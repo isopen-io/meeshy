@@ -30,7 +30,7 @@ struct IncomingPreAnswerBar: View {
         .padding(.leading, MeeshySpacing.lg)
         .padding(.trailing, MeeshySpacing.xs)
         .padding(.vertical, MeeshySpacing.xxs)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous))
+        .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous))
         .accessibilityElement(children: .contain)
     }
 

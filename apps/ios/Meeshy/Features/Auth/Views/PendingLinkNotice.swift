@@ -32,7 +32,7 @@ struct PendingLinkNotice: View {
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.top, MeeshySpacing.sm)
             .accessibilityElement(children: .combine)
-            .transition(.move(edge: .top).combined(with: .opacity))
+            .meeshyTransition(.move(edge: .top).combined(with: .opacity))
         }
     }
 }

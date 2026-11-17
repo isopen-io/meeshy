@@ -4,12 +4,6 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,7 +11,9 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -30,7 +26,6 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -101,32 +96,34 @@ internal fun CallControlsPill(
     onClosePanel: () -> Unit,
     modifier: Modifier = Modifier,
     pillText: CallPillText = CallPillText.None,
+    outputKind: CallPillKind = CallPillKind.Normal,
+    outputState: String? = null,
     rowsMaxHeight: Dp = ROWS_MAX_HEIGHT,
     captions: @Composable () -> Unit = {},
     panelContent: @Composable (CallScreenPanel) -> Unit = {},
 ) {
     val reduceMotion = rememberCallReduceMotion()
     val expanded = disposition.unfoldsPill(layer) && pillText.hasBaseRow
-    // Loi 17 : le verre ne change jamais de taille d'un coup ; Réduire les animations garde un fondu de 0,2 s.
+    // Loi 17.2 : la mise en page prend sa forme d'un coup, le VERRE en repart par une échelle (CallPillMorph.kt).
+    // Loi 17.10 : Réduire les animations garde un fondu de 0,2 s, sans échelle ni glissement.
     val millis = CallPillMotion.millis(reduceMotion)
     val unfoldScale = if (!CallPillMotion.scalesOnUnfold(reduceMotion)) EnterTransition.None else
         scaleIn(initialScale = 0.94f, transformOrigin = TransformOrigin(0.5f, 1f))
     val foldScale = if (!CallPillMotion.scalesOnUnfold(reduceMotion)) ExitTransition.None else
         scaleOut(targetScale = 0.94f, transformOrigin = TransformOrigin(0.5f, 1f))
-    val grow = expandVertically(tween(millis), expandFrom = Alignment.Bottom)
-    val shrink = shrinkVertically(tween(millis), shrinkTowards = Alignment.Bottom)
     val held = remember { HeldLayer() }
     if (expanded) held.layer = layer
-    val maxWidth = rememberCallPillMaxWidth(pillText, isUnfolded = expanded, reduceMotion = reduceMotion)
-    CallControlsGlass(modifier = modifier.animatedMaxWidth(maxWidth)) {
+    val anchor = remember { CallGlassAnchor() }
+    val maxWidth = CallPillWidth.maxWidthDp(pillText, isUnfolded = expanded).dp
+    CallMorphingControlsGlass(anchor = anchor, reduceMotion = reduceMotion, modifier = modifier.callPillMaxWidth(maxWidth)) {
         AnimatedVisibility(
             visible = expanded,
-            enter = fadeIn(tween(millis)) + unfoldScale + grow,
-            exit = fadeOut(tween(millis)) + shrink + foldScale,
+            enter = fadeIn(tween(millis)) + unfoldScale,
+            exit = fadeOut(tween(millis)) + foldScale,
         ) {
             // What is leaving (a panel, the rows) keeps its content until it has faded: it does not vanish at once.
             val shownLayer = if (expanded) layer else held.layer
-            Column {
+            Column(Modifier.followingCell(CallGlassFollow(anchor, reduceMotion))) {
                 UnfoldedContent(
                     panel = shownLayer.pillPanel,
                     millis = millis,
@@ -142,50 +139,65 @@ internal fun CallControlsPill(
                 CallPillHairline()
             }
         }
-        AnimatedVisibility(
-            visible = pillText.showsCaptionsBand,
-            enter = fadeIn(tween(millis)) + grow,
-            exit = fadeOut(tween(millis)) + shrink,
-        ) { captions() }
-        // The line between the captions and the base row fades out with whichever of the two leaves, never at once.
-        AnimatedVisibility(
-            visible = pillText == CallPillText.Captions,
-            enter = fadeIn(tween(millis)) + grow,
-            exit = fadeOut(tween(millis)) + shrink,
-        ) { CallPillHairline() }
+        CaptionsBand(pillText, millis, CallGlassFollow(anchor, reduceMotion), captions)
         AnimatedVisibility(
             visible = pillText.hasBaseRow,
-            enter = fadeIn(tween(millis)) + unfoldScale + grow,
-            exit = fadeOut(tween(millis)) + shrink + foldScale,
+            enter = fadeIn(tween(millis)) + unfoldScale,
+            exit = fadeOut(tween(millis)) + foldScale,
         ) {
-            BaseRow(state, captioned = expanded && layer.captionsBaseRow, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
+            BaseRow(
+                state = state,
+                captioned = expanded && layer.captionsBaseRow,
+                menuOpen = layer.isExpanded,
+                output = CallOutputFace(outputIcon, outputKind, outputState),
+                follow = CallGlassFollow(anchor, reduceMotion),
+                onToggleMenu = onToggleMenu,
+                onToggleMute = onToggleMute,
+                onOutput = onOutput,
+                onHangUp = onHangUp,
+            )
         }
     }
 }
 
-/**
- * L3.3 — 440 → 560 dp sur la même courbe que la hauteur ; un State lu à la mise en page, la composition ne repasse pas par
- * image. #17935 — la pilule agrandie (rangées du groupe, option tenue) prend la même borne que celle qui porte du texte.
- */
-@Composable
-private fun rememberCallPillMaxWidth(pillText: CallPillText, isUnfolded: Boolean, reduceMotion: Boolean): State<Dp> {
-    val widthMillis = CallPillMotion.widthMillis(reduceMotion)
-    val widthSpec: AnimationSpec<Dp> = if (widthMillis == 0) snap() else tween(widthMillis)
-    return animateDpAsState(CallPillWidth.maxWidthDp(pillText, isUnfolded = isUnfolded).dp, widthSpec, label = "callPillWidth")
-}
-
-/** Le plafond de largeur de la pilule, animé : la pilule remplit la largeur offerte jusqu'à [maxWidth], lue à la mise en page. */
-private fun Modifier.animatedMaxWidth(maxWidth: State<Dp>): Modifier = layout { measurable, constraints ->
-    val width = maxWidth.value.roundToPx().coerceIn(constraints.minWidth, constraints.maxWidth)
+/** L3.3 · #17935 — la borne de la pilule (440 → 560 dp), posée D'UN COUP : c'est le verre qui en repart (loi 17.2). */
+private fun Modifier.callPillMaxWidth(maxWidth: Dp): Modifier = layout { measurable, constraints ->
+    val width = maxWidth.roundToPx().coerceIn(constraints.minWidth, constraints.maxWidth)
     val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
     layout(placeable.width, placeable.height) { placeable.place(0, 0) }
 }
 
+/** What « Sortie » shows: its glyph, the state [CallOutputButtonRule] picks, and where the sound goes (TalkBack). */
+private data class CallOutputFace(val icon: ImageVector, val kind: CallPillKind, val state: String?)
+
+/** Where the base row's buttons measure their place from, to glide back when the layout moves them (loi 17.2). */
+private class CallGlassFollow(val anchor: CallGlassAnchor, val reduceMotion: Boolean)
+
+@Composable
+private fun Modifier.followingCell(follow: CallGlassFollow): Modifier =
+    followsCallGlass(rememberCallGlassFollower(), follow.anchor, follow.reduceMotion)
+
+/** The captions in the pill, above its base row, and the line between them: each fades in place and follows the glass. */
+@Composable
+private fun ColumnScope.CaptionsBand(pillText: CallPillText, millis: Int, follow: CallGlassFollow, captions: @Composable () -> Unit) {
+    AnimatedVisibility(
+        visible = pillText.showsCaptionsBand,
+        enter = fadeIn(tween(millis)),
+        exit = fadeOut(tween(millis)),
+    ) { Box(Modifier.followingCell(follow)) { captions() } }
+    // The line between the captions and the base row fades out with whichever of the two leaves, never at once.
+    AnimatedVisibility(
+        visible = pillText == CallPillText.Captions,
+        enter = fadeIn(tween(millis)),
+        exit = fadeOut(tween(millis)),
+    ) { Box(Modifier.followingCell(follow)) { CallPillHairline() } }
+}
+
 /**
  * G3.2 — what the unfolded pill holds above its base row: an option drawn in the pill, the journal, or (on a group) the
- * family rows. They swap in the SAME glass by a cross-fade while the glass resizes, never at once; « reduce animations »
- * keeps a 0.2 s fade and the glass follows over the same 0.2 s, never with a jump (P13.12). Mirrors iOS
- * `callControlsPill` (`.animation(_, value: layer)`).
+ * family rows. They swap in the SAME glass by a cross-fade, never at once, while the glass morphs by a scale (loi
+ * 17.2); « reduce animations » keeps a 0.2 s fade and the glass cross-fades over the same 0.2 s, never with a jump
+ * (P13.12, loi 17.10). Mirrors iOS `callControlsPill` (`.animation(_, value: layer)`).
  */
 @Composable
 private fun UnfoldedContent(
@@ -204,7 +216,8 @@ private fun UnfoldedContent(
         targetState = panel,
         transitionSpec = {
             val swap = fadeIn(tween(millis)) togetherWith fadeOut(tween(millis))
-            swap using SizeTransform(clip = false) { _, _ -> tween(millis) }
+            // Loi 17.2 : aucune taille animée ; le conteneur tient les deux contenus le temps du fondu, et le verre morphe.
+            swap using null
         },
         label = "callPillContent",
     ) { shown ->
@@ -257,12 +270,17 @@ private class HeldLayer {
     var layer: CallScreenLayer = CallScreenLayer.Idle
 }
 
+/**
+ * The same four buttons everywhere, captioned when the captioned rows unfold above them. Each cell follows the glass:
+ * when the layout moves it (a caption, the 440 → 560 dp bound), it glides back from where it was seen (loi 17.2).
+ */
 @Composable
 private fun BaseRow(
     state: CallUiState,
     captioned: Boolean,
     menuOpen: Boolean,
-    outputIcon: ImageVector,
+    output: CallOutputFace,
+    follow: CallGlassFollow,
     onToggleMenu: () -> Unit,
     onToggleMute: () -> Unit,
     onOutput: () -> Unit,
@@ -273,7 +291,7 @@ private fun BaseRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.smPlus),
     ) {
         val expandedLabel = stringResource(if (menuOpen) R.string.call_control_expanded else R.string.call_control_collapsed)
-        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center) {
+        Row(Modifier.weight(1f).followingCell(follow), horizontalArrangement = Arrangement.Center) {
             CallPillButton(
                 icon = Icons.Filled.MoreHoriz,
                 kind = if (menuOpen) CallPillKind.Active else CallPillKind.Normal,
@@ -286,7 +304,7 @@ private fun BaseRow(
             )
         }
         Row(
-            Modifier.weight(1f).alpha(if (state.isOnHold) HOLD_DIMMED_ALPHA else 1f),
+            Modifier.weight(1f).followingCell(follow).alpha(if (state.isOnHold) HOLD_DIMMED_ALPHA else 1f),
             horizontalArrangement = Arrangement.Center,
         ) {
             CallPillButton(
@@ -300,18 +318,19 @@ private fun BaseRow(
                 onClick = onToggleMute,
             )
         }
-        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center) {
+        Row(Modifier.weight(1f).followingCell(follow), horizontalArrangement = Arrangement.Center) {
             CallPillButton(
-                icon = outputIcon,
-                kind = CallPillKind.Normal,
+                icon = output.icon,
+                kind = output.kind,
                 label = stringResource(R.string.call_control_output_a11y),
                 hint = stringResource(R.string.call_control_output_hint),
                 caption = stringResource(R.string.call_audio_button),
                 captionShown = captioned,
                 onClick = onOutput,
+                modifier = output.state?.let { where -> Modifier.semantics { stateDescription = where } } ?: Modifier,
             )
         }
-        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center) {
+        Row(Modifier.weight(1f).followingCell(follow), horizontalArrangement = Arrangement.Center) {
             CallPillButton(
                 icon = Icons.Filled.CallEnd,
                 kind = CallPillKind.Destructive,

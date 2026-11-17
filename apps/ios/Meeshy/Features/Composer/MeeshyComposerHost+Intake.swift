@@ -635,7 +635,7 @@ extension MeeshyComposerHost {
     func presentMediaIntake(_ intake: ComposerMediaIntake) {
         switch intake {
         case .photoLibrary:
-            openingPickFoundsScenes = false
+            (openingPickFoundsScenes, viewfinderLibrary) = (false, .closed)
             showsPhotoPicker = true
         case .camera:
             presentCamera(mode: .photo)
@@ -663,19 +663,11 @@ extension MeeshyComposerHost {
         railPosesNextMedia = false
     }
 
-    /// **Jumelle de `consumeRailPosing` : elle JETTE l'intention au lieu de la
-    /// poser**.
-    ///
-    /// Une intention encore armée quand un média arrive par une AUTRE porte est
-    /// forcément périmée : la porte du rail présente son sélecteur dans la même
-    /// instruction qu'elle arme (`handleRailDoor(.media)`), donc rien ne peut
-    /// s'intercaler tant que ce sélecteur est à l'écran. Si quelque chose s'est
-    /// intercalé, c'est que le sélecteur est parti sans rien rendre.
-    ///
-    /// C'est le même geste que `disarmSceneCamera` fait déjà pour le viseur —
-    /// « quitter sans prendre RETIRE la marque ». Le chemin du sélecteur n'avait
-    /// pas son équivalent : le bouton d'annulation de la feuille de choix a un
-    /// corps VIDE, et refermer la photothèque ne produit aucun signal.
+    /// **Jumelle de `consumeRailPosing` : elle JETTE l'intention au lieu de la poser**. Une
+    /// intention encore armée quand un média arrive par une AUTRE porte est périmée : la porte du
+    /// rail présente son sélecteur dans la même instruction qu'elle arme, donc si quelque chose
+    /// s'est intercalé, le sélecteur est parti sans rien rendre. Le même geste que
+    /// `disarmSceneCamera` — « quitter sans prendre RETIRE la marque ».
     func abandonRailPosing() {
         railPosesNextMedia = false
         backgroundReplacementId = nil

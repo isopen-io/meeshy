@@ -156,10 +156,6 @@ public struct StoryExpiredContent: View {
                 .font(.title2.bold())
                 .foregroundStyle(foreground)
                 .multilineTextAlignment(.center)
-            Text("notifications.story.expired.subtitle")
-                .font(.body)
-                .foregroundStyle(foreground.opacity(MeeshyOpacity.intense))
-                .multilineTextAlignment(.center)
         }
         // Read title + subtitle as one statement rather than two separate swipes.
         .accessibilityElement(children: .combine)

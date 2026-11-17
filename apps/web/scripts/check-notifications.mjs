@@ -63,6 +63,17 @@ const BASE = served.base;
 const CAPTURE_DIR = process.env.CAPTURE_DIR ?? null;
 if (CAPTURE_DIR !== null) await mkdir(CAPTURE_DIR, { recursive: true });
 
+const withMore = async (page, read) => {
+  await page.click('[data-category-more]');
+  const value = await read();
+  await page.click('[data-category-more]');
+  return value;
+};
+const choose = async (page, category) => {
+  if ((await page.$(`[data-category="${category}"]`)) === null) await page.click('[data-category-more]');
+  await page.click(`[data-category="${category}"]`);
+};
+
 const failures = [];
 const check = (ok, what) => {
   if (ok) console.log(`  ok    ${what}`);
@@ -298,7 +309,7 @@ try {
         heure: await contrastOf(page, '[data-notification="fx-notif-mention"] [data-notification-time]'),
         compte: await contrastOf(page, '[data-unread-count]'),
         toutLire: await contrastOf(page, '[data-mark-all-read]'),
-        puce: await contrastOf(page, '[data-category="social"] > span'),
+        puce: await withMore(page, () => contrastOf(page, '[data-category="social"] > span')),
         puceSelectionnee: await contrastOf(page, '[data-category="all"] > span'),
       };
       const faibles = Object.entries(inks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
@@ -306,7 +317,7 @@ try {
       await capture(page, `cloche-${scheme}-${width}x${height}`);
 
       // ------------------------------------------------ 5. les catégories filtrent
-      await page.click('[data-category="mentions"]');
+      await choose(page, 'mentions');
       await page.waitForFunction(() => document.getElementById('contenu')?.dataset.notificationsCategory === 'mentions');
       await page.waitForTimeout(250);
       const mentions = await rowsOf(page);
@@ -315,10 +326,11 @@ try {
         `${label} : « Mentions » ne rend que sa mention non lue (${JSON.stringify(mentions.map((r) => r.type))})`,
       );
       check(page.url().endsWith('/notifications?categorie=mentions'), `${label} : la catégorie vit dans l'adresse (${page.url()})`);
-      check((await page.getAttribute('[data-category="mentions"]', 'aria-pressed')) === 'true', `${label} : la puce choisie s'annonce pressée`);
+      const moreName = (await page.getAttribute('[data-category-more]', 'aria-label')) ?? '';
+      check(moreName.includes('Mentions'), `${label} : la catégorie rangée derrière « Plus » s'annonce choisie (${moreName})`);
       await capture(page, `cloche-mentions-${scheme}-${width}x${height}`);
 
-      await page.click('[data-category="calls"]');
+      await choose(page, 'calls');
       await page.waitForSelector('[data-notifications-empty]');
       const empty = await page.evaluate(() => {
         const el = document.querySelector('[data-notifications-empty] p');

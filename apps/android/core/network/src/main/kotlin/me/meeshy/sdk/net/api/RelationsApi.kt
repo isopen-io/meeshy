@@ -11,6 +11,7 @@ import me.meeshy.sdk.model.relation.RelationLinkWire
 import me.meeshy.sdk.model.relation.RelationRitualBody
 import me.meeshy.sdk.model.relation.RelationRitualStep
 import me.meeshy.sdk.model.relation.RelationsConfig
+import me.meeshy.sdk.model.relation.SharedLocationOwnSnapshotWire
 import me.meeshy.sdk.model.relation.SharedLocationSnapshotWire
 import me.meeshy.sdk.net.routes.ApiRoutesRelations
 import retrofit2.http.Body
@@ -66,6 +67,13 @@ interface RelationsApi {
      */
     @GET(ApiRoutesRelations.LOCATIONS)
     suspend fun sharedLocations(@Query("bbox") bbox: String? = null): ApiResponse<SharedLocationSnapshotWire>
+
+    /**
+     * MON partage en cours, tel que la passerelle le sert (#18389) : qui, à quelle précision, jusqu'à quand — jamais une
+     * position. Chaque appareil du compte s'y recale à chaque socket accrochée et à chaque annonce (#18578).
+     */
+    @GET(ApiRoutesRelations.LOCATIONS_MINE)
+    suspend fun ownSharedLocation(): ApiResponse<SharedLocationOwnSnapshotWire>
 
     /** Les niveaux, leurs libellés des sept langues et leurs icônes. */
     @GET(ApiRoutesRelations.CONFIG)

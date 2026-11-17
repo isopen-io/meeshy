@@ -157,6 +157,9 @@ export function karaokeSegments(params: {
   return durationMs > 0 ? proportionalWords(servedText, durationMs) : undefined;
 }
 
+/** Le passage d'un mot à l'autre pendant l'écoute : un fondu de couleur court, que la voix devance à peine (#18327). */
+export const KARAOKE_TONE_MS = 150;
+
 /** Le rôle d'un segment pendant l'écoute — `idle` partout quand rien ne joue. */
 export type KaraokeTone = 'idle' | 'past' | 'active' | 'upcoming';
 

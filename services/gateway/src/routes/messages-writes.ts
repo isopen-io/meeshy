@@ -8,7 +8,7 @@ import { FastifyInstance } from 'fastify';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
 import { attachmentMediaSelect, attachmentProtectionSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
-import { editReadership } from '../socketio/editedAudience';
+import { messageReadership } from '../socketio/editedAudience';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
 import { mergeTrackingLinksIntoMetadata } from '../services/messaging/messageLinks';
 import {
@@ -366,7 +366,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       // gestionnaire, si bien qu'elle avait son `message:edited` gardé et son
       // `mention:created` nu.
       emitMentionCreated({
-        readership: await editReadership(prisma, message.conversationId, messageId, (err) =>
+        readership: await messageReadership(prisma, message.conversationId, messageId, (err) =>
           logger.error('Edit - edit readership unresolvable, mention withheld', err as Error),
         ),
         io: socketIOHandler?.getManager()?.getIO(),
@@ -611,9 +611,12 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       //
       // Forme reprise du handler socket, seul des quatre écrivains à la porter
       // avec les deux champs dans le même `update`.
+      // Une seule heure pour le retrait : celle qui est écrite est celle qui
+      // part sur le fil (#18159).
+      const deletedAt = new Date();
       await prisma.message.update({
         where: { id: messageId },
-        data: { translations: null, deletedAt: new Date() }
+        data: { translations: null, deletedAt }
       });
 
       // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
@@ -652,7 +655,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         // modérateur retire le message de quelqu'un d'autre.
         authorId: message.senderId,
         messageId,
-        payload: { messageId, conversationId: message.conversationId },
+        payload: { messageId, conversationId: message.conversationId, deletedAt: deletedAt.toISOString() },
         onError: (err) => logger.error('Erreur lors de la diffusion Socket.IO', err as Error),
       });
 

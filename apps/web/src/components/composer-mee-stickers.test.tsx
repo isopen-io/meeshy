@@ -58,7 +58,14 @@ describe('MeeStickerPanel', () => {
 
     const hello = mee.querySelector('[data-mee-section="bonjour"]');
     expect(hello?.querySelector('h3')?.textContent).toBe('Bonjour, merci');
-    expect(hello?.querySelector('[data-mee-hint]')?.textContent).toContain('Pour saluer');
+    expect(hello?.querySelector('[data-mee-hint]')).toBe(null);
+    const question = hello?.querySelector('button[aria-label="Que contient cette famille ?"]');
+    expect(question).not.toBe(null);
+    const note = hello?.querySelector(`#${question?.getAttribute('aria-controls')}`);
+    expect(note?.textContent).toContain('Pour saluer');
+    expect(note?.className).toContain('sr-only');
+    await mounter.click((question as HTMLElement | null) ?? null);
+    expect(note?.className).not.toContain('sr-only');
     expect(hello?.querySelector('[data-mee-sticker="mee-coucou"] svg')?.innerHTML).toContain('<style>');
 
     const duo = await mount('mee-et-meo', () => {});

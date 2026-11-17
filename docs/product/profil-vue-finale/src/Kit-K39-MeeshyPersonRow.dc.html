@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K39 MeeshyPersonRow</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:820px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:20px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;align-items:center;justify-content:center;flex:1;min-height:150px}
+.sh{--bg:#16131F;display:flex;flex-direction:column;width:100%;padding:6px 0;border-radius:24px;background:var(--bg);border:1px solid var(--line);overflow:hidden}
+.mx[data-theme=light] .sh{--bg:#FFFFFF}
+.sh>.row{width:100%;text-align:start}
+.sh>.sep{margin-inline-start:76px;margin-inline-end:18px;margin-left:auto;margin-right:auto}
+.sh>.sep{margin:0;margin-inline-start:76px;margin-inline-end:18px}
+.pav{position:relative;display:flex;flex:none}
+.pav>.dot{position:absolute;inset-inline-end:-3px;bottom:-3px;border-color:var(--bg,#16131F)}
+.who{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.who>b{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:700;color:var(--ink);white-space:nowrap}
+.who>b>i{display:flex;color:var(--ink3)}
+.who>span{font-size:12.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.far{display:flex;flex-direction:column;align-items:flex-end;gap:1px;flex:none}
+.far>b{font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:800;font-size:16px;color:var(--ink)}
+.far>span{font-size:11.5px;font-weight:600;color:var(--ink2)}
+.left{position:relative;display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;flex:none;background:conic-gradient(var(--accent) var(--p),rgba(165,180,252,.2) 0);color:var(--accent-ink)}
+.left::before{content:"";position:absolute;inset:3.5px;border-radius:50%;background:var(--bg,#16131F)}
+.left>*{position:relative}
+.ck{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;flex:none;border:1.5px solid var(--ink3);color:transparent}
+.ck.on{border-color:transparent;background:var(--brand-fill);color:#fff}
+.gh{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;flex:none;border:1.5px dashed var(--ink3);color:var(--ink2)}
+.row.pr{background:rgba(165,180,252,.08)}
+.row.fo{outline:2px solid var(--ink);outline-offset:-3px;border-radius:16px}
+.stk{display:inline-flex;align-items:center;flex:none}
+.stk>.av,.stk>i{border:2.5px solid var(--bg,var(--ground));margin-inline-start:-9px}
+.stk>:first-child{margin-inline-start:0}
+.stk>i{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:var(--field);color:var(--ink2);font-style:normal;font-weight:800;font-family:Nunito,ui-rounded,system-ui,sans-serif}
+.swp{position:relative;overflow:hidden;width:100%}
+.swp>.acts{position:absolute;inset-block:0;inset-inline-end:0;display:flex}
+.acts>button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:76px;font-size:11px;font-weight:700;background:var(--field);color:var(--ink)}
+.acts>button.x{background:#7F1D1D;color:#FECACA}
+.swp>.row{position:relative;background:var(--bg,#16131F)}
+.swp.open>.row{transform:translateX(-152px)}
+.swp.half>.row{transform:translateX(-76px)}
+.swp.half .acts>button{width:38px}.swp.half .acts>button>span{display:none}.swp.half .acts>button>.ic{transform:scale(.75);opacity:.6}
+.swp.live>.row{animation:prSwipe 6s cubic-bezier(.3,1.3,.5,1) infinite}
+.swp.live .acts>button>*{animation:prAct 6s ease-out infinite}
+.fin{position:absolute;top:50%;right:54px;width:34px;height:34px;margin-top:-17px;border-radius:50%;background:rgba(255,255,255,.26);border:1.5px solid rgba(255,255,255,.6);opacity:0;pointer-events:none;animation:prFin 6s ease-in-out infinite}
+.hap{width:12px;height:12px;border-radius:50%;background:var(--warn);opacity:.22;animation:prHap 6s infinite}
+.ck.live{animation:prCk 6s infinite}
+.ck.live>.ic{animation:prTick 6s cubic-bezier(.3,1.6,.5,1) infinite}
+.sel.live{animation:prSel 6s infinite}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.big{position:relative;display:flex;align-items:center;gap:28px;width:100%;min-height:120px;padding:16px 32px;border-radius:36px;background:#16131F;border:1px solid var(--line)}
+.big .who>b{font-size:30px;gap:12px}
+.big .who>b>i>.ic{width:32px;height:32px}
+.big .who>span{font-size:25px}
+.big .far>b{font-size:32px}
+.big .far>span{font-size:23px}
+.big .left{width:68px;height:68px}
+.big .left::before{inset:7px}
+.slot{outline:1.5px dashed color-mix(in oklab,var(--warn) 70%,transparent);outline-offset:6px;border-radius:50%}
+@keyframes prSwipe{0%,16%{transform:translateX(0)}30%,64%{transform:translateX(-152px)}76%,100%{transform:translateX(0)}}
+@keyframes prAct{0%,18%{transform:scale(.6);opacity:.3}32%,64%{transform:none;opacity:1}76%,100%{transform:scale(.6);opacity:.3}}
+@keyframes prFin{0%,8%{opacity:0;transform:translateX(0) scale(1.3)}14%,16%{opacity:1;transform:translateX(0) scale(1)}30%{opacity:1;transform:translateX(-152px) scale(1)}36%,100%{opacity:0;transform:translateX(-152px) scale(1.3)}}
+@keyframes prHap{0%,20%{opacity:.22;transform:scale(1)}24%{opacity:1;transform:scale(1.9)}30%,100%{opacity:.22;transform:scale(1)}}
+@keyframes prCk{0%,38%{background:transparent;border-color:var(--ink3)}42%,86%{background:var(--brand-fill);border-color:transparent}92%,100%{background:transparent;border-color:var(--ink3)}}
+@keyframes prTick{0%,38%{transform:scale(0);color:#fff}46%{transform:scale(1.35);color:#fff}52%,86%{transform:scale(1);color:#fff}92%,100%{transform:scale(0);color:#fff}}
+@keyframes prSel{0%,36%{background:transparent}40%{background:rgba(165,180,252,.12)}48%,100%{background:transparent}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #4ECDC4; opacity: .18"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #A855F7; opacity: .2; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 980px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K39 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyPersonRow</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Une personne dans une liste est toujours la même rangée : avatar, présence, cercle, accessoire</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 800px">Avatar, nom, une ligne dessous, une pastille de niveau, un accessoire à la fin. Partout où l'on liste des gens, c'est elle. Et quand ils sont trop nombreux, ils se serrent en pile : c'est <b>K48</b>, <code style="font-size: 15px">MeeshyAvatarGroup</code>.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Elle range, elle ne sait rien de la personne</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Elle fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose <b>cinq parties à leur place</b> : avatar, nom, ligne secondaire, pastille de niveau, accessoire de fin. Mêmes écarts, même hauteur, partout.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Porte <b>trois tenues</b> : <code>normal</code>, <code>muted</code> (atténuée) et <code>ghost</code> (fantôme, avatar en pointillé).</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Se <b>touche</b>, se <b>coche</b>, se <b>balaie</b> : elle révèle les actions que l'hôte lui donne et les offre aussi au lecteur d'écran.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dit <b>une seule phrase</b> à l'accessibilité : « Léo Marchetti, Proche, Alfama, 2,4 km, encore 42 minutes ».</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Elle ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Dessiner l'avatar ni la présence : c'est <b>l'emplacement <code>avatar</code></b>, rempli par l'hôte. Qui a le droit de voir un point vert : la loi de présence, côté app.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Choisir l'accessoire : bouton <b>K02</b>, anneau <b>K09</b>, interrupteur <b>K06</b>, coche, texte. Elle n'offre qu'une place.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Connaître un cercle, un rôle ou une distance : elle reçoit un <b>glyphe</b> et des <b>mots</b>. L'échelle des niveaux : <b>K33</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Trier, filtrer, paginer, charger : <b>l'app</b>. Le vide et l'erreur de la liste : <b>K38</b>. Le voyage de l'avatar vers la fiche : <b>K29</b>.</span></div>
+</div>
+</div>
+<div class="law">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:user-list xl]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 22px">La loi : une personne, une rangée, une phrase</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 980px">Quinze listes de gens existent dans le code, chacune avec son écart, sa hauteur et son libellé. Après K39, un membre, un destinataire, un filleul et un proche sur la carte ont la même forme. Seuls changent les mots et ce qu'on pose à la fin.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Une rangée, huit parties</h2><p>La rangée et la pile à deux fois leur taille. Les mesures sont celles de la taille réelle, en <code>regular</code>.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="flex-direction: column; align-items: stretch; gap: 44px; padding: 64px 40px 48px; background: var(--ground); --accent:#4ECDC4;--accent-ink:#7FE3DC">
+<div class="big">
+<span class="pav slot"><span class="av" style="width: 88px; height: 88px; font-size: 32px">LM</span><span class="dot on" style="width: 28px; height: 28px; border-width: 6px; inset-inline-end: -6px; bottom: -6px"></span></span>
+<span class="who"><b>Léo Marchetti<i>[[ic:fire]]</i></b><span>Alfama · quartier</span></span>
+<span class="far"><b>2,4 km</b><span>42 min</span></span>
+<span class="left slot" style="--p: 70%"></span>
+<i class="kan" style="left: 22px; top: -11px">1</i>
+<i class="kan" style="left: 162px; top: -11px">2</i>
+<i class="kan" style="left: 372px; top: -11px">3</i>
+<i class="kan" style="left: 300px; bottom: -11px">4</i>
+<i class="kan" style="right: 150px; top: -11px">5</i>
+<i class="kan" style="right: 22px; top: -11px">6</i>
+<div style="position: absolute; left: 148px; right: 32px; bottom: -22px; height: 2px; background: var(--line)"></div>
+<i class="kan" style="right: 20px; bottom: -33px">7</i>
+</div>
+<div style="display: flex; align-items: center; gap: 28px; padding: 0 32px">
+<span class="stk" style="position: relative">
+<span class="av" style="--accent:#FF6B6B; width: 64px; height: 64px; font-size: 23px; border-width: 5px; border-color: var(--ground)">MO</span>
+<span class="av" style="--accent:#F8B500; width: 64px; height: 64px; font-size: 23px; border-width: 5px; border-color: var(--ground); margin-inline-start: -18px">TR</span>
+<span class="av" style="--accent:#3498DB; width: 64px; height: 64px; font-size: 23px; border-width: 5px; border-color: var(--ground); margin-inline-start: -18px">YT</span>
+<i style="width: 64px; height: 64px; font-size: 21px; border-width: 5px; border-color: var(--ground); margin-inline-start: -18px">+9</i>
+<i class="kan" style="left: -8px; top: -14px; border: 0; margin: 0; width: 22px; height: 22px; font-size: 11px; background: var(--warn); color: #0B0B12; font-family: inherit">8</i>
+</span>
+<span style="font-size: 27px; font-weight: 600; color: var(--ink)">Mina, Tomás et 10 autres</span>
+</div>
+</div>
+<div class="lgd" style="align-content: start">
+<i class="kan">1</i><div><b>Avatar</b><span><code>avatar</code> · emplacement de 44 px (36 en <code>compact</code>, 56 en <code>large</code>). L'hôte y pose son avatar, avec sa présence et son anneau. Marge de début 18.</span></div>
+<i class="kan">2</i><div><b>Nom</b><span><code>title</code> · Inter 15 / 700, <code>--ink</code>. Une ligne, coupée par la fin. Écart de 14 avec l'avatar.</span></div>
+<i class="kan">3</i><div><b>Pastille de niveau</b><span><code>titleAccessory</code> · glyphe de 16 px collé au nom, <code>--ink3</code>. Dit par <code>levelLabel</code>. Absent : rien, pas de place gardée.</span></div>
+<i class="kan">4</i><div><b>Ligne secondaire</b><span><code>subtitle</code> · 12,5 / 400, <code>--ink2</code>. Une ligne. Absente : le nom se centre sur l'avatar.</span></div>
+<i class="kan">5</i><div><b>Méta</b><span><code>meta</code> et <code>metaDetail</code> · Nunito 16 / 800 puis 11,5 / 600, alignés à la fin. Un chiffre court et son complément : « 2,4 km », « 42 min ».</span></div>
+<i class="kan">6</i><div><b>Accessoire de fin</b><span><code>trailing</code> · emplacement, cible de 44 au moins. Ici un anneau K09 de 34. Marge de fin 18.</span></div>
+<i class="kan">7</i><div><b>Filet</b><span><code>divider</code> · 1 px, <code>--line</code>, en retrait de 76 : il part sous le nom, jamais sous l'avatar. Aucun sous la dernière rangée.</span></div>
+<i class="kan">8</i><div style="border-bottom: 0"><b>Pile</b><span><b>K48</b> <code>MeeshyAvatarGroup</code> en <code>stack</code>, posée par l'hôte · trois avatars au plus, chevauchés de 9, liseré de 2,5 à la couleur du sol, puis « +9 » et la phrase.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Dix variantes, six états</h2><p>Tout est à taille réelle, dans une colonne de téléphone. L'accent de chaque rangée est celui de la personne ; il ne teinte que son avatar et son anneau.</p></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<button class="row" style="--accent:#FF6B6B;--accent-ink:#FFA3A3">
+<span class="pav"><span class="av">MO</span><span class="dot on"></span></span>
+<span class="who"><b>Mina Okafor<i>[[ic:drop s]]</i></b><span>Baixa · point exact</span></span>
+<span class="far"><b>300 m</b><span>continu</span></span>
+<span class="left" style="--p: 100%" aria-hidden="true">[[ic:drop s]]</span>
+</button>
+<div class="sep"></div>
+<button class="row" style="--accent:#4ECDC4;--accent-ink:#7FE3DC">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who"><b>Léo Marchetti<i>[[ic:fire s]]</i></b><span>Alfama · quartier</span></span>
+<span class="far"><b>2,4 km</b><span>42 min</span></span>
+<span class="left" style="--p: 70%" aria-hidden="true"></span>
+</button>
+<div class="sep"></div>
+<button class="row" style="--accent:#F8B500;--accent-ink:#FFD35C">
+<span class="pav"><span class="av">TR</span></span>
+<span class="who"><b>Tomás Ribeiro<i>[[ic:handshake s]]</i></b><span>Cascais · ville</span></span>
+<span class="far"><b>24 km</b><span>7 h 05</span></span>
+<span class="left" style="--p: 88%" aria-hidden="true"></span>
+</button>
+</div>
+</div>
+<div class="cp"><b>Avec distance et temps restant</b><span class="kcap"><code>meta</code>, <code>metaDetail</code> et un anneau K09 dans <code>trailing</code>. C'est la rangée de « Autour de toi » sur la carte des proches.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<button class="row" aria-pressed="true" style="--accent:#4ECDC4">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who"><b>Léo Marchetti<i>[[ic:fire s]]</i></b><span>@leo.m</span></span>
+<span class="ck on">[[ic:check s]]</span>
+</button>
+<div class="sep"></div>
+<button class="row" aria-pressed="true" style="--accent:#FF6B6B">
+<span class="pav"><span class="av">MO</span><span class="dot on"></span></span>
+<span class="who"><b>Mina Okafor<i>[[ic:drop s]]</i></b><span>@mina.o</span></span>
+<span class="ck on">[[ic:check s]]</span>
+</button>
+<div class="sep"></div>
+<button class="row" aria-pressed="false" style="--accent:#F8B500">
+<span class="pav"><span class="av">TR</span></span>
+<span class="who"><b>Tomás Ribeiro<i>[[ic:handshake s]]</i></b><span>@tomas.r</span></span>
+<span class="ck"></span>
+</button>
+</div>
+</div>
+<div class="cp"><b>Sélectionnable</b><span class="kcap"><code>selection: .multiple(isSelected)</code> : la coche prend la fin, toute la rangée se touche et dit « sélectionné ». <code>.single</code> dessine un point plein.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<div class="row" style="--accent:#2ECC71">
+<span class="pav"><span class="av">SB</span></span>
+<span class="who"><b>Sofia Benali</b><span>3 amis en commun</span></span>
+<button class="btn p sm" style="padding: 0 14px">Accepter</button>
+</div>
+<div class="sep"></div>
+<div class="row" style="--accent:#9B59B6">
+<span class="pav"><span class="av">KM</span><span class="dot aw"></span></span>
+<span class="who"><b>Kwame Mensah<i>[[ic:fire s]]</i></b><span>Absent</span></span>
+<button class="ib g" aria-label="Écrire à Kwame Mensah">[[ic:chat-circle]]</button>
+</div>
+<div class="sep"></div>
+<div class="row" style="--accent:#4ECDC4">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who"><b>Léo Marchetti<i>[[ic:fire s]]</i></b><span>Batterie partagée</span></span>
+<span class="sw on" role="switch" aria-checked="true" aria-label="Partager ma batterie avec Léo Marchetti"></span>
+</div>
+</div>
+</div>
+<div class="cp"><b>Avec bouton, bouton rond, interrupteur</b><span class="kcap"><code>trailing</code> reçoit une capsule de <b>K40</b>, un K02 ou la bascule de K06. La rangée n'est plus un seul bouton : l'accessoire a sa cible et son nom.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<div class="row" style="--accent:#3498DB">
+<span class="pav"><span class="av" style="opacity: .4">YT</span></span>
+<span class="who"><b style="color: var(--ink3)">Yuki Tanaka</b><span style="color: var(--ink3); white-space: normal">Partage terminé il&nbsp;y&nbsp;a&nbsp;1&nbsp;h</span></span>
+<button class="btn q sm" style="padding: 0 14px">Redemander</button>
+</div>
+<div class="sep"></div>
+<div class="row">
+<span class="gh">[[ic:ghost]]</span>
+<span class="who"><b>Kwame Mensah<i>[[ic:fire s]]</i></b><span>En mode fantôme · position en pause</span></span>
+</div>
+</div>
+</div>
+<div class="cp"><b>Atténuée · fantôme</b><span class="kcap"><code>muted</code> : avatar à 40 %, textes en <code>--ink3</code>, l'accessoire reste vif. <code>ghost</code> : l'avatar cède sa place à un disque en pointillé qui porte <code>ghostGlyph</code>.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<div class="swp open">
+<div class="acts"><button>[[ic:bell-slash]]<span>Muet</span></button><button class="x">[[ic:user-minus]]<span>Retirer</span></button></div>
+<div class="row" style="--accent:#F8B500">
+<span class="pav"><span class="av">TR</span></span>
+<span class="who"><b>Tomás Ribeiro<i>[[ic:handshake s]]</i></b><span>Cascais · ville</span></span>
+<span class="far"><b>24 km</b><span>7 h 05</span></span>
+</div>
+</div>
+<div class="sep"></div>
+<div class="row" style="--accent:#4ECDC4">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who"><b>Léo Marchetti<i>[[ic:fire s]]</i></b><span>Alfama · quartier</span></span>
+<span class="far"><b>2,4 km</b><span>42 min</span></span>
+</div>
+</div>
+</div>
+<div class="cp"><b>Balayée</b><span class="kcap"><code>trailingActions</code> : deux pavés de 76 px, glyphe et mot. La dernière est destructive, en rouge. Une seule rangée ouverte à la fois.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; align-items: flex-start; gap: 22px">
+<button style="display: flex; align-items: center; gap: 12px; min-height: 44px">
+<span class="stk"><span class="av" style="--accent:#FF6B6B; width: 32px; height: 32px; font-size: 12px">MO</span><span class="av" style="--accent:#F8B500; width: 32px; height: 32px; font-size: 12px">TR</span><span class="av" style="--accent:#3498DB; width: 32px; height: 32px; font-size: 12px">YT</span><i style="width: 32px; height: 32px; font-size: 11px">+9</i></span>
+<span style="font-size: 14px; font-weight: 600">Mina, Tomás et 10 autres</span>
+</button>
+<div style="display: flex; align-items: center; gap: 12px; min-height: 44px">
+<span class="stk"><span class="av" style="--accent:#4ECDC4; width: 32px; height: 32px; font-size: 12px">LM</span><span class="av" style="--accent:#9B59B6; width: 32px; height: 32px; font-size: 12px">KM</span><i style="width: 32px; height: 32px; font-size: 11px">+7</i></span>
+<span style="font-size: 14px; font-weight: 600; color: var(--ink2)">9 proches</span>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; min-height: 44px">
+<span class="stk"><span class="av" style="--accent:#4ECDC4; width: 24px; height: 24px; font-size: 9px; border-width: 2px; margin-inline-start: 0">LM</span><span class="av" style="--accent:#FF6B6B; width: 24px; height: 24px; font-size: 9px; border-width: 2px; margin-inline-start: -8px">MO</span></span>
+<span style="font-size: 13px; color: var(--ink2)">Léo et Mina ont vu</span>
+</div>
+</div>
+<div class="cp"><b>En pile</b><span class="kcap"><code>MeeshyAvatarGroup</code> de <b>K48</b>, en <code>stack</code>, en 32 et en 24. Au-delà de <code>max</code>, un « +N ». La phrase est écrite par l'hôte ; la pile ne compte pas à sa place.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<button class="row pr" style="--accent:#4ECDC4">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who"><b>Léo Marchetti<i>[[ic:fire s]]</i></b><span>En ligne</span></span>
+<span style="display: flex; color: var(--ink3)">[[ic:caret-right s]]</span>
+</button>
+<div class="sep"></div>
+<button class="row fo" style="--accent:#FF6B6B">
+<span class="pav"><span class="av">MO</span><span class="dot on"></span></span>
+<span class="who"><b>Mina Okafor<i>[[ic:drop s]]</i></b><span>En ligne</span></span>
+<span style="display: flex; color: var(--ink3)">[[ic:caret-right s]]</span>
+</button>
+</div>
+</div>
+<div class="cp"><b>Pressée · focus clavier</b><span class="kcap">Pressée : voile indigo 8 % sur toute la largeur, sans échelle (une rangée ne rétrécit pas). Focus : anneau de 2 px rentré de 3, jamais au doigt.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<div class="row"><span class="sk" style="width: 44px; height: 44px; border-radius: 50%; flex: none"></span><span class="who" style="gap: 8px"><span class="sk" style="width: 132px; height: 13px"></span><span class="sk" style="width: 88px; height: 10px"></span></span><span class="sk" style="width: 40px; height: 13px"></span></div>
+<div class="sep"></div>
+<div class="row"><span class="sk" style="width: 44px; height: 44px; border-radius: 50%; flex: none"></span><span class="who" style="gap: 8px"><span class="sk" style="width: 104px; height: 13px"></span><span class="sk" style="width: 120px; height: 10px"></span></span><span class="sk" style="width: 40px; height: 13px"></span></div>
+<div class="sep"></div>
+<div class="row" style="opacity: .5"><span class="sk" style="width: 44px; height: 44px; border-radius: 50%; flex: none"></span><span class="who" style="gap: 8px"><span class="sk" style="width: 148px; height: 13px"></span><span class="sk" style="width: 72px; height: 10px"></span></span><span class="sk" style="width: 40px; height: 13px"></span></div>
+</div>
+</div>
+<div class="cp"><b>Squelette</b><span class="kcap"><code>MeeshyPersonRowSkeleton</code> : un rond et deux lignes de <code>MeeshySkeleton</code> (<b>K38</b>), même hauteur, mêmes écarts. Seulement si le cache est vide ; la liste qui arrive ne fait rien sauter.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<div class="row" style="--accent:#3498DB">
+<span class="pav"><span class="av">YT</span></span>
+<span class="who"><b>Yuki Tanaka<i>[[ic:handshake s]]</i></b><span>@yuki.t</span></span>
+<button class="btn q sm" disabled style="padding: 0 14px; opacity: .4">Inviter</button>
+</div>
+<div class="sep"></div>
+<div class="row" style="--accent:#2ECC71">
+<span class="pav"><span class="av">SB</span></span>
+<span class="who"><b>Sofia Benali<i>[[ic:hand-waving s]]</i></b><span>Déjà dans la conversation</span></span>
+<span style="display: flex; color: var(--ink3)">[[ic:check s]]</span>
+</div>
+</div>
+</div>
+<div class="cp"><b>Accessoire désactivé · rangée inerte</b><span class="kcap">Seul l'accessoire s'éteint, à 40 %. Sans <code>onPress</code>, la rangée est un texte : ni voile, ni cible, ni rôle de bouton.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="mx" data-theme="light" style="width: 100%; padding: 14px; border-radius: 26px">
+<div class="sh">
+<button class="row" style="--accent:#4ECDC4;--accent-ink:#0F766E">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who"><b>Léo Marchetti<i>[[ic:fire s]]</i></b><span>Alfama · quartier</span></span>
+<span class="far"><b>2,4 km</b><span>42 min</span></span>
+<span class="left" style="--p: 70%" aria-hidden="true"></span>
+</button>
+<div class="sep"></div>
+<div class="row" style="--accent:#3498DB">
+<span class="pav"><span class="av" style="opacity: .4">YT</span></span>
+<span class="who"><b style="color: var(--ink3)">Yuki Tanaka</b><span style="color: var(--ink3); white-space: normal">Partage terminé il&nbsp;y&nbsp;a&nbsp;1&nbsp;h</span></span>
+<button class="btn q sm" style="padding: 0 14px">Redemander</button>
+</div>
+</div>
+</div>
+</div>
+<div class="cp"><b>Thème clair</b><span class="kcap">Mêmes jetons. Le liseré du point de présence prend la couleur du fond de la liste, pas celle de l'écran.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<button class="row" style="--accent:#4ECDC4; align-items: flex-start; padding-top: 12px; padding-bottom: 12px">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who" style="gap: 4px"><b style="font-size: 21px; white-space: normal; line-height: 1.2">Léo Marchetti<i>[[ic:fire]]</i></b><span style="font-size: 17px; white-space: normal">Alfama · quartier</span><span style="font-size: 17px; font-weight: 700; color: var(--ink); white-space: normal">2,4 km · 42 min</span></span>
+<span class="left" style="--p: 70%; margin-top: 4px" aria-hidden="true"></span>
+</button>
+</div>
+</div>
+<div class="cp"><b>Très grande police</b><span class="kcap">L'avatar ne grandit pas. La méta descend sous la ligne secondaire, l'accessoire s'aligne en haut. Rien n'est tronqué.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<button class="row" dir="rtl" style="--accent:#4ECDC4">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who"><b>ليو ماركيتي<i>[[ic:fire s]]</i></b><span>ألفاما · الحي</span></span>
+<span class="far"><b>2,4 كم</b><span>42 د</span></span>
+<span class="left" style="--p: 70%" aria-hidden="true"></span>
+</button>
+<div class="sep"></div>
+<button class="row" dir="rtl" aria-pressed="true" style="--accent:#FF6B6B">
+<span class="pav"><span class="av">MO</span><span class="dot on"></span></span>
+<span class="who"><b>مينا أوكافور<i>[[ic:drop s]]</i></b><span>mina.o@</span></span>
+<span class="ck on">[[ic:check s]]</span>
+</button>
+</div>
+</div>
+<div class="cp"><b>Droite à gauche</b><span class="kcap">Tout se reflète : avatar à droite, accessoire à gauche, point de présence au bord de fin. Les actions de fin se révèlent en balayant vers la droite.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; gap: 14px">
+<div class="sh" style="--accent:#4ECDC4;--accent-ink:#7FE3DC">
+<div class="row" style="min-height: 84px">
+<span class="pav"><span class="av" style="width: 56px; height: 56px; font-size: 20px">LM</span><span class="dot on"></span></span>
+<span class="who"><b style="font-family: Nunito, ui-rounded, system-ui, sans-serif; font-weight: 800; font-size: 22px">Léo Marchetti<i>[[ic:fire s]]</i></b><span>@leo.m · en ligne</span></span>
+</div>
+</div>
+<span style="display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; min-height: 32px; font-size: 14px; color: var(--ink2); --accent:#FF6B6B"><span class="av" style="width: 26px; height: 26px; font-size: 10px">MO</span><b style="color: var(--ink)">Mina Okafor</b><span>partage sa position</span></span>
+</div>
+<div class="cp"><b>Tailles <code>header</code> · <code>inline</code></b><span class="kcap"><code>header</code> : avatar de 56, titre de 22, sans filet, jamais pressable ; la tête d'une feuille. <code>inline</code> : avatar de 26 et une ligne, dans une phrase ou un journal.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<div class="row" style="--accent:#2ECC71; background: color-mix(in oklab, var(--brand) 9%, transparent)">
+<span class="pav"><span class="av">SB</span></span>
+<span class="who"><b>Sofia Benali</b><span style="color: var(--accent-ink); --accent-ink: #A5B4FC">Demande reçue</span></span>
+<button class="ib" aria-label="Refuser la demande de Sofia Benali" style="background: var(--field); color: var(--ink)">[[ic:x]]</button>
+<button class="ib" aria-label="Accepter la demande de Sofia Benali" style="background: var(--brand-fill); color: #fff">[[ic:check]]</button>
+</div>
+<div style="display: flex; align-items: flex-start; gap: 8px; padding: 2px 18px 12px 76px; font-size: 12.5px; line-height: 1.4; color: var(--ink2)"><span style="display: inline-flex; margin-top: 1px">[[ic:info s]]</span><span>Elle verra tes stories Connaissances.</span></div>
+<div class="sep"></div>
+<div class="row" style="--accent:#3498DB">
+<span class="pav"><span class="av">YT</span></span>
+<span class="who"><b>Yuki Tanaka<i>[[ic:handshake s]]</i></b><span>Partage terminé</span></span>
+<span class="chip" style="min-height: 26px; padding: 0 9px; font-size: 11.5px">il y a 1 h</span>
+</div>
+</div>
+</div>
+<div class="cp"><b>En attente · paire · note</b><span class="kcap"><code>isPending</code> : fond teinté et <code>statusLine</code>. La paire refuser / accepter est deux <b>K40</b> <code>round</code>. Dessous, la note de <b>K46</b>. En fin de l'autre rangée : une pastille d'état <b>K41</b>.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<button class="row" style="--accent:#4ECDC4">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who"><b>Léo Marchetti<i>[[ic:fire s]]</i></b><span style="display: flex; align-items: center; gap: 5px"><span style="display: inline-flex; color: var(--ink3)">[[ic:translate s]]</span><span style="overflow: hidden; text-overflow: ellipsis">Je suis au miradouro, tu viens ?</span></span></span>
+<span class="far"><span>14:32</span><span class="chip on" style="min-height: 20px; min-width: 20px; padding: 0 6px; font-size: 11px; justify-content: center">2</span></span>
+</button>
+<div class="sep"></div>
+<button class="row" style="--accent:#FF6B6B">
+<span class="pav"><span class="av">MO</span></span>
+<span class="who"><b>Mina Okafor<i>[[ic:drop s]]</i></b><span>À tout à l'heure</span></span>
+<span class="far"><span>hier</span></span>
+</button>
+</div>
+</div>
+<div class="cp"><b>Variante fil</b><span class="kcap"><code>preview</code> : l'aperçu du dernier message, avec la marque de <b>K51</b> quand il est traduit, l'heure dans <code>meta</code>, le compte de non-lus en <b>K41</b>.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Elle suit le doigt, elle répond au toucher</h2><p>Deux mouvements lui appartiennent : le balayage qui révèle les actions, et la coche qui se pose. Le reste (entrée en cascade, sortie, voyage de l'avatar) est demandé à K26 et à K29.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px">
+
+<div class="kcell kc" style="gap: 28px; padding: 36px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<span class="tag">En vrai, en boucle de 6 s</span>
+<span style="display: inline-flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 600; color: var(--ink3)"><i class="hap"></i><span>haptique</span></span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; flex: 1">
+<div class="sh" style="width: 390px">
+<div class="swp live">
+<div class="acts"><button tabindex="-1">[[ic:bell-slash]]<span>Muet</span></button><button class="x" tabindex="-1">[[ic:user-minus]]<span>Retirer</span></button></div>
+<div class="row" style="--accent:#F8B500">
+<span class="pav"><span class="av">TR</span></span>
+<span class="who"><b>Tomás Ribeiro<i>[[ic:handshake s]]</i></b><span>Cascais · ville</span></span>
+<span class="far"><b>24 km</b><span>7 h 05</span></span>
+<i class="fin" aria-hidden="true"></i>
+</div>
+</div>
+<div class="sep"></div>
+<div class="row sel live" style="--accent:#4ECDC4">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who"><b>Léo Marchetti<i>[[ic:fire s]]</i></b><span>@leo.m</span></span>
+<span class="ck live">[[ic:check s]]</span>
+</div>
+<div class="sep"></div>
+<div class="row" style="--accent:#FF6B6B">
+<span class="pav"><span class="av">MO</span><span class="dot on"></span></span>
+<span class="who"><b>Mina Okafor<i>[[ic:drop s]]</i></b><span>@mina.o</span></span>
+<span class="ck"></span>
+</div>
+</div>
+</div>
+<div class="cp"><b>Balayer, puis cocher</b><span class="kcap">La rangée de Tomás colle au doigt ; passé 56 px, les actions grossissent jusqu'à leur taille et un tic part. Lâchée, elle s'ouvre à 152 px, puis se referme dès qu'on touche ailleurs. Ici, toucher Léo le coche : la coche saute une fois.</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="kcell" style="min-height: 0; padding: 18px 20px; justify-content: flex-start; align-items: flex-start; gap: 16px; background: var(--ground)">
+<span class="step">1</span>
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0">
+<div class="sh" style="padding: 0; border-radius: 18px"><div class="swp"><div class="acts"><button tabindex="-1">[[ic:bell-slash]]<span>Muet</span></button><button class="x" tabindex="-1">[[ic:user-minus]]<span>Retirer</span></button></div><div class="row" style="--accent:#F8B500"><span class="pav"><span class="av">TR</span></span><span class="who"><b>Tomás Ribeiro</b><span>Cascais · ville</span></span><span class="far"><b>24 km</b><span>7 h 05</span></span></div></div></div>
+<span class="kcap"><b style="color: var(--ink)">Repos.</b> Les actions existent déjà derrière, à 60 % de leur taille. Rien ne bouge.</span>
+</div>
+</div>
+<div class="kcell" style="min-height: 0; padding: 18px 20px; justify-content: flex-start; align-items: flex-start; gap: 16px; background: var(--ground)">
+<span class="step">2</span>
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0">
+<div class="sh" style="padding: 0; border-radius: 18px"><div class="swp half"><div class="acts"><button tabindex="-1">[[ic:bell-slash]]<span>Muet</span></button><button class="x" tabindex="-1">[[ic:user-minus]]<span>Retirer</span></button></div><div class="row" style="--accent:#F8B500"><span class="pav"><span class="av">TR</span></span><span class="who"><b>Tomás Ribeiro</b><span>Cascais · ville</span></span><span class="far"><b>24 km</b><span>7 h 05</span></span></div></div></div>
+<span class="kcap"><b style="color: var(--ink)">Doigt posé, 76 px.</b> La rangée suit le doigt, un pour un. Seuil d'accroche à 56 px : tic haptique.</span>
+</div>
+</div>
+<div class="kcell" style="min-height: 0; padding: 18px 20px; justify-content: flex-start; align-items: flex-start; gap: 16px; background: var(--ground)">
+<span class="step">3</span>
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0">
+<div class="sh" style="padding: 0; border-radius: 18px"><div class="swp open"><div class="acts"><button tabindex="-1">[[ic:bell-slash]]<span>Muet</span></button><button class="x" tabindex="-1">[[ic:user-minus]]<span>Retirer</span></button></div><div class="row" style="--accent:#F8B500"><span class="pav"><span class="av">TR</span></span><span class="who"><b>Tomás Ribeiro</b><span>Cascais · ville</span></span><span class="far"><b>24 km</b><span>7 h 05</span></span></div></div></div>
+<span class="kcap"><b style="color: var(--ink)">Lâchée, ouverte à 152 px.</b> Ressort à léger rebond. Un toucher ailleurs, ou une autre rangée balayée, la referme.</span>
+</div>
+</div>
+</div>
+
+</div>
+<div class="spec"><b style="color: var(--ink)">balayage</b> · suit le doigt sans durée, puis <b style="color: var(--ink)">motion.morph</b> au lâcher : 320 ms, ressort à léger rebond · déclencheur : glisser horizontal de plus de 10 px, jamais pendant un défilement vertical · haptique : un tic au seuil de 56 px, un second si le balayage complet joue la dernière action · mouvement réduit : ouverture et fermeture sans rebond, 160 ms</div>
+<div class="spec"><b style="color: var(--ink)">coche</b> · <b style="color: var(--ink)">motion.pulse</b> : la coche monte à 1,35 puis revient, 260 ms · déclencheur : <span style="color: var(--accent-ink)">selection</span> change · haptique : un tic léger à chaque bascule · mouvement réduit : fondu de 120 ms, sans saut</div>
+<div class="spec"><b style="color: var(--ink)">liste</b> · entrée : <b style="color: var(--ink)">motion.rise</b>, décalage de 40 ms par rangée, huit rangées au plus · retrait : <b style="color: var(--ink)">motion.collapse</b>, 300 ms, les voisines remontent · vers la fiche : l'avatar part par <b style="color: var(--ink)">motion.travel</b> (K29), la rangée reste · la présence pulse par <b style="color: var(--ink)">motion.pulse</b>, dans l'avatar de l'hôte</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Des mots, des glyphes, deux emplacements. Aucune signature ne nomme un utilisateur, un membre, un cercle ou un profil : l'hôte traduit sa donnée en textes avant d'appeler.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyPersonRow.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-person-row.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyPersonRow(title:subtitle:titleAccessory:meta:state:…avatar:trailing:)</code></span><span><code>MeeshyPersonRow(title, modifier, subtitle, titleAccessory, meta, state, …, avatar, trailing)</code></span><span><code>&lt;MeeshyPersonRow title subtitle titleAccessory meta state avatar trailing … /&gt;</code></span>
+<span><b>Tenues</b></span><span><code>MeeshyPersonRowState { normal, muted, ghost, highlighted }</code></span><span><code>enum class</code> identique</span><span><code>'normal' | 'muted' | 'ghost' | 'highlighted'</code></span>
+<span><b>Sélection</b></span><span><code>MeeshyPersonRowSelection { none, single(Bool), multiple(Bool) }</code></span><span><code>sealed interface</code> identique</span><span><code>{ single: boolean } | { multiple: boolean }</code></span>
+<span><b>Tailles</b></span><span><code>MeeshyPersonRowSize { inline, compact, regular, large, header }</code> : 32, 52, 60, 72, 84 pt</span><span>idem, en dp</span><span><code>'inline' | 'compact' | 'regular' | 'large' | 'header'</code>, en <code>rem</code></span>
+<span><b>Action de balayage</b></span><span><code>MeeshyPersonRowSwipeAction(title:systemImage:role:perform:)</code></span><span><code>data class MeeshyPersonRowSwipeAction(title, icon, role, perform)</code></span><span><code>type MeeshyPersonRowSwipeAction = { title; glyph; role?; perform }</code></span>
+<span><b>Emplacements</b></span><span><code>avatar</code>, <code>titleAccessory</code>, <code>trailing</code>, <code>secondaryTrailing</code>, <code>note</code> : <code>@ViewBuilder</code></span><span>mêmes noms, <code>@Composable () -&gt; Unit</code></span><span>mêmes noms, <code>ComponentChildren</code></span>
+<span><b>Pile</b></span><span>Pas ici : <b>K48</b> <code>MeeshyAvatarGroup(layout: .stack)</code></span><span>idem, <code>MeeshyAvatarGroup</code></span><span>idem, <code>&lt;MeeshyAvatarGroup layout="stack" /&gt;</code></span>
+<span><b>Squelette</b></span><span><code>MeeshyPersonRowSkeleton(size:)</code></span><span><code>MeeshyPersonRowSkeleton(size)</code></span><span><code>&lt;MeeshyPersonRowSkeleton size /&gt;</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyPersonRowRecipe.resolve(size:state:selection:hasSubtitle:hasMeta:isPressed:isEnabled:)</code></span><span style="border-bottom: 0"><code>MeeshyPersonRowRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyPersonRowRecipe(…)</code> : classes et propriétés</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>title: String</code><span>Obligatoire, non vide. Le nom affiché, déjà résolu par l'hôte.</span></div>
+<div class="par"><code>subtitle: String? = nil</code><span>Une ligne. Sans elle, le nom se centre sur l'avatar.</span></div>
+<div class="par"><code>titleAccessory</code> (emplacement)<span>Vide par défaut. Le glyphe de niveau collé au nom. Toujours avec <code>levelLabel: String?</code>, le mot dit (« Proche »).</span></div>
+<div class="par"><code>meta: String? = nil</code><span>Chiffre court à la fin : « 2,4 km », « il y a 2 h ». <code>metaDetail: String?</code> dessous.</span></div>
+<div class="par"><code>state = .normal</code><span><code>muted</code> atténue avatar et textes. <code>ghost</code> remplace l'avatar par le disque en pointillé.</span></div>
+<div class="par"><code>isPending: Bool = false</code><span>En attente d'une réponse : fond teinté à 8 %, et <code>statusLine: String?</code> à la place de la ligne secondaire.</span></div>
+<div class="par"><code>secondaryTrailing</code>, <code>note</code><span>Un second accessoire avant <code>trailing</code> (pastille K41, anneau K09). Une note de <b>K46</b> attachée sous la rangée, au retrait du texte.</span></div>
+<div class="par"><code>preview: String? = nil</code><span>Variante fil : l'aperçu remplace <code>subtitle</code>, précédé de la marque de <b>K51</b> s'il est traduit ; <code>meta</code> porte l'heure, <code>secondaryTrailing</code> le compte K41.</span></div>
+<div class="par"><code>ghostGlyph: Glyph? = nil</code><span>Le glyphe du disque en <code>ghost</code>. Sans lui : le disque vide.</span></div>
+<div class="par"><code>selection = .none</code><span>Pose la coche à la fin, avant <code>trailing</code>, et dit « sélectionné » ou non.</span></div>
+<div class="par"><code>size = .regular</code><span>Hauteur et place de l'avatar : 52 / 36, 60 / 44, 72 / 56. <code>inline</code> : avatar de 26, une ligne. <code>header</code> : titre de 22, sans filet, jamais pressable.</span></div>
+<div class="par"><code>onPress: (() -&gt; Void)? = nil</code><span>Sans lui, la rangée est inerte. Avec lui, toute la rangée est un bouton.</span></div>
+<div class="par"><code>leadingActions, trailingActions = []</code><span>Listes de <code>SwipeAction</code>, vides par défaut. Deux au plus par bord. <code>role: destructive</code> en dernier.</span></div>
+<div class="par"><code>divider: Bool = true</code><span>Le filet en retrait. L'hôte le coupe sur la dernière rangée.</span></div>
+<div class="par"><code>label: String? = nil</code><span>La phrase dite. Par défaut : <code>title</code>, <code>levelLabel</code>, <code>subtitle</code>, <code>meta</code>, <code>metaDetail</code>.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une rangée, trois façons de la balayer</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Dans une <code>List</code> : <code>swipeActions(edge:allowsFullSwipe:)</code> du système, alimenté par <code>trailingActions</code>. Hors d'une <code>List</code> : un <code>DragGesture</code> et la recette.</li>
+<li><code>Equatable</code> sur ses seules entrées de valeur, posé avec <code>.equatable()</code> : une rangée ne se réévalue que si SES mots changent.</li>
+<li>Un seul élément : <code>accessibilityElement(children: .combine)</code>, les actions de balayage en <code>accessibilityAction(named:)</code>.</li>
+<li>Coche : <code>sensoryFeedback(.selection, trigger:)</code> par le site unique de K26 ; <code>.isSelected</code> dans les traits.</li>
+<li>L'emplacement <code>avatar</code> garde son <code>matchedGeometryEffect</code> : K29 le fait voyager.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 : pas de <code>sensoryFeedback</code>, l'haptique passe par <code>HapticFeedback</code>. « Réduire les animations » : aucun rebond.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Balayage : <code>AnchoredDraggableState</code> à trois ancres (fermé, ouvert, complet), décalage lu en phase de placement. Aucune recomposition pendant le geste.</li>
+<li>Paramètres stables (primitives, <code>enum</code>, types <code>@Immutable</code>) : la rangée est sautée tant que ses mots ne changent pas.</li>
+<li>Nœud fusionné : <code>semantics(mergeDescendants = true)</code>, <code>selected</code> ou <code>toggleableState</code>, actions de balayage en <code>customActions</code>.</li>
+<li>Cible : 48 dp pour l'accessoire. Voile d'appui : <code>ripple</code> borné à la rangée, sans échelle.</li>
+<li>Voyage de l'avatar : <code>SharedTransitionLayout</code> et <code>sharedElement</code>, clé donnée par l'hôte.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Échelle d'animation à zéro : ancres atteintes sans ressort. Sans actions : aucun état de glissement créé.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Élément : <code>&lt;li&gt;</code> ; avec <code>onPress</code>, un <code>&lt;button type="button"&gt;</code> le couvre, <code>aria-pressed</code> pour la coche. L'accessoire reste un frère, jamais un bouton dans un bouton.</li>
+<li>Balayage au doigt : <code>scroll-snap-type: x mandatory</code> sur la rangée, sans écouteur. Au pointeur : les actions passent dans le menu (…) K18 et au clic droit.</li>
+<li>Appui, survol, focus : <code>:active</code>, <code>:hover</code>, <code>:focus-visible</code>. Aucun état tant qu'il n'y a ni sélection ni action.</li>
+<li>Bords logiques partout (<code>margin-inline</code>, <code>inset-inline-end</code>) : le RTL ne demande aucune règle.</li>
+<li>Voyage de l'avatar : <code>view-transition-name</code> posé par l'hôte.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans View Transitions : fondu. Longues listes : <code>content-visibility: auto</code> et hauteur fixe par taille.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Quinze rangées de gens, trois déjà presque bonnes</h2><p>Chaque écran qui liste des personnes a écrit la sienne. Les trois retenues ont déjà la bonne grammaire : des entrées de valeur, une personne, un accessoire. Elles perdent leurs types du domaine et montent dans le kit ; les autres s'y rebranchent aux lots d'intégration.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Contacts/ContactsShared.swift</span><p><span class="be">Devient le composant</span> <code>DirectoryPersonRow</code> : <code>name</code>, <code>subtitle</code>, <code>presence</code>, une action à la fin, <code>Equatable</code> sur ses valeurs, un complément dit par VoiceOver. Elle perd <code>ThemeManager</code> et son <code>enum Action</code> (écrire, inviter), qui devient l'emplacement <code>trailing</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Share/ShareRecipientRow.swift</span><p><code>ShareRecipientRow</code> : la sélection et l'état d'envoi, un seul élément d'accessibilité (« …, sélectionné »). Sa phrase dite devient la règle de <code>label</code> ; elle se rebranche sur <code>selection</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Components/ConversationInfoMemberRow.swift</span><p><code>ConversationInfoMemberRow</code> et son squelette : rôle et date d'arrivée à la fin. Elle lit <code>PresenceManager.shared</code> dans la rangée : cette lecture reste à l'hôte, dans l'emplacement <code>avatar</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Contacts/ContactsListTab.swift</span><p><code>ContactRow</code> (privée), et <code>MemberRow</code> de <span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityMembersScreen.swift</span> : deux écritures de plus, rebranchées. La pile de l'en-tête (<span class="mono">Features/Main/Views/ConversationView+Header.swift</span>, <code>topActiveMembers</code>) prend la pile de K48.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/people/DirectoryPersonRow.kt</span><p><span class="be">Devient le composant</span> <code>DirectoryPersonRow</code> : déjà dans <code>:sdk-ui</code>, paramètres stables, libellé composé par <code>PersonRowLabels.join</code> (<span class="mono">people/PersonRowLabels.kt</span>). Elle passe de <code>component/people</code> à <code>component/kit</code> et troque <code>DirectoryPersonAction</code> contre <code>trailing</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/chat/…/app/chat/ConversationMemberRow.kt</span><p><code>MemberRow</code> (rôle, « Depuis », menu à l'appui long) et <span class="mono">chat/share/ShareRecipientRow.kt</span> (coche, état d'envoi, un nœud TalkBack). Rebranchées ; leurs menus et leurs lois restent à l'app.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/stories/…/app/stories/StoryViewersSheet.kt</span><p><code>ViewerRow</code>, et <code>FriendRow</code> de <span class="mono">feature/contacts/…/app/contacts/ContactsListTab.kt</span>. La pile : <code>TypingAvatarCluster</code> (<span class="mono">feature/chat/…/app/chat/ChatTypingViews.kt</span>) va à K48, pas à K39.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/routes/discover-parts.tsx</span><p><span class="be">Devient le composant</span> <code>PersonResultRow</code> : déjà trois morceaux (<code>PersonAvatar</code>, <code>PersonText</code>, une action), mémorisée, hauteur fixe. <code>BlockedPersonRow</code>, sa voisine, devient la tenue <code>muted</code>.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/routes/conversation-new.tsx</span><p><code>PersonRow</code> : « une rangée, deux sens », avec <code>aria-pressed</code> quand elle coche. C'est la règle de <code>selection</code>. <code>MemberRow</code> de <span class="mono">routes/community-members-parts.tsx</span> et de <span class="mono">components/conversation-details-members.tsx</span>, <code>ViewerRow</code> de <span class="mono">components/publication-viewers-sheet.tsx</span> s'y rebranchent.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/active-members-stack.tsx</span><p><span class="be">Devient la pile</span> <code>ActiveMembersStack</code> : trois avatars chevauchés, cibles de 44 px gardées malgré le chevauchement. Elle perd ses contextes (anneaux, humeurs) et devient la pile de K48, pas un composant de K39.</p></div>
+<div class="twin"><span class="pf">Balayage</span><span class="mono">aucun jumeau sur une rangée de personne</span><p><span class="no">À créer</span> Le seul balayage d'une liste de gens est celui du journal d'appels sur iOS (<span class="mono">Features/Contacts/CallsTab.swift</span>, <code>swipeActions</code>). Android et le web n'en ont pas : les actions y vivent dans un menu.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Six listes qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<div class="row" style="--accent:#A855F7">
+<span class="pav"><span class="av">AN</span></span>
+<span class="who"><b>Aïssa Ndiaye</b><span>Toi · depuis mars 2026</span></span>
+<span class="chip" style="min-height: 28px; padding: 0 10px; font-size: 12px">[[ic:crown s]]<span>Admin</span></span>
+</div>
+<div class="sep"></div>
+<button class="row" style="--accent:#4ECDC4">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who"><b>Léo Marchetti<i>[[ic:fire s]]</i></b><span>@leo.m · depuis avril 2026</span></span>
+<span style="display: flex; color: var(--ink3)">[[ic:dots-three]]</span>
+</button>
+<div class="sep"></div>
+<button class="row" style="--accent:#2ECC71">
+<span class="pav"><span class="av">SB</span></span>
+<span class="who"><b>Sofia Benali<i>[[ic:hand-waving s]]</i></b><span>@sofia.b · depuis juin 2026</span></span>
+<span style="display: flex; color: var(--ink3)">[[ic:dots-three]]</span>
+</button>
+</div>
+</div>
+<div class="cp"><b>Conversation · membres</b><span class="kcap">Rôle en puce ou menu (…) K18 dans <code>trailing</code>. La date d'arrivée passe dans <code>subtitle</code>.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage" style="flex-direction: column; align-items: stretch; gap: 14px">
+<button style="display: flex; align-items: center; gap: 12px; min-height: 44px">
+<span class="stk"><span class="av" style="--accent:#4ECDC4; width: 32px; height: 32px; font-size: 12px">LM</span><span class="av" style="--accent:#F8B500; width: 32px; height: 32px; font-size: 12px">TR</span><span class="av" style="--accent:#3498DB; width: 32px; height: 32px; font-size: 12px">YT</span></span>
+<span style="font-size: 14px; font-weight: 600">Léo, Tomás et 1 202 autres</span>
+</button>
+<div class="sh" style="--bg: #16131F">
+<button class="row" style="--accent:#4ECDC4">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who"><b>Léo Marchetti<i>[[ic:fire s]]</i></b><span>Modérateur</span></span>
+<span style="display: flex; color: var(--ink3)">[[ic:caret-right s]]</span>
+</button>
+<div class="sep"></div>
+<button class="row" style="--accent:#F8B500">
+<span class="pav"><span class="av">TR</span></span>
+<span class="who"><b>Tomás Ribeiro<i>[[ic:handshake s]]</i></b><span>Membre</span></span>
+<span style="display: flex; color: var(--ink3)">[[ic:caret-right s]]</span>
+</button>
+</div>
+</div>
+<div class="cp"><b>Communauté « Photo de rue »</b><span class="kcap">La pile en tête résume 1 204 membres ; la liste dessous est la même rangée, sans présence pour qui n'est pas ami.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<button class="row" aria-pressed="true" style="--accent:#4ECDC4">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who"><b>Léo Marchetti<i>[[ic:fire s]]</i></b><span>Envoyé</span></span>
+<span class="ck on">[[ic:check s]]</span>
+</button>
+<div class="sep"></div>
+<button class="row" aria-pressed="true" style="--accent:#FF6B6B">
+<span class="pav"><span class="av">MO</span><span class="dot on"></span></span>
+<span class="who"><b>Mina Okafor<i>[[ic:drop s]]</i></b><span>Envoi…</span></span>
+<span class="ck on">[[ic:check s]]</span>
+</button>
+<div class="sep"></div>
+<button class="row" aria-pressed="false" style="--accent:#6366F1">
+<span class="pav"><span class="av" style="border-radius: 14px">BD</span></span>
+<span class="who"><b>Beatmakers Dakar</b><span>Communauté · 342 membres</span></span>
+<span class="ck"></span>
+</button>
+</div>
+</div>
+<div class="cp"><b>Envoi · destinataires</b><span class="kcap"><code>selection: .multiple</code>. L'état d'envoi s'écrit dans <code>subtitle</code>. Une conversation de groupe prend la même rangée : l'avatar est un emplacement.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<button class="row" style="--accent:#FF6B6B">
+<span class="pav"><span class="av">MO</span><span class="dot on"></span></span>
+<span class="who"><b>Mina Okafor<i>[[ic:drop s]]</i></b><span>A regardé 2 fois</span></span>
+<span class="far"><b style="font-size: 13px; font-family: inherit; font-weight: 600; color: var(--ink2)">il y a 12 min</b></span>
+<span style="display: flex; color: var(--err)">[[ic:heart-fill s]]</span>
+</button>
+<div class="sep"></div>
+<button class="row" style="--accent:#4ECDC4">
+<span class="pav"><span class="av">LM</span><span class="dot on"></span></span>
+<span class="who"><b>Léo Marchetti<i>[[ic:fire s]]</i></b><span>A répondu</span></span>
+<span class="far"><b style="font-size: 13px; font-family: inherit; font-weight: 600; color: var(--ink2)">il y a 2 h</b></span>
+<span style="display: flex; color: var(--ink3)">[[ic:chat-circle s]]</span>
+</button>
+<div class="sep"></div>
+<button class="row" style="--accent:#2ECC71">
+<span class="pav"><span class="av">SB</span></span>
+<span class="who"><b>Sofia Benali<i>[[ic:hand-waving s]]</i></b><span>@sofia.b</span></span>
+<span class="far"><b style="font-size: 13px; font-family: inherit; font-weight: 600; color: var(--ink2)">il y a 3 h</b></span>
+<span style="width: 16px; flex: none"></span>
+</button>
+</div>
+</div>
+<div class="cp"><b>Story · qui a vu</b><span class="kcap"><code>meta</code> porte le moment, <code>trailing</code> la réaction. Toucher la rangée ouvre la fiche : l'avatar part par K29.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<div class="row" style="--accent:#8D92CB">
+<span class="pav"><span class="av">KB</span></span>
+<span class="who"><b>@koffi_beats</b><span>A rejoint avec ton code</span></span>
+<span class="far"><b style="font-size: 13px; font-family: inherit; font-weight: 600; color: var(--ink2)">il y a 2 j</b></span>
+</div>
+<div class="sep"></div>
+<div class="row" style="--accent:#8D92CB">
+<span class="pav"><span class="av">NS</span></span>
+<span class="who"><b>@nadia.snd</b><span>A rejoint avec ton code</span></span>
+<span class="far"><b style="font-size: 13px; font-family: inherit; font-weight: 600; color: var(--ink2)">il y a 5 j</b></span>
+</div>
+<div class="sep"></div>
+<div class="row" style="--accent:#3498DB">
+<span class="pav"><span class="av">YT</span></span>
+<span class="who"><b>Yuki Tanaka<i>[[ic:handshake s]]</i></b><span>A rejoint avec ton code</span></span>
+<button class="ib g" aria-label="Écrire à Yuki Tanaka">[[ic:chat-circle]]</button>
+</div>
+</div>
+</div>
+<div class="cp"><b>Parrainage · filleuls</b><span class="kcap">Un inconnu n'a ni pastille de niveau ni accessoire : la rangée est inerte. Un ami retrouve le bouton d'écriture.</span></div>
+</div>
+
+<div class="kcell kc">
+<div class="stage">
+<div class="sh">
+<div class="row" style="--accent:#4ECDC4">
+<span class="pav"><span class="av">LM</span></span>
+<span class="who"><b>Léo Marchetti</b><span>Parle</span></span>
+<span class="wave" style="height: 24px" aria-hidden="true"><i style="height: 10px"></i><i style="height: 20px"></i><i style="height: 14px"></i><i style="height: 22px"></i><i style="height: 12px"></i></span>
+</div>
+<div class="sep"></div>
+<div class="row" style="--accent:#FF6B6B">
+<span class="pav"><span class="av">MO</span></span>
+<span class="who"><b>Mina Okafor</b><span>Micro coupé</span></span>
+<span style="display: flex; color: var(--ink3)">[[ic:microphone-slash]]</span>
+</div>
+<div class="sep"></div>
+<div class="row" style="--accent:#F8B500">
+<span class="pav"><span class="av" style="opacity: .4">TR</span></span>
+<span class="who"><b style="color: var(--ink3)">Tomás Ribeiro</b><span style="color: var(--ink3)">N'a pas décroché</span></span>
+<button class="btn q sm" style="padding: 0 14px">Rappeler</button>
+</div>
+</div>
+</div>
+<div class="cp"><b>Appel · participants</b><span class="kcap">Une forme d'onde, un micro barré ou un bouton à la fin. Qui n'a pas décroché est <code>muted</code>.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Une phrase.</b> Un seul élément par rangée : nom, niveau, ligne secondaire, méta, « sélectionné ». Sans <code>onPress</code>, un texte ; avec, un bouton. L'accessoire interactif est un second élément, nommé.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Balayage doublé.</b> Chaque action de balayage existe aussi comme action nommée du lecteur d'écran et au clavier. Une seule rangée ouverte à la fois. Le balayage ne part jamais pendant un défilement vertical.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque taille × tenue × sélection rend les valeurs du tableau : hauteur, place de l'avatar, écarts, retrait du filet, opacités. Vecteurs <code>K39-MeeshyPersonRow.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Rien de fabriqué.</b> La rangée ne dessine aucun point de présence et n'en garde aucune place : un emplacement <code>avatar</code> sans présence rend un avatar nu. Garde de source : aucun type du domaine, aucun singleton.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> Rangée touchable et accessoire : 44 pt, 48 dp, 44 px. Nom 15:1, ligne secondaire et tenue atténuée 4,5:1 au moins, en clair et en sombre. Atténuée n'est jamais dite « désactivée ».</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit, RTL, grande police.</b> Ni rebond ni saut de coche. En arabe tout se reflète, les actions de fin sortent à gauche. À 200 %, la méta passe sous la ligne secondaire, l'avatar ne grandit pas.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisines.</b> Cocher, presser ou balayer une rangée ne re-rend aucune autre. Une liste de 500 rangées défile sans image perdue ; le squelette et la rangée ont le même encombrement, la pile aussi avec ou sans « +N ». Non-régression : le lot ne rebranche aucun jumeau et ne change aucun écran.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Le niveau se dit par son mot, jamais par le nom du glyphe. La pile se lit en une fois, par la phrase de l'hôte. Les tenues <code>muted</code> et <code>ghost</code> sont écrites dans la ligne secondaire, pas seulement atténuées.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Au repos, une rangée ne coûte ni flou, ni ombre, ni animation. Seule la transformation s'anime au balayage. Hauteur fixe par taille : la liste connaît sa longueur avant de peindre.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8703}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

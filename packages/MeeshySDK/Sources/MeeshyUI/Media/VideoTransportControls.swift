@@ -102,7 +102,7 @@ public struct VideoTransportControls: View {
                 if TransportLayout.showsRail(placement: placement, controls: controls) { railControls }
             }
         }
-        .buttonStyle(BouncyTransportButtonStyle())
+        .buttonStyle(MeeshyGlassPressStyle())
     }
 
     /// Le `switch` ci-dessus dit QUEL conteneur ; `showsCenter` dit si la couche
@@ -172,7 +172,7 @@ public struct VideoTransportControls: View {
                 .font(.system(size: MeeshyIconSize.xxl, weight: .semibold))
                 .foregroundStyle(Color.white)
                 .frame(width: 52, height: 52)
-                .adaptiveGlass(in: Circle(), interactive: true)
+                .meeshyGlass(in: Circle(), isInteractive: true)
         }
         .accessibilityLabel(seconds < 0
             ? String(localized: "media.video.seek.backward", defaultValue: "Reculer de 10 secondes", bundle: .module)
@@ -192,6 +192,7 @@ public struct VideoTransportControls: View {
                 .frame(width: 64, height: 64)
                 .adaptiveGlassProminent(in: Circle(), tint: accent.opacity(MeeshyOpacity.intense))
         }
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(playPauseLabel)
     }
 
@@ -245,6 +246,7 @@ public struct VideoTransportControls: View {
                 .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 .contentShape(Circle())
         }
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(manager.isMuted
             ? String(localized: "media.video.unmute", defaultValue: "Réactiver le son", bundle: .module)
             : String(localized: "media.video.mute", defaultValue: "Couper le son", bundle: .module))
@@ -299,6 +301,7 @@ public struct VideoTransportControls: View {
                 tone: railTone,
                 activeTint: manager.isMuted ? accent : nil)
         }
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(manager.isMuted
             ? String(localized: "media.video.unmute", defaultValue: "Réactiver le son", bundle: .module)
             : String(localized: "media.video.mute", defaultValue: "Couper le son", bundle: .module))
@@ -426,14 +429,5 @@ private struct TransportBarSurface: ViewModifier {
         } else {
             content
         }
-    }
-}
-
-private struct BouncyTransportButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.86 : 1.0)
-            .opacity(configuration.isPressed ? 0.85 : 1.0)
-            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
     }
 }

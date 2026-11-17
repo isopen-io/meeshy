@@ -40,6 +40,7 @@ const de = {
   'listFilter.channels': 'Kanäle',
   'listFilter.pinned': 'Angeheftet',
   'listFilter.archived': 'Archiviert',
+  'listFilter.more': 'Mehr',
   'listRow.muted': 'Stummgeschaltet',
   'listRow.endToEnd': 'Ende-zu-Ende-verschlüsselt',
   'listRow.announce.pin.on': 'Unterhaltung angeheftet',

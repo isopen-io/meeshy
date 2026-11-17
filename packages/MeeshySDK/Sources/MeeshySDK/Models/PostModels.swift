@@ -537,7 +537,8 @@ extension APIPostMedia {
             captionTranslations: flatCaptionTranslations,
             transcription: transcription,
             translatedAudios: translatedAudios,
-            imageVariants: imageVariants
+            imageVariants: imageVariants,
+            mimeType: mimeType
         )
     }
 }
@@ -704,7 +705,8 @@ extension APIRepostOf {
                 width: m.width, height: m.height,
                 duration: m.duration.map { $0 / 1000 },
                 fileName: m.originalName ?? m.fileName,
-                fileSize: m.fileSize.map { MediaFormat.bytes(Int64($0)) }
+                fileSize: m.fileSize.map { MediaFormat.bytes(Int64($0)) },
+                mimeType: m.mimeType
             )
         }
         let repostTranslations: [String: PostTranslation]? = translations?.mapValues { entry in

@@ -106,6 +106,9 @@ struct FloatingCallPillView: View {
     var isLastBar: Bool = true
     /// L'encart haut, mesuré par la pile qui l'empile (`TopChromeInsetKey`).
     var topInset: CGFloat = 0
+    /// L'écran visible est la conversation de l'appel : sa puce d'en-tête dit
+    /// déjà l'appel, le bandeau se tait (#18457).
+    var isInCallConversation: Bool = false
     // Audit P2-iOS-9 — respect the user's Reduce Motion preference. The
     // slide-in/-out spring animation is the primary animation concern here;
     // when reduce motion is on, collapse it to a simple cross-fade.
@@ -117,6 +120,9 @@ struct FloatingCallPillView: View {
     @State private var pillDragOffset: CGFloat = 0
     @State private var pillLastDragSample: (time: Date, translationWidth: CGFloat)?
     @State private var showQualityDetail = false
+    /// P18.3 — les noms de l'en-tête (nom donné, nom du groupe), lus dans la
+    /// conversation en cache : l'étiquette dit « Maman · 04:12 », pas le pseudo.
+    @State private var names = CallHeaderNames(givenName: nil, groupName: nil)
 
     private let pillHeight: CGFloat = 64
 
@@ -136,16 +142,26 @@ struct FloatingCallPillView: View {
     static func isShowingPill(
         displayMode: CallDisplayMode,
         callState: CallState,
-        isSystemPiPActive: Bool
+        isSystemPiPActive: Bool,
+        isInCallConversation: Bool = false,
+        isVideo: Bool = false
     ) -> Bool {
-        displayMode == .pip && callState.isActive && !isSystemPiPActive
+        CallReducedPresence.resolve(
+            displayMode: displayMode,
+            isActive: callState.isActive,
+            isSystemPiPActive: isSystemPiPActive,
+            isInCallConversation: isInCallConversation,
+            isVideo: isVideo
+        ) == .pill
     }
 
     var body: some View {
         if Self.isShowingPill(
             displayMode: callManager.displayMode,
             callState: callManager.callState,
-            isSystemPiPActive: callManager.isSystemPiPActive
+            isSystemPiPActive: callManager.isSystemPiPActive,
+            isInCallConversation: isInCallConversation,
+            isVideo: callManager.isVideoEnabled || callManager.isRemoteVideoEnabled
         ) {
             pillContent
                 // Bannière verre + contrôles blancs : on épingle le verre en
@@ -222,7 +238,7 @@ struct FloatingCallPillView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
             String(localized: "call.pill.ongoing", defaultValue: "Appel en cours")
-            + (callManager.remoteUsername.map { " — \($0)" } ?? "")
+            + (reducedTitle.map { " — \($0)" } ?? "")
         )
         .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Touchez pour revenir à l'appel en plein écran"))
         .accessibilityAddTraits(.isButton)
@@ -234,33 +250,44 @@ struct FloatingCallPillView: View {
             }
         }
         .callQualityDetailSheet(isPresented: $showQualityDetail)
+        .task(id: callManager.conversationId) {
+            names = await CallReducedCaption.names(conversationId: callManager.conversationId)
+        }
     }
 
     // MARK: - User Info
 
     /// P18.10 — pendant mon partage, la bannière dit l'écran et « nom · durée » sur sa
     /// seule ligne d'état (signal dégradé et feuille « Qualité » compris) ; hors
-    /// partage, l'avatar, le nom et la ligne d'état.
+    /// partage (P18.3), l'avatar puis la même ligne, qui porte l'étiquette unique
+    /// « nom · durée ».
     @ViewBuilder private var identitySection: some View {
         if callManager.screenShare.isSharing {
             statusEntry.transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
         } else {
             CallParticipantVisual(diameter: 44, callManager: callManager)
                 .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
-            userInfoSection
+            statusEntry
                 .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
         }
     }
 
-    private var userInfoSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-            Text(callManager.remoteUsername ?? String(localized: "call.pill.unknown", defaultValue: "Inconnu", bundle: .main))
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(Color.white)
-                .lineLimit(1)
+    /// Le nom que j'ai donné, sinon le nom d'affichage ; en groupe, le nom du groupe.
+    private var reducedTitle: String? {
+        CallReducedRule.title(givenName: names.givenName, groupName: names.groupName, displayName: callManager.remoteUsername)
+    }
 
-            statusEntry
-        }
+    /// P18.3 — « Maman · 04:12 » une fois établi ; avant, le nom seul, à côté du glyphe d'état.
+    private var reducedLabel: some View {
+        Text(CallReducedRule.label(
+            title: reducedTitle,
+            duration: formattedDuration,
+            isConnected: pillStatus.isConnected,
+            unknown: String(localized: "call.pill.unknown", defaultValue: "Inconnu", bundle: .main)
+        ))
+        .font(.subheadline.weight(.medium).monospacedDigit())
+        .foregroundStyle(Color.white)
+        .lineLimit(1)
     }
 
     /// Une fois l'appel établi, la ligne d'état — durée et glyphe signal —
@@ -275,9 +302,10 @@ struct FloatingCallPillView: View {
         }
     }
 
-    /// Seconde ligne : durée verte + glyphe signal code couleur quand l'appel
-    /// est établi ; sinon le glyphe d'état pré-connexion (sonnerie/connexion en
-    /// ambre, rupture réseau en rouge). Le libellé texte survit pour VoiceOver.
+    /// La ligne d'état : « nom · durée » et glyphe signal code couleur quand
+    /// l'appel est établi ; sinon le glyphe d'état pré-connexion (sonnerie/connexion
+    /// en ambre, rupture réseau en rouge) et le nom seul. Le libellé texte survit
+    /// pour VoiceOver.
     private var statusLine: some View {
         CallDurationClock {
             HStack(spacing: MeeshySpacing.xs) {
@@ -288,10 +316,15 @@ struct FloatingCallPillView: View {
                     // texte courant (CallBannerContrastTests). L'état « établi »
                     // reste porté par le glyphe signal.
                     durationLabel
-                } else if let glyph = pillStatus.glyphSystemName, let color = pillStatus.glyphColor {
-                    Image(systemName: glyph)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(color)
+                } else {
+                    if let glyph = pillStatus.glyphSystemName, let color = pillStatus.glyphColor {
+                        Image(systemName: glyph)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(color)
+                    }
+                    if !callManager.screenShare.isSharing {
+                        reducedLabel
+                    }
                 }
             }
             .accessibilityElement(children: .combine)
@@ -311,9 +344,7 @@ struct FloatingCallPillView: View {
         if callManager.screenShare.isSharing {
             CallReducedCaption(callManager: callManager, style: .screenShare)
         } else {
-            Text(formattedDuration)
-                .font(.caption.weight(.medium).monospacedDigit())
-                .foregroundStyle(Color.white)
+            reducedLabel
         }
     }
 
@@ -514,21 +545,9 @@ struct FloatingCallPillView: View {
 
     private func expandToFullScreen() {
         HapticFeedback.medium()
-        guard !reduceMotion else {
-            callManager.displayMode = .fullScreen
-            return
-        }
-        // Agrandissement depuis la bannière: le
-        // fullScreenCover est présenté SANS animation système ; CallView
-        // consomme l'indice et joue l'expansion depuis le haut (mouvement
-        // inverse de collapseIntoPip) — la bannière se retire par sa propre
-        // transition .move(.top).
-        callManager.requestPipExpansionMorph()
-        var swap = Transaction()
-        swap.disablesAnimations = true
-        withTransaction(swap) {
-            callManager.displayMode = .fullScreen
-        }
+        // P18.4 — agrandissement depuis la bannière, en haut au centre : le
+        // mouvement inverse de collapseIntoPip, partagé avec la bulle.
+        CallPipMorph.expand(callManager, from: CallShareCapsuleMotion.window(reduceMotion: reduceMotion, capsuleLive: true), reduceMotion: reduceMotion)
     }
 
     // MARK: - Formatting

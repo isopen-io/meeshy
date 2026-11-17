@@ -156,6 +156,18 @@ struct MessageOverlayMenu: View {
         return windowFrame.offsetBy(dx: -containerOrigin.x, dy: -containerOrigin.y)
     }
 
+    /// **La bulle se SOULÈVE de sa cellule, elle ne surgit pas en fondu.** La
+    /// cellule du fil se cache dès l'ouverture (`isHiddenForOverlay`) : l'aperçu
+    /// doit donc déjà être là, opaque, posé exactement sur elle, puis monter à
+    /// sa place — et revenir de même à la fermeture. Partir de l'opacité 0
+    /// faisait clignoter le message : il disparaissait du fil, puis une copie
+    /// translucide glissait vers le menu. Sans cellule connue, ou sous Réduire
+    /// les animations (tout est déjà à sa place), seul le fondu reste.
+    nonisolated static func previewOpacity(isVisible: Bool, hasSourceFrame: Bool, reduceMotion: Bool) -> Double {
+        if hasSourceFrame && !reduceMotion { return 1 }
+        return isVisible ? 1 : 0
+    }
+
     // Expanded emoji set — far more than fits in the viewport, so the
     // quick reaction strip becomes horizontally scrollable. The first 6
     // are the iMessage-style "popular" defaults (still visible without
@@ -226,7 +238,32 @@ struct MessageOverlayMenu: View {
         context.canReact
     }
 
+    /// **« Imager » à droite du « + » de la barre de réactions** (#16162) : l'appui
+    /// long montrait Modifier, Sélectionner, Composer… sans Imager, relégué dans
+    /// « Plus… », alors que c'est une feature majeure qui doit s'atteindre d'un geste. La tuile suit le MÊME juge que l'action
+    /// de la liste (`MessageActionResolver.offersImager`, lu AVANT le plafond de six :
+    /// quand la liste déborde, Imager part dans « Plus… » et la tuile reste) : un seul
+    /// juge dit si ce message s'image (texte ou média peignable, non protégé, sortie
+    /// permise) ; la barre ne la montre que si l'hôte a câblé l'export.
+    static func showsImagerTile(for context: MessageMenuContext, hasExportHandler: Bool) -> Bool {
+        hasExportHandler && MessageActionResolver.offersImager(context)
+    }
+
+    /// La tuile elle-même : le glyphe d'Imager, son nom, et le chemin UNIQUE de l'action
+    /// (`handlePrimaryAction(.exportImage)` : garde « n'agit qu'une fois », rappel de
+    /// l'hôte, fermeture) — jamais un second chemin à côté de la liste.
+    private var imagerTile: EmojiReactionPicker.ExtraTile? {
+        guard Self.showsImagerTile(for: menuContext, hasExportHandler: onExportImage != nil) else { return nil }
+        return EmojiReactionPicker.ExtraTile(
+            symbol: FullscreenChromeSymbol.imager,
+            accessibilityLabel: MessageCardExportMenu.imageLabel,
+            accessibilityIdentifier: "message.overlay.imager",
+            action: { handlePrimaryAction(.exportImage) }
+        )
+    }
+
     private func handlePrimaryAction(_ action: PrimaryAction) {
+        guard isVisible else { return }
         switch action {
         case .reply:
             onReply?()
@@ -377,7 +414,7 @@ struct MessageOverlayMenu: View {
                     y: settled ? nlMenuY : (sourceRect.maxY + 8)
                 )
                 .offset(y: clusterDragOffset - menuRise)
-                .opacity(isVisible ? 1 : 0)
+                .modifier(ShownAndTouchable(isShown: isVisible))
                 .scaleEffect(settled ? 1.0 : 0.85, anchor: .top)
                 // highPriorityGesture : en `.gesture` simple, les Button
                 // des rows gagnent les drags lents (vérifié simulateur —
@@ -393,7 +430,7 @@ struct MessageOverlayMenu: View {
                 // tient pas dans la fenêtre. Gate Equatable (H3) + mémoire de
                 // la rangée plate : le drag 60 fps ne reconstruit rien. Seule la
                 // zone de lecture d'un vocal ou d'une vidéo s'y touche (#11339).
-                previewViewport(
+                settledPreviewViewport(
                     touch: touch, containerSize: geometry.size, previewSize: CGSize(width: previewW, height: previewH),
                     fit: fit)
                 // #9043 — transformation de RENDU seule (aucune passe de
@@ -404,7 +441,7 @@ struct MessageOverlayMenu: View {
                     y: settled ? nlBubbleMidY : nlSourceMidY
                 )
                 .offset(y: clusterDragOffset)
-                .opacity(isVisible ? 1 : 0)
+                .opacity(Self.previewOpacity(isVisible: isVisible, hasSourceFrame: hasSourceFrame, reduceMotion: reduceMotion))
 
                 // Barre de réactions AU-DESSUS de l'aperçu (native-lean) — montée
                 // seulement si la loi ouvre la réaction (`canReact`).
@@ -415,9 +452,8 @@ struct MessageOverlayMenu: View {
                             y: settled ? nlEmojiY : sourceRect.minY
                         )
                         .offset(y: clusterDragOffset)
-                        .opacity(isVisible ? 1 : 0)
+                        .modifier(ShownAndTouchable(isShown: isVisible))
                         .scaleEffect(settled ? 1.0 : 0.7, anchor: .center)
-                        .allowsHitTesting(true)
                 }
             }
             // #9043 — le glissement vaut sur TOUTE la vue (le voile, l'aperçu
@@ -436,16 +472,29 @@ struct MessageOverlayMenu: View {
         .onDisappear { stopPreviewPlayback() }
     }
 
+    /// L'aperçu avec le léger rebond de fin (retour porteur, #18723) : la
+    /// bulle grandit jusqu'à sa taille et la dépasse d'un rien avant de s'y
+    /// poser. Sous « Réduire les animations », elle est déjà posée.
+    private func settledPreviewViewport(
+        touch: MessageOverlayPreviewTouch, containerSize: CGSize, previewSize: CGSize, fit: MessageOverlayPreviewFit.Result
+    ) -> some View {
+        let settled = isVisible || reduceMotion
+        return previewViewport(touch: touch, containerSize: containerSize, previewSize: previewSize, fit: fit)
+            .scaleEffect(settled ? 1 : PreviewSettleSpring.messageStartScale)
+            .animation(reduceMotion ? nil : MeeshyAnimation.messagePreviewPop, value: settled)
+    }
+
     /// **L'entrée de l'overlay** (#11208). Aucune haptique : le geste
     /// (`ConditionalBubbleLongPress`) a déjà vibré, et une seconde secousse
     /// dans la même demi-seconde se lisait comme deux événements. Le ressort
-    /// d'entrée (courbe de réponse iMessage) devient un fondu sous « Réduire
+    /// d'entrée (courbe de réponse iMessage, avec le léger rebond de fin de
+    /// `PreviewSettleSpring`) devient un fondu sous « Réduire
     /// les animations ». La cascade d'emojis est jouée par
     /// `EmojiReactionPicker` lui-même via `WaveTileModifier`.
     private func enter() {
-        withAnimation(reduceMotion
-                      ? .easeOut(duration: Self.reducedMotionFadeDuration)
-                      : .spring(response: 0.42, dampingFraction: 0.74)) {
+        meeshyWithAnimation(MeeshyAnimation.messagePreviewSettle,
+                            reduced: .easeOut(duration: Self.reducedMotionFadeDuration),
+                            reduceMotion: reduceMotion) {
             isVisible = true
         }
     }
@@ -466,7 +515,7 @@ struct MessageOverlayMenu: View {
             visibleHeight: fit.visibleHeight,
             scrolls: fit.scrollsInternally,
             isTrailing: message.isMe,
-            interactive: touch.offersPlayback
+            interactive: touch.offersTouch
         ) {
             MessageOverlayCellPreview(
                 face: previewFace(kind: touch.kind, containerWidth: containerSize.width),
@@ -481,13 +530,15 @@ struct MessageOverlayMenu: View {
             .environment(\.bubbleContainerWidth, containerSize.width > 0 ? containerSize.width : nil)
             .frame(width: previewSize.width, alignment: message.isMe ? .trailing : .leading)
             .overlayPreferenceValue(MediaPlayControlAnchorKey.self) { zones in
-                previewTouchMask(zones: zones, playable: touch.playableAttachmentIds)
+                previewTouchMask(zones: zones, playable: touch.touchZoneIds)
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredPreviewHeight = $0 }
+            // Le flou levé dans l'aperçu (#18856) ne sort pas par une capture.
+            .captureShield(message.holdsBlur)
         }
         // Le cadre défile, ou l'aperçu porte une zone de lecture (#11339) :
         // sinon, une image que les touchers traversent jusqu'au voile.
-        .allowsHitTesting(fit.scrollsInternally || touch.offersPlayback)
+        .allowsHitTesting(fit.scrollsInternally || touch.offersTouch)
     }
 
     /// **Le masque de l'aperçu** (#11339) : percé aux seuls BOUTONS de lecture
@@ -550,7 +601,7 @@ struct MessageOverlayMenu: View {
     private func flatRowKey(availableWidth: CGFloat) -> MessageOverlayFlatRowMemo.Key {
         MessageOverlayFlatRowMemo.Key(
             messageId: message.id, updatedAt: message.updatedAt, content: message.content,
-            effects: message.effects.flags, reactionCount: message.reactions.count,
+            effects: message.unveiledForPreview.effects.flags, reactionCount: message.reactions.count,
             translations: textTranslations, served: preferredTranslation, selection: threadLanguage.selection,
             transcription: transcription, translatedAudios: translatedAudios, readingMode: threadLanguage.readingMode,
             senderStoryRing: threadLanguage.senderStoryRing, senderMoodEmoji: threadLanguage.senderMoodEmoji,
@@ -563,7 +614,7 @@ struct MessageOverlayMenu: View {
     /// l'auteur.
     private func previewRow(availableWidth: CGFloat) -> FocalRowInput {
         FocalRowInput.preview(
-            message: message,
+            message: message.unveiledForPreview,
             translations: textTranslations,
             servedTranslation: preferredTranslation,
             accentHex: contactColor,
@@ -633,7 +684,8 @@ struct MessageOverlayMenu: View {
                 HapticFeedback.light()
                 onExpandFullPicker?()
                 dismiss()
-            }
+            },
+            extraTile: imagerTile
         )
         .frame(maxWidth: width)
         .onAppear {
@@ -647,6 +699,7 @@ struct MessageOverlayMenu: View {
     }
 
     private func reagirDepuisLaBande(_ emoji: String) {
+        guard isVisible else { return }
         EmojiUsageTracker.recordUsage(emoji: emoji)
         onReact?(emoji)
         dismiss()
@@ -730,14 +783,15 @@ struct MessageOverlayMenu: View {
     // MARK: - Dismiss
 
     private func dismiss() {
+        guard isVisible else { return }
         HapticFeedback.light()
         // Sortie : l'overlay se retracte vers le coin natif de la bulle ;
         // un fondu sous « Réduire les animations ». La cascade d'entree des
         // emojis n'a pas de symetrique a la sortie (le composant partage gere
         // son propre cycle de vie).
-        withAnimation(reduceMotion
-                      ? .easeOut(duration: Self.reducedMotionFadeDuration)
-                      : .spring(response: 0.32, dampingFraction: 0.86)) {
+        meeshyWithAnimation(.spring(response: 0.32, dampingFraction: 0.86),
+                            reduced: .easeOut(duration: Self.reducedMotionFadeDuration),
+                            reduceMotion: reduceMotion) {
             isVisible = false
         }
         delayed.run(after: .milliseconds(260)) {
@@ -745,6 +799,14 @@ struct MessageOverlayMenu: View {
         }
     }
 
+}
+
+private struct ShownAndTouchable: ViewModifier {
+    let isShown: Bool
+
+    func body(content: Content) -> some View {
+        content.opacity(isShown ? 1 : 0).allowsHitTesting(isShown)
+    }
 }
 
 // MARK: - Ce que le fil sert pour ce message
@@ -785,7 +847,7 @@ extension MessageOverlayMenu {
     /// suivent une bascule faite dans le fil, pas le seul Prisme (#9259).
     var previewBubble: ThemedMessageBubble {
         var bubble = ThemedMessageBubble(
-            message: message,
+            message: message.unveiledForPreview,
             contactColor: contactColor,
             isDirect: isDirect,
             isDark: isDark,

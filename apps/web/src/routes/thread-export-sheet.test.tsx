@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { act } from 'react';
 
 import type { MessageCardDelivery } from '@/lib/export/deliver-message-card';
 import type { MessageCardInput } from '@/lib/export/message-card-layout';
@@ -9,7 +10,8 @@ import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { INITIAL_MESSAGE_CARD_FORMAT, MESSAGE_CARD_FORMAT_KEY } from '@/lib/export/message-card-format';
-import { ALL_TEMPLATE_IDS, CARD_LINKS, CARD_PALETTE_IDS, CARD_TYPEFACE_IDS, FEATURED_TEMPLATE_IDS } from '@/lib/export/message-card-templates';
+import { ALL_TEMPLATE_IDS, CARD_LINKS, CARD_PALETTE_IDS, CARD_TYPEFACE_IDS } from '@/lib/export/message-card-templates';
+import { BUILT_IN_MODELS } from '@/lib/export/message-card-models';
 import { MESSAGE_CARD_USAGE_KEY } from '@/lib/export/message-card-usage';
 import type { SafeStorage } from '@/lib/storage';
 
@@ -84,6 +86,8 @@ const mountSheet = async (
     readonly subject?: MessageCardSubject;
     readonly loadSources?: SourcesLoader;
     readonly recordMotion?: MotionRecorder;
+    readonly scrollHeights?: { readonly contentHeight: number; readonly viewportHeight: number };
+    readonly living?: { readonly calls: { readonly durationMs: number; readonly scrollDuration: number | null; readonly backdropVideoUrl: string | null }[] };
   } = {},
 ) => {
   const harness: Harness = { painted: [], delivered: [], intents: [], announced: [], closed: { count: 0 }, thumbnails: [] };
@@ -92,6 +96,12 @@ const mountSheet = async (
       subject={options.subject ?? subject}
       loadSources={options.loadSources ?? (async () => ({ sources: [], failed: [], dispose: () => undefined }))}
       {...(options.recordMotion === undefined ? {} : { recordMotion: options.recordMotion })}
+      measureScroll={async () => options.scrollHeights ?? null}
+      loadBackdrop={async () => ({ width: 1200, height: 800 }) as unknown as CanvasImageSource}
+      recordLiving={async ({ durationMs, plan, backdropVideoUrl }) => {
+        options.living?.calls.push({ durationMs, scrollDuration: plan?.scrollDuration ?? null, backdropVideoUrl });
+        return new Blob(['film'], { type: 'video/mp4' });
+      }}
       handle="jacques"
       {...(options.languages === true ? { exportLanguages } : {})}
       conversationTitle={options.title === undefined ? 'Soirée de lancement' : options.title}
@@ -166,6 +176,18 @@ describe('MessageExportSheet — voir la carte, choisir son template, l’enregi
     expect(host.querySelectorAll('[data-export-link]').length).toBe(CARD_LINKS.length);
     expect(chip(host, 'link', 'orbite')?.getAttribute('aria-pressed')).toBe('true');
     expect(chip(host, 'link', 'bulles')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  test('chaque case de liaison montre sa liaison posée sur la palette de la carte (#18809)', async () => {
+    const { host } = await mountSheet();
+    await openTab(host, 'link');
+    const drawings = CARD_LINKS.map((link) => {
+      const sketch = chip(host, 'link', link)?.querySelector(`[data-link-sketch="${link}"]`);
+      expect(sketch?.querySelector('svg')?.childElementCount ?? 0).toBeGreaterThanOrEqual(4);
+      expect((sketch as HTMLElement | null)?.style.background ?? '').toContain('linear-gradient');
+      return sketch?.innerHTML ?? '';
+    });
+    expect(new Set(drawings).size).toBe(CARD_LINKS.length);
   });
 
   test('changer une dimension garde les deux autres et repeint la carte', async () => {
@@ -264,14 +286,28 @@ describe('MessageExportSheet — voir la carte, choisir son template, l’enregi
     expect(host.querySelector('[data-export-count]')?.getAttribute('data-export-count')).toBe(String(ALL_TEMPLATE_IDS.length / 2));
   });
 
-  test('un appareil neuf voit la vitrine en « Populaires » ; ensuite, ses plus utilisés d’abord', async () => {
-    const fresh = await mountSheet();
-    const shown = (host: HTMLElement) => Array.from(host.querySelectorAll('[data-export-template]')).map((node) => node.getAttribute('data-export-template'));
-    expect(shown(fresh.host)).toEqual([...FEATURED_TEMPLATE_IDS]);
-    mounter.unmountAll();
-    const storage = memoryStorage({ [MESSAGE_CARD_USAGE_KEY]: JSON.stringify({ 'braise.marqueur.silence': 4, 'lagon.futur.filet': 1 }) });
-    const used = await mountSheet({ storage });
-    expect(shown(used.host).slice(0, 2)).toEqual(['braise.marqueur.silence', 'lagon.futur.filet']);
+  test('« Styles » montre les huit maquettes, et en choisir une habille la carte de son allure et de son décor (#18673)', async () => {
+    const { host, harness } = await mountSheet();
+    const shown = Array.from(host.querySelectorAll('[data-export-model]')).map((node) => node.getAttribute('data-export-model'));
+    expect(shown).toEqual(BUILT_IN_MODELS.map((model) => model.id));
+    await mounter.click(host.querySelector('[data-export-model="epure"]'));
+    await mounter.settle();
+    const painted = harness.painted[harness.painted.length - 1];
+    expect(painted?.template).toBe('ardoise.systeme.silence');
+    expect(painted?.aspect).toBe('square');
+    expect(painted?.decor).toEqual({ alignment: 'center', frame: 'border', ornament: 'none' });
+  });
+
+  test('une maquette ne propose que ses liaisons, et le hasard garde la sienne', async () => {
+    const { host, harness } = await mountSheet({ random: () => 0.5 });
+    await mounter.click(host.querySelector('[data-export-model="bulles"]'));
+    await mounter.settle();
+    await mounter.click(host.querySelector('[data-export-tab="link"]'));
+    await mounter.settle();
+    expect(Array.from(host.querySelectorAll('[data-export-link]')).map((node) => node.getAttribute('data-export-link'))).toEqual(['bulles']);
+    await mounter.click(host.querySelector('[data-export-random]'));
+    await mounter.settle();
+    expect(harness.painted[harness.painted.length - 1]?.template.endsWith('.bulles')).toBe(true);
   });
 
   test('« Au hasard » tire un template parmi tous', async () => {
@@ -746,11 +782,76 @@ describe('« Imagine » — l’atelier d’« Imager » (#8693)', () => {
       const { host } = await mountSheet();
       await mounter.settle();
       await mounter.settle();
-      const thumb = host.querySelector('[data-export-template] img');
+      const thumb = host.querySelector('[data-export-model] img');
       expect(thumb?.className.includes('object-contain')).toBe(true);
       expect(thumb?.className.includes('object-cover')).toBe(false);
     } finally {
       globalThis.IntersectionObserver = original;
     }
+  });
+});
+
+describe('le fond choisi et la vidéo qui défile (#18672, #18671)', () => {
+  const pickFile = async (host: HTMLElement, file: File) => {
+    const input = host.querySelector<HTMLInputElement>('[data-export-backdrop-file]');
+    if (input === null) throw new Error('champ de fichier absent');
+    Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await mounter.settle();
+    await mounter.settle();
+  };
+
+  test('une photo choisie dans « Fond » passe sous la carte, voilée ; « Retirer le fond » la retire', async () => {
+    const { host, harness } = await mountSheet();
+    await openTab(host, 'palette');
+    expect(host.querySelector('[data-export-backdrop-pick]')?.textContent).toBe('Photo ou vidéo en fond');
+    await pickFile(host, new File(['x'], 'plage.jpg', { type: 'image/jpeg' }));
+    expect(harness.painted.at(-1)?.chosenBackdrop).toEqual({ video: false, veil: 0.55 });
+    expect(host.querySelector('[data-export-backdrop-pick]')?.textContent).toBe('Changer le fond');
+    expect(host.querySelector('[data-export-backdrop-veil]')).not.toBeNull();
+    await mounter.click(host.querySelector('[data-export-backdrop-remove]'));
+    await mounter.settle();
+    expect(harness.painted.at(-1)?.chosenBackdrop).toBeUndefined();
+  });
+
+  test('un fichier qui n’est ni une photo ni une vidéo est refusé, et le dit', async () => {
+    const { host, harness } = await mountSheet();
+    await openTab(host, 'palette');
+    await pickFile(host, new File(['x'], 'notes.txt', { type: 'text/plain' }));
+    expect(host.querySelector('[data-export-backdrop-failed]')?.textContent).toBe('Impossible d’utiliser ce fond');
+    expect(harness.painted.at(-1)?.chosenBackdrop).toBeUndefined();
+  });
+
+  test('une vidéo choisie en fond offre l’export en vidéo', async () => {
+    const living = { calls: [] as { durationMs: number; scrollDuration: number | null; backdropVideoUrl: string | null }[] };
+    const { host, harness } = await mountSheet({ living });
+    expect(host.querySelector('[data-export-output="video"]')).toBeNull();
+    await openTab(host, 'palette');
+    await pickFile(host, new File(['x'], 'mer.mp4', { type: 'video/mp4' }));
+    await mounter.click(host.querySelector('[data-export-output="video"]'));
+    await mounter.click(host.querySelector('[data-export-save]'));
+    await mounter.settle();
+    expect(living.calls[0]?.backdropVideoUrl).toBe('blob:card');
+    expect(living.calls[0]?.scrollDuration).toBeNull();
+    expect(harness.delivered[0]?.endsWith('.mp4')).toBe(true);
+  });
+
+  test('une carte trop longue défile en vidéo, à la vitesse choisie, et sa durée se lit avant d’enregistrer', async () => {
+    const living = { calls: [] as { durationMs: number; scrollDuration: number | null; backdropVideoUrl: string | null }[] };
+    const { host } = await mountSheet({ scrollHeights: { contentHeight: 1920 + 540, viewportHeight: 1920 }, living });
+    expect(host.querySelector('[data-export-scroll]')).toBeNull();
+    await mounter.click(host.querySelector('[data-export-output="video"]'));
+    expect(host.querySelectorAll('[data-export-scroll-speed]').length).toBe(9);
+    expect(host.querySelector('[data-export-scroll-speed="1"]')?.getAttribute('aria-checked')).toBe('true');
+    expect(host.querySelector('[data-export-scroll-duration]')?.textContent).toContain('14');
+    await mounter.click(host.querySelector('[data-export-scroll-speed="2"]'));
+    expect(host.querySelector('[data-export-scroll-duration]')?.textContent).toContain('9');
+    await mounter.click(host.querySelector('[data-export-save]'));
+    await mounter.settle();
+    expect(living.calls[0]?.scrollDuration).toBeCloseTo(5, 5);
+    expect(living.calls[0]?.durationMs).toBeCloseTo(8500, 5);
+    expect(living.calls[0]?.backdropVideoUrl).toBeNull();
   });
 });

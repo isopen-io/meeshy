@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Parrainage — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.qr{display:grid;grid-template-columns:repeat(9,6px);grid-auto-rows:6px;gap:1px;padding:9px;border-radius:16px;background:#EEF2FF;box-shadow:0 10px 24px rgba(0,0,0,.35)}
+.qr>b{background:#0B0B12;border-radius:1.5px}
+.qr>i{display:block}
+.act{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;min-width:0;font-size:11.5px;font-weight:600;color:var(--ink2)}
+.pill{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;flex:none}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.fun{display:flex;align-items:center;justify-content:space-between;gap:10px;height:52px;padding:0 20px;border-radius:999px;transform-origin:center;animation:pFun .9s cubic-bezier(.2,.9,.25,1) both}
+.hop{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink3)}
+@keyframes pFun{from{transform:scaleX(.3);opacity:0}to{transform:none;opacity:1}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 0; height: 420px; overflow: hidden; pointer-events: none">
+<div class="orb" style="width: 240px; height: 240px; left: -80px; top: 40px; background: #34D399; opacity: .30"></div>
+<div class="orb" style="width: 200px; height: 200px; right: -70px; top: 170px; background: #6366F1; opacity: .34; animation-delay: -4s"></div>
+</div>
+
+<header style="position: relative; display: flex; align-items: center; gap: 12px; padding: 54px 16px 0">
+<button class="ib g" aria-label="Retour">[[ic:caret-left]]</button>
+<h1 class="d" style="font-size: 20px; flex: 1; min-width: 0">Parrainage</h1>
+<button class="ib g" aria-label="Plus d'options">[[ic:dots-three]]</button>
+</header>
+
+<section class="rise" style="position: relative; padding: 20px 20px 0">
+<div class="ticket" style="--cut: 152px; background: linear-gradient(155deg, color-mix(in oklab, var(--l-aff) 34%, var(--raised)) 0%, color-mix(in oklab, var(--l-aff) 10%, var(--raised)) 70%); border-color: color-mix(in oklab, var(--l-aff) 45%, transparent)">
+<div style="display: flex; align-items: flex-start; gap: 12px; padding: 20px 18px 0; height: 152px">
+<div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0">
+<span class="tag" style="display: inline-flex; align-items: center; gap: 6px; color: var(--l-aff)">[[ic:gift s]]<span>Ton code</span></span>
+<span class="mono" style="font-size: 30px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; color: var(--ink)">AISSA-7K2</span>
+<a href="#" class="mono" style="font-size: 12px; line-height: 1.5; color: var(--ink2); margin-top: 4px">meeshy.me/signup/affiliate/<wbr><span style="white-space: nowrap; font-weight: 700; color: var(--ink)">AISSA-7K2</span></a>
+</div>
+<div class="qr" aria-hidden="true">
+<b></b><b></b><b></b><i></i><b></b><i></i><b></b><b></b><b></b>
+<b></b><i></i><b></b><i></i><i></i><b></b><b></b><i></i><b></b>
+<b></b><b></b><b></b><i></i><b></b><i></i><b></b><b></b><b></b>
+<i></i><b></b><i></i><b></b><b></b><i></i><b></b><i></i><i></i>
+<b></b><i></i><b></b><i></i><b></b><b></b><i></i><b></b><i></i>
+<i></i><b></b><b></b><i></i><i></i><b></b><b></b><i></i><b></b>
+<b></b><b></b><b></b><i></i><b></b><i></i><i></i><b></b><b></b>
+<b></b><i></i><b></b><b></b><i></i><b></b><b></b><i></i><i></i>
+<b></b><b></b><b></b><i></i><b></b><b></b><i></i><b></b><b></b>
+<i></i><i></i><i></i><b></b><i></i><b></b><b></b><i></i><b></b>
+<b></b><i></i><b></b><b></b><i></i><i></i><b></b><b></b><i></i>
+</div>
+</div>
+<div class="cut" style="border-color: color-mix(in oklab, var(--l-aff) 45%, transparent)"></div>
+<div style="display: flex; gap: 4px; padding: 16px 10px 16px">
+<button class="act"><span class="ib g" style="width: 52px; height: 52px">[[ic:copy]]</span><span>Copier</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px">[[ic:qr-code]]</span><span>QR</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px">[[ic:export]]</span><span>Partager</span></button>
+<button class="act"><span class="ib g" style="width: 52px; height: 52px">[[ic:envelope-simple]]</span><span>Par e-mail</span></button>
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .08s; position: relative; padding: 28px 20px 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr))">
+<div style="display: flex; flex-direction: column; gap: 2px; text-align: center"><span class="d" style="font-size: 38px; color: var(--l-aff)">14</span><span style="font-size: 12.5px; color: var(--ink2)">filleuls</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px; text-align: center; border-left: 1px solid var(--line); border-right: 1px solid var(--line)"><span class="d" style="font-size: 38px">38</span><span style="font-size: 12.5px; color: var(--ink2)">visites</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px; text-align: center"><span class="d" style="font-size: 38px">9</span><span style="font-size: 12.5px; color: var(--ink2)">inscrits ce mois</span></div>
+</section>
+
+<section class="rise" style="animation-delay: .16s; padding: 36px 20px 0; display: flex; flex-direction: column; gap: 16px">
+<h2 class="d" style="font-size: 22px">Du lien au filleul</h2>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
+<div class="fun" style="width: 100%; background: color-mix(in oklab, var(--l-aff) 26%, transparent); color: var(--ink)">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-weight: 600">[[ic:cursor-click s]]<span>Visites</span></span><span class="d" style="font-size: 22px">38</span>
+</div>
+<span class="hop">[[ic:caret-down s]]<span>45 % s'inscrivent</span></span>
+<div class="fun" style="width: 68%; background: color-mix(in oklab, var(--l-aff) 70%, transparent); color: #0B0B12; animation-delay: .15s">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700">[[ic:user-plus s]]<span>Inscriptions</span></span><span class="d" style="font-size: 22px">17</span>
+</div>
+<span class="hop">[[ic:caret-down s]]<span>82 % restent actifs</span></span>
+<div class="fun" style="width: 50%; background: var(--l-aff); color: #0B0B12; animation-delay: .3s; box-shadow: 0 10px 26px color-mix(in oklab, var(--l-aff) 40%, transparent)">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-weight: 700">[[ic:pulse s]]<span>Actifs</span></span><span class="d" style="font-size: 22px">14</span>
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .24s; padding: 36px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 22px">Ce que ça te rapporte</h2>
+<div class="card" style="display: flex; flex-direction: column; gap: 18px; padding: 18px">
+<div style="display: flex; align-items: center; gap: 12px">
+<span class="ib" style="width: 48px; height: 48px; background: color-mix(in oklab, var(--warn) 18%, transparent); color: var(--warn)">[[ic:sparkle-fill]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span class="d" style="font-size: 17px">+50 étincelles par filleul actif</span>
+<span style="font-size: 13px; color: var(--ink2)">700 étincelles gagnées jusqu'ici</span>
+</div>
+</div>
+<div class="sep" style="margin: 0"></div>
+<div style="display: flex; align-items: center; gap: 14px">
+<span style="display: inline-flex; padding: 3px; border-radius: 50%; border: 2.5px solid var(--l-aff); box-shadow: 0 0 0 4px color-mix(in oklab, var(--l-aff) 20%, transparent)"><span class="av" style="width: 42px; height: 42px; font-size: 15px">AN</span></span>
+<div style="display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px">
+<span class="tag">Prochain palier</span>
+<span class="mono" style="color: var(--l-aff); font-weight: 700">14 / 15</span>
+</div>
+<span class="bar"><i style="width: 93%; background: var(--l-aff)"></i></span>
+<span style="font-size: 13.5px; color: var(--ink); text-wrap: pretty">15 filleuls : contour d'avatar Parrain</span>
+</div>
+</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .32s; padding: 36px 0 0; display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; padding: 0 20px">
+<h2 class="d" style="font-size: 22px">Tes filleuls</h2>
+<a href="#" style="font-size: 13.5px; font-weight: 700; color: var(--l-aff); min-height: 44px; display: inline-flex; align-items: center">Tout voir</a>
+</div>
+
+<div class="row" style="gap: 10px; padding: 8px 16px 8px 20px">
+<span class="av" style="--accent: #8D92CB">KB</span>
+<div style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: center; gap: 6px; min-width: 0"><span style="font-weight: 700; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">@koffi_beats</span><span class="pill" style="color: var(--ok); background: color-mix(in oklab, var(--ok) 16%, transparent)">Actif</span></span>
+<span style="font-size: 12.5px; color: var(--ink3)">a rejoint il y a 3 j</span>
+</div>
+<button class="btn q sm" style="padding: 0 10px; font-size: 12.5px; gap: 5px">[[ic:hand-waving s]]<span>Dire bonjour</span></button>
+</div>
+<div class="sep" style="margin: 0 20px 0 74px"></div>
+
+<div class="row" style="gap: 10px; padding: 8px 16px 8px 20px">
+<span class="av" style="--accent: #8D92CB">NS</span>
+<div style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: center; gap: 6px; min-width: 0"><span style="font-weight: 700; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">@nadia.snd</span><span class="pill" style="color: var(--ink3); background: color-mix(in oklab, var(--ink3) 16%, transparent)">En attente</span></span>
+<span style="font-size: 12.5px; color: var(--ink3)">a rejoint il y a 5 j</span>
+</div>
+<button class="btn q sm" style="padding: 0 10px; font-size: 12.5px; gap: 5px">[[ic:hand-waving s]]<span>Dire bonjour</span></button>
+</div>
+<div class="sep" style="margin: 0 20px 0 74px"></div>
+
+<div class="row" style="gap: 10px; padding: 8px 16px 8px 20px">
+<span class="av" style="--accent: #8D92CB">SK</span>
+<div style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: center; gap: 6px; min-width: 0"><span style="font-weight: 700; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">@samba.k</span><span class="pill" style="color: var(--ok); background: color-mix(in oklab, var(--ok) 16%, transparent)">Actif</span></span>
+<span style="font-size: 12.5px; color: var(--ink3)">a rejoint il y a 1 sem.</span>
+</div>
+<button class="btn q sm" style="padding: 0 10px; font-size: 12.5px; gap: 5px">[[ic:hand-waving s]]<span>Dire bonjour</span></button>
+</div>
+<div class="sep" style="margin: 0 20px 0 74px"></div>
+
+<div class="row" style="gap: 10px; padding: 8px 16px 8px 20px">
+<span class="av" style="--accent: #3498DB">YT</span>
+<div style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: center; gap: 6px; min-width: 0"><span style="font-weight: 700; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Yuki Tanaka</span><span class="pill" style="color: var(--ok); background: color-mix(in oklab, var(--ok) 16%, transparent)">Actif</span></span>
+<span style="font-size: 12.5px; color: var(--ink3)">a rejoint il y a 3 sem.</span>
+</div>
+<button class="btn q sm" style="padding: 0 10px; font-size: 12.5px; gap: 5px">[[ic:hand-waving s]]<span>Dire bonjour</span></button>
+</div>
+<div class="sep" style="margin: 0 20px 0 74px"></div>
+
+<div class="row" style="gap: 10px; padding: 8px 16px 8px 20px">
+<span class="av" style="--accent: #8D92CB">DW</span>
+<div style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: center; gap: 6px; min-width: 0"><span style="font-weight: 700; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">@dieyna.wav</span><span class="pill" style="color: var(--ok); background: color-mix(in oklab, var(--ok) 16%, transparent)">Actif</span></span>
+<span style="font-size: 12.5px; color: var(--ink3)">a rejoint il y a 1 mois</span>
+</div>
+<button class="btn q sm" style="padding: 0 10px; font-size: 12.5px; gap: 5px">[[ic:hand-waving s]]<span>Dire bonjour</span></button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .4s; padding: 32px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 22px">Invitations envoyées</h2>
+<div class="card" style="display: flex; flex-direction: column; padding: 6px 0">
+<div class="row" style="gap: 12px; padding: 8px 14px">
+<span class="ib" style="background: color-mix(in oklab, var(--l-aff) 16%, transparent); color: var(--l-aff)">[[ic:envelope-simple]]</span>
+<div style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0">
+<span class="mono" style="font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">ma•••••@gmail.com</span>
+<span style="font-size: 12.5px; color: var(--ink3)">Il y a 4 j · non ouverte</span>
+</div>
+<button class="btn q sm" style="padding: 0 14px; font-size: 13px">Relancer</button>
+</div>
+<div class="sep" style="margin: 0 14px 0 70px"></div>
+<div class="row" style="gap: 12px; padding: 8px 14px">
+<span class="ib" style="background: color-mix(in oklab, var(--l-aff) 16%, transparent); color: var(--l-aff)">[[ic:envelope-simple-open]]</span>
+<div style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0">
+<span class="mono" style="font-size: 13px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">ib•••••@outlook.fr</span>
+<span style="font-size: 12.5px; color: var(--ink3)">Ouverte hier · pas inscrit</span>
+</div>
+<button class="btn q sm" style="padding: 0 14px; font-size: 13px">Relancer</button>
+</div>
+</div>
+</section>
+
+<div style="position: sticky; bottom: 0; margin-top: 20px; padding: 28px 20px 24px; display: flex; background: linear-gradient(180deg, rgba(9,9,11,0), rgba(9,9,11,.94) 46%)">
+<button class="btn p" style="flex: 1; min-height: 54px; font-size: 16px">[[ic:user-plus]]<span>Inviter quelqu'un</span></button>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":1796}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

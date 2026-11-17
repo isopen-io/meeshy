@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="keypad_prompt_title">Digite um número ou nome</string>
+</resources>

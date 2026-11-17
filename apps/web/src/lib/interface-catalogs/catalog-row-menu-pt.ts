@@ -40,6 +40,7 @@ const pt = {
   'listFilter.channels': 'Canais',
   'listFilter.pinned': 'Fixadas',
   'listFilter.archived': 'Arquivadas',
+  'listFilter.more': 'Mais',
   'listRow.muted': 'Silenciada',
   'listRow.endToEnd': 'Criptografada de ponta a ponta',
   'listRow.announce.pin.on': 'Conversa fixada',

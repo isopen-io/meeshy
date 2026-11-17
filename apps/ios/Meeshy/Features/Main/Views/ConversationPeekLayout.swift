@@ -19,26 +19,45 @@ nonisolated enum ConversationPeekDetent: Equatable, Sendable {
     }
 }
 
-/// Ce qu'un glissement sur la CARTE pilote : le cran du menu, ou le morph de
-/// la carte en pastille qu'on dépose sur une section (glisser vers le bas
-/// depuis le cran compact — le geste historique du menu custom).
+/// Ce qu'un glissement sur la CARTE pilote : vers le HAUT, le cran du menu ;
+/// vers le BAS, le morph de la carte en pastille qu'on dépose sur une section,
+/// quel que soit le cran — le menu reste tel qu'il était, et revient intact
+/// si la carte est relâchée avant de décrocher.
 nonisolated enum ConversationPeekCardRoute: Equatable, Sendable {
     case detent
     case chipMorph
 
     static func resolve(startDetent: ConversationPeekDetent, translation: CGFloat) -> ConversationPeekCardRoute {
-        startDetent == .compact && translation > 0 ? .chipMorph : .detent
+        translation > 0 ? .chipMorph : .detent
     }
 }
 
-/// Glisser la carte vers le BAS depuis le cran compact (#17258) : la carte
-/// suit le doigt et se résorbe en pastille ; lâchée au-delà de 79 % de la
-/// course (position PROJETÉE, la vélocité comprise), l'aperçu se ferme ;
-/// en deçà — ou ramenée vers le haut avant le lâcher — elle revient en place.
-/// Une fois la pastille VERROUILLÉE (course entière), le lâcher la dépose.
+/// Glisser la carte vers le BAS depuis le cran compact (#17258, #18724) : la
+/// carte RÉSISTE et se comprime vers la forme d'une rangée tant qu'elle tient ;
+/// tirée franchement — la course entière, ou lancée —, elle DÉCROCHE en ligne
+/// déplaçable qu'on dépose sur une section. Lâchée avant de décrocher au-delà
+/// de 79 % de la course (position PROJETÉE, la vélocité comprise), l'aperçu se
+/// ferme ; en deçà — ou ramenée vers le haut avant le lâcher — elle revient.
 nonisolated enum ConversationPeekPullDown {
     static let morphDistance: CGFloat = 140
     static let dismissDistance: CGFloat = 110
+
+    /// La traction qui décroche : la carte est devenue ligne au même point.
+    static let detachDistance: CGFloat = morphDistance
+    /// Une main qui lance franchement vers le bas, en points par seconde,
+    /// décroche avant la course entière : elle a dit « déplace ».
+    static let detachVelocity: CGFloat = 900
+    /// En deçà, même rapide, ce n'est qu'un tremblement : rien ne décroche.
+    static let flingFloor: CGFloat = 40
+    /// La portée de l'élastique : la carte qui tient ne descend jamais plus
+    /// bas, quelle que soit la course du doigt.
+    static let elasticReach: CGFloat = 120
+    /// La hauteur d'une rangée de la liste quand la ligne pressée est inconnue
+    /// (rotor VoiceOver) : la carte se comprime encore vers une forme de ligne.
+    static let fallbackRowHeight: CGFloat = 72
+    /// La part de vitesse qu'iOS 16, sans vitesse servie, projette dans la fin
+    /// prédite d'un glissement (décélération normale d'un défilement).
+    static let predictionHorizon: CGFloat = 0.5
 
     enum Release: Equatable, Sendable {
         case restore
@@ -46,12 +65,111 @@ nonisolated enum ConversationPeekPullDown {
         case drop
     }
 
+    /// Où en est la traction : la carte TIENT (et se comprime d'autant) ou elle
+    /// a DÉCROCHÉ — définitivement, le doigt pouvant remonter viser une section.
+    enum Stage: Equatable, Sendable {
+        case holding(CGFloat)
+        case detached
+
+        /// La compression vers la ligne : 1 dès que la carte a décroché.
+        var progress: CGFloat {
+            switch self {
+            case .holding(let progress): return progress
+            case .detached: return 1
+            }
+        }
+    }
+
     static func progress(translation: CGFloat) -> CGFloat {
         min(1, max(0, translation / morphDistance))
     }
 
-    static func release(predictedEndTranslation: CGFloat, isLatched: Bool) -> Release {
-        if isLatched { return .drop }
+    static func stage(translation: CGFloat, velocity: CGFloat, isLatched: Bool = false) -> Stage {
+        let flung = velocity >= detachVelocity && translation >= flingFloor
+        guard isLatched || translation >= detachDistance || flung else {
+            return .holding(progress(translation: translation))
+        }
+        return .detached
+    }
+
+    /// Le décrochage se joue à la PREMIÈRE étape détachée, jamais aux
+    /// suivantes : c'est elle qui porte l'haptique, et une seule fois par geste.
+    static func latches(wasLatched: Bool, stage: Stage) -> Bool {
+        !wasLatched && stage == .detached
+    }
+
+    /// Le déplacement de la carte qui tient : `d · k / (k + d)`, croissant,
+    /// chaque point de traction rendant moins que le précédent, borné par la
+    /// portée de l'élastique — on tire fort avant que ça décroche.
+    static func elasticTranslation(_ translation: CGFloat) -> CGFloat {
+        guard translation > 0 else { return 0 }
+        return translation * elasticReach / (elasticReach + translation)
+    }
+
+    /// Le décalage peint : élastique tant que la carte tient, le doigt un pour
+    /// un une fois décrochée — l'écart entre les deux est le saut de la ligne.
+    static func cardOffset(translation: CGFloat, isLatched: Bool) -> CGFloat {
+        isLatched ? translation : elasticTranslation(translation)
+    }
+
+    /// La vitesse verticale qu'iOS 16 ne sert pas, retrouvée dans la fin prédite.
+    static func velocity(translation: CGFloat, predictedEndTranslation: CGFloat) -> CGFloat {
+        (predictedEndTranslation - translation) / predictionHorizon
+    }
+
+    /// La taille de la ligne visée : celle de la rangée pressée, sinon une
+    /// rangée de la liste à la largeur de la carte.
+    static func rowSize(source: CGRect?, cardWidth: CGFloat) -> CGSize {
+        source?.size ?? CGSize(width: cardWidth, height: fallbackRowHeight)
+    }
+
+    /// La ligne vers laquelle la carte se comprime : SOUS le doigt qui tire
+    /// (`grabY`, dans la carte au repos), gardée dans la carte ; sans doigt
+    /// connu, à son pied. Décrochée, elle saute donc sous le doigt, pas à côté.
+    static func rowFrame(size: CGSize, in card: CGRect, grabY: CGFloat? = nil) -> CGRect {
+        let bottom = card.maxY - size.height
+        let top = grabY.map { min(bottom, max(card.minY, $0 - size.height / 2)) } ?? bottom
+        return CGRect(x: card.midX - size.width / 2, y: top, width: size.width, height: size.height)
+    }
+
+    /// Le point saisi, dans la carte AU REPOS : le cadre mesuré (`slot`) porte
+    /// le décalage du geste (`shift`), qu'on retire pour que la ligne visée ne
+    /// glisse pas dans la carte pendant qu'elle descend.
+    static func grabY(_ grab: CGPoint?, slot: CGRect, shift: CGPoint) -> CGFloat? {
+        grab.map { $0.y - (slot.minY - shift.y) }
+    }
+
+    /// Le cadre de la carte comprimée : 0 ⇒ la carte, 1 ⇒ la ligne. Le
+    /// morphisme de naissance, rejoué à l'envers, borné comme lui.
+    static func compressed(_ card: CGRect, toward row: CGRect, detach: CGFloat) -> CGRect {
+        ConversationPreviewMorph.frame(progress: 1 - ConversationPreviewMorph.clamped(detach), from: row, to: card)
+    }
+
+    /// Le cadre rendu de la carte : celui de la naissance, comprimé par la
+    /// traction. Le cadre et l'aperçu qu'il porte le lisent tous deux.
+    static func cardFrame(morph: CGFloat, detach: CGFloat, from: CGRect, to: CGRect, row: CGRect) -> CGRect {
+        compressed(ConversationPreviewMorph.frame(progress: morph, from: from, to: to), toward: row, detach: detach)
+    }
+
+    /// Le décalage qui centre l'aperçu, mis en page à sa largeur de repos,
+    /// dans le cadre du moment : plus large pendant la naissance (la rangée
+    /// déborde la carte), plus étroit pendant la compression.
+    static func previewInset(frameWidth: CGFloat, restWidth: CGFloat) -> CGFloat {
+        (frameWidth - restWidth) / 2
+    }
+
+    /// La progression qui choisit la face peinte : celle du morphisme de
+    /// naissance, rabattue par la traction — la face de la rangée (avatar,
+    /// titre) revient quand la carte redevient ligne.
+    static func faceProgress(morph: CGFloat, detach: CGFloat) -> CGFloat {
+        min(ConversationPreviewMorph.clamped(morph), 1 - ConversationPreviewMorph.clamped(detach))
+    }
+
+    /// Une ligne décrochée qu'on JETTE vers le bas (lâchée à la vitesse qui
+    /// décroche) ferme l'aperçu, comme le coup vers le bas de #17258 : un coup
+    /// rapide ne dépose jamais la conversation sur l'en-tête qu'il traverse.
+    static func release(predictedEndTranslation: CGFloat, isLatched: Bool, velocity: CGFloat = 0) -> Release {
+        if isLatched { return velocity >= detachVelocity ? .dismiss : .drop }
         return predictedEndTranslation >= dismissDistance ? .dismiss : .restore
     }
 }

@@ -14,13 +14,16 @@ import MeeshyUI
 /// puce de la vue unique, ou le flou — et ne consomme rien. Depuis #11208, la
 /// forme se lit EN AMONT des deux faces de l'aperçu, rangée plate comme bulle
 /// (`MessageOverlayCellPreview`).
+///
+/// **Le flou n'en fait plus partie** (#18856) :
+/// l'appui long est un coup d'œil, il montre un message flouté tel qu'il est —
+/// texte et médias en clair (`Message.unveiledForPreview`). Le menu n'en laisse
+/// toujours rien sortir (`holdsBlur`), et l'aperçu reste noir à la capture.
 nonisolated enum OverlayPreviewProtection: Equatable {
     /// Rien de protégé : l'aperçu rend le message.
     case clear
     /// Vue unique : la puce `(1) · …`, jamais le contenu — ouverte ou non.
     case viewOnce(opened: Bool)
-    /// Flou : les pièces en tuiles masquées, le texte flouté, rien de lisible.
-    case blurred
     /// Chiffré et illisible ici : un cadenas, jamais un clair que l'appareil
     /// n'a pas. Un message chiffré que l'appareil a DÉCHIFFRÉ (il a du texte)
     /// se montre comme le fil le montre.
@@ -30,11 +33,10 @@ nonisolated enum OverlayPreviewProtection: Equatable {
 
     /// Trois formes distinctes pour trois états distincts : le lecteur doit
     /// pouvoir lire POURQUOI l'aperçu ne montre rien. La précédence va du plus
-    /// définitif au plus léger : disparu, vue unique, flou, chiffré. Un éphémère VIVANT n'a pas de forme à lui : le fil le montre avec son contenu et son compte à rebours, l'aperçu le montre donc aussi (la loi de sortie, elle, interdit déjà de le copier ou de l'enregistrer).
+    /// définitif au plus léger : disparu, vue unique, chiffré. Un éphémère VIVANT n'a pas de forme à lui : le fil le montre avec son contenu et son compte à rebours, l'aperçu le montre donc aussi (la loi de sortie, elle, interdit déjà de le copier ou de l'enregistrer).
     static func form(for message: Message, now: Date = Date()) -> OverlayPreviewProtection {
         if message.deletedAt != nil || (message.expiresAt.map { $0 <= now } ?? false) { return .gone }
         if message.holdsViewOnce { return .viewOnce(opened: message.viewOnceOpenedAt != nil) }
-        if message.holdsBlur { return .blurred }
         let unreadable = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if message.isEncrypted && unreadable { return .encrypted }
         return .clear
@@ -43,7 +45,7 @@ nonisolated enum OverlayPreviewProtection: Equatable {
     /// Le pictogramme de la forme, pour les formes à puce unique.
     var chipSymbol: String? {
         switch self {
-        case .clear, .viewOnce, .blurred: return nil
+        case .clear, .viewOnce: return nil
         case .encrypted: return "lock.fill"
         case .gone: return "trash.slash"
         }
@@ -101,74 +103,6 @@ nonisolated enum OverlayPreviewMediaLayout {
     }
 }
 
-// MARK: - La grille de l'aperçu
-
-/// La grille visuelle de l'aperçu d'appui long, à la disposition ci-dessus.
-/// `masked` rend des tuiles « Contenu masqué » sans charger aucun pixel.
-struct OverlayPreviewMediaGrid: View {
-    let attachments: [MessageAttachment]
-    let masked: Bool
-    var width: CGFloat = 260
-    var maxHeight: CGFloat = 320
-
-    private static let spacing: CGFloat = 3
-
-    var body: some View {
-        let items = Array(attachments.prefix(OverlayPreviewMediaLayout.visibleLimit))
-        let overflowCell = OverlayPreviewMediaLayout.overflowCell(total: attachments.count)
-        let hidden = OverlayPreviewMediaLayout.hiddenCount(total: attachments.count)
-        let rows = OverlayPreviewMediaLayout.rows(
-            ratios: items.map(OverlayPreviewMediaLayout.aspectRatio(of:)),
-            width: width, spacing: Self.spacing, maxHeight: maxHeight
-        )
-        VStack(spacing: Self.spacing) {
-            ForEach(rows.indices, id: \.self) { rowIndex in
-                HStack(spacing: Self.spacing) {
-                    ForEach(rows[rowIndex].indices, id: \.self) { cellIndex in
-                        let index = Self.flatIndex(rows: rows, row: rowIndex, cell: cellIndex)
-                        cell(items[index], size: rows[rowIndex][cellIndex])
-                            .overlay {
-                                if index == overflowCell {
-                                    ZStack {
-                                        MeeshyColors.mediaScrim
-                                        Text(verbatim: "+\(hidden)")
-                                            .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                                            .foregroundStyle(Color.white)
-                                    }
-                                    .accessibilityHidden(true)
-                                }
-                            }
-                    }
-                }
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
-    }
-
-    private static func flatIndex(rows: [[CGSize]], row: Int, cell: Int) -> Int {
-        rows.prefix(row).map(\.count).reduce(0, +) + cell
-    }
-
-    @ViewBuilder
-    private func cell(_ attachment: MessageAttachment, size: CGSize) -> some View {
-        if masked {
-            MaskedMediaTile()
-                .frame(width: size.width, height: size.height)
-        } else {
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil,
-                fullUrl: attachment.fileUrl.isEmpty ? attachment.thumbnailUrl : attachment.fileUrl
-            ) {
-                Color(hex: attachment.thumbnailColor).opacity(0.3)
-            }
-            .aspectRatio(contentMode: .fill)
-            .frame(width: size.width, height: size.height)
-            .clipped()
-        }
-    }
-}
-
 /// Une pièce masquée : aucun pixel du média, le seul pictogramme du flou.
 /// Partagée avec l'aperçu d'UNE pièce (`MessagePieceOverlay`, #9907).
 struct MaskedMediaTile: View {
@@ -185,15 +119,14 @@ struct MaskedMediaTile: View {
 
 // MARK: - L'aperçu d'un message protégé
 
-/// L'aperçu d'appui long d'un message PROTÉGÉ — la forme que le fil montre, et
-/// rien de plus. Aucun geste n'y est câblé : l'appui long ne dévoile ni ne
+/// L'aperçu d'appui long d'un message PROTÉGÉ — vue unique, chiffré, disparu :
+/// la forme que le fil montre, et rien de plus. Aucun geste n'y est câblé : l'appui long ne dévoile ni ne
 /// consomme.
 struct OverlayProtectedPreview: View {
     let form: OverlayPreviewProtection
     let message: Message
     let isDark: Bool
     let accentHex: String
-    @Environment(\.bubbleSkin) private var skin
 
     var body: some View {
         switch form {
@@ -202,48 +135,9 @@ struct OverlayProtectedPreview: View {
         case .viewOnce(let opened):
             ViewOnceChip(state: opened ? .opened : .sealed, isDark: isDark) {}
                 .allowsHitTesting(false)
-        case .blurred:
-            blurred
         case .encrypted, .gone:
             ProtectedFormChip(form: form, isMe: message.isMe, isDark: isDark, accentHex: accentHex)
         }
-    }
-
-    private var visual: [MessageAttachment] {
-        message.attachments.filter { $0.type == .image || $0.type == .video }
-    }
-
-    private var blurred: some View {
-        VStack(alignment: message.isMe ? .trailing : .leading, spacing: MeeshySpacing.sm) {
-            if !visual.isEmpty {
-                OverlayPreviewMediaGrid(attachments: visual, masked: true)
-            }
-            if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                || visual.count < message.attachments.count {
-                blurredBubble
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(ProtectedVeilAffordance.hiddenLabel)
-    }
-
-    /// Le texte flouté comme dans le fil — sa forme, jamais sa lecture : une
-    /// ligne de substitution de même longueur, floutée, que VoiceOver ignore.
-    private var blurredBubble: some View {
-        Text(verbatim: String(repeating: "▆ ", count: max(3, min(24, message.content.count / 3))))
-            .font(MeeshyFont.relative(MeeshyFont.bodySize))
-            .foregroundColor(message.isMe ? skin.ink : (isDark ? .white : .black))
-            .blur(radius: 6)
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .padding(.vertical, MeeshySpacing.smPlus)
-            .background(BubbleBackground(isMe: message.isMe, accentHex: accentHex, isDark: isDark))
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
-            .overlay {
-                Image(systemName: MessageProtectionSymbols.blurredFilled)
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundStyle(message.isMe ? skin.ink : (isDark ? .white : .black))
-            }
-            .accessibilityHidden(true)
     }
 }
 
@@ -319,7 +213,7 @@ struct ProtectedFormChip: View {
             return String(localized: "message.overlay.preview.encrypted", defaultValue: "Message chiffré", bundle: .main)
         case .gone:
             return String(localized: "message.overlay.preview.gone", defaultValue: "Message supprimé", bundle: .main)
-        case .clear, .viewOnce, .blurred:
+        case .clear, .viewOnce:
             return ""
         }
     }
@@ -362,15 +256,36 @@ struct ProtectedFormChip: View {
 /// le fil : il se lit aussi dans l'aperçu.
 struct MessageOverlayPreviewTouch: Equatable {
     let kind: MessageOverlayPreviewKind
-    /// Les pièces dont la zone de lecture se touche. Vide ⇒ l'aperçu est inerte.
+    /// Les pièces dont la zone de lecture se touche.
     let playableAttachmentIds: Set<String>
+    /// **Le carrousel défile au doigt** (#18824) : un message clair à plusieurs
+    /// visuels se montre en carrousel dans l'aperçu, et sa surface se touche.
+    var scrollsCarousel: Bool = false
+
+    /// L'identifiant de la zone du carrousel, déclarée par `BubbleCarouselView`
+    /// en présentation d'aperçu ; aucune pièce (identifiant serveur) ne le porte.
+    static let carouselZoneId = "overlay.preview.carousel"
 
     var offersPlayback: Bool { !playableAttachmentIds.isEmpty }
+
+    /// Les zones que le masque perce : lecture et carrousel. Vide ⇒ inerte.
+    var touchZoneIds: Set<String> {
+        scrollsCarousel ? playableAttachmentIds.union([Self.carouselZoneId]) : playableAttachmentIds
+    }
+
+    var offersTouch: Bool { !touchZoneIds.isEmpty }
 
     static func resolve(message: Message, readingMode: ConversationReadingMode, now: Date = Date()) -> MessageOverlayPreviewTouch {
         MessageOverlayPreviewTouch(
             kind: MessageOverlayPreviewKind.resolve(readingMode: readingMode),
-            playableAttachmentIds: playableAttachmentIds(for: message, now: now))
+            playableAttachmentIds: playableAttachmentIds(for: message, now: now),
+            scrollsCarousel: presentsCarousel(message, now: now))
+    }
+
+    /// Plusieurs visuels (photos, vidéos), sous aucune forme protégée.
+    static func presentsCarousel(_ message: Message, now: Date = Date()) -> Bool {
+        guard OverlayPreviewProtection.form(for: message, now: now) == .clear else { return false }
+        return message.attachments.filter { $0.type == .image || $0.type == .video }.count > 1
     }
 
     static func playableAttachmentIds(for message: Message, now: Date = Date()) -> Set<String> {
@@ -397,12 +312,30 @@ struct MessageOverlayPreviewTouch: Equatable {
         return played == activeAttachmentId
     }
 
-    /// **Les trous du masque** : les zones de lecture des pièces lisibles,
-    /// ramenées au cadre de l'aperçu. Une zone hors du cadre ne perce rien.
+    /// **Les trous du masque** : les zones de lecture des pièces lisibles et
+    /// celle du carrousel (`touchZoneIds`), ramenées au cadre de l'aperçu. Une
+    /// zone hors du cadre ne perce rien.
     static func holes(zones: [(attachmentId: String, frame: CGRect)], playable: Set<String>, in bounds: CGRect) -> [CGRect] {
         zones
             .filter { playable.contains($0.attachmentId) }
             .map { $0.frame.intersection(bounds) }
             .filter { !$0.isNull && !$0.isEmpty }
+    }
+}
+
+/// **Déclare la zone du carrousel de l'aperçu** (#18824) : le masque de
+/// l'aperçu la perce comme un bouton de lecture, pour que le doigt la fasse
+/// défiler. Le cadre voyage par la clé des contrôles de lecture
+/// (`MediaPlayControlAnchorKey`), que seul ce masque lit.
+struct OverlayPreviewTouchZone: ViewModifier {
+    let declares: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if declares {
+            content.mediaPlayControlAnchor(attachmentId: MessageOverlayPreviewTouch.carouselZoneId)
+        } else {
+            content
+        }
     }
 }

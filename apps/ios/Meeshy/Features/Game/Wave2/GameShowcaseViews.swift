@@ -50,7 +50,7 @@ struct GameShowcaseScreen: View {
             }
             .accessibilityIdentifier("game.showcase")
 
-            GameCard(title: GameText.showcaseVisibility) {
+            GameCard(title: GameText.showcaseVisibility, note: GameText.showcaseVisibilityNote) {
                 GameVisibilityPickerView(
                     legend: GameText.visibilityFieldShowcase,
                     value: game.visibility?.showcase ?? GameTrophies.defaultVisibility,
@@ -58,7 +58,6 @@ struct GameShowcaseScreen: View {
                 ) { level in
                     Task { await model.setVisibility(showcase: level) }
                 }
-                GameNote(text: GameText.showcaseVisibilityHint)
                 GameErrorLine(message: model.errors.visibility, identifier: "game.showcase.visibility.error")
                 if model.pending.visibility { GameNote(text: GameText.visibilitySaving) }
             }
@@ -146,7 +145,7 @@ struct GameConstellationCard: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        GameCard(title: GameText.constellationTitle + " · " + GameText.constellationStars(constellation.stars)) {
+        GameCard(title: GameText.constellationTitle + " · " + GameText.constellationStars(constellation.stars), note: GameText.constellationVisibilityNote) {
             GameConstellationSky(stars: constellation.stars, inStar: constellation.inStar)
                 .frame(height: 64)
                 .accessibilityHidden(true)
@@ -168,7 +167,6 @@ struct GameConstellationCard: View {
                     .accessibilityIdentifier("game.constellation.cosmetic")
                 }
             }
-            GameNote(text: GameText.constellationVisibility)
         }
         .accessibilityIdentifier("game.constellation")
     }

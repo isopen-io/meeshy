@@ -30,6 +30,8 @@ import me.meeshy.sdk.model.ConversationEngagementSnapshot
 import me.meeshy.sdk.model.engagement.HeaderFlameLaw
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.relation.TalkieOfferRule
+import me.meeshy.ui.component.battery.BatteryIndicator
+import me.meeshy.ui.component.phonereachability.PhoneReachabilityIndicator
 import me.meeshy.ui.component.talkie.TalkieHeaderLive
 import me.meeshy.ui.component.talkie.TalkieHeaderLiveBar
 import me.meeshy.ui.component.reading.ReadingModeChip
@@ -100,6 +102,7 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
         }
     }
     val peerPresence = rememberPresence(state.directPeerUserId)
+    val batteryPeer = state.directPeerUserId.takeUnless { state.isGroup }
     val peerHere = rememberConversationHere(state.directPeerUserId.takeUnless { state.isGroup }, state.conversationId)
     // La boule de mood du pair ouvre sa page plein écran, sans bulle ni pop-up (#13987, iOS).
     val peerMood = if (state.isGroup) null else LocalPeerMoodDirectory.current.moodOf(state.directPeerUserId)
@@ -184,6 +187,10 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                                 ),
                                 accentColor = accentColor,
                             )
+                            // La batterie du pair (#14147) : rien hors épisode.
+                            BatteryIndicator(userId = batteryPeer, name = header.peerDisplayName ?: title)
+                            // Son téléphone injoignable (#18737) : rien quand il répond.
+                            PhoneReachabilityIndicator(userId = batteryPeer, name = header.peerDisplayName ?: title)
                         }
                     },
                     avatar = { headerAvatar(AvatarContext.ConversationHeaderExpanded) },
@@ -198,6 +205,8 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                     onToggle = toggle,
                     talkieChrome = talkieLive.chrome,
                     callSlot = {
+                        BatteryIndicator(userId = batteryPeer, name = header.peerDisplayName ?: title)
+                        PhoneReachabilityIndicator(userId = batteryPeer, name = header.peerDisplayName ?: title)
                         // Le Bring (#17442) : tout direct ouvert, dès Ami — la passerelle décide, même chiffré.
                         state.directPeerUserId?.takeIf { !state.isGroup }?.let { peer ->
                             ChatHeaderBringButton(peerUserId = peer, peerName = header.peerDisplayName ?: title)

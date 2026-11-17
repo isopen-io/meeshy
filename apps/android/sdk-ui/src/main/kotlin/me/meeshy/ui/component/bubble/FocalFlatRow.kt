@@ -1,12 +1,8 @@
 package me.meeshy.ui.component.bubble
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -116,11 +112,11 @@ public fun FocalFlatRow(
         isViewOnceOpenedByMe = content.isViewOnceOpenedByMe,
         isSystem = content.isSystem,
     )
-    AnimatedVisibility(
+    EphemeralBurnVisibility(
         visible = !renderKind.isEphemeralExpired,
+        isOutgoing = content.isOutgoing,
+        seedKey = content.messageId,
         modifier = modifier,
-        enter = EnterTransition.None,
-        exit = fadeOut() + shrinkVertically(),
     ) {
         Box(
             modifier = Modifier

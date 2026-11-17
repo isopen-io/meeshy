@@ -63,7 +63,6 @@ struct CommunityPostsTab: View {
             EmptyStateView(
                 icon: "photo.on.rectangle.angled",
                 title: String(localized: "community.posts.empty.title", defaultValue: "Aucune publication", bundle: .main),
-                subtitle: String(localized: "community.posts.empty.subtitle", defaultValue: "Les publications de la communauté apparaîtront ici", bundle: .main),
                 actionLabel: onCreatePost == nil
                     ? nil
                     : String(localized: "community.posts.empty.action", defaultValue: "Créer une publication", bundle: .main),
@@ -74,7 +73,6 @@ struct CommunityPostsTab: View {
             EmptyStateView(
                 icon: "exclamationmark.triangle",
                 title: String(localized: "community.posts.failed.title", defaultValue: "Publications indisponibles", bundle: .main),
-                subtitle: String(localized: "community.posts.failed.subtitle", defaultValue: "Elles n'ont pas pu être chargées.", bundle: .main),
                 actionLabel: String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main),
                 onAction: { Task { await viewModel.refresh() } }
             )
@@ -83,7 +81,6 @@ struct CommunityPostsTab: View {
             EmptyStateView(
                 icon: "wifi.slash",
                 title: String(localized: "community.posts.offline.title", defaultValue: "Hors ligne", bundle: .main),
-                subtitle: String(localized: "community.posts.offline.subtitle", defaultValue: "Les publications s'afficheront au retour du réseau.", bundle: .main),
                 actionLabel: String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main),
                 onAction: { Task { await viewModel.refresh() } }
             )

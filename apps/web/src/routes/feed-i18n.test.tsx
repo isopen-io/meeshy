@@ -47,7 +47,7 @@ describe('les états du fil suivent la langue d’interface', () => {
     document.documentElement.lang = 'en';
     const html = renderToStaticMarkup(<FeedEmpty />);
     expect(html).toContain('No posts yet');
-    expect(html).toContain('Posts from your contacts will show up here.');
+    expect(html).not.toContain('will show up here');
     expect(html).not.toContain('Aucune publication');
   });
 

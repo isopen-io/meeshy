@@ -21,6 +21,7 @@ struct StarredMessagesView: View {
     }
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.routerCommands) private var router
+    @State private var openNoteID: String?
 
     var body: some View {
         ZStack {
@@ -48,21 +49,19 @@ struct StarredMessagesView: View {
     private var rows: some View {
         LazyVStack(spacing: MeeshySpacing.smPlus) {
             ForEach(store.snapshots) { snapshot in
-                StarredRow(snapshot: snapshot, isDark: theme.mode.isDark)
-                    .onTapGesture {
-                        navigate(to: snapshot)
+                Button { navigate(to: snapshot) } label: {
+                    StarredRow(snapshot: snapshot, isDark: theme.mode.isDark)
+                }
+                .buttonStyle(PressableButtonStyle())
+                .contextMenu {
+                    Button(role: .destructive) {
+                        store.remove(messageId: snapshot.id)
+                    } label: {
+                        Label(String(localized: "starred.messages.remove", defaultValue: "Retirer des favoris", bundle: .main), systemImage: "star.slash")
                     }
-                    .contextMenu {
-                        Button(role: .destructive) {
-                            store.remove(messageId: snapshot.id)
-                        } label: {
-                            Label(String(localized: "starred.messages.remove", defaultValue: "Retirer des favoris", bundle: .main), systemImage: "star.slash")
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityHint(String(localized: "starred.messages.row.hint", defaultValue: "Ouvre la conversation", bundle: .main))
-                    .accessibilityAction { navigate(to: snapshot) }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityHint(String(localized: "starred.messages.row.hint", defaultValue: "Ouvre la conversation", bundle: .main))
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
@@ -94,15 +93,29 @@ struct StarredMessagesView: View {
         }
     }
 
-    // Native HIG empty state (`ContentUnavailableView` on iOS 17+, faithful
-    // fallback on iOS 16) via the shared design-system wrapper — same treatment
-    // as FeedView / CreateShareLinkView. Centered by the enclosing ZStack.
-    private var emptyState: some View {
-        AdaptiveContentUnavailableView(
-            String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main),
-            systemImage: "star.circle",
-            description: Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez « Ajouter aux favoris » pour le retrouver ici.", bundle: .main))
+    /// L'état vide tient en une ligne ; le geste qui remplit la liste reste appris ICI, derrière un (i)
+    /// dont le nom est la question à laquelle il répond (règle 4, #18088).
+    static var emptyInfoNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "starred.messages.empty.question", defaultValue: "Comment ajouter un message aux favoris ?", bundle: .main),
+            text: String(localized: "starred.messages.empty.subtitle", defaultValue: "Appui long sur un message, puis « Ajouter aux favoris ».", bundle: .main)
         )
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: MeeshySpacing.md) {
+            Image(systemName: "star.circle")
+                .font(MeeshyFont.relative(40))
+                .foregroundStyle(theme.textMuted)
+                .accessibilityHidden(true)
+            MeeshyInfoNoted(note: Self.emptyInfoNote, openNoteID: $openNoteID, tint: theme.textMuted) {
+                Text(String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.xxxl)
+        .frame(maxWidth: .infinity)
     }
 
     private func navigate(to snapshot: StarredMessageSnapshot) {

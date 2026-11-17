@@ -72,7 +72,7 @@ class ProgressionWhereDetailComposeTest {
         touch("Prochain rang")
 
         sheetText("Prochain rang").assertExists()
-        sheetText("Ta gloire grandit et ne recule jamais. Elle te donne ton rang, parmi onze : de Murmure à Légende, puis le Mythe.").assertExists()
+        sheetText("Onze rangs, de Murmure à Légende, puis le Mythe.").assertExists()
     }
 
     @Test

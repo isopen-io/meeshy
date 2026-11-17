@@ -202,7 +202,10 @@ export function registerDeleteMessageRoute(
       // appliquaient toutes deux les effets du retrait, dont un décompte NON
       // idempotent. Le perdant de la course apprend désormais ce que le rejeu
       // séquentiel apprend déjà : le message n'est plus là.
-      if (await softDeleteMessage(prisma, messageId, { translations: null, deletedAt: new Date() }) === 'already-deleted') {
+      // Une seule heure pour le retrait : celle qui est écrite est celle qui
+      // part sur le fil (#18159).
+      const deletedAt = new Date();
+      if (await softDeleteMessage(prisma, messageId, { translations: null, deletedAt }) === 'already-deleted') {
         return sendNotFound(reply, 'Message not found');
       }
 
@@ -257,7 +260,7 @@ export function registerDeleteMessageRoute(
         // modérateur retire le message de quelqu'un d'autre.
         authorId: existingMessage.senderId,
         messageId,
-        payload: { messageId, conversationId },
+        payload: { messageId, conversationId, deletedAt: deletedAt.toISOString() },
         onError: (err) => logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', err),
       });
 

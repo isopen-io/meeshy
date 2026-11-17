@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,6 +45,7 @@ import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.ShareLinkDateFormat
 import me.meeshy.sdk.model.ShareLinkEditDraft
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.ui.component.MeeshyInfoNote
 import me.meeshy.ui.component.chrome.MeeshyCard
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -70,6 +72,7 @@ internal fun ShareLinkEditForm(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var openNote by rememberSaveable { mutableStateOf<String?>(null) }
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
         Text(
             text = stringResource(R.string.shareLink_detail_editTitle),
@@ -79,20 +82,29 @@ internal fun ShareLinkEditForm(
         )
 
         FormGroup {
-            OutlinedTextField(
+            ShareLinkNotedField(
                 value = draft.name,
                 onValueChange = { onDraftChange(draft.copy(name = it)) },
-                label = { Text(stringResource(R.string.shareLink_detail_nameField)) },
+                label = stringResource(R.string.shareLink_detail_nameField),
+                note = MeeshyInfoNote(
+                    question = stringResource(R.string.share_link_name_question),
+                    text = stringResource(R.string.share_link_name_note),
+                ),
+                openNoteId = openNote,
+                onOpenNoteIdChange = { openNote = it },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
+            ShareLinkNotedField(
                 value = draft.description,
                 onValueChange = { onDraftChange(draft.copy(description = it)) },
-                label = { Text(stringResource(R.string.shareLink_detail_messageField)) },
-                minLines = 2,
-                maxLines = 6,
-                modifier = Modifier.fillMaxWidth(),
+                label = stringResource(R.string.shareLink_detail_messageField),
+                note = MeeshyInfoNote(
+                    question = stringResource(R.string.share_link_message_question),
+                    text = stringResource(R.string.share_link_message_note),
+                ),
+                openNoteId = openNote,
+                onOpenNoteIdChange = { openNote = it },
+                singleLine = false,
             )
         }
 
@@ -124,7 +136,8 @@ internal fun ShareLinkEditForm(
             }
         }
 
-        ShareLinkSectionTitle(stringResource(R.string.shareLink_detail_entryConditions))
+        ShareLinkSectionTitle(stringResource(R.string.share_link_section_access))
+        ShareLinkSectionHint(stringResource(R.string.share_link_section_access_subtitle))
         FormGroup {
             SwitchRow(stringResource(R.string.shareLink_detail_requireAccount), draft.requireAccount) {
                 onDraftChange(draft.copy(requireAccount = it))
@@ -166,7 +179,8 @@ internal fun ShareLinkEditForm(
             }
         }
 
-        ShareLinkSectionTitle(stringResource(R.string.shareLink_detail_guestRights))
+        ShareLinkSectionTitle(stringResource(R.string.share_link_section_permissions))
+        ShareLinkSectionHint(stringResource(R.string.share_link_section_permissions_subtitle))
         FormGroup {
             SwitchRow(stringResource(R.string.share_link_permission_messages), draft.allowMessages) {
                 onDraftChange(draft.copy(allowMessages = it))

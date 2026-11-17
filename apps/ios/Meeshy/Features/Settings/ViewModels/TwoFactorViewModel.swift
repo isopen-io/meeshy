@@ -65,7 +65,7 @@ final class TwoFactorViewModel: ObservableObject {
             try await service.disable(code: code, password: password)
             isEnabled = false
         } catch {
-            self.error = String(localized: "twofactor.error.disable", defaultValue: "Impossible de désactiver le 2FA", bundle: .main)
+            self.error = String(localized: "twofactor.error.disable", defaultValue: "Impossible de désactiver la 2FA", bundle: .main)
         }
         isLoading = false
     }

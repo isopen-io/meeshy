@@ -69,16 +69,19 @@ internal class SheetReturnMemory {
     }
 }
 
+/** La route de cette entrée, son motif rempli par ses arguments (`profile/u1/posts`). */
+internal fun NavBackStackEntry.filledRoute(): String =
+    Regex("\\{([^}]+)\\}").replace(destination.route.orEmpty()) { match ->
+        Uri.encode(arguments?.get(match.groupValues[1])?.toString().orEmpty())
+    }
+
 private fun NavBackStackEntry.toStackEntry(): StackEntry? {
     if (destination is NavGraph) return null
     val pattern = destination.route.orEmpty()
-    val filled = Regex("\\{([^}]+)\\}").replace(pattern) { match ->
-        Uri.encode(arguments?.get(match.groupValues[1])?.toString().orEmpty())
-    }
     return StackEntry(
         id = id,
         isSheet = destination.navigatorName == NAVIGATOR_DIALOG,
-        route = filled,
+        route = filledRoute(),
         returnsOnPop = pattern in returningSheetRoutes,
         destinationId = destination.id,
     )
@@ -110,10 +113,12 @@ internal fun NavHostController.applySheetReturn(decision: SheetReturnDecision) {
 }
 
 /**
- * Empile [route] (un écran, jamais une autre feuille) depuis la feuille au sommet. Si c'est une feuille qui revient,
+ * Empile [route] (un écran, jamais une autre feuille) depuis la feuille [entry], ou rien si elle n'est plus au sommet
+ * (un double toucher, une poussée déjà partie). Si c'est une feuille qui revient,
  * elle est retirée en gardant son état, que [SheetReturnEffect] restaure au retour ; sinon c'est un `navigate` simple.
  */
-internal fun NavHostController.navigateKeepingSheet(route: String) {
+internal fun NavHostController.navigateKeepingSheet(entry: NavBackStackEntry, route: String) {
+    if (!isOnTop(entry)) return
     val sheet = currentBackStackEntry?.takeIf {
         it.destination.navigatorName == NAVIGATOR_DIALOG && it.destination.route in returningSheetRoutes
     }
@@ -128,12 +133,13 @@ internal fun NavHostController.navigateKeepingSheet(route: String) {
 }
 
 /**
- * Quitte la feuille au sommet pour [route], sans qu'elle revienne au retour (#14671) : la recherche générale qui
+ * Quitte la feuille [entry] pour [route] (rien si elle n'est plus au sommet), sans qu'elle revienne au retour (#14671) : la recherche générale qui
  * ouvre une conversation se ferme, comme iOS (`closesForConversationOpening`). La feuille est d'abord dépilée,
  * l'écran ensuite empilé sur ce qu'elle recouvrait : aucun remplacement à rejouer.
  */
-internal fun NavHostController.navigateClosingSheet(route: String) {
-    currentBackStackEntry?.takeIf { it.destination.navigatorName == NAVIGATOR_DIALOG }?.let { popBackStack() }
+internal fun NavHostController.navigateClosingSheet(entry: NavBackStackEntry, route: String) {
+    if (!isOnTop(entry)) return
+    if (entry.destination.navigatorName == NAVIGATOR_DIALOG) popBackStack()
     navigate(route)
 }
 

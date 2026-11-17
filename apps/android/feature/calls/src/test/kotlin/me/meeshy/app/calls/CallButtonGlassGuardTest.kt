@@ -21,6 +21,7 @@ class CallButtonGlassGuardTest {
         "CallPreviewViews.kt" to 2,
         "IncomingCallScreen.kt" to 1,
         "CallRecordingControls.kt" to 1,
+        "IncomingGlassDisc.kt" to 1,
     )
 
     private fun calls(): File = generateSequence(File("").absoluteFile) { it.parentFile }
@@ -129,6 +130,19 @@ class CallButtonGlassGuardTest {
         assertThat(chip).contains("CallGlassPlate(")
         assertThat(chip).contains("shape = CircleShape")
         assertThat(chip).doesNotContain(".background(Color.White")
+    }
+
+    @Test
+    fun `P17_13 - Refuser, Sans video et Repondre sont trois disques de verre, plus un IconButton a fond plein`() {
+        val disc = code("IncomingGlassDisc.kt")
+        val screen = code("IncomingCallScreen.kt")
+
+        assertThat(disc).contains("CallGlassPlate(")
+        assertThat(disc).contains("CallGlassButtonSurface(")
+        assertThat(disc).contains("shape = CircleShape")
+        assertThat(disc).doesNotContain("IconButton(")
+        assertThat(screen).contains("IncomingGlassDisc(")
+        assertThat(screen).doesNotContain("CallCircleButton(")
     }
 
     @Test

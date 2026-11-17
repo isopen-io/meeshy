@@ -20,7 +20,19 @@ const NOW = new Date('2026-10-08T10:00:00.000Z');
 const ago = (ms: number) => new Date(NOW.getTime() - ms);
 const ahead = (ms: number) => new Date(NOW.getTime() + ms);
 
-type Participant = { id: string; conversationId: string; isActive: boolean; bannedAt?: Date | null; shareLinkId?: string | null };
+type Participant = {
+  id: string;
+  conversationId: string;
+  isActive: boolean;
+  bannedAt?: Date | null;
+  shareLinkId?: string | null;
+  role?: string;
+  joinedAt?: Date;
+  historyVisibleFrom?: Date | null;
+  permissions?: { canViewHistory?: boolean } | null;
+  user?: { role: string } | null;
+};
+type Link = { id: string; expiresAt: Date | null; allowViewHistory?: boolean };
 
 /** Le prédicat Prisma tel que MongoDB l'évalue : `OR`, égalité, `{ isSet: false }` (clé absente). */
 function matches(row: Record<string, unknown>, where: Record<string, unknown>): boolean {
@@ -50,7 +62,7 @@ function prismaWith(input: {
   piece?: { messageId: string | null; isViewOnce: boolean } | null;
   message?: ReturnType<typeof carrier> | null;
   participants?: Participant[];
-  links?: Array<{ id: string; expiresAt: Date | null }>;
+  links?: Link[];
   entry?: { ephemeralExpiresAt: Date | null; viewedOnceAt: Date | null } | null;
 }) {
   const participants = input.participants ?? [{ id: READER, conversationId: CONVERSATION, isActive: true }];
@@ -68,6 +80,10 @@ function prismaWith(input: {
       messageStatusEntry: { findFirst: jest.fn(async () => input.entry ?? null) },
       conversationShareLink: {
         findMany: jest.fn(async ({ where }: { where: { id: { in: string[] } } }) => links.filter((l) => where.id.in.includes(l.id))),
+        findUnique: jest.fn(async ({ where }: { where: { id: string } }) => {
+          const link = links.find((l) => l.id === where.id);
+          return link ? { allowViewHistory: link.allowViewHistory ?? false } : null;
+        }),
       },
     },
     participantFindFirst,
@@ -108,8 +124,8 @@ describe('resolveSignedReaderVerdict', () => {
 
   it('refuse un invité dont le lien de partage est échu', async () => {
     const guest = [{ id: READER, conversationId: CONVERSATION, isActive: true, shareLinkId: 'l1' }];
-    expect(await verdictOf(prismaWith({ participants: guest, links: [{ id: 'l1', expiresAt: ago(1) }] }))).not.toBe('allow');
-    expect(await verdictOf(prismaWith({ participants: guest, links: [{ id: 'l1', expiresAt: ahead(60_000) }] }))).toBe('allow');
+    expect(await verdictOf(prismaWith({ participants: guest, links: [{ id: 'l1', expiresAt: ago(1), allowViewHistory: true }] }))).not.toBe('allow');
+    expect(await verdictOf(prismaWith({ participants: guest, links: [{ id: 'l1', expiresAt: ahead(60_000), allowViewHistory: true }] }))).toBe('allow');
   });
 
   it("refuse une pièce disparue, pas encore rattachée, ou dont le message n'existe plus", async () => {
@@ -139,5 +155,44 @@ describe('resolveSignedReaderVerdict', () => {
   it('lit la vue unique PROPRE à la pièce', async () => {
     const setup = prismaWith({ piece: { messageId: MESSAGE, isViewOnce: true }, entry: { ephemeralExpiresAt: null, viewedOnceAt: ago(VIEW_ONCE_BURN_GRACE_MS) } });
     expect(await verdictOf(setup)).toBe('gone');
+  });
+});
+
+describe('resolveSignedReaderVerdict — le plancher d’historique du lecteur (#18470)', () => {
+  const member = (over: Partial<Participant>): Participant[] => [
+    { id: READER, conversationId: CONVERSATION, isActive: true, joinedAt: ago(1_000), ...over },
+  ];
+
+  it('refuse le fichier d’un message antérieur à un octroi par DATE', async () => {
+    expect(await verdictOf(prismaWith({ participants: member({ historyVisibleFrom: ago(30_000) }) }))).toBe('gone');
+  });
+
+  it('refuse le fichier d’un message antérieur à l’arrivée quand l’historique est fermé (canViewHistory=false)', async () => {
+    expect(await verdictOf(prismaWith({ participants: member({ permissions: { canViewHistory: false } }) }))).toBe('gone');
+  });
+
+  it('refuse à l’invité d’un lien SANS historique le fichier d’un message antérieur à son arrivée', async () => {
+    const guest = member({ shareLinkId: 'l1' });
+    expect(await verdictOf(prismaWith({ participants: guest, links: [{ id: 'l1', expiresAt: null, allowViewHistory: false }] }))).toBe('gone');
+  });
+
+  it('sert le fichier d’un message postérieur au plancher', async () => {
+    expect(await verdictOf(prismaWith({ participants: member({ historyVisibleFrom: ago(120_000) }) }))).toBe('allow');
+    expect(await verdictOf(prismaWith({ participants: member({ permissions: { canViewHistory: false }, joinedAt: ago(120_000) }) }))).toBe('allow');
+  });
+
+  it('sert le participant sans plancher, l’invité d’un lien qui ouvre l’historique, l’administrateur de la conversation et le rôle de plateforme privilégié', async () => {
+    expect(await verdictOf(prismaWith({ participants: member({}) }))).toBe('allow');
+    expect(await verdictOf(prismaWith({ participants: member({ shareLinkId: 'l1' }), links: [{ id: 'l1', expiresAt: null, allowViewHistory: true }] }))).toBe('allow');
+    expect(await verdictOf(prismaWith({ participants: member({ role: 'admin', permissions: { canViewHistory: false } }) }))).toBe('allow');
+    expect(await verdictOf(prismaWith({ participants: member({ user: { role: 'ADMIN' }, historyVisibleFrom: ago(30_000) }) }))).toBe('allow');
+  });
+
+  it('demande au lecteur ce qui décide de son plancher', async () => {
+    const setup = prismaWith({});
+    await verdictOf(setup);
+    expect(setup.participantFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ joinedAt: true, historyVisibleFrom: true, role: true }) }),
+    );
   });
 });

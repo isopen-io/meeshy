@@ -26,13 +26,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.feedback.FeedbackToastKind
 import me.meeshy.sdk.model.profile.ProfilePostsEmptyKind
+import me.meeshy.ui.component.feedback.dailyGestureLimitInfo
 import me.meeshy.ui.component.MeeshyEmptyState
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.icons.MeeshyIcons
@@ -77,6 +77,7 @@ fun rememberProfilePostsItems(
                 is ProfilePostsEffect.Notice -> viewModel.toasts.show(
                     context.getString(effect.notice.messageRes()),
                     if (effect.notice.isError) FeedbackToastKind.ERROR else FeedbackToastKind.SUCCESS,
+                    info = effect.notice.takeIf { it == FeedNotice.DAILY_REACTION_LIMIT }?.let { dailyGestureLimitInfo(context) },
                 )
             }
         }
@@ -180,37 +181,33 @@ internal fun LazyListScope.profilePostsItems(
     }
 }
 
+private val ProfilePostsEmptyKind.isFiltered: Boolean
+    get() = this == ProfilePostsEmptyKind.NO_REELS || this == ProfilePostsEmptyKind.NO_POSTS
+
+/** Un filtre vide dit comment revenir à tout : retoucher la tuile, le seul chemin, qu'aucun autre signe ne montre. */
 @Composable
-private fun ProfilePostsEmpty(kind: ProfilePostsEmptyKind) {
-    val title: String
-    val subtitle: String
-    when (kind) {
-        ProfilePostsEmptyKind.NO_REELS -> {
-            title = stringResource(R.string.profile_posts_empty_reels)
-            subtitle = stringResource(R.string.profile_posts_empty_filter_subtitle)
-        }
-        ProfilePostsEmptyKind.NO_POSTS -> {
-            title = stringResource(R.string.profile_posts_empty_posts)
-            subtitle = stringResource(R.string.profile_posts_empty_filter_subtitle)
-        }
-        else -> {
-            title = stringResource(R.string.profile_posts_empty)
-            subtitle = stringResource(R.string.profile_posts_empty_subtitle)
-        }
-    }
+internal fun ProfilePostsEmpty(kind: ProfilePostsEmptyKind) {
+    val title = stringResource(
+        when (kind) {
+            ProfilePostsEmptyKind.NO_REELS -> R.string.profile_posts_empty_reels
+            ProfilePostsEmptyKind.NO_POSTS -> R.string.profile_posts_empty_posts
+            else -> R.string.profile_posts_empty
+        },
+    )
     Box(Modifier.fillMaxWidth().height(220.dp)) {
         MeeshyEmptyState(
             icon = if (kind == ProfilePostsEmptyKind.NO_REELS) MeeshyIcons.Movie else MeeshyIcons.Notes,
             title = title,
-            subtitle = subtitle,
+            subtitle = if (kind.isFiltered) stringResource(R.string.profile_posts_empty_filter_subtitle) else "",
             compact = true,
         )
     }
 }
 
+/** La fin des publications : le sceau et la date du premier contenu ; sans date, rien — un sceau seul ne dit rien. */
 @Composable
-private fun ProfilePostsEndFooter(firstPublishedAtIso: String?, locale: Locale) {
-    val date = remember(firstPublishedAtIso, locale) { abbreviatedDate(firstPublishedAtIso, locale) }
+internal fun ProfilePostsEndFooter(firstPublishedAtIso: String?, locale: Locale) {
+    val date = remember(firstPublishedAtIso, locale) { abbreviatedDate(firstPublishedAtIso, locale) } ?: return
     Column(
         Modifier.fillMaxWidth().padding(vertical = MeeshySpacing.xl).semantics(mergeDescendants = true) {},
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -218,18 +215,10 @@ private fun ProfilePostsEndFooter(firstPublishedAtIso: String?, locale: Locale) 
     ) {
         Icon(MeeshyIcons.Verified, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary)
         Text(
-            stringResource(R.string.profile_posts_end_of_content),
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
-            color = MeeshyTheme.tokens.textSecondary,
+            stringResource(R.string.profile_posts_first_published_at, date),
+            style = MaterialTheme.typography.labelSmall,
+            color = MeeshyTheme.tokens.textMuted,
         )
-        date?.let {
-            Text(
-                stringResource(R.string.profile_posts_first_published_at, it),
-                style = MaterialTheme.typography.labelSmall,
-                color = MeeshyTheme.tokens.textMuted,
-            )
-        }
     }
 }
 

@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import type { MentionCandidate } from '@/lib/api/mention-suggestions';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 import { publishMentionSource, type MentionSource } from '@/lib/view/mention-source';
 import { MENTION_REMOTE_DEBOUNCE_MS } from '@/lib/view/use-mention-suggestions';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -101,7 +102,8 @@ function press(el: HTMLElement, key: string): KeyboardEvent {
 
 const options = (el: HTMLElement): HTMLElement[] => Array.from(el.querySelectorAll<HTMLElement>('[role="option"]'));
 const names = (el: HTMLElement): (string | undefined)[] => options(el).map((o) => o.dataset.mentionOption);
-const panel = (el: HTMLElement): Element | null => el.querySelector('[data-mention-suggestions]');
+/* La liste ouverte : celle qui SORT (`data-leaving`, le temps du fondu — #18327) n'en est plus une. */
+const panel = (el: HTMLElement): Element | null => el.querySelector('[data-mention-suggestions]:not([data-leaving])');
 
 async function passDebounce(): Promise<void> {
   await act(async () => {
@@ -183,6 +185,19 @@ describe('le clavier choisit sans envoyer', () => {
     expect(panel(el)).toBeNull();
     press(el, 'Enter');
     expect(sent).toEqual(['salut @al']);
+  });
+
+  test('fermée, la liste SORT en fondu : encore peinte, inerte, puis retirée (#18327)', async () => {
+    const { el } = await mountComposer();
+    typeAt(el, 'salut @al');
+    press(el, 'Escape');
+    const leaving = el.querySelector('[data-mention-suggestions]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+    });
+    expect(el.querySelector('[data-mention-suggestions]')).toBeNull();
   });
 
   test('liste fermée, Entrée envoie comme avant', async () => {

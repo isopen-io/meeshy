@@ -9,6 +9,7 @@ import { httpTransport, unwrap, ApiError } from '@/lib/api/client';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, mintMeesh, type EngagementWithGame, type MeeshMintResult } from '@/lib/api/engagement';
 import { buyFlameFreeze, claimChest, relightFlame, rerollMission } from '@/lib/api/game';
+import { GAME_MUTATION_KEY } from '@/lib/api/game-state-order';
 import type { HttpTransport } from '@/lib/api/http';
 import { gameErrorMessage } from '@/lib/view/game-copy';
 import {
@@ -76,12 +77,7 @@ export type GameActions = {
 
 type Snapshot = { readonly snapshot: EngagementWithGame | undefined };
 
-/**
- * La clé commune des gestes du jeu : tant qu'un geste est EN VOL, la lecture
- * en cache est l'optimiste — le guide et les propositions de photo attendent
- * qu'il soit réglé pour célébrer (un geste refusé ne se célèbre pas).
- */
-export const GAME_MUTATION_KEY = ['game', 'gesture'] as const;
+export { GAME_MUTATION_KEY };
 
 const messageOf = (error: unknown): string => gameErrorMessage(error instanceof ApiError ? error.code : undefined);
 

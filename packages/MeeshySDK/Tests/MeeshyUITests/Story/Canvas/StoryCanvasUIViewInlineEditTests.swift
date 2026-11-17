@@ -150,4 +150,37 @@ final class StoryCanvasUIViewInlineEditTests: XCTestCase {
                      "Hors édition, la calque retrouve son rendu intégral")
         _ = window
     }
+
+    // MARK: - Une saisie demandée avant la calque n'est pas perdue (#18735)
+
+    /// Un canvas tout juste monté n'a encore ni taille ni calques : la saisie demandée à cet
+    /// instant attendait jusque-là un rendu suivant, que rien ne provoquait — le texte de la
+    /// caméra restait sans clavier. Elle s'ouvre dès que la calque existe.
+    func test_beginInlineTextEdit_beforeTheLayerExists_opensOnceTheCanvasIsLaidOut() {
+        let text = StoryTextObject(id: "t1", text: "", x: 0.5, y: 0.5)
+        let canvas = StoryCanvasUIView(slide: StorySlide(id: "s1", effects: StoryEffects(textObjects: [text])),
+                                       mode: .edit)
+
+        canvas.beginInlineTextEdit(textId: "t1")
+        XCTAssertNil(canvas.inlineEditingTextId, "sans calque, rien ne s'ouvre encore")
+
+        canvas.frame = CGRect(x: 0, y: 0, width: 390, height: 693)
+        canvas.layoutIfNeeded()
+
+        XCTAssertEqual(canvas.inlineEditingTextId, "t1")
+        XCTAssertEqual(textLayer(canvas, id: "t1")?.glyphsHidden, true)
+    }
+
+    func test_endInlineTextEdit_beforeTheLayerExists_dropsThePendingRequest() {
+        let text = StoryTextObject(id: "t1", text: "", x: 0.5, y: 0.5)
+        let canvas = StoryCanvasUIView(slide: StorySlide(id: "s1", effects: StoryEffects(textObjects: [text])),
+                                       mode: .edit)
+
+        canvas.beginInlineTextEdit(textId: "t1")
+        canvas.endInlineTextEdit()
+        canvas.frame = CGRect(x: 0, y: 0, width: 390, height: 693)
+        canvas.layoutIfNeeded()
+
+        XCTAssertNil(canvas.inlineEditingTextId, "une saisie terminée avant d'avoir commencé ne s'ouvre plus")
+    }
 }

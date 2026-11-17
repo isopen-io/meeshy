@@ -26,6 +26,14 @@ import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
  * injecte au `MeeshySocketIOManager` — la seule où les entrées de message sont
  * effectivement enfilées.
  *
+ * **Cette unicité est tenue par un CLIQUET depuis #18616**
+ * (`socketio/__tests__/delivery-queue-door-sweep.ts`,
+ * `sweepDeliveryQueueConstructions`), et elle l'est parce qu'elle était FAUSSE :
+ * le pipeline média en construisait une seconde, dont la tranche mémoire
+ * n'était ni drainée, ni purgée, ni balayée. Les deux doc-comments qui
+ * affirmaient l'unicité — celui-ci et celui de `server.ts` — étaient à
+ * l'endroit exact où l'on serait allé vérifier.
+ *
  * ## Ce que le repli `undefined` veut dire
  *
  * Qu'il n'y a pas de file dans ce processus (test unitaire, script, outil).
@@ -61,8 +69,27 @@ export type QueuedMessagePurger = {
  * STRUCTURELLE et minimale, comme sa voisine : le module qui enfile n'importe
  * pas `RedisDeliveryQueue`, et un double de test est un objet à une méthode.
  */
-export type QueuedPersonalMarkEnqueuer = {
-  enqueue(userId: string, entry: QueuedMessagePayload): Promise<void>;
+export type QueuedPersonalMarkEnqueuer = QueuedEntryEnqueuer;
+
+/**
+ * La méthode d'ENFILAGE de la file, déclarée telle qu'elle est.
+ *
+ * Le troisième paramètre n'est pas un détail de confort : `sealAtRest`
+ * décide si l'entrée est SCELLÉE avant d'atteindre Redis
+ * (`RedisDeliveryQueue.sealedForStorage`, fail-closed — une entrée à sceller
+ * qui ne se scelle pas n'est pas enfilée). Une projection qui l'omet reste
+ * assignable — une fonction à deux paramètres satisfait un type à trois — et
+ * le scellement se perd alors SANS qu'une ligne ne rougisse. C'est la forme
+ * de la leçon que le dépôt écrit déjà sur les `select` trop étroits : la
+ * PROJECTION est la seule des conditions qu'aucun témoin de comportement ne
+ * peut voir.
+ */
+export type QueuedEntryEnqueuer = {
+  enqueue(
+    userId: string,
+    entry: QueuedMessagePayload,
+    options?: { readonly sealAtRest?: boolean },
+  ): Promise<void>;
 };
 
 /**
@@ -107,6 +134,33 @@ export function getSharedDeliveryQueue(): QueuedMessagePurger | undefined {
  * `is not a function` sur un chemin best-effort.
  */
 export function getSharedPersonalMarkEnqueuer(): QueuedPersonalMarkEnqueuer | undefined {
+  return resolveEnqueuer();
+}
+
+/**
+ * La MÊME méthode, vue par l'autre audience : les participants d'une
+ * CONVERSATION qui sont hors ligne (#18616).
+ *
+ * Deux accesseurs pour une seule méthode, et c'est le discriminant que le
+ * dépôt emploie déjà pour ses DEUX portes d'enfilage partagées
+ * (`delivery-queue-door-sweep.ts`) : `enqueuePersonalMessageMark` décide des
+ * autres APPAREILS d'un compte, `offlineParticipantQueue` des MEMBRES absents
+ * d'une conversation. Un appelant nomme ici l'audience dont il remplit la
+ * dépendance — il ne choisit pas un comportement.
+ *
+ * Ce que cet accesseur existe pour empêcher : qu'une unité se CONSTRUISE sa
+ * file. `MeeshySocketIOHandler.startMediaPipelines` le faisait pour les quatre
+ * déclencheurs de `message:attachment-updated`, et la tranche MÉMOIRE de cette
+ * seconde instance — celle qu'emprunte toute entrée écrite pendant un hoquet
+ * Redis — n'était ni drainée, ni purgée, ni balayée. Un `undefined` ici veut
+ * dire « ce processus n'a pas de file », exactement comme pour la purge ; il ne
+ * veut jamais dire « construis-en une ».
+ */
+export function getSharedOfflineEnqueuer(): QueuedEntryEnqueuer | undefined {
+  return resolveEnqueuer();
+}
+
+function resolveEnqueuer(): QueuedEntryEnqueuer | undefined {
   const queue = sharedDeliveryQueue;
-  return queue && typeof queue.enqueue === 'function' ? (queue as QueuedPersonalMarkEnqueuer) : undefined;
+  return queue && typeof queue.enqueue === 'function' ? (queue as QueuedEntryEnqueuer) : undefined;
 }

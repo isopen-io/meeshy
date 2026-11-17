@@ -136,6 +136,59 @@ présence est DÉRIVÉE par le backend depuis `isOnline` + `lastActiveAt`, cf.
 déclaration parasite comme celle-là est aussi ce qui empêche d'écrire un garde
 « tout `CLIENT_EVENTS` a un handler gateway » sans liste d'exemptions.
 
+**Ce garde existe depuis le 2026-11-14 (#18499)** : `socket-event-handler-gate`
+ferme la direction MONTANTE, que les cinq cliquets voisins laissaient ouverte —
+un nom de `CLIENT_EVENTS` sans `socket.on` est un canal que le contrat AFFIRME
+et que **Socket.IO laisse tomber sans lever la moindre erreur**. Il est à deux
+sens : une dette neuve rougit chez celui qui l'écrit, et un canal qui gagne son
+écouteur doit SORTIR de l'inventaire. Il tient aussi `CALL_EVENTS`
+(`types/video-call.ts`) dans la portée des gardes : c'est une SECONDE carte de
+noms de fil, et c'est celle que la passerelle importe — un nom ajouté à l'une et
+pas à l'autre échappait à tous les cliquets. Le scan « la passerelle épelle-t-elle
+ce nom ? » est un site UNIQUE (`__tests__/ci/socket-payload-shape/gateway-event-names.ts`),
+partagé avec `socket-event-emitter-gate`.
+
+**Et le septième cliquet garde ce que les six premiers ne peuvent pas voir**
+(`socket-seq-lockstep-gate`, #18602, 2026-11-15). Les six répondent « ce NOM
+existe-t-il de part et d'autre ? » ; le curseur `_seq` n'est pas un champ
+déclaré par événement mais une propriété TRANSVERSE du transport, estampillée
+par `emitWithSeq` et par rien d'autre — donc hors de portée des six par
+construction.
+
+La règle qu'il porte est écrite dans le doc-comment d'`emitWithSeq` : **le
+`_seq` est per-user GLOBAL, pas per-event, donc un client qui n'observe qu'un
+SOUS-ENSEMBLE des événements estampillés voit un trou à chaque événement non
+observé.** Un curseur global observé partiellement est pire que pas de curseur :
+il fabrique des trous là où rien n'a été perdu, et chaque faux trou coûte une
+resynchronisation au client qui le croit. C'est aussi ce qui MOTIVE
+`announceReadBulk` / `announceDeletedBulk`, qui émettent PLAIN délibérément.
+
+Le cliquet dérive des sources les deux ensembles — ce que la passerelle
+estampille, ce que chaque client observe — et rougit sur l'écart dans les deux
+sens. **Ajouter un appelant à `emitWithSeq` le fait tomber en nommant les
+plateformes à étendre dans le même train de release** : c'est là que l'état se
+lit, et plus dans un commentaire. Quatre doc-comments du dépôt (dont celui du
+contrat, `types/socketio-events/notification.ts`) affirmaient que le web
+observait en nommant `notification-socketio.singleton.ts`, un fichier de
+l'application web LEGACY sortie au #7668 — mesuré, `apps/web` n'observe aucun
+curseur (#18601). Le quatrième racontait sa propre erreur ANTÉRIEURE sur
+Android : **corriger une énumération ne lui donne aucun moyen de rester vraie**,
+et le récit de sa faute passée la rend plus crédible, pas moins (leçon
+`tasks/lessons/2026-11-15-une-enumeration-corrigee-reste-une-enumeration.md`).
+
+Deux points de forme, parce qu'ils ont été payés en écrivant la garde :
+
+- **Les deux côtés ne sont pas symétriques.** Côté passerelle, fail-CLOSED : un
+  site `emitWithSeq(` dont l'événement n'est pas résoluble se nomme en rouge.
+  Côté client, une occurrence non liée est ignorée sur une plateforme
+  inventoriée (un client cite son tracker aussi pour le construire ou le
+  remettre à zéro) et ROUGE sur une plateforme qui observe.
+- **Une affirmation d'ABSENCE se mesure sur les OCCURRENCES, jamais sur le
+  relevé enrichi.** L'inventaire « cette plateforme n'observe aucun curseur » a
+  d'abord été mesuré sur le relevé LIÉ : ajouter un observateur au web laissait
+  le témoin VERT, l'occurrence neuve n'étant rattachée à aucune route. Le second
+  sens du cliquet ne pouvait pas tomber dans le sens qu'il nommait.
+
 ## Build
 ```bash
 npm run build   # TypeScript → dist/ (ESM + declarations + source maps)

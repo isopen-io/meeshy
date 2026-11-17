@@ -20,6 +20,9 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { refuserCommeIntrouvable } from '../conversations/utils/access-control';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
+import { countOnlineMembers } from '../../services/community-online-count';
+import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS, communityConversationSchema, communityDetailInclude, communityForViewer, flattenCommunityCounts } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
@@ -298,7 +301,17 @@ export async function registerCoreRoutes(
         return sendForbidden(reply, 'Access denied to this community');
       }
 
-      sendSuccess(reply, served);
+      const onlineMemberCount = await countOnlineMembers({
+        prisma: fastify.prisma,
+        privacy: new PrivacyPreferencesService(fastify.prisma),
+        communityId: community.id,
+        viewerId: userId,
+      }).catch((error: unknown) => {
+        logger.warn('Online member count unavailable', { communityId: community.id, error: String(error) });
+        return null;
+      });
+
+      sendSuccess(reply, { ...served, onlineMemberCount });
     } catch (error) {
       logger.error('Error fetching community', error as Error);
       sendInternalError(reply, 'Failed to fetch community');
@@ -355,6 +368,10 @@ export async function registerCoreRoutes(
       }
 
       const userId = authContext.userId;
+
+      if (validatedData.avatar !== undefined && !(await identityImageIsCallers(fastify.prisma, { userId, reference: validatedData.avatar }))) {
+        return sendBadRequest(reply, 'Invalid community', { code: IDENTITY_IMAGE_NOT_OWNED });
+      }
 
       // Generer l'identifier
       const identifier = generateIdentifier(validatedData.name, validatedData.identifier);

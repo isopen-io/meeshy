@@ -126,7 +126,7 @@ public object ProgressionConceptStates {
                 ConceptFact.MissionsDone, ConceptFact.Chest,
             )
             ChestStatus.Locked -> FicheStateLine(
-                GameText.of(GameTextKey.StateMissionsProgress, count(done), count(total), count((total - done).coerceAtLeast(0))),
+                GameText.of(GameTextKey.StateMissionsProgress, count(done), count(total)),
                 ConceptFact.MissionsDone,
             )
         }

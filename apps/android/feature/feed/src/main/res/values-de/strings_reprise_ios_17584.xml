@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="feed_bookmark_success">Zu Lesezeichen hinzugefügt</string>
+    <string name="feed_notice_bookmark_failed">Fehler beim Speichern des Lesezeichens</string>
+    <plurals name="feed_post_stat_reposts">
+        <item quantity="one">%1$d Repost</item>
+        <item quantity="other">%1$d Reposts</item>
+    </plurals>
+    <string name="profile_posts_empty_filter_subtitle">Tippe erneut auf die Kachel, um alles zu sehen</string>
+</resources>

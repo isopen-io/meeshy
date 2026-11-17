@@ -179,12 +179,16 @@ try {
         await network(page, 'bad');
         check(await appears(page, '[data-call-pill="poor-network"]', 8000), `${label} : réseau dégradé — la pastille « Connexion instable » paraît`);
         check((await indicator.getAttribute('data-call-quality')) === 'poor', `${label} : l'indicateur passe au niveau faible`);
-        const frozen = await whileAudioFlows(page, () => page.$('[data-call-pill="video-frozen"]').then((el) => el !== null), 15_000);
-        check(frozen.reached, `${label} : un lien mauvais tenu GÈLE la vidéo (« vidéo ralentie »)`);
+        const frozen = await whileAudioFlows(page, () => page.$('[data-call-banner-stack] [data-call-video-notice="reduced"]').then((el) => el !== null), 15_000);
+        check(frozen.reached, `${label} : un lien mauvais tenu GÈLE la vidéo (« Vidéo réduite » dans la pile du haut, #18227)`);
+        await page.waitForTimeout(600);
+        const noticeBox = await page.locator('[data-call-video-notice="reduced"]').boundingBox();
+        const selfBox = await page.locator('[data-call-self-tile-corner]').first().boundingBox({ timeout: 1000 }).catch(() => null);
+        check(noticeBox !== null && (selfBox === null || selfBox.y >= noticeBox.y + noticeBox.height - 1), `${label} : ma vignette descend sous « Vidéo réduite », jamais couverte (E4)`);
         const frozenFrames = await framesDuring(page, 3000);
         check(frozenFrames <= 12, `${label} : gelée, la vidéo arrive à quelques images par seconde (${frozenFrames} en 3 s)`);
         await capture(page, 'video-gelee');
-        const suspended = await whileAudioFlows(page, () => page.$('[data-call-pill="video-suspended"]').then((el) => el !== null), 15_000);
+        const suspended = await whileAudioFlows(page, () => page.$('[data-call-video-notice="paused"]').then((el) => el !== null), 15_000);
         check(suspended.reached, `${label} : le gel ne suffisant pas, la vidéo est SUSPENDUE (« vidéo en pause, l'audio continue »)`);
         await page.waitForTimeout(1500);
         const suspendedFrames = await framesDuring(page, 3000);
@@ -197,8 +201,8 @@ try {
 
         // ------------------------------------------------ 5. le réseau revient
         await network(page, 'good');
-        const resumed = await whileAudioFlows(page, () => page.$('[data-call-pill="video-suspended"], [data-call-pill="video-frozen"]').then((el) => el === null), 20_000);
-        check(resumed.reached, `${label} : le réseau revenu, la vidéo REPREND (les pastilles s'effacent)`);
+        const resumed = await whileAudioFlows(page, () => page.$('[data-call-video-notice]').then((el) => el === null), 20_000);
+        check(resumed.reached, `${label} : le réseau revenu, la vidéo REPREND (« Vidéo réduite » repart)`);
         await page.waitForTimeout(1500);
         const resumedFrames = await framesDuring(page, 3000);
         check(resumedFrames > 20, `${label} : les images reviennent chez le pair (${resumedFrames} en 3 s)`);

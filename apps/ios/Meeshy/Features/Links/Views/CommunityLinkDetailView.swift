@@ -12,20 +12,15 @@ struct CommunityLinkDetailView: View {
     @State private var copiedFeedback = false
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-            ScrollView {
-                VStack(spacing: MeeshySpacing.xl) {
-                    headerCard.padding(.horizontal, MeeshySpacing.lg)
-                    actionsBar.padding(.horizontal, MeeshySpacing.lg)
-                    statsSection.padding(.horizontal, MeeshySpacing.lg)
-                    infoSection.padding(.horizontal, MeeshySpacing.lg)
-                }
-                .padding(.top, MeeshySpacing.lg).padding(.bottom, 60)
+        LinksPage(title: link.name, accent: MeeshyColors.communityAccent) {
+            VStack(spacing: MeeshySpacing.xl) {
+                headerCard.padding(.horizontal, MeeshySpacing.lg)
+                actionsBar.padding(.horizontal, MeeshySpacing.lg)
+                statsSection.padding(.horizontal, MeeshySpacing.lg)
+                infoSection.padding(.horizontal, MeeshySpacing.lg)
             }
+            .padding(.top, MeeshySpacing.lg).padding(.bottom, 60)
         }
-        .navigationTitle(link.name)
-        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var headerCard: some View {
@@ -52,14 +47,12 @@ struct CommunityLinkDetailView: View {
         HStack(spacing: MeeshySpacing.md) {
             communityActionButton(String(localized: "common.copy", defaultValue: "Copier", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
                                   color: copiedFeedback ? MeeshyColors.success : MeeshyColors.communityAccent) {
-                UIPasteboard.general.string = link.joinUrl
-                HapticFeedback.success()
+                LinksClipboard.copy(link.joinUrl, confirmation: .inline)
                 withAnimation { copiedFeedback = true }
             }
             shareActionButton
             communityActionButton(String(localized: "communityLink.identify", defaultValue: "Identifier", bundle: .main), icon: "doc.plaintext", color: MeeshyColors.brandPrimary) {
-                UIPasteboard.general.string = link.identifier
-                HapticFeedback.light()
+                LinksClipboard.copy(link.identifier, message: ShareSheetCopy.copied)
             }
         }
         .settling($copiedFeedback, to: false, after: .seconds(2), animation: .default)
@@ -88,18 +81,14 @@ struct CommunityLinkDetailView: View {
         Button(action: action) {
             communityActionButtonLabel(label, icon: icon, color: color)
         }
+        .buttonStyle(.plain)
         .accessibilityLabel(label)
     }
 
     private func communityActionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
         VStack(spacing: MeeshySpacing.xsPlus) {
-            ZStack {
-                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(color.opacity(MeeshyOpacity.light))
-                    .frame(width: 52, height: 52)
-                // Glyphe dans une tuile de dimension fixe 52×52 : figé (déborderait s'il scalait) — le libellé sous le glyphe est lu par VoiceOver (doctrine 86i)
-                Image(systemName: icon).font(MeeshyFont.fixedGlyph(MeeshyIconSize.xxl)).foregroundStyle(color)
-                    .accessibilityHidden(true)
-            }
+            MeeshyGlassButtonFace(systemImage: icon, size: .s48, glyphTint: color)
+                .accessibilityHidden(true)
             Text(label).font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium)).foregroundStyle(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)

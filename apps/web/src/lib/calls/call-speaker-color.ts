@@ -35,5 +35,14 @@ export function speakerColor(userId: string, name = ''): string {
  * celle du nom, comme le portrait (`call-portrait.tsx`).
  */
 export function peerColor({ peerKey, title }: Pick<ActiveCall, 'peerKey' | 'title'>): string {
-  return peerKey == null || peerKey === '' ? colorForName(title) : speakerColor(peerKey, title);
+  return personTint(peerKey, title);
+}
+
+/**
+ * LA COULEUR D'UNE PERSONNE, PARTOUT DANS L'APPEL (loi 18.2) — son identifiant prime (`speakerColor`, celle de ses
+ * sous-titres et de son liseré) ; sans identifiant connu, son nom reste le seul repère. Aucun site ne la tire du nom
+ * quand l'identifiant est là : la même personne n'a jamais deux couleurs.
+ */
+export function personTint(userId: string | null | undefined, name: string): string {
+  return userId == null || userId === '' ? colorForName(name) : speakerColor(userId, name);
 }

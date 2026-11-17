@@ -92,6 +92,41 @@ class CallRemoteVideoFadeTest {
         assertThat(CallRemoteVideoFade.imageShare(veil = 0f, veiled = CallRemoteVideoSurface.CameraOff)).isEqualTo(1f)
     }
 
+    /** Loi 17.12 — une vignette (de groupe, ou la mienne) dont la caméra se coupe : la piste retirée ne retire pas l'image d'un coup. */
+    @Test
+    fun `une vignette garde son image, gelee si la piste est partie, tant que le voile ne l'a pas couverte`() {
+        assertThat(CallRemoteVideoFade.keepsTileImage(isLive = true, veil = 0f)).isTrue()
+        assertThat(CallRemoteVideoFade.keepsTileImage(isLive = true, veil = 1f)).isTrue()
+        assertThat(CallRemoteVideoFade.keepsTileImage(isLive = false, veil = 0.4f)).isTrue()
+        assertThat(CallRemoteVideoFade.keepsTileImage(isLive = false, veil = 1f)).isFalse()
+    }
+
+    /** Loi 17.1 — ma vignette paraît et repart en fondu, sans jamais montrer d'un coup l'image qu'elle porte. */
+    @Test
+    fun `ma vignette parait cadre d'abord, voile pose, puis le voile se leve sur ce qu'elle montre`() {
+        listOf(false, true).forEach { reduce ->
+            val fade = CallRemoteVideoFade.durationMillis(reduce)
+            assertThat(CallRemoteVideoFade.presenceVeilDelayMillis(reduce, appearing = true)).isEqualTo(fade)
+            assertThat(CallRemoteVideoFade.presenceFrameDelayMillis(reduce, appearing = true)).isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `ma vignette repart par le chemin inverse, le voile retombe avant que le cadre fonde`() {
+        listOf(false, true).forEach { reduce ->
+            val fade = CallRemoteVideoFade.durationMillis(reduce)
+            assertThat(CallRemoteVideoFade.presenceVeilDelayMillis(reduce, appearing = false)).isEqualTo(0)
+            assertThat(CallRemoteVideoFade.presenceFrameDelayMillis(reduce, appearing = false)).isEqualTo(fade)
+        }
+    }
+
+    @Test
+    fun `ce que montre ma vignette n'est monte que sous un voile qui n'est plus plein`() {
+        assertThat(CallRemoteVideoFade.mountsTileContent(veil = 1f)).isFalse()
+        assertThat(CallRemoteVideoFade.mountsTileContent(veil = 0.99f)).isTrue()
+        assertThat(CallRemoteVideoFade.mountsTileContent(veil = 0f)).isTrue()
+    }
+
     @Test
     fun `le voile garde ce qu'il montrait pendant que l'image revient, et suit l'etat sinon`() {
         assertThat(CallRemoteVideoFade.veiled(CallRemoteVideoSurface.Live, previous = CallRemoteVideoSurface.Connecting))

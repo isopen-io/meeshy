@@ -55,6 +55,7 @@ internal fun OnboardingHost(
     host: OnboardingHostViewModel = hiltViewModel(),
 ) {
     val user by host.user.collectAsStateWithLifecycle()
+    val openConversation = rememberRootConversationOpener(navController)
     val celebrating by hiltViewModel<ArrivalCelebrationViewModel>().controller.isShowing.collectAsStateWithLifecycle()
     OnboardingLayer(
         viewModel = onboarding,
@@ -65,8 +66,8 @@ internal fun OnboardingHost(
         isStoryComposerOpen = OnboardingRootRules.isStoryComposer(currentRoute),
         isCallOpen = OnboardingRootRules.isCallOpen(currentRoute),
         navigation = OnboardingNavigation(
-            openStoryComposer = { audience -> navController.navigate(Routes.storyComposerFromOnboarding(audience)) },
-            openConversation = { navController.navigate(Routes.chat(it)) },
+            openStoryComposer = { audience -> navController.navigateSingleTop(Routes.storyComposerFromOnboarding(audience)) },
+            openConversation = openConversation,
             openProgression = { navController.navigate(GameRoutes.PROGRESSION) { launchSingleTop = true } },
             signOut = { authViewModel.logout() },
         ),

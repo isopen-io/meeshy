@@ -16,24 +16,14 @@
           "androidName": "about_copyright",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "about.feature.cloudSync",
-          "androidName": "about_feature_cloud_sync",
-          "status": "adopted"
-        },
+        { "androidName": "about_feature_cloud_sync", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "about.feature.encryption",
           "androidName": "about_feature_encryption",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "about.feature.themes",
-          "androidName": "about_feature_themes",
-          "status": "adopted"
-        },
+        { "androidName": "about_feature_themes", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "about.feature.translation",
@@ -86,12 +76,7 @@
           "androidName": "about_section_features",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "about.section.informations",
-          "androidName": "about_section_informations",
-          "status": "adopted"
-        },
+        { "androidName": "about_section_informations", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "about.section.links",
@@ -804,30 +789,14 @@
           "androidName": "privacy_read_receipts",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "settings.privacy.save_media",
-          "androidName": "privacy_save_media",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.privacy.contacts_groups",
-          "androidName": "privacy_section_contacts",
-          "status": "adopted"
-        },
+        { "androidName": "privacy_section_contacts", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "settings.privacy.encryption",
           "androidName": "privacy_section_encryption",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "settings.privacy.media_data",
-          "androidName": "privacy_section_media",
-          "status": "adopted"
-        },
+        { "androidName": "privacy_section_media", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "settings.privacy.visibility",
@@ -1452,12 +1421,7 @@
           "androidName": "licenses_meeshy_body",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "about.licenses.meeshy.body_mit",
-          "androidName": "licenses_meeshy_body_mit",
-          "status": "adopted"
-        },
+        { "androidName": "licenses_meeshy_body_mit", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "about.licenses.source.title",

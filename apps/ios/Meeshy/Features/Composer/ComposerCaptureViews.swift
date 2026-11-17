@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 /// **L'aperçu du viseur — un seul montage de `CameraPreviewLayer` pour les deux
 /// présentations** (#9134). La carte en scène et le plein écran le posent à la
@@ -198,6 +199,9 @@ struct ComposerCaptureChrome: View {
     @State private var holdEndedAt: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage(ComposerCaptureGrid.storageKey) private var gridEnabled = false
+    @Environment(\.composerViewfinderClosesLibrary) private var closesLibrary
+    /// Le glisser d'un objet posé : ses cibles, la copie en haut, la poubelle en bas (#18712).
+    @StateObject private var sceneDrag = ComposerSceneDragDrop()
 
     /// Le pas d'un balayage VoiceOver sur le média : un quart de plus, ou de moins.
     private static let accessibleZoomStep: CGFloat = 1.25
@@ -206,20 +210,20 @@ struct ComposerCaptureChrome: View {
         session.gestureContext(allowsPhoto: allowsPhoto, allowsVideo: allowsVideo)
     }
 
-    /// Sous un cadre, le chrome blanc se pose sur un voile qui lui garde 4,5:1 (#9777),
-    /// réglé sur la luminance mesurée de la bande du cadre qu'il couvre.
+    /// Sous un cadre, la rangée haute se pose sur un voile qui lui garde 4,5:1 (#9777),
+    /// réglé sur la luminance mesurée de la bande du cadre qu'elle couvre ; le bas
+    /// n'en a plus (#18639) — ses mots se tiennent par leur ombre portée.
     @State private var chromeBands: ComposerCaptureChromeBands?
     /// Le chrome au repos retombe à 35 % (CAM-8).
     @State private var chromeRest: Double = 1
 
     private var framed: Bool { session.look.frame != ComposerPhotoFrame.none }
 
+    /// On écrit sur l'aperçu (#18638) : le bas du viseur et la phrase du geste cèdent au clavier.
+    private var typing: Bool { sceneObjects?.typing != nil }
+
     private var chromeVeilTop: Double {
         ComposerCaptureChromeLegibility.veilOpacity(framed: framed, bandLuminance: chromeBands?.measuring(session.look.frame)?.top)
-    }
-
-    private var chromeVeilBottom: Double {
-        ComposerCaptureChromeLegibility.veilOpacity(framed: framed, bandLuminance: chromeBands?.measuring(session.look.frame)?.bottom)
     }
 
     /// Le cadre de l'aperçu, à sa toile : la scène que la vue Metal peint déjà.
@@ -227,6 +231,11 @@ struct ComposerCaptureChrome: View {
         guard framed else { return nil }
         return ComposerLookSceneKey(look: session.look, canvas: ComposerLookPainter.previewCanvas(aspect: session.canvasAspect),
                                     date: session.lookDate, person: session.lookPerson)
+    }
+
+    /// Un objet sous le doigt : seuls l'objet et ses cibles restent (#18787).
+    private var showsChrome: Bool {
+        ComposerViewfinderScene.showsChrome(dragging: sceneDrag.isDragging)
     }
 
     /// « Terminé » rend : seule la croix répond encore.
@@ -267,33 +276,32 @@ struct ComposerCaptureChrome: View {
                     .overlay(alignment: .topLeading) { exposureLayer(width: proxy.size.width) }
                     .allowsHitTesting(!finishing)
             }
+            typingTouchCatcher
             sceneObjectsLayer
             cropBrackets
             if !finishing, session.offersEditPlayback { editPlayback }
-            cropPresets
+            if showsChrome { cropPresets }
             ComposerEditTextLayer(session: session, board: session.retouchTexts)
-            ComposerCaptureGestureHint(session: session)
+            if !typing, showsChrome { ComposerCaptureGestureHint(session: session) }
+            libraryTouchCatcher
             VStack(spacing: 0) {
                 // Toujours montée : une rangée retirée peut rester peinte le temps
                 // d'une transition, et porte la croix qui présente l'alerte.
                 topRow.opacity(showsTopRow ? chromeRest : 0)
                     .allowsHitTesting(showsTopRow)
                     .accessibilityHidden(!showsTopRow)
+                    .overlay(alignment: .topTrailing) { ComposerCropCancelButton(session: session) }
                 Spacer(minLength: 0)
-                // En retouche, le bas suit le chrome (#10930) : la prise garde
-                // tout l'écran, les outils se posent par-dessus.
-                if !session.phase.isEditing || session.editChromeShown {
-                    ComposerCaptureBottomRow(session: session, context: context, railOpacity: chromeRest)
-                        .allowsHitTesting(!finishing)
-                        .background(ComposerCaptureChromeVeil(edge: .bottom, opacity: chromeVeilBottom))
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                if showsChrome { bottomRow }
             }
-            .modifier(ComposerCaptureChromeBandWatch(key: chromeBandKey, bands: $chromeBands, veils: [chromeVeilTop, chromeVeilBottom], animation: reduceMotion ? nil : .easeOut(duration: 0.2)))
+            .modifier(ComposerCaptureChromeBandWatch(key: chromeBandKey, bands: $chromeBands, veils: [chromeVeilTop], animation: reduceMotion ? nil : .easeOut(duration: 0.2)))
+            sceneDragTargets
             if session.isRenderingLook { renderingSpinner }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.showsCropBrackets)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsTopRow)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: typing)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsChrome)
         .modifier(ComposerCaptureChromeRestWatch(session: session, timer: session.selfTimer, opacity: $chromeRest))
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editChromeShown)
         .modifier(ComposerCaptureDismissAndBudget(session: session))
@@ -312,15 +320,74 @@ struct ComposerCaptureChrome: View {
         }
     }
 
+    /// En retouche, le bas suit le chrome (#10930) : la prise garde tout l'écran, les outils se
+    /// posent par-dessus. Pendant la frappe sur l'aperçu, il cède au clavier (#18638).
+    @ViewBuilder
+    private var bottomRow: some View {
+        if ComposerViewfinderScene.servesCaptureControls(typing: typing),
+           !session.phase.isEditing || session.editChromeShown {
+            ComposerCaptureBottomRow(session: session, context: context, railOpacity: chromeRest)
+                .allowsHitTesting(!finishing)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    /// **Pendant la frappe sur l'aperçu, un toucher à vide termine la saisie** (#18638) : posée
+    /// sur la nappe de capture, sous les objets, elle ne laisse partir ni photo ni vidéo.
+    @ViewBuilder
+    private var typingTouchCatcher: some View {
+        if let saisie = sceneObjects?.typing {
+            Color.black.opacity(ComposerViewfinderScene.typingVeilOpacity)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { saisie.onDismiss() }
+                .transition(.opacity)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// **La galerie ouverte par-dessus, un toucher sur le viseur la referme** (#18709) : posé
+    /// au-dessus des objets et sous le chrome, le voile ne laisse partir ni photo, ni vidéo, ni zoom.
+    @ViewBuilder
+    private var libraryTouchCatcher: some View {
+        if let refermer = closesLibrary,
+           ComposerViewfinderScene.route(onChrome: false, onSceneObject: false, objectsTakeTouches: false, libraryOpen: true) == .closeLibrary {
+            Color.clear
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0).onEnded { _ in refermer() })
+                .accessibilityElement()
+                .accessibilityLabel(ComposerCameraCopy.closeLibrary)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { refermer() }
+        }
+    }
+
+    /// **Les cibles du glisser d'un objet posé** (#18712) : au-dessus de tout, sans prendre aucun
+    /// toucher ; elles ne paraissent que pendant le glisser.
+    @ViewBuilder
+    private var sceneDragTargets: some View {
+        if let actions = sceneObjects?.dropActions {
+            GeometryReader { proxy in
+                let emplacements = sceneObjectsFrame.map {
+                    ComposerSceneDragTargetSlots(scene: $0, container: proxy.size)
+                }
+                MeeshyDragTargets(state: sceneDrag.targets,
+                                  topSlot: emplacements?.top, bottomSlot: emplacements?.bottom,
+                                  labels: ComposerCameraCopy.dragTargets,
+                                  onDuplicate: { sceneDrag.drop(.duplicate, actions: actions) },
+                                  onRemove: { sceneDrag.drop(.remove, actions: actions) })
+            }
+        }
+    }
+
     /// **La scène sur le viseur** (#17432) : ses objets, sans son fond, à la place de la carte —
     /// au-dessus de la nappe, sous le chrome. Un toucher sur un objet le prend, une zone vide
     /// traverse vers la capture.
     @ViewBuilder
     private var sceneObjectsLayer: some View {
-        if let sceneObjects, let cadre = sceneObjectsFrame, !session.phase.isEditing {
-            sceneObjects
-                .frame(width: cadre.width, height: cadre.height)
-                .position(x: cadre.midX, y: cadre.midY)
+        if let sceneObjects, let cadre = sceneObjectsFrame, !session.editFramesScene {
+            ComposerViewfinderObjectsLayer(canvas: sceneObjects.feeding(sceneDrag), frame: cadre)
                 .transition(.opacity)
         }
     }
@@ -344,7 +411,7 @@ struct ComposerCaptureChrome: View {
     }
 
     /// **Les formats, PAR-DESSUS le cadre** (#15193), au-dessus de ses crochets
-    /// du bas, et « Annuler » en tête (#15355).
+    /// du bas, en puces et sans « Annuler » (#18639).
     @ViewBuilder
     private var cropPresets: some View {
         if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
@@ -352,13 +419,9 @@ struct ComposerCaptureChrome: View {
                 let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
                                                   framed: session.editFramesScene, playback: session.offersEditPlayback)
                 let rangee = ComposerEditPresetsLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone))
-                HStack(spacing: 0) {
-                    ComposerCropCancelButton { ComposerCropFlow.cancel(session) }
-                        .padding(.leading, ComposerEditPresetsLayout.leadingInset)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        ComposerCropPresetBar(selected: ComposerCropFlow.preset(of: session)) {
-                            ComposerCropFlow.apply($0, to: session)
-                        }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    ComposerCropPresetBar(selected: ComposerCropFlow.preset(of: session)) {
+                        ComposerCropFlow.apply($0, to: session)
                     }
                 }
                 .frame(width: rangee.width, height: rangee.height)
@@ -381,9 +444,11 @@ struct ComposerCaptureChrome: View {
     }
 
     /// **(x) et « Terminé » cèdent la place aux éléments d'édition** (porteur
-    /// 2026-10-20) : une famille ouverte ou un outil montré les cache.
+    /// 2026-10-20) : une famille ouverte ou un outil montré les cache. Pendant le
+    /// glisser d'un objet, ils se retirent avec tout le chrome (#18787).
     private var showsTopRow: Bool {
-        !session.phase.isEditing
+        guard showsChrome else { return false }
+        return !session.phase.isEditing
             || ComposerEditTools.showsTopRow(familyOpen: session.openFamily != nil, shownTools: session.shownEditTools)
     }
 
@@ -412,7 +477,7 @@ struct ComposerCaptureChrome: View {
             onDone: { session.finishEditing() },
             saveState: session.takeSaveState,
             onSave: { session.saveTakeToPhotos() })
-        .background(ComposerCaptureChromeVeil(edge: .top, opacity: chromeVeilTop))
+        .background(ComposerCaptureChromeVeil(opacity: chromeVeilTop))
     }
 
     /// **Lecture et volume d'une vidéo, en haut à droite sous « Terminé »,
@@ -429,6 +494,11 @@ struct ComposerCaptureChrome: View {
                 .frame(width: rangee.width, height: rangee.height)
                 .position(x: rangee.midX, y: rangee.midY)
         }
+        // Toujours montée pour une vidéo ; pendant le glisser d'un objet, elle
+        // s'efface avec le chrome sans quitter l'arbre (#18787).
+        .opacity(showsChrome ? 1 : 0)
+        .allowsHitTesting(showsChrome)
+        .accessibilityHidden(!showsChrome)
         .transition(.opacity)
     }
 

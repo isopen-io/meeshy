@@ -22,6 +22,14 @@ from datetime import datetime
 
 import aiohttp
 
+from utils.audio_path_guard import guard_requested_audio_path
+from utils.audio_url_guard import (
+    AudioUrlRejected,
+    GetAddrInfo,
+    VerifiedAudioHostResolver,
+    admit_audio_url,
+)
+
 logger = logging.getLogger(__name__)
 
 # Timeout pour le téléchargement HTTP (en secondes)
@@ -44,16 +52,20 @@ class AudioFetcherService:
     3. Fallback: essayer audioPath (pour compatibilité legacy)
     """
 
-    def __init__(self):
-        # Créer le répertoire temporaire s'il n'existe pas
+    def __init__(self, getaddrinfo: Optional[GetAddrInfo] = None):
         TEMP_AUDIO_DIR.mkdir(parents=True, exist_ok=True)
         self._session: Optional[aiohttp.ClientSession] = None
+        self._getaddrinfo = getaddrinfo
 
     async def _get_session(self) -> aiohttp.ClientSession:
-        """Retourne une session HTTP réutilisable"""
+        """Session HTTP réutilisable dont chaque connexion part vers une adresse vérifiée (#18666)."""
         if self._session is None or self._session.closed:
             timeout = aiohttp.ClientTimeout(total=HTTP_DOWNLOAD_TIMEOUT)
-            self._session = aiohttp.ClientSession(timeout=timeout)
+            connector = aiohttp.TCPConnector(
+                resolver=VerifiedAudioHostResolver(getaddrinfo=self._getaddrinfo),
+                use_dns_cache=False,
+            )
+            self._session = aiohttp.ClientSession(timeout=timeout, connector=connector, trust_env=False)
         return self._session
 
     async def close(self):
@@ -104,7 +116,8 @@ class AudioFetcherService:
             audio_base64: Données audio encodées en base64
             audio_mime_type: Type MIME de l'audio
             audio_url: URL publique pour télécharger l'audio
-            audio_path: Chemin local (legacy, pour compatibilité)
+            audio_path: Chemin local (legacy). Lu seulement sous une racine
+                autorisée (utils.audio_path_guard) ; sinon AudioPathRejected.
 
         Returns:
             Tuple (chemin_local, source) où source est 'binary', 'base64', 'url', 'path' ou 'error'
@@ -151,19 +164,20 @@ class AudioFetcherService:
                     logger.info(f"[AudioFetcher] ✅ Audio téléchargé depuis URL: {Path(local_path).name}")
                     return local_path, "url"
             except Exception as e:
-                logger.warning(f"[AudioFetcher] ⚠️ Erreur téléchargement URL: {e}")
+                logger.warning(f"[AudioFetcher] ⚠️ Erreur téléchargement URL: {type(e).__name__}")
 
-        # 3. Fallback: chemin local (legacy)
-        if audio_path and os.path.exists(audio_path):
-            logger.info(f"[AudioFetcher] ✅ Audio trouvé localement (legacy): {Path(audio_path).name}")
-            return audio_path, "path"
+        # 3. Fallback: chemin local (legacy). Venu d'un socket non authentifié,
+        # il n'est lu que sous une racine autorisée (#18628) : un refus lève
+        # AudioPathRejected, que le handler publie en AUDIO_PATH_REJECTED.
+        if audio_path:
+            return guard_requested_audio_path(audio_path), "path"
 
         # Aucune source valide
         logger.error(
             f"[AudioFetcher] ❌ Impossible d'acquérir l'audio: "
             f"base64={'yes' if audio_base64 else 'no'}, "
-            f"url={audio_url or 'none'}, "
-            f"path={audio_path or 'none'}"
+            f"url={'yes' if audio_url else 'none'}, "
+            f"path={'yes' if audio_path else 'none'}"
         )
         return None, "error"
 
@@ -226,61 +240,73 @@ class AudioFetcherService:
         attachment_id: str,
         mime_type: str
     ) -> Optional[str]:
-        """Télécharge le fichier audio depuis une URL HTTP"""
+        """
+        Télécharge l'audio d'une URL admise par utils.audio_url_guard (#18666).
+
+        Venue d'un socket non authentifié, l'URL n'est jamais journalisée : au
+        plus la raison d'un refus, ou l'hôte, qui est alors dans la liste
+        autorisée. Aucune redirection n'est suivie.
+        """
+        try:
+            admitted = admit_audio_url(audio_url)
+        except AudioUrlRejected as rejected:
+            logger.warning(f"[AudioFetcher] audioUrl refusée: {rejected.reason}")
+            return None
+
         try:
             session = await self._get_session()
-
-            logger.info(f"[AudioFetcher] 📥 Téléchargement depuis: {audio_url}")
-
-            async with session.get(audio_url) as response:
-                if response.status != 200:
-                    logger.error(
-                        f"[AudioFetcher] HTTP {response.status} pour {audio_url}"
-                    )
-                    return None
-
-                # Vérifier la taille
-                content_length = response.headers.get('Content-Length')
-                if content_length and int(content_length) > MAX_DOWNLOAD_SIZE:
-                    logger.error(
-                        f"[AudioFetcher] Fichier trop gros: {int(content_length) / 1024 / 1024:.1f}MB"
-                    )
-                    return None
-
-                # Détecter le mime type depuis la réponse si disponible
-                response_mime = response.headers.get('Content-Type', '').split(';')[0]
-                if response_mime.startswith('audio/'):
-                    mime_type = response_mime
-
-                # Générer le chemin de sortie
-                output_path = self._generate_temp_filename(attachment_id, mime_type)
-
-                # Télécharger par chunks pour gérer les gros fichiers
-                total_size = 0
-                with open(output_path, 'wb') as f:
-                    async for chunk in response.content.iter_chunked(8192):
-                        total_size += len(chunk)
-                        if total_size > MAX_DOWNLOAD_SIZE:
-                            logger.error("[AudioFetcher] Téléchargement interrompu: taille max dépassée")
-                            os.remove(output_path)
-                            return None
-                        f.write(chunk)
-
-                logger.info(
-                    f"[AudioFetcher] Téléchargé: {total_size / 1024:.1f}KB → {Path(output_path).name}"
-                )
-
-                return output_path
-
+            logger.info(f"[AudioFetcher] 📥 Téléchargement depuis {admitted.host}")
+            async with session.get(admitted.url, allow_redirects=False) as response:
+                return await self._save_response(response, admitted.host, attachment_id, mime_type)
+        except AudioUrlRejected as rejected:
+            logger.warning(f"[AudioFetcher] audioUrl refusée: {rejected.reason}")
         except asyncio.TimeoutError:
-            logger.error(f"[AudioFetcher] Timeout téléchargement: {audio_url}")
-            return None
-        except aiohttp.ClientError as e:
-            logger.error(f"[AudioFetcher] Erreur HTTP: {e}")
-            return None
+            logger.error(f"[AudioFetcher] Timeout téléchargement depuis {admitted.host}")
         except Exception as e:
-            logger.error(f"[AudioFetcher] Erreur téléchargement: {e}")
+            logger.error(f"[AudioFetcher] Erreur téléchargement depuis {admitted.host}: {type(e).__name__}")
+        return None
+
+    async def _save_response(self, response, host: str, attachment_id: str, mime_type: str) -> Optional[str]:
+        if 300 <= response.status < 400:
+            logger.warning(f"[AudioFetcher] audioUrl refusée: redirect (HTTP {response.status})")
             return None
+        if response.status != 200:
+            logger.error(f"[AudioFetcher] HTTP {response.status} depuis {host}")
+            return None
+
+        content_length = response.headers.get('Content-Length')
+        if content_length and content_length.isdigit() and int(content_length) > MAX_DOWNLOAD_SIZE:
+            logger.error(
+                f"[AudioFetcher] Fichier trop gros: {int(content_length) / 1024 / 1024:.1f}MB"
+            )
+            return None
+
+        response_mime = response.headers.get('Content-Type', '').split(';')[0]
+        if response_mime.startswith('audio/'):
+            mime_type = response_mime
+
+        output_path = self._generate_temp_filename(attachment_id, mime_type)
+        total_size = 0
+        try:
+            with open(output_path, 'wb') as f:
+                async for chunk in response.content.iter_chunked(8192):
+                    total_size += len(chunk)
+                    if total_size > MAX_DOWNLOAD_SIZE:
+                        raise OverflowError("max download size")
+                    f.write(chunk)
+        except OverflowError:
+            logger.error("[AudioFetcher] Téléchargement interrompu: taille max dépassée")
+            os.remove(output_path)
+            return None
+        except BaseException:
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            raise
+
+        logger.info(
+            f"[AudioFetcher] Téléchargé: {total_size / 1024:.1f}KB → {Path(output_path).name}"
+        )
+        return output_path
 
     def cleanup_temp_file(self, file_path: str):
         """

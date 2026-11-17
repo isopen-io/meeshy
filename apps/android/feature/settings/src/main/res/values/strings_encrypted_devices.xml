@@ -3,11 +3,11 @@
     <string name="security_section_encrypted_devices">End-to-end encryption</string>
     <string name="encrypted_devices_title">My encrypted devices</string>
     <string name="encrypted_devices_loading">Loading your encrypted devices</string>
-    <string name="encrypted_devices_offline_empty">You’re offline. Connect to see your encrypted devices.</string>
+    <string name="encrypted_devices_offline_empty">Offline: your devices will return with the network.</string>
     <string name="encrypted_devices_error">Your encrypted devices couldn’t be loaded.</string>
     <string name="encrypted_devices_retry">Retry</string>
-    <string name="encrypted_devices_offline">You’re offline. This list may be out of date.</string>
-    <string name="encrypted_devices_stale">This list couldn’t be refreshed and may be out of date.</string>
+    <string name="encrypted_devices_offline">Offline: last known list.</string>
+    <string name="encrypted_devices_stale">Couldn’t refresh: last known list.</string>
     <string name="encrypted_devices_current">This device</string>
     <string name="encrypted_devices_retiring">Removing %1$s</string>
     <string name="encrypted_devices_retire_a11y">Remove %1$s</string>

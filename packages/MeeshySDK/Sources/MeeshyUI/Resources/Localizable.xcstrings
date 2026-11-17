@@ -867,53 +867,6 @@
     },
     "Boucle": {},
     "Choisir ou créer une catégorie...": {},
-    "community.detail.loadFailed.body": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تحقّق من اتصالك، ثم أعد المحاولة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prüfe deine Verbindung und versuche es erneut."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Check your connection, then try again."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comprueba tu conexión y vuelve a intentarlo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vérifiez votre connexion, puis réessayez."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Controlla la connessione, poi riprova."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verifique sua conexão e tente novamente."
-          }
-        }
-      }
-    },
     "community.detail.loadFailed.title": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -957,6 +910,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Não foi possível carregar esta comunidade"
+          }
+        }
+      }
+    },
+    "community.online": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld متصل الآن"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld online"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld online"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld en línea"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld en ligne"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld online"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld online"
           }
         }
       }
@@ -1098,53 +1098,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Comunidade não encontrada"
-          }
-        }
-      }
-    },
-    "community.detail.serverFailed.body": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المشكلة من جهتنا. أعد المحاولة بعد قليل."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Problem liegt bei uns. Versuche es gleich noch einmal."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The problem is on our side. Try again in a moment."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El problema es nuestro. Vuelve a intentarlo en un momento."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le problème vient de notre côté. Réessayez dans un instant."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il problema è nostro. Riprova tra un attimo."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O problema é do nosso lado. Tente novamente em instantes."
           }
         }
       }
@@ -1708,6 +1661,54 @@
         }
       }
     },
+    "kit.object_menu.dismiss": {
+      "comment": "K18 — nom de la fermeture du menu d'un objet (action d'accessibilité, voile du menu).",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق القائمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menü schließen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close menu"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar el menú"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fermer le menu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiudi il menu"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fechar o menu"
+          }
+        }
+      }
+    },
     "kit.color_dots.position": {
       "comment": "K07 — nom dit d'une pastille de couleur sans nom : sa position (rang, total), nombres déjà localisés.",
       "extractionState": "manual",
@@ -2040,6 +2041,194 @@
           "stringUnit": {
             "state": "translated",
             "value": "Limite de caracteres atingido"
+          }
+        }
+      }
+    },
+    "media.audio.download": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تنزيل الصوت"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio herunterladen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download audio"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descargar el audio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Télécharger l'audio"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scarica l'audio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Baixar o áudio"
+          }
+        }
+      }
+    },
+    "media.audio.downloading": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ تنزيل الصوت"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio wird heruntergeladen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloading audio"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descargando el audio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Téléchargement de l'audio"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download dell'audio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Baixando o áudio"
+          }
+        }
+      }
+    },
+    "media.audio.loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ تحميل الصوت"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio wird geladen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading audio"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cargando el audio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chargement de l'audio"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caricamento dell'audio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carregando o áudio"
+          }
+        }
+      }
+    },
+    "media.audio.pause": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف الصوت مؤقتًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio pausieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause audio"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pausar el audio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre l'audio en pause"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metti in pausa l'audio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pausar o áudio"
           }
         }
       }
@@ -7459,26 +7648,26 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Vollständiger Benutzername"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Full username"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Nombre de usuario completo"
+            "state": "translated",
+            "value": "Usuario completo"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Nom d'utilisateur complet"
+            "state": "translated",
+            "value": "Pseudo complet"
           }
         },
         "it": {
@@ -7489,8 +7678,8 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Nome de usuário completo"
+            "state": "translated",
+            "value": "Usuário completo"
           }
         }
       }
@@ -8506,13 +8695,13 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Introduce tu nombre de usuario y correo completos."
+            "value": "Introduce tu usuario y correo completos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Entrez votre nom d'utilisateur et votre e-mail complets."
+            "value": "Entrez votre pseudo et votre e-mail complets."
           }
         },
         "it": {
@@ -8524,7 +8713,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Digite seu nome de usuário e e-mail completos."
+            "value": "Digite seu usuário e e-mail completos."
           }
         }
       }
@@ -10692,53 +10881,6 @@
         }
       }
     },
-    "community.addChannel.empty.hint": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أنشئ محادثة أولًا لإضافتها هنا."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Erstellen Sie zuerst eine Unterhaltung."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Create a conversation first to add it here."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Crea una conversación primero para añadirla aquí."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Créez d'abord une conversation pour l'ajouter ici."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crea prima una conversazione per aggiungerla qui."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Crie uma conversa primeiro para adicioná-la aqui."
-          }
-        }
-      }
-    },
     "community.addChannel.empty.noConversations": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -11074,43 +11216,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إضافة قناة"
+            "value": "إضافة محادثة"
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Kanal hinzufügen"
+            "state": "translated",
+            "value": "Unterhaltung hinzufügen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Add a channel"
+            "state": "translated",
+            "value": "Add a conversation"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Añadir un canal"
+            "state": "translated",
+            "value": "Añadir una conversación"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Ajouter un channel"
+            "state": "translated",
+            "value": "Ajouter une conversation"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aggiungi un canale"
+            "value": "Aggiungi una conversazione"
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Adicionar um canal"
+            "state": "translated",
+            "value": "Adicionar uma conversa"
           }
         }
       }
@@ -11726,100 +11868,6 @@
         }
       }
     },
-    "community.create.privacy.private.description": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يمكن للأعضاء المدعوّين فقط الانضمام"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Nur eingeladene Mitglieder können beitreten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Only invited members can join"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Solo los miembros invitados pueden unirse"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Seuls les membres invités peuvent rejoindre"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Solo i membri invitati possono unirsi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Apenas membros convidados podem entrar"
-          }
-        }
-      }
-    },
-    "community.create.privacy.public.description": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يمكن للجميع اكتشافه والانضمام إليه"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Jeder kann entdecken und beitreten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Everyone can discover and join"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Todos pueden descubrir y unirse"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Tout le monde peut découvrir et rejoindre"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tutti possono scoprirla e unirsi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Todos podem descobrir e entrar"
-          }
-        }
-      }
-    },
     "community.create.privacy.title": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -12202,90 +12250,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إنشاء قناة"
+            "value": "إنشاء محادثة"
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Kanal erstellen"
+            "state": "translated",
+            "value": "Unterhaltung erstellen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Create a Channel"
+            "state": "translated",
+            "value": "Create a conversation"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Crear un canal"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Créer un Channel"
-          }
-        },
-        "it": {
-          "stringUnit": {
             "state": "translated",
-            "value": "Crea un canale"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Criar um canal"
-          }
-        }
-      }
-    },
-    "community.detail.channels.empty.subtitle": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر المحادثات هنا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Unterhaltungen erscheinen hier"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Conversations will appear here"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Las conversaciones aparecerán aquí"
+            "value": "Crear una conversación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les conversations apparaîtront ici"
+            "value": "Créer une conversation"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le conversazioni appariranno qui"
+            "value": "Crea una conversazione"
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "As conversas aparecerão aqui"
+            "state": "translated",
+            "value": "Criar uma conversa"
           }
         }
       }
@@ -12296,25 +12297,25 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا توجد قنوات بعد"
+            "value": "لا توجد محادثات بعد"
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Noch keine Kanäle"
+            "state": "translated",
+            "value": "Noch keine Unterhaltungen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "No Channels Yet"
+            "state": "translated",
+            "value": "No conversations yet"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Sin canales aún"
+            "state": "translated",
+            "value": "Aún no hay conversaciones"
           }
         },
         "fr": {
@@ -12326,13 +12327,13 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ancora nessun canale"
+            "value": "Ancora nessuna conversazione"
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Ainda sem canais"
+            "state": "translated",
+            "value": "Ainda sem conversas"
           }
         }
       }
@@ -12390,43 +12391,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لن تتمكّن بعد الآن من الوصول إلى قنوات هذا المجتمع."
+            "value": "لن يكون لديك بعد الآن وصول إلى محادثات هذا المجتمع."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Sie haben keinen Zugriff mehr auf die Kanäle dieser Community."
+            "state": "translated",
+            "value": "Sie haben keinen Zugriff mehr auf die Unterhaltungen dieser Community."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "You will no longer have access to this community's channels."
+            "state": "translated",
+            "value": "You will no longer have access to this community's conversations."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Ya no tendrás acceso a los canales de esta comunidad."
+            "state": "translated",
+            "value": "Ya no tendrás acceso a las conversaciones de esta comunidad."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Vous ne pourrez plus accéder aux channels de cette communauté."
+            "state": "translated",
+            "value": "Vous n'aurez plus accès aux conversations de cette communauté."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Non potrai più accedere ai canali di questa community."
+            "value": "Non avrai più accesso alle conversazioni di questa community."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Você não terá mais acesso aos canais desta comunidade."
+            "state": "translated",
+            "value": "Você não terá mais acesso às conversas desta comunidade."
           }
         }
       }
@@ -12615,147 +12616,6 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Configurações"
-          }
-        }
-      }
-    },
-    "community.detail.posts.empty.action": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إنشاء منشور"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Beitrag erstellen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Create a post"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Crear una publicación"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Créer un post"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crea un post"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Criar uma publicação"
-          }
-        }
-      }
-    },
-    "community.detail.posts.empty.subtitle": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سيظهر تدفق المجتمع هنا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Der Community-Feed erscheint hier"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Community feed will appear here"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "El feed de la comunidad aparecerá aquí"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les publications de la communauté apparaîtront ici"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il feed della community apparirà qui"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "O feed da comunidade aparecerá aqui"
-          }
-        }
-      }
-    },
-    "community.detail.posts.empty.title": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا توجد منشورات بعد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Noch keine Beiträge"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "No Posts Yet"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Sin publicaciones aún"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune publication pour l’instant"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ancora nessun post"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Ainda sem publicações"
           }
         }
       }
@@ -12991,53 +12851,6 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Convidar"
-          }
-        }
-      }
-    },
-    "community.invite.empty.subtitle": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جرّب مصطلح بحث آخر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Anderen Suchbegriff versuchen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Try a different search term"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Prueba con otro término"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Essayez un autre terme de recherche"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prova con un altro termine di ricerca"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Tente outro termo de busca"
           }
         }
       }
@@ -13324,53 +13137,6 @@
         }
       }
     },
-    "community.list.empty.subtitle": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "انضم إلى مجتمع أو أنشئ واحدًا للتعاون"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Treten Sie einer Community bei oder erstellen Sie eine"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Join or create a community to collaborate"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Únete o crea una comunidad"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Rejoins ou crée une communauté pour collaborer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unisciti a una community o creane una per collaborare"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Entre ou crie uma comunidade para colaborar"
-          }
-        }
-      }
-    },
     "community.list.empty.title": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -13555,53 +13321,6 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Convidar"
-          }
-        }
-      }
-    },
-    "community.members.empty.subtitle": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ادعُ أشخاصًا للانضمام إلى هذا المجتمع"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Laden Sie Personen ein"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Invite people to join this community"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Invita personas a esta comunidad"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invitez des personnes à rejoindre cette communauté"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invita persone a unirsi a questa community"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Convide pessoas para esta comunidade"
           }
         }
       }
@@ -14076,194 +13795,6 @@
         }
       }
     },
-    "community.settings.avatar": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الصورة الرمزية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Avatar"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Avatar"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Avatar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Avatar"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Avatar"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Avatar"
-          }
-        }
-      }
-    },
-    "community.settings.avatar.change": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تغيير الصورة الرمزية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Avatar ändern"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Change avatar"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cambiar avatar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Changer l'avatar"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cambia l'avatar"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Alterar avatar"
-          }
-        }
-      }
-    },
-    "community.settings.banner": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "صورة الغلاف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Banner"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Banner"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Banner"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bannière"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Banner"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Banner"
-          }
-        }
-      }
-    },
-    "community.settings.banner.change": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تغيير صورة الغلاف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Banner ändern"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Change banner"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cambiar banner"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Changer la bannière"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cambia il banner"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Alterar banner"
-          }
-        }
-      }
-    },
     "community.settings.banner.edit": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -14411,43 +13942,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذا الإجراء لا رجعة فيه. سيُحذف جميع الأعضاء والقنوات والرسائل نهائيًا."
+            "value": "هذا الإجراء لا رجعة فيه. سيُحذف المجتمع وقائمة أعضائه نهائيًا، وتبقى محادثاته خارج المجتمع."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Diese Aktion ist unwiderruflich. Alle Mitglieder, Kanäle und Nachrichten werden dauerhaft gelöscht."
+            "state": "translated",
+            "value": "Diese Aktion ist unwiderruflich. Die Community und ihre Mitgliederliste werden dauerhaft gelöscht; ihre Unterhaltungen bleiben bestehen, außerhalb der Community."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "This action is irreversible. All members, channels and messages will be permanently deleted."
+            "state": "translated",
+            "value": "This action is irreversible. The community and its member list will be permanently deleted; its conversations remain, outside the community."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Esta acción es irreversible. Todos los miembros, canales y mensajes serán eliminados."
+            "state": "translated",
+            "value": "Esta acción es irreversible. La comunidad y su lista de miembros se eliminarán definitivamente; sus conversaciones se conservan, fuera de la comunidad."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Cette action est irréversible. Tous les membres, canaux et messages seront supprimés définitivement."
+            "state": "translated",
+            "value": "Cette action est irréversible. La communauté et la liste de ses membres seront supprimées définitivement ; ses conversations restent, hors de la communauté."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa azione è irreversibile. Tutti i membri, i canali e i messaggi saranno eliminati definitivamente."
+            "value": "Questa azione è irreversibile. La community e l'elenco dei suoi membri saranno eliminati definitivamente; le sue conversazioni restano, fuori dalla community."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Esta ação é irreversível. Todos os membros, canais e mensagens serão excluídos."
+            "state": "translated",
+            "value": "Esta ação é irreversível. A comunidade e a lista de membros serão excluídas definitivamente; as conversas continuam, fora da comunidade."
           }
         }
       }
@@ -14542,53 +14073,6 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Excluir comunidade"
-          }
-        }
-      }
-    },
-    "community.settings.emoji": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "رمز تعبيري"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Emoji"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Emoji"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Emoji"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Emoji"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Emoji"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Emoji"
           }
         }
       }
@@ -14881,43 +14365,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لن يكون لديك بعد الآن وصول إلى قنوات هذا المجتمع ورسائله."
+            "value": "لن يكون لديك بعد الآن وصول إلى محادثات هذا المجتمع."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Sie haben keinen Zugriff mehr auf die Kanäle und Nachrichten dieser Community."
+            "state": "translated",
+            "value": "Sie haben keinen Zugriff mehr auf die Unterhaltungen dieser Community."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "You will no longer have access to the channels and messages of this community."
+            "state": "translated",
+            "value": "You will no longer have access to this community's conversations."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Ya no tendrás acceso a los canales y mensajes de esta comunidad."
+            "state": "translated",
+            "value": "Ya no tendrás acceso a las conversaciones de esta comunidad."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Vous n'aurez plus accès aux canaux et messages de cette communauté."
+            "state": "translated",
+            "value": "Vous n'aurez plus accès aux conversations de cette communauté."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Non avrai più accesso ai canali e ai messaggi di questa community."
+            "value": "Non avrai più accesso alle conversazioni di questa community."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Você não terá mais acesso aos canais e mensagens desta comunidade."
+            "state": "translated",
+            "value": "Você não terá mais acesso às conversas desta comunidade."
           }
         }
       }
@@ -15294,53 +14778,6 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Comunidade privada"
-          }
-        }
-      }
-    },
-    "community.settings.section.appearance": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المظهر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erscheinungsbild"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Appearance"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apariencia"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apparence"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aspetto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aparência"
           }
         }
       }
@@ -16719,26 +16156,26 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Moderator"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Moderator"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Moderador"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modo"
+            "value": "Modérateur"
           }
         },
         "it": {
@@ -16749,7 +16186,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Moderador"
           }
         }
@@ -17231,43 +16668,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ستختفي هذه المحادثة نهائيًا من قائمتك. ولن يتأثر بقية الأعضاء."
+            "value": "تُزال نهائيًا من قائمتك؛ ولا يتأثر الأعضاء الآخرون."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Diese Unterhaltung verschwindet dauerhaft aus deiner Liste. Andere Mitglieder sind nicht betroffen."
+            "state": "translated",
+            "value": "Dauerhaft aus deiner Liste entfernt; die anderen Mitglieder sind nicht betroffen."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "This conversation will permanently disappear from your list. Other members won't be affected."
+            "state": "translated",
+            "value": "Removed from your list for good; other members are not affected."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Esta conversación desaparecerá definitivamente de tu lista. Los demás miembros no se verán afectados."
+            "state": "translated",
+            "value": "Se elimina definitivamente de tu lista; los demás miembros no se ven afectados."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Cette conversation disparaîtra définitivement de votre liste. Les autres membres ne seront pas affectés."
+            "state": "translated",
+            "value": "Retirée définitivement de votre liste ; les autres membres ne sont pas affectés."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa conversazione sparirà definitivamente dal tuo elenco. Gli altri membri non saranno interessati."
+            "value": "Rimossa definitivamente dalla tua lista; gli altri membri non sono interessati."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Esta conversa desaparecerá definitivamente da sua lista. Os outros membros não serão afetados."
+            "state": "translated",
+            "value": "Removida definitivamente da sua lista; os outros membros não são afetados."
           }
         }
       }
@@ -17654,43 +17091,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لن تتلقّى رسائل بعد الآن. وسيبقى سجلّك قابلًا للقراءة."
+            "value": "لن تتلقى رسائل بعد الآن؛ يبقى سجلك مقروءًا."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Sie haben keinen Zugriff mehr auf die Nachrichten."
+            "state": "translated",
+            "value": "Du erhältst keine Nachrichten mehr; dein Verlauf bleibt lesbar."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "You will no longer have access to the messages of this conversation."
+            "state": "translated",
+            "value": "You will no longer receive messages; your history stays readable."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Ya no tendrás acceso a los mensajes de esta conversación."
+            "state": "translated",
+            "value": "Ya no recibirás mensajes; tu historial seguirá siendo legible."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Vous ne recevrez plus de messages. Votre historique restera lisible."
+            "state": "translated",
+            "value": "Vous ne recevrez plus de messages ; votre historique reste lisible."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Non riceverai più messaggi. La tua cronologia resterà leggibile."
+            "value": "Non riceverai più messaggi; la cronologia resta leggibile."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Você não terá mais acesso às mensagens desta conversa."
+            "state": "translated",
+            "value": "Você não receberá mais mensagens; seu histórico continua legível."
           }
         }
       }
@@ -17847,26 +17284,26 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Zum Mitglied herabstufen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Demote to Member"
+            "state": "translated",
+            "value": "Demote to member"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Degradar a Miembro"
+            "state": "translated",
+            "value": "Degradar a miembro"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Rétrograder Membre"
+            "state": "translated",
+            "value": "Rétrograder en membre"
           }
         },
         "it": {
@@ -17877,8 +17314,8 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Rebaixar a Membro"
+            "state": "translated",
+            "value": "Rebaixar a membro"
           }
         }
       }
@@ -17941,26 +17378,26 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Zum Admin befördern"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Promote to Admin"
+            "state": "translated",
+            "value": "Promote to admin"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Promover a Admin"
+            "state": "translated",
+            "value": "Promover a admin"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Promouvoir Admin"
+            "state": "translated",
+            "value": "Promouvoir admin"
           }
         },
         "it": {
@@ -17971,8 +17408,8 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Promover a Admin"
+            "state": "translated",
+            "value": "Promover a admin"
           }
         }
       }
@@ -17988,26 +17425,26 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Zum Moderator befördern"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Promote to Moderator"
+            "state": "translated",
+            "value": "Promote to moderator"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Promover a Moderador"
+            "state": "translated",
+            "value": "Promover a moderador"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Promouvoir Modérateur"
+            "state": "translated",
+            "value": "Promouvoir modérateur"
           }
         },
         "it": {
@@ -18018,8 +17455,8 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Promover a Moderador"
+            "state": "translated",
+            "value": "Promover a moderador"
           }
         }
       }
@@ -18212,49 +17649,49 @@
         }
       }
     },
-    "conversation.settings.permissions.announcement.subtitle": {
-      "extractionState": "extracted_with_value",
+    "conversation.settings.permissions.announcement.rule": {
+      "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المشرفون وحدهم يمكنهم الكتابة"
+            "value": "المشرفون وحدهم يكتبون."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Nur Admins können schreiben"
+            "state": "translated",
+            "value": "Nur Admins schreiben."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Only admins can write"
+            "state": "translated",
+            "value": "Only admins write."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Solo los administradores pueden escribir"
+            "state": "translated",
+            "value": "Solo los administradores escriben."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Seuls les admins peuvent écrire"
+            "state": "translated",
+            "value": "Seuls les admins écrivent."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo gli amministratori possono scrivere"
+            "value": "Solo gli amministratori scrivono."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Apenas administradores podem escrever"
+            "state": "translated",
+            "value": "Apenas administradores escrevem."
           }
         }
       }
@@ -18312,43 +17749,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُترجَم الرسائل تلقائيًا"
+            "value": "يقرأ كل شخص الرسائل بلغته."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Nachrichten werden automatisch übersetzt"
+            "state": "translated",
+            "value": "Jeder liest die Nachrichten in seiner Sprache."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Messages are translated automatically"
+            "state": "translated",
+            "value": "Everyone reads messages in their own language."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Los mensajes se traducen automáticamente"
+            "state": "translated",
+            "value": "Cada persona lee los mensajes en su idioma."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Les messages sont traduits automatiquement"
+            "state": "translated",
+            "value": "Chacun lit les messages dans sa langue."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I messaggi vengono tradotti automaticamente"
+            "value": "Ognuno legge i messaggi nella propria lingua."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "As mensagens são traduzidas automaticamente"
+            "state": "translated",
+            "value": "Cada pessoa lê as mensagens no seu idioma."
           }
         }
       }
@@ -18725,53 +18162,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aparência"
-          }
-        }
-      }
-    },
-    "conversation.settings.section.danger": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "منطقة الخطر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Gefahrenzone"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Danger zone"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Zona de peligro"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Zone dangereuse"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zona pericolosa"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Zona de perigo"
           }
         }
       }
@@ -19304,26 +18694,26 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Mitglied entfernt"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Member removed"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Miembro expulsado"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Membre expulse"
+            "state": "translated",
+            "value": "Membre expulsé"
           }
         },
         "it": {
@@ -19334,7 +18724,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Membro removido"
           }
         }
@@ -29505,26 +28895,26 @@
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Keine Reaktionen"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "No reactions"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Sin reacciones"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Aucune reaction"
+            "state": "translated",
+            "value": "Aucune réaction"
           }
         },
         "it": {
@@ -29535,7 +28925,7 @@
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
+            "state": "translated",
             "value": "Sem reações"
           }
         }
@@ -29584,53 +28974,6 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Sem notificações sociais"
-          }
-        }
-      }
-    },
-    "notifications.empty.subtitle": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر إشعاراتك هنا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Ihre Benachrichtigungen erscheinen hier"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Your notifications will appear here"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Tus notificaciones aparecerán aquí"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Vos notifications apparaîtront ici"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le tue notifiche appariranno qui"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Suas notificações aparecerão aqui"
           }
         }
       }
@@ -29819,53 +29162,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Tentar novamente"
-          }
-        }
-      }
-    },
-    "notifications.error.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تحقق من اتصالك ثم أعد المحاولة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prüfe deine Verbindung und versuche es erneut."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Check your connection, then try again."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comprueba tu conexión y vuelve a intentarlo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vérifiez votre connexion, puis réessayez."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Controlla la connessione e riprova."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verifique sua conexão e tente novamente."
           }
         }
       }
@@ -30918,6 +30214,53 @@
         }
       }
     },
+    "post.visibility.community.who": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يراها أعضاء مجتمعاتك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mitglieder deiner Communitys sehen sie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Members of your communities can see it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los miembros de tus comunidades la ven"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les membres de vos communautés la voient"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I membri delle tue community la vedono"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os membros das suas comunidades podem vê-la"
+          }
+        }
+      }
+    },
     "post.visibility.except": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -30961,6 +30304,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Exceto…"
+          }
+        }
+      }
+    },
+    "post.visibility.except.who": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يراها الجميع باستثناء الأشخاص الذين اخترتهم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle sehen sie, außer den ausgewählten Personen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Everyone can see it except the people you chose"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todo el mundo la ve, salvo las personas elegidas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tout le monde la voit, sauf les personnes choisies"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutti la vedono, tranne le persone scelte"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos podem vê-la, exceto as pessoas escolhidas"
           }
         }
       }
@@ -31012,6 +30402,53 @@
         }
       }
     },
+    "post.visibility.friends.who": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يراها أصدقاؤك ومن هم أقرب منهم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Freunde und enger Verbundene sehen sie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your friends and closer can see it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus amigos y los más cercanos la ven"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos amis et au-dessus la voient"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi amici e chi è più vicino la vedono"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus amigos e mais próximos podem vê-la"
+          }
+        }
+      }
+    },
     "post.visibility.only": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -31055,6 +30492,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Apenas…"
+          }
+        }
+      }
+    },
+    "post.visibility.only.who": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يراها الأشخاص الذين اخترتهم فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur die ausgewählten Personen sehen sie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only the people you chose can see it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo las personas elegidas la ven"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seules les personnes choisies la voient"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo le persone scelte la vedono"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apenas as pessoas escolhidas podem vê-la"
           }
         }
       }
@@ -31106,6 +30590,53 @@
         }
       }
     },
+    "post.visibility.private.who": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يراها سواك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur du siehst sie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only you can see it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo tú la ves"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous seul la voyez"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo tu la vedi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Só você pode vê-la"
+          }
+        }
+      }
+    },
     "post.visibility.public": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -31149,6 +30680,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Público"
+          }
+        }
+      }
+    },
+    "post.visibility.public.who": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يراها الجميع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle sehen sie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Everyone can see it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todo el mundo la ve"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tout le monde la voit"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutti la vedono"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos podem vê-la"
           }
         }
       }
@@ -32568,43 +32146,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يرغب %@ في التواصل معك. اقبل لتبادل الرسائل."
+            "value": "يرغب %@ في التواصل معك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ möchte sich mit dir verbinden. Akzeptiere, um Nachrichten auszutauschen."
+            "value": "%@ möchte sich mit dir verbinden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ wants to connect with you. Accept to exchange messages."
+            "value": "%@ wants to connect with you."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ quiere conectar contigo. Acepta para intercambiar mensajes."
+            "value": "%@ quiere conectar contigo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ souhaite entrer en contact avec vous. Acceptez pour échanger des messages."
+            "value": "%@ souhaite entrer en contact avec vous."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ desidera mettersi in contatto con te. Accetta per scambiare messaggi."
+            "value": "%@ desidera mettersi in contatto con te."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ quer se conectar com você. Aceite para trocar mensagens."
+            "value": "%@ quer se conectar com você."
           }
         }
       }
@@ -32615,43 +32193,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أرسلت طلب اتصال إلى %@. في انتظار ردّه."
+            "value": "تم إرسال طلب إلى %@ · قيد الانتظار"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du hast %@ eine Verbindungsanfrage gesendet. Warten auf Antwort."
+            "value": "Anfrage an %@ gesendet · ausstehend"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You sent a connection request to %@. Waiting for their reply."
+            "value": "Request sent to %@ · pending"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enviaste una solicitud de conexión a %@. Esperando su respuesta."
+            "value": "Solicitud enviada a %@ · pendiente"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous avez envoyé une demande de connexion à %@. En attente de sa réponse."
+            "value": "Demande envoyée à %@ · en attente"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hai inviato una richiesta di connessione a %@. In attesa della sua risposta."
+            "value": "Richiesta inviata a %@ · in attesa"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você enviou um pedido de conexão para %@. Aguardando a resposta."
+            "value": "Solicitação enviada para %@ · pendente"
           }
         }
       }
@@ -32938,53 +32516,6 @@
         }
       }
     },
-    "profile.presence.online": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "متصل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Online"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Online"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "En línea"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "En ligne"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "In linea"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Online"
-          }
-        }
-      }
-    },
     "profile.section.about": {
       "extractionState": "manual",
       "localizations": {
@@ -33126,53 +32657,6 @@
         }
       }
     },
-    "profile.stats.achievements": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الإنجازات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Erfolge"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Achievements"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Logros"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Succès"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Traguardi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Conquistas"
-          }
-        }
-      }
-    },
     "profile.stats.daysShort": {
       "extractionState": "manual",
       "localizations": {
@@ -33267,100 +32751,6 @@
         }
       }
     },
-    "profile.stats.languagesUsed": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اللغات المستخدمة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Verwendete Sprachen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Languages used"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Idiomas usados"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Langues utilisées"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lingue usate"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Idiomas usados"
-          }
-        }
-      }
-    },
-    "profile.stats.memberDays": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أيام العضوية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Mitgliedstage"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Days of membership"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Días de membresía"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Jours d'ancienneté"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Giorni di iscrizione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Dias de membro"
-          }
-        }
-      }
-    },
     "profile.stats.memberSince": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -33408,53 +32798,6 @@
         }
       }
     },
-    "profile.stats.messagesSent": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الرسائل المُرسَلة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Gesendete Nachrichten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Messages sent"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Mensajes enviados"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Messages envoyés"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Messaggi inviati"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Mensagens enviadas"
-          }
-        }
-      }
-    },
     "profile.stats.messagesShort": {
       "extractionState": "manual",
       "localizations": {
@@ -33498,53 +32841,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mensagens"
-          }
-        }
-      }
-    },
-    "profile.stats.translations": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الترجمات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Übersetzungen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Translations"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Traducciones"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Traductions"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Traduzioni"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Traduções"
           }
         }
       }
@@ -33780,100 +33076,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Posts"
-          }
-        }
-      }
-    },
-    "profile.tab.profile": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الملف الشخصي"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Profil"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Profile"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Perfil"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Profil"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Profilo"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Perfil"
-          }
-        }
-      }
-    },
-    "profile.tab.stats": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الإحصائيات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Statistiken"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Stats"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Estadísticas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Stats"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Statistiche"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Estatísticas"
           }
         }
       }
@@ -39046,7 +38248,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Appuie longuement sur une décoration pour l'épingler ici."
+            "value": "Appuyez longuement sur une décoration pour l'épingler ici."
           }
         },
         "it": {
@@ -39140,7 +38342,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce que tu poses apparaîtra ici."
+            "value": "Ce que vous posez apparaîtra ici."
           }
         },
         "it": {
@@ -61761,52 +60963,6 @@
         }
       }
     },
-    "story.repost.reprojected": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أُعيد وضع %d عنصر ليناسب التنسيق الجديد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d Element(e) für das neue Format neu positioniert"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d item(s) repositioned for the new aspect ratio"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d elemento(s) reposicionado(s) para el nuevo formato"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d élément(s) repositionné(s) pour le nouveau format"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d elemento/i riposizionato/i per il nuovo formato"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d elemento(s) reposicionado(s) para o novo formato"
-          }
-        }
-      }
-    },
     "story.slide.addSlide": {
       "extractionState": "stale",
       "localizations": {
@@ -78147,1651 +77303,6 @@
         }
       }
     },
-    "voiceProfile.age.birthDate": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تاريخ الميلاد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Geburtsdatum"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Date of birth"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Fecha de nacimiento"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Date de naissance"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Data di nascita"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Data de nascimento"
-          }
-        }
-      }
-    },
-    "voiceProfile.age.description": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الاستنساخ الصوتي متاح لمن هم في سن 18 عامًا فأكثر."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Stimmklonen ist Personen ab 18 Jahren vorbehalten."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Voice cloning is reserved for people aged 18 and over."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "La clonación vocal está reservada a mayores de 18 años."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Le clonage vocal est réservé aux personnes de 18 ans et plus."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La clonazione vocale è riservata alle persone dai 18 anni in su."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "A clonagem vocal é reservada a maiores de 18 anos."
-          }
-        }
-      }
-    },
-    "voiceProfile.age.title": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "التحقق من العمر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Altersverifizierung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Age verification"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Verificación de edad"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Vérification d'âge"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verifica dell'età"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Verificação de idade"
-          }
-        }
-      }
-    },
-    "voiceProfile.age.tooYoungError": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يجب أن يكون عمرك 18 عامًا أو أكثر لاستخدام الاستنساخ الصوتي."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Sie müssen mindestens 18 Jahre alt sein."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "You must be 18 or older to use voice cloning."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Debes tener 18 años o más para usar la clonación vocal."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Vous devez avoir 18 ans ou plus pour utiliser le clonage vocal."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Devi avere almeno 18 anni per usare la clonazione vocale."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Você deve ter 18 anos ou mais para usar a clonagem vocal."
-          }
-        }
-      }
-    },
-    "voiceProfile.age.verify": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تحقّق"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Bestätigen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Verify"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Verificar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Vérifier"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verifica"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Verificar"
-          }
-        }
-      }
-    },
-    "voiceProfile.complete.description": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستستخدم ترجماتك الصوتية من الآن فصاعدًا صوتك المستنسَخ."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Ihre Audioübersetzungen verwenden jetzt Ihre geklonte Stimme."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Your audio translations will now use your cloned voice."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Tus traducciones de audio ahora usarán tu voz clonada."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Vos traductions audio utiliseront désormais votre voix clonée."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le tue traduzioni audio useranno d'ora in poi la tua voce clonata."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Suas traduções de áudio agora usarão sua voz clonada."
-          }
-        }
-      }
-    },
-    "voiceProfile.complete.finish": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إنهاء"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Fertig"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Finish"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Terminar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Terminer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Termina"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Finalizar"
-          }
-        }
-      }
-    },
-    "voiceProfile.complete.title": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تم إنشاء الملف الصوتي!"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Stimmprofil erstellt!"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Voice profile created!"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "¡Perfil vocal creado!"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Profil vocal créé !"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Profilo vocale creato!"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Perfil vocal criado!"
-          }
-        }
-      }
-    },
-    "voiceProfile.consent.continue": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "متابعة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Weiter"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Continue"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Continuar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Continuer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continua"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Continuar"
-          }
-        }
-      }
-    },
-    "voiceProfile.consent.description": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "‏يمكن لـ Meeshy استنساخ صوتك لترجمة رسائلك الصوتية إلى لغات أخرى بصوتك أنت."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Meeshy kann Ihre Stimme klonen, um Ihre Audionachrichten in anderen Sprachen mit Ihrer Stimme zu übersetzen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Meeshy can clone your voice to translate your audio messages in other languages with your own voice."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Meeshy puede clonar tu voz para traducir tus mensajes de audio en otros idiomas con tu propia voz."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Meeshy peut cloner votre voix pour traduire vos messages audio dans d'autres langues avec votre propre voix."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Meeshy può clonare la tua voce per tradurre i tuoi messaggi audio in altre lingue con la tua stessa voce."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "O Meeshy pode clonar sua voz para traduzir suas mensagens de áudio em outros idiomas com sua própria voz."
-          }
-        }
-      }
-    },
-    "voiceProfile.consent.point1": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سجّل بضع عيّنات من صوتك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Nehmen Sie einige Stimmproben auf"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Record a few samples of your voice"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Graba algunas muestras de tu voz"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Enregistrez quelques échantillons de votre voix"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Registra alcuni campioni della tua voce"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Grave algumas amostras da sua voz"
-          }
-        }
-      }
-    },
-    "voiceProfile.consent.point2": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يُنشأ نموذج صوتي فريد من عيّناتك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Ein einzigartiges Stimmmodell wird aus Ihren Proben erstellt"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "A unique voice model is created from your samples"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Se crea un modelo de voz único a partir de tus muestras"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Un modèle vocal unique est créé à partir de vos échantillons"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dai tuoi campioni viene creato un modello vocale unico"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Um modelo de voz único é criado a partir das suas amostras"
-          }
-        }
-      }
-    },
-    "voiceProfile.consent.point3": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستستخدم ترجماتك الصوتية صوتك المستنسَخ"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Ihre Audioübersetzungen verwenden Ihre geklonte Stimme"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Your audio translations will use your cloned voice"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Tus traducciones de audio usarán tu voz clonada"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Vos traductions audio utiliseront votre voix clonée"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le tue traduzioni audio useranno la tua voce clonata"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Suas traduções de áudio usarão sua voz clonada"
-          }
-        }
-      }
-    },
-    "voiceProfile.consent.point4": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يمكنك حذف بياناتك الصوتية في أي وقت (اللائحة العامة لحماية البيانات)"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Sie können Ihre Stimmdaten jederzeit löschen (DSGVO)"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "You can delete your voice data at any time (GDPR)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Puedes eliminar tus datos vocales en cualquier momento (RGPD)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Vous pouvez supprimer vos données vocales à tout moment (RGPD)"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Puoi eliminare i tuoi dati vocali in qualsiasi momento (GDPR)"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Você pode excluir seus dados vocais a qualquer momento (RGPD)"
-          }
-        }
-      }
-    },
-    "voiceProfile.consent.point5": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "عيّناتك مشفّرة ولا تُشارَك أبدًا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Ihre Proben sind verschlüsselt und werden nie geteilt"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Your samples are encrypted and never shared"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Tus muestras están encriptadas y nunca se comparten"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Vos échantillons sont chiffrés et ne sont jamais partagés"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I tuoi campioni sono crittografati e non vengono mai condivisi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Suas amostras são criptografadas e nunca compartilhadas"
-          }
-        }
-      }
-    },
-    "voiceProfile.consent.title": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الاستنساخ الصوتي"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Stimmklonen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Voice cloning"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Clonación vocal"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Clonage vocal"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clonazione vocale"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Clonagem vocal"
-          }
-        }
-      }
-    },
-    "voiceProfile.consent.toggle": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أوافق على استخدام عيّناتي الصوتية لإنشاء ملف صوتي"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Ich stimme zu, dass meine Stimmproben zur Erstellung eines Stimmprofils verwendet werden"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "I agree that my voice samples will be used to create a voice profile"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Acepto que mis muestras vocales se utilicen para crear un perfil vocal"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "J'accepte que mes échantillons vocaux soient utilisés pour créer un profil vocal"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Accetto che i miei campioni vocali siano usati per creare un profilo vocale"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Aceito que minhas amostras vocais sejam usadas para criar um perfil vocal"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.cancelDelete": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إلغاء"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Abbrechen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Cancel"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Cancelar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Annuler"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Annulla"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Cancelar"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.cloningActive": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "استنساخ الصوت مفعّل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Stimmklonen aktiv"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Voice cloning active"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Clonación vocal activa"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Clonage vocal actif"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clonazione vocale attiva"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Clonagem vocal ativa"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.cloningSubtitle": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "استخدام صوتك في الترجمات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Verwenden Sie Ihre Stimme für Übersetzungen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Use your voice for translations"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Usar tu voz para traducciones"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Utiliser votre voix pour les traductions"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Usa la tua voce per le traduzioni"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Usar sua voz para traduções"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.close": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إغلاق"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Schließen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Close"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Cerrar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Fermer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chiudi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Fechar"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.deleteAll": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "حذف الكل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Alles löschen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Delete all"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Eliminar todo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Supprimer tout"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elimina tutto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Excluir tudo"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.deleteAllData": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "حذف جميع البيانات الصوتية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Alle Stimmdaten löschen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Delete all voice data"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Eliminar todos los datos vocales"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Supprimer toutes les données vocales"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elimina tutti i dati vocali"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Excluir todos os dados vocais"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.deleteMessage": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سيحذف هذا الإجراء ملفك الصوتي وجميع عيّناتك نهائيًا، وسيلغي موافقتك. وهو إجراء لا رجعة فيه (اللائحة العامة لحماية البيانات)."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Diese Aktion löscht dauerhaft Ihr Stimmprofil, alle Proben und widerruft Ihre Einwilligung (DSGVO)."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "This action will permanently delete your voice profile, all your samples and revoke your consent. This action is irreversible (GDPR)."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Esta acción eliminará permanentemente tu perfil vocal, todas tus muestras y revocará tu consentimiento (RGPD)."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Cette action supprimera définitivement votre profil vocal, tous vos échantillons et révoquera votre consentement. Cette action est irréversible (RGPD)."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Questa azione eliminerà definitivamente il tuo profilo vocale e tutti i tuoi campioni, e revocherà il tuo consenso. È irreversibile (GDPR)."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Esta ação excluirá permanentemente seu perfil vocal, todas as amostras e revogará seu consentimento (RGPD)."
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.deleteTitle": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "حذف الملف الصوتي؟"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Stimmprofil löschen?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Delete voice profile?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "¿Eliminar perfil vocal?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Supprimer le profil vocal ?"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eliminare il profilo vocale?"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Excluir perfil vocal?"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.gdprNotice": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "متوافق مع اللائحة العامة لحماية البيانات — ستُحذف بياناتك الصوتية نهائيًا من خوادمنا."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "DSGVO-konform - Ihre Stimmdaten werden dauerhaft von unseren Servern gelöscht."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "GDPR compliant - Your voice data will be permanently deleted from our servers."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Conforme al RGPD - Tus datos vocales se eliminarán permanentemente."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Conforme au RGPD - Vos données vocales seront définitivement supprimées de nos serveurs."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conforme al GDPR — I tuoi dati vocali saranno eliminati definitivamente dai nostri server."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Conforme ao RGPD - Seus dados vocais serão permanentemente excluídos."
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.noSamples": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا توجد عيّنات مسجّلة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Keine aufgenommenen Proben"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "No recorded samples"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Sin muestras grabadas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Aucun échantillon enregistré"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nessun campione registrato"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Sem amostras gravadas"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.quality": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الجودة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Qualität"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Quality"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Calidad"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Qualité"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Qualità"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Qualidade"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.sample": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "عيّنة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Probe"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Sample"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Muestra"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Échantillon"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Campione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Amostra"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.samples": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "العيّنات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Proben"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Samples"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Muestras"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Échantillons"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Campioni"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Amostras"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.samplesHeader": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "العيّنات الصوتية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "STIMMPROBEN"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "VOICE SAMPLES"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "MUESTRAS VOCALES"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "ÉCHANTILLONS VOCAUX"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CAMPIONI VOCALI"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "AMOSTRAS VOCAIS"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.title": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الملف الصوتي"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Stimmprofil"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Voice profile"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Perfil vocal"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Profil vocal"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Profilo vocale"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Perfil vocal"
-          }
-        }
-      }
-    },
-    "voiceProfile.manage.totalDuration": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المدة الإجمالية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Gesamtdauer"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Total duration"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Duración total"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Durée totale"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Durata totale"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Duração total"
-          }
-        }
-      }
-    },
-    "voiceProfile.processing.description": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تجري معالجة عيّناتك. قد يستغرق ذلك بضع دقائق."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Ihre Proben werden verarbeitet. Dies kann einige Minuten dauern."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Your samples are being processed. This may take a few minutes."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Tus muestras están siendo procesadas. Esto puede tardar unos minutos."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Vos échantillons sont en cours de traitement. Cela peut prendre quelques minutes."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I tuoi campioni sono in fase di elaborazione. Potrebbero volerci alcuni minuti."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Suas amostras estão sendo processadas. Isso pode levar alguns minutos."
-          }
-        }
-      }
-    },
-    "voiceProfile.processing.title": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جارٍ إنشاء الملف الصوتي..."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Stimmprofil wird erstellt..."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Creating voice profile..."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Creando perfil vocal..."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Création du profil vocal..."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Creazione del profilo vocale..."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Criando perfil vocal..."
-          }
-        }
-      }
-    },
     "voiceProfile.recording.createProfile": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -79835,53 +77346,6 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Criar perfil vocal"
-          }
-        }
-      }
-    },
-    "voiceProfile.recording.description": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اقرأ النص أدناه بصوت عالٍ. سجّل 3 عيّنات على الأقل مدة كل منها 10 ثوانٍ."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Lesen Sie den Text laut vor. Nehmen Sie mindestens 3 Proben von je 10 Sekunden auf."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Read the text below aloud. Record at least 3 samples of 10 seconds each."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Lee el texto en voz alta. Graba al menos 3 muestras de 10 segundos."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Lisez le texte ci-dessous à voix haute. Enregistrez au moins 3 échantillons de 10 secondes chacun."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Leggi ad alta voce il testo qui sotto. Registra almeno 3 campioni da 10 secondi ciascuno."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Leia o texto em voz alta. Grave pelo menos 3 amostras de 10 segundos cada."
           }
         }
       }
@@ -80070,805 +77534,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Amostra %lld"
-          }
-        }
-      }
-    },
-    "voiceProfile.recording.title": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سجّل صوتك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Stimme aufnehmen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Record your voice"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Graba tu voz"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Enregistrez votre voix"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Registra la tua voce"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Grave sua voz"
-          }
-        }
-      }
-    },
-    "voiceProfile.status.active": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ملف نشط"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Aktives Profil"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Active profile"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Perfil activo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Profil actif"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Profilo attivo"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Perfil ativo"
-          }
-        }
-      }
-    },
-    "voiceProfile.status.expired": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "منتهٍ"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Abgelaufen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Expired"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Expirado"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Expiré"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Scaduto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Expirado"
-          }
-        }
-      }
-    },
-    "voiceProfile.status.failed": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "خطأ"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Fehler"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Error"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Error"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Erreur"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Errore"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Erro"
-          }
-        }
-      }
-    },
-    "voiceProfile.status.noProfile": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يوجد ملف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Kein Profil"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "No profile"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Sin perfil"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Aucun profil"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nessun profilo"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Sem perfil"
-          }
-        }
-      }
-    },
-    "voiceProfile.status.pending": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "قيد الانتظار"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Ausstehend"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Pending"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Pendiente"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "En attente"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "In attesa"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Pendente"
-          }
-        }
-      }
-    },
-    "voiceProfile.status.processing": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "قيد المعالجة..."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Wird verarbeitet..."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Processing..."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Procesando..."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "En traitement..."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "In elaborazione..."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Processando..."
-          }
-        }
-      }
-    },
-    "voiceProfile.subtitle.active": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يُستخدم صوتك في الترجمات الصوتية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Ihre Stimme wird für Audioübersetzungen verwendet"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Your voice is used for audio translations"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Tu voz se usa para traducciones de audio"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Votre voix est utilisée pour les traductions audio"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La tua voce è usata per le traduzioni audio"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Sua voz é usada para traduções de áudio"
-          }
-        }
-      }
-    },
-    "voiceProfile.subtitle.expired": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سجّل عيّنات جديدة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Neue Proben aufnehmen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Record new samples"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Graba nuevas muestras"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Enregistrez de nouveaux échantillons"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Registra nuovi campioni"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Grave novas amostras"
-          }
-        }
-      }
-    },
-    "voiceProfile.subtitle.failed": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "فشلت المعالجة، أعِد المحاولة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Verarbeitung fehlgeschlagen, versuchen Sie es erneut"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Processing failed, try again"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "El procesamiento falló, inténtalo de nuevo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Le traitement a échoué, réessayez"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L'elaborazione non è riuscita, riprova"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "O processamento falhou, tente novamente"
-          }
-        }
-      }
-    },
-    "voiceProfile.subtitle.noProfile": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أنشئ ملفًا صوتيًا لتفعيل الاستنساخ"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Erstellen Sie ein Stimmprofil zum Aktivieren"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Create a voice profile to enable cloning"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Crea un perfil vocal para activar la clonación"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Créez un profil vocal pour activer le clonage"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crea un profilo vocale per attivare la clonazione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Crie um perfil vocal para ativar a clonagem"
-          }
-        }
-      }
-    },
-    "voiceProfile.subtitle.pending": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "في انتظار المعالجة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Wartet auf Verarbeitung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Awaiting processing"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Esperando procesamiento"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "En attente de traitement"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "In attesa di elaborazione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Aguardando processamento"
-          }
-        }
-      }
-    },
-    "voiceProfile.subtitle.processing": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تجري معالجة عيّناتك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Ihre Proben werden verarbeitet"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Your samples are being processed"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Tus muestras están siendo procesadas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Vos échantillons sont en cours de traitement"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I tuoi campioni sono in fase di elaborazione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Suas amostras estão sendo processadas"
-          }
-        }
-      }
-    },
-    "voiceProfile.wizard.close": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إغلاق"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Schließen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Close"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Cerrar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Fermer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chiudi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Fechar"
-          }
-        }
-      }
-    },
-    "voiceProfile.wizard.errorTitle": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "خطأ"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Fehler"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Error"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Error"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Erreur"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Errore"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Erro"
-          }
-        }
-      }
-    },
-    "voiceProfile.wizard.ok": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "حسنًا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "OK"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "OK"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "OK"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "OK"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "OK"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "OK"
-          }
-        }
-      }
-    },
-    "voiceProfile.wizard.title": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الملف الصوتي"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Stimmprofil"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Voice profile"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Perfil vocal"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Profil vocal"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Profilo vocale"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Perfil vocal"
           }
         }
       }
@@ -83119,7 +79784,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il te manque des Meeshes pour ce pack."
+            "value": "Il vous manque des Meeshes pour ce pack."
           }
         },
         "it": {
@@ -83142,43 +79807,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعذّر تحميل المتجر. حاول مرة أخرى."
+            "value": "تعذّر تحميل المتجر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Shop konnte nicht geladen werden. Versuche es erneut."
+            "value": "Der Shop konnte nicht geladen werden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The shop could not load. Try again."
+            "value": "The shop could not load."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No se pudo cargar la tienda. Inténtalo de nuevo."
+            "value": "No se pudo cargar la tienda."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La boutique n’a pas pu se charger. Réessaie."
+            "value": "La boutique n’a pas pu se charger."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossibile caricare il negozio. Riprova."
+            "value": "Impossibile caricare il negozio."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não foi possível carregar a loja. Tente novamente."
+            "value": "Não foi possível carregar a loja."
           }
         }
       }
@@ -83935,6 +80600,53 @@
         }
       }
     },
+    "post.visibility.acquaintances.who": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يراها معارفك ومن هم أقرب منهم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Bekannten und enger Verbundene sehen sie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your acquaintances and closer can see it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus conocidos y los más cercanos la ven"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos connaissances et au-dessus la voient"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi conoscenti e chi è più vicino la vedono"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus conhecidos e mais próximos podem vê-la"
+          }
+        }
+      }
+    },
     "post.visibility.close": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -83982,6 +80694,53 @@
         }
       }
     },
+    "post.visibility.close.who": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يراها المقرّبون ومن هم أقرب منهم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Vertrauten und enger Verbundene sehen sie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your close ones and closer can see it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus cercanos y quienes están aún más cerca la ven"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos proches et au-dessus la voient"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi intimi e chi è più vicino la vedono"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus próximos e quem está ainda mais perto podem vê-la"
+          }
+        }
+      }
+    },
     "post.visibility.blood": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -84025,6 +80784,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sangue"
+          }
+        }
+      }
+    },
+    "post.visibility.blood.who": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يراها إلا دمك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur dein Blut sieht sie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only your Blood can see it"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo tu Sangre la ve"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seul votre Sang la voit"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo il tuo Sangue la vede"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apenas o seu Sangue pode vê-la"
           }
         }
       }
@@ -85000,7 +81806,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossible d’équiper cet élément. Réessaie."
+            "value": "Impossible d’équiper cet élément. Réessayez."
           }
         },
         "it": {
@@ -85282,7 +82088,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Installe ce pack pour voir ses éléments."
+            "value": "Installez ce pack pour voir ses éléments."
           }
         },
         "it": {
@@ -85470,7 +82276,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pince ou touche deux fois pour zoomer"
+            "value": "Pincez ou touchez deux fois pour zoomer"
           }
         },
         "it": {
@@ -85963,43 +82769,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا توجد حزم مثبّتة بعد. المتجر بانتظارك."
+            "value": "لا توجد حزم مثبّتة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Noch keine Pakete installiert. Der Shop wartet auf dich."
+            "value": "Keine Pakete installiert"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No packs installed yet. The shop is waiting for you."
+            "value": "No packs installed"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aún no tienes paquetes instalados. La tienda te espera."
+            "value": "Ningún paquete instalado"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun pack installé pour l’instant. La boutique t’attend."
+            "value": "Aucun pack installé"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessun pacchetto installato per ora. Il negozio ti aspetta."
+            "value": "Nessun pacchetto installato"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhum pacote instalado ainda. A loja espera por você."
+            "value": "Nenhum pacote instalado"
           }
         }
       }
@@ -86564,6 +83370,241 @@
           "stringUnit": {
             "state": "translated",
             "value": "Volume"
+          }
+        }
+      }
+    },
+    "conversation.settings.more": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المزيد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mehr"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altro"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mais"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.slowMode.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يفعل الوضع البطيء؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was bewirkt der Langsammodus?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does slow mode do?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué hace el modo lento?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que fait le mode lent ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa fa la modalità lenta?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que faz o modo lento?"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.slowMode.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مهلة بين رسالتين من العضو نفسه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Pause zwischen zwei Nachrichten desselben Mitglieds."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A delay between two messages from the same member."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una pausa entre dos mensajes de un mismo miembro."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un délai entre deux messages d’un même membre."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un intervallo tra due messaggi dello stesso membro."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um intervalo entre duas mensagens do mesmo membro."
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.announcement.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يغيّر وضع الإعلان؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ändert der Ankündigungsmodus?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does announcement mode change?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué cambia el modo anuncio?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que change le mode annonce ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa cambia la modalità annuncio?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que muda no modo anúncio?"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.announcement.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُقفَل عندئذٍ خيار «من يمكنه الكتابة»."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Wer schreiben darf“ ist dann gesperrt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Who can write” is then locked."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Quién puede escribir» queda bloqueado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "« Qui peut écrire » est alors verrouillé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«Chi può scrivere» è quindi bloccato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“Quem pode escrever” fica bloqueado."
           }
         }
       }

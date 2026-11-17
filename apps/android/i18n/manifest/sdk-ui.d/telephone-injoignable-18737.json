@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "phone_reachability_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_card_since",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_cause_battery",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_cause_network",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_consent_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_consent_checkbox",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_consent_confirm",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_consent_later",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_consent_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_pill_reachable",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_pill_unreachable",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_share_global_scope",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_share_global_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_share_person",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_share_person_scope",
+          "status": "android-only"
+        },
+        {
+          "androidName": "phone_reachability_someone",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -38,7 +38,7 @@ const deIdentity = {
   'conversation.details.role.moderator': 'Moderator',
   'conversation.details.share': 'Link teilen',
   'conversation.details.share.busy': 'Link wird erstellt…',
-  'conversation.details.share.copied': 'Link kopiert – jetzt nur noch einfügen.',
+  'conversation.details.share.copied': 'Link kopiert.',
   'conversation.details.share.failed': 'Der Link konnte nicht erstellt werden – versuche es gleich noch einmal.',
   'conversation.details.share.unavailable': 'Teilen ist hier nicht möglich – kopiere den Link: {url}',
   'thread.header.active_members': 'Aktivste Mitglieder',

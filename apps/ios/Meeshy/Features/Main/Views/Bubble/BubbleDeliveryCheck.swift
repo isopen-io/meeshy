@@ -168,18 +168,18 @@ struct BubbleDeliveryCheck: View, Equatable {
             return now.timeIntervalSince(sendStartedAt) >= revealDelay
         }
 
+        /// L'horloge est TOUJOURS montée et seulement voilée : un `.task` posé
+        /// sur un `EmptyView` ne part jamais, et la bulle d'un vocal créée
+        /// moins de 200 ms avant son premier rendu restait sans horloge
+        /// jusqu'à la recréation de sa cellule (#18420).
         var body: some View {
-            Group {
-                if isRevealed {
-                    Image(systemName: "clock")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                        .foregroundColor(tint)
-                        .accessibilityLabel(BubbleDeliveryCheck.label(.sending))
-                } else {
-                    EmptyView()
-                }
-            }
-            .task {
+            Image(systemName: "clock")
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs))
+                .foregroundColor(tint)
+                .opacity(isRevealed ? 1 : 0)
+                .accessibilityLabel(BubbleDeliveryCheck.label(.sending))
+                .accessibilityHidden(!isRevealed)
+                .task {
                 guard !isRevealed, let sendStartedAt else { return }
                 let remaining = Self.revealDelay - Date().timeIntervalSince(sendStartedAt)
                 if remaining > 0 {

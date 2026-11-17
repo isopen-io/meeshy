@@ -1,29 +1,19 @@
 import SwiftUI
 import MeeshySDK
 
-// MARK: - Right Chips Column (speed + progress, stacked vertically)
+// MARK: - Speed Chip
 
-/// Colonne droite du widget audio : chip vitesse en haut (alignée avec la
-/// waveform), chip pourcentage juste en dessous (alignée avec timeRow).
-/// Le tap sur la chip pourcentage ouvre la vue plein écran — le pourcentage
-/// qui n'était qu'un libellé devient l'affordance.
-struct AudioPlayerChipsColumn: View {
+/// La puce de vitesse, à droite de l'onde. Le pourcentage d'avancement qui
+/// vivait sous elle est parti sur la forme d'onde, à côté du décompte de la
+/// durée (`AudioWaveformChipsOverlay`, #18421), avec l'affordance plein écran.
+struct AudioPlayerSpeedChip: View {
     let speed: PlaybackSpeed
-    let progressFraction: Double
     let isCompact: Bool
     let isDark: Bool
     let accent: Color
     let onCycleSpeed: () -> Void
-    let onFullscreen: (() -> Void)?
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: isCompact ? 3 : 4) {
-            speedChip
-            percentageChip
-        }
-    }
-
-    private var speedChip: some View {
         let isDefault = speed == .x1_0
         let chipBg: Color = isDefault
             ? (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
@@ -46,43 +36,6 @@ struct AudioPlayerChipsColumn: View {
         .accessibilityLabel(String(localized: "media.audio.speed.cycle",
                                    defaultValue: "Vitesse de lecture \(speed.label)",
                                    bundle: .module))
-    }
-
-    private var percentageChip: some View {
-        let pct = Int(progressFraction * 100)
-        let isStarted = pct > 0
-        let chipBg: Color = isStarted
-            ? accent.opacity(0.85)
-            : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-        let chipFg: Color = isStarted
-            ? .white
-            : (isDark ? .white.opacity(0.55) : .black.opacity(0.45))
-        let label = Text("\(pct)%")
-            .font(.system(size: isCompact ? 9 : 10, weight: .heavy, design: .monospaced))
-            .foregroundColor(chipFg)
-            .padding(.horizontal, isCompact ? 7 : 8)
-            .padding(.vertical, isCompact ? 2 : 3)
-            .background(Capsule().fill(chipBg))
-            .contentTransition(.numericText())
-            .animation(.easeInOut(duration: 0.15), value: pct)
-
-        return Group {
-            if let onFullscreen = onFullscreen {
-                Button {
-                    HapticFeedback.light()
-                    onFullscreen()
-                } label: { label }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "media.audio.open.fullscreen",
-                                           defaultValue: "Ouvrir en plein écran, lecture \(pct)%",
-                                           bundle: .module))
-                .accessibilityHint(String(localized: "media.audio.open.fullscreen.hint",
-                                          defaultValue: "Affiche la vue plein écran avec les options de sauvegarde",
-                                          bundle: .module))
-            } else {
-                label
-            }
-        }
     }
 }
 

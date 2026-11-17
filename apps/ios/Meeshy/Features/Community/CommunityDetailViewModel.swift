@@ -24,17 +24,30 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     private let service: CommunityServiceProviding
     private let currentUserId: @MainActor () -> String
     private let postsCache: @MainActor () async -> CommunityPostsCache?
+    private var liveUpdates: AnyCancellable?
 
+    /// `communityUpdates` : `community:updated` (#18439) réécrit l'identité
+    /// affichée — nom, description, avatar, bannière, confidentialité,
+    /// effectif — sans relance réseau ni toucher au rôle du lecteur.
     init(
         communityId: String,
         service: CommunityServiceProviding = CommunityService.shared,
         currentUserId: @escaping @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" },
-        postsCache: @escaping @MainActor () async -> CommunityPostsCache? = { nil }
+        postsCache: @escaping @MainActor () async -> CommunityPostsCache? = { nil },
+        communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live
     ) {
         self.communityId = communityId
         self.service = service
         self.currentUserId = currentUserId
         self.postsCache = postsCache
+        self.liveUpdates = communityUpdates
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.apply(event) }
+    }
+
+    func apply(_ event: CommunityUpdatedEvent) {
+        guard let updated = community?.applying(event) else { return }
+        community = updated
     }
 
     func load() async {

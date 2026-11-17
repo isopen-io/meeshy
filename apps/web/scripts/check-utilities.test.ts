@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 // @ts-expect-error — module .mjs sans déclaration de types ; ce témoin
 // interroge son API publique exactement comme le pilote le fait.
-import { escapeForCss, findRuleBody, sizelessTextClasses, textSizeRoles, usedClasses } from './check-utilities.mjs';
+import { escapeForCss, findRuleBody, isWitnessFile, sizelessTextClasses, sourceFiles, textSizeRoles, usedClasses } from './check-utilities.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { unlinkSync, writeFileSync } from 'node:fs';
@@ -181,5 +181,55 @@ describe('sizelessTextClasses — la taille promise mais masquée par une couleu
     const used = new Map([['placeholder:text-meta', 'src/institutional/page.tsx']]);
     const css = '.placeholder\\:text-meta::placeholder{color:#000}';
     expect(sizelessTextClasses(used, css, new Set(['meta']))).toEqual([]);
+  });
+});
+
+/**
+ * LE TÉMOIN DU PÉRIMÈTRE (#18399).
+ *
+ * Ce gate mesure ce que l'APPLICATION peint. Il lisait aussi les TÉMOINS —
+ * 2 440 fichiers sur 5 995 au 2026-11-14 — et une classe inventée par un test
+ * pour servir de marqueur à une assertion n'a, par construction, aucune règle
+ * dans la feuille. `probe-sheet` (`dialog-exit.test.tsx`, #18362) a rendu
+ * `dev` ROUGE pour tout le monde le jour de son arrivée.
+ *
+ * C'est la deuxième fois sous une autre forme : #5958 / #5960, ci-dessus, est
+ * le même rayon de souffle (« `Gates web-v2` a échoué sur `dev` pour TOUTE
+ * PR ») pour une autre source de bruit. Ce lot-là a répondu en retirant le
+ * bruit du PÉRIMÈTRE, pas en exemptant une classe — même réponse ici.
+ *
+ * Le prédicat est exercé sur des noms qui RESSEMBLENT sans en être
+ * (`latest.ts`, `contest.tsx`, `manifest.ts`) : un filtre trop large retirerait
+ * de vrais écrans du périmètre, ce qu'aucun rouge ne signalerait — le gate
+ * deviendrait silencieusement aveugle, le pire des deux défauts.
+ */
+describe('le périmètre du gate exclut les témoins (#18399)', () => {
+  test('un fichier de témoin est reconnu, sous ses trois formes', () => {
+    expect(isWitnessFile('src/lib/view/dialog-exit.test.tsx')).toBe(true);
+    expect(isWitnessFile('src/lib/api/socket.test.ts')).toBe(true);
+    expect(isWitnessFile('src/routes/thread.spec.tsx')).toBe(true);
+    expect(isWitnessFile('src/routes/thread.spec.ts')).toBe(true);
+  });
+
+  test("un fichier d'application qui RESSEMBLE à un témoin reste dans le périmètre", () => {
+    for (const name of ['src/lib/latest.ts', 'src/routes/contest.tsx', 'src/lib/manifest.ts', 'src/lib/test-ids.ts', 'src/lib/protest.tsx']) {
+      expect(isWitnessFile(name)).toBe(false);
+    }
+  });
+
+  test('le balayage réel ne rend plus aucun témoin', () => {
+    const files: string[] = sourceFiles(join(HERE, '..', 'src'));
+    // Le balayage LIT bien quelque chose — une garde négative dont la lecture
+    // rend `[]` resterait verte quoi qu'il arrive.
+    expect(files.length).toBeGreaterThan(1000);
+    expect(files.filter((f) => isWitnessFile(f))).toEqual([]);
+  });
+
+  test("`probe-sheet` — la classe qui a rendu `dev` rouge — n'est plus vue", () => {
+    const used: Map<string, string> = usedClasses(sourceFiles(join(HERE, '..', 'src')));
+    expect(used.has('probe-sheet')).toBe(false);
+    // Et le balayage voit toujours de vraies classes : sans cette ligne, un
+    // périmètre devenu VIDE passerait ce témoin au vert.
+    expect(used.size).toBeGreaterThan(100);
   });
 });

@@ -14,15 +14,16 @@ import {
 import type { Anonymized, ServerEmitTarget } from './serverEmit';
 import type { QueuedVariantFor } from './queuedEventContract';
 import {
-  editReadership,
-  blockedEditKeys,
+  messageReadership,
+  blockedReaderKeys,
   emitEditedToReaders,
-  type EditReadership,
+  type MessageReadership,
 } from './editedAudience';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { withSealedQuote } from '../services/messaging/servedQuotedMessage';
 import { readerSignedPlanForMessageId } from './readerSignedDelivery';
 import { stripClientMessageId } from './utils/message-ack-shaping';
+import { conversationAudienceRooms, loadLiveParticipantTargets } from './conversationAudienceRooms';
 
 // Ce relais ne lit rien lui-même : il transmet le prisma de l'aperçu tel quel.
 // Le dériver plutôt que le redéclarer est ce qui empêche les deux listes de
@@ -59,7 +60,9 @@ export type MessageMutationQueueParams = {
    * sert.
    */
   excludedQueueKeys?: ReadonlySet<string>;
-} & QueuedVariantFor<'edited' | 'deleted' | 'expired' | 'pinned' | 'unpinned'>;
+  /** Identité de déduplication de la file, quand plusieurs occurrences d'un même `eventType` comptent. */
+  dedupKey?: string;
+} & QueuedVariantFor<'edited' | 'deleted' | 'expired' | 'pinned' | 'unpinned' | 'consumed' | 'view-once-purged'>;
 
 export interface MessageMutationManager {
   getIO(): PreviewEmitIO | null | undefined;
@@ -350,11 +353,11 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
   // des ids, pas de contenu : leur audience ne change pas ici, et c'est une
   // décision — révéler l'EXISTENCE d'un message est une question distincte,
   // suivie par sa propre issue.
-  const readership: EditReadership =
+  const readership: MessageReadership =
     params.eventType === 'edited'
-      ? await editReadership(params.prisma, conversationId, messageId, onError)
+      ? await messageReadership(params.prisma, conversationId, messageId, onError)
       : { kind: 'room' };
-  const blockedKeys = blockedEditKeys(readership);
+  const blockedKeys = blockedReaderKeys(readership);
   try {
     // #9646 — un message protégé qui porte des pièces : par destinataire,
     // chacun sa variante (scellée ou non) et ses adresses signées.
@@ -385,6 +388,9 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
         sealedForAll: (payload) =>
           withSealedQuote(payload, new Date(Math.min(...[...sealed.values()].map((at) => at.getTime())))),
       });
+    } else if (params.eventType === 'expired') {
+      const audience = await loadLiveParticipantTargets(params.prisma, conversationId, onError);
+      emitToConversationRoom(io?.to(conversationAudienceRooms(conversationId, audience)), params);
     } else {
       emitToConversationRoom(io?.to(ROOMS.conversation(conversationId)), params);
     }
@@ -459,7 +465,7 @@ export async function broadcastMessageMutation(rawParams: MessageMutationParams)
     void Promise.resolve(
       manager.enqueueOfflineMessageMutation({
         conversationId,
-        actorUserId,
+        actorUserId: eventType === 'expired' ? null : actorUserId,
         messageId,
         // La file est la TROISIÈME sortie de la même charge, et elle PERSISTE
         // 48 h : sans cette exclusion, le texte d'un message hors du plancher

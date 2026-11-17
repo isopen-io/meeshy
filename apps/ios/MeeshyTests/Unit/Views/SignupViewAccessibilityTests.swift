@@ -149,7 +149,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// chose se sent, sur cet écran, depuis #5555.
     func test_signupView_keepsItsFifteenHaptics_andTheInfoHintCarriesItsOwn() throws {
         let body = try signupViewCode()
-        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 15)
+        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 14)
         XCTAssertEqual(occurrences(of: "HapticFeedback.", in: try code(Self.infoHint)), 1,
                        "déplier un (i) se sent — et UNE fois, dans le composant partagé")
         XCTAssertTrue(body.contains("HapticFeedback.success()"),
@@ -324,27 +324,34 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// La cible tactile compte double ici : le (i) vit DANS le cadre du champ,
     /// une rangée de 48 pt — `meeshyTapTarget()` y tient ses 44 pt sans ajouter
     /// la moindre hauteur, ce qui est exactement la raison de l'avoir mis là.
-    func test_fieldHints_areReachableWithoutUnfolding() throws {
+    func test_fieldNotes_areReadAtRest_andTheFieldAnnouncesThemToo() throws {
         let body = try signupViewCode()
-        let hint = try code(Self.infoHint)
 
-        // #8054 a porté libellé et détail dans `FieldBlockAccessibility`, pour
-        // qu'un contenu à plusieurs éléments (mot de passe + œil) se libelle
-        // lui-même. Le détail doit toujours y ARRIVER, et y être POSÉ.
-        XCTAssertTrue(body.contains("FieldBlockAccessibility(label: label, hint: hint?.text ?? \"\", applies: labelsContent)"),
-                      "le CHAMP porte le détail : VoiceOver l'énonce sans que le bouton soit trouvé")
+        // #17671 (règle 7) : la phrase d'un champ propre à Meeshy se lit sous lui,
+        // elle n'est plus rangée derrière un (i). Le CHAMP la porte aussi en
+        // `accessibilityHint` : VoiceOver l'énonce en posant le doigt dessus.
+        XCTAssertTrue(body.contains("FieldBlockAccessibility(label: label, hint: note ?? \"\", applies: labelsContent)"),
+                      "le CHAMP porte la phrase : VoiceOver l'énonce sans la chercher")
         XCTAssertTrue(body.contains("content.accessibilityLabel(label).accessibilityHint(hint)"),
-                      "le modificateur du bloc POSE le détail sur le champ")
+                      "le modificateur du bloc POSE la phrase sur le champ")
+        XCTAssertFalse(body.contains("AuthInfoHintButton"), "plus aucun (i) dans l'inscription")
+        XCTAssertFalse(body.contains("AuthInfoHintText"))
         let callSites = body.components(separatedBy: "fieldBlock(").dropFirst()
             .map { $0.components(separatedBy: ") {").first ?? "" }
-        XCTAssertTrue(callSites.contains { $0.contains("hint:") },
-                      "au moins un champ du bloc porte un (i) — sinon ce témoin ne mesure rien")
-        for call in callSites where call.contains("hint:") {
+        XCTAssertTrue(callSites.contains { $0.contains("note:") },
+                      "au moins un champ du bloc porte sa phrase — sinon ce témoin ne mesure rien")
+        for call in callSites where call.contains("note:") {
             XCTAssertFalse(call.contains("labelsContent: false"),
-                           "un champ qui a un (i) ne peut pas se libeller seul : son détail ne serait plus énoncé")
+                           "un champ qui porte une phrase ne peut pas se libeller seul : elle ne serait plus énoncée")
         }
+    }
+
+    /// Le composant (i) partagé vit encore dans MeeshyUI (le mot de passe oublié
+    /// le monte) : ses trois pièces d'accessibilité restent gardées.
+    func test_infoHint_keepsItsThreeAccessibilityPieces() throws {
+        let hint = try code(Self.infoHint)
         XCTAssertTrue(hint.contains("accessibilityValue(hint.text)"),
-                      "et le BOUTON le porte aussi — « en savoir plus » seul n'apprend rien")
+                      "le BOUTON porte la note — « en savoir plus » seul n'apprend rien")
         XCTAssertTrue(hint.contains("meeshyTapTarget()"),
                       "le (i) est un glyphe : sans cadre déclaré, sa cible EST son dessin")
         XCTAssertTrue(hint.contains("accessibilityLabel(hint.buttonLabel)"),
@@ -359,17 +366,16 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// mettre un mot de passe maintenant ? » qui se déplie ». Le libellé ne
     /// se dit plus « facultatif » (#6582, comme le web) : le bouton actif
     /// sans lui le prouve.
-    func test_passwordField_explainsItsConsequence_throughAnUnfoldingLine() throws {
+    func test_passwordField_explainsItsConsequence_atRest() throws {
         let body = try signupViewCode()
         let password = try fieldBody("passwordField", in: body)
 
         XCTAssertFalse(password.lowercased().contains("facultatif"))
         XCTAssertTrue(body.contains("auth.signup.password.why.detail"),
                       "la conséquence de son absence DOIT être dite : la porte devient l'e-mail")
-        XCTAssertTrue(password.contains("accessibilityHint(passwordWhyDetail)"),
-                      "et VoiceOver l'énonce sans dépliement (#6441)")
-        XCTAssertTrue(password.contains("isPasswordWhyExpanded"),
-                      "et elle se DÉPLIE sur demande")
+        XCTAssertTrue(password.contains("Text(passwordWhyDetail)"),
+                      "et elle se LIT sous le champ, sans dépliement (#17671, règle 7)")
+        XCTAssertFalse(password.contains("isPasswordWhyExpanded"), "plus de question à déplier")
     }
 
     // MARK: - Le nom affiché aussi : facultatif, et sa conséquence dite
@@ -416,12 +422,12 @@ final class SignupViewAccessibilityTests: XCTestCase {
         XCTAssertFalse(bloc.contains("firstName"), "le prénom n'est pas saisi à l'inscription")
     }
 
-    /// Le mot de passe paraît quand l'identité est DÉFINIE, avec sa ligne
-    /// dépliable « Pourquoi mettre un mot de passe maintenant ? » (#7897).
-    func test_passwordField_waitsForTheIdentity_andExplainsItselfOnDemand() throws {
+    /// Le mot de passe paraît quand l'identité est DÉFINIE, avec sa conséquence
+    /// lisible au repos (#7897, #17671).
+    func test_passwordField_waitsForTheIdentity_andExplainsItself() throws {
         let body = try signupViewCode()
         XCTAssertTrue(body.contains("isIdentityDefined"))
-        XCTAssertTrue(body.contains("auth.signup.password.why"))
+        XCTAssertTrue(body.contains("auth.signup.password.why.detail"))
     }
 
     /// L'AVERTISSEMENT DE VALIDATION passe derrière un (i) (#6626).
@@ -434,22 +440,18 @@ final class SignupViewAccessibilityTests: XCTestCase {
     ///
     /// Ce qui ne doit pas se perdre, c'est son TEXTE — d'où la seconde moitié :
     /// le (i) du champ e-mail déplie toujours la note de validation.
-    func test_emailField_foldsTheVerificationNoticeBehindAnInfoHint() throws {
+    func test_emailField_showsTheVerificationNoticeAtRest() throws {
         let body = try signupViewCode()
         let email = try fieldBody("emailField", in: body)
-        XCTAssertTrue(email.contains("hint: emailHint"),
-                      "le champ e-mail monte son (i)")
-        XCTAssertFalse(email.contains("auth.signup.email.verificationNotice"),
-                       "la note ne se pose plus en clair sous le champ")
+        XCTAssertTrue(email.contains("note: emailNote"), "le champ e-mail pose sa phrase sous lui")
 
-        let start = try XCTUnwrap(body.range(of: "private var emailHint: AuthInfoHint {"),
-                                  "le (i) du champ e-mail est introuvable")
+        let start = try XCTUnwrap(body.range(of: "private var emailNote: String {"),
+                                  "la phrase du champ e-mail est introuvable")
         let rest = body[start.upperBound...]
-        let hint = rest[..<(rest.range(of: "\n    private var ")?.lowerBound ?? rest.endIndex)]
-        XCTAssertTrue(hint.contains("auth.signup.email.verificationNotice"),
-                      "le (i) déplie la note de validation — son texte ne change pas")
-        XCTAssertTrue(hint.contains("auth.signup.email.hintLabel"),
-                      "et VoiceOver l'annonce « Pourquoi un lien »")
+        let note = rest[..<(rest.range(of: "\n    private var ")?.lowerBound ?? rest.endIndex)]
+        XCTAssertTrue(note.contains("auth.signup.email.verificationNotice"),
+                      "la phrase reste, son texte ne change pas de clé")
+        XCTAssertFalse(body.contains("auth.signup.email.hintLabel"), "la question « Pourquoi un lien » est retirée")
     }
 
     /// Les `defaultValue:` du fichier — la copie que l'utilisateur lit.

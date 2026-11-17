@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="encryption_e2ee_direct_only_here">Su questo telefono la crittografia end-to-end è disponibile solo per le conversazioni a due: un gruppo non può ancora essere crittografato end-to-end da qui.</string>
     <string name="encryption_irreversible_refused">La crittografia end-to-end non si disattiva. Per chattare senza, crea una nuova conversazione.</string>
     <string name="encryption_action_failed">Non è stato possibile applicare la modifica. Riprova.</string>
     <string name="encryption_offline">Sei offline: riconnettiti per leggere o modificare la crittografia.</string>

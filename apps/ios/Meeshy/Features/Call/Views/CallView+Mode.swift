@@ -16,10 +16,14 @@ extension CallView {
                 VStack(spacing: MeeshySpacing.mdPlus) {
                     if mode == .effects, CallPreConnectEffectsRule.showsCompanions(showsConnectedLayout: showsConnectedLayout) { effectsCompanions }
                     if showTranscript {
-                        captionsBand(hasOwnGlass: true, opensJournal: false)
-                            .padding(.horizontal, MeeshySpacing.lg)
+                        CallAboveBarOverflow {
+                            captionsBand(hasOwnGlass: true, opensJournal: false)
+                                .padding(.horizontal, MeeshySpacing.lg)
+                        }
+                        .layoutPriority(1)
                     }
                     modeControls(mode)
+                        .layoutPriority(2)
                 }
                 .padding(.bottom, Self.chromeBottomInset)
                 .transition(CallModeChromeMotion.risesFromBottom(mode, reduceMotion: reduceMotion) ? .move(edge: .bottom).combined(with: .opacity) : .identity)

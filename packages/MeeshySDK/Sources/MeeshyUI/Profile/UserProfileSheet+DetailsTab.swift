@@ -222,7 +222,7 @@ extension UserProfileSheet {
                 icon: "person.crop.circle.badge.questionmark.fill",
                 text: String(
                     localized: "profile.connection.context.received",
-                    defaultValue: "\(name) souhaite entrer en contact avec vous. Acceptez pour échanger des messages.",
+                    defaultValue: "\(name) souhaite entrer en contact avec vous.",
                     bundle: .module
                 )
             )
@@ -231,7 +231,7 @@ extension UserProfileSheet {
                 icon: "paperplane.circle.fill",
                 text: String(
                     localized: "profile.connection.context.sent",
-                    defaultValue: "Vous avez envoyé une demande de connexion à \(name). En attente de sa réponse.",
+                    defaultValue: "Demande envoyée à \(name) · en attente",
                     bundle: .module
                 )
             )

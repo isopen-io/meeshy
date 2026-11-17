@@ -7,6 +7,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { PUBLICATION_KINDS, type PublicationKind } from '@/lib/stories/publication-kind';
 import { PUBLICATION_LAYOUT_ORDER, publicationLayoutLabelKey, type PublishChoice } from '@/lib/stories/publication-layout';
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
+import { layerMotion, LAYER_MOTION_MS } from '@/lib/view/dialog-exit';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 
 import { Glyph } from './glyph';
@@ -123,7 +124,8 @@ export function PublishSplitButton({
     return [head, ...PUBLICATION_LAYOUT_ORDER.map((mode): MenuRow => ({ type: 'layout', format, mode }))];
   });
 
-  const { open, setOpen, activeIndex, setActiveIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } = useRovingMenu({
+  const { open, mounted, leaving, setOpen, activeIndex, setActiveIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } = useRovingMenu({
+    exitMs: LAYER_MOTION_MS,
     itemCount: rows.length,
     isDisabledAt: (index) => {
       const row = rows[index];
@@ -157,8 +159,8 @@ export function PublishSplitButton({
   const measure = () => place(PUBLICATION_KINDS.length * MENU_ITEM_HEIGHT + MENU_PADDING);
 
   useEffect(() => {
-    if (!open) setExpanded(null);
-  }, [open]);
+    if (!mounted) setExpanded(null);
+  }, [mounted]);
 
   /** LA HAUTEUR RÉELLE, AVANT LA PEINTURE (revue-correction #7683) — remesurée
    * à l'OUVERTURE et à chaque dépliage : cinq lignes de plus rendaient le menu
@@ -287,7 +289,7 @@ export function PublishSplitButton({
         </span>
         {row.expandable ? (
           <span aria-hidden="true" className="shrink-0" style={{ color: 'var(--color-ios-ink-2)' }}>
-            <Glyph name="caretDown" size={14} {...(isExpanded ? { style: { transform: 'rotate(180deg)' } } : {})} />
+            <Glyph name="caretDown" size={14} style={{ transform: isExpanded ? 'rotate(180deg)' : undefined, transition: `transform ${LAYER_MOTION_MS}ms ease` }} />
           </span>
         ) : null}
       </button>
@@ -304,7 +306,7 @@ export function PublishSplitButton({
       ? rows.map(renderRow)
       : [
           ...rows.slice(0, layoutStart).map((row, offset) => renderRow(row, offset)),
-          <div key="layouts" role="group" aria-label={layoutSection} data-publish-layout-group className="pb-1">
+          <div key="layouts" role="group" aria-label={layoutSection} data-publish-layout-group className="pb-1" {...layerMotion(false)}>
             <p aria-hidden="true" className="px-4 pt-1 pb-0.5 text-mini font-semibold" style={{ color: 'var(--color-ios-ink-3)' }}>
               {layoutSection}
             </p>
@@ -326,7 +328,7 @@ export function PublishSplitButton({
         onClick={onPrimary}
         disabled={disabled}
         aria-busy={busy}
-        className="grid place-items-center px-4 text-body font-semibold focus-visible:outline-2 disabled:opacity-60"
+        className="btn-press grid place-items-center px-4 text-body font-semibold focus-visible:outline-2 disabled:opacity-60"
         style={{ minHeight: 44, outlineColor: 'var(--color-ios-on-brand)', outlineOffset: -4 }}
       >
         {label}
@@ -341,16 +343,19 @@ export function PublishSplitButton({
         aria-expanded={open}
         disabled={menuDisabled}
         onClick={() => {
-          if (!open) measure();
+          if (!open) {
+            setExpanded(null);
+            measure();
+          }
           setOpen((value) => !value);
         }}
-        className="grid place-items-center focus-visible:outline-2 disabled:opacity-60"
+        className="btn-press grid place-items-center focus-visible:outline-2 disabled:opacity-60"
         style={{ minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-on-brand)', outlineOffset: -4 }}
       >
         <Glyph name="caretDown" size={16} />
       </button>
 
-      {open && typeof document !== 'undefined'
+      {mounted && typeof document !== 'undefined'
         ? createPortal(
             <div
               ref={menuRef}
@@ -359,14 +364,14 @@ export function PublishSplitButton({
               data-publish-kind-menu
               onKeyDown={onKeyDown}
               className="fixed z-30 overflow-y-auto overscroll-contain rounded-card py-1 shadow-cast"
-              style={{
+              {...layerMotion(leaving, {
                 top: box.top,
                 right: box.right,
                 width: box.width,
                 ...(box.maxHeight > 0 ? { maxHeight: box.maxHeight } : {}),
                 backgroundColor: 'var(--color-ios-card)',
                 border: '1px solid var(--color-edge)',
-              }}
+              })}
             >
               <p className="px-3 pt-1.5 pb-1 text-mini font-semibold" style={{ color: 'var(--color-ios-ink-3)' }}>
                 {menuLabel}

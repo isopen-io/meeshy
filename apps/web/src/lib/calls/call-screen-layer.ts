@@ -10,7 +10,10 @@
  *   (`stowed`), il le range : le journal n'est pas fermé, refermer les actions
  *   le rend (#17343) ;
  * - `panel` : un sous-menu (Réagir, Enregistrer, Ajouter, Journal) qui
- *   REMPLACE les rangées — ‹ revient au menu, ✕ ferme tout ;
+ *   REMPLACE les rangées — ‹ revient au menu, ✕ ferme tout ; le journal, lui,
+ *   n'a ni ‹ ni ✕ : « Journal », en disque blanc à son pied, le referme
+ *   (#17964), `(…)` reste au repos tant qu'il est ouvert (`layerExpanded`), et
+ *   le rouvrir — « Journal » des sous-titres d'une pilule rangée — le garde (G1) ;
  * - `mode` : Effets ou Montage — tout le chrome d'appel s'efface (en-tête,
  *   pilule, rails, rangées, zoom de ma caméra) et seul reste le mode : son
  *   carrousel centré (deux tapes : photo, appui long : vidéo — #8625), ✕
@@ -79,14 +82,21 @@ function toggledMenu(layer: CallScreenLayer): CallScreenLayer {
   return layer.kind === 'menu' && layer.stowed !== undefined ? JOURNAL_PANEL : IDLE;
 }
 
+/** Le journal se LIT au repos (miroir de `CallScreenPanel.isReadAtRest`, iOS et Android) : `(…)` ne s'allume pas sous lui, et le rouvrir le garde (G1, #18357). */
+const panelReadAtRest = (panel: CallPanelKind): boolean => panel === 'journal';
+
 export function nextLayer(layer: CallScreenLayer, event: CallLayerEvent): CallScreenLayer {
   if (event.type === 'ended' || event.type === 'exit-mode' || event.type === 'close') return IDLE;
   if (event.type === 'enter-mode') return { kind: 'mode', mode: event.mode };
   if (layer.kind === 'mode') return event.type === 'back' ? IDLE : layer;
   if (event.type === 'toggle-menu') return toggledMenu(layer);
   if (event.type === 'back') return layer.kind === 'panel' ? MENU : layer.kind === 'menu' && layer.stowed !== undefined ? layer : IDLE;
-  return layer.kind === 'panel' && layer.panel === event.panel ? MENU : { kind: 'panel', panel: event.panel };
+  if (layer.kind === 'panel' && layer.panel === event.panel) return panelReadAtRest(event.panel) ? layer : MENU;
+  return { kind: 'panel', panel: event.panel };
 }
+
+/** `(…)` est ouvert : le menu, ou une option qu'il a ouverte — jamais le journal, que « Journal » referme (#17964, P9b.3 ; miroir de `isExpanded`, iOS et Android). */
+export const layerExpanded = (layer: CallScreenLayer): boolean => layer.kind === 'menu' || (layer.kind === 'panel' && !panelReadAtRest(layer.panel));
 
 export type LayerOffer = Readonly<Record<CallPanelKind | CallModeKind, boolean>>;
 

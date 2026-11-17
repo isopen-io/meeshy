@@ -37,9 +37,9 @@ class CallDetailJournalWiringTest {
     fun `A1_8 et A2_3 - l'original se deplie sous chaque traduction a l'encre secondaire du theme`() {
         val sections = code("CallDetailSections.kt")
 
-        assertThat(sections).contains("line.secondary(showOriginal)")
+        assertThat(sections).contains("line.layers(showOriginal)")
         assertThat(sections).doesNotContain("originalBelow")
-        assertThat(sections).contains("CallCaptionSecondaryBelow(secondary, reduceMotion, ink = MeeshyTheme.tokens.textSecondary)")
+        assertThat(sections).contains("CallCaptionSecondaryLine(it, ink = MeeshyTheme.tokens.textSecondary)")
         assertThat(code("CallCaptionRow.kt")).contains("ink = MeeshyMediaChromeColors.ChromeSecondary")
     }
 
@@ -49,8 +49,7 @@ class CallDetailJournalWiringTest {
         val below = code("CallCaptionRow.kt")
 
         assertThat(sections).containsMatch("""CallTranscriptRowAccessibility\.label\(\s*line = line,\s*showOriginal = showOriginal,""")
-        assertThat(sections).contains("AnimatedContent(")
-        assertThat(sections).contains("transitionSpec = { fadeIn(tween(fadeMillis)) togetherWith fadeOut(tween(fadeMillis)) }")
+        assertThat(sections).contains("animationSpec = tween(fadeMillis)")
         assertThat(below).contains("val originalWord = stringResource(R.string.call_captions_original)")
         assertThat(below).contains("val translatedWord = stringResource(R.string.call_captions_translated)")
         assertThat(below).contains("CallTranscriptSecondaryKind.ORIGINAL -> originalWord")
@@ -69,10 +68,36 @@ class CallDetailJournalWiringTest {
     }
 
     @Test
+    fun `A1_18 - les deux etats d'une phrase se superposent, seule leur opacite s'anime, aucune phrase ne glisse`() {
+        val sections = code("CallDetailSections.kt")
+        val row = sections.substringAfter("private fun TranscriptRow(").substringBefore("\n}\n")
+
+        assertThat(row).contains("line.layers(showOriginal).forEachIndexed")
+        assertThat(row).contains("Box(Modifier.fillMaxWidth())")
+        assertThat(row).contains("animateFloatAsState(")
+        assertThat(row).contains("Modifier.graphicsLayer { alpha = presence.value }")
+        assertThat(row).doesNotContain("AnimatedContent(")
+        assertThat(row).doesNotContain("by animateFloatAsState")
+        assertThat(sections).doesNotContain("animateContentSize")
+        assertThat(sections).doesNotContain("SizeTransform")
+        assertThat(sections).doesNotContain("CallCaptionSecondaryBelow(")
+    }
+
+    @Test
+    fun `A1_18 - sous Reduire les animations le fondu est court, jamais un glissement`() {
+        val sections = code("CallDetailSections.kt")
+        val row = sections.substringAfter("private fun TranscriptRow(").substringBefore("\n}\n")
+
+        assertThat(row).contains("val fadeMillis = fadeMillis(reduceMotion)")
+        assertThat(row).doesNotContain("slideIn")
+        assertThat(row).doesNotContain("translationY")
+    }
+
+    @Test
     fun `l'encre de traduction ne va qu'a une traduction servie, jamais a une ligne non servie traduite`() {
         val sections = code("CallDetailSections.kt")
 
-        assertThat(sections).contains("servesTranslation = line.showsTranslation(original)")
+        assertThat(sections).contains("servesTranslation = layer.showsTranslation")
         assertThat(sections).doesNotContain("line.translated != null")
     }
 

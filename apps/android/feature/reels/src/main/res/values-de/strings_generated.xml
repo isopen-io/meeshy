@@ -6,14 +6,10 @@
     <string name="reels_author_profile">Profil des Autors</string>
     <string name="reels_caption_translated">Übersetzung verfügbar</string>
     <string name="reels_close">Schließen</string>
-    <string name="reels_comments_composer_hint">Kommentieren…</string>
     <plurals name="reels_comments_count">
         <item quantity="one">%1$d Kommentar</item>
         <item quantity="other">%1$d Kommentare</item>
     </plurals>
-    <string name="reels_comments_empty_subtitle">Sei der Erste, der kommentiert!</string>
-    <string name="reels_comments_empty_title">Noch keine Kommentare</string>
-    <string name="reels_comments_send">Senden</string>
     <string name="reels_comments_title">Kommentare</string>
     <string name="reels_empty">Derzeit keine Reels</string>
     <string name="reels_impressions">Impressionen</string>

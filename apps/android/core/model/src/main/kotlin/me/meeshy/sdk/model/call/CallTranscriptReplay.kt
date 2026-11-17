@@ -53,7 +53,32 @@ data class CallTranscriptLine(
             CallTranscriptSecondary(CallTranscriptSecondaryKind.ORIGINAL, original)
         }
     }
+
+    /**
+     * A1.18 — the two states of a translated sentence are laid out ON TOP of each other: the sentence keeps the height
+     * of the taller, « Voir l'original » only fades their opacities, and no sentence below slides. A sentence without a
+     * served translation has a single state, always shown (iOS `CallJournalAfterCall.layers(for:showsOriginal:)`).
+     */
+    fun layers(showOriginal: Boolean): List<CallTranscriptLayer> {
+        if (!servesTranslation) return listOf(layer(showOriginal, isShown = true))
+        return listOf(false, true).map { state -> layer(state, isShown = state == showOriginal) }
+    }
+
+    private fun layer(state: Boolean, isShown: Boolean) = CallTranscriptLayer(
+        text = text(state),
+        showsTranslation = showsTranslation(state),
+        secondary = secondary(state),
+        isShown = isShown,
+    )
 }
+
+/** One state of a journal sentence, laid in its stack: shown, or kept invisible to hold the height (A1.18). */
+data class CallTranscriptLayer(
+    val text: String,
+    val showsTranslation: Boolean,
+    val secondary: CallTranscriptSecondary?,
+    val isShown: Boolean,
+)
 
 /** Which version the line below a journal sentence carries — it names its own label (« Original » / « Traduit »). */
 enum class CallTranscriptSecondaryKind { ORIGINAL, TRANSLATED }

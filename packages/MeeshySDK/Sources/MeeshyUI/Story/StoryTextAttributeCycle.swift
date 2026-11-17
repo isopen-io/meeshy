@@ -10,13 +10,13 @@ import MeeshySDK
 /// Pur et `nonisolated` : le package pose `.defaultIsolation(MainActor.self)`
 /// (SE-0466), et une annotation posée méthode par méthode ne suffit pas — elle
 /// doit l'être sur le type pour que les extensions et les conformances suivent.
-nonisolated enum StoryTextAttributeCycle {
+public nonisolated enum StoryTextAttributeCycle {
 
     /// Ce qu'affiche une bulle pour son attribut. Chaque bulle rend l'état
     /// COURANT et non un pictogramme figé : c'est ce qui rend le tap-pour-
     /// tourner utilisable — sans lui, parcourir quatorze couleurs se ferait à
     /// l'aveugle.
-    enum Indicator: Equatable, Sendable {
+    public enum Indicator: Equatable, Sendable {
         /// Symbole SF reflétant la valeur courante. `emphasis` (0…4) rend une
         /// intensité — seul le contour s'en sert, pour montrer son épaisseur.
         /// `tint` porte la couleur que l'outil applique (contour du texte,
@@ -57,8 +57,12 @@ nonisolated enum StoryTextAttributeCycle {
 
     // MARK: - Avance
 
-    static func advance(_ tool: TextEditTool, on text: inout StoryTextObject,
-                        backgrounds: [StoryTextBackgroundStyle] = StoryTextBackgroundPresets.all) {
+    static func advance(_ tool: TextEditTool, on text: inout StoryTextObject) {
+        advance(tool, on: &text, backgrounds: StoryTextBackgroundPresets.all)
+    }
+
+    public static func advance(_ tool: TextEditTool, on text: inout StoryTextObject,
+                               backgrounds: [StoryTextBackgroundStyle]) {
         switch tool {
         case .align:      advanceAlign(on: &text)
         case .border:     advanceBorder(on: &text)
@@ -150,7 +154,7 @@ nonisolated enum StoryTextAttributeCycle {
 
     // MARK: - État affiché
 
-    static func indicator(_ tool: TextEditTool, of text: StoryTextObject) -> Indicator {
+    public static func indicator(_ tool: TextEditTool, of text: StoryTextObject) -> Indicator {
         switch tool {
         case .style:
             return .styledGlyph("Aa", style: text.parsedTextStyle)

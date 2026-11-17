@@ -195,6 +195,13 @@ model User {
   /// Non nul = le compte est en FANTÔME GLOBAL pour la position du Sang depuis cette date (#13937) :
   /// rien n'est enregistré ni servi, et rien ne le distingue d'un compte sans historique.
   locationGhostAt           DateTime?
+  /// Non nul = le compte a coupé le partage de sa BATTERIE pour tous depuis cette date (#14147) :
+  /// aucun Proche ni Sang ne la reçoit, quels que soient les accords par personne. Optionnel, sans migration.
+  batterySharingDisabledAt  DateTime?
+  /// Non nul = le compte a coupé le partage de l'INJOIGNABILITÉ de son téléphone pour tous depuis cette
+  /// date (#18737, le fantôme de TEL-01) : aucun Proche ni Sang ne la reçoit, et le téléphone n'est plus
+  /// sondé. Optionnel, sans migration.
+  unreachableSharingDisabledAt DateTime?
   /// Pays appareil (Locale.current.region iOS) propage sur CHAQUE requete via
   /// X-Meeshy-Country, persiste par le middleware gateway deviceCountry.
   /// Signal continu (contrairement a registrationCountry, capture une seule
@@ -1649,6 +1656,11 @@ model MessageStatusEntry {
   receivedAt  DateTime?
   /// When user read/saw the message
   readAt      DateTime?
+  /// #18556 — posé write-once par le SEUL accusé EXACT (messages réellement
+  /// affichés). L'accusé hérité grave `readAt` sur toute une plage jusqu'à la
+  /// frontière : seul ce champ prouve qu'un message a été VU, et c'est lui
+  /// que le départ du lecteur lit avant de brûler une flamme-œil.
+  exactReadAt DateTime?
 
   // ===== READ DETAILS =====
   /// How long user viewed the message (ms) - for analytics
@@ -2235,6 +2247,23 @@ model RelationFeatureSetting {
   locationWithdrawnAt        DateTime?
   locationHistoryWithdrawnAt DateTime?
   proximityWithdrawnAt       DateTime?
+  /// Partage de la BATTERIE de `ownerId` à `otherId` (#14147), TRI-ÉTAT : absent ou nul = le
+  /// défaut du niveau effectif (accordé entre Sangs et dans l'équipe, refusé entre Proches),
+  /// `true` = accordé (le consentement donné une fois à un Proche), `false` = refusé (même à
+  /// un Sang). Résolu par `resolveEmitterConsent` ; optionnel, sans migration.
+  batteryShared              Boolean?
+  /// Quand le partage de batterie a été RETIRÉ (trace, comme les retraits ci-dessus).
+  batteryWithdrawnAt         DateTime?
+  /// Ce que `ownerId` veut RECEVOIR de la batterie de `otherId` (#14147) : `all` (défaut, absent ou
+  /// nul), `critical` (push du critique seulement), `pill` (la SyncPill, jamais de push) ou `none`
+  /// (rien). Une valeur inconnue vaut le défaut. Optionnel, sans migration.
+  batteryReceive             String?
+  /// Partage de l'INJOIGNABILITÉ du téléphone de `ownerId` à `otherId` (#18737), TRI-ÉTAT comme
+  /// `batteryShared` : nul = le défaut du niveau effectif (accordé entre Sangs et dans l'équipe, refusé
+  /// entre Proches), `true` = accordé, `false` = refusé. Optionnel, sans migration.
+  unreachableShared          Boolean?
+  /// Quand ce partage a été RETIRÉ (trace).
+  unreachableWithdrawnAt     DateTime?
   /// Non nul = `ownerId` est en FANTÔME CIBLÉ pour `otherId` depuis cette date (#13937) : l'autre ne
   /// reçoit ni historique ni alerte de proximité, et rien ne lui dit pourquoi. Ce n'est pas un
   /// consentement : une ligne née d'un fantôme laisse ses quatre partages faux.
@@ -2946,6 +2975,15 @@ model CallParticipant {
   /// Timestamps
   joinedAt        DateTime  @default(now())
   leftAt          DateTime?
+  /// Quand CET appareil a DÉCROCHÉ (#18242 B1) : posé à la première réponse
+  /// SDP qu'il échange (il répond, ou son offre reçoit une réponse). Les
+  /// clients rejoignent la room dès la SONNERIE (`call:join`), donc la ligne
+  /// existe pour qui a seulement sonné, et `CallSession.answeredAt` est porté
+  /// par l'appel entier : seul ce champ dit qui a PRIS PART. Nul pour une
+  /// sonnerie ignorée ou refusée ; la clé est écrite (`null`) à la création
+  /// et ABSENTE des lignes écrites avant lui : un appel dont aucune ligne ne
+  /// la porte n'est pas suivi et garde la liste d'avant (#18242 B-1).
+  answeredAt      DateTime?
   /// Updated on every heartbeat flush (debounced every 30s). Survives gateway
   /// restarts so CallCleanupService can detect zombie calls without in-memory state.
   lastHeartbeatAt DateTime?

@@ -5,9 +5,7 @@
       "resDir": "feature/chat/src/main/res",
       "entries": [
         { "catalog": "app", "iosKey": "message-detail.edits.current", "status": "adopted" },
-        { "catalog": "app", "iosKey": "message-detail.edits.empty", "status": "adopted" },
         { "catalog": "app", "iosKey": "message-detail.edits.history-title", "status": "adopted" },
-        { "catalog": "app", "iosKey": "message-detail.edits.none-detail", "status": "adopted" },
         { "catalog": "app", "iosKey": "message-detail.edits.none-title", "status": "adopted" },
         { "catalog": "app", "iosKey": "message-detail.edits.previous-one", "status": "adopted" },
         { "catalog": "app", "iosKey": "message-detail.edits.previous-other", "status": "adopted" },

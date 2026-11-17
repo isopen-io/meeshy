@@ -13,21 +13,6 @@
           "catalog": "app",
           "iosKey": "game.spend.missing.unlock",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "progression.a11y.tier.pending",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "progression.a11y.tier.reached",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "progression.a11y.bar.streak",
-          "status": "adopted"
         }
       ]
     }

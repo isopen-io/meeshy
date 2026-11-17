@@ -277,14 +277,15 @@ extension MessageCardLayoutEngine {
         return ops
     }
 
-    /// Le média peint dans son cadre : une photo REMPLIT (coins arrondis) ; un
-    /// sticker s'INSCRIT en entier, sans arrondi ni rognage (#10915).
+    /// Le média peint dans son cadre : une photo REMPLIT (coins arrondis), sous
+    /// le cadrage choisi (#18805) ; un sticker s'INSCRIT en entier, sans arrondi ni rognage (#10915).
     func mediaOp(_ media: MessageCardMedia, x: Double, y: Double, width: Double, height: Double) -> MessageCardOp {
         .media(MessageCardMediaOp(
             mediaID: media.id, kind: media.kind,
             x: x, y: y, width: width, height: height,
             radius: media.isSticker ? 0 : MessageCardMetrics.mediaRadius, placeholder: palette.quotePanel,
-            fit: media.isSticker ? .contain : .cover
+            fit: media.isSticker ? .contain : .cover,
+            framing: media.isSticker ? .centered : input.framings[media.id] ?? .centered
         ))
     }
 
@@ -306,6 +307,15 @@ extension MessageCardLayoutEngine {
             ))]
         case .bulles, .silence:
             return []
+        case .points:
+            return [6.0, 26, 46].map { .dot(MessageCardDotOp(x: rtl ? x - $0 : x + $0, y: y, radius: 4, color: accent)) }
+        case .double:
+            return [-4.0, 4].map { .separator(MessageCardSeparatorOp(x1: ends[0], x2: ends[1], y: y + $0, radius: 0, color: accent, dash: [], lineWidth: 2)) }
+        case .losange, .asterisme:
+            return [.text(MessageCardTextOp(
+                text: link == .losange ? "◆" : "⁂", x: x, y: y + 12, font: MessageCardFont(face: .system(700), size: link == .losange ? 26 : 34),
+                color: accent, align: rtl ? .right : .left, direction: .ltr
+            ))]
         }
     }
 
@@ -344,13 +354,23 @@ extension MessageCardLayoutEngine {
         ))
     }
 
+    /// Ce qui se peint SOUS le filigrane : le fond CHOISI s'il y en a un (#18672),
+    /// sinon le média du message posé en fond.
+    func paintedBackdrop(_ media: MessageCardMediaPlan, width: Double, height: Double) -> [MessageCardOp] {
+        if let chosen = input.backdrop {
+            return backdropOps(chosen.media, width: width, height: height, veilAlpha: chosen.veil)
+        }
+        return media.backdrop.map { backdropOps($0, width: width, height: height) } ?? []
+    }
+
     /// Le visuel peint EN FOND, sous un voile de la couleur de la palette :
     /// le texte reste lisible, et la carte garde sa teinte.
-    func backdropOps(_ media: MessageCardMedia, width: Double, height: Double) -> [MessageCardOp] {
+    func backdropOps(_ media: MessageCardMedia, width: Double, height: Double, veilAlpha: Double? = nil) -> [MessageCardOp] {
         let base = palette.background.first?.color ?? MessageCardColor.hex("#000000")
-        let veil = MessageCardColor(red: base.red, green: base.green, blue: base.blue, alpha: palette.tone == .dark ? 0.6 : 0.72)
+        let veil = MessageCardColor(red: base.red, green: base.green, blue: base.blue, alpha: veilAlpha ?? (palette.tone == .dark ? 0.6 : 0.72))
         return [
-            .media(MessageCardMediaOp(mediaID: media.id, kind: media.kind, x: 0, y: 0, width: width, height: height, radius: 0, placeholder: base)),
+            .media(MessageCardMediaOp(mediaID: media.id, kind: media.kind, x: 0, y: 0, width: width, height: height, radius: 0, placeholder: base,
+                                      framing: input.framings[media.id] ?? .centered)),
             .panel(MessageCardRectOp(x: 0, y: 0, width: width, height: height, radius: 0, color: veil)),
         ]
     }

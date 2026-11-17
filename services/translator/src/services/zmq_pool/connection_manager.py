@@ -24,6 +24,11 @@ RejectedTasksHandler = Callable[[List[TranslationTask]], Awaitable[None]]
 
 LOGGED_TASK_IDS_LIMIT = 20
 
+# #18535 — une fois l'arrêt demandé, le report des lots refusés a ce délai pour
+# finir. Assez pour une publication PUB locale (quelques ms) même sous charge ;
+# assez court pour tenir dans le délai de grâce d'un `docker stop` (10 s).
+REJECTED_REPORT_SHUTDOWN_GRACE_S = 5.0
+
 
 def summarize_task_ids(tasks: List[TranslationTask], limit: int = LOGGED_TASK_IDS_LIMIT) -> str:
     """
@@ -213,6 +218,7 @@ class ConnectionManager:
         self.enable_batching = os.getenv("TRANSLATOR_BATCH_ENABLED", "true").lower() == "true"
         self.batch_window_ms = int(os.getenv("BATCH_WINDOW_MS", "50"))
         self.batch_max_size = int(os.getenv("BATCH_MAX_SIZE", "10"))
+        self.rejected_report_grace_s = REJECTED_REPORT_SHUTDOWN_GRACE_S
 
         # Batch accumulator: key -> list of tasks
         self._batch_accumulator: Dict[str, List[TranslationTask]] = {}
@@ -586,13 +592,38 @@ class ConnectionManager:
     async def _report_through_cancellation(self, batches: List[List[TranslationTask]]) -> None:
         """#17063 — les lots refusés ont déjà quitté l'accumulateur et sont
         comptés : leur report va jusqu'au bout même si `stop()` annule la boucle
-        de flush, et l'annulation n'est rendue qu'une fois le report fini."""
+        de flush, et l'annulation n'est rendue qu'une fois le report fini.
+        #17132 — `asyncio.wait` n'annule pas le report : chaque annulation
+        suivante (l'arrêt lui-même annulé) le retrouve, exécuté une seule fois.
+        #18535 — dès la PREMIÈRE annulation, le report a
+        `rejected_report_grace_s` pour finir ; une annulation suivante ne relance
+        pas le délai. Passé ce délai, il est annulé et une ligne le dit."""
         report = asyncio.ensure_future(self._report_batches(batches))
-        try:
-            await asyncio.shield(report)
-        except asyncio.CancelledError:
-            await report
-            raise
+        loop = asyncio.get_running_loop()
+        deadline: Optional[float] = None
+        while not report.done():
+            remaining = None if deadline is None else deadline - loop.time()
+            if remaining is not None and remaining <= 0:
+                break
+            try:
+                await asyncio.wait({report}, timeout=remaining)
+            except asyncio.CancelledError:
+                if deadline is None:
+                    deadline = loop.time() + self.rejected_report_grace_s
+        if deadline is None:
+            return report.result()
+        if not report.done():
+            report.cancel()
+            total = sum(len(tasks) for tasks in batches)
+            logger.error(
+                f"[TRANSLATOR] Rejected batches report abandoned at shutdown after "
+                f"{self.rejected_report_grace_s}s: {total} tasks"
+            )
+            raise asyncio.CancelledError()
+        error = None if report.cancelled() else report.exception()
+        if error is not None:
+            logger.error(f"[TRANSLATOR] Rejected batches report failed: {type(error).__name__}")
+        raise asyncio.CancelledError()
 
     async def _report_batches(self, batches: List[List[TranslationTask]]) -> None:
         for tasks in batches:

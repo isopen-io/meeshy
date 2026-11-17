@@ -4,6 +4,7 @@ import { CARD_MEDIA_ARRANGEMENTS, CARD_MEDIA_LAYOUTS, type CardMediaArrangement,
 import type { MessageCardFormat, MessageCardToggle } from '@/lib/export/message-card-format';
 import { CARD_ASPECTS, CARD_AUTHOR_PLACEMENTS, CARD_HEADER_ORIENTATIONS, CARD_TILTS, type CardAspect, type CardAuthorPlacement, type CardHeaderOrientation, type CardTilt } from '@/lib/export/message-card-frame';
 import { CARD_AUDIO_STYLES, type CardAudioStyle } from '@/lib/export/message-card-media';
+import { CARD_DECOR_FRAMES, CARD_DECOR_ORNAMENTS, type CardDecor } from '@/lib/export/message-card-models';
 import type { CardSource } from '@/lib/export/message-card-paint';
 import { translateExportCard, type ExportCardCatalogKey, type PlainExportCardKey } from '@/lib/i18n-export-card-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -41,7 +42,8 @@ export type FrameChoice =
   | { readonly tilt: CardTilt }
   | { readonly mediaLayout: CardMediaLayout }
   | { readonly mediaArrangement: CardMediaArrangement }
-  | { readonly audioStyle: CardAudioStyle };
+  | { readonly audioStyle: CardAudioStyle }
+  | { readonly decor: CardDecor };
 
 const ASPECT_LABEL = {
   auto: 'export.card.aspect.auto',
@@ -68,6 +70,18 @@ const TILT_LABEL = {
   left: 'export.card.tilt.left',
   right: 'export.card.tilt.right',
 } as const satisfies Readonly<Record<CardTilt, ExportCardCatalogKey>>;
+
+const DECOR_FRAME_LABEL = {
+  none: 'export.card.decor.frame.none',
+  panel: 'export.card.decor.frame.panel',
+  border: 'export.card.decor.frame.border',
+} as const satisfies Readonly<Record<CardDecor['frame'], ExportCardCatalogKey>>;
+
+const DECOR_ORNAMENT_LABEL = {
+  none: 'export.card.decor.ornament.none',
+  quoteMark: 'export.card.decor.ornament.quoteMark',
+  accentRule: 'export.card.decor.ornament.accentRule',
+} as const satisfies Readonly<Record<CardDecor['ornament'], ExportCardCatalogKey>>;
 
 export const MEDIA_LAYOUT_LABEL = {
   above: 'export.card.media.layout.above',
@@ -159,6 +173,25 @@ export function FramePanel({
         {CARD_TILTS.map((tilt) => (
           <Pill key={tilt} role="radio" pressed={format.tilt === tilt} onClick={() => onChoice({ tilt })} data={{ 'data-export-tilt': tilt }}>
             {t(TILT_LABEL[tilt])}
+          </Pill>
+        ))}
+      </Group>
+      <Group label={t('export.card.decor.label')} data={{ 'data-export-group': 'decor' }}>
+        <Pill
+          pressed={format.decor.alignment === 'center'}
+          onClick={() => onChoice({ decor: { ...format.decor, alignment: format.decor.alignment === 'center' ? 'start' : 'center' } })}
+          data={{ 'data-export-decor-center': '' }}
+        >
+          {t('export.card.decor.center')}
+        </Pill>
+        {CARD_DECOR_FRAMES.map((frame) => (
+          <Pill key={frame} pressed={format.decor.frame === frame} onClick={() => onChoice({ decor: { ...format.decor, frame } })} data={{ 'data-export-decor-frame': frame }}>
+            {t(DECOR_FRAME_LABEL[frame])}
+          </Pill>
+        ))}
+        {CARD_DECOR_ORNAMENTS.map((ornament) => (
+          <Pill key={ornament} pressed={format.decor.ornament === ornament} onClick={() => onChoice({ decor: { ...format.decor, ornament } })} data={{ 'data-export-decor-ornament': ornament }}>
+            {t(DECOR_ORNAMENT_LABEL[ornament])}
           </Pill>
         ))}
       </Group>

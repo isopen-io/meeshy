@@ -271,7 +271,7 @@ describe('les états dessinés', () => {
     const host = await open(deps);
 
     expect(host.querySelector('[data-admin-empty]')?.textContent).toContain('Aucune conversation');
-    expect(host.querySelector('[data-admin-empty]')?.textContent).toContain('apparaissent ici');
+    expect(host.querySelector('[data-admin-empty]')?.textContent).not.toContain('apparaissent ici');
   });
 
   test('vide filtré : le dit, et « Réinitialiser » retire les filtres', async () => {

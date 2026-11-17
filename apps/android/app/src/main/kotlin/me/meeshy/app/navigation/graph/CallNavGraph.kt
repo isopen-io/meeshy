@@ -1,5 +1,7 @@
 package me.meeshy.app.navigation.graph
 
+import me.meeshy.app.navigation.popFrom
+import me.meeshy.app.navigation.pushFrom
 import android.net.Uri
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
@@ -17,11 +19,11 @@ internal fun NavGraphBuilder.callNavGraph(
     navController: NavHostController,
     callViewModel: CallViewModel,
 ) {
-    composable(Routes.CALLS) {
+    composable(Routes.CALLS) { entry ->
         CallHistoryScreen(
-            onBack = { navController.popBackStack() },
+            onBack = { navController.popFrom(entry) },
             onRedial = { record, isVideo ->
-                navController.navigate(CallRoute.redial(record, isVideo))
+                navController.pushFrom(entry, CallRoute.redial(record, isVideo))
             },
         )
     }
@@ -59,21 +61,21 @@ internal fun NavGraphBuilder.callNavGraph(
             onMinimize = {
                 val fallback = CallRoute.minimizeFallback(hasScreenBehind = navController.previousBackStackEntry != null)
                 if (fallback == null) {
-                    navController.popBackStack()
+                    navController.popFrom(entry)
                 } else {
-                    navController.navigate(fallback) {
+                    navController.pushFrom(entry, fallback) {
                         popUpTo(CallRoute.PATTERN) { inclusive = true }
                         launchSingleTop = true
                     }
                 }
             },
             onOpenConversation = {
-                navController.navigate(CallRoute.openConversation(callViewModel.activeConfig.conversationId)) {
+                navController.pushFrom(entry, CallRoute.openConversation(callViewModel.activeConfig.conversationId)) {
                     popUpTo(CallRoute.PATTERN) { inclusive = true }
                     launchSingleTop = true
                 }
             },
-            onClose = { navController.popBackStack() },
+            onClose = { navController.popFrom(entry) },
         )
     }
 }

@@ -241,3 +241,31 @@ export function UnreadRungBadge({
     </span>
   );
 }
+
+/** Le diamètre du point de signal — sans chiffre, il reste plus petit que la pastille qu'il remplace. */
+export const RUNG_SIGNAL_DOT = 10;
+
+/**
+ * **LE POINT DE COIN D'UN BARREAU** (#18165) — la même pose que `UnreadRungBadge` (même coin, même décalage, même
+ * blanc), sans chiffre : il dit « quelque chose t'attend ici » sans compter. Décoratif (`aria-hidden`) — c'est le nom
+ * du barreau qui le dit au lecteur d'écran. Miroir du point de `ThemedActionButton` (iOS) et du rung Android.
+ */
+export function RungSignalDot({ size }: { readonly size: number }) {
+  const offset = Math.round(size * UNREAD_BADGE_RUNG.offsetRatio * 100) / 100;
+  return (
+    <span
+      data-rung-dot=""
+      aria-hidden="true"
+      className="pointer-events-none absolute rounded-full"
+      style={{
+        top: '50%',
+        left: '50%',
+        width: RUNG_SIGNAL_DOT,
+        height: RUNG_SIGNAL_DOT,
+        transform: `translate(calc(-50% + ${offset}px), calc(-50% - ${offset}px))`,
+        backgroundColor: 'var(--color-ios-on-brand)',
+        boxShadow: '0 1px 3px color-mix(in srgb, var(--color-media-backdrop) 35%, transparent)',
+      }}
+    />
+  );
+}

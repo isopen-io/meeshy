@@ -7,7 +7,7 @@ import MeeshyUI
 /// master PIN… ») ouvrait les Réglages en haut de page : l'utilisateur devait
 /// trouver seul la ligne. Elle désigne désormais SON réglage : l'écran défile
 /// jusqu'à lui et le met en évidence.
-enum SettingsFocus: String, Equatable, CaseIterable {
+enum SettingsFocus: String, Equatable, CaseIterable, Identifiable {
     /// Consentement vocal (transcription et traduction des vocaux) : le
     /// profil vocal, dont la GESTION s'ouvre directement (#16418).
     case voiceProfile
@@ -18,30 +18,68 @@ enum SettingsFocus: String, Equatable, CaseIterable {
     case transcription
     /// Master PIN des conversations verrouillées : Réglages ▸ Sécurité.
     case masterPin
+    /// Mon e-mail, changé et vérifié dans Réglages ▸ Sécurité (#18590 : la
+    /// rangée Contact de ma fiche y mène).
+    case securityEmail
+    /// Mon téléphone, changé et vérifié dans Réglages ▸ Sécurité (#18590).
+    case securityPhone
+
+    var id: String { rawValue }
 
     /// La feuille que les Réglages ouvrent d'eux-mêmes pour ce réglage.
     enum Sheet: Equatable { case voiceProfileManage, voiceProfileWizard }
 
-    /// L'ancre de la section de l'écran Réglages où vit le réglage.
-    var settingsAnchor: String {
+    /// La rangée des Réglages qui mène au réglage (#18589).
+    var destination: SettingsDestination {
         switch self {
-        case .voiceProfile, .voiceProfileCreation: return "settings.section.voice"
-        case .transcription: return "settings.section.transcription"
-        case .masterPin: return "settings.section.account"
+        case .voiceProfile, .voiceProfileCreation: return .voiceProfile
+        case .transcription: return .transcriptionMine
+        case .masterPin, .securityEmail, .securityPhone: return .security
         }
     }
 
+    /// L'ancre du bloc où vit la rangée : la loi des Réglages la porte, une
+    /// invite n'en recopie aucune.
+    var settingsAnchor: String? {
+        SettingsLayout.block(containing: destination)?.id.anchor
+    }
+
+    /// Le réglage vit sous le pli « Annexes » : l'écran le déplie avant de
+    /// défiler, sans quoi l'ancre visée ne serait pas montée.
+    var unfoldsAnnex: Bool { SettingsLayout.unfoldsAnnex(toReach: destination) }
+
     /// Le réglage vit dans l'écran Sécurité, ouvert par-dessus les Réglages.
-    var opensSecurity: Bool { self == .masterPin }
+    var opensSecurity: Bool { destination == .security }
+
+    /// La section où l'écran Sécurité se pose en s'ouvrant : celle qu'on lui a
+    /// désignée, sinon celle qu'une invite a demandée, sinon aucune. Un réglage
+    /// qui ne vit pas dans Sécurité n'y désigne rien.
+    static func securityLanding(initial: SettingsFocus?, requested: SettingsFocus?) -> SettingsFocus? {
+        [initial, requested].compactMap { $0 }.first { $0.opensSecurity }
+    }
 
     /// La configuration de la voix s'ouvre DIRECTEMENT, sans second toucher.
     var opensSheet: Sheet? {
         switch self {
         case .voiceProfile: return .voiceProfileManage
         case .voiceProfileCreation: return .voiceProfileWizard
-        case .transcription, .masterPin: return nil
+        case .transcription, .masterPin, .securityEmail, .securityPhone: return nil
         }
     }
+}
+
+/// **Les temps de la mise au point d'un réglage désigné, nommés** (#18589).
+/// SwiftUI ne signale pas la fin d'une poussée de pile : une feuille demandée
+/// pendant la transition est avalée, un défilement vers une ancre pas encore
+/// montée ne mène nulle part. Ces temps-là ne s'écrivent donc qu'ici.
+extension MeeshyMotion {
+    /// La poussée d'un écran achevée : son ancre est montée, il peut défiler.
+    static let pushSettle: Duration = .milliseconds(350)
+    /// Une feuille que l'écran poussé ouvre de lui-même.
+    static let sheetAfterPush: Duration = .milliseconds(500)
+    /// Une feuille ouverte APRÈS le défilement jusqu'à sa rangée, pour qu'on
+    /// voie d'où elle vient (Sécurité par-dessus les Réglages).
+    static let sheetAfterFocusScroll: Duration = .milliseconds(900)
 }
 
 /// La demande en attente, posée par l'invite et CONSOMMÉE une fois par l'écran
@@ -61,6 +99,14 @@ final class SettingsFocusRequest: ObservableObject {
         return pending
     }
 
+    /// Consomme la demande si elle vise l'écran Sécurité ; une demande destinée
+    /// aux Réglages reste en attente.
+    func consumeSecurityFocus() -> SettingsFocus? {
+        guard let pending, pending.opensSecurity else { return nil }
+        self.pending = nil
+        return pending
+    }
+
     /// Ne consomme que si la demande vise `focus` (l'écran Sécurité ne prend
     /// pas une demande destinée aux Réglages).
     func consume(_ focus: SettingsFocus) -> Bool {
@@ -75,7 +121,11 @@ final class SettingsFocusRequest: ObservableObject {
 struct SettingsFocusHighlight: ViewModifier {
     let isActive: Bool
     @State private var lit = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     func body(content: Content) -> some View {
         content
@@ -90,9 +140,10 @@ struct SettingsFocusHighlight: ViewModifier {
     }
 
     private func light() {
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35).repeatCount(3, autoreverses: true)) { lit = true }
+        let reduce = reduceMotion
+        meeshyWithAnimation(.easeInOut(duration: 0.35).repeatCount(3, autoreverses: true), reduceMotion: reduce) { lit = true }
         Task { await DelayedUI.perform(after: .milliseconds(2200)) {
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) { lit = false }
+            meeshyWithAnimation(.easeOut(duration: 0.4), reduceMotion: reduce) { lit = false }
         } }
     }
 }

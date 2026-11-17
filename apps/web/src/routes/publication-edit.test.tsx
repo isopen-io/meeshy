@@ -79,4 +79,21 @@ describe('PublicationEditView — /posts/:id/edit (#9317)', () => {
     await flush(() => document.querySelector('[data-publication-edit-sheet]') !== null);
     expect(document.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]')?.value).toBe('Juste du texte');
   });
+
+  test('au repos, Annuler et Enregistrer ne figent aucune opacité en ligne : le voile d’appui réduit joue sous « Réduire les animations » (#18326)', async () => {
+    const post = cached({ ...withScene('p-voile'), content: 'Juste du texte', storyEffects: null });
+    mountAt(post.id);
+    await flush(() => document.querySelector('[data-publication-edit-sheet]') !== null);
+    const field = document.querySelector<HTMLTextAreaElement>('[data-publication-edit-field]');
+    act(() => {
+      if (field === null) return;
+      field.value = 'Un autre texte';
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const cancel = document.querySelector<HTMLButtonElement>('[data-publication-edit-cancel]');
+    const save = document.querySelector<HTMLButtonElement>('[data-publication-edit-save]');
+    expect(save?.disabled).toBe(false);
+    expect(cancel?.style.opacity).toBe('');
+    expect(save?.style.opacity).toBe('');
+  });
 });

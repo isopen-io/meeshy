@@ -13,13 +13,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.graphicsLayer
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.motion.motionSpec
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +50,9 @@ internal const val REACTIONS_MAX_VISIBLE: Int = ReactionStripLayout.MAX_VISIBLE
 /** Le rebond d'une pastille dont le compte ou la marque du lecteur change (iOS : ressort 0,32 s, amorti 0,55). */
 private const val REACTION_PULSE_PEAK: Float = 1.22f
 private const val REACTION_PULSE_DAMPING: Float = 0.55f
+
+/** La réponse du ressort de la pulsation, `Spring.StiffnessMedium` (1 500) exprimé à la manière d'iOS : 2π / √1500. */
+private const val REACTION_PULSE_RESPONSE: Float = 0.1622f
 
 /** Décalage vertical de la bande sous le bord de la bulle (iOS `restingOffset`). */
 internal val ReactionsRestingOffset = ReactionStripLayout.RESTING_OFFSET_DP.dp
@@ -131,13 +134,15 @@ private fun ReactionChip(
     val toggleHint = stringResource(R.string.bubble_reactions_toggle_hint)
     val pulse = remember { Animatable(1f) }
     val firstFrame = remember { booleanArrayOf(true) }
+    val reduceMotion = LocalReduceMotion.current
     LaunchedEffect(entry.count, entry.includesMe) {
         if (firstFrame[0]) {
             firstFrame[0] = false
             return@LaunchedEffect
         }
+        if (reduceMotion) return@LaunchedEffect
         pulse.snapTo(REACTION_PULSE_PEAK)
-        pulse.animateTo(1f, spring(dampingRatio = REACTION_PULSE_DAMPING, stiffness = Spring.StiffnessMedium))
+        pulse.animateTo(1f, motionSpec(reduceMotion, REACTION_PULSE_RESPONSE, REACTION_PULSE_DAMPING))
     }
     val fill = when {
         entry.includesMe -> accent.copy(alpha = if (isDark) 0.70f else 0.50f)

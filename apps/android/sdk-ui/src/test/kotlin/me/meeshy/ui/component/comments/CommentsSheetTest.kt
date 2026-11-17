@@ -43,7 +43,7 @@ class CommentsSheetTest {
     }
 
     @Test
-    fun `la feuille montre le titre et le corps et se ferme par la croix`() {
+    fun `la feuille montre le titre et le corps et la croix ne ferme qu une fois la feuille redescendue`() {
         var dismissed = false
         compose.setContent {
             MeeshyTheme {
@@ -57,7 +57,13 @@ class CommentsSheetTest {
         compose.onNodeWithText("2 commentaires").assertIsDisplayed()
         compose.onNodeWithText("corps").assertIsDisplayed()
         compose.onNodeWithText("composeur").assertIsDisplayed()
+        compose.mainClock.autoAdvance = false
         compose.onNodeWithContentDescription("Fermer").performSemanticsAction(SemanticsActions.OnClick)
+        compose.mainClock.advanceTimeByFrame()
+        assertThat(dismissed).isFalse()
+        compose.onNodeWithText("corps").assertExists()
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
         assertThat(dismissed).isTrue()
     }
 

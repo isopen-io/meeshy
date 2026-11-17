@@ -12,13 +12,13 @@ extension CallView {
     var isMyImageFullScreen: Bool {
         CallCameraRail.isMyImageFullScreen(
             isGroupStage: isGroupStage,
-            isSelfFeatured: isSelfFeatured,
+            isSelfFeatured: GroupCallSpotlight.featuresLocal(groupStageFocus),
             isLocalPrimary: effectiveSwapStreams
         )
     }
 
     /// La vignette perso du duo porte-t-elle MON image ? Même garde que
-    /// `duoOverlays`, qui la monte.
+    /// `duoSelfView`, qui la monte.
     private var showsMyImageTile: Bool {
         !isGroupStage && callManager.isVideoEnabled && callManager.hasLocalVideoTrack && !isLiveFrameShown
     }
@@ -55,7 +55,7 @@ extension CallView {
     func tapCameraMenu(_ tap: CallCameraFoldedTap) {
         let next = CallCameraRail.foldedMenu(isOpen: isCameraMenuUnfolded, after: tap)
         guard next != isCameraMenuUnfolded else { return }
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) {
+        meeshyWithAnimation(.spring(response: 0.3, dampingFraction: 0.85), reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
             isCameraMenuUnfolded = next
         }
         if tap == .button { HapticFeedback.light() }

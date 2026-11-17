@@ -75,6 +75,7 @@
  * exporté par `messages-list-reader-state.ts`) — et il devra venir avec son lecteur.
  */
 import { Prisma } from '@meeshy/shared/prisma/client';
+import { withoutCallSummaryParticipants } from '@meeshy/shared/utils/call-summary';
 import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import {
   transformTranslationsToArray,
@@ -375,7 +376,8 @@ function servedReplyTo(replyTo: SovereignReplyToRow, hostConversationId: string)
     isEncrypted: replyTo.isEncrypted,
     encryptionMode: replyTo.encryptionMode,
     translations: servedTranslations(replyTo.id, replyTo.translations, protege),
-    metadata: protege ? undefined : replyTo.metadata,
+    // #18242 — la citation ne nomme pas les participants d'un résumé d'appel.
+    metadata: protege ? undefined : withoutCallSummaryParticipants(replyTo.metadata),
   };
 }
 

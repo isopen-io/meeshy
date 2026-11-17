@@ -12,7 +12,8 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
-import { relationConsentOf, RITUAL_CONSENT_FEATURES } from '../../../../services/relations/relationConsent';
+import { relationConsentOf, relationStoredConsentAmong, relationStoredConsentBy, RITUAL_CONSENT_FEATURES } from '../../../../services/relations/relationConsent';
+import { table as whereTable } from '../../../helpers/messaging-circle-world';
 
 const ME = '5f0000000000000000000001';
 const OTHER = '5f0000000000000000000002';
@@ -64,8 +65,39 @@ describe('relationConsentOf — ce que JE partage à l’autre, lu à chaque foi
   });
 });
 
+describe('le consentement TRI-ÉTAT de la batterie (#14147) — la valeur stockée, brute', () => {
+  const THIRD = '5f0000000000000000000003';
+  const FOURTH = '5f0000000000000000000004';
+  const rows = () => whereTable([
+    { ownerId: ME, otherId: OTHER, batteryShared: true },
+    { ownerId: ME, otherId: THIRD, batteryShared: false },
+    { ownerId: ME, otherId: FOURTH, batteryShared: 'true' },
+    { ownerId: OTHER, otherId: ME, batteryShared: false },
+  ]);
+
+  it('rend vrai, faux, ou nul (absent ou illisible) pour chaque autre personne', async () => {
+    const stored = await relationStoredConsentAmong({ relationFeatureSetting: rows() } as never, {
+      ownerId: ME,
+      otherIds: [OTHER, THIRD, FOURTH, '5f0000000000000000000009'],
+      feature: 'device.battery',
+    });
+    expect([...stored.entries()].sort()).toEqual([
+      [FOURTH, null],
+      [OTHER, true],
+      [THIRD, false],
+      ['5f0000000000000000000009', null],
+    ].sort());
+  });
+
+  it('dans le sens du lecteur : ce que chaque propriétaire a stocké pour lui', async () => {
+    const stored = await relationStoredConsentBy({ relationFeatureSetting: rows() } as never, { ownerIds: [ME, OTHER], otherId: ME, feature: 'device.battery' });
+    expect(stored.get(OTHER)).toBe(false);
+    expect(stored.get(ME)).toBeNull();
+  });
+});
+
 const GATEWAY_SRC = join(__dirname, '../../../..');
-const CONSENT_COLUMN = /\b(?:listeningCategoryShared|listeningTitleShared|locationShared|locationHistoryShared|proximityShared)\b/;
+const CONSENT_COLUMN = /\b(?:listeningCategoryShared|listeningTitleShared|locationShared|locationHistoryShared|proximityShared|batteryShared)\b/;
 
 /** Les seuls fichiers qui nomment une colonne de consentement : le site unique, et ce qui l'écrit, le sert à son auteur ou l'exporte. */
 const ALLOWED: readonly string[] = [
@@ -75,6 +107,7 @@ const ALLOWED: readonly string[] = [
   'services/relations/ritualShareWithdrawal.ts',
   'services/relations/relationExport.ts',
   'routes/me/export-relations.ts',
+  'services/battery/batterySettings.ts',
 ];
 
 function sources(dir: string): string[] {
@@ -95,7 +128,7 @@ describe('garde — le consentement de cercle ne se lit que par relationConsentO
   });
 
   it('la garde sait rougir : elle reconnaît chaque colonne', () => {
-    ['listeningCategoryShared', 'listeningTitleShared', 'locationShared', 'locationHistoryShared', 'proximityShared'].forEach((column) =>
+    ['listeningCategoryShared', 'listeningTitleShared', 'locationShared', 'locationHistoryShared', 'proximityShared', 'batteryShared'].forEach((column) =>
       expect(CONSENT_COLUMN.test(`select: { ${column}: true }`)).toBe(true));
     expect(CONSENT_COLUMN.test('locationWithdrawnAt')).toBe(false);
   });

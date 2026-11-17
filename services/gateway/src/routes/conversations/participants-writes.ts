@@ -353,6 +353,26 @@ export function registerParticipantWriteRoutes(
     if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission);
     announceConversationLanguageChange({ kind: 'arrival', conversationId, language: addedMemberFields.language, readerUserId: userId });
 
+    const socketManager = fastify.socketIOHandler?.getManager();
+    const io = socketManager?.getIO();
+
+    // L'admission dans la ROOM d'abord — « l'une sert l'arrivant, l'autre parle
+    // de lui aux autres, et c'est la première qui décide s'il recevra quoi que
+    // ce soit du fil » (`performLinkJoin`). #18384 : « d'abord » veut dire avant
+    // le MESSAGE D'ARRIVÉE aussi, pas seulement avant les trois diffusions
+    // d'adhésion. Il part sur `conversation:<id>` ; tant que la socket de
+    // l'arrivant n'y est pas, il ne reçoit pas son propre message d'arrivée, et
+    // la file hors ligne ne le rattrape pas — il figure déjà dans
+    // `connectedUsers` et ne porte aucun marqueur d'injoignabilité.
+    //
+    // ATTENDUE, et fail-OPEN : l'adhésion est déjà persistée, donc un
+    // adaptateur en panne ne doit pas la retenir.
+    if (socketManager) {
+      await socketManager.joinUserToConversationRoom(userId, conversationId).catch(
+        (err: unknown) => logger.error('Failed to auto-join added user to conversation room', err as Error)
+      );
+    }
+
     // Annoncer l'arrivée — quatrième et dernière porte, même loi. Une entrée
     // qui ne se voit pas dans le fil est une entrée que les présents
     // découvrent au premier message de l'arrivant.
@@ -372,19 +392,6 @@ export function registerParticipantWriteRoutes(
         addedBy
       }
     );
-
-    const socketManager = fastify.socketIOHandler?.getManager();
-    const io = socketManager?.getIO();
-
-    // L'admission dans la ROOM d'abord — « l'une sert l'arrivant, l'autre parle
-    // de lui aux autres, et c'est la première qui décide s'il recevra quoi que
-    // ce soit du fil » (`performLinkJoin`). Elle vivait ENTRE les diffusions,
-    // ce qui n'était la règle d'aucune des deux portes.
-    if (socketManager) {
-      socketManager.joinUserToConversationRoom(userId, conversationId).catch(
-        (err: unknown) => logger.error('Failed to auto-join added user to conversation room', err as Error)
-      );
-    }
 
     // Les TROIS diffusions d'adhésion, par leur site UNIQUE (#17032). Cette
     // porte était la seule à les émettre toutes ; sa jumelle l'invitation n'en

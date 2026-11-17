@@ -13,10 +13,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "circles_empty_title",
-          "status": "android-only"
-        },
-        {
           "androidName": "circles_error_load",
           "status": "android-only"
         },

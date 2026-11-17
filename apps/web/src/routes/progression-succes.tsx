@@ -11,6 +11,7 @@ import { visibleRarity, type AchievementRarityMap } from '@/lib/game/rarity';
 import { useAtmosphereGate } from '@/lib/game/use-atmosphere-gate';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
+import { gameText } from '@/lib/view/game-copy';
 import { ProgressionPage } from '@/routes/progression-page';
 import { AchievementsSection, UNLOCKED_TINT } from '@/routes/progression-parts';
 
@@ -55,7 +56,7 @@ export default function ProgressionSuccesScreen() {
   const flameDays = cached?.game?.flame.days ?? null;
   return (
     <ProgressionPage
-      titre="Succès"
+      titre={gameText('game.concept.succes.name')}
       teinte={UNLOCKED_TINT}
       compte={(p) => `${p.achievements.filter((a) => a.unlocked).length} / ${p.achievements.length}`}
     >

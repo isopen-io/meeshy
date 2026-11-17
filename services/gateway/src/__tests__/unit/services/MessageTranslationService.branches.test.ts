@@ -1621,7 +1621,7 @@ describe('MessageTranslationService — branch supplement', () => {
         taskId: 'task-err-msg',
         messageId: OBJECT_ID,
         error: 'boom',
-        conversationId: 'conv-1'
+        conversationId: '507f1f77bcf86cd799439022'
       });
       await flushAsync(4);
 

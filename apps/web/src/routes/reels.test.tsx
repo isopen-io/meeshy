@@ -302,10 +302,10 @@ describe('les états du lecteur sont DESSINÉS, jamais un écran noir muet', () 
     expect(html).toContain('Chargement des réels');
   });
 
-  test('vide : le dit, et annonce ce qui viendra', () => {
+  test('vide : le dit en une ligne', () => {
     const html = renderToStaticMarkup(<ReelsEmpty language="fr" />);
     expect(html).toContain('Aucun réel pour le moment');
-    expect(html).toContain('Les réels de vos contacts apparaîtront ici.');
+    expect(html).not.toContain('apparaîtront ici');
   });
 
   test('erreur en ligne : le motif et « Réessayer » à 44 px', () => {

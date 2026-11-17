@@ -103,17 +103,15 @@ export function canShareScreen(mediaDevices: unknown): boolean {
   return typeof mediaDevices === 'object' && mediaDevices !== null && typeof (mediaDevices as { readonly getDisplayMedia?: unknown }).getDisplayMedia === 'function';
 }
 
-export type StatusPill = 'mic-muted' | 'peer-muted' | 'poor-network' | 'video-frozen' | 'video-suspended';
+export type StatusPill = 'mic-muted' | 'peer-muted' | 'poor-network';
 
 export const STATUS_PILL_KEY: Readonly<Record<StatusPill, PlainCallKey>> = {
   'mic-muted': 'call.mic.muted',
   'peer-muted': 'call.peer.muted',
   'poor-network': 'call.quality.poor',
-  'video-frozen': 'call.video.frozen',
-  'video-suspended': 'call.video.suspended',
 };
 
-/** Les pastilles de `CallView.swift` que le web sait dire — le partage d'écran n'en est plus une : c'est un bandeau sous l'en-tête (P16.4, `call-top-banners.ts`). */
+/** Les pastilles de `CallView.swift` que le web sait dire — le partage d'écran n'en est plus une : c'est un bandeau sous l'en-tête (P16.4, `call-top-banners.ts`) ; la survie de ma vidéo non plus : c'est « Vidéo réduite », une pastille de service de la même pile (E4, `call-service-pills.ts`). */
 export function statusPills(call: Pick<ActiveCall, 'micMuted' | 'screenSharing' | 'members' | 'quality' | 'isGroup'>): readonly StatusPill[] {
   const members = Object.values(call.members);
   const peerMuted = !call.isGroup && members.length === 1 && members[0]?.micMuted === true;
@@ -121,8 +119,6 @@ export function statusPills(call: Pick<ActiveCall, 'micMuted' | 'screenSharing' 
     ...(call.micMuted ? (['mic-muted'] as const) : []),
     ...(peerMuted ? (['peer-muted'] as const) : []),
     ...(call.quality?.level === 'poor' ? (['poor-network'] as const) : []),
-    ...(call.quality?.survival === 'frozen' ? (['video-frozen'] as const) : []),
-    ...(call.quality?.survival === 'suspended' ? (['video-suspended'] as const) : []),
   ];
 }
 
@@ -180,3 +176,14 @@ export const GRID_MIN_HEIGHT = 140;
 export const COMPACT_HEIGHT = 500;
 
 export const isCompactHeight = (height: number): boolean => height > 0 && height < COMPACT_HEIGHT;
+
+/** La scène audio du duo (#18488, P9b ; `CallDuoAudioFit` d'Android, `CallAudioStageLayout.form` d'iOS) : avatar de 56 en forme compacte, de 40 sous 340 px de haut. */
+export const AUDIO_AVATAR_COMPACT = 56;
+export const AUDIO_AVATAR_TIGHT = 40;
+export const TIGHT_HEIGHT = 340;
+
+/** Compacte sous le journal ouvert dans la pilule (#17529) ET quand la HAUTEUR manque : la pilule entière, (…) compris, doit tenir dans la fenêtre. */
+export const audioStageCompact = ({ journalOpen, height }: { readonly journalOpen: boolean; readonly height: number }): boolean => journalOpen || isCompactHeight(height);
+
+export const audioAvatarSize = ({ compact, height, joined }: { readonly compact: boolean; readonly height: number; readonly joined: boolean }): number =>
+  compact ? (height > 0 && height < TIGHT_HEIGHT ? AUDIO_AVATAR_TIGHT : AUDIO_AVATAR_COMPACT) : joined ? 120 : 112;

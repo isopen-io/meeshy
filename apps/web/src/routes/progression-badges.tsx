@@ -1,15 +1,12 @@
-import { Fragment } from 'react';
-
 import { engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 import type { EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 import { badgeGuideOfProgress, badgeGuidesByFamily } from '@meeshy/shared/utils/game/badge-guide';
 
-import { BadgeUpcoming } from '@/components/game/badge-ladder';
 import { PRESS } from '@/components/game-touch';
 import { medalOfAxis } from '@/lib/game/medal';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { BADGES_GUIDE_LINK, badgeGuideView } from '@/lib/view/badge-guide-view';
+import { BADGES_GUIDE_LINK } from '@/lib/view/badge-guide-view';
 import { familyName, gameText, medalLabel } from '@/lib/view/game-copy';
 import { ProgressionPage } from '@/routes/progression-page';
 import { AxisRow, BRAND, INK_2 } from '@/routes/progression-parts';
@@ -20,8 +17,8 @@ import { Link } from '@/routes/route-table';
  *
  * Le hub n'en annonce que le COMPTE ; le détail vit ici, où il a la place de
  * respirer. Les badges sont rangés par famille, dans l'ordre que la loi
- * partagée déclare (`badgeGuidesByFamily`, #9639), et chacun montre la SUITE de
- * ses paliers à venir — sa matière et son seuil. Un lien « Comprendre les
+ * partagée déclare (`badgeGuidesByFamily`, #9639) ; l'échelle des paliers ne se
+ * répète pas sous chaque médaille, elle vit une fois dans le carnet. Un lien « Comprendre les
  * badges » mène à la section badges du carnet des règles, la même adresse que
  * celle de la fiche d'un badge.
  *
@@ -34,6 +31,9 @@ export function BadgesBody({ progress }: { readonly progress: EngagementProgress
   const groups = badgeGuidesByFamily(progress.axes.map(badgeGuideOfProgress));
   return (
     <>
+      <p className="px-1 text-caption" style={{ color: INK_2 }}>
+        {gameText('game.badges.intro')}
+      </p>
       <Link
         to={BADGES_GUIDE_LINK.to}
         search={BADGES_GUIDE_LINK.search}
@@ -54,12 +54,7 @@ export function BadgesBody({ progress }: { readonly progress: EngagementProgress
               if (axis === undefined) return null;
               const label = engagementAxisLabel(language, guide.axisKey);
               return (
-                <Fragment key={guide.axisKey}>
-                  <AxisRow axis={axis} medalLabel={medalLabel(medalOfAxis(axis), label)} />
-                  <li>
-                    <BadgeUpcoming view={badgeGuideView(guide, language)} axisLabel={label} />
-                  </li>
-                </Fragment>
+                <AxisRow key={guide.axisKey} axis={axis} medalLabel={medalLabel(medalOfAxis(axis), label)} />
               );
             })}
           </ul>
@@ -72,7 +67,7 @@ export function BadgesBody({ progress }: { readonly progress: EngagementProgress
 export default function ProgressionBadgesScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   return (
-    <ProgressionPage titre="Badges" teinte={BRAND} compte={(p) => `${p.badgesEarned} / ${p.badgesTotal}`}>
+    <ProgressionPage titre={gameText('game.concept.badges.name')} teinte={BRAND} compte={(p) => `${p.badgesEarned} / ${p.badgesTotal}`}>
       {(progress) => <BadgesBody progress={progress} />}
     </ProgressionPage>
   );

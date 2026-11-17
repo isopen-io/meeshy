@@ -29,7 +29,7 @@ struct SessionContent: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 PendingLinkNotice(isVisible: pendingDeepLink?.opensAfterSignIn == true)
             }
-            .animation(.easeOut(duration: 0.25), value: pendingDeepLink)
+            .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: pendingDeepLink)
             .onAppear { onLoginAppear() }
             .sheet(item: revocationNotice) { notice in
                 SessionClosedNoticeView(notice: notice) { commands.acknowledgeRevocationNotice() }

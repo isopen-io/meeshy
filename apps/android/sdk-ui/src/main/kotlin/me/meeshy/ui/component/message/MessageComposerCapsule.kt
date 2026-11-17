@@ -43,6 +43,8 @@ import me.meeshy.sdk.model.composer.ComposerFocusBorderPolicy
 import me.meeshy.sdk.model.composer.ComposerPlaceholderFit
 import me.meeshy.sdk.model.composer.ComposerLineBounds
 import me.meeshy.sdk.model.composer.ComposerReturnKey
+import me.meeshy.ui.motion.meeshyEnter
+import me.meeshy.ui.motion.meeshyExit
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.theme.MeeshyGradients
 import me.meeshy.ui.theme.MeeshyMotion
@@ -107,8 +109,8 @@ public fun MessageComposerCapsule(
     ) {
         AnimatedVisibility(
             visible = leadingVisible,
-            enter = fadeIn() + scaleIn(initialScale = 0.6f),
-            exit = fadeOut() + scaleOut(targetScale = 0.6f),
+            enter = meeshyEnter(reduceMotion, fadeIn() + scaleIn(initialScale = MIC_FROM_SCALE)),
+            exit = meeshyExit(reduceMotion, fadeOut() + scaleOut(targetScale = MIC_FROM_SCALE)),
         ) {
             leading?.invoke()
         }
@@ -152,6 +154,9 @@ public fun MessageComposerCapsule(
         trailing?.invoke()
     }
 }
+
+/** L'echelle d'ou entre le micro (aucune sous « Reduire les animations », un fondu court). */
+private const val MIC_FROM_SCALE = 0.6f
 
 /** L'invite, rétrécie juste assez pour tenir dans la capsule (#14394, [ComposerPlaceholderFit]). */
 @Composable

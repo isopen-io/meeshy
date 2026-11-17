@@ -8,13 +8,15 @@ import MeeshyUI
 /// (ou « Annuler le lien » à Connaissance), chacun confirmé. Sans lien servi, rien : `linked` reste faux et la fiche garde ce qu'elle montrait avant.
 struct ProfileCircleSection: View {
     @StateObject private var viewModel: ProfileCircleViewModel
+    @ObservedObject private var sharing: SharedLocationSharingCenter
     let displayName: String
     @Binding var linked: Bool
     @State private var confirmsLowering = false
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(userId: String, displayName: String, linked: Binding<Bool>) {
+    init(userId: String, displayName: String, linked: Binding<Bool>, sharing: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
         _viewModel = StateObject(wrappedValue: ProfileCircleViewModel(userId: userId))
+        _sharing = ObservedObject(wrappedValue: sharing)
         self.displayName = displayName
         _linked = linked
     }
@@ -33,13 +35,15 @@ struct ProfileCircleSection: View {
                     if viewModel.offersTogether {
                         ProfileTogetherRow(userId: viewModel.userId, displayName: displayName)
                     }
-                    if viewModel.offersSharedLocation {
-                        ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName)
+                    if showsSharedLocation {
+                        ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName, center: sharing)
                     }
+                    deviceRows
                     promoteButton
                     loweringButton(from: level)
                 }
-            } else if viewModel.offersTalkie || viewModel.offersBring || viewModel.offersTogether || viewModel.offersSharedLocation {
+            } else if viewModel.offersTalkie || viewModel.offersBring || viewModel.offersTogether || showsSharedLocation
+                        || viewModel.offersBattery || viewModel.offersPhoneReachability {
                 VStack(spacing: MeeshySpacing.smPlus) {
                     if viewModel.offersTalkie {
                         ProfileTalkieRow(userId: viewModel.userId, displayName: displayName)
@@ -50,9 +54,10 @@ struct ProfileCircleSection: View {
                     if viewModel.offersTogether {
                         ProfileTogetherRow(userId: viewModel.userId, displayName: displayName)
                     }
-                    if viewModel.offersSharedLocation {
-                        ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName)
+                    if showsSharedLocation {
+                        ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName, center: sharing)
                     }
+                    deviceRows
                 }
             } else {
                 Color.clear.frame(height: 0)
@@ -67,6 +72,28 @@ struct ProfileCircleSection: View {
             FeedbackToastManager.shared.showError(new)
             viewModel.notice = nil
         }
+    }
+
+    /// L'état du téléphone de la personne et mon partage avec elle : la batterie (#14147), puis l'injoignabilité (#18737).
+    @ViewBuilder
+    private var deviceRows: some View {
+        if viewModel.offersBattery {
+            ProfileBatteryRow(
+                userId: viewModel.userId, displayName: displayName,
+                canPull: viewModel.offersBatteryPull, asksConsent: viewModel.batteryAsksConsent
+            )
+        }
+        if viewModel.offersPhoneReachability {
+            ProfilePhoneReachabilityRow(
+                userId: viewModel.userId, displayName: displayName,
+                asksConsent: viewModel.phoneReachabilityAsksConsent
+            )
+        }
+    }
+
+    /// Proposée dès Ami, la ligne reste tant qu'un partage court vers la personne : « Arrêter » ne part jamais avant lui.
+    private var showsSharedLocation: Bool {
+        sharing.showsRow(for: viewModel.userId, offered: viewModel.offersSharedLocation)
     }
 
     private func row(_ level: RelationLevel) -> some View {

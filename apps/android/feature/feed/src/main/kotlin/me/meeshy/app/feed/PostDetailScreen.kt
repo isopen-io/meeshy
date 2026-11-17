@@ -508,7 +508,12 @@ private fun PostReachLine(post: FeedPostPresentation) {
         impressionCount = post.impressionCount,
         uniqueViewCount = post.uniqueViewCount,
     )
-    if (reach.pseudo == null && reach.views == null) return
+    val figures = listOfNotNull(
+        reach.views?.let { Icons.Filled.Visibility to it },
+        reach.impressions?.let { Icons.Filled.BarChart to it },
+        reach.uniqueViews?.let { Icons.Filled.Person to it },
+    )
+    if (reach.pseudo == null && figures.isEmpty()) return
     val a11yLabel = stringResource(R.string.feed_post_reach_a11y)
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -518,20 +523,12 @@ private fun PostReachLine(post: FeedPostPresentation) {
         reach.pseudo?.let {
             Text(text = it, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
         }
-        if (reach.views != null && reach.impressions != null) {
-            if (reach.pseudo != null) {
+        figures.forEachIndexed { index, (icon, figure) ->
+            if (reach.pseudo != null || index > 0) {
                 Text(text = "·", style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
             }
-            Icon(Icons.Filled.Visibility, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
-            Text(text = reach.views, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
-            Text(text = "·", style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
-            Icon(Icons.Filled.BarChart, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
-            Text(text = reach.impressions, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
-            reach.uniqueViews?.let { people ->
-                Text(text = "·", style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
-                Icon(Icons.Filled.Person, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
-                Text(text = people, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
-            }
+            Icon(icon, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(14.dp))
+            Text(text = figure, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textSecondary)
         }
     }
 }

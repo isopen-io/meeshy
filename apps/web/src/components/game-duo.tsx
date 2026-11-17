@@ -125,7 +125,7 @@ export function GameDuo(props: GameDuoProps) {
       return (
         <>
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
-            {gameText('game.duo.locked', { level: formatCount(DUO_MIN_LEVEL), current: formatCount(levelRecord) })}
+            {gameText('game.duo.locked', { level: formatCount(DUO_MIN_LEVEL) })}
           </p>
           <GameRequirementLine concept="league" current={levelRecord} required={DUO_MIN_LEVEL} record />
         </>

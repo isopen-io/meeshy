@@ -27,7 +27,7 @@ data class PeerIndicators(
      * SCREENSHOT (no end on the wire). The capsule shows while it holds anyone, and names [CallScreenCaptureLedger.capturerId].
      */
     val screenCapture: CallScreenCaptureLedger = CallScreenCaptureLedger(),
-    /** #16665 — the captures of the call in progress, dated, for the live journal and the captions band. */
+    /** #16665 — the captures of the call in progress, dated, for the live journal and the captions band (mine included, R1.8). */
     val liveCaptures: List<CallLiveCapture> = emptyList(),
     /**
      * Retired by #13333: the peer's words are the captions band's (CallCaptionsController), read
@@ -169,15 +169,26 @@ class CallPeerIndicatorsController @Inject constructor(
         host.publish()
     }
 
-    private fun journal(host: CallSessionHost, id: String, kind: CallCaptureKind, userId: String) {
+    private fun journal(host: CallSessionHost, id: String, kind: CallCaptureKind, userId: String, isLocal: Boolean = false) {
         val capture = CallLiveCapture(
             id = id,
             kind = kind,
             userId = userId,
             atMs = System.currentTimeMillis(),
             elapsedLabel = CallDuration.clock(host.elapsedSeconds),
+            isLocal = isLocal,
         )
         indicators = indicators.copy(liveCaptures = CallLiveCaptureJournal.adding(indicators.liveCaptures, capture))
+    }
+
+    /**
+     * R1.8 (#17963, loi 13) — MY capture enters MY live journal at once, as iOS `CallAppStateObserver.report` writes it:
+     * the gateway relays the alert to the others only (`socket.to`), never back to me. It never touches the chip
+     * ([PeerIndicators.screenCapture]): who captures does not see their own chip.
+     */
+    private fun journalMine(host: CallSessionHost, self: String, kind: CallCaptureKind) {
+        journal(host, "capture:$self:${kind.wire}:${captureSequence++}", kind, self, isLocal = true)
+        host.publish()
     }
 
     private fun restartScreenshotResetWindow(host: CallSessionHost) {
@@ -242,6 +253,7 @@ class CallPeerIndicatorsController @Inject constructor(
         val self = host.selfId
         if (self.isBlank()) return
         signals.emitScreenCaptureDetected(host.callId, self, isCapturing = true, kind = CallCaptureKind.SCREENSHOT)
+        journalMine(host, self, CallCaptureKind.SCREENSHOT)
     }
 
     /**
@@ -260,6 +272,7 @@ class CallPeerIndicatorsController @Inject constructor(
         if (self.isBlank()) return
         lastReportedCapture = isCapturing
         signals.emitScreenCaptureDetected(host.callId, self, isCapturing)
+        if (isCapturing) journalMine(host, self, CallCaptureKind.RECORDING)
     }
 
     private fun stopScreenCaptureReport() {

@@ -25,6 +25,7 @@ import { useCarriedPlayback } from '@/lib/view/audio-carry';
 import { PLAYBACK_SPEEDS, formatMediaTime, seekFraction, speedLabel } from '@/lib/view/media-transport';
 import {
   karaokeSegments,
+  KARAOKE_TONE_MS,
   karaokeTone,
   segmentSeekTarget,
   type KaraokeTone,
@@ -341,7 +342,7 @@ function VoiceAttachment({
           onClick={toggle}
           /* `tap-target-34` (`app.css`) porte la zone tactile de ce bouton de
              34 px de dessin a 44x44, meme dispositif que `tap-target-22`. */
-          className="tap-target-34 grid size-[34px] shrink-0 place-items-center rounded-chip"
+          className="btn-press tap-target-34 grid size-[34px] shrink-0 place-items-center rounded-chip"
           style={{ background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, transparent))' }}
           // « Lire l'audio » (`media.audio.play`, `AudioPlayerView.swift:1278`)
           // — vocabulaire iOS REPRIS tel quel (§1.6 de la spécification #5805).
@@ -411,7 +412,7 @@ function VoiceAttachment({
         <button
           type="button"
           onClick={() => setRate(PLAYBACK_SPEEDS[(PLAYBACK_SPEEDS.indexOf(rate as 1) + 1) % PLAYBACK_SPEEDS.length] ?? 1)}
-          className="tap-target-22 shrink-0 rounded-chip px-1 text-time tabular-nums"
+          className="btn-press tap-target-22 shrink-0 rounded-chip px-1 text-time tabular-nums"
           aria-label={translate(uiLanguage, 'media.audio.speed')}
         >
           {speedLabel(rate, uiLanguage)}
@@ -426,7 +427,7 @@ function VoiceAttachment({
             if (isPlaying) toggle();
             onExpand();
           }}
-          className="tap-target-22 grid shrink-0 place-items-center rounded-chip"
+          className="btn-press tap-target-22 grid shrink-0 place-items-center rounded-chip"
           aria-label={translate(uiLanguage, 'media.viewer.open_fullscreen')}
         >
           <GlyphSvg glyph={MEDIA_GLYPHS.arrowsOutSimple} size={13} />
@@ -465,8 +466,8 @@ function VoiceAttachment({
                         const target = segmentSeekTarget(segments, i);
                         if (target !== null) seek(target);
                       }}
-                      className="cursor-pointer rounded-[4px] transition-[color,background-color,opacity] duration-150"
-                      style={KARAOKE_STYLE[tone]}
+                      className="cursor-pointer rounded-[4px] transition-[color,background-color,opacity]"
+                      style={{ ...KARAOKE_STYLE[tone], transitionDuration: `${KARAOKE_TONE_MS}ms` }}
                     >
                       {segment.text}
                     </span>{' '}
@@ -491,7 +492,7 @@ function VoiceAttachment({
 
       {isError ? (
         <div data-audio-status="error" className="flex items-center">
-          <button type="button" onClick={toggle} className="text-mini underline" style={{ minHeight: 44 }}>
+          <button type="button" onClick={toggle} className="active:opacity-80 text-mini underline" style={{ minHeight: 44 }}>
             {translate(currentInterfaceLanguage(), 'media.playback.failed')}
           </button>
         </div>

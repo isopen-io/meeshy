@@ -406,7 +406,9 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
     /// Le masque de l'aperçu ne se perce qu'aux BOUTONS de lecture que les
     /// lecteurs du SDK déclarent (`MediaPlayControlAnchorKey`), jamais au
     /// lecteur entier : citation, pied et drapeaux, forme d'onde et surface de
-    /// la vidéo restent sous le masque. Le vocal part par le ViewModel de l'hôte.
+    /// la vidéo restent sous le masque. Seule exception, voulue : le carrousel
+    /// d'un message à plusieurs visuels, qui défile au doigt (#18824). Le vocal
+    /// part par le ViewModel de l'hôte.
     func test_preview_playbackHoles_areThePlayButtonsOnly_andPlayThroughTheViewModel() throws {
         let router = try source("Features/Main/Views/Bubble/AudioBubbleRouter.swift")
         XCTAssertFalse(router.contains("PlaybackZone"), "Le lecteur entier n'est pas une zone de lecture.")
@@ -415,7 +417,9 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
 
         let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
         XCTAssertTrue(menu.contains(".overlayPreferenceValue(MediaPlayControlAnchorKey.self)"), "Le masque lit les boutons de lecture.")
-        XCTAssertTrue(menu.contains("interactive: touch.offersPlayback"), "Le contenu ne se touche que s'il porte un bouton lisible.")
+        XCTAssertTrue(menu.contains("interactive: touch.offersTouch"),
+                      "Le contenu ne se touche que s'il porte un bouton lisible ou un carrousel qui défile (#18824).")
+        XCTAssertTrue(menu.contains("playable: touch.touchZoneIds"), "Le masque se perce aux zones que la loi ouvre.")
         XCTAssertTrue(menu.contains("bubble.onPlayAudio = { playFromPreview($0) }"), "La bulle de l'aperçu lit le vocal.")
         XCTAssertTrue(menu.contains("onPlayAudio: { playFromPreview($0) }"), "La rangée plate de l'aperçu lit le vocal.")
         XCTAssertTrue(menu.contains(".onDisappear { stopPreviewPlayback() }"), "La fermeture arrête la lecture lancée.")
@@ -430,5 +434,98 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
         XCTAssertTrue(cell.contains("FocalRow(input: input, actions: rowActions)"))
         XCTAssertTrue(cell.contains("actions.onPlayAudio = onPlayAudio"))
         XCTAssertTrue(cell.contains(".allowsHitTesting(interactive)"))
+    }
+
+    // MARK: - Le menu n'agit qu'une fois pendant sa sortie (#18297)
+
+    /// La sortie dure 260 ms avant que l'overlay ne parte : un second toucher
+    /// dans ce délai rebasculait la réaction (ajoutée puis retirée) ou rappelait
+    /// Répondre, Supprimer, Transférer. Les trois entrées tombent dès que le
+    /// menu n'est plus visible, et le menu comme la bande ne prennent plus le
+    /// doigt pendant qu'ils s'effacent.
+    func test_overlayMenu_actsOnce_whileItLeaves() throws {
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        for anchor in ["private func handlePrimaryAction(", "private func reagirDepuisLaBande(", "private func dismiss()"] {
+            guard let fn = body(of: anchor, in: menu) else {
+                return XCTFail("`\(anchor)` introuvable : la garde ne mesurerait rien.")
+            }
+            let firstStatement = fn.drop(while: { $0 != "{" }).dropFirst()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            XCTAssertTrue(firstStatement.hasPrefix("guard isVisible else { return }"),
+                          "`\(anchor)` agit encore pendant la sortie : un second toucher rejoue l'action.")
+        }
+        XCTAssertFalse(menu.contains(".allowsHitTesting(true)"),
+                       "La bande d'emojis prend le doigt pendant qu'elle s'efface.")
+        XCTAssertEqual(menu.components(separatedBy: ".modifier(ShownAndTouchable(isShown: isVisible))").count - 1, 2,
+                       "Le menu d'actions et la bande d'emojis ne prennent le doigt que visibles.")
+        guard let law = body(of: "private struct ShownAndTouchable", in: menu) else {
+            return XCTFail("`ShownAndTouchable` introuvable : la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(law.contains("opacity(isShown ? 1 : 0)") && law.contains(".allowsHitTesting(isShown)"),
+                      "Une couche qui s'efface cesse de prendre le doigt en même temps.")
+    }
+
+    // MARK: - « Imager » à droite du « + » de la barre de réactions (#16162)
+
+    /// Le verdict de la tuile est CELUI de la liste : un message qui s'image par
+    /// « Plus… » s'image aussi d'un toucher sur la barre, et un message protégé,
+    /// vide ou sans sortie n'offre la tuile nulle part.
+    @MainActor func test_showsImagerTile_followsThePrimaryActionVerdict() {
+        let imageable = MessageMenuContext(isMine: false, canEdit: false, canDelete: false,
+                                           hasText: true, hasMedia: false, hasTimebasedMedia: false,
+                                           isPinned: false, isStarred: false, isEdited: false, hasEditRevisions: false)
+        XCTAssertTrue(MessageOverlayMenu.showsImagerTile(for: imageable, hasExportHandler: true))
+        XCTAssertEqual(MessageOverlayMenu.showsImagerTile(for: imageable, hasExportHandler: true),
+                       MessageActionResolver.offersImager(imageable))
+
+        let empty = MessageMenuContext(isMine: false, canEdit: false, canDelete: false,
+                                       hasText: false, hasMedia: false, hasTimebasedMedia: false,
+                                       isPinned: false, isStarred: false, isEdited: false, hasEditRevisions: false)
+        XCTAssertFalse(MessageOverlayMenu.showsImagerTile(for: empty, hasExportHandler: true),
+                       "rien à imager : pas de tuile")
+
+        var blurred = imageable
+        blurred.isBlurred = true
+        XCTAssertFalse(MessageOverlayMenu.showsImagerTile(for: blurred, hasExportHandler: true),
+                       "un message flouté ne s'image pas")
+    }
+
+    /// La tuile ne suit PAS le plafond de six de la liste : quand la liste déborde,
+    /// Imager part dans « Plus… » et c'est précisément là que la tuile doit rester.
+    @MainActor func test_showsImagerTile_whenTheListOverflows_staysOnTheBar() {
+        var crowded = MessageMenuContext(isMine: true, canEdit: true, canDelete: true,
+                                         hasText: true, hasMedia: true, hasTimebasedMedia: false,
+                                         isPinned: false, isStarred: false, isEdited: false, hasEditRevisions: false)
+        crowded.saveableAttachmentCount = 1
+        crowded.hasPaintableMedia = true
+        crowded.hasDefaultExportFormat = true
+        XCTAssertFalse(MessageActionResolver.primaryActions(crowded).contains(.exportImage),
+                       "précondition : la liste déborde et rabat Imager dans « Plus… »")
+        XCTAssertTrue(MessageOverlayMenu.showsImagerTile(for: crowded, hasExportHandler: true),
+                      "la tuile reste sur la barre quand la liste rabat Imager")
+
+        var viewOnce = crowded
+        viewOnce.isViewOnce = true
+        XCTAssertFalse(MessageOverlayMenu.showsImagerTile(for: viewOnce, hasExportHandler: true),
+                       "une vue unique ne s'image pas")
+    }
+
+    @MainActor func test_showsImagerTile_withoutExportHandler_isFalse() {
+        let imageable = MessageMenuContext(isMine: false, canEdit: false, canDelete: false,
+                                           hasText: true, hasMedia: false, hasTimebasedMedia: false,
+                                           isPinned: false, isStarred: false, isEdited: false, hasEditRevisions: false)
+        XCTAssertFalse(MessageOverlayMenu.showsImagerTile(for: imageable, hasExportHandler: false),
+                       "un contrôle existe s'il a un effet : sans rappel d'export, pas de tuile")
+    }
+
+    /// La tuile est posée sur la barre d'emojis (le composant partagé la rend après
+    /// le « + ») et son action passe par le chemin UNIQUE de la liste.
+    func test_overlayMenu_passesTheImagerTileToTheReactionBar_throughThePrimaryActionPath() throws {
+        let code = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        XCTAssertTrue(code.contains("extraTile: imagerTile"), "la barre reçoit la tuile Imager")
+        XCTAssertTrue(code.contains("symbol: FullscreenChromeSymbol.imager"), "même glyphe que partout ailleurs")
+        XCTAssertTrue(code.contains("accessibilityLabel: MessageCardExportMenu.imageLabel"), "même nom que l'action")
+        XCTAssertTrue(code.contains("action: { handlePrimaryAction(.exportImage) }"),
+                      "un seul chemin : la garde « n'agit qu'une fois », le rappel, la fermeture")
     }
 }

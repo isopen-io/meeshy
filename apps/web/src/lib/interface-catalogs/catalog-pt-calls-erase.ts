@@ -12,6 +12,7 @@ const ptCallsErase = {
   'calls.clearAll.cancel': 'Cancelar',
   'calls.erase.failed': 'Não foi possível apagar. Tente novamente.',
   'calls.search': 'Pesquisar um nome',
+  'calls.search.placeholder': 'Pesquisar',
   'calls.search.clear': 'Limpar a pesquisa',
   'calls.search.empty': 'Nenhuma chamada corresponde a «{query}»',
   'calls.participants.more': '{names} +{count}',

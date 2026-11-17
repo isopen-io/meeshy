@@ -54,18 +54,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "calls.search.empty",
-          "androidName": "call_journal_search_empty",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "calls.search.empty.hint",
-          "androidName": "call_journal_search_empty_hint",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "common.cancel",
           "androidName": "call_journal_cancel",
           "status": "adopted"

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure #18083 : libellés raccourcis ou nés de l'épure, écrits à la main (hors du générateur iOS), traduits, jamais recopiés du français. -->
+<resources>
+    <string name="call_journal_search_empty">Aucun appel ne correspond à « %1$s » dans les trois derniers mois.</string>
+    <string name="call_transcript_note">Il inclut les paroles de votre interlocuteur, telles que reçues pendant l’appel.</string>
+    <string name="call_transcript_note_question">Que contient ce journal ?</string>
+</resources>

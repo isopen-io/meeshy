@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du fil (#17697, 1/3) : sous-titres des modes de lecture, écrits à la main — les clés quittent le catalogue iOS (manifeste android-only). -->
+<resources>
+    <string name="reading_mode_focal_subtitle">The current message is highlighted in the row.</string>
+    <string name="reading_mode_script_subtitle">All messages on a flat row, at equal density.</string>
+    <string name="reading_mode_summary_subtitle">A summary first, the original messages one tap away.</string>
+    <string name="reading_mode_river_subtitle">In active groups, one lane per voice.</string>
+</resources>

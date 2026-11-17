@@ -2,6 +2,7 @@ package me.meeshy.ui.component.feedback
 
 import android.content.Context
 import me.meeshy.sdk.model.feedback.DailyGestureLimit
+import me.meeshy.sdk.model.feedback.FeedbackToastInfo
 import me.meeshy.ui.R
 
 /** Le message d'un refus de limite quotidienne, dans la langue de l'app, avec l'heure de remise à zéro au fuseau de l'appareil. */
@@ -15,3 +16,9 @@ public fun dailyGestureLimitMessage(context: Context, limit: DailyGestureLimit):
         else -> context.getString(R.string.post_daily_limit_reaction, time)
     }
 }
+
+/** La précision de la limite, derrière le (i) du toast : sa question nomme le (i), sa note y répond. */
+public fun dailyGestureLimitInfo(context: Context): FeedbackToastInfo = FeedbackToastInfo(
+    question = context.getString(R.string.post_daily_limit_note_question),
+    text = context.getString(R.string.post_daily_limit_note),
+)

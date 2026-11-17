@@ -1,0 +1,882 @@
+{
+ "nouveaux": [
+  {
+   "numero": "K40",
+   "nom": "MeeshyButton",
+   "phrase": "Toute action nommée est une capsule libellée, pleine, de verre, à contour ou en texte, partout la même",
+   "parties": [
+    "capsule (rayon plein, hauteur 56 / 50 / 44 / 36)",
+    "glyphe de tête optionnel",
+    "libellé",
+    "emplacement de fin (touche de raccourci K55, chevron, compteur)",
+    "indicateur d'occupation à la place du glyphe",
+    "forme `round` : disque plein 56 à glyphe seul (carré-arrondi et FAB étendu sur Android), ombre teintée",
+    "forme `hold` : grand disque 96 à maintenir, ondes d'émission",
+    "disposition `pair` : deux boutons qui se partagent la largeur, le principal plus large"
+   ],
+   "variantes": "Genres : primary (indigo de marque), accent (teinte passée), tinted (teinte libre, famille), glass (via K01), outline, danger (fond err 13 %, texte err, rangé en dernier sous un filet), text (sans fond, cible 44, tons normal / accent / danger, chevron de fin possible). Tailles 56 / 50 / 44 / 36, pleine largeur ou ajustée. Formes capsule, round, hold. États : repos, pressé, survol et focus-visible (web, pointeur iPad), désactivé avec raison, occupé, différé hors ligne (pastille horloge K41), hold : repos, maintenu, émission, refusé. Le glyphe du round se métamorphose d'une face à l'autre (motion.morph).",
+   "voir": [
+    "Moi-Apercu",
+    "Moi-Edition",
+    "Moi-Actions",
+    "Autre-Actions",
+    "Autre-Cercle",
+    "Autre-Inconnu",
+    "Lien-Creer",
+    "Lien-Partage",
+    "Carte-Partage",
+    "Carte-Sang",
+    "Etat-Demande",
+    "Signaler",
+    "Android-Feuilles",
+    "Web-Public",
+    "Main",
+    "Sys-Boutons"
+   ],
+   "ailleurs": "Connexion et inscription, « Rejoindre » d'une communauté, « Rappeler » des appels, confirmations de réglages, pied des feuilles du composer, Talkie d'une conversation (forme hold), bouton « Nouveau message » de la liste (forme round).",
+   "jumeaux_a_chercher": "Android `apps/android/sdk-ui/.../component/MeeshyPrimaryButton.kt` (candidat à DEVENIR le composant) ; iOS `apps/ios/Meeshy/Features/Main/Views/ThemedActionButton.swift`, `ConversationHeaderTalkieButton.swift`, grep `Capsule()` + `.buttonStyle` et `struct .*ButtonStyle` dans `apps/ios/Meeshy` et `MeeshyUI` ; Web `apps/web/src/components/admin/button.tsx`, `call-round-button.tsx`, grep `rounded-full` + `<button` dans `apps/web/src/components` ; Talkie : `apps/android/app/.../talkie/TalkieOverlay.kt`. Vérifier que K16 garde seulement son cadre et délègue ses capsules à K40."
+  },
+  {
+   "numero": "K41",
+   "nom": "MeeshyBadge",
+   "phrase": "Une information courte posée sur ou à côté d'autre chose est une seule pastille : glyphe, valeur, teinte",
+   "parties": [
+    "capsule ou disque (hauteurs 18 / 22 / 28 / 36)",
+    "tête : glyphe, point (fixe ou pulsé) ou rien",
+    "contenu : mot, valeur, compte (plafond « 99+ »), code court en mono, numéro d'ordre, heure en chasse fixe",
+    "queue de bulle optionnelle (rayon 18 / 6) pour l'ancrage à un avatar",
+    "ancre : libre, en ligne dans un texte, coin d'une vignette ou d'un avatar (détourage du fond), point d'une carte géographique"
+   ],
+   "variantes": "Surfaces : glass (K01, sur média, bannière ou carte), tonal (fond teinté 16 %), solid (aplat), outline. Tons : neutral, accent, ok, warn, err, teinte libre. Contenus : label (badge de jeu, humeur, légende, échéance, « Vérifié »), count (non-lus, quota « 2 / 3 »), code (pays), ordinal (étape), glyph seul (coche, cadenas, horloge en coin), key est à K55. Touchable ou inerte (rôle bouton seulement si touchable). États : courant (bord d'accent), périmé (désaturé), multi-ligne pleine largeur (légende sur média). Android : surface tonale à la place du verre.",
+   "voir": [
+    "Main",
+    "Autre-Vitrine",
+    "Autre-Publications",
+    "Autre-Commun",
+    "Moi-Edition",
+    "Lien-Partage",
+    "Lien-Detail",
+    "Parrainage",
+    "Carte-Personne",
+    "Carte-Sang",
+    "Carte-Proches",
+    "Etat-Bloque",
+    "Android-Liens",
+    "Android-Vitrine",
+    "Web-Lien",
+    "Hors-App"
+   ],
+   "ailleurs": "Compteur de non-lus de la liste de conversations, badge de durée d'un réel dans le fil, « Admin » d'un membre, « Chiffré » d'une conversation, type d'appel, étiquette d'épingle d'une carte partagée, rang du jeu.",
+   "jumeaux_a_chercher": "iOS `apps/ios/Meeshy/Features/Game/Wave2/GameBannerBadge.swift`, `Call/Components/CallTypeBadgeView.swift`, `Lens/Chrome/SectionScrollPill.swift`, `Composer/ComposerRailDoorBadge.swift` ; Android modèles `core/model/.../chrome/UnreadBadge.kt`, `BadgeCountPolicy.kt`, `avatar/MoodBadgeMotion.kt`, `account/ContactVerificationBadge.kt`, `game/GameBannerBadge.kt` ; Web `apps/web/src/components/app-badge.tsx`, `attachment-reaction-badge.tsx`, grep `unread` + `rounded-full` dans `components`. Ne pas doubler K14 (message éphémère lié à un geste) ni K04 (rangée de choix)."
+  },
+  {
+   "numero": "K42",
+   "nom": "MeeshyMeter",
+   "phrase": "Une mesure fixe se lit sur une jauge linéaire qui dit sa valeur, sa teinte et ce qu'il reste",
+   "parties": [
+    "piste tonale arrondie (hauteur 5 / 8 / 12)",
+    "remplissage teinté ou dégradé, qui grandit depuis le bord de début",
+    "en-tête optionnel : libellé à gauche, valeur à droite",
+    "légendes de bord optionnelles (« 46 % du quota » · « encore 27 places »)",
+    "crans optionnels (échelle segmentée de N crans)",
+    "repères sur la piste optionnels"
+   ],
+   "variantes": "Formes : continue, segmentée (crans, pour comparer deux échelles alignées), décompte (se vide), indéterminée (barre de chargement haute). Teintes : accent, sémantique (ok / warn / err), libre. États : normal, plein (teinte d'alerte), périmé (désaturé), animé à l'entrée (motion.rise), mouvement réduit = valeur posée. Rôle progressbar avec valeur dite (« 23 sur 50 »), sens inversé en RTL.",
+   "voir": [
+    "Main",
+    "Moi-Liens",
+    "Lien-Partage",
+    "Lien-Detail",
+    "Parrainage",
+    "Autre-Vitrine",
+    "Autre-Cercle",
+    "Carte-Personne",
+    "Etat-Erreur",
+    "Etat-HorsLigne",
+    "Android-Carte",
+    "Android-Feuilles",
+    "Web-Moi",
+    "iPad-Split"
+   ],
+   "ailleurs": "Progression de niveau du jeu, stockage du cache dans les réglages, force du mot de passe, avancement d'un envoi de fichier en liste, complétion du profil, quota d'un sondage.",
+   "jumeaux_a_chercher": "Android `feature/auth/.../onboarding/OnboardingProgressBar.kt`, modèle `core/model/.../PasswordStrengthMeter.kt` ; iOS `apps/ios/Meeshy/Features/Game/GameGaugesView.swift`, grep `ProgressView(value` et `GeometryReader` + `Capsule()` + `width: geo.size.width *` dans `apps/ios/Meeshy` ; Web grep `role=\"progressbar\"` et `<progress` dans `apps/web/src`. K09 reste l'anneau d'une opération en vol, K05 le curseur réglable."
+  },
+  {
+   "numero": "K43",
+   "nom": "MeeshyGroupCard",
+   "phrase": "Ce qui va ensemble tient dans une seule surface arrondie, avec ses filets en retrait, son en-tête et son pied",
+   "parties": [
+    "surface (rayon 26 / 30, bord fin)",
+    "en-tête optionnel : sur-titre + accessoire de fin",
+    "emplacement média optionnel en tête (mini-bannière K27, vignette, fond de carte)",
+    "contenu : rangées séparées par des filets en retrait, ou contenu libre",
+    "pied optionnel : note de conséquence (K46) ou actions (K40, seul ou en paire)",
+    "emblème de tête optionnel (K45, avatar)"
+   ],
+   "variantes": "Fonds : raised (relevé), ground (dans une feuille), glass (K01, sur média ou carte), accent (lavis de teinte, orbe optionnelle), danger (fond, bord et filets rouges doux), dashed (fermé ou vide), solid (aplat de teinte, carte d'action). Gabarits : group (rangées), content (libre), prompt (tête à avatar, texte, une action principale et deux secondaires : demande, invitation, proposition), preview (média, deux lignes, une ou deux actions : aperçu riche d'une entité ou d'un lien, en bulle ou en flux), action (toute la carte se touche, emblème, sur-titre, titre). États : repos, pressé (si action), mis en avant (bord d'accent), verrouillé.",
+   "voir": [
+    "Moi-Actions",
+    "Autre-Actions",
+    "Autre-Cercle",
+    "Autre-Vitrine",
+    "Autre-Liens",
+    "Autre-Inconnu",
+    "Lien-Detail",
+    "Lien-Creer",
+    "Carte-Partage",
+    "Sans-Contact",
+    "Carte-Profil",
+    "Etat-Demande",
+    "Android-Feuilles",
+    "Web-Etats",
+    "Apercu-Lien",
+    "Web-Public"
+   ],
+   "ailleurs": "Groupes de l'écran Réglages, détails d'une conversation, invitation à une communauté dans un fil, aperçu de lien déplié dans une bulle, carte de retour d'appel, fiche d'un pack dans la boutique.",
+   "jumeaux_a_chercher": "iOS `apps/ios/Meeshy/Features/Settings/Views/SettingsSectionCard.swift` (candidat à DEVENIR le composant), `SettingsBlockView.swift`, `packages/MeeshySDK/Sources/MeeshyUI/Settings/SettingsComponents.swift`, `Call/Views/CallFeedbackCard.swift` ; Android `sdk-ui/.../component/settings/SettingsCard.kt`, `feature/chat/.../LinkPreviewCard.kt` ; Web `apps/web/src/components/call-feedback-card.tsx`, `call-notice-card.tsx`, `contact-card-sheet.tsx`, grep `rounded-\\[2[0-9]px\\]` + `border`. K15 reste la feuille, K06 la ligne, K30 le billet."
+  },
+  {
+   "numero": "K44",
+   "nom": "MeeshySectionHeader",
+   "phrase": "Une section s'annonce toujours de la même façon : un titre, ce qu'elle compte, et ce qu'on peut y faire",
+   "parties": [
+    "tête optionnelle : numéro d'ordre (K41) ou emblème (K45)",
+    "titre Nunito (22) ou sur-titre en capitales (11)",
+    "compteur accolé atténué",
+    "témoin « en direct » (point pulsé) optionnel",
+    "accessoire de fin : lien texte à chevron, compteur, pastille (K41), puces (K04), bouton (K40), touche (K55), chevron de repli",
+    "filet(s) pour la forme séparateur"
+   ],
+   "variantes": "Formes : title (titre de section), overline (sur-titre de groupe de liste), divider (filet + libellé, centré entre deux filets ou en tête), step (pastille numérotée + titre, états à faire / en cours / fait), column (bandeau capsule d'une colonne large : emblème, titre, raccourci, action). Comportement : statique ou repliable (toute la ligne se touche, chevron qui tourne, corps qui se déplie en motion.collapse, `aria-expanded`). Accessoire de fin toujours ≥ 44 pt. Rôle titre.",
+   "voir": [
+    "Main",
+    "Moi-Liens",
+    "Moi-Edition",
+    "Autre-Vitrine",
+    "Autre-Commun",
+    "Autre-Inconnu",
+    "Lien-Detail",
+    "Lien-Creer",
+    "Lien-Suivi-Creer",
+    "Mes-Adresses",
+    "Carte-Proches",
+    "Carte-Sang",
+    "Sans-Contact",
+    "Android-Liens",
+    "Web-Moi",
+    "Web-Lien"
+   ],
+   "ailleurs": "Sections de la liste de conversations (épinglées, non lues), groupes des Réglages, séparateur de date d'un fil, « Membres · 42 » d'une communauté, sections du fil et de la recherche.",
+   "jumeaux_a_chercher": "Android `sdk-ui/.../component/settings/SettingsSectionHeader.kt`, `sdk-ui/.../component/CollapsibleSection.kt`, `feature/conversations/.../ConversationSectionHeader.kt`, `feature/auth/.../AuthInfoDisclosure.kt` ; iOS `apps/ios/Meeshy/Features/Main/Views/ConversationListView+SectionHeader.swift`, grep `DisclosureGroup` et `sectionHeader` ; Web `apps/web/src/components/collapsible-section.tsx` (candidat pour la forme repliable), `appearance-picker-sections.tsx`. K11 reste l'option qui s'ouvre DANS la pilule K10, K15 le titre de feuille."
+  },
+  {
+   "numero": "K45",
+   "nom": "MeeshyMedallion",
+   "phrase": "Un glyphe qui nomme une chose sans se toucher est un médaillon teinté, d'une seule recette",
+   "parties": [
+    "forme : disque, carré-arrondi, festonnée (MaterialShapes), organique qui se déforme",
+    "fond : doux (teinte à 16–30 %) ou plein (aplat ou dégradé)",
+    "contenu : glyphe, ou valeur courte en Nunito (niveau)",
+    "décor optionnel : halo, anneau pointillé, ondes concentriques (motion.pulse), trait diagonal « barré »",
+    "tailles 24 / 36 / 44 / 52 / 64 / 96"
+   ],
+   "variantes": "Tons : accent, teinte libre (famille), ok, warn, err, neutre. Fonds soft / solid. Formes disc / squircle / scallop / blob (repli disque sur iOS et web quand la forme manque). Décors : none, halo, dashed, struck, waves (1 à 3 anneaux, cadence passée). États : normal, courant (plein), gagné / verrouillé (rangée de récompenses avec compte), mouvement réduit = forme fixe. Jamais interactif : le bouton est K02 ou K40.",
+   "voir": [
+    "Moi-Liens",
+    "Moi-Actions",
+    "Main",
+    "Autre-Vitrine",
+    "Lien-Detail",
+    "Lien-Creer",
+    "Parrainage",
+    "Carte-Personne",
+    "Carte-Partage",
+    "Carte-Profil",
+    "Sans-Contact",
+    "Etat-Erreur",
+    "Etat-Introuvable",
+    "Android-Vitrine",
+    "Android-Feuilles"
+   ],
+   "ailleurs": "Tête de chaque rangée des Réglages (emplacement leading de K06), image de K38, type d'une notification, trophées et paliers du jeu, type d'un appel dans le journal, famille d'une pièce jointe.",
+   "jumeaux_a_chercher": "iOS `apps/ios/Meeshy/Features/Settings/Views/SettingsRowContent.swift` (icône en pastille), `Game/GameBadgeShelf.swift`, `Game/Choreography/BadgeStage.swift`, grep `Circle().fill(` + `.opacity(0.1` suivi d'un `Image(systemName` ; Android modèle `core/model/.../game/BadgeStageFrame.kt`, grep `MaterialShapes` et `CircleShape` + `copy(alpha` dans `sdk-ui` et `feature/settings` ; Web grep `rounded-full` + `bg-.*\\/1[0-9]` autour d'une icône dans `apps/web/src/components`."
+  },
+  {
+   "numero": "K46",
+   "nom": "MeeshyNote",
+   "phrase": "Ce que l'écran doit dire sans qu'on l'ait demandé tient en une note en ligne : un glyphe, une phrase, un ton",
+   "parties": [
+    "tête : glyphe, point coloré ou point pulsé",
+    "phrase (une valeur peut être en gras), sur plusieurs lignes",
+    "seconde ligne optionnelle (horodatage, précision)",
+    "action de fin optionnelle (K40 text ou outline)",
+    "conteneur optionnel : filet d'accent, bande arrondie, bandeau pleine largeur"
+   ],
+   "variantes": "Formes : line (ligne atténuée sous une commande ou une donnée), band (bande à filet dans le flux), banner (pleine largeur, accrochée au haut d'un conteneur, deux lignes + action), list (2 à 4 lignes à glyphe : conséquences, garanties), live (point pulsé + texte teinté, fraîcheur de la donnée, état périmé). Tons : neutral, info, ok (confirmation), warn, security. Persistante et dans le flux : jamais flottante ni éphémère (c'est K14), jamais annoncée comme alerte sauf ton warn au changement.",
+   "voir": [
+    "Moi-Edition",
+    "Mes-Adresses",
+    "Sans-Contact",
+    "Carte-Profil",
+    "Lien-Creer",
+    "Carte-Personne",
+    "Carte-Partage",
+    "Etat-Erreur",
+    "Etat-Bloque",
+    "Etat-HorsLigne",
+    "Android-Feuilles",
+    "Android-Carte",
+    "Web-Etats",
+    "Hors-App"
+   ],
+   "ailleurs": "« Messages chiffrés de bout en bout » en tête d'un fil, aide sous un réglage, conséquences avant suppression de compte, bandeau de connexion perdue, garanties sous une demande de permission.",
+   "jumeaux_a_chercher": "iOS `apps/ios/Meeshy/Features/Main/Components/ConnectionBanner.swift` (candidat pour la forme banner), `Main/Views/CommentSheetBanners.swift`, `Call/Views/CallWaitingBannerView.swift`, grep `footnote` + `Image(systemName: \"info` ; Android `feature/auth/.../AuthInfoDisclosure.kt`, grep `InfoRow|HintRow|Banner` dans `apps/android/feature` ; Web `apps/web/src/components/call-notice-card.tsx`, grep `role=\"note\"|role=\"status\"` et `offline` dans `components`."
+  },
+  {
+   "numero": "K47",
+   "nom": "MeeshyChoiceTiles",
+   "phrase": "Choisir parmi quelques options qui méritent d'être expliquées se fait sur des tuiles, une ou plusieurs à la fois",
+   "parties": [
+    "tuile arrondie (carrée, large ou compacte)",
+    "tête : médaillon (K45), grande valeur typographique + unité, ou glyphe",
+    "titre, description optionnelle",
+    "marque de sélection : bord 2 px, fond teinté, coche en pastille de coin (K41)",
+    "chevron optionnel (tuile large)",
+    "grille de 2, 3 ou 4 colonnes égales"
+   ],
+   "variantes": "Sélection : single (rôle radio) ou multiple (rôle case à cocher, compteur dit). Contenus : option (icône, titre, description), value (chiffre 40 + unité), icon (disque à glyphe libellé dessous). Surfaces tonale ou verre (K01). États : libre, choisie (coche qui saute, motion.rise), pressée, désactivée, verrouillée (bord pointillé, cadenas, ce qui l'ouvre : même décoration que K37). Formats square, wide, compact.",
+   "voir": [
+    "Lien-Creer",
+    "Lien-Suivi-Creer",
+    "Carte-Partage",
+    "Sans-Contact",
+    "Mes-Adresses",
+    "Web-Lien"
+   ],
+   "ailleurs": "Type de conversation à la création, durée des messages éphémères, type de sondage, choix d'un thème, motif d'un retour d'appel, qualité des médias dans les réglages.",
+   "jumeaux_a_chercher": "iOS grep `LazyVGrid` + `isSelected` dans `apps/ios/Meeshy/Features/Settings`, `Auth/Signup` et `Composer` ; Android grep `selectable(` + `Role.RadioButton` dans `apps/android/feature` ; Web `apps/web/src/components/appearance-picker-sections.tsx`, grep `role=\"radio\"` et `aria-checked` dans `components`. K19 reste la bande de vignettes à APERÇU peint par l'hôte, K07 les pastilles de couleur, K04 les puces."
+  },
+  {
+   "numero": "K48",
+   "nom": "MeeshyAvatarGroup",
+   "phrase": "Plusieurs personnes ensemble se montrent d'une seule façon : en pile, en duo, en rangée nommée ou en grille",
+   "parties": [
+    "cellules d'avatar (le `MeeshyAvatar` existant, passé par l'hôte)",
+    "détourage au fond entre deux cellules",
+    "cellule de débordement « +N »",
+    "libellé sous la cellule (prénom) pour la rangée",
+    "marque de sélection : double anneau + coche de coin (K41)",
+    "résumé texte et chevron optionnels (« Mina, Kwame et 10 autres »)",
+    "cellule d'action de fin optionnelle (« Chercher »)"
+   ],
+   "variantes": "Dispositions : stack (chevauchement, 2 à 5 + « +N », cible unique), duo (deux grands avatars fondus, halo qui respire au contact, nom accessible unique), rail (rangée défilante, avatar + nom dessous, présence), grid (2 × 2 à 2 × 4 en tuile). Sélection : aucune, single, multiple (compteur). États : repos, choisi, désactivé, squelette. Tailles de cellule 26 / 40 / 44 / 56 / 72. Mouvement réduit : halo fixe.",
+   "voir": [
+    "Moi-Liens",
+    "Lien-Partage",
+    "Lien-Communaute",
+    "Autre-Commun",
+    "Autre-Liens",
+    "Autre-Publications",
+    "Android-Liens",
+    "Etat-Vide",
+    "Hors-App"
+   ],
+   "ailleurs": "« Qui écrit » d'une conversation de groupe, lecteurs d'un message (accusés), participants d'un appel, destinataires d'un transfert, membres d'une communauté, vues d'une story.",
+   "jumeaux_a_chercher": "Android `feature/chat/src/test/.../TypingAvatarStackTest.kt` (remonter à sa source), `feature/stories/.../StoryRingCell.kt`, `StoryRingPresentation.kt` ; iOS `apps/ios/Meeshy/Features/Stories/Views/StoryTrayView+RingCell.swift`, grep `offset(x: -` + `MeeshyAvatar` et `ZStack` + `ForEach` + `MeeshyAvatar` ; Web `apps/web/src/components/author-avatar.tsx`, `avatar-ring.tsx`, grep `-ml-2|-space-x-` dans `components`. K39 reste la rangée d'UNE personne, K29 son voyage."
+  },
+  {
+   "numero": "K49",
+   "nom": "MeeshyMediaGrid",
+   "phrase": "Des médias en lecture seule se rangent dans une grille à colonnes, chaque tuile disant son type",
+   "parties": [
+    "grille (2 à 3 colonnes, écart 6–8, rayon 18)",
+    "tuile média (image peinte par l'hôte)",
+    "surimpressions par coin : pastille de type et de durée (K41), légende basse (K41 multi-ligne, marque K51)",
+    "tuile de texte en aplat teinté (sur-titre + phrase)",
+    "tuile fantôme (bord pointillé, glyphe du type) pour le vide",
+    "tuile squelette"
+   ],
+   "variantes": "Dispositions : regular (carrée ou haute, N colonnes), masonry (hauteurs libres, colonnes décalées), row (une ligne de 3). États de tuile : repos, pressée, survol (liseré d'accent, élévation, barre d'actions K10 + K02 sur le web), vide fantôme, chargement. Recyclage des cellules, aucune sélection, aucun « + », aucun réordonnancement (c'est K20).",
+   "voir": [
+    "Main",
+    "Moi-Apercu",
+    "Autre-Publications",
+    "Autre-Commun",
+    "Autre-Inconnu",
+    "Etat-Vide",
+    "Android-Moi",
+    "Web-Public",
+    "Web-Public-Mobile"
+   ],
+   "ailleurs": "Médias partagés d'une conversation, galerie d'une communauté, résultats de recherche de médias, archives de stories, sélecteur de réels à citer.",
+   "jumeaux_a_chercher": "Android `feature/chat/.../RecentMediaGrid.kt` (candidat à DEVENIR le composant), modèle `core/model/.../reading/focal/FocalMediaGridLayout.kt` ; iOS grep `LazyVGrid` + `GridItem(.flexible` dans `apps/ios/Meeshy/Features/Profile` et `Main/Views` (médias de conversation) ; Web `apps/web/src/components/call-grid.tsx` n'est PAS un jumeau (grille d'appel), grep `grid-cols-3` + `aspect-` dans `components` et `routes`."
+  },
+  {
+   "numero": "K50",
+   "nom": "MeeshyChart",
+   "phrase": "Une série de valeurs se lit sur un graphique sobre qui nomme son pic, ses bornes et ce qu'on y choisit",
+   "parties": [
+    "zone de tracé : barres, courbe à aire, anneau à segments, étages d'entonnoir, rangées de répartition, bande d'intensité, bulles proportionnelles",
+    "axe : bornes de dates en mono, repères de valeur optionnels",
+    "marqueurs : pic, aujourd'hui, bande de période surlignée",
+    "étiquette de valeur ancrée (info-bulle : date + valeur + mention)",
+    "légende à points (libellé + part)",
+    "cellule ou barre sélectionnée"
+   ],
+   "variantes": "Genres : bars (jours, barre plancher pour un jour vide, pic éclairé), line (aire, repères, trait qui se dessine), donut (2 à 5 segments, contenu central), funnel (étages de largeur proportionnelle, taux entre deux), breakdown (tête · libellé · valeur · barre K42, dessous ou en ligne), strip (hauteur fixe, valeur portée par l'opacité, cellule choisie), bubbles (disques chiffrés sur un fond fourni par l'hôte). États : sans donnée, chargement, survolé ou choisi, entrée animée en cascade (motion.rise), mouvement réduit = posé. Chaque valeur est dite à l'accessibilité ; résumé texte du graphique.",
+   "voir": [
+    "Lien-Detail",
+    "Lien-Communaute",
+    "Lien-Partage",
+    "Parrainage",
+    "Carte-Sang",
+    "Web-Lien",
+    "Web-Etats"
+   ],
+   "ailleurs": "Statistiques d'un compte, activité d'une communauté, vues d'une story ou d'un réel, écran Stockage, bilan d'appel (qualité réseau), progression du jeu sur 30 jours.",
+   "jumeaux_a_chercher": "Web `apps/web/src/components/admin/charts/bar-chart.tsx`, `sparkline.tsx`, `share-chart.tsx`, `chart-scale.ts`, `chart-card.tsx` (les plus complets : DEVIENNENT le composant, l'administration les consommant ensuite) ; iOS `apps/ios/Meeshy/Features/Profile/Views/StatsTimelineChart.swift`, grep `import Charts` ; Android `feature/chat/.../DashboardArcGauge.kt`, grep `Canvas` + `drawArc|drawRect` dans `apps/android/feature`. K34 garde le grand chiffre, sa mini-courbe et ses tuiles."
+  },
+  {
+   "numero": "K51",
+   "nom": "MeeshyTranslationMark",
+   "phrase": "Tout contenu traduit porte la même marque discrète, qui dit d'où il vient et rend l'original d'un geste",
+   "parties": [
+    "glyphe de traduction en accent",
+    "mention de la langue d'origine (« Traduit de l'italien »)",
+    "séparateur",
+    "bascule texte « Voir l'original » / « Voir la traduction » (cible 44)",
+    "variante d'annonce : « Il le lira en portugais »"
+   ],
+   "variantes": "Densités : icon (glyphe seul devant un aperçu), line (sous un texte, une bulle, une bio, une citation), legend (dans une légende de verre sur un média). Modes : translated, original (bascule), announce (langue du destinataire, sans bascule). États : repos, pressé, bascule en cours (fondu du texte), sans traduction = absent. Paramètres opaques : `sourceLanguageName`, `isShowingOriginal`, `onToggle` ; aucune résolution de langue dans le composant (elle reste aux résolveurs du Prisme).",
+   "voir": [
+    "Autre-Publications",
+    "Autre-Commun",
+    "Autre-Inconnu",
+    "Etat-Demande",
+    "Android-Feuilles",
+    "Web-Public",
+    "Web-Etats",
+    "Apercu-Lien"
+   ],
+   "ailleurs": "Bulles de message, commentaires, posts du fil, légendes de story, transcriptions de vocaux, bio d'un profil, description d'une communauté, aperçu de la liste de conversations.",
+   "jumeaux_a_chercher": "Web grep `TranslationToggle` (composant et son relais `onDisplayedChange`, cités par le CLAUDE.md racine : candidat à DEVENIR le composant) dans `apps/web/src/components` ; iOS grep `Voir l'original|showOriginal|isShowingOriginal|translatedFrom` dans `apps/ios/Meeshy/Features/Main/Views` et `MeeshyUI` ; Android grep `showOriginal|TranslatedFrom|translation_original` dans `apps/android/feature/chat` et `feature/feed`."
+  },
+  {
+   "numero": "K52",
+   "nom": "MeeshyReorderList",
+   "phrase": "Un ordre qui compte se règle en glissant des rangées pleines, avec leur rang et une alternative sans geste",
+   "parties": [
+    "rangée hôte (contenu libre : ligne K06, billet K30)",
+    "poignée de glisser (cible 44)",
+    "pastille de rang optionnelle (K41 ordinal)",
+    "état soulevé : penché de 2°, ombre forte, bord de marque",
+    "emplacement cible en pointillé",
+    "indice de découverte en tête de liste"
+   ],
+   "variantes": "Avec ou sans rang ; première rangée mise en avant (bord d'accent). États : repos, saisie, en vol, déposée (motion.rise + haptique), désactivée, hors ligne (ordre appliqué localement puis confirmé). Accessibilité : actions « monter » / « descendre » au lecteur d'écran, flèches au clavier, annonce du nouveau rang. Vertical seulement : l'horizontal des vignettes reste à K20.",
+   "voir": [
+    "Moi-Edition",
+    "Mes-Adresses"
+   ],
+   "ailleurs": "Ordre des conversations épinglées, ordre des diapos d'une story en liste, favoris de réactions, ordre des packs d'autocollants, priorité des langues dans les réglages.",
+   "jumeaux_a_chercher": "Android modèles `core/model/.../ConversationReorder.kt`, `conversationlist/ConversationListReorderMotion.kt` ; iOS `apps/ios/Meeshy/Features/Main/ViewModels/ConversationListReorderMotion.swift`, grep `.onMove(` et `.draggable(` + `.dropDestination(` dans `apps/ios/Meeshy` ; Web grep `dragstart|onDragStart|draggable` dans `apps/web/src/components` (hors composer). Vérifier K25 : il garde les cibles de glisser de la scène."
+  },
+  {
+   "numero": "K53",
+   "nom": "MeeshyStepper",
+   "phrase": "Une valeur qui avance par crans se règle ou se suit sur une seule échelle discrète",
+   "parties": [
+    "forme boutons : capsule tonale, bouton moins, valeur en grand, bouton plus",
+    "forme piste : arrêts sur une ligne, repère par cran (taille libre : c'est elle qui porte le sens), remplissage jusqu'au cran choisi, libellés dessous",
+    "forme jalons : disques reliés par une trace, titre et date sous chacun, le dernier en aplat"
+   ],
+   "variantes": "Genres : buttons (bornes, pas, appui long qui accélère, valeur annoncée), track (2 à 5 crans, rôle radiogroup, halo sur le choisi), milestones (lecture seule, 2 à 5 étapes, trace qui se dessine en motion.rise, état à faire / fait / courant). États : repos, pressé, borne atteinte (bouton atténué + haptique de butée), désactivé. RTL : sens inversé. Mouvement réduit : trace posée.",
+   "voir": [
+    "Lien-Creer",
+    "Carte-Partage",
+    "Autre-Commun"
+   ],
+   "ailleurs": "Nombre de participants maximum d'un appel, taille du texte dans les réglages, durée d'un message éphémère, étapes de l'inscription, jalons d'une série dans le jeu, quantité dans la boutique.",
+   "jumeaux_a_chercher": "iOS grep `Stepper(` et `minus.circle|plus.circle` dans `apps/ios/Meeshy/Features` ; Android grep `Icons.*Remove` + `Icons.*Add` dans un même fichier de `apps/android/feature`, `feature/auth/.../onboarding/OnboardingProgressBar.kt` (jalons) ; Web grep `aria-valuenow` et `type=\"number\"` dans `apps/web/src/components`. K05 reste le curseur CONTINU, K03 le choix nommé à pastille qui glisse."
+  },
+  {
+   "numero": "K54",
+   "nom": "MeeshyMapTrace",
+   "phrase": "Un chemin sur une carte est un seul tracé : il avance vers quelqu'un ou raconte d'où l'on vient",
+   "parties": [
+    "trait à la teinte passée",
+    "liseré sombre de contraste dessous",
+    "points qui défilent (itinéraire) ou dégradé d'opacité dans le temps (historique)",
+    "nœuds d'arrêt cerclés (14 px)",
+    "étiquette de milieu (K41 : distance et durée) et étiquettes d'arrêt horodatées (K41)",
+    "tête de lecture optionnelle liée à une position 0–1"
+   ],
+   "variantes": "Genres : route (pointillé qui avance de l'un vers l'autre), link (pointillé droit entre deux points avec sa distance), history (chemin épais du plus pâle au plein, halo large, nœuds, dessin progressif lié à la relecture). États : repos, relecture, périmé (désaturé), mouvement réduit = trait fixe. Le composant reçoit des points d'écran ou des coordonnées opaques ; il ne calcule aucun itinéraire et ne connaît aucun fournisseur de carte.",
+   "voir": [
+    "Carte-Personne",
+    "Carte-Sang",
+    "Android-Carte",
+    "Web-Autre",
+    "iPad-Split"
+   ],
+   "ailleurs": "Position partagée dans une conversation, trajet « j'arrive » d'un rendez-vous, carte d'une story géolocalisée, parcours d'un Bring.",
+   "jumeaux_a_chercher": "iOS `apps/ios/Meeshy/Features/Contacts/SharedLocationsMapSection.swift`, grep `MapPolyline|MKPolyline` dans `apps/ios/Meeshy` ; Android grep `Polyline(` dans `apps/android/feature` ; Web `apps/web/src/components/bubble-location*.tsx`, grep `polyline|stroke-dasharray` dans `components`. K36 reste l'épingle d'une personne."
+  },
+  {
+   "numero": "K55",
+   "nom": "MeeshyKeyHint",
+   "phrase": "Un raccourci clavier se montre partout par la même touche, seule, dans un bouton ou en légende",
+   "parties": [
+    "touche : carré-arrondi mono (26, rayon 8)",
+    "combinaison : touches accolées, glyphe de modificateur selon la plateforme (⌘ / Ctrl)",
+    "légende : suite de paires touche + libellé, groupes séparés par un filet",
+    "conteneur de légende optionnel (barre de verre K01, pied de page)"
+   ],
+   "variantes": "Contextes : free (dans le flux), inset (dans un bouton K40 plein ou de verre, sous une action K32, en fin d'une ligne K18), legend (bandeau de pied, barre apparue au maintien de ⌘ sur iPad). États : repos, enfoncée (retour bref quand le raccourci part). Absent sur un écran tactile sans clavier : le composant ne rend rien et ne réserve aucune place. Texte lu « raccourci : Commande M ».",
+   "voir": [
+    "Web-Moi",
+    "Web-Autre",
+    "Web-Lien",
+    "Web-Public",
+    "Web-Etats",
+    "iPad-Split",
+    "Hors-App"
+   ],
+   "ailleurs": "Recherche globale (« ⌘K »), composeur web (Entrée pour envoyer), menus contextuels du web, commandes d'un appel au clavier, lecteur de stories sur ordinateur.",
+   "jumeaux_a_chercher": "Web grep `<kbd` et `metaKey|ctrlKey` + `title=` dans `apps/web/src`, grep `shortcut` dans `apps/web/src/components` et `lib` ; iOS grep `.keyboardShortcut(` dans `apps/ios/Meeshy` (table des raccourcis à relier) ; Android : aucun jumeau attendu — à créer ou à ne pas rendre."
+  }
+ ],
+ "evolutions": [
+  {
+   "composant": "K02 MeeshyGlassButton",
+   "ajout": "Forme Android carré-arrondi (rayon 14) et surface tonale sans verre ; taille petite (32) pour une pastille d'action de coin (appareil photo sur un avatar modifiable) ; état actif teinté (calque de carte) ; groupe vertical `stack` de 2 à 4 boutons, dont deux soudés dans une même capsule avec filet (zoom + / −), boussole qui tourne avec le cap ; état survol au pointeur (soulèvement, halo). Le libellé reste interdit : la capsule de verre libellée est K40 `glass`.",
+   "planches": [
+    "Android-Vitrine",
+    "Android-Carte",
+    "Carte-Personne",
+    "Web-Autre",
+    "Moi-Edition",
+    "iPad-Split"
+   ]
+  },
+  {
+   "composant": "K03 MeeshySegmented",
+   "ajout": "Glyphe de tête par option avec variante pleine pour la courante, largeur propre à chaque segment ; jusqu'à six crans avec glyphe empilé au-dessus du libellé ; repli Android en icône seule des inactives et marqueur à forme métamorphosée ; orientation verticale à deux niveaux (titre, sous-titre, accessoire de fin) ; variante `navigation` sans piste (sémantique lien, `aria-current`) ; variante `indicator` en lecture seule (points, courant étiré ou tiret libellé, valeur « 1 sur 4 » dite) pour un carrousel ou un objet qui se retourne.",
+   "planches": [
+    "Main",
+    "Moi-Apercu",
+    "Android-Vitrine",
+    "Web-Autre",
+    "Carte-Profil",
+    "Autre-Publications"
+   ]
+  },
+  {
+   "composant": "K04 MeeshyChipRow",
+   "ajout": "Genre `info` en lecture seule (rôle liste, aucune sélection), rendu par des K41 qui se replient sur plusieurs lignes ; emplacement `leading` par puce (glyphe, point de teinte de famille, échantillon de légende) et emplacement compteur atténué ; surface de verre via K01 pour une rangée posée sur une carte ou un média ; puce `menu` AUTONOME (glyphe, valeur courante, chevron, états ouvert / fermé, version verre) qui ouvre K18 ; puce-lien sortant de verre ; pose en fin d'une ligne K06.",
+   "planches": [
+    "Main",
+    "Autre-Vitrine",
+    "Mes-Adresses",
+    "Carte-Profil",
+    "Carte-Proches",
+    "Lien-Partage",
+    "Android-Moi",
+    "Web-Moi",
+    "Web-Etats"
+   ]
+  },
+  {
+   "composant": "K05 MeeshyLabeledSlider",
+   "ajout": "Rien pour la valeur fixe (c'est K42). Sa piste `MeeshySliderTrack` accepte des repères posés par l'hôte, pour servir la barre de transport de K35.",
+   "planches": [
+    "Carte-Sang",
+    "Web-Etats"
+   ]
+  },
+  {
+   "composant": "K06 MeeshyToggleRow",
+   "ajout": "Interrupteur exposé seul (`MeeshySwitch`, avec mot d'état optionnel « Actif » teinté) ; accessoires de fin nommés : `radio` (aussi en tête), double chevron « sélecteur », valeur sur deux lignes, bouton K40, horodatage, stepper K53 ; emplacement `below` (action ou jauge sous la ligne, hauteur libre) ; tête `badge` = K45 ; présentation `card` (une ligne = une carte arrondie, tonale ou de verre, haute 56 / 68 / 76, teinte de sélection sémantique, état déplié avec panneau accolé) ; ligne `static` inerte multi-ligne (journal, conséquence, clé · valeur, mise en avant du dernier) ; ligne centrée sans fond ; `swipeActions` (1 à 3 tuiles glyphe + mot révélées au balayage, la destructive en dernier, indice de découverte, équivalents clavier et lecteur d'écran) ; état « en file » (tête horloge ambre, annulation en fin).",
+   "planches": [
+    "Lien-Detail",
+    "Lien-Creer",
+    "Lien-Partage",
+    "Signaler",
+    "Carte-Sang",
+    "Carte-Personne",
+    "Autre-Inconnu",
+    "Etat-HorsLigne",
+    "Etat-Bloque",
+    "Android-Moi",
+    "Web-Lien",
+    "iPad-Split"
+   ]
+  },
+  {
+   "composant": "K07 MeeshyColorDots",
+   "ajout": "Pastille d'entrée « autre couleur » (arc-en-ciel + pipette) qui délègue au sélecteur de couleur du système ; variante `swatch` où l'échantillon est une vignette d'aperçu peinte par l'hôte (bannière + avatar).",
+   "planches": [
+    "Moi-Edition",
+    "Apercu-Lien"
+   ]
+  },
+  {
+   "composant": "K08 MeeshyField",
+   "ajout": "État lecture seule / verrouillé (ligne d'aide, glyphe de fin, bord pointillé pour un résultat calculé, valeur barrée si invalide) ; emplacement de fin (pastille K41, bouton K40, copier, QR, touche K55) ; préfixe fixe atténué dans la boîte, police mono, validation asynchrone (vérification · disponible · pris · invalide) ; disposition « libellé en ligne » à largeur de tête fixe ; variante sans boîte (titre éditable en place, crayon d'indice) ; variante recherche en capsule avec loupe ; l'adresse copiable hors billet est ce champ en lecture seule avec retour « copié ».",
+   "planches": [
+    "Moi-Edition",
+    "Lien-Creer",
+    "Lien-Suivi-Creer",
+    "Mes-Adresses",
+    "Etat-Bloque",
+    "Web-Public",
+    "Web-Lien",
+    "Apercu-Lien"
+   ]
+  },
+  {
+   "composant": "K09 MeeshyProgressRing",
+   "ajout": "Mode `countdown` : diamètre 34, arc qui se vide, teinte opaque passée, glyphe au centre, valeur dite « reste 42 min », ne se retire pas à 100 % ; cible Android à livrer. L'anneau à plusieurs segments n'y entre pas (K50 `donut`).",
+   "planches": [
+    "Carte-Proches"
+   ]
+  },
+  {
+   "composant": "K10 MeeshyGlassPill",
+   "ajout": "Emplacement `primary` qui accepte K40 `round` (disque plein 56, FAB sur Android) ; variante `footer` : pied collant sans verre, fondu vers le fond, un K40 pleine largeur ou une paire primaire + secondaire à libellé qui bascule ; ancrage HAUT (barre flottante retour · titre · accessoire, renvoyée à K28 `bar`).",
+   "planches": [
+    "Main",
+    "Lien-Creer",
+    "Parrainage",
+    "Web-Public-Mobile",
+    "Android-Vitrine",
+    "Android-Carte"
+   ]
+  },
+  {
+   "composant": "K12 MeeshyEdgeRails",
+   "ajout": "Aucun ajout : la pile de commandes de carte est un groupe de K02 (`stack`), pas un rail du composer.",
+   "planches": [
+    "Carte-Personne",
+    "Android-Carte"
+   ]
+  },
+  {
+   "composant": "K13 MeeshySplitActionButton",
+   "ajout": "Aucun : le bouton plein à un segment et le disque contextuel sortent vers K40. K13 reste le bouton SCINDÉ ; sa fiche renvoie à K40 pour la forme simple.",
+   "planches": [
+    "Main",
+    "Autre-Vitrine"
+   ]
+  },
+  {
+   "composant": "K14 MeeshyStatusCapsule",
+   "ajout": "Emplacement `leading` libre et animé (égaliseur, deux points qui se rejoignent) ; durée `persistent` sans action pour une activité en direct ; teinte de fond et de bord par nature, dont `success` ; variante à deux parties autour d'un glyphe central ; rendu Android snackbar (rectangle arrondi inversé, deux lignes, action texte). Les étiquettes permanentes sur média ou sur carte ne sont PAS des K14 : K41. Le bandeau en flux est K46.",
+   "planches": [
+    "Autre-Vitrine",
+    "Carte-Sang",
+    "Android-Feuilles",
+    "Android-Vitrine",
+    "Hors-App"
+   ]
+  },
+  {
+   "composant": "K15 MeeshyAnchoredSheet",
+   "ajout": "Surface `glass` (K01) pour une feuille posée sur une carte géographique ; forme `modal` haute avec voile et flou de l'hôte ; forme `confirm` (tête médaillon + titre + valeur mono, pied à deux actions K40, rôle dialogue d'alerte) ; pied collant d'actions ; présentations écran large : tiroir latéral et panneau flottant ancré dans un coin (sans poignée, en-tête avec fermeture, défilement interne).",
+   "planches": [
+    "Carte-Personne",
+    "Carte-Proches",
+    "Lien-Creer",
+    "Autre-Liens",
+    "Prototype",
+    "Web-Lien",
+    "Web-Autre",
+    "Web-Etats",
+    "iPad-Split"
+   ]
+  },
+  {
+   "composant": "K16 MeeshyModeChrome",
+   "ajout": "Ses capsules (Annuler, Valider) deviennent des K40 ; aucune variante nouvelle. La barre d'un écran poussé n'y entre pas (K28 `bar`).",
+   "planches": [
+    "Moi-Edition"
+   ]
+  },
+  {
+   "composant": "K18 MeeshyObjectMenu",
+   "ajout": "Rôle « liste de choix » : sous-titre par ligne, état courant coché ; séparateur de groupe ; ancrage à tout déclencheur (puce `menu` de K04, bouton K40) ; accessoire de fin par ligne (touche K55, poignée).",
+   "planches": [
+    "Carte-Profil",
+    "Android-Actions",
+    "Web-Moi",
+    "Hors-App"
+   ]
+  },
+  {
+   "composant": "K19 MeeshyTileStrip",
+   "ajout": "Légende sur deux lignes (titre + sous-titre ou pack) ; vignette de navigation sans cercle de sélection ; choix multiple avec coche de coin sur le rail de vignettes. Les tuiles d'OPTION (icône, titre, description, valeur) sortent vers K47.",
+   "planches": [
+    "Moi-Edition",
+    "Autre-Commun",
+    "Lien-Suivi-Creer"
+   ]
+  },
+  {
+   "composant": "K20 MeeshyThumbnailRow",
+   "ajout": "Vignette de TEXTE (extrait + date) avec sélection multiple, coche de coin et compteur « 2 joints » ; mode lecture seule sans « + » ni réordonnancement. Les grilles et les rails de médias en lecture vont à K49, les vignettes rondes à anneau à K48 `rail`.",
+   "planches": [
+    "Signaler",
+    "Android-Moi"
+   ]
+  },
+  {
+   "composant": "K23 MeeshySelectionFeedback",
+   "ajout": "État survol au pointeur pour les commandes (soulèvement 1,08, halo, aimantation iPadOS), donné comme recette que K02, K32 et K40 appliquent.",
+   "planches": [
+    "iPad-Split"
+   ]
+  },
+  {
+   "composant": "K25 MeeshyDragTargets",
+   "ajout": "Cible portée par une commande (K32, K40) : contour pointillé décalé, teinte, échelle 1,06, légende ; source « fichier venu de l'extérieur » (bureau, autre app) ; aperçu flottant de l'objet transporté avec pastille d'intention (+ ajouter / interdit).",
+   "planches": [
+    "Web-Autre",
+    "iPad-Split"
+   ]
+  },
+  {
+   "composant": "K26 MeeshyMotion",
+   "ajout": "Recettes nommées : `motion.reveal` (squelette → contenu par zone, fondu croisé sans saut de mise en page), `motion.celebrate` (particules, rebond, repli fixe), `motion.shimmer` (reflet du squelette, cascade), cadence et nombre d'anneaux de `motion.pulse`, la forme de `motion.morph` (goutte de fusion, contour organique).",
+   "planches": [
+    "Etat-Chargement",
+    "Etat-Demande",
+    "Sans-Contact",
+    "Sys-Mouvement"
+   ]
+  },
+  {
+   "composant": "K27 MeeshyLivingBanner",
+   "ajout": "Mode `ambient` : fond sans cadre, teinte passée libre, jusqu'au plein écran ; mode `veil` (transparent vers le bas, posé sur un autre fond) ; mode `fill` : remplissage d'une K43 `accent` (une orbe) ; rendu `static` figé et exportable (image partagée, miniature 68 px) ; tons neutre (gris) et éteint (chargement) ; halos en parallaxe sur écran large.",
+   "planches": [
+    "Lien-Detail",
+    "Carte-Profil",
+    "Carte-Personne",
+    "Autre-Vitrine",
+    "Etat-Bloque",
+    "Web-Public",
+    "Apercu-Lien"
+   ]
+  },
+  {
+   "composant": "K28 MeeshyCollapsingHero",
+   "ajout": "Variante `bar` autonome, sans héros : début (K02) · titre + sous-titre ou grand titre · fin (K02, K40, avatar), zone sûre, en verre ou nue ; variante `capsule` ajustée au contenu (mini-avatar ou glyphe teinté + titre, touchable) ; emplacement `identity` du héros en trois gabarits (aligné au début, centré, compact).",
+   "planches": [
+    "Moi-Apercu",
+    "Lien-Detail",
+    "Autre-Actions",
+    "Carte-Proches",
+    "Carte-Sang",
+    "Android-Liens",
+    "Android-Carte",
+    "Etat-Bloque"
+   ]
+  },
+  {
+   "composant": "K29 MeeshyAvatarMorph",
+   "ajout": "Storyboard de l'état intermédiaire (empreinte de départ en pointillé) dans la fiche seulement, rien de livré ; métamorphose de contour liée à un état sur Android, repli cercle ailleurs.",
+   "planches": [
+    "Carte-Personne",
+    "Hors-App"
+   ]
+  },
+  {
+   "composant": "K30 MeeshyTicket",
+   "ajout": "Variantes : `compact` (talon de trois valeurs K34, état brouillon mis à jour à la saisie), `row` (une ligne, encoche à mi-hauteur, accessoires de fin), `mini` vertical, `hero` (emplacement média à droite) ; emplacements `leading` (poignée K52), `trailing` (K06 switch), titre éditable (K08 sans boîte), `status` (K41) ; états terminaux : expiré (tampon, inclinaison), désactivé, introuvable (adresse barrée), complet ; états pointeur : survol, focus-within, sélectionné en liste maître-détail, talon d'actions révélé ; silhouette squelette et silhouette fantôme (« créer » en pointillé) ; indicateur de faces (K03 `indicator`).",
+   "planches": [
+    "Lien-Creer",
+    "Lien-Suivi-Creer",
+    "Mes-Adresses",
+    "Etat-Erreur",
+    "Etat-Introuvable",
+    "Etat-Chargement",
+    "Etat-Vide",
+    "Web-Moi",
+    "Web-Lien"
+   ]
+  },
+  {
+   "composant": "K31 MeeshyCodeCard",
+   "ajout": "La plaque du code extraite en emplacement réutilisable (`MeeshyCodePlate` : modules arrondis, yeux teintés, médaillon central, tailles 56 à 220, miniature sans yeux) posée à plat hors de la carte ; variante web à plat avec ligne de balayage et action « image » ; face `identity` sans code (verso : avatar, nom, bio) ; cadre de visée du scanner (coins d'accent, repos / cherche / trouvé).",
+   "planches": [
+    "Moi-Liens",
+    "Autre-Liens",
+    "Parrainage",
+    "Carte-Profil",
+    "Sans-Contact",
+    "Android-Liens",
+    "Web-Public",
+    "Hors-App"
+   ]
+  },
+  {
+   "composant": "K32 MeeshyLabeledAction",
+   "ajout": "Emplacement `control` dans une cellule (interrupteur K06 avec légende d'état) ; sous-légende d'état et pastille sous le libellé (quota, raccourci K55) ; états : désactivé avec raison, en file (pastille horloge de coin), actif plein avec halo, mise en avant plein marque, cible de dépôt (K25), focus-visible ; formes : Android carré-arrondi tonal, libellé dans la tuile, tuile horizontale (glyphe à gauche, titre, sous-ligne), compacte 44 tonale ; libellé sur 2 à 3 lignes ; silhouette squelette ; en-tête de grille (sur-titre + état) fourni par K43.",
+   "planches": [
+    "Lien-Detail",
+    "Autre-Actions",
+    "Etat-HorsLigne",
+    "Android-Actions",
+    "Android-Liens",
+    "Web-Autre",
+    "Web-Moi",
+    "Carte-Profil",
+    "Hors-App"
+   ]
+  },
+  {
+   "composant": "K33 MeeshyCircleScale",
+   "ajout": "Pilule en deux tailles (34, 26), en contour, en verre, avec chevron ; glyphe seul accolé à un nom ; sélecteur à glyphes (via K03 six crans ou K04 `leading`) ; disposition `ladder` verticale à nœuds reliés avec marqueur du niveau courant ; anneaux : légende à rayons, deux avatars posés, anneau en tirets, souffle ; `compare` : deux échelles à crans alignées (K42 segmentée), colonne commune surlignée ; figure `link` entre deux personnes (trait plein ou pointillé).",
+   "planches": [
+    "Moi-Apercu",
+    "Autre-Cercle",
+    "Mes-Adresses",
+    "Carte-Personne",
+    "Carte-Proches",
+    "Etat-Vide",
+    "Android-Vitrine"
+   ]
+  },
+  {
+   "composant": "K34 MeeshyFigures",
+   "ajout": "Bande de 2 à 4 chiffres sans graphique (filets, un chiffre mis en avant) ; tuile touchable (glyphe, chiffre, libellé, teinte) ; tuile d'état à valeur TEXTE (pied : jauge K42 ou phrase, fraîcheur, état périmé en pointillé, action de rafraîchissement, témoin de direct) ; forme « valeur / plafond » avec K42 ; minuteur à chiffres de largeur fixe ; état fantôme. Les graphiques détaillés (axes, pic, anneau, entonnoir, classement, bande d'intensité, bulles) sortent vers K50.",
+   "planches": [
+    "Moi-Actions",
+    "Autre-Vitrine",
+    "Lien-Partage",
+    "Etat-HorsLigne",
+    "Etat-Erreur",
+    "Etat-Vide",
+    "Android-Vitrine",
+    "Web-Autre",
+    "Web-Etats",
+    "Hors-App"
+   ]
+  },
+  {
+   "composant": "K35 MeeshyWavePlayer",
+   "ajout": "Variante `indicator` (égaliseur ou mini-onde seule, sans lecture ni durée) ; légende sous l'onde ; variante `transport` : lecture / pause, piste K05 avec repères, pouce, heure courante, conteneur de verre, pour relire autre chose qu'un son.",
+   "planches": [
+    "Prototype",
+    "Autre-Vitrine",
+    "Web-Autre",
+    "iPad-Split",
+    "Carte-Sang",
+    "Web-Etats"
+   ]
+  },
+  {
+   "composant": "K36 MeeshyMapPin",
+   "ajout": "Emplacements d'étiquette (K41) : bulle au-dessus, légende dessous, pilule de contexte ; variantes `self` (bord blanc, halo, sans onde), `ghost` (pointillé, masqué), `stale` (désaturé, disque pointillé, sans onde), `aggregate` laissé à K50 ; vignette d'aperçu de carte non interactive (fond recadré, voile de lisibilité, légende, cible unique) pour une tuile ou une notification.",
+   "planches": [
+    "Prototype",
+    "Autre-Vitrine",
+    "Carte-Proches",
+    "Carte-Personne",
+    "Etat-HorsLigne",
+    "Etat-Vide",
+    "Android-Vitrine",
+    "Web-Autre"
+   ]
+  },
+  {
+   "composant": "K37 MeeshyLockedRow",
+   "ajout": "La décoration `locked` devient applicable à toute cellule (tuile K47, carte K43) ; état OUVERT pendant du fermé (tuile pleine, glyphe en accent) pour qu'une même liste passe de l'un à l'autre ; groupe de lignes verrouillées dans un cadre pointillé.",
+   "planches": [
+    "Autre-Cercle",
+    "Carte-Partage",
+    "Sans-Contact",
+    "Autre-Inconnu"
+   ]
+  },
+  {
+   "composant": "K38 MeeshyStateBlock",
+   "ajout": "L'atome squelette exposé (formes ligne, pilule, disque, carte ; reflet, cascade, mouvement réduit ; règle « seulement si le cache est vide »), extrait de `MeeshyUI/Primitives/SkeletonView.swift` ; gabarits fantômes par forme (billet, rangée, tuile, épingle) ; image = K45 avec ses tons et ses décors ; variante `success` (lignes de conséquence cochées) ; variante « erreur sur contenu estompé » ; taille compacte.",
+   "planches": [
+    "Etat-Chargement",
+    "Etat-Vide",
+    "Etat-Erreur",
+    "Signaler",
+    "Android-Feuilles",
+    "Web-Etats"
+   ]
+  },
+  {
+   "composant": "K39 MeeshyPersonRow",
+   "ajout": "Tailles `header` (titre 22, sans filet, non pressable) et `inline` (avatar 26, une ligne) ; second accessoire de fin et accessoires nommés : valeur sur deux lignes, anneau K09, bouton K40, paire accepter / refuser (K40 round), pastille d'état K41 ; états : en attente (fond teinté, ligne d'état), mis en avant, atténué, masqué (avatar remplacé par un cercle pointillé) ; variante `thread` (aperçu traduit avec K51, horodatage, compteur K41) ; ligne de note attachée (K46) ; `titleAccessory` (glyphe de niveau).",
+   "planches": [
+    "Moi-Actions",
+    "Lien-Communaute",
+    "Autre-Commun",
+    "Autre-Inconnu",
+    "Carte-Proches",
+    "Carte-Partage",
+    "Carte-Personne",
+    "Android-Feuilles"
+   ]
+  }
+ ],
+ "hors_kit": [
+  {
+   "quoi": "Avatar à initiales, anneau de story, point et libellé de présence, avatar modifiable, pastille de coin sur avatar",
+   "pourquoi": "`MeeshyAvatar` existe déjà HORS kit, sur les trois plateformes (`packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyAvatar.swift`, `apps/android/sdk-ui/.../component/MeeshyAvatar.kt` + `AvatarPresenceDot.kt` + `avatar/AvatarStoryRing.kt`, `apps/web/src/components/avatar.tsx` + `avatar-ring.tsx`), avec sa table de couleurs de présence centrale. Le kit le CONSOMME (K29, K36, K39, K48) et ne le redessine pas. Ce qui lui manque (emplacement de pastille de coin, état modifiable en pointillé, variante neutralisée « bloqué », forme carré-arrondi) se demande par une issue sur cette primitive, pas par une fiche K."
+  },
+  {
+   "quoi": "Notification riche d'écran verrouillé, notification en cours Android, notification web de retour, notification système « Léo partage sa position »",
+   "pourquoi": "Surfaces dessinées par le système (UNNotification, NotificationCompat, Notification API) : on y fournit des champs, pas des vues. À documenter comme gabarits de charge, hors kit."
+  },
+  {
+   "quoi": "Activité en direct compacte et étendue, capsule de l'île, widgets « Mes proches » et « Mon lien », cadran de montre, tuile de réglages rapides, cadre de redimensionnement de widget",
+   "pourquoi": "ActivityKit, WidgetKit, watchOS et Quick Settings imposent leur fond, leurs tailles et leur rendu hors du processus de l'app : aucun composant du kit (verre K01, mouvement K26) n'y tourne. Cibles d'extension à part, avec leurs propres vues."
+  },
+  {
+   "quoi": "Feuille de partage système, menu de raccourcis de l'icône (appui long, clic droit PWA), bulle de conversation flottante Android, dock d'applications, indice du bouton Action, carte de raccourci",
+   "pourquoi": "Chrome du système d'exploitation ou décor de planche : l'app déclare des intentions et des raccourcis, elle ne dessine pas ces surfaces."
+  },
+  {
+   "quoi": "Boîte de dialogue de confirmation Material",
+   "pourquoi": "Laissée au système (`AlertDialog`, `confirmationDialog`, `<dialog>`). Quand la confirmation mérite du contenu, c'est K15 `confirm`."
+  },
+  {
+   "quoi": "Image d'aperçu de lien 1200 × 630 et cartes de lien dans les messageries tierces",
+   "pourquoi": "Rendu serveur figé (Open Graph) puis affiché par d'autres apps : ce n'est pas un composant d'interface. Sa composition réemploie K27 `static` comme référence visuelle seulement."
+  },
+  {
+   "quoi": "Bulle de message (traduite, en attente d'envoi), carte de publication, barre de réactions",
+   "pourquoi": "Composants de produit déjà en place côté app (`apps/web/src/components/bubble.tsx`, `apps/android/feature/feed/.../FeedPostCard.kt` + `FeedPostCardActions.kt`, bulles iOS de `Features/Main/Views`) avec leur orchestration (états d'envoi, Prisme, réactions). Le kit leur fournit des atomes (K51, K41, K43 `preview`) sans les absorber."
+  },
+  {
+   "quoi": "Barre de navigation web, fil d'Ariane, tableau des derniers clics, poignée de redimensionnement des colonnes",
+   "pourquoi": "Coque et mise en page propres au web large ou à l'iPad scindé : une seule plateforme, un seul écran. Le tableau de données a ses pièces dans l'administration web (`components/admin/`). L'en-tête de colonne, lui, est servi par K44 `column`."
+  },
+  {
+   "quoi": "Illustration de rapprochement, goutte de fusion, scène NameDrop, étiquette NFC, célébration à confettis",
+   "pourquoi": "Illustrations animées d'UN écran : orchestration côté app. Le kit n'en retient que les jetons de mouvement (K26 `motion.morph`, `motion.pulse`, `motion.celebrate`) et l'emblème à ondes (K45 `waves`)."
+  },
+  {
+   "quoi": "Aperçu d'écran en miniature (« ce que voit l'autre »), aperçu de vitrine en squelette dans une silhouette de téléphone, révélation cache puis réseau comme séquence",
+   "pourquoi": "Orchestration propre à l'écran « Voir comme » et au chargement de la fiche : l'app compose K38 et K26 `motion.reveal`. Aucun composant nouveau."
+  },
+  {
+   "quoi": "Étiquette « Nouveau », pastille d'étape et séparateur titré des planches, fantôme d'origine et flèche du morphing",
+   "pourquoi": "Annotations du canevas, pas des éléments livrés. Si le produit veut un jour annoncer une nouveauté, c'est un K41 `solid` ton warn, sans fiche à part."
+  },
+  {
+   "quoi": "Carte de jeu (niveau, rang, étincelles, trophées), carte de récompense et palier, carte « Ma Légende », carte de file d'attente hors ligne, carte Talkie, carte d'activité « en direct », bloc de relevé à la demande, panneau de liste sur carte",
+   "pourquoi": "Assemblages d'un écran, faits d'atomes du kit (K43 + K45 + K42 + K34 + K40 + K35 + K46). Les nommer dans le kit y ferait entrer le domaine ; ils restent des compositions côté app."
+  },
+  {
+   "quoi": "Carte de visiteurs, conteneur de carte géographique et fond de carte",
+   "pourquoi": "Le fond de carte vient du fournisseur (MapKit, Google Maps, MapLibre) et de l'hôte. Le kit ne pose que ce qui s'y superpose : K36, K54, K41, K02 `stack`, K50 `bubbles`."
+  }
+ ]
+}

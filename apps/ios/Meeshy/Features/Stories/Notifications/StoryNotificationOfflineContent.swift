@@ -43,9 +43,7 @@ public struct StoryNotificationOfflineContent: View {
                     Text(cause.title)
                         .font(.title3.bold())
                         .foregroundStyle(.white)
-                    Text(cause.message)
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(MeeshyOpacity.heavy))
+                    ContentFetchFailureMessage(message: cause.message, tint: .white.opacity(MeeshyOpacity.heavy))
                 }
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxxl)

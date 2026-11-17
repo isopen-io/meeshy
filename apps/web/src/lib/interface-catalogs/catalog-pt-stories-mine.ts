@@ -4,7 +4,6 @@ const ptStoriesMine = {
   'storiesMine.title': 'Minhas stories',
   'storiesMine.manage': 'Gerenciar minhas stories',
   'storiesMine.empty.title': 'Nenhuma story enviada',
-  'storiesMine.empty.subtitle': 'Suas stories publicadas aparecerão aqui enquanto estiverem ativas.',
   'storiesMine.action.open': 'Abrir',
   'storiesMine.action.edit': 'Editar',
   'storiesMine.action.delete': 'Excluir',

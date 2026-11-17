@@ -399,10 +399,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "nearby_permission_title",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "feed.nearby.empty.retry",
           "androidName": "nearby_retry",
@@ -563,10 +559,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "status_composer_placeholder",
-          "status": "android-only"
-        },
-        {
           "androidName": "status_composer_emoji_too_long",
           "status": "android-only"
         },
@@ -618,7 +610,7 @@
         },
         {
           "catalog": "app",
-          "iosKey": "feed.empty.title",
+          "iosKey": "profile.posts.empty",
           "androidName": "user_posts_empty",
           "status": "adopted"
         },
@@ -689,16 +681,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "feed.nearby.empty.denied.detail",
           "androidName": "nearby_denied_detail",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.nearby.empty.denied.title",
-          "androidName": "nearby_denied_title",
-          "status": "adopted"
+          "status": "android-only"
         }
       ]
     }

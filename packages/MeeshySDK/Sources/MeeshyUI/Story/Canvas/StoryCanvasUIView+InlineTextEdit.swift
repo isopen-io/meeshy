@@ -57,9 +57,9 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// fermeture, le texte retrouve sa position réelle et le canvas sa
     /// luminosité.
     public func beginInlineTextEdit(textId: String) {
-        guard inlineEditingTextId != textId,
-              let textLayer = textLayer(forId: textId),
-              let textObject = textLayer.textObject else { return }
+        guard inlineEditingTextId != textId else { return }
+        guard let textLayer = textLayer(forId: textId), let textObject = textLayer.textObject else { return pendingInlineEditTextId = textId }
+        pendingInlineEditTextId = nil
 
         // Bascule directe d'un texte A vers un texte B (tap sur un autre texte
         // pendant l'édition) : A doit retrouver ses glyphes ET sa position
@@ -107,6 +107,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// commencé sur lui serait annulé si sa vue quittait la hiérarchie sous le
     /// doigt. `releaseParkedInlineEditor()` le retire à la fin du geste.
     func endInlineTextEdit(parkingEditor: Bool) {
+        pendingInlineEditTextId = nil
         guard let id = inlineEditingTextId else { return }
         if let layer = textLayer(forId: id) {
             layer.setGlyphsHidden(false)
@@ -138,8 +139,8 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// la géométrie du champ (SANS réécrire la chaîne : le `UITextView`
     /// est la source de vérité du texte pendant l'édition).
     func reapplyInlineEditingIfNeeded() {
-        guard let id = inlineEditingTextId,
-              let textLayer = textLayer(forId: id) else { return }
+        if inlineEditingTextId == nil, let attendu = pendingInlineEditTextId { return beginInlineTextEdit(textId: attendu) }
+        guard let id = inlineEditingTextId, let textLayer = textLayer(forId: id) else { return }
         textLayer.setGlyphsHidden(true)
         centerLayerForEditing(textLayer)
         if let editor = inlineEditor, let textObject = textLayer.textObject {
@@ -179,7 +180,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
         CATransaction.setDisableActions(true)
         layer.position = CGPoint(x: bounds.midX, y: centerY)
         layer.transform = CATransform3DIdentity
-        applyInlineEditMask(to: layer, visibleHeight: visibleHeight)
+        StoryInlineEditMask.apply(to: layer, visibleHeight: visibleHeight)
         CATransaction.commit()
 
         editor.transform = .identity
@@ -220,37 +221,6 @@ extension StoryCanvasUIView: UITextViewDelegate {
         return convert(CGPoint(x: 0, y: y), from: nil).y
     }
 
-    /// Aligne le FOND du texte (solide, glass, losange, bulle — peint par la
-    /// calque, pas par le champ) sur la fenêtre de défilement.
-    ///
-    /// Les sous-calques de fond sont dimensionnés dans `StoryTextLayer
-    /// .configure()` à partir de `bounds` ; les muter après coup ne les
-    /// redimensionne pas. Un texte plus haut que la zone garderait donc un fond
-    /// sortant de l'écran sous un champ borné. `StoryTextLayer` n'utilise jamais
-    /// `self.mask` (seulement `backdrop.mask` sur son sous-calque de glass),
-    /// la propriété est libre.
-    private func applyInlineEditMask(to layer: StoryTextLayer, visibleHeight: CGFloat) {
-        guard layer.bounds.height > visibleHeight + 0.5 else {
-            layer.mask = nil
-            return
-        }
-        let window = CGRect(x: 0,
-                            y: (layer.bounds.height - visibleHeight) / 2,
-                            width: layer.bounds.width,
-                            height: visibleHeight)
-        // Ré-assigner la MÊME instance en masque la fait passer par un retrait
-        // puis un ré-attachement côté Core Animation, dont le superlayer d'un
-        // masque est déjà la calque masquée : on se contente de recadrer.
-        if let existing = layer.mask {
-            existing.frame = window
-            return
-        }
-        let mask = CALayer()
-        mask.backgroundColor = UIColor.white.cgColor
-        mask.frame = window
-        layer.mask = mask
-    }
-
     /// Hauteur maximale offerte au champ : celle de la zone, ou aucune borne
     /// tant qu'elle n'est pas mesurée.
     private var inlineEditMaxHeight: CGFloat {
@@ -263,7 +233,7 @@ extension StoryCanvasUIView: UITextViewDelegate {
     /// la sortie d'édition couperait net.
     private func setInlineEditScrimVisible(_ visible: Bool) {
         inlineEditScrimLayer.frame = bounds
-        guard visible else {
+        guard visible, !backgroundLayer.isHidden else { // sans fond peint, l'hôte voile l'image entière (#18640)
             CATransaction.begin()
             CATransaction.setCompletionBlock { [weak self] in
                 guard let self, self.inlineEditingTextId == nil else { return }

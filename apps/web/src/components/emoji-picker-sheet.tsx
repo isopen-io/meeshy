@@ -23,6 +23,7 @@ import { readEmojiRecents, recordEmojiRecent } from '@/lib/emoji-recents';
 import { emojiPickerText, loadEmojiPickerCatalog, type EmojiPickerCatalogKey } from '@/lib/i18n-emoji-picker-catalog';
 import { interfaceDirection } from '@/lib/inline-interface-language-bootstrap.js';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useLayerPresence } from '@/lib/view/dialog-exit';
 import { useLongPress } from '@/lib/view/long-press';
 import { EXTENDED_REACTIONS } from '@/lib/view/message-actions';
 
@@ -239,7 +240,7 @@ function EmojiCells({
               }
               onPick(emoji);
             }}
-            className="relative grid place-items-center rounded-chip text-2xl focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="btn-press relative grid place-items-center rounded-chip text-2xl focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)', WebkitTouchCallout: 'none', userSelect: 'none' }}
           >
             {emoji}
@@ -287,7 +288,7 @@ function Notice({ label, retryLabel, onRetry }: { readonly label: string; readon
           type="button"
           data-emoji-retry=""
           onClick={onRetry}
-          className="rounded-chip px-4 text-check font-semibold"
+          className="btn-press rounded-chip px-4 text-check font-semibold"
           style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-brand)', backgroundColor: 'var(--color-ios-card)' }}
         >
           {retryLabel}
@@ -318,6 +319,7 @@ export function EmojiPickerSheet({
   const [recents] = useState(() => readEmojiRecents());
   const [tone, setTone] = useState(() => readEmojiSkinTone());
   const [toning, setToning] = useState<{ readonly base: string; readonly opener: HTMLElement } | null>(null);
+  const tones = useLayerPresence(toning);
   const searching = query.trim().length > 0;
 
   const index = useOnDemand(true, loadedEmojiIndex, loadEmojiIndex);
@@ -454,7 +456,7 @@ export function EmojiPickerSheet({
               aria-controls={panelId}
               tabIndex={id === category ? 0 : -1}
               onClick={() => choose(id)}
-              className="grid shrink-0 grow place-items-center rounded-chip focus-visible:outline-2 focus-visible:-outline-offset-2"
+              className="btn-press grid shrink-0 grow place-items-center rounded-chip focus-visible:outline-2 focus-visible:-outline-offset-2"
               style={{
                 minHeight: 44,
                 minWidth: 44,
@@ -479,15 +481,18 @@ export function EmojiPickerSheet({
         }}
       >
         {body}
-        {toning === null ? null : (
+        {tones.value === null ? null : (
           <Suspense fallback={null}>
             <EmojiToneMenu
-              base={toning.base}
-              tone={skinToneOf(toning.opener.dataset.emoji ?? '')}
+              base={tones.value.base}
+              tone={skinToneOf(tones.value.opener.dataset.emoji ?? '')}
+              leaving={tones.leaving}
               label={text('emojiPicker.tones')}
               toneLabel={(candidate) => text(`emojiPicker.tone.${candidate}`)}
               rtl={rtl}
-              onChoose={(chosen) => pickTone(toning.base, chosen)}
+              onChoose={(chosen) => {
+                if (toning !== null) pickTone(toning.base, chosen);
+              }}
               onDismiss={dismissTones}
             />
           </Suspense>

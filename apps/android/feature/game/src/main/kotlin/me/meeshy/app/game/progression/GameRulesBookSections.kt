@@ -18,6 +18,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +43,8 @@ import me.meeshy.sdk.model.game.rules.GuideFilms
 import me.meeshy.sdk.model.game.rules.GuideSpeaker
 import me.meeshy.sdk.model.game.rules.OnboardingStep
 import me.meeshy.sdk.model.game.rules.OnboardingStepKey
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import me.meeshy.ui.component.game.MeeFigure
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -72,6 +77,8 @@ internal fun RulesList(
 ) {
     val tokens = MeeshyTheme.tokens
     val locale = LocalConfiguration.current.locales[0]
+    var openNote by rememberSaveable { mutableStateOf<String?>(null) }
+    val onOpenNoteChange: (String?) -> Unit = { openNote = it }
     Column(modifier.fillMaxWidth().testTag(RULES_RULES_TAG), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         SectionTitle(stringResource(R.string.game_rules_section_rules))
         GameRulesBook.ruleIndices.forEach { index ->
@@ -88,7 +95,6 @@ internal fun RulesList(
                     .clip(RoundedCornerShape(MeeshyRadius.md))
                     .background(MeeshyPalette.Indigo500.copy(alpha = tint))
                     .padding(MeeshySpacing.xs)
-                    .semantics(mergeDescendants = true) {}
                     .testTag(rulesRuleTag(index)),
                 horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 verticalAlignment = Alignment.Top,
@@ -104,9 +110,18 @@ internal fun RulesList(
                         color = MeeshyPalette.Indigo500,
                     )
                 }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(stringResource(copy.title), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = tokens.textPrimary)
-                    Text(stringResource(copy.body), style = MaterialTheme.typography.bodyMedium, color = tokens.textMuted)
+                val info = copy.info?.let { MeeshyInfoNote(question = stringResource(it.question), text = stringResource(it.detail)) }
+                MeeshyInfoNoted(
+                    note = info,
+                    openNoteId = openNote,
+                    onOpenNoteIdChange = onOpenNoteChange,
+                    modifier = Modifier.weight(1f),
+                    tint = tokens.textMuted,
+                ) {
+                    Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(stringResource(copy.title), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = tokens.textPrimary)
+                        Text(stringResource(copy.body), style = MaterialTheme.typography.bodyMedium, color = tokens.textMuted)
+                    }
                 }
             }
         }

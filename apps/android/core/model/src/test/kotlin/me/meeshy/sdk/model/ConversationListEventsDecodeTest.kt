@@ -19,11 +19,19 @@ class ConversationListEventsDecodeTest {
         assertThat(json.decodeFromString<FriendRequestCancelledEvent>("""{"cancelledBy":"u2"}""").friendRequestId).isNull()
     }
 
+    /**
+     * `senderId` ne voyage PAS sur ce fil — il ne sert qu'à router l'émission côté passerelle
+     * (`FriendRequestRejectedEventData` porte `{ friendRequestId, rejecterId }`). Le miroir le
+     * déclarait, donc il valait toujours `null` : piège armé retiré (#18159). Ce témoin garde ce
+     * qui compte — la clé en trop sur le fil est TOLÉRÉE, elle ne fait pas tomber la trame.
+     */
     @Test
-    fun `une demande refusee nomme celui qui refuse, senderId n'est pas requis`() {
-        val event = json.decodeFromString<FriendRequestRejectedEvent>("""{"friendRequestId":"r1","rejecterId":"u3"}""")
+    fun `une demande refusee nomme celui qui refuse, une cle en trop ne la casse pas`() {
+        val event = json.decodeFromString<FriendRequestRejectedEvent>(
+            """{"friendRequestId":"r1","senderId":"u1","rejecterId":"u3"}""",
+        )
         assertThat(event.rejecterId).isEqualTo("u3")
-        assertThat(event.senderId).isNull()
+        assertThat(event.friendRequestId).isEqualTo("r1")
     }
 
     @Test
@@ -51,14 +59,21 @@ class ConversationListEventsDecodeTest {
         assertThat(malforme.role).isEqualTo("member")
     }
 
+    /**
+     * Le titre de ce témoin AFFIRMAIT que la passerelle sert une raison. Elle ne le fait pas :
+     * `announceConversationClosed.ts` émet `{ conversationId, closedBy, closedAt }`, et le contrat
+     * ne déclare rien d'autre. Le champ `reason` du miroir valait donc toujours `null` — piège armé
+     * retiré (#18159). Ce qui RESTE à garder est l'horodatage, qui lui voyage, et la tolérance aux
+     * clés en trop.
+     */
     @Test
-    fun `une fermeture porte sa raison quand la passerelle la sert`() {
+    fun `une fermeture porte son horodatage, et une cle en trop ne la casse pas`() {
         val closed = json.decodeFromString<ConversationClosedSocketEvent>(
             """{"conversationId":"c1","closedBy":"u1","closedAt":"2026-11-01T00:00:00Z","reason":"creator_deleted"}""",
         )
         val old = json.decodeFromString<ConversationClosedSocketEvent>("""{"conversationId":"c1","closedBy":"u1"}""")
-        assertThat(closed.reason).isEqualTo("creator_deleted")
-        assertThat(old.reason).isNull()
+        assertThat(closed.closedAt).isEqualTo("2026-11-01T00:00:00Z")
+        assertThat(old.closedAt).isNull()
     }
 
     @Test

@@ -547,6 +547,7 @@ async function main() {
      * conversations synthétiques sont toutes `direct` et aucune n'est
      * épinglée : « Épinglés » rend donc exactement zéro rangée.
      */
+    await page.click('nav[data-list-filters] [data-list-filters-more]');
     await page.click('nav[data-list-filters] button[data-list-filter="pinned"]');
     await page.waitForFunction(() => document.querySelectorAll('[data-row]').length === 0, undefined, { timeout: 3000 });
     await page.waitForTimeout(1200);

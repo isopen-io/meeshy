@@ -34,6 +34,10 @@ import me.meeshy.sdk.model.relation.RelationReceptionSetting
 import me.meeshy.sdk.model.relation.RelationsConfig
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.battery.BatteryPersonSection
+import me.meeshy.ui.component.battery.BatteryPersonSurface
+import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSection
+import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSurface
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.component.circles.levelIcon
 import me.meeshy.ui.component.circles.levelTitle
@@ -141,6 +145,18 @@ internal fun CircleLinkSheet(
                     }
                 }
             }
+            // La batterie (#14147) : ce que je partage à cette personne, et son état quand elle est en épisode.
+            BatteryPersonSection(
+                userId = link.userId,
+                name = name,
+                surface = BatteryPersonSurface.PERSON_FICHE,
+            )
+            // Le téléphone injoignable (#18737) : son état, et « Prévenir X si mon téléphone est injoignable ».
+            PhoneReachabilityPersonSection(
+                userId = link.userId,
+                name = name,
+                surface = PhoneReachabilityPersonSurface.PERSON_FICHE,
+            )
             Spacer(Modifier.heightIn(min = 16.dp))
         }
     }

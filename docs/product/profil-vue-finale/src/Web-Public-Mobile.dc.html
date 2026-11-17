@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Page publique — web mobile, sans compte</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+body{background:#fff}
+.flip{position:relative;display:grid}
+.flip>span{grid-area:1/1;animation:pubFlip 7s ease-in-out infinite}
+.flip>span+span{animation-name:pubFlop}
+@keyframes pubFlip{0%,38%{opacity:1;transform:none}48%,90%{opacity:0;transform:translateY(-6px)}100%{opacity:1;transform:none}}
+@keyframes pubFlop{0%,38%{opacity:0;transform:translateY(6px)}48%,90%{opacity:1;transform:none}100%{opacity:0;transform:translateY(6px)}}
+</style>
+</helmet>
+<div class="mx" data-theme="light" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<header class="glass" style="position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px 8px 20px; border-width: 0 0 1px; box-shadow: none">
+<a href="#" class="d" style="font-size: 23px; font-weight: 900; color: var(--brand-fill); min-height: 44px; display: inline-flex; align-items: center">Meeshy</a>
+<button class="btn p sm">Ouvrir l'app</button>
+</header>
+
+<div style="position: relative; height: 196px; overflow: hidden; background: linear-gradient(165deg, #C4B5FD 0%, #E9D5FF 46%, #FFFFFF 100%)">
+<div class="orb" style="width: 220px; height: 220px; left: -60px; top: -40px; background: #A855F7; opacity: .55"></div>
+<div class="orb" style="width: 190px; height: 190px; right: -50px; top: 20px; background: #6366F1; opacity: .42; animation-delay: -4s"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 90px; background: linear-gradient(180deg, rgba(255,255,255,0), #fff)"></div>
+<span class="chip glass" style="position: absolute; right: 16px; top: 16px; color: var(--ink)">[[ic:globe s]]<span>Profil public</span></span>
+</div>
+
+<section class="rise" style="position: relative; margin-top: -72px; padding: 0 20px; display: flex; flex-direction: column; gap: 14px">
+<span class="av" style="width: 104px; height: 104px; font-size: 38px; border: 5px solid #fff; box-shadow: 0 14px 30px rgba(126,34,206,.28)">AN</span>
+
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 class="d" style="font-size: 36px">Aïssa Ndiaye</h1>
+<div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+<span class="mono" style="font-size: 14px; color: var(--accent-ink)">@aissa</span>
+<span style="display: inline-flex; align-items: center; gap: 4px; font-size: 13.5px; color: var(--ink3)">[[ic:map-pin s]]<span>Dakar</span></span>
+</div>
+</div>
+
+<p style="font-size: 16px; line-height: 1.45; color: var(--ink); text-wrap: pretty">Designer sonore à Dakar. Je parle wolof, j'écris en français, je rêve en anglais.</p>
+
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="chip">[[ic:translate s]]<span>Français</span></span>
+<span class="chip">Wolof</span>
+<span class="chip">Anglais</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px; padding-top: 6px">
+<button class="btn p" style="width: 100%">[[ic:chat-circle]]<span>Lui écrire sur Meeshy</span></button>
+<button class="btn q" style="width: 100%">[[ic:address-book]]<span>Enregistrer le contact</span></button>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .08s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<h2 class="d" style="font-size: 22px">Sa voix</h2>
+<div class="card" style="display: flex; align-items: center; gap: 14px; padding: 14px 18px 14px 14px">
+<button class="ib lg" aria-label="Écouter l'échantillon de sa voix" style="background: var(--accent); color: #0B0B12">[[ic:play-fill]]</button>
+<div class="wave" style="flex: 1; height: 40px; justify-content: space-between">
+<i style="height: 30%"></i><i style="height: 60%"></i><i style="height: 90%"></i><i style="height: 45%"></i><i style="height: 75%"></i><i style="height: 100%"></i><i style="height: 55%"></i><i style="height: 35%"></i><i style="height: 80%"></i><i style="height: 60%"></i><i style="height: 95%"></i><i style="height: 40%"></i><i style="height: 70%"></i><i style="height: 50%"></i><i style="height: 85%"></i><i style="height: 30%"></i><i style="height: 65%"></i><i style="height: 45%"></i><i style="height: 75%"></i><i style="height: 35%"></i><i style="height: 55%"></i><i style="height: 25%"></i>
+</div>
+<span class="mono" style="color: var(--ink2)">0:12</span>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .14s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px">
+<h2 class="d" style="font-size: 22px">Ses adresses</h2>
+<span class="new">Nouveau</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<a href="#" class="tonal" style="display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 16px 0 8px; border-radius: 999px; color: var(--ink)">
+<span class="ib" style="width: 40px; height: 40px; background: #fff; color: var(--brand-fill)">[[ic:globe-hemisphere-west]]</span>
+<span class="mono" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px">aissandiaye.studio</span>
+<span style="font-size: 12.5px; font-weight: 600; color: var(--ink3)">Site</span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:arrow-square-out s]]</span>
+</a>
+<a href="#" class="tonal" style="display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 16px 0 8px; border-radius: 999px; color: var(--ink)">
+<span class="ib" style="width: 40px; height: 40px; background: #fff; color: var(--brand-fill)">[[ic:vinyl-record]]</span>
+<span class="mono" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px">soundcloud.com/aissa</span>
+<span style="font-size: 12.5px; font-weight: 600; color: var(--ink3)">Musique</span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:arrow-square-out s]]</span>
+</a>
+<a href="#" class="tonal" style="display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 0 16px 0 8px; border-radius: 999px; color: var(--ink)">
+<span class="ib" style="width: 40px; height: 40px; background: #fff; color: var(--brand-fill)">[[ic:camera]]</span>
+<span class="mono" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px">instagram.com/aissa.snd</span>
+<span style="font-size: 12.5px; font-weight: 600; color: var(--ink3)">Photos</span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:arrow-square-out s]]</span>
+</a>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .2s; padding: 34px 20px 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 class="d" style="font-size: 22px">Publications</h2>
+<span style="font-size: 13px; color: var(--ink3)">Publiques</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div class="ph" style="height: 150px">réel 0:24</div>
+<div class="ph" style="height: 150px">photo</div>
+<div class="ph" style="height: 150px">photo</div>
+<div class="ph" style="height: 150px">photo</div>
+<div class="ph" style="height: 150px">réel 0:41</div>
+<div class="ph" style="height: 150px">photo</div>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .26s; padding: 34px 20px 0">
+<div style="position: relative; overflow: hidden; border-radius: 28px; padding: 22px 20px 20px; display: flex; flex-direction: column; gap: 16px; background: linear-gradient(150deg, #EEF2FF 0%, #F3E8FF 100%); border: 1px solid var(--line)">
+<div class="orb" style="width: 150px; height: 150px; right: -50px; top: -60px; background: #A855F7; opacity: .22"></div>
+<span class="ib" style="position: relative; background: var(--brand-fill); color: #fff; box-shadow: 0 8px 20px rgba(79,70,229,.35)">[[ic:translate]]</span>
+<div style="position: relative; display: flex; flex-direction: column; gap: 6px">
+<h2 class="d" style="font-size: 22px; text-wrap: balance">Sur Meeshy, tu la lis dans ta langue.</h2>
+<p style="font-size: 14.5px; color: var(--ink3)">Aïssa écrit en français et en wolof.</p>
+</div>
+<div style="position: relative; display: flex; align-items: flex-end; gap: 8px">
+<span class="av" style="width: 30px; height: 30px; font-size: 11px">AN</span>
+<div style="flex: 1; min-width: 0; background: #fff; border: 1px solid var(--line); border-radius: 20px 20px 20px 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 8px 20px rgba(67,56,202,.10)">
+<div class="flip" style="font-size: 15px; color: var(--ink)">
+<span>How are you? The track is ready.</span>
+<span>Nanga def ? Le son est prêt.</span>
+</div>
+<div class="flip" style="font-size: 11.5px; font-weight: 600; color: var(--ink2)">
+<span style="display: inline-flex; align-items: center; gap: 5px">[[ic:translate s]]<span>Traduit pour toi · voir l'original</span></span>
+<span style="display: inline-flex; align-items: center; gap: 5px">[[ic:translate s]]<span>Écrit en wolof et en français</span></span>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section style="padding: 22px 20px 0">
+<div style="display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 16px; border-radius: 18px; border: 1.5px dashed var(--line); color: var(--ink3)">
+[[ic:lock-simple]]
+<span style="font-size: 12.5px; line-height: 1.35; white-space: nowrap">Présence, cercles et jeu : visibles par ses amis</span>
+</div>
+</section>
+
+<footer style="padding: 26px 20px 8px; display: flex; flex-direction: column; align-items: center; gap: 4px">
+<div style="display: flex; align-items: center; gap: 10px; align-self: stretch; padding: 6px 6px 6px 18px; border-radius: 999px; background: var(--raised); border: 1px solid var(--line)">
+<span class="mono" style="flex: 1; min-width: 0; font-size: 14px; color: var(--ink)">meeshy.me/@aissa</span>
+<button class="ib" aria-label="Afficher le QR du profil" style="background: #fff; border: 1px solid var(--line); color: var(--brand-fill)">[[ic:qr-code]]</button>
+</div>
+<a href="#" style="display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 13.5px; font-weight: 600; color: var(--ink3)">[[ic:flag s]]<span>Signaler ce profil</span></a>
+</footer>
+
+<div style="position: sticky; bottom: 0; z-index: 5; padding: 14px 12px 14px; background: linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.94) 40%)">
+<div class="glass" style="display: flex; align-items: center; gap: 6px; padding: 7px; border-radius: 999px">
+<button class="btn p" style="flex: 1.25; min-width: 0; padding: 0 14px; font-size: 14.5px">Continuer dans l'app</button>
+<button class="btn" style="flex: 1; min-width: 0; padding: 0 10px; font-size: 14px; color: var(--ink2)">Rester sur le web</button>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":2018}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

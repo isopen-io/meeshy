@@ -79,8 +79,8 @@ describe('les autres états', () => {
     expect(t).toContain('s’ouvre au niveau 20, pour vous deux');
     expect(t).toContain('Au plus haut 12');
     expect(t).toContain('Requis 20');
-    expect(t).toContain('Il manque 8 niveaux');
-    expect(t).toContain('Tu es au niveau 12');
+    expect(t).not.toContain('Il manque');
+    expect(t).not.toContain('Tu es au niveau');
   });
 
   test('jamais ouvert : les amis acceptés se proposent par leur nom', () => {

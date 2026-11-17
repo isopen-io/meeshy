@@ -1,9 +1,12 @@
 package me.meeshy.ui.component.settings
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -18,12 +21,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -33,60 +41,89 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import me.meeshy.ui.R
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.motion.meeshyEnter
+import me.meeshy.ui.motion.meeshyExit
+import me.meeshy.ui.motion.rememberHeldPresence
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * Fiche d'information d'un « i » : carte modale posée sur un voile, fermée d'un tap n'importe où
- * (haptique léger). N'anime pas quand les animations système sont coupées.
+ * Fiche d'information d'un « i » : carte modale posée sur un voile, fermée d'un tap n'importe où (haptique léger).
+ * Fermée, la fenêtre reste ouverte le temps de sa sortie (voile et carte en fondu, la carte à 0,96), puis [onDismiss]
+ * part ; un second toucher pendant la sortie ne rejoue rien. Une fiche retirée par l'hôte sort de la même façon. Sous
+ * « Réduire les animations » ([LocalReduceMotion]) : le fondu court seul.
  */
 @Composable
 public fun SettingsInfoOverlay(info: SettingsInfo?, onDismiss: () -> Unit) {
-    if (info == null) return
     val haptics = rememberMeeshyHaptics()
-    val resolver = LocalContext.current.contentResolver
-    val animate = remember(info) { SettingsInfoOverlayMotion.shouldAnimate(SettingsInfoOverlayMotion.systemScale(resolver)) }
-    val dismiss = { haptics.light(); onDismiss() }
+    val reduce = LocalReduceMotion.current
+    var dismissed by remember(info) { mutableStateOf(false) }
+    val presence = rememberHeldPresence(info.takeUnless { dismissed }, animateFirstAppearance = true)
+    val visibility = presence.visibleState
+    val leave by rememberUpdatedState(newValue = { if (dismissed) onDismiss() })
+    LaunchedEffect(presence.visibleState) {
+        snapshotFlow { presence.isGone }.collect { gone -> if (gone) leave() }
+    }
+    val shown = presence.value ?: return
+    if (presence.isGone) return
+    val dismiss = {
+        if (!dismissed) {
+            haptics.light()
+            dismissed = true
+        }
+    }
     val closeLabel = stringResource(R.string.common_close)
-    val appeared = remember(info) { MutableTransitionState(!animate) }
-    appeared.targetState = true
 
     Dialog(
         onDismissRequest = dismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClickLabel = closeLabel,
-                    role = Role.Button,
-                    onClick = dismiss,
-                ),
-            contentAlignment = Alignment.Center,
+        AnimatedVisibility(
+            visibleState = visibility,
+            enter = meeshyEnter(reduce, fadeIn(MeeshyMotion.springDefault())),
+            exit = meeshyExit(reduce, fadeOut(MeeshyMotion.springDefault())),
+            label = "settings-info-overlay",
         ) {
-            AnimatedVisibility(
-                visibleState = appeared,
-                enter = if (animate) fadeIn() + scaleIn(initialScale = 0.96f) else androidx.compose.animation.EnterTransition.None,
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClickLabel = closeLabel,
+                        role = Role.Button,
+                        onClick = dismiss,
+                    ),
+                contentAlignment = Alignment.Center,
             ) {
-                InfoCard(info, closeLabel, dismiss)
+                InfoCard(
+                    info = shown,
+                    closeLabel = closeLabel,
+                    onClose = dismiss,
+                    modifier = Modifier.animateEnterExit(
+                        enter = if (reduce) EnterTransition.None else scaleIn(MeeshyMotion.springDefault(), initialScale = CARD_SCALE),
+                        exit = if (reduce) ExitTransition.None else scaleOut(MeeshyMotion.springDefault(), targetScale = CARD_SCALE),
+                    ),
+                )
             }
         }
     }
 }
 
+private const val CARD_SCALE: Float = 0.96f
+
 @Composable
-private fun InfoCard(info: SettingsInfo, closeLabel: String, onClose: () -> Unit) {
+private fun InfoCard(info: SettingsInfo, closeLabel: String, onClose: () -> Unit, modifier: Modifier = Modifier) {
     val tokens = MeeshyTheme.tokens
     val shape = RoundedCornerShape(MeeshyRadius.xxl)
     Column(
-        modifier = Modifier
+        modifier = modifier
             .padding(horizontal = MeeshySpacing.xxl)
             .widthIn(max = 420.dp)
             .fillMaxWidth()

@@ -6,8 +6,8 @@ import { fadeStow } from './pill-motion-engine';
 
 /**
  * LE FONDU COURT DU CHROME RANGÉ (#17536) ne touche pas ce que le plein écran garde visible (U2.4) : la capsule
- * « Revenir à la grille · Quitter le plein écran » porte `data-call-chrome-keep`, et rangée avec le reste elle
- * clignoterait sous « Réduire les animations ».
+ * « Revenir à la grille · Quitter le plein écran » porte `data-call-chrome-keep` : elle se range par SON toucher
+ * (`data-call-stowed`, U2.4), et rangée avec le reste elle clignoterait sous « Réduire les animations ».
  */
 
 beforeAll(() => ensureHappyDomRegistered());
@@ -18,13 +18,16 @@ describe('fadeStow — sous « Réduire les animations »', () => {
     const real = window.matchMedia;
     window.matchMedia = (() => ({ matches: true })) as unknown as typeof window.matchMedia;
     const root = document.createElement('div');
-    root.innerHTML = '<div id="header" data-call-stow="top"></div><div id="capsule" data-call-chrome-fade data-call-chrome-keep></div><div id="menu" data-call-chrome-fade></div>';
+    root.innerHTML = '<div id="header" data-call-stow="top"></div><div id="capsule" data-call-chrome-fade data-call-chrome-keep></div><div id="place" data-call-stow="top" data-call-chrome-keep></div><div id="menu" data-call-chrome-fade></div>';
     document.body.appendChild(root);
     const faded: string[] = [];
     const real_animate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
     Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value(this: Element) { faded.push(this.id); return {}; } });
     fadeStow(root, true);
     expect(faded.sort()).toEqual(['header', 'menu']);
+    faded.length = 0;
+    fadeStow(root.querySelector<HTMLElement>('#place') as HTMLElement, true);
+    expect(faded).toEqual(['place']);
     if (real_animate === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
     else Object.defineProperty(HTMLElement.prototype, 'animate', real_animate);
     window.matchMedia = real;

@@ -197,12 +197,8 @@ describe('la feuille montre la personne, ses gestes, et la porte vers la page', 
     const el = await mountSheet(<ProfilePeekSheet username="kwame-mensah" onClose={() => {}} />);
     expect(el.querySelector('dialog')).not.toBeNull();
     expect(text(el.querySelector('[data-user-hero] p'))).toBe('Kwame Mensah');
-    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual([
-      'add',
-      'write',
-      'block',
-      'report',
-    ]);
+    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write']);
+    expect(el.querySelector('[data-profile-more]')).not.toBeNull();
     const page = el.querySelector('[data-profile-peek-open-page]');
     expect(page?.getAttribute('href')).toBe('/u/kwame-mensah');
     expect(text(page)).toBe('Ouvrir le profil complet');

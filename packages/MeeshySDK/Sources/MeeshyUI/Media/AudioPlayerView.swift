@@ -423,12 +423,9 @@ public struct AudioPlayerView: View {
 
             HStack(alignment: .center, spacing: context.isCompact ? 8 : 10) {
                 playButton
-                VStack(alignment: .leading, spacing: context.isCompact ? 3 : 4) {
-                    waveformProgress
-                    timeRow
-                }
+                waveformProgress
                 if chromePlan.showsRightChips {
-                    rightChipsColumn
+                    speedChip
                 }
                 contextActions
             }
@@ -475,36 +472,23 @@ public struct AudioPlayerView: View {
     }
 
     // MARK: - Play Button
+    /// La commande du kit (K02 + K09, `AudioPlayerPlayControl`, #18421) ; l'ancre
+    /// de l'aperçu d'appui long reste sur elle seule (#11339).
     private var playButton: some View {
-        Button {
-            switch availability {
-            case .ready:
-                handlePlayTap()
-            case .needsDownload:
-                onDownload?()
-                HapticFeedback.light()
-            case .downloading:
-                break
+        AudioPlayerPlayControl(
+            availability: availability,
+            isCompact: context.isCompact,
+            isDark: isDark,
+            accent: accent,
+            isPlaying: player.isPlaying,
+            isLoading: player.isLoading,
+            fileSize: attachment.fileSize,
+            onPlay: { handlePlayTap() },
+            onDownload: onDownload.map { download in
+                { download(); HapticFeedback.light() }
             }
-        } label: {
-            AudioPlayerPlayButtonLabel(
-                availability: availability,
-                isCompact: context.isCompact,
-                isDark: isDark,
-                accent: accent,
-                isPlaying: player.isPlaying,
-                isLoading: player.isLoading,
-                fileSize: attachment.fileSize
-            )
-        }
-        .disabled(isDownloading)
-        .accessibilityLabel(String(localized: "media.audio.play", defaultValue: "Lire l'audio", bundle: .module))
+        )
         .mediaPlayControlAnchor(attachmentId: attachment.id)
-    }
-
-    private var isDownloading: Bool {
-        if case .downloading = availability { return true }
-        return false
     }
 
     private func handlePlayTap() {
@@ -613,6 +597,8 @@ public struct AudioPlayerView: View {
             let shownProgress = displayedProgress.fraction
             let playedColor = displayedProgress.isLive ? accent : accent.opacity(0.4)
 
+            // Les barres vivent dans la BANDE HAUTE du ruban ; la bande basse
+            // est à la puce (#18526) : rien ne se recouvre pendant la lecture.
             HStack(spacing: 0) {
                 ForEach(0..<barCount, id: \.self) { i in
                     let fraction = (Double(i) + 0.5) / Double(barCount)
@@ -622,12 +608,12 @@ public struct AudioPlayerView: View {
                     Capsule(style: .continuous)
                         .fill(isPlayed ? playedColor : (isDark ? Color.white.opacity(0.20) : Color.black.opacity(0.12)))
                         .frame(width: barWidth, height: h)
-                        .frame(width: slot, height: 24, alignment: .center)
+                        .frame(width: slot, height: AudioWaveformStripLayout.barsHeight, alignment: .center)
                 }
             }
-            .frame(height: 24, alignment: .center)
+            .frame(width: geo.size.width, height: AudioWaveformStripLayout.barsHeight, alignment: .center)
         }
-        .frame(height: 24)
+        .frame(height: AudioWaveformStripLayout.stripHeight)
         .overlay(
             GeometryReader { geo in
                 Color.clear
@@ -662,34 +648,35 @@ public struct AudioPlayerView: View {
         // le conteneur de swipe de la bulle désengage reply/forward tant que le
         // doigt manipule la waveform.
         .preference(key: MediaScrubbingPreferenceKey.self, value: isUserScrubbing)
+        // La puce de l'onde (#18421), au-dessus de la nappe de scrub, dans la
+        // BANDE BASSE du ruban (#18526) : elle lit la MÊME progression que les
+        // barres et n'en couvre aucune.
+        .overlay(alignment: .bottomLeading) { waveformChips }
     }
 
-    // MARK: - Time Row
-    /// Timecodes seuls : `currentTime` à gauche, `estimatedDuration` à droite.
-    /// La vitesse de lecture et l'affordance plein écran ont migré vers
-    /// `rightChipsColumn` (capsules empilées à droite du widget).
-    private var timeRow: some View {
-        HStack(spacing: 0) {
-            Text(MediaFormat.duration(displayedProgress.elapsed))
-                .meeshyScaledFont(context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced)
-                .foregroundColor(isDark ? .white.opacity(0.5) : .black.opacity(0.4))
-            Spacer()
-            Text(MediaFormat.duration(estimatedDuration))
-                .meeshyScaledFont(context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced)
-                .foregroundColor(isDark ? .white.opacity(0.3) : .black.opacity(0.25))
-        }
+    // MARK: - Waveform Chips
+    private var waveformChips: some View {
+        AudioWaveformChipsOverlay(
+            total: estimatedDuration,
+            elapsed: displayedProgress.elapsed,
+            fraction: displayedProgress.fraction,
+            isLive: displayedProgress.isLive,
+            isCompact: context.isCompact,
+            accent: accent,
+            onProgressTap: onFullscreen.map { open in
+                { HapticFeedback.light(); open() }
+            }
+        )
     }
 
-    // MARK: - Right Chips Column (speed + progress, stacked vertically)
-    private var rightChipsColumn: some View {
-        AudioPlayerChipsColumn(
+    // MARK: - Speed Chip
+    private var speedChip: some View {
+        AudioPlayerSpeedChip(
             speed: player.speed,
-            progressFraction: displayedProgress.fraction,
             isCompact: context.isCompact,
             isDark: isDark,
             accent: accent,
-            onCycleSpeed: { player.cycleSpeed() },
-            onFullscreen: onFullscreen
+            onCycleSpeed: { player.cycleSpeed() }
         )
     }
 
@@ -744,26 +731,17 @@ public struct AudioPlayerView: View {
             )
     }
 
-    /// Bar height in points. Maps the normalized amplitude (0–1) to the strip
-    /// height with a mild perceptual curve (`pow 0.65`) so quiet passages stay
-    /// visible instead of collapsing to the floor next to a few loud peaks —
-    /// the envelope reads truer to the ear. Falls back to a smooth procedural
-    /// shape until the real samples finish decoding.
+    /// Bar height in points, by `AudioWaveformStripLayout` (#18526) : the
+    /// normalized amplitude climbs a pronounced perceptual curve so quiet
+    /// passages stay visible next to a few loud peaks. Falls back to the law's
+    /// procedural shape until the real samples finish decoding.
     private func waveformHeight(index: Int, total: Int) -> CGFloat {
-        let minHeight: CGFloat = 2
-        let maxHeight: CGFloat = 22
         let samples = waveformAnalyzer.samples
-        if !samples.isEmpty {
-            // Map the bar index onto the sample array so the render density and
-            // the sample count can differ without dropping or duplicating data.
-            let sampleIndex = min(samples.count - 1, index * samples.count / max(1, total))
-            let normalized = Double(max(0, min(1, samples[sampleIndex])))
-            let curved = pow(normalized, 0.65)
-            return max(minHeight, CGFloat(curved) * maxHeight)
-        }
-        let seed = Double(index * 7 + 3)
-        let base = 5.0 + sin(seed) * 6 + cos(seed * 0.5) * 4.0
-        return CGFloat(max(minHeight, min(maxHeight, base)))
+        guard !samples.isEmpty else { return AudioWaveformStripLayout.placeholderHeight(index: index) }
+        // Map the bar index onto the sample array so the render density and
+        // the sample count can differ without dropping or duplicating data.
+        let sampleIndex = min(samples.count - 1, index * samples.count / max(1, total))
+        return AudioWaveformStripLayout.barHeight(normalized: Double(samples[sampleIndex]))
     }
 
     private func loadWaveformSamples() {

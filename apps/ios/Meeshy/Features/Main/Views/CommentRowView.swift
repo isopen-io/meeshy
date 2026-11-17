@@ -308,12 +308,12 @@ struct CommentRowView: View, Equatable {
                                         Text("\(comment.replies)")
                                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                                     }
-                                    Text(String(localized: "feed.comments.reply", defaultValue: "Répondre", bundle: .main))
-                                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                                 }
                                 .foregroundColor(theme.textMuted)
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
                             }
-                            .frame(minHeight: 44)
+                            .accessibilityInputLabels([Text(String(localized: "feed.comments.reply", defaultValue: "Répondre", bundle: .main))])
                             .accessibilityLabel(String(localized: "a11y.comment.reply", defaultValue: "Répondre", bundle: .main))
                             .accessibilityValue(comment.replies > 0 ? PostStatAccessibility.repliesLabel(comment.replies) : "")
                             .accessibilityHint(String(format: String(localized: "a11y.comment.reply.hint", defaultValue: "Répondre à %@", bundle: .main), comment.author))

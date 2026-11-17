@@ -69,7 +69,7 @@ struct GamePrestigeScreen: View {
             if prestige.stars >= prestige.max {
                 GameNote(text: GameText.prestigeMax)
             } else if !prestige.canPrestige && passed == nil {
-                GameNote(text: GameText.prestigeLocked(level: GameCopy.formatCount(game.level.shown.level)))
+                GameNote(text: GameText.prestigeLocked)
                 GameFactChipRow(
                     concept: .prestige,
                     items: GameSpendRows.requirement(GameSpend.requirement(current: game.level.shown.level, required: GameLevels.prestigeLevel)),

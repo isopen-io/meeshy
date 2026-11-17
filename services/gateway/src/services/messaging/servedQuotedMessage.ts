@@ -10,6 +10,8 @@ import {
 } from '../../utils/translation-transformer';
 import type { AttachmentReplyTo } from './attachmentReplySnapshot';
 import { quotableNoticeKind } from '@meeshy/shared/utils/quotable-notice';
+import { withoutCallSummaryParticipants } from '@meeshy/shared/utils/call-summary';
+import { CAPTURE_NOTICE_KIND, captureNoticeQuotedText } from '@meeshy/shared/utils/capture-notice';
 
 /**
  * Ce qu'une CITATION a le droit de transporter — site UNIQUE des trois
@@ -182,6 +184,7 @@ export function servedQuotedMessage(
   if (quoted.deletedAt) return servedDeletedQuote(quoted.deletedAt);
   const ephemeral = quotedEphemeralVerdict(quoted, options?.ephemeralReader);
   if (ephemeral?.sealedAt) return sealedQuotedMessage(ephemeral.sealedAt);
+  if (quotesCaptureNotice(quoted)) return redactedCaptureNoticeQuote(options?.languages);
   const isProtected = quotedMessageIsProtected(quoted);
   const served: Record<string, unknown> = {};
   // Toujours POSÉE pour un éphémère, même absente : elle écrase la colonne
@@ -257,9 +260,44 @@ export function servedQuotedMessage(
   // #17441 — un avis AFFICHÉ se cite : sa métadonnée voyage seule, pour que le
   // client le DISE dans la langue de son lecteur (le `content` stocké n'est
   // qu'un repli français). Toujours POSÉE : un autre message n'en porte pas.
-  served['notice'] = quotableNoticeKind(quoted) === null ? undefined : quoted.metadata;
+  served['notice'] = quotableNoticeKind(quoted) === null ? undefined : withoutCallSummaryParticipants(quoted.metadata);
+  // #18242 — une citation ne compose pas les noms des participants d'un résumé
+  // d'appel : la forme stockée `{ userId }` n'en sort pas (POSÉE seulement là).
+  if (withoutCallSummaryParticipants(quoted.metadata) !== quoted.metadata) served['metadata'] = withoutCallSummaryParticipants(quoted.metadata);
 
   return served;
+}
+
+/**
+ * #18830 — le cité est-il un AVIS DE CAPTURE ? Les sites d'appel qui
+ * recomposent l'expéditeur ou l'heure du cité APRÈS la garde le demandent ici.
+ * Lu sur la seule métadonnée, que toutes les projections de citation chargent
+ * (`messageType` manque à certaines) : un faux positif masque, il ne fuit pas.
+ */
+export const quotesCaptureNotice = (quoted: { readonly metadata?: unknown } | null | undefined): boolean =>
+  typeof quoted?.metadata === 'object'
+  && quoted.metadata !== null
+  && (quoted.metadata as { kind?: unknown }).kind === CAPTURE_NOTICE_KIND;
+
+/**
+ * #18830 — la citation d'un AVIS DE CAPTURE, défense en profondeur derrière
+ * le refus à l'écriture (#9629) : une réponse déjà stockée qui en cite un part
+ * à toute la conversation, l'avis n'étant remis qu'à son audience. Elle ne
+ * transporte qu'une phrase NEUTRE dans la langue du lecteur ; chaque clé qui
+ * nommerait l'acteur, le message capturé ou l'heure est POSÉE pour écraser la
+ * ligne brute que le site d'appel a répandue avant.
+ */
+function redactedCaptureNoticeQuote(languages: readonly string[] | undefined): Record<string, unknown> {
+  return {
+    ...servedDeletedQuote(new Date(0)),
+    deletedAt: undefined,
+    content: captureNoticeQuotedText({ language: languages?.[0] }),
+    senderId: undefined,
+    anonymousSenderId: undefined,
+    sender: undefined,
+    createdAt: undefined,
+    updatedAt: undefined,
+  };
 }
 
 /**

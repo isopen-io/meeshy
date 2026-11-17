@@ -50,15 +50,22 @@ struct ComposerAttachmentZone<Content: View>: View {
 
 /// La tuile 56×56 d'une pièce prête : vignette (ou dessin de son type),
 /// glyphe « Éditer » au centre quand toucher l'édite, retrait en coin, libellé
-/// dessous.
-struct ComposerAttachmentTile: View {
+/// dessous — et, quand la pièce en a une, SA commande au centre (#7171).
+/// Les mesures de la tuile, partagées par ses dessins (onde, épingle, face de
+/// chargement) : un type générique n'offre pas de constante sans paramètre.
+enum ComposerAttachmentTileMetrics {
     static let side: CGFloat = 56
     static let labelWidth: CGFloat = 60
+}
+
+struct ComposerAttachmentTile<Control: View>: View {
+    static var side: CGFloat { ComposerAttachmentTileMetrics.side }
+    static var labelWidth: CGFloat { ComposerAttachmentTileMetrics.labelWidth }
 
     let thumbnail: UIImage?
     /// Dessin propre au type quand il n'y a pas de vignette (onde d'un son,
     /// épingle d'un lieu). `nil` ⇒ dégradé à la teinte de la pièce.
-    var art: AnyView? = nil
+    let art: AnyView?
     let tint: String
     let typeGlyph: String
     /// Le glyphe central : présent ⇒ toucher la tuile l'édite.
@@ -70,6 +77,36 @@ struct ComposerAttachmentTile: View {
     /// bouton : un contrôle sans effet n'est pas annoncé (loi 4).
     let onTap: (() -> Void)?
     let onRemove: () -> Void
+    /// La commande de la pièce (lire un son), posée au centre de la tuile EN
+    /// SŒUR du bouton d'édition, jamais dans son libellé : son toucher lui
+    /// revient, celui du reste de la tuile édite. `EmptyView` ⇒ rien.
+    let control: Control
+
+    init(
+        thumbnail: UIImage?,
+        art: AnyView? = nil,
+        tint: String,
+        typeGlyph: String,
+        centerGlyph: String?,
+        label: String,
+        tapAccessibilityLabel: String,
+        removeAccessibilityLabel: String,
+        onTap: (() -> Void)?,
+        onRemove: @escaping () -> Void,
+        @ViewBuilder control: () -> Control
+    ) {
+        self.thumbnail = thumbnail
+        self.art = art
+        self.tint = tint
+        self.typeGlyph = typeGlyph
+        self.centerGlyph = centerGlyph
+        self.label = label
+        self.tapAccessibilityLabel = tapAccessibilityLabel
+        self.removeAccessibilityLabel = removeAccessibilityLabel
+        self.onTap = onTap
+        self.onRemove = onRemove
+        self.control = control()
+    }
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -89,6 +126,9 @@ struct ComposerAttachmentTile: View {
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(tapAccessibilityLabel)
                 }
+
+                control
+                    .frame(width: Self.side, height: Self.side)
 
                 ComposerAttachmentRemoveBadge(accessibilityLabel: removeAccessibilityLabel, action: onRemove)
             }
@@ -150,6 +190,28 @@ struct ComposerAttachmentTile: View {
     }
 }
 
+/// Une pièce sans commande : la tuile telle que les commentaires la montent.
+extension ComposerAttachmentTile where Control == EmptyView {
+    init(
+        thumbnail: UIImage?,
+        art: AnyView? = nil,
+        tint: String,
+        typeGlyph: String,
+        centerGlyph: String?,
+        label: String,
+        tapAccessibilityLabel: String,
+        removeAccessibilityLabel: String,
+        onTap: (() -> Void)?,
+        onRemove: @escaping () -> Void
+    ) {
+        self.init(
+            thumbnail: thumbnail, art: art, tint: tint, typeGlyph: typeGlyph, centerGlyph: centerGlyph,
+            label: label, tapAccessibilityLabel: tapAccessibilityLabel,
+            removeAccessibilityLabel: removeAccessibilityLabel, onTap: onTap, onRemove: onRemove
+        ) { EmptyView() }
+    }
+}
+
 // ============================================================================
 // MARK: - ComposerAttachmentRemoveBadge
 // ============================================================================
@@ -203,7 +265,7 @@ struct ComposerPlaceTile: View {
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
-                .frame(width: ComposerAttachmentTile.labelWidth)
+                .frame(width: ComposerAttachmentTileMetrics.labelWidth)
         }
     }
 }
@@ -220,7 +282,7 @@ struct ComposerLocationTileArt: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: ComposerAttachmentTile.side, height: ComposerAttachmentTile.side)
+                .frame(width: ComposerAttachmentTileMetrics.side, height: ComposerAttachmentTileMetrics.side)
 
             VStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "mappin.circle.fill")
@@ -259,7 +321,7 @@ struct ComposerAudioTileArt: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: ComposerAttachmentTile.side, height: ComposerAttachmentTile.side)
+                .frame(width: ComposerAttachmentTileMetrics.side, height: ComposerAttachmentTileMetrics.side)
 
             HStack(spacing: 1.5) {
                 ForEach(Self.bars.indices, id: \.self) { index in
@@ -289,7 +351,7 @@ struct ComposerAttachmentLoadingArt: View {
                 .progressViewStyle(.circular)
                 .tint(.white)
         }
-        .frame(width: ComposerAttachmentTile.side, height: ComposerAttachmentTile.side)
+        .frame(width: ComposerAttachmentTileMetrics.side, height: ComposerAttachmentTileMetrics.side)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
         .accessibilityLabel(String(localized: "attachment.loading.a11y-loading", defaultValue: "Chargement en cours", bundle: .main))
     }

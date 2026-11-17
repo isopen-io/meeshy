@@ -25,7 +25,12 @@ class TranslationFailureApplier @Inject constructor(
 
     override fun subscribe(registrar: RelayRegistrar) {
         val lane = OrderedEventLane.Family.ENRICHMENT
-        registrar.relay(socket.translationReceived, lane) { store.textTranslated(it.messageId, it.targetLanguage) }
+        /* `answeredLanguages` et non `usable` : ce qui solde une attente est l'ARRIVÉE d'une
+           réponse, pas sa qualité. Une trame à texte vide laisserait sinon l'état « traduction en
+           cours » allumé pour toujours. */
+        registrar.relay(socket.translationReceived, lane) { event ->
+            event.answeredLanguages.forEach { store.textTranslated(event.messageId, it) }
+        }
         registrar.relay(socket.transcriptionReady, lane) { store.transcribed(it.messageId, it.attachmentId) }
         registrar.relay(socket.audioTranslationReady, lane) { store.audioTranslated(it.messageId, it.attachmentId, it.language) }
         registrar.relay(conversationEvents.events, lane) { event ->

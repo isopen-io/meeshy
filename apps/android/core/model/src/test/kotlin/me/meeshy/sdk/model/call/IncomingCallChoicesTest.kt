@@ -76,5 +76,7 @@ class IncomingCallChoicesTest {
         assertThat(IncomingCallLayout.Audio.showsTypeChipAboveName).isFalse()
         assertThat(IncomingCallLayout.Audio.showsTypeLineAndBadge).isTrue()
         assertThat(IncomingCallLayout.VideoPreview.showsTypeLineAndBadge).isFalse()
+        assertThat(IncomingCallLayout.VideoPreview.whiteCaptions).isTrue()
+        assertThat(IncomingCallLayout.Audio.whiteCaptions).isFalse()
     }
 }

@@ -36,12 +36,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.atlas.flames.line",
-          "androidName": "game_atlas_flames_line",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.atlas.flames.title",
           "androidName": "game_atlas_flames_title",
           "status": "adopted"
@@ -178,22 +172,11 @@
           "androidName": "game_atlas_tiers_line",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "game.atlas.tiers.prestige",
-          "androidName": "game_atlas_tiers_prestige",
-          "status": "adopted"
-        },
+        { "androidName": "game_atlas_tiers_prestige", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "game.atlas.tiers.title",
           "androidName": "game_atlas_tiers_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.atlas.treasury.line",
-          "androidName": "game_atlas_treasury_line",
           "status": "adopted"
         },
         {

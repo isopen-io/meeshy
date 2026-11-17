@@ -30,6 +30,8 @@ public enum class NotificationType {
     GAME,
     CONTACT_REQUEST,
     CONTACT_ACTIVITY,
+    DEVICE_BATTERY,
+    DEVICE_UNREACHABLE,
     GROUP_INVITE,
     MEMBER_JOINED,
     MEMBER_LEFT,
@@ -139,6 +141,14 @@ public object NotificationTypeCatalog {
         NotificationTypeDescriptor(
             NotificationType.CONTACT_ACTIVITY, NotificationCategory.GROUPS,
             { it.contactActivityEnabled }, { p, e -> p.copy(contactActivityEnabled = e) },
+        ),
+        NotificationTypeDescriptor(
+            NotificationType.DEVICE_BATTERY, NotificationCategory.GROUPS,
+            { it.deviceBatteryEnabled }, { p, e -> p.copy(deviceBatteryEnabled = e) },
+        ),
+        NotificationTypeDescriptor(
+            NotificationType.DEVICE_UNREACHABLE, NotificationCategory.GROUPS,
+            { it.deviceUnreachableEnabled }, { p, e -> p.copy(deviceUnreachableEnabled = e) },
         ),
         NotificationTypeDescriptor(
             NotificationType.GROUP_INVITE, NotificationCategory.GROUPS,

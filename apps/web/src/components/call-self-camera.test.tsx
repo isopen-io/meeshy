@@ -104,7 +104,7 @@ function Harness({ active, layout, controls, choice = null }: { readonly active:
   const local = useLocalZoom(active.callId, active.facing);
   const zoom = !controls ? null : layout === 'grid' || full ? ('capsule' as const) : ('step' as const);
   const self = { full, onToggle: () => setFull((value) => !value), zoom, column: (capsule: ReactNode) => <div data-test-column="">{capsule}</div>, local };
-  return <CallStage call={active} layout={layout} language="fr" choice={choice} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} />;
+  return <CallStage call={active} layout={layout} language="fr" choice={choice} onChoose={() => undefined} fullScreen="off" onFullScreen={() => undefined} moderation={null} self={self} />;
 }
 
 describe('mon image pendant un appel', () => {
@@ -306,7 +306,7 @@ describe('ma vignette en coin se pince (#8577)', () => {
     const root = createRoot(host);
     const toggled: string[] = [];
     const self = { full: false, onToggle: () => void toggled.push('toggle'), zoom: 'step' as const, column: () => null };
-    act(() => root.render(<CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} />));
+    act(() => root.render(<CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} fullScreen="off" onFullScreen={() => undefined} moderation={null} self={self} />));
     const corner = () => host.querySelector('[data-call-corner]') as HTMLElement;
     const frame = () => host.querySelector('[data-call-corner-frame]') as HTMLElement;
     const done = () => {

@@ -19,6 +19,12 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-09 | Une publication réservée à une communauté ne se lit que par ses membres, sur toutes les portes de lecture (passerelle) | #17183 | #16892 | fusionnée dans dev (réveil 25) |
 | 2026-11-09 | Les notifications et le temps réel d'une publication réservée à une communauté ne partent qu'à ses membres (passerelle) | voir réveil 25 | #17178 | voir réveil 25 |
 | 2026-11-13 | Les traductions en direct d'une story ne partent plus vers un compte bloqué (passerelle) | voir réveil 26 | #17209 | voir réveil 26 |
+| 2026-11-13 | Le détail d'une communauté dit combien de membres sont en ligne, sans dire qui (passerelle, web, iOS) | voir réveil du 2026-11-13 | #18014 | voir réveil du 2026-11-13 |
+| 2026-11-14 | Une image de profil ou de communauté ne désigne qu'un hôte Meeshy (passerelle) | voir réveil 38 | #16809 | voir réveil 38 |
+| 2026-11-14 | Le détail Android d'une communauté dit « N en ligne », comme iOS et le web | voir réveil 40 | #18026 | voir réveil 40 |
+| 2026-11-14 | Sur Android, la notification « ajouté à la communauté » ouvre la communauté | voir réveil 43 | #18061 | voir réveil 43 |
+| 2026-11-15 | Sur Android, toucher la bannière in-app « ajouté à la communauté » ouvre la communauté | voir réveil du 2026-11-15 17:38 | #18670 | voir réveil du 2026-11-15 17:38 |
+| 2026-11-15 | Rejoindre, quitter ou changer de rôle dans une communauté se voit aussitôt chez ses membres (passerelle, web) | voir réveil du 2026-11-15 23:38 | #18766 | voir réveil du 2026-11-15 23:38 |
 
 ## 2026-11-07 — lot 1
 
@@ -210,6 +216,18 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gotcha : un appel de test à `filterPostConsumers` ou à un éventail sans `communityId` est désormais FERMÉ en `COMMUNITY` (undefined ≠ null) : passer `communityId: null` pour l'ancienne règle.
 - Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #17209 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
 
+## 2026-11-13 — réveil « N en ligne »
+
+- Début du run : cinq PR de la routine ouvertes (#17960 #6451, #17972 #17968, #17974 #17209, #17983 #17182, #18006 #17104), toutes menées EN DIRECT par d'autres sessions (commentaires et poussées de moins de deux heures) : cédées, non touchées. Le run précédent de ce fil avait été coupé par une erreur d'API le 2026-11-10 ; sa branche était déjà fusionnée.
+- Lot : #18014 (issue ouverte). `GET /communities/:id` sert `onlineMemberCount` (additif) : les AUTRES membres actifs en ligne (règle 1/3/5), hors comptes non vivants, bloqués dans un sens ou dans l'autre, ou ayant coupé `showOnlineStatus` ; `null` sous dix autres membres actifs (`ONLINE_COUNT_ANONYMITY_FLOOR`) — dans une petite communauté, un compte désigne quelqu'un. Site unique : `services/community-online-count.ts`. Lecture bornée (membres dans la fenêtre de 5 min, 1 000 au plus), comptage APRÈS la garde d'accès, panne ⇒ `null` sans casser le détail.
+- Web : `CommunityStats` écrit « N en ligne » ; iOS : `CommunityDetailScreen.statsSection`. Rien à 0, `null` ou absent. Clé `community.detail.online` × 7 langues des deux côtés.
+- Suivi ouvert : #18026 (miroir Android).
+- Décision prise sur la lecture la plus probable, à confirmer par le porteur : plancher d'anonymat à 10 ; le compte est servi aussi à un non-membre d'une communauté PUBLIQUE (il peut déjà la lire).
+- Gotcha : `act-leak-guard.test.ts` (web) est rouge en conteneur sans ce diff aussi (mesuré par `git stash`).
+- Revue adversariale : BLOQUANTE. Corrigés dans le lot : bloquer-relire-débloquer faisait du compte un oracle (le compte ne dépend plus du lecteur), dix comptes désactivés franchissaient le plancher (population = comptes vivants), préférence illisible fail-closed. Reste ouvert, et c'est ce qui retient la PR : une communauté FABRIQUÉE (dix comptes de l'attaquant + la cible ajoutée sans son accord, `POST …/members` ou `…/invite`, #16669) fait du compte exact un oracle de la présence de la cible, mineurs compris. Parade proposée au porteur : ne compter que les membres entrés d'eux-mêmes (champ `CommunityMember.joinedVia`, lignes existantes exclues) + paliers. M1 (aucun index sur `CommunityMember`) rejoint #14227 / #16696.
+- État en fin de run : PR #18028 en BROUILLON, non fusionnée, en attente de la décision du porteur sur la parade. Ne pas la fusionner sans elle.
+- **Décision du porteur, 2026-11-14 : « ce n'est pas grave ».** Le risque de la communauté fabriquée est ACCEPTÉ, sans parade (ni `joinedVia`, ni paliers) ; le compte exact reste servi, plancher à 10, et aussi au non-membre d'une communauté publique. La PR sort du brouillon.
+- Prochain lot recommandé : la parade choisie sur #18028 ; sinon #18026 (Android, après #18028), puis les événements temps réel `community:*` (membre rejoint/parti, rôle, réglages) — dont un `community:online-count-changed` pourrait rafraîchir l'agrégat ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
 ## 2026-11-13 — réveil 26
 
 - Début du run : #17211 (#17178) fusionnée dans dev ; #17960 (#6451, libellés iOS) ouverte à 13:25 UTC par un autre réveil de cette routine et menée en direct (CI en cours) : cédée, non touchée.
@@ -323,3 +341,111 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : shared vitest 9651 (après correction du témoin périmé) ; passerelle `unit/routes/communities` + `unit/routes/users` + cliquet `tsc-never-loaded-tests-ratchet` 88/88 suites, `tsc --noEmit` vert ; web `bun test src/lib/api src/lib/profile src/routes` 9073/9073, `tsc --noEmit` vert.
 - Pas de revue adversariale : resserrement d'une validation d'entrée, ni permission ni migration.
 - Prochain lot recommandé : #16811 (une image d'identité ne désigne qu'un fichier de l'appelant), puis #16809 (hôtes Meeshy) ; #18061 dès que la CI des branches revient ; #16739, #16893, #16669 et #18028 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-14 — réveil 36 (05:38 UTC)
+
+- Début du run : une seule PR de la routine ouverte, #18028 (« N en ligne », #18014). Le porteur a accepté le risque de l'oracle « communauté fabriquée » (décision consignée à 04:58 UTC, aucune parade) et la PR est sortie du brouillon ; dernière poussée 40 minutes avant, sans session active : run consacré à sa fusion, aucun lot nouveau.
+- `origin/dev` intégré sans conflit. Gates locaux sur la tête intégrée : passerelle `unit/routes/communities` + `community-online-count` + cliquet `tsc-never-loaded-tests-ratchet` 33/33 suites (530 tests), `tsc --noEmit` vert (il n'avait pas pu tourner au run précédent : client Prisma généré ici) ; web `bun test src/lib/api src/routes/community` 4226/4226, `tsc --noEmit` vert, `bun run build` + `measure-weight.mjs` verts. `check-communities.mjs` ne tourne pas en conteneur (Playwright cherche `chromium_headless_shell-1248`, absent) — hors lot.
+- Prochain lot recommandé : #16811 (une image d'identité ne désigne qu'un fichier de l'appelant), #18026 (miroir Android de « N en ligne ») et #18061 dès que la CI des branches revient ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-14 — réveil 37 (07:38 UTC)
+
+- Début du run : aucune PR de la routine ouverte ; #18028 (« N en ligne ») fusionnée. CI des branches toujours coupée (`CI_DEV_SEUL`, #18048) : preuve locale, puis CI de `dev`.
+- Lot : #16811 (passerelle + partagé, sécurité). Une image d'identité ne désigne plus qu'un fichier TÉLÉVERSÉ par celui qui la pose. `profileImageStorageKey` (`packages/shared/utils/profile-image-reference.ts`) rend la clé de stockage sous ses trois formes (chemin relatif, route de flux, adresse absolue de la route de flux — quel que soit l'hôte) ; `identityImageIsCallers` (`services/attachments/identityImageOwnership.ts`) exige une ligne `MessageAttachment` image avec `uploadedBy` = l'appelant (`filePath` ou `fileUrl`), la règle que la source `upload` de l'administration appliquait déjà (#8217). Branché sur `POST /communities`, `PUT /communities/:id`, `PATCH /users/me/avatar` et `/banner` : sinon 400 `IDENTITY_IMAGE_NOT_OWNED`, rien d'écrit ; une lecture qui échoue ⇒ 500.
+- Rétrocompatible : la valeur DÉJÀ posée passe sans lecture (une valeur stockée avant la garde n'est jamais refusée à son propriétaire) ; les trois clients posent le `fileUrl` que leur propre téléversement vient de rendre. Un hôte tiers reste l'affaire de #16809.
+- Témoins : `profile-image-ownership.test.ts` (14), cinq de plus dans `settings.test.ts`, un dans `core.test.ts`, quatre pour `profileImageStorageKey` ; 17 rouges sans le correctif des routes.
+- Pas de revue adversariale : resserrement d'une validation d'entrée sur une règle existante, ni permission ni migration.
+- Gates locaux (CI des branches coupée, #18048) : passerelle `unit/routes` + `routes/__tests__` + `security` 930/930 suites (14 155 tests), `tsc --noEmit` vert, cliquet `tsc-never-loaded-tests-ratchet` vert ; shared vitest ciblé 95/95. Un rouge corrigé en route : `search-tokens-write-guard` lit toute clé `displayName` dans le `data` d'un `user.update` comme une écriture de nom — la composition explicite du taux de complétion l'y faisait entrer, revenue à l'étalement.
+- PR #18355.
+- Prochain lot recommandé : #16809 (hôtes Meeshy, même loi), #18026 et #18061 dès que la CI des branches revient ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-14 — réveil 38 (09:38 UTC)
+
+- Début du run : aucune PR de la routine ouverte ; #18355 (#16811) fusionnée. CI des branches toujours coupée (`CI_DEV_SEUL`, #18048) : preuve locale, puis CI de `dev`.
+- Lot : #16809 (passerelle, sécurité, vie privée). Une image d'identité ABSOLUE — avatar ou bannière d'un profil, d'une communauté — n'est plus admise que sur un hôte de médias Meeshy : `meeshyMediaHosts.ts` (`services/attachments/`) lit les hôtes de `PUBLIC_URL`, `API_PUBLIC_URL`, `BACKEND_URL` et `MEESHY_MEDIA_HOSTS` (liste), plus `gate.meeshy.me` toujours ; l'hôte se compare à la forme que `URL` analyse (port compris), une adresse à identifiants est refusée. `identityImageIsCallers` refuse désormais toute référence qui ne désigne aucun fichier du volume (hôte tiers, route Meeshy qui ne sert pas un fichier) et son PROPRE fichier servi par un hôte tiers ; 400 `IDENTITY_IMAGE_NOT_OWNED`, rien d'écrit, aucune lecture.
+- Rétrocompatible : écriture stricte, lecture tolérante. La valeur DÉJÀ posée passe toujours (un renommage qui renvoie la bannière tierce existante n'échoue pas) ; les trois clients ne posent que la clé de leur propre téléversement. Le web n'a rien à changer.
+- Reste : #18404 — la mesure des lignes existantes vers un hôte tiers (User.avatar/banner, Community.avatar/banner) demande une base, et ce qu'on fait de celles qu'on trouve (laisser, purger, masquer à la lecture) est une décision.
+- Témoins : `meeshy-media-hosts.test.ts` (18), `profile-image-ownership.test.ts` et `settings.test.ts` (hôte tiers ⇒ 400, valeur tierce déjà posée ⇒ 200), `core.test.ts` (création). Fixtures de trois suites `users/` passées de `https://example.com/…` à un téléversement de l'appelant sur `gate.meeshy.me`.
+- Gates locaux : passerelle `unit/routes` + `unit/services` + `routes/__tests__` + `security` + cliquet `tsc-never-loaded-tests-ratchet` 1587/1588 suites (26 507 tests) — le rouge restant est `UploadProcessor.heif-conversion` (binaire natif absent sous `--ignore-scripts`, hors lot) ; `tsc --noEmit` vert.
+- Pas de revue adversariale : resserrement d'une validation d'entrée sur la règle de #16811, ni permission ni migration.
+- Prochain lot recommandé : #18026 (miroir Android de « N en ligne ») et #18061 dès que la CI des branches revient ; sinon #16741 ou #16879 ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-14 — réveil 39 (11:38 UTC)
+
+- Début du run : aucune PR de la routine ouverte. CI des branches toujours coupée (`CI_DEV_SEUL`, #18048).
+- Lot : #18435 (première tranche de #16857, contrat + passerelle + web). Un nom NEUF au contrat, `community:updated` (`CommunityUpdatedEventData`, `packages/shared/types/socketio-events/community.ts`) : l'identité publique ÉCRITE (identifiant, nom et description tels que stockés, avatar, bannière, confidentialité, `updatedAt` ISO) et l'effectif ACTIF — ni membres, ni présence, ni coordonnées, ni créateur. `services/community-updated-broadcast.ts` le diffuse APRÈS la réponse sur la room personnelle de chaque membre actif et du créateur, une fois chacun ; communauté désactivée ⇒ rien. Branché sur `PUT /communities/:id` et `PATCH /admin/communities/:id`. Le web l'applique au détail et à chaque liste en cache (`lib/api/community-live.ts`), chargé par `import()` (`community-live-binding.ts`, chunk `realtime` au plafond) : première peinture 97,51 → 97,53 Ko (plafond 98).
+- Décision prise : audience = rooms personnelles des membres actifs, pas de room `community:<id>` (aucune adhésion de socket à tenir à jour, et la loi « membre = ligne active » reste la seule). L'effectif part avec l'identité : une bascule en privée fait entrer des membres (#16741).
+- Témoins : passerelle `community-updated-broadcast.test.ts` (7), `community-updated-emission.test.ts` (4, deux rouges sans le branchement), `admin-communities.test.ts` (+2, un rouge sans le branchement) ; web `community-live.test.ts` (5, trois rouges sous mutation), `community-live-binding.test.ts` (2). Le cliquet `socket-event-orphan-gate` (shared) a rougi tant qu'aucun client ne citait l'événement.
+- Suivi ouvert : #18439 (iOS et Android consomment `community:updated`). Reste de #16857 : membres (rejoint/parti/rôle), suppression.
+- Pas de revue adversariale : diffusion vers les seuls membres actifs d'une identité qu'ils lisent déjà, ni permission ni migration.
+- Après fusion de #18440 : la suite complète a rougi `server-emit-door-sweep` (une dépendance nommée `emit: (userId: string, …)` ressemble, pour le balayage, à une porte d'émission redéclarée). Rattrapé en renommant la dépendance `deliver` (PR suivante). Gotcha : lancer `server-emit-door-sweep` sur tout nouveau diffuseur, même quand sa porte réelle est `broadcastToUser`.
+
+## 2026-11-14 — réveil 40 (13:38 UTC)
+
+- Début du run : aucune PR de la routine ouverte ; #18440 et #18448 (`community:updated`, #18435) fusionnées. Le gel de la CI des PR est levé (#18048 fermée : `CI_DEV_SEUL=false`, `PR_CI_GEL=false`) : la CI de la PR redevient la preuve, ce qui rouvre les lots Android.
+- Lot : #18026 (Android). `ApiCommunity.onlineMemberCount: Int? = null` (un ancien serveur reste lisible), porté par `Community` ; `Community.onlineLine` rend le nombre à écrire, rien quand il est absent, nul ou négatif. `CommunityDetailScreen.StatsRow` l'écrit sous les compteurs, point `Indigo500` (iOS `brandPrimary`), rangée fusionnée pour TalkBack. Chaîne `community.online` adoptée du catalogue iOS dans les sept langues (`i18n/manifest/community.json` + `xcstrings_to_android.py`).
+- Témoins : `CommunityDecodingTest` (+4 : servi, `null`/absent, zéro/négatif, résultat de recherche).
+- Gates locaux : `xcstrings_to_android.py --check` vert, tests des scripts i18n 218/218. `meeshy.sh jvm-check` ne tourne plus en conteneur : `libsignal-client` vient de `build-artifacts.signal.org`, refusé (403) par le proxy — la preuve est `android.yml` sur la PR.
+- Prochain lot recommandé : #18061 (Android, la notification « ajouté à la communauté » ouvre la communauté), puis #18439 (iOS et Android consomment `community:updated`), puis le reste de #16857 (membres, suppression) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-14 — réveil 41 (15:38 UTC)
+
+- Run consacré à mener #18479 (#18026) à la fusion : PR de la routine ouverte, dernière poussée à 14:06, donc inactive.
+- CI de la tête `5039d5f4e` : tout vert sauf `Android (assemble + unit tests)`, rouge sur les 7 mêmes tests de `:feature:calls` que `dev` (#18490, ouverte), que la PR ne touche pas. `assembleDebug` vert ; `:core:model`, `:core:network` et `:feature:community` (dont `CommunityDecodingTest`) passés avant l'arrêt de Gradle sur `:feature:calls`.
+- `origin/dev` intégré sans conflit ; `xcstrings_to_android.py --check` vert sur la fusion.
+- Prochain lot recommandé : inchangé (#18061, puis #18439, puis le reste de #16857).
+
+## 2026-11-14 — réveil 42 (17:38 UTC)
+
+- Run consacré à fusionner #18479 (#18026, « N en ligne » sur Android) une fois `dev` déverrouillé : fusion `8078bfefd`. Non journalisé à ce réveil-là ; consigné ici.
+
+## 2026-11-14 — réveil 43 (19:38 UTC)
+
+- Début du run : aucune PR de la routine ouverte, `dev` déverrouillé.
+- Lot : #18061 (Android). `PushPayload.communityId` (la clé `communityId` de la carte ; `''` = absente) et `NotificationContext.communityId` ; `PushTapDestination.Community`, élue avant la conversation pour la famille communauté / membres d'iOS (`RootNotificationNavigator` : `community_invite`, `community_joined`/`left`, `member_*`, `added_to_conversation`, `new_conversation*`, `removed_from_conversation`) ; sans la clé, le chemin d'avant. Une seule table pour les deux portes : la ligne de la cloche (`NotificationDestination.Community` → `onOpenCommunity` → `CommunityRoutes.detail`) et le push (`PushTapExtras` transporte `communityId`, `LaunchRouter` ouvre `CommunityRoutes.detail`).
+- Hors lot : la bannière in-app (`NotificationBannerHost`) n'ouvre que conversation, publication ou jeu ; un toucher sur la bannière d'un ajout reste sans effet, comme avant.
+- Témoins : `PushTapDestinationTest` (+4), `PushPayloadTest` (+1), `NotificationDestinationResolverTest` (+3), `LaunchRouterTest` (+2), `PushTapIntentFactoryTest` (+1). Preuve : `android.yml` sur la PR (`jvm-check` ne tourne pas en conteneur, `libsignal-client` refusé par le proxy).
+- Prochain lot recommandé : #18439 (iOS et Android consomment `community:updated`), puis le reste de #16857 (membres, suppression) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-15 — réveil 17:38 UTC
+
+- Début du run : #18682 (iOS consomme `community:updated`, #18439) est ouverte et a reçu une poussée à 17:32, donc vivante : cédée à sa session. #18568 (#18061) fusionnée.
+- Lot : #18670 (Android). `InAppBanner.communityId`, posé quand `NotificationDestinationResolver` (la table de la cloche et du push) élit `Community` ; l'ordre du toucher devient la fonction pure `InAppBanner.tapTarget()` (`BannerTapTarget.kt`) : jeu, communauté, conversation, publication. `NotificationBannerHost.onOpenCommunity` → `CommunityRoutes.detail` dans `MeeshyApp`. Un message qui nomme seulement une communauté ouvre toujours sa conversation.
+- Témoins : `BannerTapTargetTest` (5), `NotificationBannerViewModelTest` (+2). Preuve : `android.yml` sur la PR (Gradle ne joint pas `dl.google.com` en conteneur).
+- Prochain lot recommandé : le volet Android de #18439 une fois #18682 fusionnée, puis le reste de #16857 (membres, suppression) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+## 2026-11-14/15 — réveils 44 à 51 (rattrapage)
+
+- Runs consacrés à fusionner #18568 (#18061, la notification « ajouté à la communauté » ouvre la communauté sur Android) : `dev` verrouillé plusieurs heures, puis rouges Android étrangers ; fusion `17a816d67` une fois `dev` réparé. Suppression de branche refusée par le proxy (API 403). Suivi ouvert : #18670 (la bannière in-app Android n'ouvre pas la communauté).
+
+## 2026-11-15 — réveil 52 (15:38 UTC)
+
+- Début du run : aucune PR de la routine ouverte, `dev` déverrouillé.
+- Lot : #18439, volet iOS (la référence). `community:updated` est décodé par le SDK (`CommunityUpdatedEvent`, `Sockets/CommunityUpdateChannel.swift`, canal hors de `MessageSocketManager` comme `ConversationObsolescenceChannel`), routé (`SocketEvent.communityUpdated`, table des conversations) et servi par `MessageSocketProviding.communityUpdated`. Une seule règle d'application (`Models/CommunityUpdatedEvent+Apply.swift`) pour le modèle d'écran (`MeeshyCommunity.applying`) et la ligne persistée (`APICommunity.applying`) : autre communauté ⇒ rien, événement plus ancien que la copie ⇒ rien, rôle du lecteur, « N en ligne », emoji et nombre de canaux gardés, empreinte floue d'une image qui change oubliée. Appliqué sans relance réseau à `CacheCoordinator.communities` (toutes clés, `repaintEverywhere`), à `CommunityListViewModel` et à `CommunityDetailViewModel` (flux injecté, défaut `CommunityUpdateChannel.live`).
+- Témoins : SDK `CommunityUpdatedEventTests` (6, décodage clé par clé depuis la charge de l'émetteur), `SocketInboundRouteTableTests` (+1 route, relevé figé +1 nom), `CacheCoordinatorCommunityUpdatesTests` (2) ; app `CommunityListViewModelTests` (+3), `CommunityDetailViewModelTests` (+2). Preuve : CI iOS de la PR (pas de Swift en conteneur).
+- Gates locaux : shared `ios-socket-event-enum-parity`, `socket-event-name-gate`, `socket-payload-shape`, `socket-event-orphan-gate` verts ; cliquets maison iOS identiques à `dev` (ses rouges `fixed-font`/`kit-glass-*` et la suite non enregistrée `UserActivityCardsTests` sont étrangers).
+- Reste de #18439 : le volet Android (#18439 reste ouverte) ; la rangée Communautés de la liste des conversations relit le cache réécrit à son prochain chargement, sans rafraîchissement en direct.
+
+## 2026-11-15 — réveil 19:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #18682 (iOS) et #18693 (#18670) fusionnées.
+- Lot : #18439, volet Android (le dernier). `CommunityUpdatedEvent` (`core/model`, miroir de `CommunityUpdatedEventData`) et la règle d'application `ApiCommunity.applying` / `List<ApiCommunity>.applying`, mêmes règles qu'iOS : autre communauté ⇒ rien, événement plus ancien que la copie ⇒ rien (date illisible ⇒ appliqué), membres, créateur, « N en ligne » et nombre de canaux gardés. `SocketEventNames.COMMUNITY_UPDATED`. `CommunityUpdateBinding` (`sdk-core/community`, `RealtimeBinding` en `@IntoSet`, modèle de `ConversationCreatedBinding`) installe la route sur le routeur série et applique chaque événement sous le compte auquel il est ARRIVÉ (`collectArrived`) à `CommunityCacheRepository.applyUpdate`, qui réécrit la fiche et la première page DÉJÀ tenues sans rajeunir l'instant de lecture : la liste et le détail, qui lisent ce cache, se ré-émettent sans relance réseau. Aucun ViewModel touché.
+- Cliquets partagés : `community:updated` sort de l'inventaire d'asymétrie de `socket-event-platform-parity-gate` (lu par les trois clients) ; `SWEPT_EVENTS_AT_LAST_MEASURE` 125 → 126 (la forme de la charge est désormais confrontée au miroir Kotlin). `packages/shared/__tests__/ci/` 24 fichiers, 204 tests verts.
+- Témoins : `CommunityUpdatedEventTest` (8), `CommunityCacheRepositoryTest` (+3), `CommunityUpdateBindingTest` (4). Preuve : `android.yml` sur la PR (`jvm-check` refusé en conteneur : `libsignal-client` 403).
+- Reste : les pages 2+ et la recherche de la liste Android ne sont pas réécrites (elles relisent au prochain chargement), comme la rangée Communautés de la liste des conversations iOS.
+- Prochain lot recommandé : le reste de #16857 (membres rejoint/parti/rôle, suppression) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-15 — réveil 21:38 UTC
+
+- Début du run : #18718 (#18439, volet Android) ouverte, dernière poussée à 20:11, donc inactive : run consacré à la mener à la fusion.
+- État : fusionnable sans conflit avec `dev`, mais `dev` est verrouillé (`lock_branch` actif) : fusion impossible. Le second `android.yml` lancé à la main sur `472a2325b` (21:08) a été annulé à la main à 21:28 pendant les tests unitaires, après un `assembleDebug` vert, comme celui de 19:46. Pas de nouveau lancement : la preuve Android manque toujours.
+- Prochain lot recommandé : fusionner #18718 dès que `dev` est déverrouillé et qu'un `android.yml` va au bout ; ensuite le reste de #16857 (membres, suppression).
+
+## 2026-11-15 — réveil 23:38 UTC
+
+- Début du run : #18718 (#18439, volet Android) fusionnée ; aucune PR de la routine ouverte ; `dev` verrouillé (`lock_branch`).
+- Lot : #18766, seconde tranche de #16857 (l'effectif). Contrat : `community:member-joined` (`role`, `via: self|invited`), `community:member-left` (`reason: left|removed`), `community:member-role-updated`, chacun avec `memberCount` actif après l'écriture et `at` ISO ; la personne n'est nommée que par son identifiant. Passerelle : `services/community-member-broadcast.ts` (audience = membres actifs ∪ créateur ∪ personne concernée, communauté désactivée ⇒ rien, envoi qui lève isolé, après la réponse), branché sur les six gestes (`join`, `leave`, `invite`, `POST …/members` hors ligne déjà active, `PATCH …/role` avec le rôle ÉCRIT, `DELETE …/members/:userId`). Web : `community-member-live.ts`, monté par `bindCommunityLive` avec `viewerId` — `memberCount` recopié au détail et aux listes, rôle du lecteur suivi, liste des membres relue, lecteur sorti ⇒ détail et listes relus.
+- Témoins : passerelle `community-member-broadcast.test.ts` (6) et `communities-member-broadcast-wiring.test.ts` (11, dont 5 refus muets) ; web `community-member-live.test.ts` (7) + `community-live-binding.test.ts` adapté (quatre écoutes).
+- Gates locaux : gateway `tsc` 0 erreur, `src/__tests__/unit/routes` + services communauté + sweeps 892 suites vertes (le cliquet `tsc-never-loaded` vert seul, la passe groupée ayant été tuée par manque de mémoire) ; shared `__tests__/ci/` 24 fichiers / 204 tests ; web `tsc` 0, `bun test` 33 088 / 33 089 (le rouge `act-leak-guard` est étranger : rouge aussi sans le lot), `vite build` + `measure-weight` verts ; `check-communities.mjs` ne lance pas Chromium en conteneur (version Playwright).
+- Cliquet de parité : famille « effectif d'une communauté » ajoutée à `ASYMETRIES` (absents iOS #18767, Android #18768).
+- Hors lot : les entrées INDIRECTES (créer ou rejoindre un salon d'une communauté via `applyCommunityAdmission`, désactivation des appartenances d'un compte supprimé) n'émettent pas encore — suivi à ouvrir ; la suppression d'une communauté reste muette (reste de #16857).
+- Prochain lot recommandé : #18767 (iOS lit l'effectif), puis #18768 (Android), puis la suppression d'une communauté (#16857).

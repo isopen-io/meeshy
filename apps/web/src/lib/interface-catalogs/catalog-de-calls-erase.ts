@@ -12,6 +12,7 @@ const deCallsErase = {
   'calls.clearAll.cancel': 'Abbrechen',
   'calls.erase.failed': 'Das Löschen ist fehlgeschlagen. Bitte erneut versuchen.',
   'calls.search': 'Nach Namen suchen',
+  'calls.search.placeholder': 'Suchen',
   'calls.search.clear': 'Suche löschen',
   'calls.search.empty': 'Kein Anruf passt zu „{query}“',
   'calls.participants.more': '{names} +{count}',

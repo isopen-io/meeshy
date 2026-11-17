@@ -39,6 +39,7 @@ import {
   type SharedLocationChangedEventData,
   type SharedLocationCircle,
   type SharedLocationErrorCode,
+  type SharedLocationOwnSnapshot,
   type SharedLocationPrecision,
   type SharedLocationSnapshot,
   type SharedLocationStopAck,
@@ -140,6 +141,19 @@ const withHeldCells = (current: SharedLocationState, position: SharedLocationSta
     return { ...recipient, cell: heldCell(position, step, recipient.cell ?? cellOf(current.position, step)) };
   });
 
+const recipientOf = (state: Pick<SharedLocationState, 'recipients'>, readerId: string) =>
+  state.recipients.find((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase());
+
+/** L'échéance de `readerId` : la sienne si elle est plus proche que le terme, sinon le terme (#18205). */
+const deadlineOf = (state: Pick<SharedLocationState, 'recipients' | 'expiresAt'>, readerId: string | undefined): string => {
+  const own = readerId === undefined ? undefined : recipientOf(state, readerId)?.expiresAt;
+  return own !== undefined && Date.parse(own) < Date.parse(state.expiresAt) ? own : state.expiresAt;
+};
+
+/** Les destinataires dont l'échéance n'est pas passée : les seuls que la passerelle sert encore. */
+const liveRecipients = (state: SharedLocationState, now: number): SharedLocationState['recipients'] =>
+  state.recipients.filter((recipient) => Date.parse(deadlineOf(state, recipient.userId)) > now);
+
 /**
  * La projection d'UN destinataire : la position à sa précision, le rayon de son flou, son
  * cercle, rien d'autre. Un lecteur flouté reçoit la maille que `state` retient pour lui (`readerId`) et
@@ -155,9 +169,9 @@ export function projectSharedLocation(
   const circle = access.circle ? { circle: access.circle } : {};
   if (access.precision === 'exact') {
     const radiusMeters = Math.max(SHARED_LOCATION_EXACT_MIN_RADIUS_METERS, Math.round(state.position.accuracy ?? 0));
-    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, ...circle, updatedAt: state.updatedAt, expiresAt: state.expiresAt };
+    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, ...circle, updatedAt: state.updatedAt, expiresAt: deadlineOf(state, readerId) };
   }
-  const held = readerId === undefined ? undefined : state.recipients.find((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase())?.cell;
+  const held = readerId === undefined ? undefined : recipientOf(state, readerId)?.cell;
   const cell = held ?? cellOf(state.position, SHARED_LOCATION_GRID_DEGREES[access.precision]);
   return {
     userId,
@@ -167,7 +181,7 @@ export function projectSharedLocation(
     radiusMeters: SHARED_LOCATION_BLUR_RADIUS_METERS[access.precision],
     ...circle,
     updatedAt: roundedClock(state.updatedAt),
-    expiresAt: state.expiresAt,
+    expiresAt: deadlineOf(state, readerId),
   };
 }
 
@@ -187,7 +201,7 @@ async function accessOf(
   state: SharedLocationState,
   readerIds: readonly string[],
 ): Promise<ReadonlyMap<string, SharedLocationReaderAccess>> {
-  const chosen = new Map(state.recipients.map((recipient) => [recipient.userId.toLowerCase(), recipient.precision]));
+  const chosen = new Map(liveRecipients(state, deps.now()).map((recipient) => [recipient.userId.toLowerCase(), recipient.precision]));
   const candidates = readerIds.filter((id) => chosen.has(id.toLowerCase()));
   if (candidates.length === 0) return new Map(readerIds.map((id) => [id, 'none']));
   const [law, usable] = await Promise.all([
@@ -350,14 +364,19 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
   if (!parsed.success) return failed(SHARED_LOCATION_ERROR_CODES.INVALID, 'Partage illisible');
 
   const now = deps.now();
+  const term = now + parsed.data.durationMinutes * 60_000;
   const state: SharedLocationState = {
     sessionId: randomUUID(),
     recipients: parsed.data.recipients
       .filter((recipient) => recipient.userId.toLowerCase() !== emitterId.toLowerCase())
-      .map((recipient) => ({ userId: recipient.userId.toLowerCase(), precision: recipient.precision ?? SHARED_LOCATION_DEFAULT_PRECISION })),
+      .map((recipient) => ({
+        userId: recipient.userId.toLowerCase(),
+        precision: recipient.precision ?? SHARED_LOCATION_DEFAULT_PRECISION,
+        ...(recipient.expiresInSeconds === undefined ? {} : { expiresAt: new Date(Math.min(term, now + recipient.expiresInSeconds * 1000)).toISOString() }),
+      })),
     position: parsed.data.position,
     updatedAt: new Date(now).toISOString(),
-    expiresAt: new Date(now + parsed.data.durationMinutes * 60_000).toISOString(),
+    expiresAt: new Date(term).toISOString(),
   };
 
   try {
@@ -518,6 +537,21 @@ export async function endSharedLocationOfAccount(
   return stopped;
 }
 
+/**
+ * MON partage, tel que mes appareils le relisent (#18389) : la passerelle ne connaît qu'un
+ * partage par compte, et c'est lui qui fait foi. La liste CHOISIE, sans verdict de loi (le
+ * filtrer par cercle ou blocage trahirait qu'un destinataire a bloqué), sans les personnes
+ * échues, et sans rien de la position : chaque appareil a la sienne.
+ */
+export async function ownSharedLocationFor(deps: SharedLocationRelayDeps, emitterId: string): Promise<SharedLocationOwnSnapshot> {
+  const state = await readSharedLocation(deps.cache, emitterId, deps.now());
+  if (!state) return { recipients: [], expiresAt: null };
+  const recipients = liveRecipients(state, deps.now())
+    .map((recipient) => ({ userId: recipient.userId.toLowerCase(), precision: recipient.precision, expiresAt: deadlineOf(state, recipient.userId) }))
+    .sort((a, b) => a.userId.localeCompare(b.userId));
+  return { recipients, expiresAt: recipients.length === 0 ? null : state.expiresAt };
+}
+
 /** Les émetteurs à lire : les liens du lecteur dès Ami, et les collègues de l'équipe (la loi les ouvre sans lien). */
 async function snapshotCandidates(deps: SharedLocationRelayDeps, readerId: string): Promise<readonly string[]> {
   const [linked, peers] = await Promise.all([
@@ -540,12 +574,12 @@ export async function sharedLocationSnapshotFor(
 ): Promise<SharedLocationSnapshot> {
   const now = deps.now();
   const states = await readSharedLocations(deps.cache, await snapshotCandidates(deps, readerId), now);
-  const addressed = [...states].filter(([, state]) => state.recipients.some((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase()));
+  const addressed = [...states].filter(([, state]) => liveRecipients(state, now).some((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase()));
   if (addressed.length === 0) return { items: [] };
 
   const allowed = await snapshotAllowed(deps, readerId, addressed.map(([emitterId]) => emitterId), now);
   const opened = addressed.flatMap(([emitterId, state]) => {
-    const precision = state.recipients.find((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase())?.precision;
+    const precision = recipientOf(state, readerId)?.precision;
     const circle = allowed.get(emitterId);
     const projection = projectSharedLocation(emitterId, state, precision && circle !== undefined ? { precision, circle } : 'none', readerId);
     return projection ? [{ emitterId, state, projection }] : [];

@@ -43,6 +43,8 @@ class NotificationTypeToggleTest {
         friendContentEnabled = false,
         contactActivityEnabled = false,
         gameEnabled = false,
+        deviceBatteryEnabled = false,
+        deviceUnreachableEnabled = false,
     )
 
     /**
@@ -271,6 +273,21 @@ class NotificationTypeToggleTest {
             assertThat(NotificationTypeToggle.isEnabled(type, allOn.copy(systemEnabled = false))).isTrue()
         }
         assertThat(NotificationTypeToggle.isEnabled("type_inconnu", allOn.copy(systemEnabled = false))).isFalse()
+    }
+
+    @Test
+    fun deviceBatteryFollowsItsOwnToggle() {
+        assertThat(NotificationTypeToggle.isEnabled("device_battery", allOn)).isTrue()
+        assertThat(NotificationTypeToggle.isEnabled("device_battery", allOn.copy(deviceBatteryEnabled = false))).isFalse()
+        assertThat(NotificationTypeToggle.isEnabled("device_battery", allOn.copy(contactActivityEnabled = false))).isTrue()
+    }
+
+    @Test
+    fun deviceUnreachableFollowsItsOwnToggle() {
+        assertThat(NotificationTypeToggle.isEnabled("device_unreachable", allOn)).isTrue()
+        assertThat(NotificationTypeToggle.isEnabled("device_unreachable", allOn.copy(deviceUnreachableEnabled = false))).isFalse()
+        assertThat(NotificationTypeToggle.isEnabled("device_unreachable", allOn.copy(deviceBatteryEnabled = false))).isTrue()
+        assertThat(NotificationTypeToggle.isEnabled("device_battery", allOn.copy(deviceUnreachableEnabled = false))).isTrue()
     }
 
     @Test

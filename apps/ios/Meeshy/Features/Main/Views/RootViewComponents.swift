@@ -393,9 +393,7 @@ struct ThemedFeedOverlay: View {
                 reelAutoplay.clear()
                 SharedAVPlayerManager.shared.pause()
                 HapticFeedback.medium()
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id, from: .feed)
-                }
+                ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id, from: .feed)
             },
             onTapGlyph: {
                 // Le logo Réel ouvre la page détail du poste (thread complet),
@@ -409,9 +407,7 @@ struct ThemedFeedOverlay: View {
                 reelAutoplay.clear()
                 SharedAVPlayerManager.shared.pause()
                 HapticFeedback.medium()
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id, from: .feed)
-                }
+                ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id, from: .feed)
             },
             onRepost: { postId in togglePostRepost(postId: postId) },
             onQuote: { postId in
@@ -526,6 +522,15 @@ struct ThemedFeedOverlay: View {
         .environment(\.commentSettingsAction, CommentSettingsToggle.feedAction(for: post, in: viewModel))
     }
 
+    /// Cache vide et chargement en cours : les cartes fantômes se montrent, et
+    /// leur fondu s'anime sur cette seule bascule.
+    private var isLoadingSkeleton: Bool {
+        SkeletonVisibilityResolver.shouldShowSkeleton(
+            isLoading: viewModel.isLoading,
+            hasCachedData: !viewModel.posts.isEmpty
+        )
+    }
+
     var body: some View {
         ZStack {
             // Background
@@ -582,10 +587,7 @@ struct ThemedFeedOverlay: View {
                     // Cache vide et chargement en cours : des cartes fantômes de
                     // la hauteur des vraies, jamais du fond nu. Même loi que
                     // l'hôte iPad (`FeedView`).
-                    if SkeletonVisibilityResolver.shouldShowSkeleton(
-                        isLoading: viewModel.isLoading,
-                        hasCachedData: !viewModel.posts.isEmpty
-                    ) {
+                    if isLoadingSkeleton {
                         SkeletonFeedList()
                             .transition(.opacity)
                     }
@@ -623,6 +625,7 @@ struct ThemedFeedOverlay: View {
                             .transition(.opacity)
                     }
                 }
+                .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: isLoadingSkeleton)
                 .padding(.bottom, 100) // Clear floating button / tab bar area
                 }
                 .onPreferenceChange(ReelVisibilityPreferenceKey.self) { frames in

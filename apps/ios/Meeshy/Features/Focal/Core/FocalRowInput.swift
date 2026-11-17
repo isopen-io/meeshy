@@ -151,6 +151,12 @@ struct FocalRowInput: Equatable {
     let translatedAudios: [MessageTranslatedAudio]
     /// CORRIGÉ vs le texte littéral du contrat — voir doc de tête.
     let allAudioItems: [ConversationViewModel.AudioItem]
+    /// #10690 — le message de CETTE rangée quand il porte un vocal : le bloc
+    /// audio s'en sert quand la projection `allAudioItems` du ViewModel ne le
+    /// connaît pas encore, ou plus (bascule d'identifiant local → serveur à
+    /// l'accusé). Sans lui, la rangée d'un vocal qu'on vient d'envoyer restait
+    /// VIDE jusqu'à la réouverture de la conversation. `nil` sans vocal.
+    var audioHostMessage: Message? = nil
     let conversationName: String
 
     // MARK: - Effets (F-083ter, F15)
@@ -291,6 +297,8 @@ struct FocalRowInput: Equatable {
             && lhs.content == rhs.content
             && lhs.density == rhs.density
             && lhs.isFirstInGroup == rhs.isFirstInGroup
+            && lhs.audioHostMessage?.id == rhs.audioHostMessage?.id
+            && lhs.audioHostMessage?.attachments.map(\.id) == rhs.audioHostMessage?.attachments.map(\.id)
             && lhs.senderId == rhs.senderId
             && lhs.senderDisplayName == rhs.senderDisplayName
             && lhs.senderUsername == rhs.senderUsername
@@ -402,7 +410,7 @@ extension FocalRowInput {
             currentUserId: context.currentUserId,
             recipientCount: context.recipientCount
         )
-        return FocalRowInput(
+        var row = FocalRowInput(
             localId: message.id,
             serverId: message.id,
             content: content,
@@ -441,6 +449,10 @@ extension FocalRowInput {
             sentAt: message.createdAt,
             availableWidth: context.availableWidth
         )
+        // L'aperçu n'a pas la file audio du fil : son vocal est hébergé par le
+        // message lui-même, sans quoi le bloc audio ne rend rien (#18824).
+        row.audioHostMessage = message
+        return row
     }
 
     /// Les effets du message, moins ceux d'APPARITION : un aperçu ne rejoue pas

@@ -25,10 +25,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "members_sheet_error_title",
-          "status": "android-only"
-        },
-        {
           "androidName": "members_sheet_leave",
           "status": "android-only"
         },

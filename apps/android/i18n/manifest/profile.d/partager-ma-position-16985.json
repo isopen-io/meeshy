@@ -20,6 +20,7 @@
         { "catalog": "app", "iosKey": "sharedLocation.share.offline", "androidName": "shared_location_share_offline", "status": "adopted" },
         { "catalog": "app", "iosKey": "sharedLocation.share.rateLimited", "androidName": "shared_location_share_rate_limited", "status": "adopted" },
         { "catalog": "app", "iosKey": "sharedLocation.share.failed", "androidName": "shared_location_share_failed", "status": "adopted" },
+        { "catalog": "app", "iosKey": "sharedLocation.share.stopPending", "androidName": "shared_location_share_stop_pending", "status": "adopted" },
         { "catalog": "app", "iosKey": "circles.locations.precision.exact", "androidName": "shared_location_precision_exact", "status": "adopted" },
         { "catalog": "app", "iosKey": "circles.locations.precision.neighborhood", "androidName": "shared_location_precision_neighborhood", "status": "adopted" },
         { "catalog": "app", "iosKey": "circles.locations.precision.city", "androidName": "shared_location_precision_city", "status": "adopted" }

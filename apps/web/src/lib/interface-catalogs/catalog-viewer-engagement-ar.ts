@@ -16,7 +16,6 @@ const ar = {
   'viewerEngagement.openProfile': 'عرض الملف الشخصي',
   'viewerEngagement.back': 'العودة إلى المشاهدات',
   'viewerEngagement.openDetail': 'عرض ما فعله {name}',
-  'viewerEngagement.empty.subtitle': 'سيظهر هنا الأشخاص الذين يشاهدون هذا المنشور.',
   'viewerEngagement.forbidden': 'لا يمكنك الوصول إلى قائمة من شاهد هذا المنشور.',
   'viewerEngagement.unavailable': 'تفاصيل النشاط غير متاحة مؤقتًا.',
   'viewerEngagement.visitors.one': 'و{count} زائر بلا حساب',

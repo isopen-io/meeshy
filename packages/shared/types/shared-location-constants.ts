@@ -9,6 +9,13 @@ export const SHARED_LOCATION_DURATIONS_MINUTES = [60, 480] as const;
 export type SharedLocationDurationMinutes = (typeof SHARED_LOCATION_DURATIONS_MINUTES)[number];
 
 /**
+ * L'échéance d'UNE personne, en secondes à compter de la réception (#18205) : au plus le
+ * plus long partage. Relative et non datée, pour qu'une horloge d'appareil en avance ou en
+ * retard ne la déplace pas ; la passerelle la ramène au terme du partage.
+ */
+export const SHARED_LOCATION_RECIPIENT_DEADLINE_MAX_SECONDS = 8 * 60 * 60;
+
+/**
  * Ce qu'un destinataire voit (LOC-06, RG-15) : la position exacte, le quartier ou la
  * ville. La ville est le défaut : on ouvre plus, jamais l'inverse.
  */

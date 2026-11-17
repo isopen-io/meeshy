@@ -217,12 +217,6 @@ private fun Hint(load: KeypadLoad) {
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center,
         )
-        Text(
-            text = stringResource(if (noMatch) R.string.keypad_no_match_subtitle else R.string.keypad_prompt_subtitle),
-            color = tokens.textMuted,
-            fontSize = MeeshyFontSize.label,
-            textAlign = TextAlign.Center,
-        )
     }
 }
 

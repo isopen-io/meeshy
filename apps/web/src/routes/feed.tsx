@@ -234,9 +234,6 @@ export function FeedEmpty() {
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(language, 'feed.empty.title')}
       </p>
-      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'feed.empty.subtitle')}
-      </p>
     </li>
   );
 }

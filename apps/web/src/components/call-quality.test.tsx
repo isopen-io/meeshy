@@ -6,10 +6,10 @@ import type { ActiveCall, CallMember, CallQuality } from '@/lib/calls/call-store
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
-import { CallPeerAlerts, CallQualityChip } from './call-quality';
+import { CallQualityChip } from './call-quality';
 import { CallQualityDetail } from './call-quality-detail';
 import { CallScreen, loadColdCallViews } from './call-screen';
-import { CallCaptureAlerts } from './call-share-banner';
+import { CallCaptureAlerts, CallPeerAlerts } from './call-share-banner';
 
 /**
  * **LA QUALITÉ SE VOIT** (#8047) — l'indicateur de l'en-tête (quatre barres,
@@ -199,12 +199,37 @@ describe('l’indicateur de qualité (#8047), dans la capsule de l’en-tête (#
     expect(renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' } })} canShare={false} />)).not.toContain('data-call-quality=');
   });
 
-  test('ma vidéo gelée puis suspendue se dit par une pastille', async () => {
+  /* E4 (#18227) : la survie de ma vidéo n'est plus une pastille de la rangée (`data-call-pill`) mais « Vidéo réduite », un maillon de verre partagé de la pile du haut, annoncé poliment. */
+  const stackOf = (html: string): string => html.slice(html.indexOf('data-call-banner-stack'));
+
+  test('ma vidéo gelée puis suspendue se dit par la pastille « Vidéo réduite », en verre du kit, dans la pile du haut', async () => {
     await loadColdCallViews();
-    expect(renderToStaticMarkup(<CallScreen call={call({ quality: quality({ level: 'poor', survival: 'frozen' }) })} canShare={false} />)).toContain('data-call-pill="video-frozen"');
+    const frozen = renderToStaticMarkup(<CallScreen call={call({ quality: quality({ level: 'poor', survival: 'frozen' }) })} canShare={false} />);
+    expect(frozen).not.toContain('data-call-pill="video-frozen"');
+    expect(stackOf(frozen)).toContain('data-call-video-notice="reduced"');
+    expect(stackOf(frozen)).toContain('Réseau faible : votre vidéo est ralentie');
     const paused = renderToStaticMarkup(<CallScreen call={call({ quality: quality({ level: 'poor', survival: 'suspended' }) })} canShare={false} />);
-    expect(paused).toContain('data-call-pill="video-suspended"');
-    expect(paused).toContain('Réseau faible : votre vidéo est en pause, l’audio continue');
+    expect(paused).not.toContain('data-call-pill="video-suspended"');
+    expect(stackOf(paused)).toContain('data-call-video-notice="paused"');
+    expect(stackOf(paused)).toContain('Réseau faible : votre vidéo est en pause, l’audio continue');
+    const tag = /<[^>]*data-call-video-notice="paused"[^>]*>/.exec(paused)?.[0] ?? '';
+    expect(tag).toContain('role="status"');
+    expect(tag).toContain('data-glass-tone=');
+  });
+
+  test('« Vidéo réduite » se range au premier toucher avec les autres bannières, et revient au second (loi 11, comme iOS #18396)', async () => {
+    await loadColdCallViews();
+    const html = renderToStaticMarkup(<CallScreen call={call({ quality: quality({ level: 'poor', survival: 'frozen' }) })} canShare={false} />);
+    const slot = /<[^>]*data-call-video-notice-slot[^>]*>/.exec(html)?.[0] ?? '';
+    expect(slot).toContain('data-call-stow="top"');
+  });
+
+  test('« Vidéo réduite » se tait caméra coupée, en appel audio et avant l’appel établi (loi des pastilles de service)', async () => {
+    await loadColdCallViews();
+    const frozen = quality({ level: 'poor', survival: 'frozen' });
+    expect(renderToStaticMarkup(<CallScreen call={call({ quality: frozen, cameraOn: false })} canShare={false} />)).not.toContain('data-call-video-notice');
+    expect(renderToStaticMarkup(<CallScreen call={call({ quality: frozen, media: 'audio', cameraOn: false })} canShare={false} />)).not.toContain('data-call-video-notice');
+    expect(renderToStaticMarkup(<CallScreen call={call({ quality: frozen, phase: { kind: 'connecting' }, connectedAt: null })} canShare={false} />)).not.toContain('data-call-video-notice');
   });
 });
 
@@ -239,14 +264,36 @@ describe('les alertes d’un pair (#8047)', () => {
     }
   });
 
-  test('#16665 — R1 : la capsule se pose sous l’en-tête, hors du fondu du chrome', () => {
+  /* R1.6 (#17963, tranchée le 2026-11-13) : le témoin « hors du fondu du chrome » évolue — la puce se range désormais au premier toucher avec les bannières, comme iOS #18364 et Android #18376. */
+  test('#16665 — R1 : la capsule se pose sous l’en-tête, et se range au premier toucher avec les bannières (R1.6)', () => {
     const html = renderToStaticMarkup(<CallScreen call={call({ media: 'audio', members: { 'u-peer': member({ capturing: true }) } })} canShare={false} />);
     const slot = html.indexOf('data-call-capture-slot');
     expect(slot).toBeGreaterThan(-1);
     expect(html.indexOf('data-call-plane')).toBeLessThan(slot);
-    const opening = html.lastIndexOf('<div', slot);
-    expect(html.slice(opening, slot)).not.toContain('invisible');
-    expect(html.slice(opening, slot)).not.toContain('aria-hidden');
+    const tag = /<[^>]*data-call-capture-slot[^>]*>/.exec(html)?.[0] ?? '';
+    expect(tag).toContain('data-call-stow="top"');
+    expect(tag).not.toContain('aria-hidden');
+  });
+
+  test('R1.2 (#17963) : la puce est en verre teinté rouge du kit, celui du bandeau de partage, jamais un aplat', () => {
+    const html = renderToStaticMarkup(<CallCaptureAlerts members={{ b: member({ userId: 'u-b', name: 'Karim', capturing: true }) }} language="fr" />);
+    const chip = /<span[^>]*data-call-alert="capturing"[^>]*>/.exec(html)?.[0] ?? '';
+    expect(chip.split('class="')[1]?.split('"')[0]?.split(' ')).toContain('glass-call-danger');
+    expect(chip).not.toContain('color-mix');
+    expect(chip).not.toContain('style=');
+  });
+
+  test('R1.2 : deux personnes capturent, UNE puce — celle de la capture la plus récente (comme iOS et Android)', () => {
+    const members = { a: member({ userId: 'u-a', name: 'Awa', capturing: true }), b: member({ userId: 'u-b', name: 'Karim', capturing: true }) };
+    const notes = [
+      { id: 'n1', kind: 'screenshot' as const, userId: 'u-b', name: 'Karim', at: 10 },
+      { id: 'n2', kind: 'recording' as const, userId: 'u-a', name: 'Awa', at: 20 },
+    ];
+    const html = renderToStaticMarkup(<CallCaptureAlerts members={members} notes={notes} language="fr" />);
+    expect(html.split('data-call-alert="capturing"')).toHaveLength(2);
+    expect(html).toContain('Awa capture l’écran de l’appel');
+    const screen = renderToStaticMarkup(<CallScreen call={call({ media: 'audio', members: { 'u-a': members.a, 'u-b': members.b }, journalNotes: notes })} canShare={false} />);
+    expect(screen.split('data-call-alert="capturing"')).toHaveLength(2);
   });
 
   test('l’écran d’appel les montre', () => {

@@ -37,6 +37,41 @@ public object MeeshyMotion {
     public fun <T> springBouncy(): SpringSpec<T> =
         spring(dampingRatio = 0.6f, stiffness = stiffnessForResponse(0.5f))
 
+    /** iOS `bannerPullReturn` — response 0.36, damping 0.66: the pulled banner springs back, with the elastic overshoot (#18721). */
+    public fun <T> bannerPullReturn(): SpringSpec<T> =
+        spring(dampingRatio = 0.66f, stiffness = stiffnessForResponse(0.36f))
+
+    /** iOS `bannerPullMorph` — response 0.44, damping 0.9: the banner grows into the conversation without trembling (#18721). */
+    public fun <T> bannerPullMorph(): SpringSpec<T> =
+        spring(dampingRatio = 0.9f, stiffness = stiffnessForResponse(0.44f))
+
+    /** iOS `previewMorph` — response 0.5, damping 0.72: the long-press preview grows out of its row and settles with a slight bounce (#18722, #18723). */
+    public fun <T> previewMorph(): SpringSpec<T> =
+        spring(dampingRatio = 0.72f, stiffness = stiffnessForResponse(0.5f))
+
+    /** iOS `messagePreviewSettle` — response 0.42, damping 0.72: a message's long-press preview takes its place with the same slight bounce. */
+    public fun <T> messagePreviewSettle(): SpringSpec<T> =
+        spring(dampingRatio = 0.72f, stiffness = stiffnessForResponse(0.42f))
+
+    /** iOS `messagePreviewPop` — response 0.42, damping 0.58: the previewed bubble grows past its size before settling. */
+    public fun <T> messagePreviewPop(): SpringSpec<T> =
+        spring(dampingRatio = 0.58f, stiffness = stiffnessForResponse(0.42f))
+
+    /** iOS `previewMorphReturn` — response 0.3, damping 0.8: the preview shrinks back into its row, faster than it grew. */
+    public fun <T> previewMorphReturn(): SpringSpec<T> =
+        spring(dampingRatio = 0.8f, stiffness = stiffnessForResponse(0.3f))
+
+    /** iOS `peekDetachReturn` — response 0.32, damping 0.72: the pulled preview released before detaching springs back. */
+    public fun <T> peekDetachReturn(): SpringSpec<T> =
+        spring(dampingRatio = 0.72f, stiffness = stiffnessForResponse(0.32f))
+
+    /**
+     * A spring from an iOS `(response, dampingFraction)` pair, for a component whose law owns its pair (the kit's anchored
+     * sheet, K15: 0.32 / 0.88) — the same conversion as the three springs above, never a local `spring(...)` literal.
+     */
+    public fun <T> springFor(response: Float, dampingFraction: Float): SpringSpec<T> =
+        spring(dampingRatio = dampingFraction, stiffness = stiffnessForResponse(response))
+
     /** Standard UI transition — the historic name of [springDefault]. */
     public fun <T> standardSpring(): SpringSpec<T> = springDefault()
 

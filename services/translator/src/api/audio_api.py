@@ -17,7 +17,17 @@ import base64
 import tempfile
 import shutil
 
+from utils.voice_cache_guard import INVALID_USER_ID_DETAIL, VoiceCacheIdRejected, guard_voice_cache_id
+
 logger = logging.getLogger(__name__)
+
+
+def _admitted_id(raw: str) -> str:
+    try:
+        return guard_voice_cache_id(raw)
+    except VoiceCacheIdRejected:
+        raise HTTPException(status_code=400, detail=INVALID_USER_ID_DETAIL) from None
+
 
 # ===== MODÈLES PYDANTIC =====
 
@@ -256,6 +266,8 @@ def create_audio_router(
         """
         if not tts_service:
             raise HTTPException(status_code=503, detail="TTS service not available")
+        if voice_id:
+            voice_id = _admitted_id(voice_id)
 
         try:
             voice_model = None
@@ -309,6 +321,7 @@ def create_audio_router(
         """
         if not voice_clone_service:
             raise HTTPException(status_code=503, detail="Voice clone service not available")
+        user_id = _admitted_id(user_id)
 
         temp_path = None
         try:
@@ -387,6 +400,7 @@ def create_audio_router(
         """
         if not audio_pipeline:
             raise HTTPException(status_code=503, detail="Audio pipeline not available")
+        user_id = _admitted_id(user_id)
 
         temp_path = None
         try:

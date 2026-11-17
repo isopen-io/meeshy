@@ -114,6 +114,22 @@ Instantanés (`MeeshyChipRow/<id>.<variante>`) : `simple`, `icone`, `deborde`, `
 
 Catalogue : entrée K04, vide sur `dev` sur les trois plateformes (`MeeshyKitCatalog+K04.swift`, `KitCatalogK04.kt`, `components/kit/catalog/k04.tsx`). Vues : `simple` S1, `icone` A2, `deborde` A12, `replie` A16, `multiple` A17 ; chaque échantillon se pose sur une plaque sombre opaque.
 
+## 8 bis. Android (reproduction du composant iOS, #17599)
+- `me.meeshy.ui.component.kit` : `MeeshyChipRow.kt` (la rangée), `MeeshyChipCell.kt` (la puce), `MeeshyChipRowRule.kt` (vocabulaire, loi du toucher, nom et rôle), `MeeshyChipRecipe.kt` (la recette), `MeeshyScrollEdges.kt` (la loi des bords), `MeeshyChipEdgeFade.kt` (le masque). Témoins : `MeeshyChipRowTest` (lois, lues sur les vecteurs) et `MeeshyChipRowBehaviorTest` (rendu, rôles, toucher, recomposition) ; catalogue : `KitCatalogK04.kt`.
+- Transposition imposée par la plateforme : Compose ne prend aucun toucher hors des bornes de la mise en page, la cible de 48 dp tient donc DANS la rangée (capsule centrée, 6 dp de marge haut et bas en régulier) ; l'écart entre deux capsules de rangées repliées vaut 12 dp (cible moins capsule), porté par ces marges, l'écart de mise en page entre rangées est nul.
+- Rôles : choix simple `Role.RadioButton` et `selected`, multiple `Role.Checkbox` et `toggleableState`, `tabs` `Role.Tab`, action `Role.Button`, menu `Role.DropdownList`. Le groupe est un `selectableGroup` nommé par `label`.
+- Les bords se lisent depuis `ScrollState` en phase de dessin (`scrollEdgesOf`), le masque n'ouvre un calque hors écran que s'il y a débordement ; la courante se centre par les largeurs mesurées (aucune référence retenue ; la carte des largeurs oublie toute puce qui quitte la rangée, elle reste bornée aux puces présentes). « Réduire les animations » (`LocalReduceMotion`) : fondus et centrage immédiats, voile d'appui conservé.
+- L'anneau du clavier est dessiné décalé de 2 dp ; le survol au pointeur donne le voile d'appui.
+
+## 8 ter. Web (reproduction du composant iOS, #17599)
+- `components/kit/` : `meeshy-chip-row.tsx` (la rangée et la puce mémoïsée), `meeshy-chip-row-rule.ts` (vocabulaire, loi du toucher, bords, recette, nom et rôle, flèches, molette), `meeshy-chip-row-style.ts` (la recette posée en propriétés `--kit-chip-*`, mémoïsée et bornée), `styles/kit-chip-row.css` (mise en page, appui, survol, focus, masque). Témoins : `meeshy-chip-row-rule.test.ts` (lois, lues sur les vecteurs) et `meeshy-chip-row.test.tsx` (rendu, rôles, clavier, bords, rendus évités) ; catalogue : `catalog/k04.tsx`, images dans `docs/product/kit/captures/web/MeeshyChipRow`.
+- Sélection : `readonly string[]` (ordre d'ajout conservé) ; `onChange(next, tapped)`. Une puce sans titre ni nom, ou un groupe sans nom, lève hors production.
+- Rôles : choix simple `radiogroup` / `radio` / `aria-checked`, multiple `group` et `aria-pressed`, `tabs` `tablist` / `tab` / `aria-selected`, menu `aria-haspopup`. Un seul arrêt de tabulation (la courante, sinon la première puce active) ; ← → en boucle, Début, Fin, sens inversé en RTL ; les flèches cochent en choix simple ou simple ou aucun, jamais en multiple.
+- Bords : écouteur `scroll` passif, `ResizeObserver` (rangée et piste) et observateur de `dir`, qui écrivent `data-overflow`, `data-edge-low` et `data-edge-high` (côtés PHYSIQUES, miroités en RTL) sans état Preact ; le masque (`mask-image`) n'existe que s'il y a débordement, et ses deux largeurs s'animent en 150 ms par `@property` (propriétés personnalisées, aucune géométrie). La molette verticale défile la rangée tant qu'elle a de la course.
+- Montrer la courante : `scrollBy` calculé sur les cadres (centrée), sans animation à l'apparition, `smooth` ensuite, `auto` sous « réduire les animations ». Le web ne règle pas la durée du défilement natif : les 250 ms de la fiche sont celles d'iOS et d'Android.
+- Écarts assumés : le ✕ de retrait ne se dessine que sur une puce courante (loi 13) ; la cible de 44 px est un `::before` qui déborde la capsule ; mesures en `rem` ; `previewPressed` fige une puce pressée pour le catalogue.
+- Jumeaux web : rien n'est rebranché (`CHIP`, `PanelRow`, `MoodChips`, `StudioChip`… restent), l'intégration relève de I3, I5, I6 et I10.
+
 ## 9. Écarts connus et choix retenus
 Écarts relevés :
 - Registre : `CallPillChip`, `KindChip` sont des vignettes ; `ReferenceChipRow`, `FooterChip` relèvent de K24 ; `ComposerObjectChipsRow` n'a plus d'appelant. Il omet `MoodChips` d'Android, les filtres de conversation et de contacts, et tout le web.

@@ -13,7 +13,6 @@
     <string name="feed_action_send">إرسال</string>
     <string name="feed_action_share">مشاركة</string>
     <string name="feed_action_view_profile">عرض الملف الشخصي</string>
-    <string name="feed_bookmark_success">تمت الإضافة إلى المفضلة</string>
     <string name="feed_caption_collapse">أقل</string>
     <string name="feed_caption_expand">المزيد…</string>
     <string name="feed_carousel_a11y_position">الوسائط %1$d من %2$d</string>
@@ -27,8 +26,7 @@
     <string name="feed_delete_cancel">إلغاء</string>
     <string name="feed_delete_confirm">حذف</string>
     <string name="feed_draft_recovered">تمت استعادة المسودة دون اتصال</string>
-    <string name="feed_empty">لا توجد منشورات</string>
-    <string name="feed_empty_subtitle">ستظهر منشورات جهات اتصالك هنا</string>
+    <string name="feed_empty">لا توجد منشورات من جهات اتصالك</string>
     <string name="feed_header_nearby">المنشورات القريبة</string>
     <string name="feed_like">إعجاب</string>
     <string name="feed_link_copied">تم نسخ الرابط</string>
@@ -44,7 +42,6 @@
         <item quantity="many">%1$d منشورات جديدة</item>
         <item quantity="other">%1$d منشورات جديدة</item>
     </plurals>
-    <string name="feed_notice_bookmark_failed">تعذّر حفظ الإشارة المرجعية</string>
     <string name="feed_notice_delete_failed">خطأ في حذف المنشور</string>
     <string name="feed_notice_like_failed">تعذّر الإعجاب بالمنشور</string>
     <string name="feed_notice_pin_failed">خطأ في تثبيت المنشور</string>
@@ -94,14 +91,6 @@
         <item quantity="many">%1$d ردًا</item>
         <item quantity="other">%1$d رد</item>
     </plurals>
-    <plurals name="feed_post_stat_reposts">
-        <item quantity="zero">لا توجد إعادات نشر</item>
-        <item quantity="one">إعادة نشر واحدة</item>
-        <item quantity="two">إعادتا نشر</item>
-        <item quantity="few">%1$d إعادات نشر</item>
-        <item quantity="many">%1$d إعادة نشر</item>
-        <item quantity="other">%1$d إعادة نشر</item>
-    </plurals>
     <string name="feed_post_stat_saves">%1$d عملية حفظ</string>
     <string name="feed_post_stat_shares">%1$d مشاركة</string>
     <string name="feed_quote_cancel">إلغاء</string>
@@ -137,7 +126,7 @@
     <string name="feed_scene_previous">المشهد السابق</string>
     <string name="feed_scene_resume">يستأنف تشغيل المشهد</string>
     <string name="feed_scene_sound_mute">كتم الصوت</string>
-    <string name="feed_scene_sound_muted">الصوت مكتوم — افتح ملء الشاشة لسماعه</string>
+    <string name="feed_scene_sound_muted">الصوت مكتوم</string>
     <string name="feed_scene_sound_track">صوت الخلفية</string>
     <string name="feed_scene_sound_unmute">إعادة تشغيل الصوت</string>
     <string name="feed_scene_tile">المشهد %1$d</string>
@@ -177,8 +166,6 @@
     <string name="mood_spotlight_unavailable">لم يعد هذا المزاج متاحًا</string>
     <string name="nearby_back">رجوع</string>
     <string name="nearby_denied_action">فتح الإعدادات</string>
-    <string name="nearby_denied_detail">لا يمكن لـ Meeshy الوصول إلى موقعك. اسمح بذلك من الإعدادات، أو حرّك الخريطة يدويًا.</string>
-    <string name="nearby_denied_title">الموقع غير مسموح به</string>
     <string name="nearby_retry">إعادة المحاولة</string>
     <string name="nearby_title">بالقرب مني</string>
     <string name="post_bookmark_removed">تمت الإزالة من المفضلة</string>
@@ -232,11 +219,8 @@
     <string name="post_detail_title">منشور</string>
     <string name="post_detail_viewers">المشاهدات</string>
     <string name="profile_posts_empty">لا توجد منشورات</string>
-    <string name="profile_posts_empty_filter_subtitle">المس المربع مرة أخرى لعرض كل شيء</string>
     <string name="profile_posts_empty_posts">لا توجد منشورات</string>
     <string name="profile_posts_empty_reels">لا توجد مقاطع</string>
-    <string name="profile_posts_empty_subtitle">ستظهر المنشورات هنا</string>
-    <string name="profile_posts_end_of_content">لقد شاهدت كل شيء</string>
     <string name="profile_posts_first_published_at">تم نشر أول محتوى في %1$s</string>
     <string name="profile_posts_load_error">خطأ أثناء تحميل المنشورات</string>
     <string name="profile_posts_stat_posts">المنشورات</string>

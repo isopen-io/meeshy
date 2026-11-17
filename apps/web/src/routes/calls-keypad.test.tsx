@@ -80,9 +80,13 @@ describe('le pavé', () => {
 
   test('chaque état a son texte, et l’erreur se réessaie', () => {
     const idle = renderToStaticMarkup(<KeypadStatusView language="fr" status="idle" onRetry={noop} />);
-    expect(idle).toContain('Composez un numéro ou un nom');
+    expect(idle).not.toContain('Composez');
+    expect(idle).not.toContain('<p');
     expect(renderToStaticMarkup(<KeypadStatusView language="fr" status="searching" onRetry={noop} />)).toContain('Recherche…');
-    expect(renderToStaticMarkup(<KeypadStatusView language="fr" status="none" onRetry={noop} />)).toContain('Aucun contact trouvé');
+    const none = renderToStaticMarkup(<KeypadStatusView language="fr" status="none" onRetry={noop} />);
+    expect(none).toContain('Aucun contact trouvé');
+    expect(none).not.toContain('Vérifiez');
+    expect(none.match(/<p/g)?.length).toBe(1);
     expect(renderToStaticMarkup(<KeypadStatusView language="fr" status="offline" onRetry={noop} />)).toContain('Hors ligne');
     const error = renderToStaticMarkup(<KeypadStatusView language="fr" status="error" onRetry={noop} />);
     expect(error).toContain('role="alert"');

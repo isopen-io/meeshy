@@ -270,7 +270,17 @@ async function joinAsRegistered(
   shareLink: ShareLinkWithConversation,
   userId: string,
   entry: ConversationEntryDecision,
-  broadcast: LinkJoinBroadcast | undefined
+  broadcast: LinkJoinBroadcast | undefined,
+  /**
+   * #18384 — l'admission dans la ROOM, à appeler AVANT le message d'arrivée.
+   *
+   * Elle vivait chez l'appelant, donc APRÈS `postJoinSystemMessage` : l'arrivant
+   * n'était pas dans `conversation:<id>` quand son propre message d'arrivée y
+   * passait, et la file hors ligne ne le rattrapait pas — il figure déjà dans
+   * `connectedUsers` et ne porte aucun marqueur d'injoignabilité. Elle est ici
+   * parce que c'est ici que l'ordre se décide.
+   */
+  admitToRoom: (() => Promise<void>) | undefined
 ): Promise<LinkJoinOutcome> {
   // « Déjà membre » ne consomme rien du lien : aucune place nouvelle n'est
   // prise, donc aucun incrément — même règle que la porte authentifiée
@@ -343,6 +353,11 @@ async function joinAsRegistered(
   }
   announceConversationLanguageChange({ kind: 'arrival', conversationId: shareLink.conversationId, language: linkMemberFields.language, readerUserId: userId });
 
+  // #18384 — la room D'ABORD. Fail-OPEN : un adaptateur en panne ne doit pas
+  // retenir une arrivée déjà PERSISTÉE ; l'arrivant retrouvera le message au
+  // premier chargement du fil.
+  if (admitToRoom) await admitToRoom();
+
   await postJoinSystemMessage(
     { prisma, broadcast },
     {
@@ -372,6 +387,34 @@ async function joinAsRegistered(
  * livraison, le câblage y est déclaré en diff plutôt qu'appliqué (voir le
  * rapport de livraison de #4167).
  */
+/**
+ * L'admission dans la room, prête à être appelée au bon moment — ou `undefined`
+ * quand il n'y a rien à admettre (un invité n'a pas de socket vivante).
+ *
+ * Fail-OPEN par décision : l'arrivée est déjà PERSISTÉE quand ceci tourne, et un
+ * adaptateur en panne ne doit pas la retenir. Ce que l'échec coûte est écrit
+ * dans #18381 — un compte joignable aux yeux de `connectedUsers`, absent de la
+ * room, que la file hors ligne saute.
+ */
+function admitArrivalToRoom(
+  params: LinkJoinParams,
+  conversationId: string,
+  arrivingUserId: string,
+): (() => Promise<void>) | undefined {
+  const rooms = params.arrivalRooms;
+  if (!rooms) return undefined;
+  return async () => {
+    try {
+      await rooms.joinUserToConversationRoom(arrivingUserId, conversationId);
+    } catch (error) {
+      logError(
+        `link join could not admit the account into the conversation room (conversation ${conversationId})`,
+        error,
+      );
+    }
+  };
+}
+
 export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinOutcome> {
   const { prisma, key, authContext, requestIp, profile, broadcast, rejectedCredential } = params;
 
@@ -436,7 +479,7 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
 
   const outcome = identity.kind === 'guest'
     ? await joinAsGuest(prisma, shareLink, profile, broadcast, params.requestUserAgent)
-    : await joinAsRegistered(prisma, shareLink, identity.userId, verdict.entry, broadcast);
+    : await joinAsRegistered(prisma, shareLink, identity.userId, verdict.entry, broadcast, admitArrivalToRoom(params, shareLink.conversationId, identity.userId));
 
   // #7797 — une ARRIVÉE (pas « déjà membre ») enregistre son pays, dérivé de
   // l'IP après la réponse ; l'IP n'est écrite ni sur le participant ni dans
@@ -447,22 +490,13 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
     // #16837 — l'arrivée s'annonce aux autres membres. Un invité ne peut pas
     // en être le SUJET (contrat strict, #16838) ; il en reste DESTINATAIRE.
     const arrivingUserId = outcome.participant.userId;
-    // L'admission dans la room, AVANT l'annonce : l'une sert l'arrivant, l'autre
-    // parle de lui aux autres, et c'est la première qui décide s'il recevra quoi
-    // que ce soit du fil. Un INVITÉ n'en a pas besoin — sa socket naît de cette
-    // réponse, et elle rejoindra ses rooms à son authentification ; c'est la
-    // même condition que l'annonce, pour une raison différente, et c'est
-    // pourquoi elles sont écrites séparément.
-    if (arrivingUserId && params.arrivalRooms) {
-      try {
-        await params.arrivalRooms.joinUserToConversationRoom(arrivingUserId, shareLink.conversationId);
-      } catch (error) {
-        logError(
-          `link join could not admit the account into the conversation room (conversation ${shareLink.conversationId})`,
-          error,
-        );
-      }
-    }
+    // L'admission dans la room est faite PLUS HAUT, dans `joinAsRegistered`
+    // (#18384) : elle doit précéder le message d'arrivée, qui part de là.
+    // Elle précédait déjà l'annonce d'adhésion, et son doc-comment ÉNONÇAIT la
+    // loi — « c'est la première qui décide s'il recevra quoi que ce soit du
+    // fil » — en ne la tenant que pour la seconde des deux diffusions.
+    // Un INVITÉ n'en a pas besoin : sa socket naît de cette réponse et
+    // rejoindra ses rooms à son authentification.
     if (arrivingUserId) {
       await announceMemberArrival({
         prisma,

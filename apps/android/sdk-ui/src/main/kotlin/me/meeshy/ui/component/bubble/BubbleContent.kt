@@ -217,6 +217,8 @@ public data class BubbleContent(
     val quotedNoticeText: String? = null,
     /** L'appel a été lancé par CE lecteur (initiateur = utilisateur courant) : la notice dit sortant. */
     val callIsOutgoing: Boolean = false,
+    /** A1.2 — les autres noms de l'appel et ma présence, résolus pour CE lecteur ; nul quand rien n'est servi. */
+    val callParticipants: me.meeshy.sdk.model.reading.focal.FocalCallParticipants.Roster? = null,
     /** Le consentement vocal manque : un audio du message propose de l'activer (avis discret sous le lecteur). */
     val voiceConsentMissing: Boolean = false,
     /** Une édition part au serveur : le pied montre des flèches qui tournent à la place du crayon. */

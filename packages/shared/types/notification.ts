@@ -61,6 +61,10 @@ export enum NotificationTypeEnum {
   CONTACT_RECENTLY_ACTIVE = 'contact_recently_active',
   /** La Connaissance est née toute seule : chacun a assez échangé avec l'autre (#13932). Discrète, jamais une demande. */
   RELATION_ACQUAINTANCE = 'relation_acquaintance',
+  /** La batterie d'un Proche ou d'un Sang l'empêchera bientôt de répondre (#14147) : le palier est dans les métadonnées. */
+  DEVICE_BATTERY = 'device_battery',
+  /** Le téléphone d'un Proche ou d'un Sang est injoignable, ou répond de nouveau (#18737). */
+  DEVICE_UNREACHABLE = 'device_unreachable',
 
   // ===== INTERACTION EVENTS =====
   USER_MENTIONED = 'user_mentioned',
@@ -647,6 +651,30 @@ export interface RelationAcquaintanceNotificationMetadata extends BaseNotificati
   readonly origin: 'auto-acquaintance';
 }
 
+/**
+ * Metadata pour device_battery (#14147) — la batterie d'un Proche ou d'un Sang.
+ * `userId` est l'ÉMETTEUR : le toucher ouvre son profil. Seul le palier se range :
+ * ni le niveau (il n'est que dans le corps), ni l'appareil, ni l'estimation, ni
+ * l'heure du relevé. La ligne expire avec l'état (24 h) : aucun historique.
+ */
+export interface DeviceBatteryNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly userId: string;
+  readonly batteryKind: 'critical' | 'probably-off' | 'back-on' | 'charging' | 'recharged';
+}
+
+/**
+ * Metadata pour device_unreachable (#18737) — le téléphone d'un Proche ou d'un Sang.
+ * `userId` est l'ÉMETTEUR : le toucher ouvre son profil. Seuls le genre et la cause probable se
+ * rangent ; l'heure du dernier signe de vie n'est que dans le corps. La ligne expire avec l'état.
+ */
+export interface DeviceUnreachableNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly userId: string;
+  readonly reachabilityKind: 'unreachable' | 'reachable';
+  readonly cause?: 'battery' | 'network';
+}
+
 /** Le contenu qu'un retrait par la modération a visé (#11149). */
 export type RemovedContentType = 'message' | 'post' | 'reel' | 'story' | 'comment';
 
@@ -727,6 +755,8 @@ export type NotificationMetadata =
   | ContactJoinedNotificationMetadata
   | ContactRecentlyActiveNotificationMetadata
   | RelationAcquaintanceNotificationMetadata
+  | DeviceBatteryNotificationMetadata
+  | DeviceUnreachableNotificationMetadata
   | ContentRemovedNotificationMetadata
   | GameDuoNotificationMetadata
   | GameLeagueResultNotificationMetadata

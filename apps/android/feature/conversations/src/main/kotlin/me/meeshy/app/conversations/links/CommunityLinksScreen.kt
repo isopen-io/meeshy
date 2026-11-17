@@ -62,6 +62,13 @@ fun CommunityLinksScreen(
         },
     ) {
         if (state.refreshFailed && state.hasLoaded) item(key = "failed", contentType = "banner") { LinkRefreshFailedBanner(viewModel::refresh) }
+        item(key = "intro", contentType = "intro") {
+            Text(
+                stringResource(R.string.links_hub_community_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+        }
         item(key = "stats", contentType = "stats") {
             Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 LinkStatTile(MeeshyIcons.Groups, stats.totalCommunities, R.plurals.links_count_groups, accent, Modifier.weight(1f))
@@ -69,15 +76,13 @@ fun CommunityLinksScreen(
                 LinkStatTile(MeeshyIcons.PersonFilled, stats.totalMembers, R.plurals.links_count_members, accent, Modifier.weight(1f))
             }
         }
-        item(key = "section", contentType = "section") { LinksSectionTitle(stringResource(R.string.links_community_section_mine)) }
         when {
             !state.hasLoaded -> item(key = "skeleton", contentType = "skeleton") { LinkSkeletonRows(accent) }
             state.links.isEmpty() -> item(key = "empty", contentType = "empty") {
                 LinkEmptyState(
                     MeeshyIcons.Groups,
                     stringResource(R.string.links_community_empty_title),
-                    stringResource(R.string.links_community_empty_subtitle),
-                    accent,
+                    accent = accent,
                 )
             }
             else -> items(state.links, key = { it.id }, contentType = { "community" }) { link ->
@@ -109,6 +114,9 @@ private fun CommunityRow(link: CommunityLink, accent: Color, onOpen: () -> Unit,
                 color = MeeshyTheme.tokens.textMuted,
                 maxLines = 1,
             )
+            communityRowCreatedText(link)?.let { created ->
+                Text(created, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted, maxLines = 1)
+            }
         }
         IconButton(onClick = onCopy) {
             Icon(MeeshyIcons.Copy, stringResource(R.string.links_common_copy_link), tint = accent, modifier = Modifier.size(20.dp))

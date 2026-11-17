@@ -61,6 +61,12 @@ public struct MessageCardInput: Equatable, Sendable {
     /// L'instant d'une carte ANIMÉE, en secondes depuis le début de l'extrait —
     /// le VRAI temps écoulé, celui qu'on entend (#8979) ; `nil` pour une image fixe.
     public let time: Double?
+    /// Une carte SANS PLAFOND, qui défile en vidéo (#18671) : le texte garde sa taille naturelle.
+    public var unbounded = false
+    /// Le fond CHOISI dans la photothèque (#18672) — il passe avant un média du message posé en fond.
+    public var backdrop: MessageCardBackdrop?
+    /// Le cadrage choisi de chaque photo recadrée, par identifiant de média (#18805) — absente : centrée.
+    public var framings: [String: MessageCardFraming] = [:]
 
     public init(quoted: MessageCardPart?, reply: MessageCardPart, template: MessageCardTemplateID, handle: String?,
                 title: String? = nil, date: String? = nil, showAuthors: Bool = true,
@@ -84,16 +90,32 @@ public struct MessageCardInput: Equatable, Sendable {
 
     /// La même carte, à un autre instant de son animation.
     public func at(time: Double?) -> MessageCardInput {
-        MessageCardInput(quoted: quoted, reply: reply, template: template, handle: handle, title: title, date: date,
-                         showAuthors: showAuthors, media: media, disposition: disposition,
-                         quotedTime: quotedTime, replyTime: replyTime, clip: clip, time: time)
+        carrying(MessageCardInput(quoted: quoted, reply: reply, template: template, handle: handle, title: title, date: date,
+                                  showAuthors: showAuthors, media: media, disposition: disposition,
+                                  quotedTime: quotedTime, replyTime: replyTime, clip: clip, time: time))
     }
 
     /// La même carte, sur un autre extrait de son média.
     public func clipped(to clip: MessageCardClip?) -> MessageCardInput {
-        MessageCardInput(quoted: quoted, reply: reply, template: template, handle: handle, title: title, date: date,
-                         showAuthors: showAuthors, media: media, disposition: disposition,
-                         quotedTime: quotedTime, replyTime: replyTime, clip: clip, time: time)
+        carrying(MessageCardInput(quoted: quoted, reply: reply, template: template, handle: handle, title: title, date: date,
+                                  showAuthors: showAuthors, media: media, disposition: disposition,
+                                  quotedTime: quotedTime, replyTime: replyTime, clip: clip, time: time))
+    }
+
+    /// La même carte, sans plafond : celle que la vidéo fait défiler (#18671).
+    public func unboundedCard() -> MessageCardInput {
+        var tall = self
+        tall.unbounded = true
+        return tall
+    }
+
+    /// Ce qui ne passe pas par l'initialiseur voyage avec la carte.
+    private func carrying(_ next: MessageCardInput) -> MessageCardInput {
+        var copy = next
+        copy.unbounded = unbounded
+        copy.backdrop = backdrop
+        copy.framings = framings
+        return copy
     }
 }
 
@@ -157,6 +179,8 @@ public struct MessageCardMediaOp: Equatable, Sendable {
     /// `cover` remplit le cadre (une photo) ; `contain` y inscrit l'image en
     /// entier, sans arrondi (un sticker, #10915).
     public var fit: MessageCardMediaFit = .cover
+    /// La partie de la photo montrée dans le cadre (#18805) — sans effet sur un `contain`.
+    public var framing: MessageCardFraming = .centered
 }
 
 public enum MessageCardGlyph: String, Sendable {
@@ -227,10 +251,15 @@ public struct MessageCardLayout: Equatable, Sendable {
     /// L'échelle la plus grande que les médias peuvent prendre en laissant au
     /// texte sa place minimale — le pincement s'y arrête (revue #8979).
     public var mediaScaleLimit: Double = MessageCardScales.range.upperBound
+    /// Une carte SANS PLAFOND (#18671) : la hauteur du format, la fenêtre sous
+    /// laquelle la vidéo fait défiler la carte — `nil` pour une carte au format.
+    public var viewportHeight: Double?
 
     public static let cardWidth: Double = 1080
     public static let minHeight: Double = 1080
     public static let maxHeight: Double = 1920
+    /// La plus haute carte qui défile — au-delà, le texte se coupe comme ailleurs.
+    public static let scrollMaxHeight: Double = 40_000
 
     /// « Meeshy @pseudo » — le pseudo sans son éventuel « @ », la marque seule quand il manque.
     public static func watermark(handle: String?) -> String {
@@ -240,7 +269,7 @@ public struct MessageCardLayout: Equatable, Sendable {
     }
 
     public static func make(_ input: MessageCardInput, measure: @escaping MessageCardMeasure) -> MessageCardLayout {
-        MessageCardLayoutEngine(input: input, measure: measure).layout()
+        MessageCardDecorator(input: input).decorated(MessageCardLayoutEngine(input: input, measure: measure).layout())
     }
 
     /// **La même carte, LISIBLE à petite échelle** — la vignette d'un template
@@ -256,7 +285,8 @@ public struct MessageCardLayout: Equatable, Sendable {
             backdrop: backdrop,
             ops: ops.map { Self.legible($0, floor: floor) },
             regions: regions, watermark: watermark, truncated: truncated,
-            crowdedByMedia: crowdedByMedia, mediaScaleLimit: mediaScaleLimit
+            crowdedByMedia: crowdedByMedia, mediaScaleLimit: mediaScaleLimit,
+            viewportHeight: viewportHeight
         )
     }
 

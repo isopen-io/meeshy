@@ -54,6 +54,14 @@ struct MessageCardTemplatesTests {
         #expect(Self.keys(in: typefaces) == MessageCardTypefaceID.allCases.map(\.rawValue))
     }
 
+    @Test func elevenLinksAreOffered_theFourNewOnesAppendedSoNoStoredIdentifierMoves() {
+        #expect(MessageCardLinkID.allCases.map(\.rawValue) == [
+            "orbite", "filet", "guillemets", "fleche", "bulles", "fil", "silence",
+            "points", "losange", "asterisme", "double",
+        ])
+        #expect(MessageCardTemplateID(rawValue: "aurore.rond.losange")?.link == .losange)
+    }
+
     @Test func linkIDs_matchTheWebTable_inOrder() throws {
         let links = Self.block(try Self.webSource(), from: "export const CARD_LINKS = [", to: "]")
         #expect(Self.quoted(in: links) == MessageCardLinkID.allCases.map(\.rawValue))

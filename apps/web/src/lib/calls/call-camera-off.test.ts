@@ -1,22 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { CallCaption } from './call-captions';
-import { cameraOffFadeMs, peerSpeakingOnCameraOff } from './call-camera-off';
-
-const caption = (speakerId: string, isFinal: boolean, at: number): CallCaption => ({ id: `${speakerId}-${at}`, speakerId, speakerName: speakerId, original: '…', translated: null, pair: null, isFinal, at, mine: false }) as CallCaption;
+import * as cameraOff from './call-camera-off';
 
 describe('G4.6 — le fondu image ↔ avatar', () => {
   test('250 ms, et 120 ms sous « Réduire les animations » : plus court, jamais supprimé', () => {
-    expect(cameraOffFadeMs(false)).toBe(250);
-    expect(cameraOffFadeMs(true)).toBe(120);
+    expect(cameraOff.cameraOffFadeMs(false)).toBe(250);
+    expect(cameraOff.cameraOffFadeMs(true)).toBe(120);
   });
 });
 
-describe('G4.2 — l’anneau n’existe qu’à la parole', () => {
-  test('le pair dont le dernier segment est en cours parle ; au repos, personne', () => {
-    expect(peerSpeakingOnCameraOff([caption('u-peer', false, 2)], 'u-peer')).toBe(true);
-    expect(peerSpeakingOnCameraOff([caption('u-peer', true, 2)], 'u-peer')).toBe(false);
-    expect(peerSpeakingOnCameraOff([], 'u-peer')).toBe(false);
-    expect(peerSpeakingOnCameraOff([caption('u-peer', false, 2)], undefined)).toBe(false);
+describe('G4.2 · P9.6 (#17637) — la parole de la caméra coupée ne se lit plus dans les sous-titres', () => {
+  test('la loi de la scène noire ne porte plus de lecture des sous-titres : l’anneau suit le niveau audio reçu (`usePeerSpeaking`), comme le duo audio', () => {
+    expect(Object.keys(cameraOff)).toEqual(['cameraOffFadeMs']);
   });
 });

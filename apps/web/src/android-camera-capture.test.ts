@@ -31,9 +31,9 @@ describe('la capture photo de la coque Android (#7930)', () => {
   });
 
   test('la photothèque (#9120) choisit images ET vidéos, et n’ouvre jamais l’appareil photo', () => {
-    for (const source of [lire('src', 'components', 'composer-attachment-panel.tsx'), lire('src', 'components', 'composer-top-row.tsx')]) {
-      expect(source).toContain('accept="image/*,video/*"');
-    }
+    /* La rangée haute n'a plus sa propre photothèque (épure #18361) : le menu du « + » est la SEULE porte. */
+    expect(lire('src', 'components', 'composer-attachment-panel.tsx')).toContain('accept="image/*,video/*"');
+    expect(lire('src', 'components', 'composer-top-row.tsx')).not.toContain('type="file"');
     const panneau = lire('src', 'components', 'composer-attachment-panel.tsx');
     const tuile = panneau.slice(panneau.indexOf('id="photo"'), panneau.indexOf('</FileSource>', panneau.indexOf('id="photo"')));
     expect(tuile).toContain('accept="image/*,video/*"');

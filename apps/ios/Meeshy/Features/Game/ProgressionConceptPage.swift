@@ -8,8 +8,8 @@ import MeeshyUI
 ///  1. la tête — l'emblème en grand, la valeur, une ligne, la jauge vers l'étape suivante ; ou TA LUMIÈRE (la tête des
 ///     Étincelles, #11180) ; ou, quand le concept a sa PIÈCE de jeu (anneau du niveau, l'Héritage et sa frappe,
 ///     détail de la joute, Élans), cette pièce À SA PLACE — jamais les deux (amendement n° 4) ;
-///  2. « C'est quoi ? » — ce que c'est (`what`), puis les deux phrases de la carte, à quoi ça sert (`why`) et comment
-///     ça marche (`how`) ;
+///  2. « C'est quoi ? » — ce que c'est (`what`) et à quoi ça sert (`why`), lus au repos ; comment ça marche (`how`)
+///     passe derrière le (i) « Comment ça marche ? » du pourquoi, et n'existe pas quand `what` le dit déjà ;
 ///  3. « Où j'en suis » — ce que la tête ne dit pas déjà, et rien d'autre : un fait ne paraît qu'une fois par écran
 ///     (`ProgressionConceptFiche`, #11180) ; la section disparaît quand elle n'a rien à ajouter ;
 ///  4. « Comment en gagner » — les deux conseils qui développent la carte (`tip1`, `tip2`) ; puis « Comment m'en
@@ -140,7 +140,7 @@ struct ProgressionConceptContent: View {
 
     /// « Jeu masqué » (#9481) : la fiche se lit alors comme devant un serveur sans jeu.
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
-    /// Le (i) de « C’est quoi ? » : la définition détaillée s'y déplie sous la phrase, jamais au repos.
+    /// Le (i) ouvert de la fiche — détail chiffré, « Comment ça marche ? », cas particuliers : un seul à la fois.
     @State private var openNoteID: String?
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -169,13 +169,12 @@ struct ProgressionConceptContent: View {
                 GamePhotoOfferView(moment: offer, onStart: { photos.start($0) }, onLater: { photos.later($0) })
             }
             section(ConceptText.ficheWhat) {
-                MeeshyInfoNoted(
-                    note: MeeshyInfoNote(question: ConceptText.ficheWhatQuestion, text: ConceptText.what(concept)),
-                    openNoteID: $openNoteID, tint: theme.textMuted
-                ) {
+                MeeshyInfoNoted(note: ConceptText.whatNote(concept), openNoteID: $openNoteID, tint: theme.textMuted) {
+                    sentence(ConceptText.what(concept))
+                }
+                MeeshyInfoNoted(note: ConceptText.howNote(concept), openNoteID: $openNoteID, tint: theme.textMuted) {
                     sentence(ConceptText.why(concept), strong: true)
                 }
-                sentence(ConceptText.how(concept))
             }
             if fiche.hasWhere {
                 section(ConceptText.ficheWhere) {
@@ -191,10 +190,12 @@ struct ProgressionConceptContent: View {
             }
             section(ConceptText.ficheEarn) {
                 sentence(ConceptText.tip1(concept))
-                sentence(ConceptText.tip2(concept))
+                if let tip = ConceptText.tip2(concept) { sentence(tip) }
             }
             section(ConceptText.ficheUse) {
-                sentence(ConceptText.use(concept))
+                MeeshyInfoNoted(note: ConceptText.useNote(concept), openNoteID: $openNoteID, tint: theme.textMuted) {
+                    sentence(ConceptText.use(concept))
+                }
             }
             // Le prix et le manque de la prochaine Meesh vivent à l'Héritage : la fiche des Étincelles y MÈNE (#11180).
             if case .sparks = fiche.head {

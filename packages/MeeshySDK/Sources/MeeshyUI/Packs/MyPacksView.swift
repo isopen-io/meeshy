@@ -15,16 +15,19 @@ public struct MyPacksView: View {
     private let usageText: ((FrameUsage) -> String)?
     private let rankName: ((GloryRank) -> String)?
     private let recency: any PackInstallRecording
+    private let onOpenShop: (() -> Void)?
 
     @MainActor
     public init(language: String = "fr", usageText: ((FrameUsage) -> String)? = nil,
                 rankName: ((GloryRank) -> String)? = nil, store: PackShopStore? = nil,
                 designs: (any PackElementDesignProviding)? = nil,
-                recency: any PackInstallRecording = PackInstallRecency.shared) {
+                recency: any PackInstallRecording = PackInstallRecency.shared,
+                onOpenShop: (() -> Void)? = nil) {
         self.language = language
         self.usageText = usageText
         self.rankName = rankName
         self.recency = recency
+        self.onOpenShop = onOpenShop
         _store = StateObject(wrappedValue: store ?? PackShopStore(recency: recency))
         _showcase = StateObject(wrappedValue: PackShowcaseModel(designs: designs, language: language))
     }
@@ -48,14 +51,44 @@ public struct MyPacksView: View {
     private var content: some View {
         let sections = MyPacks.sections(of: store.state, sort: sort, recency: recency.installDates(), language: language)
         if store.loadFailed {
-            Text(String(localized: "shop.error.load", defaultValue: "La boutique n’a pas pu se charger. Réessaie.", bundle: .module))
-                .font(MeeshyFont.relative(13, weight: .medium))
-                .foregroundStyle(MeeshyColors.error)
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                Text(String(localized: "shop.error.load", defaultValue: "La boutique n’a pas pu se charger.", bundle: .module))
+                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .foregroundStyle(MeeshyColors.error)
+                Button {
+                    HapticFeedback.light()
+                    Task { await store.load(domains: nil) }
+                } label: {
+                    Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
+                        .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 44)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("shop.mine.retry")
+            }
         } else if let sections, sections.isEmpty {
-            Text(String(localized: "shop.mine.empty", defaultValue: "Aucun pack installé pour l’instant. La boutique t’attend.", bundle: .module))
-                .font(MeeshyFont.relative(14))
-                .foregroundStyle(.secondary)
-                .accessibilityIdentifier("shop.mine.empty")
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                Text(String(localized: "shop.mine.empty", defaultValue: "Aucun pack installé", bundle: .module))
+                    .font(MeeshyFont.relative(14))
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("shop.mine.empty")
+                if let onOpenShop {
+                    Button {
+                        HapticFeedback.light()
+                        onOpenShop()
+                    } label: {
+                        Text(String(localized: "sticker.sheet.tab.shop", defaultValue: "Boutique", bundle: .module))
+                            .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: 44)
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("shop.mine.openShop")
+                }
+            }
         } else if let sections {
             ForEach(sections) { section in
                 VStack(alignment: .leading, spacing: MeeshySpacing.sm) {

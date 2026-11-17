@@ -144,11 +144,9 @@ const frShellLabels = {
   'list.empty': 'Aucune conversation pour l’instant.',
   'list.empty.filter': 'Aucune conversation ne correspond à « {query} ».',
   'list.showAll': 'Tout afficher',
-  'list.quick.start': 'Commencez ici',
-  'list.quick.next': 'Et maintenant ?',
-  'list.quick.subtitle': 'Meeshy s’écrit à plusieurs — invitez quelqu’un à vous rejoindre.',
   'list.quick.invite': 'Inviter des amis',
   'list.quick.invite.hint': 'Partagez votre lien Meeshy : c’est ainsi que naît une première conversation.',
+  'list.quick.invite.question': 'À quoi sert ce lien ?',
   'list.quick.story': 'Créer une story',
   'list.quick.story.hint': 'Une image, un son, quelques mots — visibles vingt heures.',
   'list.quick.mood': 'Poser une humeur',
@@ -195,6 +193,7 @@ const frShellLabels = {
   'newConversation.group.chosen.one': '{count} personne',
   'newConversation.group.chosen.other': '{count} personnes',
   'newConversation.group.chosen.hint': 'Vous pouvez le créer seul, pour un audit ou pour recueillir des avis, et inviter plus tard.',
+  'newConversation.group.chosen.question': 'Peut-on créer un groupe seul ?',
   'newConversation.group.remove': 'Retirer {name}',
 
   'summary.title': 'Résumé Vivant',
@@ -229,7 +228,6 @@ const frShellLabels = {
   'hashtag.loading': 'Chargement des publications',
   'hashtag.error': 'Impossible de charger ce mot-clé',
   'hashtag.empty.title': 'Rien sous #{tag}',
-  'hashtag.empty.body': 'Aucune publication visible ne porte ce mot-clé.',
   'hashtag.loadMore': 'Charger plus',
   'hashtag.loadingMore': 'Chargement…',
 } as const;

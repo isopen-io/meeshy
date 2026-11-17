@@ -62,14 +62,15 @@ class CallsTabTest {
         body(CallHistoryUiState(hasMore = false))
 
         compose.onNodeWithText("Aucun appel récent").assertIsDisplayed()
-        compose.onNodeWithText("Le journal couvre les trois derniers mois.").assertIsDisplayed()
+        compose.onNodeWithText("Le journal couvre les trois derniers mois.").assertDoesNotExist()
     }
 
     @Test
-    fun `une recherche sans résultat nomme la requête`() {
+    fun `une recherche sans résultat nomme la requête et la période couverte, en une ligne`() {
         body(CallHistoryUiState(hasMore = false, searchQuery = "zoe"))
 
-        compose.onNodeWithText("Aucun appel ne correspond à « zoe »").assertIsDisplayed()
+        compose.onNodeWithText("Aucun appel ne correspond à « zoe » dans les trois derniers mois.").assertIsDisplayed()
+        compose.onNodeWithText("Le journal couvre les trois derniers mois.").assertDoesNotExist()
     }
 
     @Test

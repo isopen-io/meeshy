@@ -418,7 +418,7 @@ struct ParticipantsView: View {
                     Button {
                         roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "ADMIN")
                     } label: {
-                        Label(String(localized: "participants.promote.admin", defaultValue: "Promouvoir administrateur", bundle: .main), systemImage: "crown.fill")
+                        Label(String(localized: "participants.promote.admin", defaultValue: "Promouvoir admin", bundle: .main), systemImage: "crown.fill")
                     }
                 }
                 if targetRole == .admin {
@@ -448,7 +448,7 @@ struct ParticipantsView: View {
                 Button {
                     roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "ADMIN")
                 } label: {
-                    Label(String(localized: "participants.promote.admin", defaultValue: "Promouvoir administrateur", bundle: .main), systemImage: "crown.fill")
+                    Label(String(localized: "participants.promote.admin", defaultValue: "Promouvoir admin", bundle: .main), systemImage: "crown.fill")
                 }
                 if targetRole == .moderator {
                     Button {

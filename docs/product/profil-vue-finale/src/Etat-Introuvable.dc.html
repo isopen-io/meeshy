@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Profil introuvable ou privé — iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.void{position:relative;display:flex;align-items:center;justify-content:center;width:112px;height:112px;border-radius:50%;color:var(--ink3)}
+.void::before{content:"";position:absolute;inset:0;border-radius:50%;border:2px dashed var(--line);animation:mxSpin 40s linear infinite}
+.void::after{content:"";position:absolute;inset:14px;border-radius:50%;background:radial-gradient(circle,color-mix(in oklab,var(--brand) 22%,transparent),transparent 70%);animation:nfBreath 4.2s ease-in-out infinite}
+.void>.ic{position:relative;z-index:1;animation:nfBreath 4.2s ease-in-out infinite}
+.struck{color:var(--ink2);text-decoration:line-through;text-decoration-color:color-mix(in oklab,var(--err) 75%,transparent);text-decoration-thickness:1px}
+@keyframes nfBreath{0%,100%{transform:scale(.94);opacity:.72}50%{transform:scale(1.06);opacity:1}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<div class="orb" style="width: 260px; height: 260px; left: 65px; top: 70px; background: #4F46E5; opacity: .22; filter: blur(60px)"></div>
+
+<header style="position: relative; display: flex; align-items: center; padding: 54px 16px 0">
+<button class="ib g" aria-label="Fermer">[[ic:x]]</button>
+</header>
+
+<main style="position: relative; flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 26px; padding: 20px 20px 8px">
+
+<section class="rise" style="display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center">
+<div class="void" style="margin-bottom: 8px">[[ic:user-circle-dashed xl]]</div>
+<h1 class="d" style="font-size: 30px">Personne ici</h1>
+<p style="font-size: 16px; line-height: 1.45; color: var(--ink2); max-width: 290px; text-wrap: balance">Ce profil n'existe pas, ou il n'est pas visible pour toi.</p>
+</section>
+
+<section class="ticket rise" style="--cut: 44px; animation-delay: .08s">
+<div style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; color: var(--ink3)">
+[[ic:link-break s]]
+<span class="tag">Adresse demandée</span>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; justify-content: center; padding: 16px 18px 18px">
+<span class="mono struck" style="font-size: 15px">meeshy.me/@leo.marcheti</span>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .16s; display: flex; flex-direction: column; gap: 10px">
+<h2 class="tag" style="padding: 0 4px">Tu cherchais peut-être</h2>
+<div class="card" style="overflow: hidden">
+<a href="#" class="row" style="color: var(--ink)">
+<span class="av" style="--accent: #4ECDC4">LM</span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 1px">
+<span style="font-weight: 700; font-size: 15.5px">Léo Marchetti</span>
+<span class="mono" style="color: var(--ink2)">@leo.m</span>
+</span>
+<span style="color: var(--ink3); display: inline-flex">[[ic:caret-right s]]</span>
+</a>
+</div>
+</section>
+
+</main>
+
+<footer class="rise" style="animation-delay: .24s; position: relative; display: flex; flex-direction: column; gap: 10px; padding: 14px 20px 24px">
+<button class="btn p">[[ic:magnifying-glass]]<span>Chercher quelqu'un</span></button>
+<button class="btn q">[[ic:scan]]<span>Scanner un QR</span></button>
+<a href="#" style="align-self: center; display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; font-size: 14.5px; font-weight: 700; color: var(--ink2)">Retour</a>
+</footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

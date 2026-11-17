@@ -102,3 +102,68 @@ describe("les portes d'adhésion partagent le site unique de leurs trois diffusi
     });
   });
 });
+
+/**
+ * #18384 — ET L'ADMISSION DANS LA ROOM PRÉCÈDE LE MESSAGE D'ARRIVÉE.
+ *
+ * Le balayage ci-dessus garde ce qu'une porte ÉMET. Celui-ci garde l'ORDRE de
+ * deux gestes qu'elles font toutes : admettre la socket de l'arrivant dans
+ * `conversation:<id>`, et y poster son message d'arrivée.
+ *
+ * Les trois portes qui servent un COMPTE les faisaient dans l'ordre inverse.
+ * L'arrivant ne recevait donc pas son propre message d'arrivée — et la file
+ * hors ligne ne le rattrapait pas : il figure déjà dans `connectedUsers` et ne
+ * porte aucun marqueur d'injoignabilité (#18381). Deux d'entre elles lançaient
+ * en plus l'admission SANS L'ATTENDRE, ce qui faisait courir la fenêtre
+ * jusque dans les diffusions d'adhésion — que le doc-comment de la troisième
+ * déclarait pourtant précédées par elle.
+ *
+ * Un balayage TEXTUEL, et il faut dire pourquoi : l'ordre de deux appels dans
+ * une fonction n'a pas de témoin de comportement bon marché aux quatre portes
+ * (chacune a son harnais, sa base, ses doubles). Celui de la porte PAR LIEN
+ * existe et observe le vrai ordre — `link-join-room-admission.test.ts` — ; ce
+ * balayage-ci garde les trois autres, et surtout la CINQUIÈME, qui entrera ici
+ * sans que personne y pense.
+ */
+describe("l'admission dans la room précède le message d'arrivée (#18384)", () => {
+  /** Les deux façons d'admettre : l'appel direct, et le relais que la porte par lien passe à son cœur. */
+  const ADMISSION = ['joinUserToConversationRoom(', 'admitToRoom('];
+
+  const premierIndex = (source: string, marqueurs: readonly string[]): number => {
+    const found = marqueurs.map((m) => source.indexOf(m)).filter((i) => i >= 0);
+    return found.length === 0 ? -1 : Math.min(...found);
+  };
+
+  it('le balayage LIT bien les portes', () => {
+    expect(doorFiles().length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("aucune porte ne poste l'arrivée avant d'avoir admis l'arrivant", () => {
+    const inversees = doorFiles()
+      .map((name) => ({ name, source: readFileSync(join(DOORS_DIR, name), 'utf8') }))
+      .filter(({ source }) => premierIndex(source, ADMISSION) >= 0)
+      .filter(({ source }) => premierIndex(source, ADMISSION) > source.indexOf(DOOR_MARKER))
+      .map(
+        ({ name }) =>
+          `${name} — poste le message d'arrivée AVANT d'admettre l'arrivant dans ` +
+          `\`conversation:<id>\`. Il ne reçoit alors pas son propre message d'arrivée, et la ` +
+          `file hors ligne ne le rattrape pas. Hisser l'admission, et l'ATTENDRE.`,
+      );
+
+    expect(inversees).toEqual([]);
+  });
+
+  /*
+   * Lancer l'admission sans l'attendre ne fait que RÉTRÉCIR la fenêtre, de
+   * façon non déterministe — ce qui est pire qu'une fenêtre franche : le défaut
+   * devient intermittent, donc attribué au réseau.
+   */
+  it("l'admission est ATTENDUE, jamais lancée en arrière-plan", () => {
+    const nonAttendues = doorFiles()
+      .map((name) => ({ name, source: readFileSync(join(DOORS_DIR, name), 'utf8') }))
+      .filter(({ source }) => /(?<!await )(?<!\. *)\bsocketManager\.joinUserToConversationRoom\(|(?<!await )\binviteSocketManager\.joinUserToConversationRoom\(/.test(source))
+      .map(({ name }) => `${name} — admet l'arrivant sans attendre : la fenêtre devient intermittente.`);
+
+    expect(nonAttendues).toEqual([]);
+  });
+});

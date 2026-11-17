@@ -208,9 +208,6 @@ export function MyStoriesEmpty({ language }: { readonly language: InterfaceLangu
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(language, 'storiesMine.empty.title')}
       </p>
-      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'storiesMine.empty.subtitle')}
-      </p>
       <Link
         to="storyCompose"
         className={BUTTON.primary}

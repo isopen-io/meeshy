@@ -18,6 +18,17 @@ object SocketEventNames {
     const val AUTH_SESSION_REVOKED = "auth:session-revoked"
     const val AUTH_TOKEN_EXPIRED = "auth:token-expired"
 
+    // batterie des Proches (#14147) : relevé et demande (client -> serveur), état et réveil (serveur -> client, `user:<id>`)
+    const val BATTERY_CHANGED = "battery:changed"
+    const val BATTERY_CLEARED = "battery:cleared"
+    const val BATTERY_PULL = "battery:pull"
+    const val BATTERY_PULL_REQUESTED = "battery:pull-requested"
+    const val BATTERY_REPORT = "battery:report"
+
+    // téléphone injoignable (#18737, TEL-01) : serveur -> client, `user:<lecteur>` ; aucun événement montant
+    const val PHONE_UNREACHABLE = "phone:unreachable"
+    const val PHONE_REACHABLE = "phone:reachable"
+
     // connection health
     const val HEARTBEAT_ACK = "heartbeat:ack"
 
@@ -97,6 +108,9 @@ object SocketEventNames {
     const val COMMENT_UNLIKED = "comment:unliked"
     const val COMMENT_UPDATED = "comment:updated"
 
+    // community
+    const val COMMUNITY_UPDATED = "community:updated"
+
     // conversation
     const val CONVERSATION_CLOSED = "conversation:closed"
     const val CONVERSATION_DELETED = "conversation:deleted"
@@ -125,6 +139,9 @@ object SocketEventNames {
     // position partagée à des personnes (#14109, #16985) : serveur -> client, sur la room `user:<id>`, déjà tronquée
     const val LOCATION_SHARE_CHANGED = "location:share-changed"
     const val LOCATION_SHARE_ENDED = "location:share-ended"
+
+    // MON partage a changé sur la passerelle, ici ou sur un autre appareil du compte (#18389, #18578) : sans charge
+    const val LOCATION_SHARE_OWN_CHANGED = "location:share-own-changed"
 
     // MA position partagée à des personnes (#16985) : client -> serveur, chacun avec son accusé
     const val LOCATION_SHARE_START = "location:share-start"
@@ -287,6 +304,13 @@ object SocketEventNames {
 
     /** Tous les noms du catalogue, dans l'ordre de déclaration. */
     val all: List<String> = listOf(
+        BATTERY_CHANGED,
+        BATTERY_CLEARED,
+        BATTERY_PULL,
+        BATTERY_PULL_REQUESTED,
+        BATTERY_REPORT,
+        PHONE_UNREACHABLE,
+        PHONE_REACHABLE,
         AUDIO_TRANSCRIPTION_READY,
         AUDIO_TRANSLATION_READY,
         AUTH_SESSION_REVOKED,
@@ -360,6 +384,7 @@ object SocketEventNames {
         COMMENT_TRANSLATION_UPDATED,
         COMMENT_UNLIKED,
         COMMENT_UPDATED,
+        COMMUNITY_UPDATED,
         CONVERSATION_CLOSED,
         CONVERSATION_DELETED,
         CONVERSATION_ENCRYPTION_CHANGED,
@@ -384,6 +409,7 @@ object SocketEventNames {
         LOCATION_LIVE_UPDATED,
         LOCATION_SHARE_CHANGED,
         LOCATION_SHARE_ENDED,
+        LOCATION_SHARE_OWN_CHANGED,
         LOCATION_SHARE_START,
         LOCATION_SHARE_STOP,
         LOCATION_SHARE_UPDATE,

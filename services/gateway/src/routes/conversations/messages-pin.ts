@@ -773,6 +773,7 @@ export function registerMessagePinRoutes(
       const heirsApplied = formattedMessages.map((served) => withInheritedExpiry(served, pinnedReaderPage.inherited));
 
       // #9646 — les pièces d'un message protégé épinglé, signées pour CE lecteur.
+      // #18453 — une épingle ne sert pas `metadata` : un résumé d'appel épinglé n'a pas de participants à nommer.
       const servedMessages = await signMessagesAttachmentsForReader(prisma, {
         messages: heirsApplied,
         readerParticipantId: pinnedReaderParticipantId,

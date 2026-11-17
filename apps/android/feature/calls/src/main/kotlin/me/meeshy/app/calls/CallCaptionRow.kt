@@ -207,14 +207,12 @@ private fun CallCaptionStackedPhrase(line: CallLiveCaptionLine) {
 }
 
 /**
- * « Original · … » (or « Traduit · … » once the journal shows the original, #17862) under the leading line, in secondary
- * ink, indented: it unfolds from the sentence and folds back into it; a swap between the two only fades.
- * One piece for the live captions (chrome ink) and the journal after the call (the theme's secondary ink, [ink]).
+ * « Original · … » under a live caption, in secondary ink, indented: it unfolds from the sentence and folds back into
+ * it; a revision of its text only fades. The journal after the call lays its two states on top of each other instead
+ * (A1.18, `TranscriptRow`), and draws the same line ([CallCaptionSecondaryLine]) in the theme's secondary ink.
  */
 @Composable
 internal fun CallCaptionSecondaryBelow(secondary: CallTranscriptSecondary?, reduceMotion: Boolean, ink: Color) {
-    val originalWord = stringResource(R.string.call_captions_original)
-    val translatedWord = stringResource(R.string.call_captions_translated)
     AnimatedContent(
         targetState = secondary,
         transitionSpec = {
@@ -226,19 +224,28 @@ internal fun CallCaptionSecondaryBelow(secondary: CallTranscriptSecondary?, redu
         },
         label = "caption-secondary",
     ) { shown ->
-        if (shown != null) {
-            val word = when (shown.kind) {
-                CallTranscriptSecondaryKind.ORIGINAL -> originalWord
-                CallTranscriptSecondaryKind.TRANSLATED -> translatedWord
-            }
-            Text(
-                text = "$word · ${shown.text}",
-                style = MaterialTheme.typography.bodySmall,
-                color = ink,
-                modifier = Modifier.fillMaxWidth().padding(start = MeeshySpacing.md, top = MeeshySpacing.xxs),
-            )
-        }
+        if (shown != null) CallCaptionSecondaryLine(shown, ink)
     }
+}
+
+/**
+ * The line itself: « Original · … », or « Traduit · … » once the journal shows the original (#17862). One piece for the
+ * live captions (chrome ink) and the journal after the call (the theme's secondary ink, [ink]).
+ */
+@Composable
+internal fun CallCaptionSecondaryLine(secondary: CallTranscriptSecondary, ink: Color) {
+    val originalWord = stringResource(R.string.call_captions_original)
+    val translatedWord = stringResource(R.string.call_captions_translated)
+    val word = when (secondary.kind) {
+        CallTranscriptSecondaryKind.ORIGINAL -> originalWord
+        CallTranscriptSecondaryKind.TRANSLATED -> translatedWord
+    }
+    Text(
+        text = "$word · ${secondary.text}",
+        style = MaterialTheme.typography.bodySmall,
+        color = ink,
+        modifier = Modifier.fillMaxWidth().padding(start = MeeshySpacing.md, top = MeeshySpacing.xxs),
+    )
 }
 
 /** Opacity and translation only (iOS `.opacity.combined(with: .move(edge: .top))`); a short fade under Reduce motion. */

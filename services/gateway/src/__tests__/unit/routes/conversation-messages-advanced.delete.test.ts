@@ -676,7 +676,15 @@ describe('registerMessagesAdvancedRoutes', () => {
           actorUserId: USER_ID,
           eventType: 'deleted',
           messageId: MSG_ID,
-          payload: { messageId: MSG_ID, conversationId: CONV_ID },
+          // #18159 — l'heure du retrait est celle du SERVEUR, et c'est la
+          // MÊME que la colonne écrite. Un destinataire absent rejoue des
+          // heures plus tard : sans elle, sa pierre tombale est datée de sa
+          // RECONNEXION par l'horloge de son appareil.
+          payload: {
+            messageId: MSG_ID,
+            conversationId: CONV_ID,
+            deletedAt: (prisma.message.update.mock.calls[0][0].data.deletedAt as Date).toISOString(),
+          },
         })
       );
     });

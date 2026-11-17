@@ -251,7 +251,7 @@ private fun StoryCommentsLoading() {
     }
 }
 
-/** L'état vide (iOS `emptyPlaceholder`) : le glyphe est décoratif, les deux libellés portent le sens. */
+/** L'état vide (iOS `emptyPlaceholder`) : le glyphe est décoratif, le libellé porte le sens. */
 @Composable
 private fun StoryCommentsEmpty() {
     Column(
@@ -263,10 +263,6 @@ private fun StoryCommentsEmpty() {
         Text(
             stringResource(R.string.stories_comments_empty_title),
             style = TextStyle(color = MeeshyMediaChromeColors.OnMediaSecondary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
-        )
-        Text(
-            stringResource(R.string.stories_comments_empty_subtitle),
-            style = TextStyle(color = MeeshyMediaChromeColors.OnMediaMuted, fontSize = 13.sp),
         )
     }
 }

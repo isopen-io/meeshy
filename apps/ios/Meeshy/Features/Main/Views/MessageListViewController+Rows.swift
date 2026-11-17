@@ -222,15 +222,14 @@ extension MessageListViewController {
             currentUserId: row.currentUserId,
             recipientCount: inputs.recipients
         )
-        return FocalRowInput(
+        var input = FocalRowInput(
             localId: localId,
             serverId: record?.serverId,
             content: content,
             density: self.readingMode == .script ? .script : .focal,
             isFirstInGroup: isFirstInGroup,
             isLastInGroup: inputs.isLastInGroup,
-            senderId: senderId,
-            senderDisplayName: message.senderName ?? message.senderUsername ?? "",
+            senderId: senderId, senderDisplayName: message.senderName ?? message.senderUsername ?? "",
             senderUsername: message.senderUsername,
             senderAvatarURL: message.senderAvatarURL,
             senderThumbHash: nil,
@@ -242,11 +241,9 @@ extension MessageListViewController {
             senderIsAnonymous: message.senderIsAnonymous,
             senderRing: isMine ? nil : message.senderRing,
             accentHex: row.accentHex,
-            isDark: row.isDark,
-            isDirect: row.isDirect,
+            isDark: row.isDark, isDirect: row.isDirect,
             isRightToLeft: collectionView.effectiveUserInterfaceLayoutDirection == .rightToLeft,
-            isOptimistic: isOptimistic,
-            isAgentAuthored: message.messageSource == .agent,
+            isOptimistic: isOptimistic, isAgentAuthored: message.messageSource == .agent,
             showsAgentGrammar: MeeshyFeatureFlags.isAgentGrammarEnabled,
             highlightSearchTerm: inputs.highlightTerm,
             mentionDisplayNames: inputs.mentionDisplayNames,
@@ -266,6 +263,9 @@ extension MessageListViewController {
             focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil,
             availableWidth: rowAvailableWidth
         )
+        // #10690 — la rangée d'un vocal garde son message : la projection du ViewModel le perd à l'accusé.
+        input.audioHostMessage = message.attachments.contains { $0.type == .audio } ? message : nil
+        return input
     }
 
     func focalRowActions(
@@ -389,12 +389,11 @@ extension MessageListViewController {
                     messageBubble.longMessageExpansion(longMessageExpansion).modifier(unencryptedMarking)
                 }
             }
-            .environmentObject(host)
-            .environmentObject(stories)
-            .environmentObject(statuses)
+            .environmentObject(host).environmentObject(stories).environmentObject(statuses)
             .environment(\.bubbleSkin, scene.skin)
             .environment(\.pendingUploadProgress, self.conversationViewModel?.collaborators.uploadProgress.progress(for: messageId))
             .environment(\.bubbleContainerWidth, self.collectionView.bounds.width > 0 ? self.collectionView.bounds.width : nil)
+            .environment(\.ephemeralBurnWind, self.conversationViewModel?.ephemeralWind.wind) // #17938 — le vent de la combustion
             .environment(\.messagePieceLongPress, selectionModeActive ? nil : pieceLongPressHandler)
             .environment(\.pieceSpotlight, self.pieceSpotlight.eraseToAnyPublisher())
             .conversationListObject(convList).announcesCaptures() // #9617 — le fil déclare ce qu'il montre

@@ -43,6 +43,10 @@ const EXPECTED: Record<QueuedEventType, boolean> = {
   starred: false,
   'hidden-for-me': false,
   'restored-for-me': false,
+  // Une flamme-œil CONSOMMÉE et une vue unique PURGÉE (#18556) annoncent une
+  // disparition, comme `expired` : aucune arrivée à accuser.
+  consumed: false,
+  'view-once-purged': false,
 };
 
 describe('announcesMessageArrival', () => {

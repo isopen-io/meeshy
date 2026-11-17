@@ -410,12 +410,10 @@ internal fun MessageActionsSheet(
                     onClick = { showAllActions = true },
                 )
             }
-            if (MessageMenuEntries.saysServerFeaturesAbsent(entryFacts)) {
-                EndToEndMenuNotice(R.string.chat_menu_e2ee_notice)
-            }
-            if (PlainSignalAdmission.saysWhy(signalClearance)) {
-                EndToEndMenuNotice(R.string.chat_menu_e2ee_signals_notice)
-            }
+            endToEndMenuNotices(
+                serverFeaturesAbsent = MessageMenuEntries.saysServerFeaturesAbsent(entryFacts),
+                signalsRefused = PlainSignalAdmission.saysWhy(signalClearance),
+            ).forEach { EndToEndMenuNotice(it) }
         }
     }
     if (confirmingDelete) {

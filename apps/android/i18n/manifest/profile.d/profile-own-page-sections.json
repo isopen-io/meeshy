@@ -74,11 +74,7 @@
           "iosKey": "profile.language.primary",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "profile.language.primary.subtitle",
-          "status": "adopted"
-        },
+        { "androidName": "profile_language_primary_subtitle", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "profile.language.regional",
@@ -132,11 +128,6 @@
         {
           "catalog": "app",
           "iosKey": "profile.progression.subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "profile.progression.hint",
           "status": "adopted"
         },
         {

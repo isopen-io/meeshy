@@ -14,12 +14,16 @@ import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { circleSections, listedLinks, pendingRaiseOf, raiseRequests } from '@/lib/relations/circles';
 import { coldStateOf } from '@/lib/view/cold-state';
+import { ExitPresence } from '@/lib/view/exit-presence';
 import { Glyph, GlyphSvg } from '@/components/glyph';
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoAlone } from '@/components/info-hint';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import {
   CircleLinkRow,
   CircleLinkSheet,
   CircleRequestRow,
+  CircleRequestsSection,
   CircleSectionHeader,
   CirclesErrorBanner,
   type CircleRequestHandlers,
@@ -142,14 +146,20 @@ export function CirclesPanel(props: CirclesPanelProps) {
           data="circles"
           glyph={<Glyph name="users" size={44} />}
           title={translateCircles(language, 'circles.empty.title')}
-          subtitle={translateCircles(language, 'circles.empty.subtitle')}
-        />
+        >
+          <p data-circles-empty-intro className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+            {translateCircles(language, 'circles.intro')}
+          </p>
+          <InfoAlone
+            hint={{ label: translateCircles(language, 'circles.empty.question'), text: translateCircles(language, 'circles.empty.subtitle'), glyph: SETTINGS_GLYPHS.info }}
+          />
+        </DiscoverEmpty>
         <div className="flex justify-center pb-10">
           <button
             type="button"
             data-circles-find
             onClick={onFindContacts}
-            className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="btn-press grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ minHeight: 44, backgroundColor: 'var(--ios-indigo-600)', outlineColor: 'var(--color-ios-brand)' }}
           >
             {translateCircles(language, 'circles.empty.action')}
@@ -163,10 +173,13 @@ export function CirclesPanel(props: CirclesPanelProps) {
   return (
     <section data-circles className="flex flex-col pb-8">
       {query.isError ? <CirclesErrorBanner language={language} onRetry={() => void query.refetch()} /> : online ? null : <DiscoverOfflineNotice language={language} cold={false} />}
+      <p data-circles-intro className="px-5 pt-3 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {translateCircles(language, 'circles.intro')}
+      </p>
       <Link
         to="sharedLocations"
         data-circles-positions
-        className="mx-5 mt-3 flex min-h-[44px] items-center gap-3 rounded-card px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="btn-press mx-5 mt-3 flex min-h-[44px] items-center gap-3 rounded-card px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ backgroundColor: 'var(--color-panel)', color: 'var(--color-ios-ink)', border: '1px solid var(--color-border)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <span aria-hidden="true" style={{ color: 'var(--color-ios-brand)' }}>
@@ -175,21 +188,22 @@ export function CirclesPanel(props: CirclesPanelProps) {
         <span className="min-w-0 flex-1 truncate">{translateCircles(language, 'positions.title')}</span>
         <GlyphSvg glyph={FEED_GLYPHS.caretRight} size={14} className="rtl:-scale-x-100" />
       </Link>
-      {hasRaises ? (
-        <>
-          <h2 className="px-5 pt-4 pb-1.5 text-body font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            {translateCircles(language, 'circles.section.requests')}
-          </h2>
-          <ul data-circle-requests className="flex flex-col">
-            {raises.incoming.map((request) => (
-              <CircleRequestRow key={request.id} language={language} request={request} direction="incoming" person={request.sender ?? personOf(request.senderId)} handlers={requestHandlers} />
-            ))}
-            {raises.outgoing.map((request) => (
-              <CircleRequestRow key={request.id} language={language} request={request} direction="outgoing" person={request.receiver ?? personOf(request.receiverId)} handlers={requestHandlers} />
-            ))}
-          </ul>
-        </>
-      ) : null}
+      <ExitPresence scope="circle-requests">
+        {hasRaises ? (
+          <CircleRequestsSection key="requests" title={translateCircles(language, 'circles.section.requests')}>
+            <ExitPresence scope="circle-requests">
+              {[
+                ...raises.incoming.map((request) => (
+                  <CircleRequestRow key={request.id} language={language} request={request} direction="incoming" person={request.sender ?? personOf(request.senderId)} handlers={requestHandlers} />
+                )),
+                ...raises.outgoing.map((request) => (
+                  <CircleRequestRow key={request.id} language={language} request={request} direction="outgoing" person={request.receiver ?? personOf(request.receiverId)} handlers={requestHandlers} />
+                )),
+              ]}
+            </ExitPresence>
+          </CircleRequestsSection>
+        ) : null}
+      </ExitPresence>
       {sections.map((section) => (
         <div key={section.level}>
           <CircleSectionHeader language={language} level={section.level} count={section.links.length} />

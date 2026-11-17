@@ -5,12 +5,20 @@ import MeeshyUI
 struct SecurityPhoneSection: View {
     let user: MeeshyUser?
     @ObservedObject var phoneFlow: PhoneChangeFlowModel
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
 
     private var theme: ThemeManager { ThemeManager.shared }
+
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             SecuritySectionHeader(title: String(localized: "settings.security.phone", defaultValue: "Téléphone", bundle: .main), icon: "phone.fill", color: MeeshyColors.indigo400Hex)
+
+            SettingsSentence(text: String(localized: "settings.security.phone.summary", defaultValue: "Vérifié, il sert à récupérer votre compte par SMS.", bundle: .main))
 
             VStack(spacing: 0) {
                 currentPhoneRow
@@ -29,10 +37,14 @@ struct SecurityPhoneSection: View {
                         .foregroundStyle(MeeshyColors.error)
                         .padding(.horizontal, MeeshySpacing.mdPlus)
                         .padding(.bottom, MeeshySpacing.smPlus)
+                        .transition(.opacity)
                 }
             }
+            .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: phoneFlow.error)
             .background(SettingsSectionBackground(tint: MeeshyColors.indigo400Hex))
         }
+        .onAppear { phoneFlow.reducesMotion = reduceMotion }
+        .adaptiveOnChange(of: reduceMotion) { _, reduce in phoneFlow.reducesMotion = reduce }
     }
 
     private var currentPhoneRow: some View {
@@ -87,8 +99,7 @@ struct SecurityPhoneSection: View {
                     Task { await phoneFlow.requestCode(for: phone) }
                 } label: {
                     HStack(spacing: MeeshySpacing.sm) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.caption.weight(.semibold))
+                        SecurityVerifyGlyph(isSending: phoneFlow.isSending)
                         Text(String(localized: "common.verify", defaultValue: "Vérifier", bundle: .main))
                             .font(.footnote.weight(.semibold))
                     }
@@ -96,6 +107,7 @@ struct SecurityPhoneSection: View {
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.vertical, MeeshySpacing.sm)
                 }
+                .disabled(phoneFlow.isSending)
             }
 
             Spacer()

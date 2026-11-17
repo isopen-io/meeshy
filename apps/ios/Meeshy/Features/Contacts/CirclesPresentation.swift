@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 // « Mes cercles » (#13938) — les types PURS de l'écran : la personne que le serveur ne nomme jamais, ce que la
 // ligne d'un lien dit de sa progression, la cible du rituel. Sans état, sans I/O, jouables sans écran.
@@ -34,6 +35,12 @@ nonisolated enum CirclePersonSetting: String, CaseIterable, Identifiable, Sendab
         allCases.filter { level >= $0.opensAt }
     }
 
+    /// Les réglages que la fiche rend : ceux dont le serveur sert l'état. Un réglage sans effet n'est pas rendu (un
+    /// interrupteur désactivé qui s'excuse est du texte en trop) ; sa place revient avec son lot.
+    static func shown(at level: RelationLevel) -> [CirclePersonSetting] {
+        offered(at: level).filter { $0.personSwitch != nil }
+    }
+
     private var opensAt: RelationLevel {
         switch self {
         case .blockBring: return .friend
@@ -64,8 +71,23 @@ nonisolated enum CirclePersonSetting: String, CaseIterable, Identifiable, Sendab
             )
         case .listening:
             return ListeningShareCopy.detail
-        case .blockBring, .liveLocation:
+        case .blockBring:
+            return String(
+                localized: "circles.settings.blockBring.detail",
+                defaultValue: "Ses Bring n’arriveront plus chez vous. Cette personne n’en est pas prévenue.",
+                bundle: .main
+            )
+        case .liveLocation:
             return nil
+        }
+    }
+
+    /// Le détail SECONDAIRE d'un réglage, derrière un (i) dont le nom est la question. La phrase qui dit ce que fait le
+    /// réglage reste au repos (`detail`) ; ici, seulement le cas limite.
+    var infoNote: MeeshyInfoNote? {
+        switch self {
+        case .listening: return ListeningShareCopy.note
+        case .blockBring, .talkie, .liveLocation: return nil
         }
     }
 
@@ -155,6 +177,19 @@ nonisolated enum CircleLevelNames {
         }
     }
 
+    /// Ce que ce niveau OUVRE à la personne, dit sous le nom du niveau sur la fiche du lien : le niveau est nommé, la
+    /// phrase dit ce qu'il change (règle 7 : repère propre à Meeshy, lisible au repos).
+    static func opens(of level: RelationLevel) -> String {
+        switch level {
+        case .blood: return String(localized: "circles.level.blood.opens", defaultValue: "Présence, talkie, écoute avec titre et position en direct, selon ton accord.", bundle: .main)
+        case .close: return String(localized: "circles.level.close.opens", defaultValue: "Ta présence complète, le talkie et la catégorie de ce que tu écoutes.", bundle: .main)
+        case .friend: return String(localized: "circles.level.friend.opens", defaultValue: "Ta présence « en ligne », sans l'heure, et le Bring.", bundle: .main)
+        case .acquaintance: return String(localized: "circles.level.acquaintance.opens", defaultValue: "Vous pouvez vous écrire ; cette personne voit tes stories « Connaissances ».", bundle: .main)
+        case .community: return String(localized: "circles.level.community.opens", defaultValue: "Ce que voient les membres de tes communautés.", bundle: .main)
+        case .public: return String(localized: "circles.level.public.opens", defaultValue: "Ce que tout le monde voit de toi.", bundle: .main)
+        }
+    }
+
     static func icon(of level: RelationLevel) -> String {
         switch level {
         case .blood: return "🩸"
@@ -211,10 +246,10 @@ nonisolated enum BloodRitualConsentCopy {
         String(localized: "circles.ritual.consent.folding.title", defaultValue: "Ce que ça montre, à qui, combien de temps, comment arrêter", bundle: .main)
     }
 
-    /// Où retirer un consentement : la fiche de la personne, à la même place que l'activation (E3). La route de
-    /// retrait n'existe pas encore (#14401) : l'écran le dit.
+    /// Où refuser un consentement, et ce que l'écran ne promet pas : la route de retrait n'existe pas encore
+    /// (#14401), l'écran le dit en une phrase visible.
     static var withdrawal: String {
-        String(localized: "circles.ritual.consent.withdrawal", defaultValue: "Tu pourras retirer chaque partage à tout moment, depuis la fiche de cette personne. Bientôt disponible.", bundle: .main)
+        String(localized: "circles.ritual.consent.withdrawal", defaultValue: "Chaque partage se refuse ici ; le retirer après coup n'est pas encore possible.", bundle: .main)
     }
 
     static func folding(for key: RelationRitualConsentKey, otherName: String) -> String {

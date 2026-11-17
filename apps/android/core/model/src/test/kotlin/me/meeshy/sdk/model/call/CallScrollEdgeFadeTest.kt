@@ -4,46 +4,21 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 class CallScrollEdgeFadeTest {
-    private fun edges(back: Boolean, ahead: Boolean, horizontal: Boolean = true, rtl: Boolean = false, symmetric: Boolean = true) =
-        CallScrollEdgeFade.edges(back, ahead, horizontal, rtl, symmetric)
-
     @Test
-    fun `a row that fits whole is cut nowhere, so nothing fades`() {
-        assertThat(edges(back = false, ahead = false).any).isFalse()
-        assertThat(edges(back = false, ahead = false, symmetric = false).any).isFalse()
+    fun `a row fades at BOTH of its edges, the same law as iOS ScrollEdgeFadeMask start and end (P2_8, U1_13, U3_3, C1_5, loi 17_9)`() {
+        assertThat(CallScrollEdgeFade.edges).isEqualTo(CallScrollEdgeFade.Edges(first = true, last = true))
+        assertThat(CallScrollEdgeFade.edges.any).isTrue()
     }
 
     @Test
-    fun `a row that scrolls fades at BOTH edges, at rest on its first chip too (P12_8, P14_9)`() {
-        assertThat(edges(back = false, ahead = true)).isEqualTo(CallScrollEdgeFade.Edges(first = true, last = true))
-        assertThat(edges(back = true, ahead = false)).isEqualTo(CallScrollEdgeFade.Edges(first = true, last = true))
-        assertThat(edges(back = true, ahead = true)).isEqualTo(CallScrollEdgeFade.Edges(first = true, last = true))
+    fun `the law never reads the scroll state, so a row that fits whole fades like one that scrolls`() {
+        val readers = CallScrollEdgeFade::class.java.declaredMethods.filter { it.name.contains("dges") && it.parameterCount > 0 }
+        assertThat(readers).isEmpty()
     }
 
     @Test
-    fun `the symmetric fade is the same in right-to-left`() {
-        assertThat(edges(back = false, ahead = true, rtl = true)).isEqualTo(edges(back = false, ahead = true, rtl = false))
-    }
-
-    @Test
-    fun `a rail fades only the edge that hides buttons, and lets go once that edge is reached`() {
-        assertThat(edges(back = false, ahead = true, horizontal = false, symmetric = false))
-            .isEqualTo(CallScrollEdgeFade.Edges(first = false, last = true))
-        assertThat(edges(back = true, ahead = false, horizontal = false, symmetric = false))
-            .isEqualTo(CallScrollEdgeFade.Edges(first = true, last = false))
-    }
-
-    @Test
-    fun `in right-to-left the horizontal start is the RIGHT edge, so what hides behind it fades there`() {
-        assertThat(edges(back = true, ahead = false, rtl = true, symmetric = false))
-            .isEqualTo(CallScrollEdgeFade.Edges(first = false, last = true))
-        assertThat(edges(back = true, ahead = false, rtl = false, symmetric = false))
-            .isEqualTo(CallScrollEdgeFade.Edges(first = true, last = false))
-    }
-
-    @Test
-    fun `right-to-left never flips a vertical rail`() {
-        assertThat(edges(back = false, ahead = true, horizontal = false, rtl = true, symmetric = false))
-            .isEqualTo(CallScrollEdgeFade.Edges(first = false, last = true))
+    fun `the edges are physical, so right-to-left and a vertical rail fade the very same two edges`() {
+        assertThat(CallScrollEdgeFade.edges.first).isTrue()
+        assertThat(CallScrollEdgeFade.edges.last).isTrue()
     }
 }

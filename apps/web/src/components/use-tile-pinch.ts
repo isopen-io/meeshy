@@ -1,6 +1,7 @@
 import { useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type WheelEvent } from 'react';
 
-import { scaleAfterPinch, scaleAfterWheel, type SelfTileScale } from '@/lib/calls/call-self-tile';
+import type { SelfTileScale } from '@/lib/calls/call-self-tile';
+import { scaleAfterPinch, scaleAfterWheel } from '@/lib/calls/call-self-tile-gestures';
 
 /**
  * **PINCER MA VIGNETTE** (#8577) — deux doigts sur ma vignette en coin la

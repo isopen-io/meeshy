@@ -129,7 +129,7 @@ describe('le (i) des titres des réglages du jeu', () => {
   test('sans note, les titres restent nus et gardent leur identifiant', async () => {
     const host = await mount(<GameSettings {...props()} />);
     expect(host.querySelector('#game-settings-celebrations-title')).not.toBeNull();
-    expect(host.querySelectorAll('button[aria-controls]')).toHaveLength(0);
+    expect(host.querySelectorAll('#game-settings-celebrations button[aria-controls]')).toHaveLength(0);
   });
 
   test('une note sur un bloc pose son (i) à côté du seul titre visé', async () => {
@@ -140,6 +140,6 @@ describe('le (i) des titres des réglages du jeu', () => {
     );
     const button = infoButton(host, 'Que fêtent Mee et Meo ?');
     expect(noteOf(host, button).textContent).toBe('Chaque étape franchie.');
-    expect(host.querySelectorAll('button[aria-controls]')).toHaveLength(1);
+    expect(host.querySelectorAll('#game-settings-celebrations button[aria-controls]')).toHaveLength(1);
   });
 });

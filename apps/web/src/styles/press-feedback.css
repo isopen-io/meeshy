@@ -24,11 +24,11 @@
  */
 @media (prefers-reduced-motion: no-preference) {
   [data-press-host] {
-    transition: scale 180ms cubic-bezier(0.2, 0, 0, 1);
+    transition: scale var(--press-return-ms) var(--press-curve);
   }
 
   [data-press-host][data-pressing] {
     scale: 0.97;
-    transition: scale 220ms cubic-bezier(0.2, 0, 0, 1) 150ms;
+    transition: scale 220ms var(--press-curve) 150ms;
   }
 }

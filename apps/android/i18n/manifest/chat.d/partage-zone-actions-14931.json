@@ -84,12 +84,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "forward.publish-capture-warning",
-          "androidName": "share_capture_warning",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "share.sheet.withheld.not-a-reel",
           "androidName": "share_withheld_not_a_reel",
           "status": "adopted"

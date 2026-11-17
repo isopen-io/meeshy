@@ -118,6 +118,39 @@ final class PerpetualMotionGuardTests: XCTestCase {
                        "`RestingWaveform` doit rester déclaré une seule fois")
     }
 
+    // MARK: - Règle 4 — la racine du mouvement est câblée (#18354)
+
+    /// Sans la racine, chaque `withAnimation` brut joue sous « Réduire les
+    /// animations ». Elle est posée sur les DEUX fenêtres, chacune AVANT
+    /// l'injection de `meeshyForceReduceMotion` : posée après, elle ne lirait
+    /// que la moitié système de la préférence.
+    func test_laRacineDuMouvementPrecedeChaqueInjectionDeLaPreference() throws {
+        let code = DeclarationBodyScanner.mask(
+            try String(contentsOf: appRoot.appendingPathComponent("MeeshyApp.swift"), encoding: .utf8))
+        let injection = ".environment(\\.meeshyForceReduceMotion"
+        let segments = code.components(separatedBy: injection).dropLast()
+        XCTAssertEqual(segments.count, 2, "les deux fenêtres injectent la préférence de l'app")
+        XCTAssertEqual(code.components(separatedBy: ".meeshyMotionRoot()").count - 1, 2,
+                       "une racine du mouvement par fenêtre")
+        for (index, segment) in segments.enumerated() {
+            let tail = segment.components(separatedBy: "\n").suffix(3).joined(separator: "\n")
+            XCTAssertTrue(tail.contains(".meeshyMotionRoot()"),
+                          "la fenêtre \(index + 1) doit poser `.meeshyMotionRoot()` juste avant "
+                          + "d'injecter `meeshyForceReduceMotion`")
+        }
+    }
+
+    /// Les surfaces présentées déclarées portent leur propre racine : la
+    /// préférence y vaut, que la transaction traverse la présentation ou non.
+    func test_laSurfacePresenteePorteLaRacineDuMouvement() throws {
+        let source = try String(
+            contentsOf: appRoot.appendingPathComponent("Features/Navigation/PresentedSurfaceModifier.swift"),
+            encoding: .utf8)
+        let body = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct PresentedSurfaceModifier", in: source))
+        XCTAssertTrue(DeclarationBodyScanner.mask(body).contains(".meeshyMotionRoot()"),
+                      "`PresentedSurfaceModifier.body` doit poser `.meeshyMotionRoot()`")
+    }
+
     // MARK: - Bornes
 
     /// Si le balayage cesse de voir les boucles, la règle 1 passe au vert en ne

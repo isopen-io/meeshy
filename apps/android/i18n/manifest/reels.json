@@ -30,40 +30,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "story.viewer.comments.beFirst",
-          "androidName": "reels_comments_empty_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "story.viewer.comments.empty",
-          "androidName": "reels_comments_empty_title",
-          "status": "adopted"
-        },
-        {
-          "androidName": "reels_comments_error",
-          "status": "android-only"
-        },
-        {
-          "androidName": "reels_comments_failed",
-          "status": "android-only"
-        },
-        {
-          "androidName": "reels_comments_input_hint",
-          "status": "android-only"
-        },
-        {
-          "androidName": "reels_comments_loading",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "call.feedback.send",
-          "androidName": "reels_comments_send",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "a11y.post.comments",
           "androidName": "reels_comments_title",
           "status": "adopted"

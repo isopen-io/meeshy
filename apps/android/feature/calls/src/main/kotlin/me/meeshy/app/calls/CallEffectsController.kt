@@ -15,23 +15,30 @@ import me.meeshy.sdk.model.call.effects.CallEffectsModeState
 internal class CallEffectsController(
     private val effects: CallVideoEffectsController,
 ) {
-    private val _state = MutableStateFlow(
-        CallEffectsModeState.opening(effects.config.value, effects.layers.value, effects.takeRequestedCategory()),
-    )
+    private val _state = MutableStateFlow(opening())
     val state: StateFlow<CallEffectsModeState> = _state.asStateFlow()
 
     private var finished = false
 
     init {
-        effects.apply(_state.value.current)
-        effects.setLayers(_state.value.layers)
+        publish()
     }
 
     fun change(transform: (CallEffectsModeState) -> CallEffectsModeState) {
         if (finished) return
         _state.update(transform)
-        effects.apply(_state.value.current)
-        effects.setLayers(_state.value.layers)
+        publish()
+    }
+
+    /**
+     * #17819 — la couche du mode fond en sortant : y rentrer pendant ce fondu retrouve la même session. Close par ‹, elle se
+     * rouvre comme une entrée neuve (la rangée demandée, la pile que l'appel tient) ; encore ouverte, rien ne change.
+     */
+    fun reopen() {
+        if (!finished) return
+        finished = false
+        _state.value = opening()
+        publish()
     }
 
     /** Ferme la session en gardant le look ; rend `false` si elle l'était déjà (un double toucher ne ferme pas deux fois). */
@@ -39,5 +46,13 @@ internal class CallEffectsController(
         if (finished) return false
         finished = true
         return true
+    }
+
+    private fun opening(): CallEffectsModeState =
+        CallEffectsModeState.opening(effects.config.value, effects.layers.value, effects.takeRequestedCategory())
+
+    private fun publish() {
+        effects.apply(_state.value.current)
+        effects.setLayers(_state.value.layers)
     }
 }

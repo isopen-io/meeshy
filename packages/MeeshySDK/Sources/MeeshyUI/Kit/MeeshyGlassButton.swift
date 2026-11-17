@@ -516,7 +516,7 @@ enum MeeshyGlassPressReport {
 /// L'appui long : 500 ms, annulé au-delà de 10 pt. N'existe que si l'hôte en
 /// donne un ; désactivé, il ne fait rien (`fireLongPress`). L'identité du
 /// bouton ne dépend donc pas de `.disabled`.
-private struct MeeshyGlassLongPress: ViewModifier {
+struct MeeshyGlassLongPress: ViewModifier {
     let isOn: Bool
     let perform: () -> Void
 
@@ -563,7 +563,7 @@ private struct MeeshyGlassTraits: ViewModifier {
 
 /// L'appui long offert au lecteur d'écran dès qu'il existe : sans
 /// `longPressLabel`, il porte le nom du bouton plutôt que de disparaître.
-private struct MeeshyGlassLongPressAction: ViewModifier {
+struct MeeshyGlassLongPressAction: ViewModifier {
     let name: String
     let perform: (() -> Void)?
 

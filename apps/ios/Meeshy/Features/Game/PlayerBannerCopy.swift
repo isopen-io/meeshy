@@ -14,7 +14,8 @@ import MeeshyUI
 enum PlayerBannerCopy {
 
     /// Les phrases courtes que la brique pose : les points, ce qu'il manque, les Meeshes, la place, les jours de Flamme.
-    static func texts(for banner: GamePlayerBanner) -> PlayerBannerView.Texts {
+    /// `offeringReward` : le gain d'une Offrande que l'hôte vient d'ouvrir sur place (#18199), dit quelques secondes.
+    static func texts(for banner: GamePlayerBanner, offeringReward: Int? = nil) -> PlayerBannerView.Texts {
         PlayerBannerView.Texts(
             points: GameText.bannerPoints(points: GameCopy.formatCount(banner.score)),
             missing: banner.pointsToNext.map {
@@ -28,8 +29,20 @@ enum PlayerBannerCopy {
             season: banner.season.map { seasonShort($0.number) },
             rank: banner.rank.map { GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic) },
             gloryMissing: banner.rank.map(gloryMissing),
-            pieceLabels: Dictionary(uniqueKeysWithValues: banner.pieces.map { ($0, pieceLabel($0, banner)) })
+            pieceLabels: Dictionary(uniqueKeysWithValues: banner.pieces.map { ($0, pieceLabel($0, banner)) }),
+            offeringReward: offeringReward.map { "+\(GameCopy.formatCount($0))" },
+            offeringRewardLabel: offeringReward.map(offeringOpenedLabel)
         )
+    }
+
+    /// « Offrande ouverte : +40 étincelles » — ce que VoiceOver lit du gain posé à la place de la pièce (#18199).
+    static func offeringOpenedLabel(_ points: Int) -> String {
+        String(localized: "game2.banner.offering.opened.a11y", defaultValue: "Offrande ouverte : +\(GameCopy.points(points))", bundle: .main)
+    }
+
+    /// « Offrande prête », dans la phrase entière du bandeau.
+    static var offeringReady: String {
+        String(localized: "game2.banner.offering.ready", defaultValue: "Offrande prête", bundle: .main)
     }
 
     /// « 5 543 vers Passeur II », ou « Gloire 990 k » quand il n'y a plus de marche.
@@ -77,6 +90,8 @@ enum PlayerBannerCopy {
             return String(localized: "game2.banner.mission.a11y",
                           defaultValue: "Rêve : \(GameCopy.formatCount(mission.done)) sur \(GameCopy.formatCount(mission.total))",
                           bundle: .main)
+        case .offering:
+            return String(localized: "game2.banner.offering.open", defaultValue: "Offrande prête : l’ouvrir", bundle: .main)
         case .treasury:
             return banner.treasury.map { GameText.visitorTreasury(tier: GameCopy.treasuryName($0)) } ?? ""
         case .season:
@@ -102,6 +117,7 @@ enum PlayerBannerCopy {
                 GameText.bannerLeague(league: GameText.leagueName($0.league), place: GameText.bannerPlace(count: $0.place))
             },
             banner.flame.map { GameText.bannerFlame(days: GameCopy.days($0.days)) },
+            banner.attention.chestReady ? offeringReady : nil,
             banner.treasury.map { GameText.visitorTreasury(tier: GameCopy.treasuryName($0)) },
         ]
         return parts.compactMap { $0 }.joined(separator: GameText.bannerSeparator)

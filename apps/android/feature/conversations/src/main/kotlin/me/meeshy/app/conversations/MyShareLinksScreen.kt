@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -166,7 +167,7 @@ private fun Modifier.headerReserve(): Modifier =
         .padding(top = CollapsibleHeaderMetrics.EXPANDED_HEIGHT.dp)
 
 @Composable
-private fun EmptyLinks() {
+internal fun EmptyLinks() {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -183,9 +184,10 @@ private fun EmptyLinks() {
             color = MeeshyTheme.tokens.textPrimary,
         )
         Text(
-            text = stringResource(R.string.my_share_links_empty_subtitle),
+            text = stringResource(R.string.links_hub_share_description),
             style = MaterialTheme.typography.bodyMedium,
             color = MeeshyTheme.tokens.textSecondary,
+            textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = MeeshySpacing.sm),
         )
     }
@@ -227,7 +229,7 @@ private fun FailureBanner(onRetry: () -> Unit) {
 }
 
 @Composable
-private fun LinksList(
+internal fun LinksList(
     listState: LazyListState,
     links: List<MyShareLink>,
     stats: MyShareLinkStats?,
@@ -262,17 +264,15 @@ private fun LinksList(
         if (showFailureBanner) {
             item(key = "failure", contentType = "banner") { FailureBanner(onRetry) }
         }
+        item(key = "intro", contentType = "intro") {
+            Text(
+                stringResource(R.string.links_hub_share_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+        }
         stats?.let {
             item(key = "stats", contentType = "stats") { StatsHeader(it) }
-        }
-        item(key = "section") {
-            Text(
-                text = stringResource(R.string.my_share_links_section),
-                style = MaterialTheme.typography.labelLarge,
-                color = MeeshyTheme.tokens.textSecondary,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(vertical = MeeshySpacing.xs),
-            )
         }
         items(links, key = { it.id }, contentType = { "link" }) { link ->
             ShareLinkRow(
@@ -377,6 +377,14 @@ private fun ShareLinkRow(
                 link.conversationTitle?.let { title ->
                     Text(
                         text = title,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MeeshyTheme.tokens.textMuted,
+                        maxLines = 1,
+                    )
+                }
+                isoToEpochMillisOrNull(link.createdAt)?.let { created ->
+                    Text(
+                        text = stringResource(R.string.shareLink_detail_createdOn, ShareLinkDateFormat.day(created)),
                         style = MaterialTheme.typography.labelSmall,
                         color = MeeshyTheme.tokens.textMuted,
                         maxLines = 1,

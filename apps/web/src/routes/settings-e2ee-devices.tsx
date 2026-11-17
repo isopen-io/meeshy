@@ -171,6 +171,7 @@ export function SettingsE2eeDevicesScreen({
             title={t('e2eeDevices.section').toLocaleUpperCase(language)}
             icon={<GlyphSvg glyph={SETTINGS_GLYPHS.shieldCheck} size={12} />}
             card={false}
+            note={{ label: t('e2eeDevices.approval.question'), text: t('e2eeDevices.approval'), glyph: SETTINGS_GLYPHS.info }}
           >
             <p className="ps-1 text-caption" style={{ color: SECTION_INK_2 }}>
               {t('e2eeDevices.intro')}
@@ -205,9 +206,6 @@ export function SettingsE2eeDevicesScreen({
                 ))}
               </ul>
             )}
-            <p className="ps-1 text-caption" style={{ color: SECTION_INK_2 }}>
-              {t('e2eeDevices.approval')}
-            </p>
           </GroupedSection>
         </div>
       </main>

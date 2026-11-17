@@ -116,7 +116,7 @@ struct FeedPostCardCarousel: View {
     @ViewBuilder
     private func slide(_ item: FeedMedia, at offset: Int) -> some View {
         ZStack(alignment: .bottomLeading) {
-            FeedMediaTile(media: item)
+            FeedMediaTile(media: item, animates: offset == index)
 
             // La légende de CE média, et d'aucun autre. Le dégradé n'existe que
             // sous elle : sans légende, rien ne s'assombrit — un voile permanent
@@ -286,21 +286,15 @@ nonisolated enum FeedCarouselLayout {
 /// changent pas.
 struct FeedMediaTile: View {
     let media: FeedMedia
+    /// #4984 — la page visible d'un carrousel joue son GIF ; une vignette de
+    /// grille ou une page voisine reste figée.
+    var animates: Bool = false
 
     var body: some View {
         ZStack {
             let thumbUrl = media.thumbnailUrl ?? media.url ?? ""
             if !thumbUrl.isEmpty || media.thumbHash != nil {
-                ProgressiveCachedImage(
-                    thumbHash: media.thumbHash,
-                    thumbnailUrl: media.thumbnailUrl,
-                    fullUrl: media.url,
-                    autoLoad: true
-                ) {
-                    Color(hex: media.thumbnailColor)
-                        .shimmer()
-                }
-                .aspectRatio(contentMode: .fill)
+                FeedMediaImage(media: media, animates: animates)
                 .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
                 .clipped()
             } else {

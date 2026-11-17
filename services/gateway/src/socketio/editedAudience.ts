@@ -16,7 +16,14 @@ export type EditAudiencePrisma = Pick<PrismaClient, 'participant' | 'conversatio
 
 /**
  * **QUI a le droit de LIRE ce message** — la loi `translationReaders` (#9709),
- * appliquée au texte d'une ÉDITION, et le SITE UNIQUE qui la porte.
+ * et le SITE UNIQUE qui la porte.
+ *
+ * **Elle ne s'appelle plus `editReadership`, et le nom était faux avant de
+ * l'être (#18613).** Elle servait DÉJÀ deux familles quand elle portait ce
+ * nom — l'édition et la MENTION (`services/messaging/messageMentions.ts`) — et
+ * l'enrichissement d'une pièce jointe est la troisième. Un nom qui désigne un
+ * seul de ses appelants rend la loi invisible depuis les autres : le quatrième
+ * site qui aura besoin d'elle ne la cherchera pas sous « edit ».
  *
  * Elle existait déjà et gouvernait trois autres sorties : `message:translation`
  * (« un invité entré par un lien sans historique recevait donc le TEXTE traduit
@@ -64,7 +71,7 @@ export type EditAudiencePrisma = Pick<PrismaClient, 'participant' | 'conversatio
  * perdue dont la base garde la vérité — mais le coût est réel, et l'appelant
  * reçoit l'erreur (`onError`) pour que la panne soit NOMMÉE là où il journalise.
  */
-export type EditReadership = TranslationReaders | { readonly kind: 'unknown' };
+export type MessageReadership = TranslationReaders | { readonly kind: 'unknown' };
 
 /**
  * Les clés de file que le plancher écarte — vide dès que la room entière peut
@@ -80,15 +87,15 @@ export type EditReadership = TranslationReaders | { readonly kind: 'unknown' };
  * fuite ; c'est un couplage qui rendrait la prochaine régression illisible, et
  * il est écrit ici pour qu'on ne le redécouvre pas comme un défaut.
  */
-export const blockedEditKeys = (readership: EditReadership): ReadonlySet<string> =>
+export const blockedReaderKeys = (readership: MessageReadership): ReadonlySet<string> =>
   readership.kind === 'readers' ? readership.excludedQueueKeys : EMPTY_KEYS;
 
-export async function editReadership(
+export async function messageReadership(
   prisma: EditAudiencePrisma,
   conversationId: string,
   messageId: string,
   onError?: (error: unknown) => void,
-): Promise<EditReadership> {
+): Promise<MessageReadership> {
   // DEUX gardes par lecture, et aucune ne subsume l'autre (§ Critical Gotchas) :
   // le `try/catch` garde l'APPEL — un double de prisma sans la méthode, un
   // `throw` synchrone — et c'est le cas qui est tombé pendant le lot ; `await`

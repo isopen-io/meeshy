@@ -39,86 +39,68 @@ final class AffiliateCreateViewAccessibilityTests: XCTestCase {
         }
     }
 
-    // MARK: - Field labelling
-
-    func test_bothTextFields_carryAnAccessibilityLabel() throws {
-        let code = try code
-        XCTAssertEqual(
-            code.components(separatedBy: "TextField(").count - 1, 2,
-            "Guard: this screen is expected to have exactly two fields — if that changes, the "
-            + "assertions below no longer cover all of them."
-        )
-        XCTAssertEqual(
-            code.components(separatedBy: ".accessibilityLabel(").count - 1, 3,
-            "Two fields plus the primary CTA must each carry an explicit label."
-        )
-    }
-
-    /// The label must be the **visible caption**, not a new string: reusing the
-    /// caption's own key keeps voice and screen in step and adds no i18n key.
-    func test_fieldLabels_reuseTheVisibleCaptionKeys() throws {
-        let code = try code
-        for key in ["affiliate.create.name.label", "affiliate.create.maxUses.label"] {
-            XCTAssertEqual(
-                code.components(separatedBy: key).count - 1, 2,
-                "\(key) must appear twice: once rendering the caption, once labelling its field."
+    private var formFieldSource: String {
+        get throws {
+            try String(
+                contentsOf: URL(fileURLWithPath: #filePath)
+                    .deletingLastPathComponent()
+                    .deletingLastPathComponent()
+                    .deletingLastPathComponent()
+                    .deletingLastPathComponent()
+                    .appendingPathComponent("Meeshy/Features/Links/Views/LinksHubView.swift"),
+                encoding: .utf8
             )
         }
     }
 
-    /// Once the caption is the field's label, leaving it visible to VoiceOver
-    /// makes it a second stop that reads the same words.
-    func test_captions_areHiddenFromVoiceOver() throws {
+    // MARK: - Field labelling (retournée au kit, #18429)
+
+    /// The two fields are the kit's `MeeshyField`, through the links form field
+    /// that renders the visible caption above it. No hand-rolled `TextField` is left.
+    func test_bothFields_areKitFieldsThroughTheLinksFormField() throws {
         let code = try code
-        XCTAssertGreaterThanOrEqual(
-            code.components(separatedBy: ".accessibilityHidden(true)").count - 1, 3,
-            "Both field captions and the decorative CTA glyph must be hidden."
+        XCTAssertEqual(
+            code.components(separatedBy: "LinksFormField(").count - 1, 2,
+            "Guard: this screen is expected to have exactly two fields — if that changes, the "
+            + "assertions below no longer cover all of them."
         )
+        XCTAssertFalse(code.contains("TextField("), "The fields are the kit's MeeshyField, never a hand-rolled TextField.")
+    }
+
+    /// The label must be the **visible caption**, not a new string: one key per
+    /// field, which the links form field renders AND gives to the kit field as its name.
+    func test_fieldLabels_reuseTheVisibleCaptionKeys() throws {
+        let code = try code
+        for key in ["affiliate.create.name.label", "affiliate.create.maxUses.label"] {
+            XCTAssertEqual(code.components(separatedBy: key).count - 1, 1, "\(key) names its field once.")
+        }
+        let field = try formFieldSource
+        let declaration = try XCTUnwrap(field.range(of: "struct LinksFormField"))
+        let body = String(field[declaration.lowerBound...].prefix(1400))
+        XCTAssertTrue(body.contains("Text(label)"), "The caption stays visible.")
+        XCTAssertTrue(body.contains(".accessibilityHidden(true)"), "The visible caption is hidden: the kit field already carries it as its name.")
+        XCTAssertTrue(body.contains("MeeshyField(\n                accessibilityLabel ?? label"), "The kit field is named by the caption.")
     }
 
     // MARK: - Primary action
 
-    /// The `link.badge.plus` glyph sits inside the button's label next to the
-    /// text, so VoiceOver reads the SF Symbol name ahead of the real label.
-    /// Same treatment as the repost glyph in `ComposerMoodSurface.republicationBanner`.
-    func test_ctaGlyph_isHiddenAndButtonIsLabelled() throws {
+    /// The CTA is the kit's primary button, named by its own title.
+    func test_cta_isTheKitPrimaryButton() throws {
         let code = try code
-        let glyph = try XCTUnwrap(code.range(of: "Image(systemName: \"link.badge.plus\")"))
-        let window = String(code[glyph.lowerBound...].prefix(220))
-        XCTAssertTrue(
-            window.contains(".accessibilityHidden(true)"),
-            "The CTA glyph must be hidden — anchored to the glyph, since the file hides other views too."
-        )
-        XCTAssertTrue(
-            code.contains(".accessibilityLabel(String(localized: \"affiliate.create.button\""),
-            "The CTA keeps an explicit label so hiding the glyph cannot leave it unnamed."
-        )
+        XCTAssertTrue(code.contains("MeeshySplitActionButton("))
+        XCTAssertTrue(code.contains("\"affiliate.create.button\""))
+        XCTAssertFalse(code.contains("Image(systemName: \"link.badge.plus\")"), "No decorative glyph left to hide.")
     }
 
     // MARK: - In-flight state (226i)
 
-    /// While creating, the glyph is swapped for a bare `ProgressView`: sighted
-    /// users see a spinner, VoiceOver users hear only "dimmed" and cannot tell
-    /// whether the tap registered. The twin button (`CreateTrackingLinkView:136`)
-    /// and the mood composer (`MeeshyComposerHost.publishButton`) both carry that transient
-    /// state as an `accessibilityValue`; this screen was the last holdout.
-    func test_busyState_isCarriedAsAnAccessibilityValue() throws {
+    /// While creating, the kit button becomes a ring and SAYS it — the busy title
+    /// reuses the tracking-link key, already localised in 7 locales.
+    func test_busyState_isSaidByTheKitButton() throws {
         let code = try code
-        XCTAssertTrue(
-            code.contains(".accessibilityValue(isCreating"),
-            "The in-flight state must be exposed as a value on the CTA, not left silent."
-        )
-        // Reuses the tracking-link key — same action, same words, already
-        // localised in 7 locales. A screen-specific key would add an untranslated
-        // string for no semantic gain.
-        XCTAssertTrue(
-            code.contains("a11y.tracking.create.in-progress"),
-            "The busy value must reuse the existing localised key rather than mint a new one."
-        )
-        XCTAssertFalse(
-            code.contains("a11y.affiliate.create.in-progress"),
-            "No screen-specific busy key should be introduced."
-        )
+        XCTAssertTrue(code.contains("phase: isCreating"), "The in-flight state drives the button phase.")
+        XCTAssertTrue(code.contains(".busy(progress: nil, title: String(localized: \"a11y.tracking.create.in-progress\""))
+        XCTAssertFalse(code.contains("a11y.affiliate.create.in-progress"), "No screen-specific busy key should be introduced.")
     }
 
     // MARK: - Error feedback

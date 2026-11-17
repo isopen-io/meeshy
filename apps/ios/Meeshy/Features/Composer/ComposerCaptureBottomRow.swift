@@ -14,11 +14,10 @@ import MeeshyUI
 /// qu'on ne peut pas ouvrir n'est montré ni à l'œil ni à VoiceOver, et il
 /// revient dès que les segments sont supprimés.
 ///
-/// **En édition, les outils seuls, sous la scène posée sur le sol** (#9352,
-/// porteur 2026-10-07, #9567, 2026-10-09 #9754) : « Filtres », « Cadres »,
-/// « Recadrer » et, pour une vidéo, « Couper » et « Son », en rangée ; au-dessus
-/// d'eux les panneaux des outils ACTIFS, tous ensemble à l'entrée — les
-/// proportions, le spectre du son, la piste de découpe (#9353) —, ou la bande
+/// **En édition, les outils gardent la colonne du viseur** (#18638, qui retourne la rangée
+/// de #9567) : « Effets » (#18639), « Recadrer », « Texte » et, pour une
+/// vidéo, « Couper » et « Son », en colonne en bas à gauche, sur la prise ; sous elle les
+/// panneaux des outils ACTIFS — le spectre du son, la piste de découpe (#9353) —, ou la bande
 /// ouverte (ses miniatures se peignent sur le média retouché), qui les replie.
 /// Ni miniature seule, ni zoom, ni phrase du geste ; « Terminé » est en haut,
 /// aligné sur la croix.
@@ -111,15 +110,15 @@ struct ComposerCaptureBottomRow: View {
             }
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading, spacing: ComposerLookStripRule.spacing) {
-                    // **Texte · Fond · Galerie · Sticker AVANT les familles** (#17432).
+                    // **Galerie · Texte · Fond · Stickers AVANT « Effets »** (#17432, #18639).
                     ComposerViewfinderColumnView(entries: sceneEntries) { sceneEntry?($0) }
                     if ComposerViewfinderColumn.separatesLooks(sceneEntries: sceneEntries,
                                                                offersLooks: ComposerCaptureGesture.offersRail(context)) {
                         ComposerViewfinderRailSeparator()
                     }
                     if ComposerCaptureGesture.offersRail(context) {
-                        ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
-                            session.toggleFamily(famille)
+                        ComposerLookRail(open: session.openFamily != nil) {
+                            session.toggleFamily(ComposerLookStripRule.railFamily)
                         }
                         .transition(.opacity)
                     }
@@ -142,12 +141,11 @@ struct ComposerCaptureBottomRow: View {
             .transition(.opacity)
     }
 
-    /// **Sous la scène de retouche : les panneaux, puis les outils** (#9567,
-    /// #9754) — un panneau par outil ACTIF, empilés : les proportions, la
-    /// piste de découpe portant le spectre du son (#10341), ou le spectre seul
-    /// quand la coupe est retirée. Puis « Filtres », « Effets », « Cadres », « Recadrer »,
-    /// « Couper », « Son » : chaque outil se retire ou revient d'un toucher,
-    /// sans fermer les autres. Une famille ouverte prend la place de tout cela,
+    /// **Au bas de la retouche : la colonne des outils, puis les panneaux** (#18638,
+    /// #9754) — « Effets », « Recadrer », « Texte », « Couper »,
+    /// « Son » à gauche : chaque outil se retire ou revient d'un toucher, sans fermer les
+    /// autres. Dessous, un panneau par outil ACTIF : la piste de découpe portant le spectre
+    /// du son (#10341), ou le spectre seul quand la coupe est retirée. La bande ouverte prend la place de tout cela,
     /// sa bande au niveau de son rail (#10311).
     private var editTools: some View {
         VStack(spacing: ComposerEditScene.gap) {
@@ -162,6 +160,7 @@ struct ComposerCaptureBottomRow: View {
 
     @ViewBuilder
     private var editPanelsAndTools: some View {
+        ComposerEditRailGate(board: session.retouchTexts) { editRail }
         ForEach(session.editPanels, id: \.self) { panneau in
             switch panneau {
             case .trim:
@@ -189,27 +188,32 @@ struct ComposerCaptureBottomRow: View {
                 EmptyView()
             }
         }
-        ComposerEditRailFit(rail: editRail)
-            .frame(height: ComposerEditScene.toolsRow)
     }
 
-    private var editRail: ComposerLookRail {
-        ComposerLookRail(open: session.openFamily, axis: .horizontal, editTools: session.editTools,
+    /// **La colonne du viseur, gardée après la prise** (#18638, #18654) :
+    /// Galerie · Texte · Stickers · Son, un trait, Effets · Recadrer · Couper, en bas à gauche,
+    /// posés SUR la prise comme le rail de la capture — plus de rangée en bas.
+    private var editRail: some View {
+        ComposerLookRail(open: session.openFamily != nil,
+                         items: ComposerRetouchRail.items(composesScene: sceneEntry != nil, tools: session.editTools),
                          shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) },
-                         fitsLabels: true) { famille in
-            session.toggleFamily(famille)
+                         onScene: { sceneEntry?($0) }) {
+            session.toggleFamily(ComposerLookStripRule.railFamily)
         }
+        .padding(.leading, MeeshySpacing.mdPlus)
+        .padding(.bottom, ComposerEditScene.railBottomInset(framed: session.editFramesScene))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// **La famille ouverte, au niveau de son rail** (#10311) : Filtres · Effets
-    /// · Cadres en colonne, la bande à leur droite — jamais un panneau qui
-    /// flotte au-dessus des outils. Retoucher la famille ouverte rend les outils.
+    /// **La bande ouverte, au niveau de son rail** (#10311) : « Effets » à gauche,
+    /// la bande à sa droite — jamais un panneau qui flotte au-dessus des outils.
+    /// Retoucher « Effets » rend les outils.
     private var familyRow: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: MeeshySpacing.sm) {
-                // Le haut de la colonne sur le haut des cases (#10339).
-                ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
-                    session.toggleFamily(famille)
+                // Le haut de « Effets » sur le haut des cases (#10339).
+                ComposerLookRail(open: session.openFamily != nil) {
+                    session.toggleFamily(ComposerLookStripRule.railFamily)
                 }
                 .padding(.leading, MeeshySpacing.mdPlus)
                 .padding(.top, ComposerTriggerOutline.outset)
@@ -242,7 +246,7 @@ struct ComposerCaptureBottomRow: View {
 /// **La phrase du geste, centrée sur la scène** (A8, #17109 : « Touchez deux
 /// fois pour une photo · maintenez pour filmer »). Elle se tait pendant la
 /// prise et la retouche, sous un cadre, dont le bas porte sa propre écriture
-/// (#9557), bande ouverte, où le nom du choix prend sa place (#9566), et dès
+/// (#9557), bande ouverte, dont les noms des cases prennent sa place (#18639), et dès
 /// qu'une prise a été faite (#16482). Elle ne prend aucun doigt : la scène
 /// sous elle vise et photographie.
 struct ComposerCaptureGestureHint: View {
@@ -289,22 +293,56 @@ struct ComposerCaptureGestureHint: View {
     }
 }
 
-/// **Le rail entier, ou qui défile — jamais un libellé coupé** (porteur
-/// 2026-10-20) : à son idéal s'il tient, sinon il défile jusqu'aux bords.
-///
-/// Un type à lui seul (#11411) : `ViewThatFits` mesure ses candidats sur le
-/// rendu asynchrone d'iOS 26, et un candidat posé au fil d'un membre de la
-/// rangée y emportait tout ce que ce membre construit avant lui — pistes de
-/// coupe et de son, bande des familles. Ici, il ne voit que le rail.
-struct ComposerEditRailFit: View {
-    let rail: ComposerLookRail
+/// **« Annuler », à la place de « Terminé », pendant le recadrage** (#18654) :
+/// il rend le format et le cadrage d'avant l'outil et le range. Fermer l'outil les garde.
+struct ComposerCropCancelButton: View {
+    @ObservedObject var session: ComposerCaptureSession
+    /// Le recadrage qu'on avait en ouvrant l'outil, tenu tant qu'il est actif.
+    @State private var before: ComposerCropSnapshot?
+
+    private var cropActive: Bool { session.activeEditTools.contains(.crop) }
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            rail
-            ScrollView(.horizontal, showsIndicators: false) {
-                rail.padding(.horizontal, ComposerEditPresetsLayout.leadingInset)
+        ZStack { button }
+            .onAppear { hold(cropActive) }
+            .adaptiveOnChange(of: cropActive) { _, actif in hold(actif) }
+    }
+
+    private func hold(_ active: Bool) {
+        before = ComposerCropSnapshot.held(before, cropActive: active, current: ComposerCropFlow.snapshot(of: session))
+    }
+
+    @ViewBuilder
+    private var button: some View {
+        if ComposerCropSnapshot.offersCancel(shownTools: session.shownEditTools), !session.isRenderingLook {
+            Button { ComposerCropFlow.cancel(before, in: session) } label: {
+                Text(ComposerCaptureCopy.cancelCrop)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .frame(minHeight: 40)
+                    .adaptiveLiquidGlass(in: Capsule())
+                    .frame(minHeight: MeeshyControlSize.tapTarget)
             }
+            .buttonStyle(ComposerBounceButtonStyle())
+            .accessibilityLabel(ComposerCaptureCopy.cancelCropLabel)
+            .accessibilityIdentifier("composer.capture.crop.cancel")
+            .padding(.trailing, MeeshySpacing.mdPlus)
+            .padding(.top, MeeshySpacing.md)
+            .transition(.opacity)
+        }
+    }
+}
+
+/// **La colonne cède à la barre du texte** (#18638) : pendant qu'un texte de la retouche se
+/// saisit, sa barre de style prend le bas — comme au viseur, où le rail se retire à la frappe.
+struct ComposerEditRailGate<Rail: View>: View {
+    @ObservedObject var board: ComposerRetouchTextBoard
+    @ViewBuilder let rail: Rail
+
+    var body: some View {
+        if ComposerViewfinderScene.servesCaptureControls(typing: board.typingId != nil) {
+            rail.transition(.opacity)
         }
     }
 }
@@ -360,9 +398,20 @@ private struct ComposerViewfinderSceneEntryKey: EnvironmentKey {
     static let defaultValue: (@MainActor (ComposerViewfinderEntry) -> Void)? = nil
 }
 
+/// **Comment refermer la galerie ouverte par-dessus le viseur** (#18709) : `nil` tant
+/// qu'aucune n'est ouverte, et hors du composer.
+private struct ComposerViewfinderClosesLibraryKey: EnvironmentKey {
+    static let defaultValue: (@MainActor () -> Void)? = nil
+}
+
 extension EnvironmentValues {
     var composerViewfinderSceneEntry: (@MainActor (ComposerViewfinderEntry) -> Void)? {
         get { self[ComposerViewfinderSceneEntryKey.self] }
         set { self[ComposerViewfinderSceneEntryKey.self] = newValue }
+    }
+
+    var composerViewfinderClosesLibrary: (@MainActor () -> Void)? {
+        get { self[ComposerViewfinderClosesLibraryKey.self] }
+        set { self[ComposerViewfinderClosesLibraryKey.self] = newValue }
     }
 }

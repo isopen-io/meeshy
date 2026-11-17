@@ -80,16 +80,21 @@ fun TrackingLinksScreen(
         },
     ) {
         if (state.refreshFailed && state.hasLoaded) item(key = "failed", contentType = "banner") { LinkRefreshFailedBanner(viewModel::refresh) }
+        item(key = "intro", contentType = "intro") {
+            Text(
+                stringResource(R.string.links_hub_tracking_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+        }
         state.stats?.let { stats -> item(key = "stats", contentType = "stats") { StatsRow(stats, accent) } }
-        item(key = "section", contentType = "section") { LinksSectionTitle(stringResource(R.string.links_tracking_section_my_links)) }
         when {
             !state.hasLoaded -> item(key = "skeleton", contentType = "skeleton") { LinkSkeletonRows(accent) }
             state.links.links.isEmpty() -> item(key = "empty", contentType = "empty") {
                 LinkEmptyState(
                     MeeshyIcons.ChartBar,
                     stringResource(R.string.links_tracking_empty_title),
-                    stringResource(R.string.links_tracking_empty_subtitle),
-                    accent,
+                    accent = accent,
                 )
             }
             else -> items(state.links.links, key = { it.id }, contentType = { "link" }) { link ->
@@ -140,6 +145,9 @@ private fun TrackingRow(link: TrackingLink, accent: Color, onOpen: () -> Unit, o
                 color = MeeshyTheme.tokens.textMuted,
                 maxLines = 1,
             )
+            trackingRowFactsText(link)?.let { facts ->
+                Text(facts, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted, maxLines = 2)
+            }
         }
         IconButton(onClick = onCopy) {
             Icon(MeeshyIcons.Copy, stringResource(R.string.links_common_copy_link), tint = accent, modifier = Modifier.size(20.dp))

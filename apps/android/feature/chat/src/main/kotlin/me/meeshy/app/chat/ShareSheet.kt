@@ -304,7 +304,6 @@ private fun ShareRecipients(model: ShareSheetModel, accentColor: Color, actions:
             }
             sections.isEmpty -> Column(Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.lg)) {
                 Text(stringResource(R.string.share_empty_title), style = MaterialTheme.typography.titleSmall, color = MeeshyTheme.tokens.textPrimary)
-                Text(stringResource(R.string.share_empty_body), style = MaterialTheme.typography.bodyMedium, color = MeeshyTheme.tokens.textSecondary)
             }
             else -> LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
                 if (sections.conversations.isNotEmpty()) {

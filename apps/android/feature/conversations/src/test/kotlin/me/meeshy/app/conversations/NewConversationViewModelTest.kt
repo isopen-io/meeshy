@@ -510,7 +510,6 @@ class NewConversationViewModelTest {
 
         vm.toggleGroupRequested()
         assertThat(vm.state.value.isGroup).isTrue()
-        assertThat(vm.state.value.showsSoloHint).isTrue()
         assertThat(vm.state.value.showsCreate).isTrue()
         assertThat(vm.state.value.canCreate).isFalse()
         vm.onGroupTitleChange("Mes notes")
@@ -543,7 +542,6 @@ class NewConversationViewModelTest {
         advanceUntilIdle()
         vm.toggleSelection("u1")
         assertThat(vm.state.value.shape).isEqualTo(NewConversationShape.DIRECT)
-        assertThat(vm.state.value.showsSoloHint).isFalse()
 
         vm.toggleGroupRequested()
         assertThat(vm.state.value.canCreate).isFalse()

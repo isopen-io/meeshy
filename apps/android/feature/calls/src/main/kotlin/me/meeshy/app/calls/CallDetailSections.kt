@@ -1,10 +1,7 @@
 package me.meeshy.app.calls
 
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,23 +12,23 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -45,11 +42,13 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.CallSpeakerColor
 import me.meeshy.sdk.model.call.CallCaptureKind
 import me.meeshy.sdk.model.call.CallDetailParticipantRow
+import me.meeshy.sdk.model.call.CallTranscriptLayer
 import me.meeshy.sdk.model.call.CallTranscriptLine
 import me.meeshy.sdk.model.call.CallTranscriptState
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
-import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -194,16 +193,24 @@ private fun OriginalToggle(showOriginal: Boolean, accent: Color, onChange: (Bool
     }
 }
 
-/** Says where the transcript lives — here AND on the server (the iOS sentence « jamais envoyée au serveur » is not true). */
+/**
+ * Says where the transcript lives — here AND on the server (the iOS sentence « jamais envoyée au serveur » is not true).
+ * The two places stay visible at rest (règle 7 : consent-adjacent, specific to Meeshy) ; only the secondary detail —
+ * what the server journal contains — waits behind its (i), named by the question it answers (#18083).
+ */
 @Composable
-private fun TranscriptDisclaimer() {
-    Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus)) {
-        Icon(
-            imageVector = MeeshyIcons.Info,
-            contentDescription = null,
-            tint = MeeshyTheme.tokens.textMuted,
-            modifier = Modifier.size(14.dp),
-        )
+internal fun TranscriptDisclaimer() {
+    var openNote by rememberSaveable { mutableStateOf<String?>(null) }
+    val note = MeeshyInfoNote(
+        question = stringResource(R.string.call_transcript_note_question),
+        text = stringResource(R.string.call_transcript_note),
+    )
+    MeeshyInfoNoted(
+        note = note,
+        openNoteId = openNote,
+        onOpenNoteIdChange = { openNote = it },
+        tint = MeeshyTheme.tokens.textMuted,
+    ) {
         Text(
             text = stringResource(R.string.call_transcript_disclaimer),
             style = MaterialTheme.typography.labelSmall,
@@ -244,9 +251,14 @@ private fun TranscriptDeletion(onDelete: () -> Unit) {
     }
 }
 
+/**
+ * One sentence of the journal: the speaker in the author's colour, the clock, then its two states laid ON TOP of each
+ * other (A1.18, [CallTranscriptLine.layers]) — the row keeps the height of the taller, « Voir l'original » only fades
+ * their opacities in the draw phase (no recomposition per frame, no size animated, no sentence below slides), a short
+ * fade under Reduce motion. TalkBack reads the row once, in the state it shows ([CallTranscriptRowAccessibility]).
+ */
 @Composable
 private fun TranscriptRow(line: CallTranscriptLine, showOriginal: Boolean, reduceMotion: Boolean) {
-    val secondary = line.secondary(showOriginal)
     val spoken = CallTranscriptRowAccessibility.label(
         line = line,
         showOriginal = showOriginal,
@@ -254,7 +266,8 @@ private fun TranscriptRow(line: CallTranscriptLine, showOriginal: Boolean, reduc
         translatedWord = stringResource(R.string.call_captions_translated),
     )
     val scheme = authorScheme()
-    val speakerColor = hexColor(CallSpeakerColor.hex(line.speakerId.ifBlank { line.speakerName }, scheme), MeeshyTheme.tokens.textPrimary)
+    val speakerKey = line.speakerId.ifBlank { line.speakerName }
+    val speakerColor = hexColor(CallSpeakerColor.hex(speakerKey, scheme), MeeshyTheme.tokens.textPrimary)
     val fadeMillis = fadeMillis(reduceMotion)
     Column(
         modifier = Modifier
@@ -281,16 +294,29 @@ private fun TranscriptRow(line: CallTranscriptLine, showOriginal: Boolean, reduc
                 )
             }
         }
-        AnimatedContent(
-            targetState = line.servesTranslation && showOriginal,
-            transitionSpec = { fadeIn(tween(fadeMillis)) togetherWith fadeOut(tween(fadeMillis)) },
-            label = "transcript-leading",
-        ) { original ->
-            val textColor = CallSpeakerColor.textHex(line.speakerId.ifBlank { line.speakerName }, servesTranslation = line.showsTranslation(original), mode = scheme)
-                ?.let { hexColor(it, MeeshyTheme.tokens.textPrimary) } ?: MeeshyTheme.tokens.textPrimary
-            Text(line.text(original), style = MaterialTheme.typography.bodyMedium, color = textColor)
+        Box(Modifier.fillMaxWidth()) {
+            line.layers(showOriginal).forEachIndexed { index, layer ->
+                key(index) {
+                    val presence = animateFloatAsState(
+                        targetValue = if (layer.isShown) 1f else 0f,
+                        animationSpec = tween(fadeMillis),
+                        label = "transcript-layer",
+                    )
+                    TranscriptLayer(layer, speakerKey, scheme, Modifier.graphicsLayer { alpha = presence.value })
+                }
+            }
         }
-        CallCaptionSecondaryBelow(secondary, reduceMotion, ink = MeeshyTheme.tokens.textSecondary)
+    }
+}
+
+/** One state of a sentence: the leading line (the author's colour only when it is the served translation), then the line below. */
+@Composable
+private fun TranscriptLayer(layer: CallTranscriptLayer, speakerKey: String, scheme: DynamicColorGenerator.ThemeMode, modifier: Modifier) {
+    val textColor = CallSpeakerColor.textHex(speakerKey, servesTranslation = layer.showsTranslation, mode = scheme)
+        ?.let { hexColor(it, MeeshyTheme.tokens.textPrimary) } ?: MeeshyTheme.tokens.textPrimary
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
+        Text(layer.text, style = MaterialTheme.typography.bodyMedium, color = textColor, modifier = Modifier.fillMaxWidth())
+        layer.secondary?.let { CallCaptionSecondaryLine(it, ink = MeeshyTheme.tokens.textSecondary) }
     }
 }
 

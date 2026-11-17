@@ -100,6 +100,7 @@ struct DownloadBadgeView: View {
             case .compact: compactIdleBadge
             }
         }
+        .buttonStyle(MeeshyGlassPressStyle())
         .task {
             await downloader.checkCache(attachment)
         }
@@ -111,15 +112,14 @@ struct DownloadBadgeView: View {
         VStack(spacing: 6) {
             ZStack {
                 Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 56, height: 56)
-                Circle()
                     .fill(accent.opacity(MeeshyOpacity.intense))
                     .frame(width: 48, height: 48)
                 Image(systemName: "arrow.down.to.line")
                     .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .bold))
                     .foregroundStyle(Color.white)
             }
+            .frame(width: 56, height: 56)
+            .meeshyGlass(in: Circle(), isInteractive: true)
             .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
 
             if !totalSizeText.isEmpty {
@@ -139,15 +139,14 @@ struct DownloadBadgeView: View {
     private var compactIdleBadge: some View {
         ZStack {
             Circle()
-                .fill(.ultraThinMaterial)
-                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
-            Circle()
                 .fill(accent.opacity(MeeshyOpacity.intense))
                 .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
             Image(systemName: "arrow.down.to.line")
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
                 .foregroundStyle(Color.white)
         }
+        .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
+        .meeshyGlass(in: Circle(), isInteractive: true)
         .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 4, y: 2)
         .frame(width: MediaTileDownloadPlacement.compactHitTarget,
                height: MediaTileDownloadPlacement.compactHitTarget)

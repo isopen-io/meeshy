@@ -8,38 +8,29 @@ struct TrackingLinksView: View {
     @StateObject private var viewModel = TrackingLinksViewModel()
     @State private var showCreate = false
 
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.isPresented) private var isPresented
-    @Environment(\.meeshyPanelDismiss) private var panelDismiss
-    /// Retour operant dans les trois contextes de presentation : pile iPhone,
-    /// panneau droit iPad (ni pile ni modale — d'ou l'inertie historique), sheet.
-    private var back: PanelBackAction {
-        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
-    }
-
     private let accent = MeeshyColors.trackingAccent
     private let accentHex = MeeshyColors.trackingAccentHex
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                header
-                
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: MeeshySpacing.xl) {
-                        if let stats = viewModel.stats {
-                            trackingStatsOverview(stats).padding(.horizontal, MeeshySpacing.lg)
-                        }
-                        linksSection.padding(.horizontal, MeeshySpacing.lg)
-                    }
-                    .padding(.top, MeeshySpacing.sm).padding(.bottom, 40)
+        LinksPage(
+            title: String(localized: "tracking.links.title", defaultValue: "Liens de suivi", bundle: .main),
+            accent: accent,
+            action: LinksPageAction(
+                label: String(localized: "tracking.links.create.a11y", defaultValue: "Créer un lien de suivi", bundle: .main),
+                perform: { showCreate = true }
+            )
+        ) {
+            VStack(spacing: MeeshySpacing.xl) {
+                SettingsSentence(text: String(localized: "tracking.links.orientation", defaultValue: "Un lien de suivi compte les clics et dit d'où ils viennent.", bundle: .main))
+                    .padding(.horizontal, MeeshySpacing.lg)
+                if let stats = viewModel.stats {
+                    trackingStatsOverview(stats).padding(.horizontal, MeeshySpacing.lg)
                 }
-                .refreshable { await viewModel.load() }
+                linksSection.padding(.horizontal, MeeshySpacing.lg)
             }
+            .padding(.top, MeeshySpacing.sm).padding(.bottom, 40)
         }
-        .navigationBarHidden(true)
+        .refreshable { await viewModel.load() }
         .task { await viewModel.load() }
         .sheet(isPresented: $showCreate) {
             CreateTrackingLinkView { link in
@@ -47,43 +38,6 @@ struct TrackingLinksView: View {
                 Task { await viewModel.loadStats() }
             }
         }
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                back()
-            } label: {
-                Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                    .foregroundColor(accent)
-            }
-            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-
-            Spacer()
-
-            Text(String(localized: "tracking.links.title", defaultValue: "Liens de suivi", bundle: .main))
-                .font(.headline.weight(.bold))
-                .foregroundStyle(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Button {
-                HapticFeedback.light()
-                showCreate = true
-            } label: {
-                Image(systemName: "plus.circle.fill")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxl))
-                    .foregroundColor(accent)
-            }
-            .accessibilityLabel(String(localized: "tracking.links.create.a11y", defaultValue: "Créer un lien de tracking", bundle: .main))
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.md)
     }
 
     private func trackingStatsOverview(_ stats: TrackingLinkStats) -> some View {
@@ -150,10 +104,11 @@ struct TrackingLinksView: View {
     private var trackingEmptyState: some View {
         EmptyStateView(
             icon: "chart.bar.fill",
-            title: String(localized: "tracking.links.empty.title", defaultValue: "Aucun lien de tracking", bundle: .main),
-            subtitle: String(localized: "tracking.links.empty.subtitle", defaultValue: "Créez un lien pour suivre vos clics et campagnes", bundle: .main),
+            title: String(localized: "tracking.links.empty.title", defaultValue: "Aucun lien de suivi", bundle: .main),
+            actionLabel: String(localized: "tracking.links.create.a11y", defaultValue: "Créer un lien de suivi", bundle: .main),
             accentColor: MeeshyColors.trackingAccentHex,
-            compact: true
+            compact: true,
+            onAction: { showCreate = true }
         )
         .padding(.vertical, MeeshySpacing.xxl)
     }
@@ -182,18 +137,20 @@ struct TrackingLinksView: View {
                         Text("· \(c)").font(.caption).foregroundStyle(theme.textMuted).lineLimit(1)
                     }
                 }
+                Text(TrackingLinkRowDates.line(for: link))
+                    .font(.caption2).foregroundStyle(theme.textMuted).lineLimit(1)
             }
 
             Spacer()
 
-            Button {
-                UIPasteboard.general.string = link.shortUrl
-                HapticFeedback.success()
-            } label: {
-                Image(systemName: "doc.on.doc").font(MeeshyFont.relative(MeeshyIconSize.md))
-                    .foregroundColor(accent)
-            }.padding(.horizontal, MeeshySpacing.xs)
-            .accessibilityLabel(String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main))
+            MeeshyGlassButton(
+                systemImage: "doc.on.doc",
+                label: String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main),
+                size: .s36,
+                glyphTint: accent,
+                haptic: .none,
+                action: { LinksClipboard.copy(link.shortUrl) }
+            )
 
             Image(systemName: "chevron.forward").font(MeeshyFont.relative(MeeshyIconSize.xs)).foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
@@ -205,6 +162,24 @@ struct TrackingLinksView: View {
                 .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: 1))
         )
+    }
+}
+
+/// Ce qui permet de reconnaître un lien de suivi dans la liste : la date de création et, s'il a servi, celle de son
+/// dernier clic (règle 7 de l'épure). Aucune date inventée : un lien jamais cliqué ne dit que sa création.
+enum TrackingLinkRowDates {
+    static func line(for link: TrackingLink, now: Date = Date(), locale: Locale = .current) -> String {
+        let created = String(
+            format: String(localized: "links.row.created", defaultValue: "Créé le %@", bundle: .main),
+            link.createdAt.formatted(.dateTime.day().month(.abbreviated).year().locale(locale))
+        )
+        let lastClick = link.lastClickedAt.map { last in
+            String(
+                format: String(localized: "tracking.links.row.lastClick", defaultValue: "Dernier clic %@", bundle: .main),
+                RelativeTimeFormatter.fullString(for: min(last, now), now: now, locale: locale)
+            )
+        }
+        return [created, lastClick].compactMap { $0 }.joined(separator: " · ")
     }
 }
 

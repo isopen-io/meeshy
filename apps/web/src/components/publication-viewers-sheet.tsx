@@ -97,7 +97,7 @@ export function PublicationViewersSheet({
   const count = query.data?.viewCount ?? viewCount ?? query.data?.pagination.total;
   const visitors = query.data?.anonymousViewCount ?? anonymousViewCount ?? 0;
   const title =
-    count === undefined
+    count === undefined || count === 0
       ? translate(lang, 'story.action.views')
       : translate(lang, count === 1 ? 'story.views.count.one' : 'story.views.count.other', { count: String(count) });
 
@@ -236,11 +236,6 @@ function ViewersBody({
         <Glyph name="eyeSlash" size={28} style={MUTED} />
         <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
           {translate(lang, 'story.views.empty.title')}
-        </p>
-        <p className="text-body" style={MUTED}>
-          {subject === 'publication' && labelsReady
-            ? translateViewerEngagement(lang, 'viewerEngagement.empty.subtitle')
-            : translate(lang, 'story.views.empty.subtitle')}
         </p>
       </li>
     );

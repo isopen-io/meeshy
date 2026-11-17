@@ -12,13 +12,16 @@ final class ComposerKeyboardDockState: ObservableObject {
 
     struct Session {
         let viewModel: StoryComposerViewModel
-        let mentionBox: ComposerMentionControllerBox
+        /// `nil` : l'hôte ne nomme personne (un texte cuit dans une prise).
+        let mentionBox: ComposerMentionControllerBox?
+        /// Ce que l'hôte sert des outils et des fonds (#18640).
+        var profile: StoryTextEditProfile = .composer
         let onDone: () -> Void
     }
 
     @Published var input: ComposerKeyboardOrOptions.Input = .keyboard
     @Published var session: Session?
-    var onFamily: ((ComposerKeyboardStyleFamily) -> Void)?
+    var onFamily: ((ComposerKeyboardStyleFamily, ComposerKeyboardOrOptions.Gesture) -> Void)?
     var onMention: ((String) -> Void)?
 }
 
@@ -48,7 +51,7 @@ final class ComposerKeyboardDock: ObservableObject {
     init(accessoryView: UIView, panelView: UIView) {
         self.accessoryView = accessoryView
         self.panelView = panelView
-        state.onFamily = { [weak self] famille in self?.tap(famille) }
+        state.onFamily = { [weak self] famille, geste in self?.touch(famille, geste) }
         state.onMention = { [weak self] texte in self?.link.replaceText(texte) }
     }
 
@@ -69,10 +72,23 @@ final class ComposerKeyboardDock: ObservableObject {
         link.accessoryView = nil
     }
 
-    func tap(_ family: ComposerKeyboardStyleFamily) {
-        state.input = ComposerKeyboardOrOptions.tapped(family, in: state.input)
-        applyInput()
+    /// Toucher fait tourner la valeur, l'appui long ouvre ou referme le panneau (#18640).
+    func touch(_ family: ComposerKeyboardStyleFamily, _ gesture: ComposerKeyboardOrOptions.Gesture) {
+        switch ComposerKeyboardOrOptions.outcome(gesture, on: family, in: state.input) {
+        case .cycle(let outil): cycle(outil)
+        case .show(let entree):
+            state.input = entree
+            applyInput()
+        }
         HapticFeedback.light()
+    }
+
+    private func cycle(_ tool: TextEditTool) {
+        guard let session = state.session, let id = session.viewModel.textEditingMode.activeTextId,
+              let texte = session.viewModel.textObjectBinding(for: id) else { return }
+        var suivant = texte.wrappedValue
+        ComposerKeyboardStyleFamily.quickAdvance(tool, on: &suivant, backgrounds: session.profile.backgrounds)
+        texte.wrappedValue = suivant
     }
 
     func textTouched() {
@@ -164,15 +180,43 @@ struct ComposerKeyboardDockBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if let session = state.session {
+            if let session = state.session, let boite = session.mentionBox {
                 ComposerKeyboardDockMentions(viewModel: session.viewModel,
-                                             mentionBox: session.mentionBox,
+                                             mentionBox: boite,
                                              onSelect: { state.onMention?($0) })
             }
-            ComposerKeyboardStyleBarView(openFamily: state.input.family,
-                                         onFamily: { state.onFamily?($0) },
-                                         onDone: { state.session?.onDone() })
+            if let session = state.session {
+                ComposerKeyboardDockStyleBar(viewModel: session.viewModel, profile: session.profile,
+                                             openFamily: state.input.family,
+                                             onFamily: { state.onFamily?($0, $1) },
+                                             onDone: { state.session?.onDone() })
+            } else {
+                ComposerKeyboardStyleBarView(openFamily: state.input.family,
+                                             onFamily: { state.onFamily?($0, $1) },
+                                             onDone: { state.session?.onDone() })
+            }
         }
+    }
+}
+
+/// La barre qui lit le texte en cours : ses cercles en suivent les couleurs, et
+/// une commande que l'hôte ne sert pas (la langue d'un texte cuit) n'y paraît pas.
+struct ComposerKeyboardDockStyleBar: View {
+    @ObservedObject var viewModel: StoryComposerViewModel
+    let profile: StoryTextEditProfile
+    let openFamily: ComposerKeyboardStyleFamily?
+    let onFamily: (ComposerKeyboardStyleFamily, ComposerKeyboardOrOptions.Gesture) -> Void
+    let onDone: () -> Void
+
+    var body: some View {
+        let texte = viewModel.textEditingMode.activeTextId.flatMap { id in
+            viewModel.currentEffects.textObjects.first(where: { $0.id == id })
+        }
+        ComposerKeyboardStyleBarView(families: ComposerKeyboardStyleFamily.served(by: profile.tools),
+                                     text: texte,
+                                     openFamily: openFamily,
+                                     onFamily: onFamily,
+                                     onDone: onDone)
     }
 }
 
@@ -199,7 +243,7 @@ struct ComposerKeyboardDockPanel: View {
 
     var body: some View {
         if let session = state.session, let famille = state.input.family {
-            ComposerKeyboardDockPanelBody(viewModel: session.viewModel, family: famille)
+            ComposerKeyboardDockPanelBody(viewModel: session.viewModel, family: famille, profile: session.profile)
         } else {
             Color.black.opacity(0.92)
         }
@@ -209,11 +253,12 @@ struct ComposerKeyboardDockPanel: View {
 struct ComposerKeyboardDockPanelBody: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     let family: ComposerKeyboardStyleFamily
+    var profile: StoryTextEditProfile = .composer
 
     var body: some View {
         if let id = viewModel.textEditingMode.activeTextId,
            let binding = viewModel.textObjectBinding(for: id) {
-            ComposerKeyboardStylePanel(family: family, textObject: binding)
+            ComposerKeyboardStylePanel(family: family, textObject: binding, profile: profile)
         } else {
             Color.black.opacity(0.92)
         }

@@ -66,11 +66,12 @@ class CallRailsGuardTest {
     }
 
     @Test
-    fun `un rail qui defile s'efface en fondu a ses deux bords`() {
+    fun `un rail s'efface en fondu a ses deux bords, qu'il defile ou non (#18213)`() {
         val rails = code("CallActionRails.kt")
 
-        assertThat(rails).contains("canScrollBackward")
-        assertThat(rails).contains("canScrollForward")
+        assertThat(rails).contains(".callScrollEdgeFade(horizontal = false)")
+        assertThat(rails).doesNotContain("canScrollBackward")
+        assertThat(rails).doesNotContain("canScrollForward")
         assertThat(rails).contains("BlendMode.DstIn")
     }
 
@@ -137,11 +138,14 @@ class CallRailsGuardTest {
     }
 
     @Test
-    fun `le badge de ma vignette rangée garde son coin, droite à gauche compris (G1_11)`() {
+    fun `la plaque de ma vignette rangée, micro coupé de l'autre compris, garde sa taille de petite vignette (G1_11, #17982)`() {
         val stage = code("CallStage.kt")
         assertThat(stage).doesNotContain("TransformOrigin(0f, 1f)")
-        assertThat(stage).contains("callKeepsSmallTileSize(stowFactor, CallSelfTileCorner.BottomStart, rtl)")
-        assertThat(code("CallSelfTile.kt")).contains("CallSelfTileLaw.anchor(corner).transformOrigin(rtl)")
+        assertThat(Regex("""CallPeerMutedBadge\(""").findAll(stage).count()).isEqualTo(1)
+        assertThat(stage).doesNotContain("callKeepsSmallTileSize(")
+        val tile = code("CallSelfTile.kt")
+        assertThat(tile).contains("callKeepsSmallTileSize(stowFactor, TransformOrigin(0.5f, 1f))")
+        assertThat(tile).contains("CallSelfTileLaw.anchor(corner).transformOrigin(rtl)")
     }
 
     @Test

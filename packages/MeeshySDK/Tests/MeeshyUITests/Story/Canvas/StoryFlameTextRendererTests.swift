@@ -238,6 +238,29 @@ final class StoryFlameTextRendererTests: XCTestCase {
         XCTAssertEqual(window.minY, StoryFlameLayer.window(phase: 0.25).minY, accuracy: 1e-6)
     }
 
+    /// **Le scintillement de la chaleur suit l'horloge de la vidéo** (#18734).
+    /// À l'écran, l'opacité du dégradé bat de 1 à 0,86 toutes les 0,9 s ;
+    /// `layer.render(in:)` ne joue pas cette animation, la vidéo exportée
+    /// gardait donc un feu à opacité FIXE. La passe des rendus « en un coup »
+    /// pose la valeur de l'image sur la calque modèle.
+    func test_flicker_followsTheScreenKeyframes() {
+        let d = StoryFlameTextRenderer.flickerDuration
+        XCTAssertEqual(StoryFlameTextRenderer.flickerOpacity(atElapsed: 0), 1, accuracy: 1e-9)
+        XCTAssertEqual(StoryFlameTextRenderer.flickerOpacity(atElapsed: d * 0.23), 0.86, accuracy: 1e-9)
+        XCTAssertEqual(StoryFlameTextRenderer.flickerOpacity(atElapsed: d * 1.5), 0.97, accuracy: 1e-9)
+        XCTAssertEqual(StoryFlameTextRenderer.flickerOpacity(atElapsed: d * 0.115), 0.93, accuracy: 1e-9)
+    }
+
+    func test_oneShotRender_flickersTheHeat_atTheFrameTime() {
+        let flame = StoryFlameLayer()
+        flame.configure(glyphFrame: CGRect(x: 0, y: 0, width: 200, height: 80), fontSize: 60,
+                        key: StoryFlameGlyphKey(glyphs: NSAttributedString(string: "A"),
+                                                size: CGSize(width: 200, height: 80), scale: 1),
+                        animates: true) { _ in }
+        flame.show(atElapsed: StoryFlameTextRenderer.flickerDuration * 0.23)
+        XCTAssertEqual(flame.heatOpacity ?? 1, 0.86, accuracy: 1e-6)
+    }
+
     // MARK: - L'éditeur en ligne
 
     func test_inlineEditor_burnsWhileTyping() {

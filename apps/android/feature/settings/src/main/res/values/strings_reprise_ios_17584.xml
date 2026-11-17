@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="about_feature_cloud_sync">Cloud sync</string>
+    <string name="about_feature_themes">Customizable themes</string>
+    <string name="about_link_about">About Meeshy</string>
+    <string name="about_section_informations">Information</string>
+    <string name="licenses_meeshy_body_mit">Meeshy’s source code is published under the MIT license.</string>
+    <string name="privacy_section_contacts">Contacts</string>
+    <string name="privacy_section_media">Media &amp; Data</string>
+    <string name="settings_privacy_encryption_coming_soon_a11y">Encryption — coming soon, currently disabled</string>
+    <string name="settings_transcription_engine">Transcription engine</string>
+    <string name="settings_transcription_engine_a11y">Transcription engine</string>
+</resources>

@@ -33,7 +33,6 @@ import {
   CommunityHero,
   CommunityRefused,
   CommunityRowsSkeleton,
-  CommunityStats,
 } from '@/routes/communities-parts';
 import { CommunityInviteButton, CommunityMembersLink, CommunitySettingsLink } from '@/routes/community-members-parts';
 import { CommunityMembershipAction, type MembershipFailure } from '@/routes/community-membership';
@@ -187,8 +186,7 @@ export default function CommunityScreen() {
             <CommunityHero language={language} community={community} />
             <div className="mx-auto grid max-w-xl gap-5 px-4 pb-24 pt-5">
               {online ? null : <CommunitiesOfflineNotice language={language} />}
-              <CommunityStats language={language} community={community} />
-              <CommunityMembersLink language={language} communityId={community.id} />
+              <CommunityMembersLink language={language} communityId={community.id} count={community.memberCount} />
               {canEditSettingsOf(community, viewerId) ? <CommunitySettingsLink language={language} communityId={community.id} /> : null}
               {canInviteOf(community) ? <CommunityInviteButton language={language} onOpen={() => setInviting(true)} /> : null}
               {inviteStatus === null ? null : (
@@ -208,7 +206,7 @@ export default function CommunityScreen() {
               <CommunityDetailTabs language={language} selected={tab} onSelect={setTab} />
               {tab === 'channels' ? (
                 <div id={communityPanelId('channels')} role="tabpanel" aria-labelledby={communityTabId('channels')}>
-                  <CommunityConversationsSection language={language}>{conversationBody}</CommunityConversationsSection>
+                  <CommunityConversationsSection>{conversationBody}</CommunityConversationsSection>
                 </div>
               ) : (
                 <section id={communityPanelId('posts')} role="tabpanel" aria-labelledby={communityTabId('posts')}>

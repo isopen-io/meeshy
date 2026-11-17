@@ -148,6 +148,8 @@ import {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const USER_ID = '507f1f77bcf86cd799439011';
+const OWN_AVATAR_URL = `https://gate.meeshy.me/api/v1/attachments/file/${encodeURIComponent(`2026/11/${USER_ID}/avatar.jpg`)}`;
+const OWN_BANNER_URL = `https://gate.meeshy.me/api/v1/attachments/file/${encodeURIComponent(`2026/11/${USER_ID}/banner.jpg`)}`;
 const OTHER_USER_ID = '507f1f77bcf86cd799439099';
 
 const mockUser = {
@@ -226,6 +228,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
     userVoiceModel: {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    messageAttachment: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'att-own' }) },
   };
 
   const fusionne: Record<string, any> = { ...base };
@@ -553,7 +556,7 @@ describe('PATCH /users/me — realtime propagation to conversation partners', ()
 describe('PATCH /users/me/avatar — unauthenticated', () => {
   it('returns 401 when no auth context', async () => {
     const app = await buildApp({ authenticated: false, routes: [updateUserAvatar] });
-    const res = await app.inject({ method: 'PATCH', url: '/users/me/avatar', payload: { avatar: 'https://example.com/avatar.jpg' } });
+    const res = await app.inject({ method: 'PATCH', url: '/users/me/avatar', payload: { avatar: OWN_AVATAR_URL } });
     expect(res.statusCode).toBe(401);
     await app.close();
   });
@@ -566,7 +569,7 @@ describe('PATCH /users/me/avatar — success', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/avatar',
-      payload: { avatar: 'https://example.com/avatar.jpg' },
+      payload: { avatar: OWN_AVATAR_URL },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
@@ -576,7 +579,7 @@ describe('PATCH /users/me/avatar — success', () => {
   it('serialized body carries emailVerifiedAt and autoTranslateEnabled — not truncated by a narrow select', async () => {
     const fullUser = {
       ...mockUser,
-      avatar: 'https://example.com/avatar.jpg',
+      avatar: OWN_AVATAR_URL,
       emailVerifiedAt: new Date('2024-02-01'),
       autoTranslateEnabled: true,
     };
@@ -585,7 +588,7 @@ describe('PATCH /users/me/avatar — success', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/avatar',
-      payload: { avatar: 'https://example.com/avatar.jpg' },
+      payload: { avatar: OWN_AVATAR_URL },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -599,19 +602,19 @@ describe('PATCH /users/me/avatar — realtime propagation to conversation partne
   it('emits USER_UPDATED with the new avatar URL', async () => {
     const prisma = makePrisma({
       user: {
-        update: jest.fn<any>().mockResolvedValue({ ...mockUser, avatar: 'https://example.com/avatar.jpg' }),
+        update: jest.fn<any>().mockResolvedValue({ ...mockUser, avatar: OWN_AVATAR_URL }),
       },
     });
     const app = await buildApp({ routes: [updateUserAvatar], prisma, withNotificationService: true });
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/avatar',
-      payload: { avatar: 'https://example.com/avatar.jpg' },
+      payload: { avatar: OWN_AVATAR_URL },
     });
     expect(res.statusCode).toBe(200);
     expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
       userId: USER_ID,
-      changes: { avatar: 'https://example.com/avatar.jpg' },
+      changes: { avatar: OWN_AVATAR_URL },
     });
     await app.close();
   });
@@ -641,7 +644,7 @@ describe('PATCH /users/me/avatar — service error', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/avatar',
-      payload: { avatar: 'https://example.com/avatar.jpg' },
+      payload: { avatar: OWN_AVATAR_URL },
     });
     expect(res.statusCode).toBe(500);
     await app.close();
@@ -653,7 +656,7 @@ describe('PATCH /users/me/avatar — service error', () => {
 describe('PATCH /users/me/banner — unauthenticated', () => {
   it('returns 401 when no auth context', async () => {
     const app = await buildApp({ authenticated: false, routes: [updateUserBanner] });
-    const res = await app.inject({ method: 'PATCH', url: '/users/me/banner', payload: { banner: 'https://example.com/banner.jpg' } });
+    const res = await app.inject({ method: 'PATCH', url: '/users/me/banner', payload: { banner: OWN_BANNER_URL } });
     expect(res.statusCode).toBe(401);
     await app.close();
   });
@@ -666,7 +669,7 @@ describe('PATCH /users/me/banner — success', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/banner',
-      payload: { banner: 'https://example.com/banner.jpg' },
+      payload: { banner: OWN_BANNER_URL },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
@@ -676,7 +679,7 @@ describe('PATCH /users/me/banner — success', () => {
   it('serialized body carries emailVerifiedAt and autoTranslateEnabled — not truncated by a narrow select', async () => {
     const fullUser = {
       ...mockUser,
-      banner: 'https://example.com/banner.jpg',
+      banner: OWN_BANNER_URL,
       emailVerifiedAt: new Date('2024-02-01'),
       autoTranslateEnabled: true,
     };
@@ -685,7 +688,7 @@ describe('PATCH /users/me/banner — success', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/banner',
-      payload: { banner: 'https://example.com/banner.jpg' },
+      payload: { banner: OWN_BANNER_URL },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -699,19 +702,19 @@ describe('PATCH /users/me/banner — realtime propagation to conversation partne
   it('emits USER_UPDATED with the new banner URL', async () => {
     const prisma = makePrisma({
       user: {
-        update: jest.fn<any>().mockResolvedValue({ ...mockUser, banner: 'https://example.com/banner.jpg' }),
+        update: jest.fn<any>().mockResolvedValue({ ...mockUser, banner: OWN_BANNER_URL }),
       },
     });
     const app = await buildApp({ routes: [updateUserBanner], prisma, withNotificationService: true });
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/banner',
-      payload: { banner: 'https://example.com/banner.jpg' },
+      payload: { banner: OWN_BANNER_URL },
     });
     expect(res.statusCode).toBe(200);
     expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
       userId: USER_ID,
-      changes: { banner: 'https://example.com/banner.jpg' },
+      changes: { banner: OWN_BANNER_URL },
     });
     await app.close();
   });
@@ -728,7 +731,7 @@ describe('PATCH /users/me/banner — service error', () => {
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me/banner',
-      payload: { banner: 'https://example.com/banner.jpg' },
+      payload: { banner: OWN_BANNER_URL },
     });
     expect(res.statusCode).toBe(500);
     await app.close();

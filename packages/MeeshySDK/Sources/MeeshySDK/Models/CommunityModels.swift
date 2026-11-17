@@ -107,6 +107,10 @@ public struct APICommunity: Codable, Identifiable, Sendable, CacheIdentifiable {
     /// n'est pas membre — servi par `GET /communities/:id` (#6378). `members`
     /// n'est jamais servi : c'est ce champ qui dit « Rejoindre » ou « Quitter ».
     public var currentUserRole: String? = nil
+    /// Les AUTRES membres en ligne, en agrégat anonyme — servi par
+    /// `GET /communities/:id` (#18014). `nil` : communauté trop petite pour
+    /// qu'un compte reste anonyme, ou serveur qui ne le sert pas.
+    public var onlineMemberCount: Int? = nil
 }
 
 extension APICommunity {
@@ -124,7 +128,8 @@ extension APICommunity {
             updatedAt: updatedAt ?? createdAt,
             memberCount: memberCount ?? _count?.members ?? members?.count ?? 0,
             conversationCount: conversationCount ?? _count?.conversations ?? 0,
-            color: DynamicColorGenerator.colorForName(name)
+            color: DynamicColorGenerator.colorForName(name),
+            onlineMemberCount: onlineMemberCount.flatMap { $0 >= 0 ? $0 : nil }
         )
     }
 }

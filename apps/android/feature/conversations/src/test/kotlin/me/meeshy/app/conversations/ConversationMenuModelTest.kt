@@ -192,7 +192,7 @@ class ConversationMenuModelTest {
             ConversationMenuSection.MORE,
             ConversationMenuSection.DEPARTURE,
         ).inOrder()
-        assertThat(model.departure).containsAtLeast(LEAVE, HIDE, DELETE_FOR_ALL)
+        assertThat(model.departure).containsExactly(LEAVE, HIDE).inOrder()
         assertThat(model.departure.all { it.isDestructive }).isTrue()
     }
 
@@ -236,5 +236,33 @@ class ConversationMenuModelTest {
 
         assertThat(full.withoutQuickActions().entries.first()).isEqualTo(DETAILS)
         assertThat(full.entries.take(4)).containsExactly(PIN, MUTE, MARK_UNREAD, DETAILS).inOrder()
+    }
+
+    @Test
+    fun `the root keeps details, profile, members, the draft and the departures, the rare rests behind Plus`() {
+        val model = menu(
+            conversation(role = "moderator"), hasDraft = true, isCreator = true,
+        )
+
+        assertThat(model.organize).containsExactly(VIEW_PROFILE, MANAGE_MEMBERS, DISCARD_DRAFT).inOrder()
+        assertThat(model.more).containsAtLeast(RENAME, FAVORITE, TAGS, MOVE, MENTIONS_ONLY, INVITE)
+        assertThat(model.organize + model.reach).containsNoneOf(RENAME, FAVORITE, TAGS, MOVE, MENTIONS_ONLY, ALL_NOTIFICATIONS)
+    }
+
+    @Test
+    fun `the rare red departures rest behind More, still reachable, while Leave and Hide stay on the root`() {
+        val model = menu(conversation(role = "creator"), isCreator = true)
+
+        assertThat(model.more).contains(DELETE_FOR_ALL)
+        assertThat(model.departure).containsNoneOf(DELETE_FOR_ALL, MAKE_OBSOLETE)
+        assertThat(model.entries).contains(DELETE_FOR_ALL)
+        assertThat(model.more.filter { it.isDestructive }).contains(DELETE_FOR_ALL)
+    }
+
+    @Test
+    fun `every entry the root lost is still offered, accessibility actions follow the whole model`() {
+        val model = menu(conversation(role = "moderator"), hasDraft = true)
+
+        assertThat(model.entries).containsAtLeast(RENAME, FAVORITE, TAGS, MOVE, MENTIONS_ONLY, DISCARD_DRAFT)
     }
 }

@@ -8,6 +8,7 @@
  */
 import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
 import { withNoticeUsernames } from '../../services/messaging/noticeUsernames';
+import { withCallSummaryParticipantNames } from '../../services/calls/callSummaryParticipantNames';
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
@@ -292,10 +293,14 @@ export function registerMessageSearchRoute(
       merged.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       // #7451 × #8630 — ce qui est mort pour CE lecteur ne ressort pas par
       // son contenu : l'éphémère échu, puis la réponse à ce qui l'est.
+      // #18556 — une recherche trouve par le CONTENU : la bulle vide d'un
+      // message mort pour ce lecteur n'y a aucun sens, elle n'en sort pas.
       const readerPage = await keepAliveForReader(
         prisma,
         merged,
-        await readerParticipantIdOf(prisma, conversationId, authRequest.authContext)
+        await readerParticipantIdOf(prisma, conversationId, authRequest.authContext),
+        new Date(),
+        { lapsed: 'drop' }
       );
       // #10429 — une réponse qui hérite de l'échéance de ce qu'elle cite
       // (#8630) disparaît aussi : elle ne se trouve pas plus que lui.
@@ -363,7 +368,7 @@ export function registerMessageSearchRoute(
       // root level. Migration to sendSuccess requires a coordinated client update
       // (breaking change).
       // #7950 — la citation d'une story retirée sort expurgée (une requête).
-      const servedResults = await withNoticeUsernames(prisma, await servePostReplyCitations(prisma, mappedResults));
+      const servedResults = await withCallSummaryParticipantNames(prisma, await withNoticeUsernames(prisma, await servePostReplyCitations(prisma, mappedResults)), { conversationId });
       reply.send({
         success: true,
         data: servedResults,

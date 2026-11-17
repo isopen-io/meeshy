@@ -545,7 +545,7 @@ export function ChatJoin({
         {ended !== null || invitation === null || entering ? null : (
           <div
             data-invite-layout
-            className="grid gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:grid-rows-[auto_auto_auto_1fr] md:items-start md:gap-x-8 md:gap-y-4"
+            className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:grid-rows-[auto_auto_auto_1fr] md:items-start md:gap-x-8 md:gap-y-4"
           >
             <div className="grid gap-5 md:row-span-4">
               <InviterBlock language={language} invitation={invitation} />

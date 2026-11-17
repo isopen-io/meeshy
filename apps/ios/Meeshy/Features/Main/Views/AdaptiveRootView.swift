@@ -471,17 +471,9 @@ struct DetachedWindowView: View {
         .meeshyConversationList(conversationVMOwner.viewModel)
         .environmentObject(storyViewerCoordinator)
         .meeshySocialChrome(status: statusViewModel, story: storyViewModel, storyViewer: storyViewerCoordinator)
-        .sheet(item: $router.deepLinkProfileUser) { user in
-            UserProfileSheet(
-                user: user,
-                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
-                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) }, dependencies: .live
-            )
-            .modifier(MeeshyRouterInjection(router: router))
-            .environmentObject(statusViewModel)
-            .meeshyConversationList(conversationVMOwner.viewModel)
-        }
+        .modifier(DetachedWindowSheets(router: router, storyViewModel: storyViewModel, statusViewModel: statusViewModel,
+                                       conversationViewModel: conversationVMOwner.viewModel,
+                                       storyViewerCoordinator: storyViewerCoordinator))
         .modifier(StoryReaderCover(
             request: $storyViewerCoordinator.pendingRequest,
             storyViewModel: storyViewModel,
@@ -642,6 +634,38 @@ struct DetachedWindowView: View {
             UIApplication.shared.requestSceneSessionActivation(primary, userActivity: nil, options: nil)
         }
         UIApplication.shared.requestSceneSessionDestruction(session, options: nil)
+    }
+}
+
+/// Les feuilles d'une fenêtre détachée : la fiche d'un profil et le détail d'un post. Son routeur n'a pas de
+/// panneau, donc `push(.postDetail)` y pose `presentedPost`, que seul `PostDetailSheetHost` présente (#18443).
+struct DetachedWindowSheets: ViewModifier {
+    @ObservedObject var router: Router
+    let storyViewModel: StoryViewModel
+    let statusViewModel: StatusViewModel
+    let conversationViewModel: ConversationListViewModel
+    let storyViewerCoordinator: StoryViewerCoordinator
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(item: $router.deepLinkProfileUser) { user in
+                UserProfileSheet(
+                    user: user,
+                    moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                    onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                    presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) }, dependencies: .live
+                )
+                .modifier(MeeshyRouterInjection(router: router))
+                .environmentObject(statusViewModel)
+                .meeshyConversationList(conversationViewModel)
+            }
+            .modifier(PostDetailSheetHost(
+                router: router,
+                storyViewModel: storyViewModel,
+                statusViewModel: statusViewModel,
+                conversationViewModel: conversationViewModel,
+                storyViewerCoordinator: storyViewerCoordinator
+            ))
     }
 }
 

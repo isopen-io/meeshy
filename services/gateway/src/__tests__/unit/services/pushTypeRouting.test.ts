@@ -181,3 +181,32 @@ describe('PushNotificationService.sendToUser — le chokepoint applique la loi',
     expect(await servedTokenIds([row('shell-old', shell('2.0.0')), row('iphone', iphone(null))], PHOTO)).toEqual([]);
   });
 });
+
+describe('battery_pull (#14147) — le réveil de relevé ne part vers aucun client qui ne sait pas relever', () => {
+  it('aucun client publié ne le reçoit, quelle que soit sa version', () => {
+    for (const token of [iphone('99.0.0'), nativeAndroid('99.0.0'), shell('99.0.0'), browser('99.0.0')]) {
+      expect(tokenRoutesPushType(token, 'battery_pull')).toBe(false);
+    }
+  });
+
+  it('la notification device_battery, elle, n\'a pas de plancher : sa bannière dit tout', () => {
+    expect(tokenRoutesPushType(iphone(null), 'device_battery')).toBe(true);
+  });
+});
+
+describe('talkie_incoming (#17144) — l’Android natif 3.1.0 route le réveil vers TalkieWakeService', () => {
+  const playNative = (appVersion: string): RoutableToken => ({ platform: 'android', appVersion, bundleId: 'me.meeshy.app' });
+
+  it('la 3.1.0 publiée sur Play (me.meeshy.app) reçoit le réveil', () => {
+    expect(tokenRoutesPushType(playNative('3.1.0'), 'talkie_incoming')).toBe(true);
+  });
+
+  it('une native antérieure à 3.1.0 n’en ferait qu’une bannière vide : rien ne part', () => {
+    expect(tokenRoutesPushType(playNative('3.0.0'), 'talkie_incoming')).toBe(false);
+  });
+
+  it('la coque et le navigateur ne le routent toujours pas', () => {
+    expect(tokenRoutesPushType(shell('99.0.0'), 'talkie_incoming')).toBe(false);
+    expect(tokenRoutesPushType(browser('99.0.0'), 'talkie_incoming')).toBe(false);
+  });
+});

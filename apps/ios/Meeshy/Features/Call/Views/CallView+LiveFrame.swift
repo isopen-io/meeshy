@@ -90,7 +90,7 @@ extension CallView {
                 onAccept: { Task { await liveFrame.accept() } },
                 onDecline: { Task { await liveFrame.decline() } }
             )
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
         } else if let answer = liveFrame.answer {
             CallLiveFrameNotice(text: CallLiveFrameCopy.answered(answer.reply, by: answer.from))
                 .transition(.opacity)

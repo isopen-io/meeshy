@@ -13,5 +13,4 @@
     <string name="global_search_summary_hidden">1 verborgene Nachricht</string>
     <string name="global_search_summary_view_once">1 Nachricht zum einmaligen Ansehen</string>
     <string name="global_search_summary_expired">Nachricht abgelaufen</string>
-    <string name="global_search_summary_ephemeral">Verschwindet nach dem Lesen</string>
 </resources>

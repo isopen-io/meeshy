@@ -130,6 +130,10 @@ struct ConversationRowAvatar: View {
             )
             // Ce qu'écoute le pair d'un direct (#16733), sur les DEUX rangs : le bandeau que le serveur a servi.
             .overlay { AvatarListeningOverlay(userId: listenedUserId, avatarSize: style.context.size) }
+            // La batterie du pair d'un direct (#14147) : l'icône d'état pendant un épisode, rien hors épisode.
+            .modifier(AvatarBatteryOverlay(userId: listenedUserId, avatarSize: style.context.size))
+            // Le téléphone injoignable du pair d'un direct (#18737) : le glyphe tant qu'il ne répond pas.
+            .modifier(AvatarPhoneReachabilityOverlay(userId: listenedUserId, avatarSize: style.context.size))
 
             if showLastSeenTooltip, let text = conversation.lastSeenLabel {
                 Text(text)

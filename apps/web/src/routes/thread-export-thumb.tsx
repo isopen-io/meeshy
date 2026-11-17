@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import type { ThumbnailCache } from '@/lib/export/message-card-thumbnails';
-import { CARD_PALETTES, CARD_TYPEFACES, templateOf, type CardFont, type CardLinkId, type MessageCardTemplateId } from '@/lib/export/message-card-templates';
+
+import { CARD_PALETTES, CARD_TYPEFACES, templateOf, type CardFont, type CardLinkId, type CardPalette, type MessageCardTemplateId } from '@/lib/export/message-card-templates';
+
+import { LINK_SKETCH_SIDE, linkSketch, sketchMarks, type SketchInk, type SketchMark } from './thread-export-link-sketch';
 
 /**
  * **UNE VIGNETTE DE TEMPLATE** — la carte réelle, réduite, dès qu'elle entre à
@@ -112,37 +115,50 @@ export function CardThumb({
   );
 }
 
-/** Le dessin d'une liaison, en petit : ce qu'elle PEINT entre la question et la réponse. */
-export function LinkGlyph({ link }: { readonly link: CardLinkId }) {
-  const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 2.2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+/** Une case du choix de liaison : la liaison posée sur une carte miniature de la palette choisie (#18809). */
+export function LinkGlyph({ link, palette }: { readonly link: CardLinkId; readonly palette: keyof typeof CARD_PALETTES }) {
+  const inks: CardPalette = CARD_PALETTES[palette];
+  const ink = (role: SketchInk): string =>
+    ({ accent: inks.accent, quote: inks.quoteInk, reply: inks.replyInk, quotePanel: inks.quotePanel, replyPanel: inks.replyPanel })[role];
   return (
-    <svg viewBox="0 0 50 34" width={46} height={30} aria-hidden="true" {...common}>
-      {link === 'orbite' ? (
-        <>
-          <path d="M4 17h14M32 17h14" strokeDasharray="1 5" />
-          <circle cx="25" cy="17" r="4" />
-        </>
-      ) : null}
-      {link === 'filet' ? <path d="M6 17h16" strokeWidth={3.4} /> : null}
-      {link === 'guillemets' ? (
-        <text x="6" y="33" fontSize="36" fontFamily="Prata, serif" fill="currentColor" stroke="none">
-          “
-        </text>
-      ) : null}
-      {link === 'fleche' ? <path d="M12 6v8a4 4 0 0 0 4 4h14M25 13l5 5-5 5" /> : null}
-      {link === 'bulles' ? (
-        <>
-          <rect x="3" y="4" width="28" height="11" rx="5.5" />
-          <rect x="19" y="19" width="28" height="11" rx="5.5" />
-        </>
-      ) : null}
-      {link === 'fil' ? (
-        <>
-          <path d="M10 3v21" />
-          <circle cx="10" cy="28" r="3.2" fill="currentColor" />
-        </>
-      ) : null}
-      {link === 'silence' ? <path d="M8 17h34" strokeDasharray="2 5" opacity={0.4} /> : null}
-    </svg>
+    <span data-link-sketch={link} aria-hidden="true" className="block overflow-hidden rounded-[10px]" style={{ width: 48, height: 48, background: paletteGradient(palette) }}>
+      <svg viewBox={`0 0 ${LINK_SKETCH_SIDE} ${LINK_SKETCH_SIDE}`} width={48} height={48} direction="ltr">
+        {sketchMarks(linkSketch(link)).map((mark, index) => (
+          <SketchShape key={index} mark={mark} color={ink(mark.ink)} />
+        ))}
+      </svg>
+    </span>
   );
+}
+
+function SketchShape({ mark, color }: { readonly mark: SketchMark; readonly color: string }) {
+  switch (mark.kind) {
+    case 'line':
+      return <line x1={mark.x1} y1={mark.y1} x2={mark.x2} y2={mark.y2} stroke={color} strokeWidth={mark.width} strokeLinecap="round" strokeDasharray={mark.dash.length > 0 ? mark.dash.join(' ') : undefined} />;
+    case 'dot':
+      return <circle cx={mark.x} cy={mark.y} r={mark.radius} fill={color} />;
+    case 'ring':
+      return <circle cx={mark.x} cy={mark.y} r={mark.radius} fill="none" stroke={color} strokeWidth={1.6} />;
+    case 'panel':
+      return <rect x={mark.x} y={mark.y} width={mark.width} height={mark.height} rx={mark.height / 2} fill={color} />;
+    case 'diamond':
+      return <path d={`M${mark.x} ${mark.y - mark.radius}L${mark.x + mark.radius} ${mark.y}L${mark.x} ${mark.y + mark.radius}L${mark.x - mark.radius} ${mark.y}Z`} fill={color} />;
+    case 'arrow':
+      return (
+        <path
+          d={`M${mark.x} ${mark.top}V${mark.bottom - 3}Q${mark.x} ${mark.bottom} ${mark.x + 3} ${mark.bottom}H${mark.end}M${mark.end - 4} ${mark.bottom - 4}L${mark.end} ${mark.bottom}L${mark.end - 4} ${mark.bottom + 4}`}
+          fill="none"
+          stroke={color}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      );
+    case 'glyph':
+      return (
+        <text x={mark.x} y={mark.y} fontSize={mark.size} fontFamily={mark.serif ? 'Prata, serif' : 'var(--font-native)'} fontWeight={700} fill={color} textAnchor="middle" dominantBaseline="central">
+          {mark.text}
+        </text>
+      );
+  }
 }

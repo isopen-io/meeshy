@@ -67,6 +67,23 @@ describe('ConfirmDialog — une modale nommée, deux gestes, un effet chacun', (
     expect(calls).not.toContain('confirm');
   });
 
+  test('« Annuler » rappelle onCancel une fois, dans le même toucher, et laisse un fantôme de la confirmation (#18362)', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'showPopover', { configurable: true, writable: true, value() {} });
+    try {
+      const calls: string[] = [];
+      const host = await mountDialog({ onCancel: () => calls.push('cancel') });
+      host.querySelector<HTMLButtonElement>('[data-confirm="cancel"]')?.click();
+      expect(calls).toEqual(['cancel']);
+      expect(host.querySelector('dialog')?.open).toBe(false);
+      const ghost = document.querySelector('[data-dialog-ghost]');
+      expect(ghost?.getAttribute('data-dialog-ghost')).toBe('confirm');
+      expect(ghost?.hasAttribute('data-confirm-dialog')).toBe(false);
+    } finally {
+      delete (HTMLElement.prototype as { showPopover?: unknown }).showPopover;
+      for (const ghost of document.querySelectorAll('[data-dialog-ghost]')) ghost.remove();
+    }
+  });
+
   /**
    * **LE GESTE DESTRUCTIF S'ÉCRIT EN ROUGE SUR LA CARTE, JAMAIS EN BLANC SUR
    * DU ROUGE** — c'est la forme de l'alerte iOS (`.destructive` : texte

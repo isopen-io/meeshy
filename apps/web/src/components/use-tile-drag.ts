@@ -1,6 +1,6 @@
 import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 
-import { isTileDrag } from '@/lib/calls/call-self-tile';
+import { isTileDrag } from '@/lib/calls/call-self-tile-gestures';
 
 /**
  * **GLISSER MA VIGNETTE** (#8747) — un doigt, ou la souris, l'emporte : elle

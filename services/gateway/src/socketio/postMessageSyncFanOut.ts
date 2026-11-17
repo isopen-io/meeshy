@@ -1,8 +1,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Message } from '@meeshy/shared/types/index';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ServerEmitIO } from './serverEmit';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueDeps } from './offlineParticipantQueue';
+import type { OfflineSignedDecision } from './offlineSignedPayload';
 import { fetchParticipantSuperset } from './participant-superset';
 import {
   emitUnreadCountsToRecipients,
@@ -10,6 +10,7 @@ import {
   type UnreadBridgeBuilder,
 } from './emitUnreadCountsToRecipients';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
+import { emitConversationUpdatedPerReader } from './conversationUpdatedPerReader';
 import { toIsoOrNull } from './utils/lastMessagePreviewPrism';
 import { resolveLastMessagePreviewGroup } from './utils/lastMessagePreviewGroup';
 import type { QueuedPayloadFor } from './queuedEventContract';
@@ -51,6 +52,16 @@ export interface PostMessageSyncFanOutParams {
   readonly resolvedSenderId: string | null | undefined;
   /** #8562 — la variante d'un lecteur que la diffusion commune ne peut pas servir (citation scellée). */
   readonly payloadForReader?: (queueKey: string) => QueuedPayloadFor<'new'>;
+  /**
+   * Ce que la FILE doit faire d'un message dont une pièce se lit par lecteur
+   * (#18619) : retenir (plan illisible), enfiler tel quel, ou enfiler une
+   * charge SIGNÉE par destinataire.
+   *
+   * Elle ne gouverne QUE l'enfilage. `CONVERSATION_UPDATED` et le badge de
+   * non-lus qui la suivent ne portent aucune adresse de fichier et partent
+   * dans tous les cas : retenir le message n'est pas retenir la conversation.
+   */
+  readonly offlineSigned?: OfflineSignedDecision;
   /** #8686 — par clé de room personnelle, la mort de la chaîne citée : sa ligne de liste part « expirée ». */
   readonly quotedDeaths?: ReadonlyMap<string, Date>;
 }
@@ -116,7 +127,11 @@ export async function syncConversationListOnNewMessage(
   // `deliveryQueue.enqueue` du dépôt, et son `payload as Record<string,
   // unknown>` le dernier endroit où une charge pouvait être ENFILÉE sous
   // une forme que le fil ne diffuse pas.
-  await enqueueForOfflineParticipants(
+  // #18619 — `PLAN_UNAVAILABLE` gouverne les DEUX canaux : ne pas savoir
+  // adresser une pièce peut-être protégée n'autorise pas à écrire son adresse
+  // NUE dans Redis pour 48 h. Ce qu'on perd est une REMISE que la relecture du
+  // fil sert de toute façon, sous les mêmes lois.
+  if (params.offlineSigned?.kind !== 'withhold') await enqueueForOfflineParticipants(
     { deliveryQueue: ctx.deliveryQueue, prisma: ctx.prisma, connectedUsers: ctx.connectedUsers },
     {
       conversationId: normalizedId,
@@ -132,7 +147,14 @@ export async function syncConversationListOnNewMessage(
       // un rejeu portant le `clientMessageId` de l'auteur ferait fuiter son
       // espace d'ids optimistes dans celui d'un autre utilisateur.
       payload: broadcastPayload,
-      ...(params.payloadForReader ? { resolvePayloadForReader: params.payloadForReader } : {}),
+      // UN seul hook par lecteur, la décision ayant déjà composé masquage et
+      // signature ; `payloadForReader` reste le repli des appelants qui ne la
+      // passent pas encore.
+      ...(params.offlineSigned?.kind === 'per-reader'
+        ? { resolvePayloadForReader: params.offlineSigned.resolve }
+        : params.payloadForReader
+          ? { resolvePayloadForReader: params.payloadForReader }
+          : {}),
       // #12822 — le clair d'une conversation chiffrée au repos part scellé dans Redis.
       atRest: isServerAtRestMode(message.encryptionMode),
       participants: allParticipants,
@@ -171,8 +193,15 @@ export async function syncConversationListOnNewMessage(
     // alimente `message:new` ci-dessus : les deux événements portent donc
     // toujours la même carte, et le `conversation:updated` jumeau ne peut pas
     // arriver derrière pour effacer ce que `message:new` vient d'installer.
-    for (const { room, participant } of participantUserRoomTargets(allParticipants)) {
-      ctx.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+    //
+    // #18380 — un lecteur qui LÈVE ne coûte que ce lecteur. Le `catch` nommé
+    // « non-bloquant » qui enveloppe cette unité attrapait bien la levée sans
+    // la CONFINER : les lecteurs suivants ET la pastille de non-lus douze
+    // lignes plus bas partaient avec elle.
+    emitConversationUpdatedPerReader(
+      ctx.io,
+      participantUserRoomTargets(allParticipants),
+      (participant) => ({
         ...updatePayload,
         // Parité avec le chemin WS (`MessageHandler.ts`) et
         // `emitConversationPreviewUpdate.ts` : les trois émetteurs composent le
@@ -180,8 +209,9 @@ export async function syncConversationListOnNewMessage(
         ...resolveLastMessagePreviewGroup(participant, message, new Date(), {
           quotedDeathAt: quotedDeathFor(params.quotedDeaths, participant),
         })
-      });
-    }
+      }),
+      (error, room) => logger.warn('conversation:updated fanout failed for one reader', { conversationId: normalizedId, room, error }),
+    );
 
     // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process).
     // Délégué à l'unité partagée par les trois transports d'envoi : la copie

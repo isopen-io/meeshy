@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_options_section_actions">Actions</string>
+    <string name="encryption_fact_not_yet_decrypted_notifications">Decrypting notifications on the device, to show their text, isn’t available yet.</string>
+    <string name="participant_profile_allowed_can_send_audios">Send audio</string>
+    <string name="participant_profile_allowed_can_send_files">Send files</string>
+    <string name="participant_profile_allowed_can_send_images">Send photos</string>
+    <string name="participant_profile_allowed_can_send_links">Send links</string>
+    <string name="participant_profile_allowed_can_send_locations">Share their location</string>
+    <string name="participant_profile_allowed_can_send_messages">Write messages</string>
+    <string name="participant_profile_allowed_can_send_videos">Send videos</string>
+    <string name="participant_profile_allowed_can_view_history">See earlier messages</string>
+    <string name="participant_profile_denied_can_send_audios">Cannot send audio</string>
+    <string name="participant_profile_denied_can_send_files">Cannot send files</string>
+    <string name="participant_profile_denied_can_send_images">Cannot send photos</string>
+    <string name="participant_profile_denied_can_send_links">Cannot send links</string>
+    <string name="participant_profile_denied_can_send_locations">Cannot share their location</string>
+    <string name="participant_profile_denied_can_send_messages">Cannot write messages</string>
+    <string name="participant_profile_denied_can_send_videos">Cannot send videos</string>
+</resources>

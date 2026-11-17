@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_service_channel_name">المكالمات الجارية</string>
+    <string name="call_service_on_hold">قيد الانتظار</string>
+    <string name="call_service_reconnecting">جارٍ إعادة الاتصال…</string>
+    <string name="call_service_unmute">تفعيل الميكروفون</string>
+</resources>

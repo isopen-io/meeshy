@@ -22,8 +22,12 @@ LOOP_MAX_PERIOD = 16
 LOOP_COPIES = 4
 
 
-def generation_budget(source_tokens: int, ceiling: int = GENERATION_CEILING) -> int:
-    proportional = math.ceil(TOKENS_PER_SOURCE_TOKEN * source_tokens + TOKEN_MARGIN)
+def generation_budget(
+    source_tokens: int,
+    ceiling: int = GENERATION_CEILING,
+    tokens_per_source: float = TOKENS_PER_SOURCE_TOKEN,
+) -> int:
+    proportional = math.ceil(tokens_per_source * source_tokens + TOKEN_MARGIN)
     return min(ceiling, max(GENERATION_FLOOR, proportional))
 
 
@@ -90,9 +94,13 @@ def settle_generation(
     return kept, outcome
 
 
-def greedy_generation_kwargs(source_tokens: int, ceiling: int = GENERATION_CEILING) -> dict[str, Any]:
+def greedy_generation_kwargs(
+    source_tokens: int,
+    ceiling: int = GENERATION_CEILING,
+    tokens_per_source: float = TOKENS_PER_SOURCE_TOKEN,
+) -> dict[str, Any]:
     return {
-        "max_new_tokens": generation_budget(source_tokens, ceiling),
+        "max_new_tokens": generation_budget(source_tokens, ceiling, tokens_per_source),
         "num_beams": 1,
         "do_sample": False,
         "stopping_criteria": [RepetitionLoopStop()],

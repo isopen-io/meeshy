@@ -49,6 +49,9 @@ export function matchesMongoWhere(row: MongoDocument, where: MongoDocument | und
     if (condition === null) return has(row, key) && row[key] === null;
 
     if (typeof condition === 'object' && !(condition instanceof Date)) {
+      if (isRelationWhere(row, key, condition as MongoDocument)) {
+        return isPlainDocument(row[key]) && matchesMongoWhere(row[key] as MongoDocument, condition as MongoDocument);
+      }
       return matchesFieldFilter(row, key, condition as MongoDocument);
     }
 
@@ -82,6 +85,25 @@ function fieldsOf(clause: MongoDocument): string[] {
   );
 }
 
+const FIELD_OPERATORS = new Set(['isSet', 'equals', 'not', 'gt', 'lt', 'gte', 'lte', 'in', 'notIn', 'is', 'has', 'isEmpty', 'some', 'none']);
+
+const isPlainDocument = (value: unknown): boolean =>
+  typeof value === 'object' && value !== null && !(value instanceof Date) && !Array.isArray(value);
+
+/**
+ * Filtre de relation 1-1 sous sa forme courte (`participant: { userId }`) : un
+ * filtre dont AUCUNE clé n'est un opérateur, posé sur un document embarqué ou
+ * sur `null`. Une relation nulle n'apparie rien, comme chez Prisma ; une clé
+ * ABSENTE du document reste un opérateur inconnu, et jette.
+ */
+function isRelationWhere(row: MongoDocument, key: string, filter: MongoDocument): boolean {
+  const keys = Object.keys(filter);
+  return keys.length > 0 && keys.every((operator) => !FIELD_OPERATORS.has(operator)) && has(row, key) && (row[key] === null || isPlainDocument(row[key]));
+}
+
+const relatedDocuments = (row: MongoDocument, key: string): MongoDocument[] =>
+  has(row, key) && Array.isArray(row[key]) ? (row[key] as MongoDocument[]) : [];
+
 function matchesFieldFilter(row: MongoDocument, key: string, filter: MongoDocument): boolean {
   return Object.entries(filter).every(([operator, operand]) => {
     if (operator === 'isSet') return has(row, key) === operand;
@@ -114,6 +136,17 @@ function matchesFieldFilter(row: MongoDocument, key: string, filter: MongoDocume
       // Un tableau ABSENT ne « contient » rien — c'est la même règle que le
       // reste du fichier, appliquée à `has` plutôt qu'à `isSet`/`equals`.
       return has(row, key) && Array.isArray(row[key]) && (row[key] as unknown[]).some((v) => sameValue(v, operand));
+    }
+    if (operator === 'isEmpty') {
+      // Liste scalaire ABSENTE : ni vide ni pleine — elle n'apparie aucune des deux formes.
+      return has(row, key) && Array.isArray(row[key]) && ((row[key] as unknown[]).length === 0) === operand;
+    }
+    if (operator === 'some') {
+      // Relation 1-n embarquée : une relation sans document n'en a aucun qui apparie.
+      return relatedDocuments(row, key).some((related) => matchesMongoWhere(related, operand as MongoDocument));
+    }
+    if (operator === 'none') {
+      return !relatedDocuments(row, key).some((related) => matchesMongoWhere(related, operand as MongoDocument));
     }
     throw new Error(`double Mongo: opérateur non supporté « ${key}.${operator} »`);
   });
@@ -152,4 +185,91 @@ export function updateManyIn<T extends MongoDocument>(rows: readonly T[]) {
     return Promise.resolve({ count: matched.length });
   };
   return { updateMany, touched };
+}
+
+type FindManyArgs = {
+  readonly where?: MongoDocument;
+  readonly select?: MongoDocument;
+  readonly orderBy?: MongoDocument | readonly MongoDocument[];
+  readonly take?: number;
+};
+
+const SUPPORTED_FIND_MANY_ARGS = new Set(['where', 'select', 'orderBy', 'take']);
+const SUPPORTED_NESTED_SELECT_ARGS = new Set(['select', 'where', 'take']);
+
+/**
+ * La projection de Prisma : un scalaire demandé et ABSENT du document se lit
+ * `null`. C'est exactement ce qui rend une clé absente indiscernable d'une clé
+ * nulle à la LECTURE — seul un filtre (`isSet`) les sépare.
+ */
+function project(row: MongoDocument, select: MongoDocument): MongoDocument {
+  return Object.fromEntries(
+    Object.entries(select).flatMap(([key, wanted]) => {
+      if (wanted === false || wanted === undefined) return [];
+      if (wanted === true) return [[key, has(row, key) ? row[key] : null]];
+      const nested = wanted as MongoDocument & { readonly select?: MongoDocument; readonly where?: MongoDocument; readonly take?: number };
+      const unknown = Object.keys(nested).filter((arg) => !SUPPORTED_NESTED_SELECT_ARGS.has(arg));
+      if (unknown.length > 0) throw new Error(`double Mongo: sélection non supportée « ${key}.${unknown.join(', ')} »`);
+      const value = has(row, key) ? row[key] : null;
+      if (Array.isArray(value)) {
+        const kept = (value as MongoDocument[]).filter((related) => matchesMongoWhere(related, nested.where));
+        const taken = nested.take === undefined ? kept : kept.slice(0, nested.take);
+        return [[key, nested.select ? taken.map((related) => project(related, nested.select as MongoDocument)) : taken]];
+      }
+      if (!isPlainDocument(value)) return [[key, null]];
+      return [[key, nested.select ? project(value as MongoDocument, nested.select) : value]];
+    })
+  );
+}
+
+function compareBy(orderBy: readonly MongoDocument[]) {
+  return (left: MongoDocument, right: MongoDocument): number => {
+    for (const clause of orderBy) {
+      for (const [field, direction] of Object.entries(clause)) {
+        if (direction !== 'asc' && direction !== 'desc') throw new Error(`double Mongo: tri non supporté « ${field} »`);
+        const a = left[field] instanceof Date ? (left[field] as Date).getTime() : left[field];
+        const b = right[field] instanceof Date ? (right[field] as Date).getTime() : right[field];
+        if (a === b) continue;
+        const order = (a as number | string) < (b as number | string) ? -1 : 1;
+        return direction === 'asc' ? order : -order;
+      }
+    }
+    return 0;
+  };
+}
+
+/**
+ * `findUnique` sur une collection en mémoire : le premier document qui apparie
+ * le `where`, PROJETÉ par son `select` comme Prisma le projette — un champ que
+ * le `select` ne demande pas n'existe pas dans la ligne rendue. Rend `null`
+ * quand rien n'apparie. Tout autre argument jette.
+ */
+export function findUniqueIn<T extends MongoDocument>(rows: readonly T[]) {
+  return (args: { readonly where?: MongoDocument; readonly select?: MongoDocument }): Promise<MongoDocument | null> => {
+    const unknown = Object.keys(args).filter((arg) => arg !== 'where' && arg !== 'select');
+    if (unknown.length > 0) return Promise.reject(new Error(`double Mongo: argument non supporté « ${unknown.join(', ')} »`));
+    const found = rows.find((row) => matchesMongoWhere(row, args.where));
+    if (!found) return Promise.resolve(null);
+    return Promise.resolve(args.select ? project(found, args.select) : { ...found });
+  };
+}
+
+/**
+ * `findMany` sur une collection en mémoire : `where` évalué contre les
+ * documents (sémantique ci-dessus), `select` projeté comme Prisma le projette,
+ * `orderBy` et `take` honorés. Tout autre argument jette.
+ */
+export function findManyIn<T extends MongoDocument>(rows: readonly T[]) {
+  const calls: FindManyArgs[] = [];
+  const findMany = (args: FindManyArgs = {}): Promise<MongoDocument[]> => {
+    const unknown = Object.keys(args).filter((arg) => !SUPPORTED_FIND_MANY_ARGS.has(arg));
+    if (unknown.length > 0) return Promise.reject(new Error(`double Mongo: argument non supporté « ${unknown.join(', ')} »`));
+    calls.push(args);
+    const matched = rows.filter((row) => matchesMongoWhere(row, args.where));
+    const orderBy = args.orderBy === undefined ? [] : Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy as MongoDocument];
+    const sorted = orderBy.length === 0 ? matched : [...matched].sort(compareBy(orderBy));
+    const taken = args.take === undefined ? sorted : sorted.slice(0, args.take);
+    return Promise.resolve(taken.map((row) => (args.select ? project(row, args.select) : { ...row })));
+  };
+  return { findMany, calls };
 }

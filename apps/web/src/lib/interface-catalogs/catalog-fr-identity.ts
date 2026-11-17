@@ -38,7 +38,7 @@ const frIdentity = {
   'conversation.details.role.moderator': 'Modérateur',
   'conversation.details.share': 'Partager un lien',
   'conversation.details.share.busy': 'Création du lien…',
-  'conversation.details.share.copied': 'Lien copié — il ne reste qu’à le coller.',
+  'conversation.details.share.copied': 'Lien copié.',
   'conversation.details.share.failed': 'Impossible de créer le lien — réessayez dans un instant.',
   'conversation.details.share.unavailable': 'Partage impossible ici — copiez le lien : {url}',
   'thread.header.active_members': 'Participants les plus actifs',

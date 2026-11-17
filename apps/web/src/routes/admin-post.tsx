@@ -226,7 +226,7 @@ export function AdminPostPanel({
         ) : failure instanceof ApiError && failure.status === 403 ? (
           <AdminDeniedInline language={language} />
         ) : failure instanceof ApiError && failure.status === 404 ? (
-          <AdminEmptyState title={translateAdmin(language, 'admin.posts.notFound')} hint={translateAdmin(language, 'admin.posts.notFound.hint')} glyph="newspaper" />
+          <AdminEmptyState title={translateAdmin(language, 'admin.posts.notFound')} glyph="newspaper" />
         ) : (
           <AdminErrorState language={language} onRetry={() => void query.refetch()} />
         )}

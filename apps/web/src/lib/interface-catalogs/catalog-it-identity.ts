@@ -38,7 +38,7 @@ const itIdentity = {
   'conversation.details.role.moderator': 'Moderatore',
   'conversation.details.share': 'Condividi un link',
   'conversation.details.share.busy': 'Creazione del link…',
-  'conversation.details.share.copied': 'Link copiato: basta incollarlo.',
+  'conversation.details.share.copied': 'Link copiato.',
   'conversation.details.share.failed': 'Impossibile creare il link: riprova tra un momento.',
   'conversation.details.share.unavailable': 'Impossibile condividere qui: copia il link: {url}',
   'thread.header.active_members': 'Membri più attivi',

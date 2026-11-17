@@ -716,7 +716,14 @@ describe('DELETE /messages/:messageId — offline delivery replay', () => {
         actorUserId: USER_ID,
         eventType: 'deleted',
         messageId: MSG_ID,
-        payload: { messageId: MSG_ID, conversationId: CONV_ID },
+        // #18159 — le retrait voyage avec l'heure SERVEUR qui vient d'être
+        // écrite : un destinataire absent rejoue des heures plus tard, et son
+        // horloge locale daterait la pierre tombale de sa RECONNEXION.
+        payload: {
+          messageId: MSG_ID,
+          conversationId: CONV_ID,
+          deletedAt: ((app as any).prisma.message.update.mock.calls.at(-1)[0].data.deletedAt as Date).toISOString(),
+        },
       })
     );
   });

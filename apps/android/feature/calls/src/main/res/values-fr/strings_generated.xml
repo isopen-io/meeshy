@@ -90,6 +90,7 @@
     <string name="call_effects_companions_more">%1$d autres participants</string>
     <string name="call_effects_companions_move">Changer de côté</string>
     <string name="call_effects_layer_undo">Annuler %1$s</string>
+    <string name="call_effects_settings_panel">Réglages de mon image</string>
     <string name="call_ended">Appel terminé</string>
     <string name="call_ended_connection_lost">Connexion perdue</string>
     <string name="call_ended_declined">Appel refusé</string>
@@ -168,8 +169,6 @@
     <string name="call_journal_erase_failed">L\'effacement a échoué. Réessayez.</string>
     <string name="call_journal_filter_video">Vidéo</string>
     <string name="call_journal_hide">Effacer</string>
-    <string name="call_journal_search_empty">Aucun appel ne correspond à « %1$s »</string>
-    <string name="call_journal_search_empty_hint">Le journal couvre les trois derniers mois.</string>
     <string name="call_journal_search_placeholder">Rechercher un appel</string>
     <string name="call_live_frame_accept">Appliquer</string>
     <string name="call_live_frame_answer_accepted_anonymous">Votre correspondant a appliqué votre cadre</string>
@@ -180,7 +179,10 @@
     <string name="call_live_frame_label">Cadre en direct</string>
     <string name="call_live_frame_none">Aucun cadre</string>
     <string name="call_live_frame_not_proposed">Le cadre est appliqué chez vous, mais n\'a pas pu être proposé</string>
+    <string name="call_live_frame_peer_released">%1$s a retiré le cadre</string>
+    <string name="call_live_frame_peer_released_anonymous">Votre correspondant a retiré le cadre</string>
     <string name="call_live_frame_proposal">%1$s vous propose le cadre « %2$s »</string>
+    <string name="call_mode_carousel_position">%1$d sur %2$d</string>
     <string name="call_mode_gesture_hint">toucher deux fois pour une photo · maintenir pour filmer</string>
     <string name="call_mode_montage_title">Montage de l\'appel</string>
     <string name="call_mode_photo">Prendre une photo</string>

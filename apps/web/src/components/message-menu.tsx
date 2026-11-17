@@ -400,6 +400,7 @@ export function MessageMenu({
     onScroll: onScrollAway,
     onResize: close,
     initialOpen: true,
+    layer: false,
   });
 
   // Le portail est monté DÉJÀ ouvert (`initialOpen: true`) — cet effet ferme

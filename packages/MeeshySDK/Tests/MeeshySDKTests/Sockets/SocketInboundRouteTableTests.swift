@@ -25,14 +25,15 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "attachment-status:updated", "attachment:deleted", "attachment:reaction-added", "attachment:reaction-removed",
         "audio:transcription-failed", "audio:transcription-ready", "audio:translation-failed",
         "audio:translation-ready", "audio:translations-completed", "audio:translations-progressive",
-        "auth:session-revoked", "auth:token-expired", "bring:ring", "bring:stopped", "call:already-answered", "call:ended", "call:error",
+        "auth:session-revoked", "auth:token-expired", "battery:changed", "battery:cleared", "battery:pull-requested",
+        "bring:ring", "bring:stopped", "call:already-answered", "call:ended", "call:error",
         "call:force-leave", "call:frame-selected", "call:ice-servers-refreshed", "call:initiated",
         "call:invite-declined", "call:invite-expired", "call:media-toggled", "call:missed",
         "call:muted-by-moderator", "call:participant-invited", "call:participant-joined", "call:participant-left",
         "call:preview-requested", "call:preview-signal", "call:quality-alert", "call:reaction-received",
         "call:recording-requested", "call:recording-started", "call:recording-stopped", "call:screen-capture-alert",
         "call:signal", "call:transcription-active", "call:translated-segment", "categories:reordered",
-        "category:created", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
+        "category:created", "community:updated", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
         "conversation:encryption-changed", "conversation:join-error", "conversation:joined", "conversation:left", "conversation:new",
         "conversation:obsoleted",
         "conversation:participant-banned", "conversation:participant-joined", "conversation:participant-left",
@@ -40,7 +41,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "conversation:unread-updated", "conversation:updated", "e2ee:envelope", "engagement:conversation-updated",
         "engagement:post-updated", "friend-request:cancelled", "friend-request:rejected", "game:missions-updated", "game:updated",
         "heartbeat:ack", "location:live-started", "location:live-stopped", "location:live-updated",
-        "location:share-changed", "location:share-ended",
+        "location:share-changed", "location:share-ended", "location:share-own-changed",
         "mention:created", "message:attachment-updated", "message:cited-post-withdrawn", "message:consumed",
         "message:countdown-started", "message:deleted", "message:edited", "message:expired", "message:hidden-for-me",
         "message:new", "message:pending-delivered", "message:pinned", "message:restored-for-me", "message:starred",
@@ -48,6 +49,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "notification:counts", "notification:deleted", "notification:deleted-bulk", "notification:new",
         "notification:read", "notification:read-bulk", "now-playing:changed", "now-playing:cleared",
         "participant:rights-updated", "participant:role-updated",
+        "phone:reachable", "phone:unreachable",
         "presence:snapshot", "profile:decor-updated", "reaction:added", "reaction:removed", "read-status:updated",
         "relation:level-raised", "relation:ritual-completed", "relation:ritual-progress", "relation:ritual-started",
         "talkie:chunk", "talkie:ended", "talkie:incoming",
@@ -284,5 +286,19 @@ final class SocketInboundRouteTableTests: XCTestCase {
             "obsoletedAt": "2026-11-02T10:00:00.000Z",
             "purgeAfter": "2026-11-04T10:00:00.000Z",
         ]
+    }
+
+    func test_communityUpdated_reachesTheCommunityUpdatedChannel() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+
+        await expectOneValue(from: MessageSocketManager.shared.communityUpdated, where: {
+            $0.communityId == "c-renamed" && $0.name == "Nouveau nom" && $0.memberCount == 7 && $0.isPrivate
+        }) {
+            registrar.deliver("community:updated", [
+                "communityId": "c-renamed", "identifier": "mshy_c", "name": "Nouveau nom",
+                "description": NSNull(), "avatar": NSNull(), "banner": NSNull(),
+                "isPrivate": true, "memberCount": 7, "updatedAt": "2026-11-15T10:00:00.000Z",
+            ])
+        }
     }
 }

@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import me.meeshy.app.accessibility.AccessibilityLocalsProvider
 import me.meeshy.app.calls.CallPictureInPictureCoordinator
 import me.meeshy.app.composer.inbound.ComposerSeedLaunch
 import me.meeshy.app.composer.inbound.ComposerSeedStore
@@ -49,6 +50,12 @@ import me.meeshy.app.push.PushTapExtras
 import me.meeshy.app.shortcuts.DynamicShortcutsPublisher
 import me.meeshy.app.theme.LanguageViewModel
 import me.meeshy.app.theme.ThemeViewModel
+import me.meeshy.sdk.battery.BatteryConsentLedger
+import me.meeshy.sdk.battery.BatterySettingsGateway
+import me.meeshy.sdk.battery.BatteryStore
+import me.meeshy.sdk.phonereachability.PhoneReachabilityConsentLedger
+import me.meeshy.sdk.phonereachability.PhoneReachabilitySettingsGateway
+import me.meeshy.sdk.phonereachability.PhoneReachabilityStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.SystemBarsAppearance
 import me.meeshy.sdk.model.call.CallLinkRequest
@@ -61,6 +68,12 @@ import me.meeshy.sdk.socket.PresenceStore
 import me.meeshy.ui.component.LocalMediaBaseUrl
 import me.meeshy.ui.component.LocalConversationViewers
 import me.meeshy.ui.component.LocalPresenceStore
+import me.meeshy.ui.component.battery.LocalBatteryConsentLedger
+import me.meeshy.ui.component.battery.LocalBatterySettings
+import me.meeshy.ui.component.battery.LocalBatteryStore
+import me.meeshy.ui.component.phonereachability.LocalPhoneReachabilityConsentLedger
+import me.meeshy.ui.component.phonereachability.LocalPhoneReachabilitySettings
+import me.meeshy.ui.component.phonereachability.LocalPhoneReachabilityStore
 import me.meeshy.ui.component.video.LocalVideoPictureInPicture
 import me.meeshy.ui.component.video.VideoPictureInPictureCoordinator
 import me.meeshy.ui.profile.LocalProfileGameSlot
@@ -98,6 +111,26 @@ class MainActivity : ComponentActivity() {
     /** La carte de présence unique de la session : [LocalPresenceStore] la fournit aux avatars. */
     @Inject
     lateinit var presenceStore: PresenceStore
+
+    /** La batterie des Proches (#14147) : [LocalBatteryStore] la fournit à l'en-tête et aux avatars. */
+    @Inject
+    lateinit var batteryStore: BatteryStore
+
+    @Inject
+    lateinit var batterySettings: BatterySettingsGateway
+
+    @Inject
+    lateinit var batteryConsent: BatteryConsentLedger
+
+    /** Le téléphone injoignable des Proches (#18737) : [LocalPhoneReachabilityStore] le fournit à l'en-tête, aux avatars, aux fiches. */
+    @Inject
+    lateinit var phoneReachabilityStore: PhoneReachabilityStore
+
+    @Inject
+    lateinit var phoneReachabilitySettings: PhoneReachabilitySettingsGateway
+
+    @Inject
+    lateinit var phoneReachabilityConsent: PhoneReachabilityConsentLedger
 
     /** Qui a l'écran de quelle conversation ouvert : [LocalConversationViewers] le fournit aux avatars. */
     @Inject
@@ -148,6 +181,10 @@ class MainActivity : ComponentActivity() {
     /** #16665 — les captures d'écran prises pendant que l'activité est visible, relayées à l'appel en cours. */
     @Inject
     lateinit var screenshotSignals: AppScreenshotSignals
+
+    /** « Réduire les animations » pour TOUT l'arbre : le disque flottant, l'écran de démarrage et les couches de la racine vivent hors du NavHost. */
+    @Inject
+    lateinit var accessibilityLocals: AccessibilityLocalsProvider
 
     private val gameSlot = gameProfileSlot()
 
@@ -215,29 +252,37 @@ class MainActivity : ComponentActivity() {
                     CompositionLocalProvider(
                         LocalMediaBaseUrl provides config.apiBaseUrl,
                         LocalPresenceStore provides presenceStore,
+                        LocalBatteryStore provides batteryStore,
+                        LocalBatterySettings provides batterySettings,
+                        LocalBatteryConsentLedger provides batteryConsent,
+                        LocalPhoneReachabilityStore provides phoneReachabilityStore,
+                        LocalPhoneReachabilitySettings provides phoneReachabilitySettings,
+                        LocalPhoneReachabilityConsentLedger provides phoneReachabilityConsent,
                         LocalConversationViewers provides conversationViewing.viewers,
                         // Le niveau et le rang d'un membre, posés sur sa bannière (iOS `ProfileSheetEnvironment`).
                         LocalProfileGameSlot provides gameSlot,
                         LocalVideoPictureInPicture provides videoPictureInPicture,
                         LocalBubbleMediaAutoDownload provides bubbleMediaPolicy,
                     ) {
-                        ProvideRootSplash {
-                            MeeshyApp(
-                                floatingButtonPositions = floatingButtonPositions,
-                                launchRoute = launchRoute,
-                                onLaunchRouteConsumed = {
-                                    launchRoute = null
-                                    pushTapConsumer.onNavigated(pendingTapNotificationId.also { pendingTapNotificationId = null })
-                                },
-                                warmDeepLink = warmDeepLink,
-                                warmDeepLinkAwaitsAccount = warmDeepLinkAwaitsAccount,
-                                onWarmDeepLinkHandled = {
-                                    warmDeepLink = null
-                                    warmDeepLinkAwaitsAccount = false
-                                },
-                                callLink = callLink,
-                                onCallLinkHandled = { callLink = null },
-                            )
+                        accessibilityLocals.Provide {
+                            ProvideRootSplash {
+                                MeeshyApp(
+                                    floatingButtonPositions = floatingButtonPositions,
+                                    launchRoute = launchRoute,
+                                    onLaunchRouteConsumed = {
+                                        launchRoute = null
+                                        pushTapConsumer.onNavigated(pendingTapNotificationId.also { pendingTapNotificationId = null })
+                                    },
+                                    warmDeepLink = warmDeepLink,
+                                    warmDeepLinkAwaitsAccount = warmDeepLinkAwaitsAccount,
+                                    onWarmDeepLinkHandled = {
+                                        warmDeepLink = null
+                                        warmDeepLinkAwaitsAccount = false
+                                    },
+                                    callLink = callLink,
+                                    onCallLinkHandled = { callLink = null },
+                                )
+                            }
                         }
                     }
                 }

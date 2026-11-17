@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Mes liens — Android</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+body{background:#fff}
+.qr{position:relative;display:grid;grid-template-columns:repeat(15,4px);grid-auto-rows:4px;width:76px;height:76px;padding:8px;border-radius:20px;background:#fff;flex:none;border:1px solid var(--line)}
+.qr>i{background:#1E1B4B;border-radius:1px}
+.qr>em{position:absolute;width:20px;height:20px;border:4px solid #1E1B4B;border-radius:6px}
+.qr>em::after{content:"";position:absolute;inset:2px;border-radius:2px;background:#4F46E5}
+.rail{display:flex;overflow-x:auto;scrollbar-width:none}
+.rail::-webkit-scrollbar{display:none}
+.cookie{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;flex:none;background:color-mix(in oklab,var(--fam) 20%,#fff);color:var(--fam);clip-path:polygon(100.0% 50.0%,99.1% 53.2%,96.6% 56.1%,93.2% 58.6%,89.6% 60.6%,86.7% 62.5%,85.1% 64.5%,84.8% 67.2%,85.5% 70.5%,86.6% 74.4%,87.3% 78.6%,87.0% 82.4%,85.4% 85.4%,82.4% 87.0%,78.6% 87.3%,74.4% 86.6%,70.5% 85.5%,67.2% 84.8%,64.5% 85.1%,62.5% 86.7%,60.6% 89.6%,58.6% 93.2%,56.1% 96.6%,53.2% 99.1%,50.0% 100.0%,46.8% 99.1%,43.9% 96.6%,41.4% 93.2%,39.4% 89.6%,37.5% 86.7%,35.5% 85.1%,32.8% 84.8%,29.5% 85.5%,25.6% 86.6%,21.4% 87.3%,17.6% 87.0%,14.6% 85.4%,13.0% 82.4%,12.7% 78.6%,13.4% 74.4%,14.5% 70.5%,15.2% 67.2%,14.9% 64.5%,13.3% 62.5%,10.4% 60.6%,6.8% 58.6%,3.4% 56.1%,0.9% 53.2%,0.0% 50.0%,0.9% 46.8%,3.4% 43.9%,6.8% 41.4%,10.4% 39.4%,13.3% 37.5%,14.9% 35.5%,15.2% 32.8%,14.5% 29.5%,13.4% 25.6%,12.7% 21.4%,13.0% 17.6%,14.6% 14.6%,17.6% 13.0%,21.4% 12.7%,25.6% 13.4%,29.5% 14.5%,32.8% 15.2%,35.5% 14.9%,37.5% 13.3%,39.4% 10.4%,41.4% 6.8%,43.9% 3.4%,46.8% 0.9%,50.0% 0.0%,53.2% 0.9%,56.1% 3.4%,58.6% 6.8%,60.6% 10.4%,62.5% 13.3%,64.5% 14.9%,67.2% 15.2%,70.5% 14.5%,74.4% 13.4%,78.6% 12.7%,82.4% 13.0%,85.4% 14.6%,87.0% 17.6%,87.3% 21.4%,86.6% 25.6%,85.5% 29.5%,84.8% 32.8%,85.1% 35.5%,86.7% 37.5%,89.6% 39.4%,93.2% 41.4%,96.6% 43.9%,99.1% 46.8%)}
+.act{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;min-width:0;font-size:12.5px;font-weight:700;color:var(--ink)}
+.act>span:first-child{display:flex;align-items:center;justify-content:center;width:100%;height:56px;border-radius:20px;background:var(--deep);color:var(--ink2)}
+.fchip{display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:0 15px;border-radius:12px;border:1.5px solid var(--line);font-size:13.5px;font-weight:700;color:var(--ink2);white-space:nowrap;flex:none}
+.mx .fchip.on{background:var(--deep);border-color:transparent;color:var(--ink);padding-left:11px}
+.tbtn{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:16px;background:var(--deep);color:var(--ink2);flex:none}
+.fbar{display:inline-flex;align-items:center;gap:2px;padding:6px;border-radius:32px;background:var(--field);border:1px solid var(--line);box-shadow:0 10px 26px rgba(67,56,202,.18)}
+.fbar>button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:52px;padding:0 14px;border-radius:26px;font-family:Inter,system-ui,sans-serif;font-weight:700;font-size:13.5px;color:var(--ink2)}
+.mx .fbar>.on{position:relative;isolation:isolate;padding:0 18px 0 8px;color:var(--ink)}
+.mx .fbar>.on::before{content:"";position:absolute;inset:0;z-index:-1;background:color-mix(in oklab,var(--accent) 22%,var(--field));animation:axPill 5s cubic-bezier(.4,0,.2,1) infinite}
+.fck{position:relative;display:flex;align-items:center;justify-content:center;width:40px;height:40px;flex:none;isolation:isolate;color:#0B0B12}
+.fck::before{content:"";position:absolute;inset:0;z-index:-1;background:var(--accent);clip-path:polygon(100.0% 50.0%,98.4% 54.2%,94.3% 57.8%,90.1% 60.7%,87.6% 63.7%,87.6% 67.5%,89.0% 72.5%,89.8% 77.8%,88.3% 82.1%,84.3% 84.3%,78.9% 84.5%,73.8% 84.0%,70.0% 84.6%,67.5% 87.6%,65.4% 92.3%,62.6% 96.9%,58.7% 99.2%,54.2% 98.4%,50.0% 95.0%,46.4% 91.3%,43.1% 89.4%,39.3% 90.1%,34.6% 92.3%,29.5% 94.0%,25.0% 93.3%,22.2% 89.8%,21.1% 84.5%,20.7% 79.3%,19.4% 75.7%,16.0% 73.8%,11.0% 72.5%,6.0% 70.5%,3.0% 67.1%,3.1% 62.6%,5.7% 57.8%,8.7% 53.6%,10.0% 50.0%,8.7% 46.4%,5.7% 42.2%,3.1% 37.4%,3.0% 32.9%,6.0% 29.5%,11.0% 27.5%,16.0% 26.2%,19.4% 24.3%,20.7% 20.7%,21.1% 15.5%,22.2% 10.2%,25.0% 6.7%,29.5% 6.0%,34.6% 7.7%,39.3% 9.9%,43.1% 10.6%,46.4% 8.7%,50.0% 5.0%,54.2% 1.6%,58.7% 0.8%,62.6% 3.1%,65.4% 7.7%,67.5% 12.4%,70.0% 15.4%,73.8% 16.0%,78.9% 15.5%,84.3% 15.7%,88.3% 17.9%,89.8% 22.2%,89.0% 27.5%,87.6% 32.5%,87.6% 36.3%,90.1% 39.3%,94.3% 42.2%,98.4% 45.8%);animation:mxSpin 22s linear infinite}
+@keyframes axPill{0%,100%{border-radius:26px}25%{border-radius:26px 12px 26px 12px}50%{border-radius:16px}75%{border-radius:12px 26px 12px 26px}}
+.spark{stroke-dasharray:240;stroke-dashoffset:240;animation:lkDraw 1.6s .5s cubic-bezier(.3,.8,.3,1) forwards}
+@keyframes lkDraw{to{stroke-dashoffset:0}}
+.sheet{animation:anLift 1s .3s cubic-bezier(.2,.9,.25,1) both}
+@keyframes anLift{from{transform:translateY(120px);opacity:0}to{transform:none;opacity:1}}
+.tgt{display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--ink)}
+@media (prefers-reduced-motion:reduce){.mx .spark{stroke-dashoffset:0}}
+</style>
+</helmet>
+<div class="mx" data-theme="light" style="width: 412px; min-height: 915px; display: flex; flex-direction: column; font-family: Nunito, system-ui, sans-serif">
+
+<header style="display: flex; flex-direction: column; padding: 40px 0 0">
+<div style="display: flex; align-items: center; gap: 4px; height: 64px; padding: 0 8px 0 20px">
+<span class="av" style="width: 40px; height: 40px; font-size: 15px">AN</span>
+<span style="flex: 1"></span>
+<button class="ib" aria-label="Chercher un lien" style="width: 48px; height: 48px; color: var(--ink)">[[ic:magnifying-glass]]</button>
+<button class="ib" aria-label="Plus d'options" style="width: 48px; height: 48px; color: var(--ink)">[[ic:dots-three]]</button>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px; padding: 14px 20px 0">
+<h1 class="d" style="font-size: 40px; font-weight: 900">Mes liens</h1>
+<span style="display: inline-flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 700; color: var(--ink2)">[[ic:chart-line-up s]]<span>1 719 visites ce mois</span></span>
+</div>
+</header>
+
+<section class="rise" style="padding: 24px 20px 0; display: flex; flex-direction: column">
+<article class="ticket" style="--cut: 133px; border-radius: 28px; background: var(--field)">
+<div style="display: flex; align-items: center; gap: 12px; height: 132px; padding: 0 20px">
+<div style="display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0">
+<div style="display: flex; align-items: center; gap: 8px"><span class="tag">Mon lien de profil</span><span class="new">Nouveau</span></div>
+<a href="#" class="mono" style="font-size: 21px; font-weight: 700; color: var(--ink); white-space: nowrap">meeshy.me/<span style="color: var(--brand-soft)">@aissa</span></a>
+<span style="font-size: 13.5px; font-weight: 700; color: var(--ink3)">Ouvre ma vitrine, vue Public</span>
+</div>
+<button class="qr" aria-label="Agrandir mon QR de profil">
+<em style="left: 8px; top: 8px"></em><em style="right: 8px; top: 8px"></em><em style="left: 8px; bottom: 8px"></em>
+<b></b><b></b><b></b><b></b><b></b><b></b><b></b><i></i><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><i></i><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><i></i><i></i><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><i></i><i></i><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><i></i><i></i><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><i></i><b></b><i></i><i></i><b></b><i></i><b></b><i></i><i></i><b></b><b></b><b></b><b></b><b></b><b></b><i></i><i></i><i></i><b></b><i></i><i></i><b></b><i></i><b></b><b></b><i></i><i></i><b></b><i></i><i></i><b></b><b></b><i></i><b></b><b></b><i></i><b></b><i></i><i></i><b></b><b></b><i></i><b></b><b></b><b></b><b></b><b></b><b></b><i></i><i></i><i></i><b></b><i></i><i></i><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><i></i><i></i><i></i><b></b><b></b><i></i><i></i><b></b><b></b><b></b><b></b><b></b><b></b><b></b><i></i><i></i><b></b><b></b><i></i><i></i><i></i><i></i><i></i><b></b><b></b><b></b><b></b><b></b><b></b><b></b><i></i><b></b><i></i><b></b><b></b><i></i><i></i><b></b><b></b><b></b><b></b><b></b><b></b><b></b><i></i><i></i><i></i><b></b><i></i><i></i><i></i><i></i><b></b><b></b><b></b><b></b><b></b><b></b><b></b><i></i><b></b><b></b><b></b><b></b><b></b><i></i><i></i><i></i>
+</button>
+</div>
+<div class="cut" style="margin: 0 20px"></div>
+<div style="display: flex; gap: 10px; padding: 18px 18px 18px">
+<button class="act"><span>[[ic:copy]]</span><span>Copier</span></button>
+<button class="act"><span>[[ic:qr-code]]</span><span>QR</span></button>
+<button class="act"><span>[[ic:paper-plane-tilt]]</span><span>Envoyer</span></button>
+<button class="act"><span style="background: var(--brand-fill); color: #fff">[[ic:contactless-payment]]</span><span>Approcher</span></button>
+</div>
+</article>
+</section>
+
+<section class="rise" style="animation-delay: .08s; padding: 32px 0 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px; padding: 0 20px">
+<h2 class="d" style="font-size: 24px">Mes adresses</h2>
+<span class="new">Nouveau</span>
+<span style="flex: 1"></span>
+<button aria-label="Ajouter une adresse" class="tbtn" style="width: 44px; height: 44px; border-radius: 14px">[[ic:plus]]</button>
+</div>
+<div class="rail" style="gap: 10px; padding: 0 20px 4px">
+<a href="#" class="tonal" style="display: flex; flex-direction: column; gap: 22px; flex: none; width: 156px; padding: 16px; border-radius: 28px; color: var(--ink)">
+<span style="display: flex; align-items: center; justify-content: space-between"><span class="tbtn" style="width: 44px; height: 44px; border-radius: 14px">[[ic:globe-hemisphere-west]]</span><span style="color: var(--ink3)">[[ic:arrow-square-out s]]</span></span>
+<span style="display: flex; flex-direction: column; gap: 3px"><span class="d" style="font-size: 18px">Site</span><span class="mono" style="font-size: 11.5px; line-height: 1.45; min-height: 34px; color: var(--ink2)">aissandiaye.<wbr>studio</span></span>
+</a>
+<a href="#" class="tonal" style="display: flex; flex-direction: column; gap: 22px; flex: none; width: 156px; padding: 16px; border-radius: 28px; color: var(--ink)">
+<span style="display: flex; align-items: center; justify-content: space-between"><span class="tbtn" style="width: 44px; height: 44px; border-radius: 14px">[[ic:vinyl-record]]</span><span style="color: var(--ink3)">[[ic:arrow-square-out s]]</span></span>
+<span style="display: flex; flex-direction: column; gap: 3px"><span class="d" style="font-size: 18px">Musique</span><span class="mono" style="font-size: 11.5px; line-height: 1.45; min-height: 34px; color: var(--ink2)">soundcloud.com/<wbr>aissa</span></span>
+</a>
+<a href="#" class="tonal" style="display: flex; flex-direction: column; gap: 22px; flex: none; width: 156px; padding: 16px; border-radius: 28px; color: var(--ink)">
+<span style="display: flex; align-items: center; justify-content: space-between"><span class="tbtn" style="width: 44px; height: 44px; border-radius: 14px">[[ic:camera]]</span><span style="color: var(--ink3)">[[ic:arrow-square-out s]]</span></span>
+<span style="display: flex; flex-direction: column; gap: 3px"><span class="d" style="font-size: 18px">Photos</span><span class="mono" style="font-size: 11.5px; line-height: 1.45; min-height: 34px; color: var(--ink2)">instagram.com/<wbr>aissa.snd</span></span>
+</a>
+</div>
+</section>
+
+<section class="rise" style="animation-delay: .16s; padding: 32px 0 0; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; padding: 0 20px">
+<h2 class="d" style="font-size: 24px">Liens créés</h2>
+<span style="font-size: 14px; font-weight: 700; color: var(--ink3)">5 actifs</span>
+</div>
+<div class="rail" role="group" aria-label="Filtrer par famille" style="gap: 8px; padding: 0 20px">
+<button class="fchip on" aria-pressed="true">[[ic:check s]]<span>Tous</span></button>
+<button class="fchip" aria-pressed="false">Partage</button>
+<button class="fchip" aria-pressed="false">Suivi</button>
+<button class="fchip" aria-pressed="false">Communauté</button>
+<button class="fchip" aria-pressed="false">Parrainage</button>
+</div>
+</section>
+
+<div style="position: relative; display: flex; flex-direction: column">
+
+<section style="padding: 18px 20px 0; display: flex; flex-direction: column; gap: 12px">
+
+<article class="ticket rise" style="--cut: 81px; border-radius: 28px; animation-delay: .22s">
+<div style="display: flex; align-items: center; gap: 12px; height: 80px; padding: 0 12px 0 16px">
+<span class="cookie" style="--fam: var(--l-share)">[[ic:chats-circle]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<h3 class="d" style="font-size: 18px">Studio — invités</h3>
+<span class="mono" style="font-size: 12px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">meeshy.me/chat/studio-invites</span>
+</div>
+<button class="tbtn" aria-label="Copier le lien Studio — invités">[[ic:copy]]</button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 20px 18px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px">
+<span style="font-size: 14px; font-weight: 700; color: var(--ink)"><b class="d" style="font-size: 22px">23</b> / 50 arrivées</span>
+<span style="display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 700; color: var(--ink2)"><span style="display: inline-flex; color: var(--warn)">[[ic:clock s]]</span><span>expire dans 6 j</span></span>
+</div>
+<span class="bar" style="background: var(--deep)"><i style="width: 46%; background: var(--l-share)"></i></span>
+</div>
+</article>
+
+<article class="ticket rise" style="--cut: 81px; border-radius: 28px; animation-delay: .28s">
+<div style="display: flex; align-items: center; gap: 12px; height: 80px; padding: 0 12px 0 16px">
+<span class="cookie" style="--fam: var(--l-track)">[[ic:cursor-click]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<h3 class="d" style="font-size: 18px">Réel Dakar la nuit</h3>
+<span class="mono" style="font-size: 12px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">meeshy.me/l/dkr-nuit</span>
+</div>
+<button class="tbtn" aria-label="Copier le lien Réel Dakar la nuit">[[ic:copy]]</button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; gap: 14px; padding: 14px 20px 16px">
+<div style="display: flex; flex-direction: column; flex: none">
+<span class="d" style="font-size: 30px; font-weight: 900">1 284</span>
+<span style="font-size: 13px; font-weight: 700; color: var(--ink2)">clics au total</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0">
+<svg viewBox="0 0 140 44" preserveAspectRatio="none" aria-hidden="true" style="display: block; width: 100%; height: 44px; overflow: visible">
+<defs><linearGradient id="anFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4F46E5" stop-opacity=".26"></stop><stop offset="1" stop-color="#4F46E5" stop-opacity="0"></stop></linearGradient></defs>
+<path d="M2 37 L16 34 L30 35 L44 30 L58 24 L68 14 L77 4 L88 15 L100 22 L112 26 L126 24 L138 28 L138 44 L2 44 Z" fill="url(#anFill)"></path>
+<path class="spark" d="M2 37 L16 34 L30 35 L44 30 L58 24 L68 14 L77 4 L88 15 L100 22 L112 26 L126 24 L138 28" fill="none" stroke="#4338CA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></path>
+<circle cx="77" cy="4" r="3.5" fill="#4338CA"></circle>
+</svg>
+<span style="font-size: 11.5px; font-weight: 700; color: var(--ink3); white-space: nowrap">30 jours · pic le 3 nov.</span>
+</div>
+<span class="chip" style="flex: none; border-radius: 12px">[[ic:flag-banner s]]<span>31 pays</span></span>
+</div>
+</article>
+
+<article class="ticket rise" style="--cut: 81px; border-radius: 28px; animation-delay: .34s">
+<div style="display: flex; align-items: center; gap: 12px; height: 80px; padding: 0 12px 0 16px">
+<span class="cookie" style="--fam: var(--l-track)">[[ic:cursor-click]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<h3 class="d" style="font-size: 18px">Mon profil</h3>
+<span class="mono" style="font-size: 12px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">meeshy.me/l/aissa</span>
+</div>
+<button class="tbtn" aria-label="Copier le lien Mon profil">[[ic:copy]]</button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 20px 14px">
+<span style="font-size: 14px; font-weight: 700; color: var(--ink2)"><b class="d" style="font-size: 22px; color: var(--ink)">412</b> clics</span>
+<span class="chip" style="border-radius: 12px">[[ic:user-focus s]]<span>Vers ma vitrine</span></span>
+</div>
+</article>
+
+<article class="ticket rise" style="--cut: 81px; border-radius: 28px; animation-delay: .4s">
+<div style="display: flex; align-items: center; gap: 12px; height: 80px; padding: 0 12px 0 16px">
+<span class="cookie" style="--fam: var(--l-comm)">[[ic:users-four]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<h3 class="d" style="font-size: 18px">Beatmakers Dakar</h3>
+<span class="mono" style="font-size: 12px; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">meeshy.me/c/beatmakers</span>
+</div>
+<button class="tbtn" aria-label="Copier le lien Beatmakers Dakar">[[ic:copy]]</button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 20px 14px">
+<span style="font-size: 14px; font-weight: 700; color: var(--ink2)"><b class="d" style="font-size: 22px; color: var(--ink)">342</b> membres</span>
+<span style="display: inline-flex; align-items: center">
+<span class="av" style="width: 32px; height: 32px; font-size: 10px; --accent: #FF6B6B; border: 2px solid var(--raised)">MO</span>
+<span class="av" style="width: 32px; height: 32px; font-size: 10px; --accent: #F8B500; border: 2px solid var(--raised); margin-left: -8px">TR</span>
+<span class="av" style="width: 32px; height: 32px; font-size: 10px; --accent: #9B59B6; border: 2px solid var(--raised); margin-left: -8px">KM</span>
+</span>
+</div>
+</article>
+
+<article class="ticket rise" style="--cut: 81px; border-radius: 28px; animation-delay: .46s">
+<div style="display: flex; align-items: center; gap: 12px; height: 80px; padding: 0 12px 0 16px">
+<span class="cookie" style="--fam: var(--l-aff)">[[ic:gift]]</span>
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<h3 class="d" style="font-size: 18px">Parrainage</h3>
+<span class="mono" style="font-size: 14px; font-weight: 700; letter-spacing: .06em; color: var(--ink2)">AISSA-7K2</span>
+</div>
+<button class="tbtn" aria-label="Copier mon code de parrainage">[[ic:copy]]</button>
+</div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 20px 14px">
+<span style="font-size: 14px; font-weight: 700; color: var(--ink2)"><b class="d" style="font-size: 22px; color: var(--ink)">14</b> filleuls</span>
+<span class="chip" style="border-radius: 12px">[[ic:qr-code s]]<span>QR du code</span></span>
+</div>
+</article>
+
+</section>
+
+<nav aria-label="Faces du profil" style="position: relative; z-index: 2; margin-top: -8px; padding: 30px 12px 20px; display: flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(180deg, rgba(255,255,255,0), #fff 42%)">
+<div class="fbar">
+<button>[[ic:user-focus]]<span>Vitrine</span></button>
+<button class="on" aria-current="page"><span class="fck">[[ic:link-fill]]</span><span>Liens</span></button>
+<button>[[ic:lightning]]<span>Actions</span></button>
+</div>
+<button aria-label="Créer un lien" style="display: inline-flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 18px; flex: none; background: var(--brand-fill); color: #fff; box-shadow: 0 10px 24px rgba(79,70,229,.38)">[[ic:plus l]]</button>
+</nav>
+
+<div aria-hidden="true" style="position: absolute; inset: 0; z-index: 2; background: linear-gradient(180deg, rgba(0,0,0,0) 0, rgba(0,0,0,.45) 96px)"></div>
+
+<section class="sheet" aria-label="Feuille de partage" style="position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; flex-direction: column; padding: 0 0 24px; border-radius: 28px 28px 0 0; background: var(--raised); border-top: 1px solid var(--line); box-shadow: 0 -18px 44px rgba(30,27,75,.20)">
+<span aria-hidden="true" style="align-self: center; width: 36px; height: 4px; margin: 14px 0 6px; border-radius: 999px; background: var(--ink3); opacity: .55"></span>
+<h2 class="d" style="font-size: 20px; padding: 10px 20px 0">Partager <span class="mono" style="font-size: 17px; font-weight: 700; color: var(--ink2)">meeshy.me/@aissa</span></h2>
+
+<div class="tonal" style="display: flex; align-items: center; gap: 12px; margin: 16px 20px 0; padding: 12px 14px; border-radius: 20px">
+<span class="av" style="width: 48px; height: 48px; font-size: 17px; border-radius: 16px">AN</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0">
+<span class="d" style="font-size: 16px">Aïssa Ndiaye sur Meeshy</span>
+<span style="font-size: 12.5px; font-weight: 700; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Designer sonore à Dakar · @aissa</span>
+</div>
+</div>
+
+<button style="display: flex; align-items: center; gap: 14px; min-height: 64px; margin: 10px 20px 0; padding: 8px 16px 8px 12px; border-radius: 20px; background: var(--deep)">
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: var(--brand-fill); color: #fff; flex: none">[[ic:share-network]]</span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0"><span class="d" style="font-size: 16px">Partage à proximité</span><span style="font-size: 12.5px; font-weight: 700; color: var(--ink2)">2 appareils tout près</span></span>
+<span style="color: var(--ink2)">[[ic:caret-right s]]</span>
+</button>
+
+<div style="display: flex; gap: 6px; padding: 20px 14px 0">
+<button class="tgt"><span class="av" style="width: 56px; height: 56px; font-size: 19px; --accent: #4ECDC4">LM</span><span>Léo</span></button>
+<button class="tgt"><span class="av" style="width: 56px; height: 56px; font-size: 19px; --accent: #FF6B6B">MO</span><span>Mina</span></button>
+<button class="tgt"><span class="av" style="width: 56px; height: 56px; font-size: 19px; --accent: #F8B500">TR</span><span>Tomás</span></button>
+<button class="tgt"><span class="av" style="width: 56px; height: 56px; font-size: 19px; --accent: #3498DB">YT</span><span>Yuki</span></button>
+</div>
+
+<div style="display: flex; gap: 10px; padding: 22px 20px 0">
+<button class="btn" style="flex: 1; min-height: 52px; padding: 0 12px; background: var(--deep); color: var(--ink)">[[ic:copy]]<span>Copier</span></button>
+<button class="btn" style="flex: 1.35; min-height: 52px; padding: 0 12px; background: var(--deep); color: var(--ink)">[[ic:printer]]<span>Imprimer le QR</span></button>
+</div>
+</section>
+
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":412,"height":1768}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

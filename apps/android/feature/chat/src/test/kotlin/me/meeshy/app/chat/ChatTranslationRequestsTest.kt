@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.ApiAttachmentTranslation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.TranslationEntry
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.model.translation.TranslationRequestFailure
 import me.meeshy.sdk.session.SessionRepository
@@ -183,7 +184,7 @@ class ChatTranslationRequestsTest {
         advanceUntilIdle()
         assertThat(r.controller.translationFailures.value).isNotEmpty()
 
-        r.translationReceived.emit(TranslationEvent("m1", "c1", "de", "Hallo"))
+        r.translationReceived.emit(TranslationEvent("m1", listOf(TranslationEntry(targetLanguage = "de", translatedContent = "Hallo"))))
         advanceUntilIdle()
 
         assertThat(r.controller.translationFailures.value).isEmpty()

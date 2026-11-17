@@ -46,6 +46,12 @@ const ProfileBringRow = lazy(() => import('@/routes/user-profile-bring').then((m
 const ProfileTalkieRow = lazy(() => import('@/routes/user-profile-talkie').then((m) => ({ default: m.ProfileTalkieRow })));
 /* Regarder ou écouter ensemble (#17055) : son propre chunk, dès Proche, comme le talkie. */
 const ProfileTogetherRow = lazy(() => import('@/routes/user-profile-together').then((m) => ({ default: m.ProfileTogetherRow })));
+/* Partager ma position (#18345) : son propre chunk, dès Ami — et gardé tant qu'un partage court. */
+const ProfileShareLocationRow = lazy(() => import('@/routes/user-profile-share-location').then((m) => ({ default: m.ProfileShareLocationRow })));
+/* La batterie (#14147) : son propre chunk, dès Proche — le détail, le relevé entre Sangs, et ce que je lui partage. */
+const ProfileBatteryRow = lazy(() => import('@/components/battery-panel').then((m) => ({ default: m.ProfileBatteryRow })));
+/* Le téléphone injoignable (#18737) : son propre chunk, dès Proche — l'heure, la cause probable, et « Prévenir {name} ». */
+const ProfilePhoneReachabilityRow = lazy(() => import('@/components/phone-reachability-panel').then((m) => ({ default: m.ProfilePhoneReachabilityRow })));
 
 /**
  * **LE PROFIL PUBLIC DE QUELQU'UN** (#7032, complété par #7083) — `/u/$username`,
@@ -322,8 +328,16 @@ export function UserProfileView({ username }: { readonly username: string }) {
                                       person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
                                       onNotice={(message, failed) => announce(message, failed ? 'error' : 'neutral')}
                                     />
+                                    <ProfilePhoneReachabilityRow language={language} viewerId={viewerId} person={{ id: person.id, username: person.username, displayName: person.displayName }} />
+                                    <ProfileBatteryRow language={language} viewerId={viewerId} person={{ id: person.id, username: person.username, displayName: person.displayName }} />
                                   </>
                                 ) : null}
+                                <ProfileShareLocationRow
+                                  language={language}
+                                  person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}
+                                  offered={relation.kind === 'friend'}
+                                  onNotice={(message) => announce(message, 'error')}
+                                />
                                 <ProfileBringRow
                                   language={language}
                                   person={{ id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar }}

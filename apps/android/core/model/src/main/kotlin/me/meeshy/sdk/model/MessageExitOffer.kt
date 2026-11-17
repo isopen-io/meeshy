@@ -45,7 +45,17 @@ data class MessageExitOffer(
 ) {
     val nature: ContentExitLaw.Nature get() = law.nature
 
-    val capture: ContentExitLaw.CaptureVerdict get() = law.capture
+    /**
+     * Le verdict de capture RENDU : celui de la loi, et `BLOCKED` pour un message FLOUTÉ que
+     * la loi laisse libre — son contenu révélé sort noir lui aussi (#18831). Ce qui se DÉCLARE
+     * à la passerelle lit `law.capture`, jamais ce verdict : le flou n'a rien à annoncer.
+     */
+    val capture: ContentExitLaw.CaptureVerdict
+        get() = if (law.capture == ContentExitLaw.CaptureVerdict.FREE && holdsBlur) {
+            ContentExitLaw.CaptureVerdict.BLOCKED
+        } else {
+            law.capture
+        }
 
     fun offers(exit: MessageExit): Boolean {
         if (exit == MessageExit.FORWARD) return law.forward.isAllowed && !isEncrypted

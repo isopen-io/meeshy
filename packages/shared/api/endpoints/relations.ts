@@ -12,14 +12,32 @@
  * Les paramètres sont encodés ICI (encodeURIComponent) : passer la valeur brute.
  */
 
+/** GET /api/v1/relations/battery */
+export const battery = '/api/v1/relations/battery';
+
 /** GET /api/v1/relations/:userId */
 export const byUserId = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}`;
+
+/** GET /api/v1/relations/:userId/battery */
+export const byUserIdBattery = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/battery`;
+
+/** POST /api/v1/relations/:userId/battery/pull */
+export const byUserIdBatteryPull = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/battery/pull`;
+
+/** GET · PUT /api/v1/relations/:userId/battery/settings */
+export const byUserIdBatterySettings = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/battery/settings`;
 
 /** POST /api/v1/relations/:userId/level */
 export const byUserIdLevel = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/level`;
 
 /** GET /api/v1/relations/:userId/location/history */
 export const byUserIdLocationHistory = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/location/history`;
+
+/** GET /api/v1/relations/:userId/phone-reachability */
+export const byUserIdPhoneReachability = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/phone-reachability`;
+
+/** GET · PUT /api/v1/relations/:userId/phone-reachability/settings */
+export const byUserIdPhoneReachabilitySettings = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/phone-reachability/settings`;
 
 /** POST /api/v1/relations/:userId/ritual */
 export const byUserIdRitual = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/ritual`;
@@ -33,8 +51,14 @@ export const config = '/api/v1/relations/config';
 /** GET /api/v1/relations/locations */
 export const locations = '/api/v1/relations/locations';
 
+/** GET /api/v1/relations/locations/mine */
+export const locationsMine = '/api/v1/relations/locations/mine';
+
 /** GET /api/v1/relations/now-playing */
 export const nowPlaying = '/api/v1/relations/now-playing';
+
+/** GET /api/v1/relations/phone-reachability */
+export const phoneReachability = '/api/v1/relations/phone-reachability';
 
 /** GET /api/v1/relations */
 export const root = '/api/v1/relations';

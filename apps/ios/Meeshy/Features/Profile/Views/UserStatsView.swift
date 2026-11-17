@@ -5,6 +5,8 @@ import MeeshySDK
 import MeeshyUI
 import Charts
 
+/// « Mon activité » (#18591, ex-Statistiques) : mes trois compteurs (`UserActivityCards`) puis la frise des trente
+/// derniers jours. Les badges ne s'y montrent plus : Ma Légende les porte, et les montrer ici en faisait deux vitrines.
 struct UserStatsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isPresented) private var isPresented
@@ -27,7 +29,7 @@ struct UserStatsView: View {
             // geste : l'écran s'ouvre aussi depuis le Profil, une route et le
             // panneau droit iPad.
             CollapsibleHeaderPage(
-                title: String(localized: "user.stats.title", defaultValue: "Statistiques", bundle: .main),
+                title: String(localized: "user.stats.my_activity", defaultValue: "Mon activité", bundle: .main),
                 onBack: { back() },
                 titleColor: theme.textPrimary,
                 backArrowColor: Color(hex: accentColor),
@@ -41,60 +43,60 @@ struct UserStatsView: View {
 
     // MARK: - Content
 
+    /// L'erreur et la frise paraissent en fondu à la réponse du réseau ; le contenu ne saute plus.
     private var statsContent: some View {
         VStack(spacing: MeeshySpacing.xl) {
             if let errorMessage = viewModel.errorMessage {
-                HStack(spacing: MeeshySpacing.md) {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                        .foregroundStyle(MeeshyColors.error)
-                        .accessibilityHidden(true)
-                    Text(errorMessage)
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundStyle(MeeshyColors.error)
-                    Spacer()
-                }
-                .padding(MeeshySpacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
-                )
+                errorBanner(errorMessage)
+                    .meeshyTransition(.move(edge: .top).combined(with: .opacity))
             }
             statsCards
             if !viewModel.timeline.isEmpty {
                 timelineChart
+                    .meeshyTransition(.opacity)
             }
-            achievementsSection
             Spacer().frame(height: 40)
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.top, MeeshySpacing.sm)
+        .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: viewModel.errorMessage)
+        .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: viewModel.timeline.isEmpty)
+    }
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(spacing: MeeshySpacing.md) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
+                .foregroundStyle(MeeshyColors.error)
+                .accessibilityHidden(true)
+            Text(message)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundStyle(MeeshyColors.error)
+            Spacer()
+        }
+        .padding(MeeshySpacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
+        )
     }
 
     // MARK: - Stats Cards
 
     private var statsCards: some View {
         VStack(spacing: MeeshySpacing.md) {
-            HStack(spacing: MeeshySpacing.md) {
-                statCard(value: "\(viewModel.stats?.totalMessages ?? 0)", label: String(localized: "user.stats.messages", defaultValue: "Messages", bundle: .main), color: MeeshyColors.brandPrimaryHex, icon: "bubble.left.fill")
-                statCard(value: "\(viewModel.stats?.totalConversations ?? 0)", label: String(localized: "user.stats.conversations", defaultValue: "Conversations", bundle: .main), color: MeeshyColors.indigo300Hex, icon: "person.2.fill")
-            }
-            HStack(spacing: MeeshySpacing.md) {
-                statCard(value: "\(viewModel.stats?.totalTranslations ?? 0)", label: String(localized: "user.stats.translations", defaultValue: "Traductions", bundle: .main), color: MeeshyColors.indigo600Hex, icon: "globe")
-                statCard(value: "\(viewModel.stats?.languagesUsed ?? 0)", label: String(localized: "user.stats.languages", defaultValue: "Langues", bundle: .main), color: MeeshyColors.tileBlueHex, icon: "character.book.closed.fill")
-            }
-            HStack(spacing: MeeshySpacing.md) {
-                statCard(value: "\(viewModel.stats?.memberDays ?? 0)j", label: String(localized: "user.stats.member", defaultValue: "Membre", bundle: .main), color: MeeshyColors.tileSaffronHex, icon: "calendar")
-                statCard(value: "\(viewModel.stats?.friendRequestsReceived ?? 0)", label: String(localized: "user.stats.requests", defaultValue: "Demandes", bundle: .main), color: "E91E63", icon: "person.badge.plus")
+            ForEach(UserActivityCards.make(stats: viewModel.stats)) { card in
+                statCard(card)
             }
         }
     }
 
-    private func statCard(value: String, label: String, color: String, icon: String) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
+    private func statCard(_ card: UserActivityCards.Card) -> some View {
+        let color = card.colorHex
+        return HStack(spacing: MeeshySpacing.md) {
             // Icône figée : glyphe décoratif verrouillé dans une puce 36×36 à géométrie fixe
             // (doctrine 74i/83i — la valeur/label scalent, le chip ne bouge pas). Masqué VoiceOver.
-            Image(systemName: icon)
+            Image(systemName: card.icon)
                 .font(MeeshyFont.fixedGlyph(MeeshyIconSize.xl, weight: .semibold))
                 .foregroundStyle(Color(hex: color))
                 .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
@@ -105,11 +107,11 @@ struct UserStatsView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(value)
+                Text(card.value, format: .number)
                     .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color(hex: color))
+                    .foregroundStyle(Color(hex: card.valueHex(isDark: theme.mode.isDark)))
 
-                Text(label)
+                Text(card.label)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundStyle(theme.textMuted)
             }
@@ -130,6 +132,11 @@ struct UserStatsView: View {
 
     // MARK: - Timeline Chart
 
+    /// La frise dit sa période, pas « ACTIVITÉ » : le titre de l'écran le dit déjà.
+    static var timelineHeader: String {
+        String(localized: "user.stats.last_30_days", defaultValue: "30 DERNIERS JOURS", bundle: .main)
+    }
+
     private var timelineChart: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack(spacing: MeeshySpacing.xsPlus) {
@@ -137,7 +144,7 @@ struct UserStatsView: View {
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundStyle(MeeshyColors.info)
                     .accessibilityHidden(true)
-                Text(String(localized: "user.stats.activity", defaultValue: "ACTIVITÉ", bundle: .main))
+                Text(Self.timelineHeader)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                     .foregroundColor(MeeshyColors.info)
                     .tracking(1.2)
@@ -159,32 +166,6 @@ struct UserStatsView: View {
                 )
         }
     }
-
-    // MARK: - Achievements
-
-    private var achievementsSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                Image(systemName: "trophy.fill")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.warning)
-                    .accessibilityHidden(true)
-                Text(String(localized: "user.stats.badges", defaultValue: "BADGES", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                    .foregroundColor(MeeshyColors.warning)
-                    .tracking(1.2)
-            }
-            .padding(.leading, MeeshySpacing.xs)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(viewModel.stats?.achievements ?? []) { achievement in
-                    AchievementBadgeView(achievement: achievement)
-                }
-            }
-        }
-    }
 }
 
 // MARK: - ViewModel
@@ -203,53 +184,59 @@ final class UserStatsViewModel: ObservableObject {
 
     private static let logger = MeeshyLog.logger(.stats)
 
+    /// Le cache se peint d'abord ; compteurs et frise se relisent chacun selon SON cache (`UserActivityRefreshLaw`).
     func load() async {
         let userId = AuthManager.shared.currentUser?.id ?? ""
-
-        // Load stats from cache
-        let cacheResult = await CacheCoordinator.shared.stats.load(for: userId)
-
-        // Load timeline from cache.
-        //
-        // SWR: timeline data only matters when it has rows to render — both
-        // fresh and stale variants satisfy the cache-first contract. The
-        // stats branch below already drives the network revalidation when
-        // appropriate, so we do not kick a separate refresh here.
-        let timelineCacheKey = "timeline_\(userId)"
-        let timelineCached = await CacheCoordinator.shared.timeline.load(for: timelineCacheKey)
-        switch timelineCached {
-        case .fresh(let cached, _), .stale(let cached, _):
-            if !cached.isEmpty { timeline = cached }
-        case .expired, .empty:
-            break
+        let cachedStats = await CacheCoordinator.shared.stats.load(for: userId)
+        let cachedTimeline = await CacheCoordinator.shared.timeline.load(for: Self.timelineKey(userId))
+        switch cachedStats {
+        case .fresh(let cached, _), .stale(let cached, _): stats = cached.first
+        case .expired, .empty: break
         }
+        switch cachedTimeline {
+        case .fresh(let cached, _), .stale(let cached, _): if !cached.isEmpty { timeline = cached }
+        case .expired, .empty: break
+        }
+        let statsFreshness = UserActivityRefreshLaw.freshness(of: cachedStats)
+        let fetchesStats = UserActivityRefreshLaw.needsStatsFetch(stats: statsFreshness)
+        let fetchesTimeline = UserActivityRefreshLaw.needsTimelineFetch(
+            stats: statsFreshness, timeline: UserActivityRefreshLaw.freshness(of: cachedTimeline)
+        )
+        guard fetchesStats || fetchesTimeline else { return }
+        isLoading = stats == nil
+        async let statsFailure = refreshStats(fetchesStats, userId: userId)
+        async let timelineFailure = refreshTimeline(fetchesTimeline, userId: userId)
+        let failures = await [statsFailure, timelineFailure].compactMap { $0 }
+        errorMessage = failures.first
+        isLoading = false
+    }
 
-        switch cacheResult {
-        case .fresh(let cached, _):
-            stats = cached.first
-        case .stale(let cached, _):
-            stats = cached.first
-            await refreshFromAPI(userId: userId)
-        case .expired, .empty:
-            isLoading = stats == nil
-            await refreshFromAPI(userId: userId)
+    private static func timelineKey(_ userId: String) -> String { "timeline_\(userId)" }
+
+    /// `nil` au succès (ou sans demande), le message d'erreur sinon.
+    private func refreshStats(_ fetches: Bool, userId: String) async -> String? {
+        guard fetches else { return nil }
+        do {
+            let served = try await StatsService.shared.fetchStats()
+            stats = served
+            await bestEffort("userStatsView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([served], for: userId) }
+            return nil
+        } catch {
+            UserStatsViewModel.logger.error("stats refresh failed: \(error.localizedDescription)")
+            return error.localizedDescription
         }
     }
 
-    private func refreshFromAPI(userId: String) async {
+    private func refreshTimeline(_ fetches: Bool, userId: String) async -> String? {
+        guard fetches else { return nil }
         do {
-            async let statsTask = StatsService.shared.fetchStats()
-            async let timelineTask = StatsService.shared.fetchTimeline(days: 30)
-            let (s, t) = try await (statsTask, timelineTask)
-            stats = s
-            timeline = t
-            errorMessage = nil
-            await bestEffort("userStatsView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([s], for: userId) }
-            await bestEffort("userStatsView.timeline.save", category: .cache) { try await CacheCoordinator.shared.timeline.save(t, for: "timeline_\(userId)") }
+            let served = try await StatsService.shared.fetchTimeline(days: 30)
+            timeline = served
+            await bestEffort("userStatsView.timeline.save", category: .cache) { try await CacheCoordinator.shared.timeline.save(served, for: Self.timelineKey(userId)) }
+            return nil
         } catch {
-            UserStatsViewModel.logger.error("stats refresh failed: \(error.localizedDescription)")
-            errorMessage = error.localizedDescription
+            UserStatsViewModel.logger.error("timeline refresh failed: \(error.localizedDescription)")
+            return error.localizedDescription
         }
-        isLoading = false
     }
 }

@@ -206,7 +206,7 @@ function CallsSearchField({ language, search }: { readonly language: InterfaceLa
         value={search.value}
         onInput={(event) => search.onChange(event.currentTarget.value)}
         aria-label={translate(language, 'calls.search')}
-        placeholder={translate(language, 'calls.search')}
+        placeholder={translate(language, 'calls.search.placeholder')}
         enterKeyHint="search"
         // 44 px au moins (#10645) : à 320 px de large, les capsules en français laissaient au champ 40 px — sous
         // la cible d'un doigt. La rangée prend ces quelques pixels dans sa marge, jamais au-delà de l'écran.
@@ -373,9 +373,6 @@ export function CallsEmpty({ language, filter }: { readonly language: InterfaceL
       </span>
       <p className="text-body font-semibold" style={{ color: INK }}>
         {translate(language, missed ? 'calls.empty.missed.title' : 'calls.empty.title')}
-      </p>
-      <p className="text-caption" style={{ color: INK_2 }}>
-        {translate(language, missed ? 'calls.empty.missed.subtitle' : 'calls.empty.subtitle')}
       </p>
     </li>
   );

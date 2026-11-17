@@ -12,8 +12,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -26,6 +29,7 @@ import me.meeshy.sdk.model.call.frames.CallFrameCallContext
 import me.meeshy.sdk.model.call.frames.CallFramePerson
 import me.meeshy.sdk.model.call.frames.CallLiveFrameMachine
 import me.meeshy.sdk.model.call.frames.CallLiveFrameOutgoing
+import me.meeshy.sdk.model.call.frames.CallLiveFramePeerRelease
 import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
 import me.meeshy.sdk.model.call.frames.CallLiveFrameState
 import me.meeshy.sdk.model.call.frames.CallLiveFrameStep
@@ -60,6 +64,11 @@ class CallLiveFrameController internal constructor(
 
     private val _notices = MutableStateFlow<CallLiveFrameNotice?>(null)
     val notices: StateFlow<CallLiveFrameNotice?> = _notices.asStateFlow()
+
+    private val _peerReleases = MutableSharedFlow<CallLiveFramePeerRelease>(extraBufferCapacity = 1)
+
+    /** L'autre vient de relâcher le cadre que nous partagions (#18367) : l'écran le dit au lecteur d'écran, sans rien dessiner. */
+    val peerReleases: SharedFlow<CallLiveFramePeerRelease> = _peerReleases.asSharedFlow()
 
     @Volatile private var callId: String? = null
 
@@ -110,6 +119,7 @@ class CallLiveFrameController internal constructor(
 
     private fun run(step: CallLiveFrameStep) {
         _state.value = step.state
+        step.peerRelease?.let(_peerReleases::tryEmit)
         val target = callId ?: return
         step.send.forEach { send(target, it) }
     }

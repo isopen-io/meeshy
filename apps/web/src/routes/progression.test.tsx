@@ -206,7 +206,8 @@ describe('la page des succès', () => {
   const htmlSucces = renderToStaticMarkup(<AchievementsSection progress={fixture} />);
 
   test('quatre débloqués et datés, un verrouillé avec sa condition', () => {
-    expect(htmlSucces).toContain('4 / 5');
+    expect(htmlSucces).toContain('Un haut fait récompense une première fois ou un exploit.');
+    expect(htmlSucces).not.toContain('4 / 5');
     for (const key of ENGAGEMENT_ACHIEVEMENT_KEYS) expect(htmlSucces).toContain(achievementCopy(key).title);
     expect(htmlSucces).toContain(achievementCopy('achievement.all_content_types').condition);
     expect(htmlSucces.match(/Obtenu le /g)?.length).toBe(4);

@@ -3,6 +3,7 @@ package me.meeshy.sdk.feedback
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.model.feedback.FeedbackToastInfo
 import me.meeshy.sdk.model.feedback.FeedbackToastKind
 import org.junit.Test
 
@@ -81,5 +82,14 @@ class FeedbackToastCenterTest {
         val center = center()
         center.show("  ")
         assertThat(center.current.value).isNull()
+    }
+
+    @Test fun `un toast porte la note de son i, absente par defaut`() {
+        val center = center()
+        center.show("Limite atteinte", FeedbackToastKind.ERROR, info = FeedbackToastInfo("Cette limite touche-t-elle mes étincelles ?", "Non."))
+        assertThat(center.current.value?.info).isEqualTo(FeedbackToastInfo("Cette limite touche-t-elle mes étincelles ?", "Non."))
+        center.dismiss(center.current.value!!.id)
+        center.show("Autre")
+        assertThat(center.current.value?.info).isNull()
     }
 }

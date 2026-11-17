@@ -62,8 +62,9 @@ extension EnvironmentValues {
 /// les mêmes entrées que la cellule.
 ///
 /// La protection reste EN AMONT des deux faces (#8009) : un message à vue
-/// unique ou flouté montre sa forme protégée, jamais son contenu — l'appui long
-/// ne dévoile ni ne consomme.
+/// unique montre sa forme protégée, jamais son contenu — l'appui long ne
+/// consomme pas. Un message flouté, lui, se montre en clair (#18856) : la face
+/// est construite sur `Message.unveiledForPreview`.
 ///
 /// Rendu à l'échelle 1 et sans flou : la rangée se pose comme une carte, à
 /// `flatRowMargin` des bords de l'écran, son contenu gardant les marges que la
@@ -94,9 +95,10 @@ struct MessageOverlayCellPreview: View {
     /// couloir, en-tête d'identité, largeur de couloir. L'hôte de la Rivière la
     /// remet (`riverOverlayFace`) ; elle remplace la bulle du fil pour CE
     /// message, sous ses deux identités (`cid_…` accusé compris). Une rangée
-    /// plate reste une rangée plate : la Rivière n'en a pas.
+    /// plate reste une rangée plate : la Rivière n'en a pas. Un message flouté
+    /// garde la bulle du fil, voile levé : celle du couloir porte le voile (#18856).
     static func displayedFace(_ face: Face, river: RiverOverlayFace?, message: Message) -> Face {
-        guard case .bubble = face, let river,
+        guard case .bubble = face, let river, !message.holdsBlur,
               river.messageId == message.id || river.messageId == message.clientMessageId else { return face }
         return .river(river)
     }
@@ -130,6 +132,7 @@ struct MessageOverlayCellPreview: View {
                 .padding(.horizontal, Self.flatRowMargin)
         } else {
             faceView
+                .environment(\.carouselPresentation, .preview)
         }
     }
 

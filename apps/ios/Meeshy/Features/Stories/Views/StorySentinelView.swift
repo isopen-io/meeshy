@@ -149,12 +149,8 @@ enum StorySentinelCopy {
     /// est celle qui distingue une sentinelle d'un message d'erreur — sans
     /// elle, le lecteur croit la story perdue.
     static var body: String {
-        // Un SEUL littéral : `defaultValue:` attend une `String.LocalizationValue`
-        // que le compilateur construit à partir d'une chaîne littérale — une
-        // concaténation `+` produit une `String` runtime, qu'il refuse. La
-        // phrase est longue ; la couper aurait coûté sa clé.
         String(localized: "story.sentinel.body",
-               defaultValue: "Votre version de l'application ne sait pas encore la peindre. Elle n'est pas perdue : elle s'affichera telle que son auteur l'a composée après la mise à jour.",
+               defaultValue: "Mettez l'application à jour pour la voir telle que son auteur l'a composée.",
                bundle: .main)
     }
 

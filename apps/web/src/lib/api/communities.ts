@@ -68,6 +68,8 @@ export type CommunitySummary = {
   readonly memberCount: number;
   readonly conversationCount: number;
   readonly viewerRole?: CommunityViewerRole | null;
+  /** Les AUTRES membres en ligne, en agrégat anonyme (#18014) ; `null` = trop petite pour qu'un compte reste anonyme ; absent = non servi. */
+  readonly onlineMemberCount?: number | null;
 };
 
 export type CommunityConversation = {
@@ -109,6 +111,7 @@ const WireCommunity = z.object({
   conversationCount: counter,
   _count: z.optional(z.object({ members: counter, Conversation: counter })),
   currentUserRole: optionalText,
+  onlineMemberCount: counter,
 });
 
 const WireConversation = z.object({
@@ -136,6 +139,9 @@ const countOf = (...values: ReadonlyArray<number | null | undefined>): number =>
   return found === undefined || found === null ? 0 : Math.floor(found);
 };
 
+const onlineCountOf = (served: number | null): number | null =>
+  served !== null && Number.isFinite(served) && served >= 0 ? Math.floor(served) : null;
+
 const VIEWER_ROLES: readonly CommunityViewerRole[] = ['admin', 'moderator', 'member'];
 
 const viewerRoleOf = (served: string | null): CommunityViewerRole | null =>
@@ -157,6 +163,7 @@ export function decodeCommunity(raw: unknown): CommunitySummary | null {
     memberCount: countOf(wire.memberCount, wire._count?.members),
     conversationCount: countOf(wire.conversationCount, wire._count?.Conversation),
     ...(wire.currentUserRole === undefined ? {} : { viewerRole: viewerRoleOf(wire.currentUserRole) }),
+    ...(wire.onlineMemberCount === undefined ? {} : { onlineMemberCount: onlineCountOf(wire.onlineMemberCount) }),
   };
 }
 

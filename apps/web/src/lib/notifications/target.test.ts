@@ -336,6 +336,24 @@ describe('contact_recently_active ouvre le profil du contact revenu', () => {
   });
 });
 
+describe('device_battery ouvre la fiche du Proche dont la batterie faiblit (#14147)', () => {
+  const proche = { id: 'u-ada', username: 'ada', displayName: 'Ada', avatar: null };
+
+  test('la cloche et le tap ouvrent `/u/<pseudo>`, où se lit le détail', () => {
+    expect(notificationTarget(record({ type: 'device_battery', actor: proche }))).toEqual({ route: 'userProfile', params: { username: 'ada' } });
+    expect(pushTapTarget({ type: 'device_battery', senderUsername: 'ada' })).toEqual({ route: 'userProfile', params: { username: 'ada' } });
+  });
+});
+
+describe('device_unreachable ouvre le profil du Proche dont le téléphone est injoignable (#18737)', () => {
+  const proche = { id: 'u-ada', username: 'ada', displayName: 'Ada', avatar: null };
+
+  test('la cloche et le tap ouvrent `/u/<pseudo>`, où se lisent l’heure et la cause probable', () => {
+    expect(notificationTarget(record({ type: 'device_unreachable', actor: proche }))).toEqual({ route: 'userProfile', params: { username: 'ada' } });
+    expect(pushTapTarget({ type: 'device_unreachable', senderUsername: 'ada' })).toEqual({ route: 'userProfile', params: { username: 'ada' } });
+  });
+});
+
 /**
  * UN APPEL MANQUÉ SANS CONVERSATION NOMMÉE (#9177) — une invitée non membre,
  * sans DM avec l'inviteur : la passerelle ne pose aucun `conversationId`, et

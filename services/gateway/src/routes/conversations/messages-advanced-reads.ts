@@ -347,8 +347,10 @@ export function registerMessagesAdvancedReadRoutes(
             readCount: summary?.readCount ?? 0,
             recipientCount: summary?.totalMembers ?? 0
           },
+          // Un accusé est celui d'un DESTINATAIRE : la ligne que l'auteur porte sur
+          // son propre message (vue unique ouverte, feu annoncé) n'en est pas un.
           entries: message.statusEntries
-            .filter(entry => visibleParticipantIds.has(entry.participantId))
+            .filter(entry => entry.participantId !== message.senderId && visibleParticipantIds.has(entry.participantId))
             .map(entry => ({
               participantId: entry.participantId,
               isAnonymous: entry.participant.type === 'anonymous',

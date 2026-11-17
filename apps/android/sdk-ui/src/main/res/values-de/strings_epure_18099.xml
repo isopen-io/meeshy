@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure des composants partagés (#18099, #17584) : écrit à la main — les clés quittent le catalogue iOS (manifeste android-only), l'épure de iOS suit son propre lot. -->
+<resources>
+    <string name="post_daily_limit_comment">Tägliches Kommentarlimit erreicht: weiter ab %1$s</string>
+    <string name="post_daily_limit_comment_untimed">Tägliches Kommentarlimit erreicht</string>
+    <string name="post_daily_limit_reaction">Tägliches Reaktionslimit erreicht: weiter ab %1$s</string>
+    <string name="post_daily_limit_reaction_untimed">Tägliches Reaktionslimit erreicht</string>
+    <string name="post_daily_limit_note_question">Betrifft dieses Limit meine Funken?</string>
+    <string name="post_daily_limit_note">Es zählt deine Aktionen, nie deine Funken.</string>
+    <string name="bubble_failed_attachment_right">Dieser Anhangstyp ist hier noch nicht erlaubt.</string>
+    <string name="bring_explain">Für einen extremen Notfall: Das Telefon klingelt, auch gesperrt.</string>
+    <string name="bring_silent_question">Und wenn das Telefon lautlos ist?</string>
+    <string name="bring_silent_note">Ein iPhone im Lautlos-Modus zeigt je nach Einstellung nur einen dringenden Hinweis.</string>
+    <string name="talkie_info_note">Nur für deine engsten Vertrauten, im äußersten Notfall: Deine Stimme ist bei ihnen zu hören, auch wenn Meeshy im Hintergrund ist. Es ist nicht Ende-zu-Ende-verschlüsselt und bleibt in einer verschlüsselten Unterhaltung geschlossen. Kommt es nicht durch, geht eine Sprachnachricht in eure letzte Unterhaltung.</string>
+    <string name="talkie_send_voice_copy">Stattdessen als Sprachnachricht gesendet.</string>
+    <string name="voiceProfile_processing_description">Verarbeitung läuft, einige Minuten.</string>
+    <string name="voiceProfile_recording_description">Text laut lesen: mindestens 3 Proben à 10 Sekunden.</string>
+    <string name="audio_consent_notice_message">Aktiviere die Sprach-Einwilligung, um deine Audios zu transkribieren und zu übersetzen.</string>
+    <string name="sticker_sheet_intent_humour_noir_hint">Um über alles zu lachen, sogar das Schlimmste</string>
+    <string name="sticker_sheet_intent_quotidien_hint">Um zu sagen, was du gerade machst: Kaffee, Essen, Arbeit, unterwegs</string>
+    <string name="sticker_sheet_intent_bonjour_hint">Zum Grüßen, Danken, Entschuldigen</string>
+</resources>

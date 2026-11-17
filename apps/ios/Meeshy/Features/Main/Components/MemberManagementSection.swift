@@ -210,7 +210,7 @@ struct MemberManagementSection: View {
                     Image(systemName: "crown.fill")
                         .font(MeeshyFont.relative(9))
                         .accessibilityHidden(true)
-                    Text(String(localized: "member-management.role.creator", defaultValue: "Créateur", bundle: .main))
+                    Text(String(localized: "conversation.role.creator", defaultValue: "Créateur", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.tileSaffron)
@@ -220,7 +220,7 @@ struct MemberManagementSection: View {
                     Image(systemName: "shield.fill")
                         .font(MeeshyFont.relative(9))
                         .accessibilityHidden(true)
-                    Text(String(localized: "member-management.role.admin", defaultValue: "Admin", bundle: .main))
+                    Text(String(localized: "conversation.role.admin", defaultValue: "Admin", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.info)
@@ -230,7 +230,7 @@ struct MemberManagementSection: View {
                     Image(systemName: "checkmark.shield.fill")
                         .font(MeeshyFont.relative(9))
                         .accessibilityHidden(true)
-                    Text(String(localized: "member-management.role.moderator", defaultValue: "Modérateur", bundle: .main))
+                    Text(String(localized: "conversation.role.moderator", defaultValue: "Modérateur", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.success)
@@ -377,11 +377,11 @@ struct MemberManagementSection: View {
     private func label(for kind: MemberActionPolicy.Kind) -> String {
         switch kind {
         case .promoteToAdmin:
-            return String(localized: "member-management.action.promote-admin", defaultValue: "Promouvoir administrateur", bundle: .main)
+            return String(localized: "member-management.action.promote-admin", defaultValue: "Promouvoir admin", bundle: .main)
         case .promoteToModerator:
-            return String(localized: "member-management.action.promote-moderator", defaultValue: "Promouvoir Modérateur", bundle: .main)
+            return String(localized: "member-management.action.promote-moderator", defaultValue: "Promouvoir modérateur", bundle: .main)
         case .demoteToMember:
-            return String(localized: "member-management.action.demote-member", defaultValue: "Rétrograder Membre", bundle: .main)
+            return String(localized: "member-management.action.demote-member", defaultValue: "Rétrograder en membre", bundle: .main)
         case .expel:
             return String(localized: "member-management.action.expel", defaultValue: "Expulser", bundle: .main)
         case .ban:

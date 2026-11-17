@@ -24,19 +24,12 @@ struct MessageEditsDetailView: View {
                 text: revisions.isEmpty
                     ? String(localized: "message-detail.edits.none-title", defaultValue: "Aucune modification", bundle: .main)
                     : String(localized: "message-detail.edits.history-title", defaultValue: "Historique", bundle: .main),
-                detail: revisions.isEmpty
-                    ? String(localized: "message-detail.edits.none-detail", defaultValue: "Ce message n'a pas été modifié", bundle: .main)
-                    : previousVersionsDetail(revisions.count),
+                detail: revisions.isEmpty ? nil : previousVersionsDetail(revisions.count),
                 count: revisions.isEmpty ? nil : "\(revisions.count)",
                 accent: accent
             )
 
-            if revisions.isEmpty {
-                MessageDetailEmptyState(
-                    icon: "pencil.slash",
-                    text: String(localized: "message-detail.edits.empty", defaultValue: "L'historique des modifications apparaît ici", bundle: .main)
-                )
-            } else {
+            if !revisions.isEmpty {
                 // Current (post-edit) version rendered first so the user
                 // sees the "as-is" content as the anchor, then the
                 // chronological revisions below it.

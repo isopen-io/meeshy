@@ -119,7 +119,7 @@ struct RiverBubbleView: View, Equatable {
         }
         // #7467 — la destruction se VOIT ici aussi. La rivière était, avec le
         // résumé, l'un des deux modes où un éphémère disparaissait d'un coup.
-        .ephemeralBurn(isBurning: content.isBurning)
+        .ephemeralBurn(isBurning: content.isBurning, side: .init(isMine: content.bubble.isViewer))
     }
 
     /// Le haut du rang. Une nouvelle voix qui prend la parole gagne du VIDE

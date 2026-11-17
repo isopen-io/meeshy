@@ -3,6 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { controlNoticeText, noticeRole } from '@/lib/calls/call-control-text';
 import { callNoticeStore, callReactionStore, dismissNotice, REACTION_LIFETIME_MS, type CallReactionBurst } from '@/lib/calls/call-control-state';
+import { callLiveFrameStore, type LiveFramePeerRelease } from '@/lib/calls/call-live-frame-store';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { appSettingsOpener } from '@/lib/view/settings-recovery';
@@ -16,7 +17,9 @@ import { appSettingsOpener } from '@/lib/view/settings-recovery';
  * `prefers-reduced-motion`, elle apparaît et s'efface sur place. Le nombre
  * affiché à la fois est borné par le magasin (`REACTION_MAX_SHOWN`). Chacune
  * est dite au lecteur d'écran (« Nadia a réagi 👍 ») par une région polie.
- * Le mot d'un contrôle s'efface seul après `NOTICE_MS`. Une caméra refusée
+ * Le mot d'un contrôle s'efface seul après `NOTICE_MS`. Le cadre partagé que
+ * l'autre relâche (#18367) se dit aussi, poliment et sans rien montrer, comme
+ * l'annonce de VoiceOver sur iOS : « Awa a retiré le cadre ». Une caméra refusée
  * porte « Réglages » dans la coque Android (#10862) : deux refus y suffisent
  * pour qu'elle ne se redemande plus (`appSettingsOpener`, nul sur le web).
  *
@@ -26,7 +29,7 @@ import { appSettingsOpener } from '@/lib/view/settings-recovery';
 
 export const NOTICE_MS = 4_000;
 
-const KEYFRAMES = `@keyframes call-reaction-rise{0%{opacity:0;transform:translate(-50%,0) scale(.6)}12%{opacity:1;transform:translate(-50%,-4vh) scale(1.25)}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-38vh) scale(1.05)}}@keyframes call-reaction-fade{0%{opacity:0}15%{opacity:1}75%{opacity:1}100%{opacity:0}}[data-call-reaction]{animation:call-reaction-rise ${REACTION_LIFETIME_MS}ms ease-out forwards}@media (prefers-reduced-motion:reduce){[data-call-reaction]{animation-name:call-reaction-fade;transform:translate(-50%,-12vh)}}`;
+const KEYFRAMES = `@keyframes call-reaction-rise{0%{opacity:0;transform:translate(-50%,0) scale(.6)}12%{opacity:1;transform:translate(-50%,-4vh) scale(1.25)}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-38vh) scale(1.05)}}@keyframes call-reaction-fade{0%{opacity:0}15%{opacity:1}75%{opacity:1}100%{opacity:0}}[data-call-reaction]{animation:call-reaction-rise ${REACTION_LIFETIME_MS}ms ease-out forwards}@media (prefers-reduced-motion:reduce){[data-call-reaction]{--reduced-fade:${REACTION_LIFETIME_MS}ms;animation-name:call-reaction-fade;transform:translate(-50%,-12vh)}}`;
 
 type NameOf = (userId: string) => string | null;
 
@@ -77,10 +80,26 @@ export function CallControlToast({ language, nameOf }: { readonly language: Inte
   );
 }
 
+const releasedText = (language: InterfaceLanguage, released: LiveFramePeerRelease | null): string => {
+  if (released === null) return '';
+  return released.from === null ? t(language, 'callControls.liveFrame.peerReleased.anonymous') : t(language, 'callControls.liveFrame.peerReleased', { name: released.from });
+};
+
+/** Posée tant que l'appel vit, AVANT le retrait : une région qui naît avec son texte n'est pas lue par tous les lecteurs d'écran. */
+function CallLiveFrameReleaseNotice({ language }: { readonly language: InterfaceLanguage }) {
+  const released = useStore(callLiveFrameStore, (state) => state.peerReleased);
+  return (
+    <p className="sr-only" role="status" aria-live="polite" data-call-live-frame-released="">
+      {releasedText(language, released)}
+    </p>
+  );
+}
+
 export function CallControlFeedback({ language, nameOf, live }: { readonly language: InterfaceLanguage; readonly nameOf: NameOf; readonly live: boolean }) {
   return (
     <>
       {live ? <CallReactionBursts language={language} nameOf={nameOf} /> : null}
+      {live ? <CallLiveFrameReleaseNotice language={language} /> : null}
       <CallControlToast language={language} nameOf={nameOf} />
     </>
   );

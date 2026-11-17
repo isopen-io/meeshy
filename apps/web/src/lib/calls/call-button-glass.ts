@@ -45,3 +45,17 @@ export function callButtonGlassTreatment(tone: CallButtonTone): CallButtonGlassT
     drawsPressHighlight: tone === 'disc',
   };
 }
+
+/** Où part le son de l'appel, lu par chaque plateforme à sa façon (`callOutputRouting`, `call-output.ts`). */
+export type CallOutputRouting = { readonly isSpeaker: boolean; readonly routesExternally: boolean };
+
+/**
+ * P1.6 · #17843 — l'état de « Sortie » dans la pilule, miroir de `CallOutputButtonRule` (iOS) et
+ * d'Android (#18411), mêmes vecteurs. En appel vidéo le haut-parleur démarre allumé d'office : c'est
+ * le repos, un disque (le disque blanc est un choix, jamais le défaut). Un appareil externe reste un
+ * choix : allumé, en audio comme en vidéo.
+ */
+export function callOutputButtonTone({ isSpeaker, routesExternally, isVideoCall }: CallOutputRouting & { readonly isVideoCall: boolean }): 'active' | 'disc' {
+  if (routesExternally) return 'active';
+  return isSpeaker && !isVideoCall ? 'active' : 'disc';
+}

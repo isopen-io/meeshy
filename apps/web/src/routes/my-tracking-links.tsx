@@ -41,10 +41,14 @@ export function TrackingLinkRow({ language, link, copied, onCopy }: { readonly l
     count: new Intl.NumberFormat(language).format(link.uniqueClicks),
   });
   const created = linkCreatedLabel(language, link.createdAt);
+  const lastClick =
+    link.lastClickedAt === null
+      ? null
+      : translateLinkFamilies(language, 'linkFamilies.tracking.lastClick', { date: new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(link.lastClickedAt)) });
   const label = new Intl.ListFormat(language, {
     type: 'unit',
     style: 'short',
-  }).format([name, statusLabel(language, link.isActive), clicks, uniques, created]);
+  }).format([name, statusLabel(language, link.isActive), clicks, uniques, created, ...(lastClick === null ? [] : [lastClick])]);
   return (
     <FamilyRow
       rowId={link.token}
@@ -68,6 +72,15 @@ export function TrackingLinkRow({ language, link, copied, onCopy }: { readonly l
           <LinkCreated language={language} createdAt={link.createdAt} />
         </>
       }
+      {...(lastClick === null
+        ? {}
+        : {
+            extra: (
+              <span data-tracking-last-click className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+                {lastClick}
+              </span>
+            ),
+          })}
       actions={<CopyRowAction language={language} label={translateLinkFamilies(language, 'linkFamilies.tracking.copy')} tint={TRACKING_TINT} copied={copied} onCopy={onCopy} />}
     />
   );

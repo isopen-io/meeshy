@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { detailStore } from '@/lib/view/detail-store';
-import { levelsLabel, meeshCount } from '@/lib/view/game-copy';
+import { meeshCount } from '@/lib/view/game-copy';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -91,7 +91,7 @@ describe('la ligne d’exigence', () => {
     const page = text(renderToStaticMarkup(<GameRequirementLine concept="missions" current={3} required={5} />));
     expect(page).toContain('Niveau 3');
     expect(page).toContain('Requis 5');
-    expect(page).toContain(`Il manque ${levelsLabel(2)} pour l’ouvrir.`);
+    expect(page).not.toContain('Il manque');
   });
 
   test('se tait sur le manque quand l’exigence est remplie', () => {

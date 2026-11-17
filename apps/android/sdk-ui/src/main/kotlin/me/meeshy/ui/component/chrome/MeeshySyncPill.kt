@@ -73,6 +73,8 @@ import me.meeshy.sdk.model.syncpill.SyncPillRotator
 import me.meeshy.sdk.model.syncpill.SyncPillRow
 import me.meeshy.sdk.model.syncpill.SyncPillTapOutcome
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.battery.BatteryPillVector
+import me.meeshy.ui.component.phonereachability.PhoneUnreachableVector
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyMotion
@@ -404,4 +406,6 @@ private fun SyncPillGlyph.vector(): ImageVector? = when (this) {
     SyncPillGlyph.PLAY -> MeeshyIcons.PlayCircleFilled
     SyncPillGlyph.ATTACH -> MeeshyIcons.AttachFile
     SyncPillGlyph.MOOD -> MeeshyIcons.EmojiFilled
+    SyncPillGlyph.BATTERY -> BatteryPillVector
+    SyncPillGlyph.PHONE_UNREACHABLE -> PhoneUnreachableVector
 }

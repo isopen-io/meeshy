@@ -54,15 +54,13 @@ data class ContentExitLaw(
         val isDeclared: Boolean get() = this != FREE
 
         /**
-         * Un contenu qui disparaît est soit ANNONCÉ, soit NOIR — jamais capturé en silence.
-         * Une flamme ne quitte la couche sécurisée QUE sur une surface qui annonce sa
-         * capture ; fermé par défaut.
+         * Un contenu qui disparaît sort NOIR de toute capture (directive porteur du
+         * 2026-11-16, #18831) : la vue unique comme les deux flammes, sur toutes les surfaces.
+         * Une flamme reste ANNONCÉE en plus ([isDeclared]) ; [surfaceAnnounces] ne change plus
+         * le verdict, il reste accepté pour les sites qui le passent. Miroir de iOS.
          */
-        fun shieldsCapture(surfaceAnnounces: Boolean = false): Boolean = when (this) {
-            FREE -> false
-            ANNOUNCED -> !surfaceAnnounces
-            BLOCKED -> true
-        }
+        @Suppress("UNUSED_PARAMETER")
+        fun shieldsCapture(surfaceAnnounces: Boolean = false): Boolean = this != FREE
     }
 
     /** Ce que la loi lit d'une pièce jointe — ses propres drapeaux, indépendants du message. */

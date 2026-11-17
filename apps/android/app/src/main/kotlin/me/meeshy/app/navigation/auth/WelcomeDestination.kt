@@ -1,5 +1,6 @@
 package me.meeshy.app.navigation.auth
 
+import me.meeshy.app.navigation.navigateSingleTop
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -57,13 +58,15 @@ internal fun WelcomeHost(
             Box(Modifier.fillMaxSize()) {
                 SignupScreen(
                     onClose = { viewModel.onEvent(WelcomeUiEvent.SignupClosed) },
+                    // « Se connecter » solde l'accueil ; la connexion, composée dessous, adopte l'adresse tapée maintenant.
+                    onSignIn = { authViewModel.adoptPendingHandoffs(); viewModel.onEvent(WelcomeUiEvent.SignInTapped) },
                     onRegistered = {
                         authViewModel.onExternalSessionOpened()
                         viewModel.onEvent(WelcomeUiEvent.AccountCreated)
-                        navController.navigate(Routes.CONVERSATIONS) { popUpTo(Routes.LOGIN) { inclusive = true } }
+                        navController.navigateSingleTop(Routes.CONVERSATIONS) { popUpTo(Routes.LOGIN) { inclusive = true } }
                     },
-                    onOpenTerms = { navController.navigate(Routes.legal(LegalDocumentKind.TERMS_OF_SERVICE)) },
-                    onOpenPrivacy = { navController.navigate(Routes.legal(LegalDocumentKind.PRIVACY_POLICY)) },
+                    onOpenTerms = { navController.navigateSingleTop(Routes.legal(LegalDocumentKind.TERMS_OF_SERVICE)) },
+                    onOpenPrivacy = { navController.navigateSingleTop(Routes.legal(LegalDocumentKind.PRIVACY_POLICY)) },
                 )
                 FeedbackToastHost(toasts = remember { emptyFlow<FeedbackToastRequest>() })
             }

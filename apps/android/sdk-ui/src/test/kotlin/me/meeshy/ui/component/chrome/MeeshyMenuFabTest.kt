@@ -13,6 +13,8 @@ import androidx.compose.ui.unit.DpRect
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -162,5 +164,31 @@ class MeeshyMenuFabTest {
 
     private companion object {
         const val HOST_TAG = "ladder-host"
+    }
+
+    @Test
+    fun `a signaled rung carries one dot, and a counted rung keeps its badge instead (#18165)`() {
+        compose.setContent {
+            MeeshyTheme {
+                Box(Modifier.requiredSize(400.dp, 800.dp)) {
+                    MeeshyMenuLadder(
+                        items = listOf(
+                            RadialMenuItem(MeeshyIcons.SettingsFilled, "My Legend, Offering ready", Color.Red, dot = true) {},
+                            RadialMenuItem(MeeshyIcons.BellFilled, "Notifications", Color.Red, badgeCount = 2, dot = true) {},
+                            RadialMenuItem(MeeshyIcons.Call, "Calls", Color.Blue) {},
+                        ),
+                        expanded = true,
+                        menuCenter = PointDp(200f, 600f),
+                        opensDownward = false,
+                        itemHint = "Open this section",
+                        onDismiss = {},
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+
+        compose.onAllNodesWithTag(MENU_LADDER_RUNG_DOT_TAG, useUnmergedTree = true).assertCountEquals(1)
+        compose.onNodeWithContentDescription("My Legend, Offering ready").assertExists()
     }
 }

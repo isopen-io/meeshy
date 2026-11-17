@@ -69,6 +69,9 @@ enum class IncomingCallLayout {
     /** L'écran audio garde sa ligne grise et son badge SOUS le nom. */
     val showsTypeLineAndBadge: Boolean get() = this == Audio
 
+    /** P17.10 — sur la vue P17, les légendes des boutons ronds sont blanches ; l'écran audio garde les légendes teintées (iOS `whiteCaptions`). */
+    val whiteCaptions: Boolean get() = this == VideoPreview
+
     companion object {
         fun of(isVideoCall: Boolean): IncomingCallLayout = if (isVideoCall) VideoPreview else Audio
     }

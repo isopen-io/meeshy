@@ -99,17 +99,14 @@ internal fun MessageHistorySheet(
             icon = MeeshyIcons.History,
             title = stringResource(if (history.isEmpty) R.string.message_detail_edits_none_title else R.string.message_detail_edits_history_title),
             detail = if (history.isEmpty) {
-                stringResource(R.string.message_detail_edits_none_detail)
+                ""
             } else {
                 stringResource(if (count == 1) R.string.message_detail_edits_previous_one else R.string.message_detail_edits_previous_other, count)
             },
             accent = accentColor,
             count = count.takeIf { it > 0 }?.toString(),
         )
-        if (history.isEmpty) {
-            MessageDetailEmpty(MeeshyIcons.Edit, stringResource(R.string.message_detail_edits_empty))
-            return@Column
-        }
+        if (history.isEmpty) return@Column
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
             modifier = Modifier.heightIn(max = 480.dp),

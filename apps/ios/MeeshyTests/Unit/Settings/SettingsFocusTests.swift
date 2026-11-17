@@ -1,4 +1,5 @@
 import XCTest
+import MeeshyUI
 @testable import Meeshy
 
 /// #16339 — une invite de réglage mène AU réglage : la demande désigne sa
@@ -14,6 +15,33 @@ final class SettingsFocusTests: XCTestCase {
     func test_masterPin_opensSecurityFromTheAccountSection() {
         XCTAssertEqual(SettingsFocus.masterPin.settingsAnchor, "settings.section.account")
         XCTAssertTrue(SettingsFocus.masterPin.opensSecurity)
+    }
+
+    func test_securityContactFocus_opensSecurityFromTheAccountSection_withoutSheet() {
+        for focus in [SettingsFocus.securityEmail, .securityPhone] {
+            XCTAssertEqual(focus.destination, .security, "\(focus)")
+            XCTAssertEqual(focus.settingsAnchor, "settings.section.account", "\(focus)")
+            XCTAssertTrue(focus.opensSecurity, "\(focus)")
+            XCTAssertNil(focus.opensSheet, "\(focus)")
+        }
+    }
+
+    func test_securityLanding_withAnInitialFocusOnSecurity_landsOnIt() {
+        XCTAssertEqual(SettingsFocus.securityLanding(initial: .securityPhone, requested: .masterPin), .securityPhone)
+        XCTAssertEqual(SettingsFocus.securityLanding(initial: nil, requested: .masterPin), .masterPin)
+        XCTAssertNil(SettingsFocus.securityLanding(initial: nil, requested: nil))
+        XCTAssertNil(SettingsFocus.securityLanding(initial: .voiceProfile, requested: .transcription),
+                     "un réglage qui ne vit pas dans Sécurité n'y désigne rien")
+    }
+
+    func test_consumeSecurityFocus_takesOnlyARequestForSecurity() {
+        let request = SettingsFocusRequest()
+        request.request(.voiceProfile)
+        XCTAssertNil(request.consumeSecurityFocus(), "une demande destinée aux Réglages reste en attente")
+        XCTAssertEqual(request.pending, .voiceProfile)
+        request.request(.securityEmail)
+        XCTAssertEqual(request.consumeSecurityFocus(), .securityEmail)
+        XCTAssertNil(request.pending)
     }
 
     func test_consume_pendingRequest_isServedOnce() {
@@ -32,6 +60,27 @@ final class SettingsFocusTests: XCTestCase {
         XCTAssertNil(request.pending)
     }
 
+    // MARK: - Le pli des annexes (#18589)
+
+    func test_settingsAnchor_isTheAnchorOfTheBlockHoldingItsDestination() {
+        for focus in SettingsFocus.allCases {
+            XCTAssertEqual(focus.settingsAnchor, SettingsLayout.block(containing: focus.destination)?.id.anchor, "\(focus)")
+        }
+    }
+
+    func test_unfoldsAnnex_followsTheStratumOfItsDestination() {
+        for focus in SettingsFocus.allCases {
+            XCTAssertEqual(focus.unfoldsAnnex, SettingsLayout.unfoldsAnnex(toReach: focus.destination), "\(focus)")
+        }
+        XCTAssertFalse(SettingsFocus.masterPin.unfoldsAnnex, "le master PIN vit dans Compte, en haut")
+    }
+
+    func test_annexUnfolded_aFocusOnAnAnnexDestination_unfoldsBeforeScrolling() {
+        XCTAssertTrue(SettingsLayout.annexUnfolded(current: false, reaching: .storage))
+        XCTAssertTrue(SettingsLayout.annexUnfolded(current: true, reaching: .privacy), "un pli ouvert le reste")
+        XCTAssertFalse(SettingsLayout.annexUnfolded(current: false, reaching: .transcriptionMine))
+    }
+
     /// Les invites du dépôt passent par la demande — plus aucune n'ouvre les
     /// Réglages « en haut de page ». Garde de source : la seule mesure d'une
     /// fermeture passée à un bouton.
@@ -40,5 +89,19 @@ final class SettingsFocusTests: XCTestCase {
         XCTAssertTrue(consent.contains("VoiceSetupLauncher.open(.voice)"), "#16418 — la note passe par la loi de destination")
         let pin = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ConversationListView+Presentations.swift")
         XCTAssertTrue(pin.contains("SettingsFocusRequest.shared.request(.masterPin)"))
+    }
+
+    // MARK: - Les temps de la mise au point sont nommés (contre-audit #18589)
+
+    func test_focusTimings_areNamedAndOrdered_scrollThenSheetThenSecurity() {
+        XCTAssertLessThan(MeeshyMotion.pushSettle, MeeshyMotion.sheetAfterPush)
+        XCTAssertLessThan(MeeshyMotion.sheetAfterPush, MeeshyMotion.sheetAfterFocusScroll)
+    }
+
+    func test_settingsAndSecurity_writeNoLiteralDelay() throws {
+        for path in ["Meeshy/Features/Settings/Views/SettingsView.swift", "Meeshy/Features/Settings/Views/SecurityView.swift"] {
+            let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
+            XCTAssertFalse(source.contains("DelayedUI.perform(after: .milliseconds("), path)
+        }
     }
 }

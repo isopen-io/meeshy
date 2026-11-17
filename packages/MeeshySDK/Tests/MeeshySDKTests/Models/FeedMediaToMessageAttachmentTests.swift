@@ -57,4 +57,33 @@ struct FeedMediaToMessageAttachmentTests {
         #expect(attachment.imageVariants?.count == 1)
         #expect(attachment.imageVariants?.first?.url == "https://cdn.meeshy.me/x-640.webp")
     }
+    // MARK: - #4984 — le type servi voyage jusqu'à la galerie
+
+    @Test("APIPostMedia.toFeedMedia garde le type servi : un GIF reste image/gif jusqu'au plein écran")
+    func apiPostMediaKeepsItsMimeType() throws {
+        let json = """
+        {"id":"pm1","mimeType":"image/gif","fileUrl":"https://cdn.meeshy.me/x.gif"}
+        """
+        let api = try JSONDecoder().decode(APIPostMedia.self, from: Data(json.utf8))
+        let media = api.toFeedMedia()
+        #expect(media.mimeType == "image/gif")
+        #expect(media.toMessageAttachment().mimeType == "image/gif")
+    }
+
+    @Test("sans type servi (ancien blob), le pont garde son repli par famille")
+    func legacyMediaFallsBackToItsFamily() throws {
+        let json = """
+        {"id":"m1","type":"image","url":"https://cdn.meeshy.me/x.jpg","thumbnailColor":"4ECDC4"}
+        """
+        let media = try JSONDecoder().decode(FeedMedia.self, from: Data(json.utf8))
+        #expect(media.mimeType == nil)
+        #expect(media.toMessageAttachment().mimeType == "image/jpeg")
+    }
+
+    @Test("aller-retour Codable conserve le type (cache GRDB du feed)")
+    func codableRoundTripKeepsTheMimeType() throws {
+        let media = FeedMedia(type: .image, url: "https://cdn.meeshy.me/x.gif", mimeType: "image/gif")
+        let decoded = try JSONDecoder().decode(FeedMedia.self, from: JSONEncoder().encode(media))
+        #expect(decoded.mimeType == "image/gif")
+    }
 }

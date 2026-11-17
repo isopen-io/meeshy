@@ -1,6 +1,5 @@
 package me.meeshy.ui.component.bubble
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -29,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.user.ContactCardMeeshyAccount
 import me.meeshy.ui.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.motion.MeeshyAnimatedVisibility
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -89,13 +89,12 @@ internal fun meeshyAccountSpoken(account: ContactCardMeeshyAccount?): String? =
 /** La rangée « Sur Meeshy » sous une carte de visite : le visage et le nom de l'inscrit, ou rien. */
 @Composable
 internal fun BubbleMeeshyAccountRow(account: ContactCardMeeshyAccount?, onColor: Color) {
-    AnimatedVisibility(
-        visible = account != null,
+    MeeshyAnimatedVisibility(
+        value = account,
         enter = fadeIn(MeeshyMotion.springDefault()) + expandVertically(MeeshyMotion.springDefault()),
         exit = fadeOut(MeeshyMotion.springDefault()) + shrinkVertically(MeeshyMotion.springDefault()),
-    ) {
-        val shown = remember(account) { account }
-        if (shown == null) return@AnimatedVisibility
+        label = "bubble-meeshy-account",
+    ) { shown ->
         val label = stringResource(R.string.bubble_contact_card_on_meeshy)
         Row(
             modifier = Modifier

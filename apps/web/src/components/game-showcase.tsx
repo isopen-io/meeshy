@@ -9,6 +9,8 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { GAME_ERROR, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
 import { GameTouch } from './game-touch';
 import { GameTrophyShelf, shelfOrder, type ShelfEntry } from './game-trophy-shelf';
+import { gameHint } from './game-hint';
+import { InfoNoted } from './info-hint';
 import { GameVisibilityPicker } from './game-visibility-picker';
 
 /**
@@ -100,8 +102,8 @@ export function GameShowcase(props: GameShowcaseProps) {
   return (
     <>
       <GameCard id="game-showcase" labelledBy="game-showcase-title">
-        <h2 id="game-showcase-title" className="text-body font-bold" style={{ color: GAME_INK }}>
-          {gameText('game.showcase.title')} · {translateGamePlural(language, 'game.door.showcase.count', entries.length)}
+        <h2 id="game-showcase-title" className="sr-only">
+          {translateGamePlural(language, 'game.door.showcase.count', entries.length)}
         </h2>
         {entries.length === 0 ? (
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
@@ -128,13 +130,12 @@ export function GameShowcase(props: GameShowcaseProps) {
       </GameCard>
 
       <GameCard id="game-showcase-visibility" labelledBy="game-showcase-visibility-title">
-        <h2 id="game-showcase-visibility-title" className="text-body font-bold" style={{ color: GAME_INK }}>
-          {gameText('game.showcase.visibility')}
-        </h2>
-        <GameVisibilityPicker legend={gameText('game.visibility.field.showcase')} value={visibility} disabled={!online} busy={savingVisibility} onChange={onVisibility} />
-        <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          {gameText('game.showcase.visibility_hint')}
-        </p>
+        <InfoNoted note={gameHint('game.showcase.visibility_note_q', 'game.showcase.visibility_hint')}>
+          <h2 id="game-showcase-visibility-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+            {gameText('game.showcase.visibility')}
+          </h2>
+        </InfoNoted>
+        <GameVisibilityPicker legend={gameText('game.visibility.field.showcase')} legendHidden value={visibility} disabled={!online} busy={savingVisibility} onChange={onVisibility} />
         {errors.visibility === undefined ? null : (
           <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
             {errors.visibility}

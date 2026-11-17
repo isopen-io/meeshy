@@ -18,13 +18,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.dismiss
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoteButton
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -40,8 +48,20 @@ internal fun LinkField(
     keyboardType: KeyboardType = KeyboardType.Text,
     lowercase: Boolean = false,
     singleLine: Boolean = true,
+    note: MeeshyInfoNote? = null,
+    openNoteId: String? = null,
+    onOpenNoteIdChange: (String?) -> Unit = {},
 ) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus)) {
+    val expanded = note != null && openNoteId == note.id
+    val close = { note?.let { onOpenNoteIdChange(MeeshyInfoNote.closed(openNoteId, it.id)) } }
+    Column(
+        modifier.onPreviewKeyEvent { event ->
+            val isEscape = expanded && event.key == Key.Escape && event.type == KeyEventType.KeyUp
+            if (isEscape) close()
+            isEscape
+        },
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+    ) {
         Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MeeshyTheme.tokens.textPrimary)
         OutlinedTextField(
             value = value,
@@ -53,7 +73,25 @@ internal fun LinkField(
                 keyboardType = keyboardType,
                 capitalization = if (lowercase) KeyboardCapitalization.None else KeyboardCapitalization.Sentences,
             ),
+            trailingIcon = note?.let { infoNote ->
+                {
+                    MeeshyInfoNoteButton(
+                        note = infoNote,
+                        expanded = expanded,
+                        onToggle = { onOpenNoteIdChange(MeeshyInfoNote.toggled(openNoteId, infoNote.id)) },
+                        tint = MeeshyTheme.tokens.textSecondary,
+                    )
+                }
+            },
         )
+        if (expanded && note != null) {
+            Text(
+                text = note.text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier.semantics { dismiss { close(); true } },
+            )
+        }
     }
 }
 

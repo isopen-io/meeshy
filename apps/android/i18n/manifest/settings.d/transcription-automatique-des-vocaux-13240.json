@@ -16,18 +16,8 @@
           "androidName": "settings_transcription_auto",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "settings.transcription.engine",
-          "androidName": "settings_transcription_engine",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.transcription.engine.a11y",
-          "androidName": "settings_transcription_engine_a11y",
-          "status": "adopted"
-        }
+        { "androidName": "settings_transcription_engine", "status": "android-only" },
+        { "androidName": "settings_transcription_engine_a11y", "status": "android-only" }
       ]
     }
   }

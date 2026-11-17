@@ -7,6 +7,7 @@ import me.meeshy.sdk.model.game.GameAtlasBlock
 import me.meeshy.sdk.model.game.GameBlock
 import me.meeshy.sdk.model.game.GameBlockFixtures
 import me.meeshy.sdk.model.game.GameBlockParser
+import me.meeshy.sdk.model.game.ChestStatus
 import me.meeshy.sdk.model.game.GameTextKey
 import me.meeshy.sdk.model.game.GameTrophiesBlock
 import me.meeshy.sdk.model.game.GameTrophyItem
@@ -163,5 +164,14 @@ class ProgressionConceptFicheTest {
         assertThat(generic.head).isEqualTo(FicheHead.Generic)
         assertThat(piece.head).isEqualTo(FicheHead.Piece)
         assertThat(sparks.head).isInstanceOf(FicheHead.Sparks::class.java)
+    }
+
+    @Test
+    fun `le reve verrouille dit ses actes une fois et laisse la condition a l Offrande`() {
+        val block = game()
+        val locked = block.copy(chest = block.chest.copy(status = ChestStatus.Locked))
+        val said = checkNotNull(ProgressionConceptStates.stateLine(ProgressionConcept.Missions, progress(locked), locked))
+        assertThat(said.text.key).isEqualTo(GameTextKey.StateMissionsProgress)
+        assertThat(said.text.args).hasSize(2)
     }
 }

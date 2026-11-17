@@ -26,10 +26,6 @@ extension StoryComposerViewModel {
         guard let targetSlideIndex = slideIndex(pinnedTo: toSlideId) else { return nil }
         guard admits(kind == .video ? .video : .image, in: slides[targetSlideIndex].effects) else { return nil }
 
-        // La slide CIBLE, pas la courante : ce site peut poser sur une autre
-        // slide, et cascader d'après les objets de la mauvaise donnerait un
-        // décalage sans rapport avec ce que l'auteur voit.
-        let center = nextObjectPosition(in: slides[targetSlideIndex].effects)
         var targetEffects = slides[targetSlideIndex].effects
         // Auto-background uniquement si la slide n'a aucun media visuel (pre-migration
         // inclus : resolvedBackgroundMedia retombe sur le 1er existant). Un fond
@@ -39,6 +35,7 @@ extension StoryComposerViewModel {
         // synthetic-clip injecté par loadCurrentSlideIntoTimeline.
         let hasSlideLevelBgImage = slideImages[slides[targetSlideIndex].id] != nil
         let shouldBeBackground = targetEffects.resolvedBackgroundMedia == nil && !hasSlideLevelBgImage
+        let center = StoryObjectPlacement.center
         let obj = StoryMediaObject(
             id: id,
             postMediaId: "",
@@ -228,11 +225,7 @@ extension StoryComposerViewModel {
     /// d'appel existant ne change de comportement (#4483).
     func addAudioObject(role: ComposerAudioRole?) -> StoryAudioPlayerObject? {
         guard canAddAudio else { refuse(.audio); return nil }
-        // La cascade est SANS EFFET sur un son qui bascule en fond juste après
-        // — un fond n'a pas de position. La calculer quand même coûte un
-        // parcours et évite une branche qui devrait deviner, avant la bascule,
-        // ce que la règle d'auto-fond décidera après.
-        let center = nextObjectPosition(in: currentEffects)
+        let center = StoryObjectPlacement.center
         // Auto-bascule en background si aucun audio n'est déjà en background
         // (ni via isBackground=true, ni via le champ legacy backgroundAudioId).
         let obj = StoryAudioPlayerObject(

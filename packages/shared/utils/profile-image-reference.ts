@@ -41,15 +41,50 @@ function decodedStorageKey(encoded: string): string | null {
   }
 }
 
-function isAttachmentFileRoute(value: string): boolean {
-  const encoded = ATTACHMENT_FILE_ROUTE.exec(value)?.[1];
-  if (encoded === undefined) return false;
+function attachmentRouteKey(path: string): string | null {
+  const encoded = ATTACHMENT_FILE_ROUTE.exec(path)?.[1];
+  if (encoded === undefined) return null;
   const key = decodedStorageKey(encoded);
-  return key !== null && isStoragePath(key);
+  return key !== null && isStoragePath(key) ? key : null;
+}
+
+function isAttachmentFileRoute(value: string): boolean {
+  return attachmentRouteKey(value) !== null;
+}
+
+function absoluteUrlPath(value: string): string | null {
+  try {
+    return new URL(value).pathname;
+  } catch {
+    return null;
+  }
 }
 
 export function isProfileImageReference(value: string): boolean {
   if (value.startsWith('http://') || value.startsWith('https://')) return true;
   if (value.startsWith('/api/')) return isAttachmentFileRoute(value);
   return isStoragePath(value);
+}
+
+/**
+ * LE FICHIER DU VOLUME qu'une référence d'image désigne (#16811) — la clé de
+ * stockage, quelle que soit la forme sous laquelle elle voyage : le chemin
+ * relatif lui-même, la route de flux (`/api/(v1/)attachments/file/<clé>`), ou
+ * une adresse ABSOLUE dont le chemin est cette route (`publicMediaUrl`
+ * l'écrit ainsi). `null` quand la référence ne désigne aucun fichier du volume
+ * (un hôte tiers, que la passerelle refuse à l'écriture — #16809 — ou une forme
+ * refusée).
+ *
+ * C'est la question que pose la passerelle avant d'accepter une image
+ * d'identité : ce fichier, l'appelant l'a-t-il téléversé ? `/attachments/file/*`
+ * sert par chemin, donc une image reçue en privé, une fois posée en avatar,
+ * serait affichée à tous.
+ */
+export function profileImageStorageKey(value: string): string | null {
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    const path = absoluteUrlPath(value);
+    return path === null ? null : attachmentRouteKey(path);
+  }
+  if (value.startsWith('/api/')) return attachmentRouteKey(value);
+  return isStoragePath(value) ? value : null;
 }

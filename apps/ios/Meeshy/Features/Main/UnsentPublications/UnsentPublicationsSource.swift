@@ -108,7 +108,7 @@ enum UnsentPublicationsCopy {
         String(localized: "feed.unsent.reopen", defaultValue: "Rouvrir en brouillon", bundle: .main)
     }
     static var composerBusy: String {
-        String(localized: "feed.unsent.composerBusy", defaultValue: "Un brouillon est déjà en cours dans le composeur : publiez-le ou videz-le d'abord.", bundle: .main)
+        String(localized: "feed.unsent.composerBusy", defaultValue: "Terminez d'abord le brouillon en cours.", bundle: .main)
     }
     static var alreadySending: String {
         String(localized: "feed.unsent.alreadySending", defaultValue: "Cette publication est en train de partir.", bundle: .main)

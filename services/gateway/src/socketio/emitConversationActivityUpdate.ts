@@ -1,10 +1,10 @@
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import type { ConversationActiveCall } from '@meeshy/shared/types/conversation-preview';
 import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
+import { emitConversationUpdatedPerReader } from './conversationUpdatedPerReader';
 import { PREVIEW_PARTICIPANT_SELECT } from './emitConversationPreviewUpdate';
 import { loadHistoryFloorsForOrFail } from '../services/historyFloor';
 import {
@@ -98,28 +98,36 @@ export async function emitConversationActivityUpdate(
     const activeCall: ConversationActiveCall | null = resolveActiveCall(callRow as ActiveCallRow | null);
     const updatedAt = new Date().toISOString();
 
-    for (const { room, participant } of participantUserRoomTargets(participants)) {
-      const index = readerIndex.get(participant.id) ?? -1;
-      const mayReadReaction = update.reaction === true && !unreadable.has(index);
-      if (!mayReadReaction && !update.call && listRankAt === undefined) continue;
-      const prefs = participant.user;
-      const lastReaction = mayReadReaction
-        ? resolveConversationLastReaction(reactionRow as LastReactionRow | null, {
-            viewerLanguages: prefs
-              ? resolveUserLanguagesOrdered(prefs, { deviceLocale: prefs.deviceLocale ?? undefined })
-              : [],
-            historyFloor: floors[index] ?? null,
-          })
-        : undefined;
-      io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
-        conversationId,
-        updatedBy: { id: updatedByUserId },
-        updatedAt,
-        ...(lastReaction !== undefined ? { lastReaction } : {}),
-        ...(listRankAt !== undefined ? { listRankAt } : {}),
-        ...(update.call ? { activeCall } : {}),
-      });
-    }
+    // #18380 — un lecteur qui LÈVE ne coûte que ce lecteur. Le `continue`
+    // devient un `null` rendu : il a toujours voulu dire « rien à envoyer à
+    // celui-ci ».
+    emitConversationUpdatedPerReader(
+      io,
+      participantUserRoomTargets(participants),
+      (participant) => {
+        const index = readerIndex.get(participant.id) ?? -1;
+        const mayReadReaction = update.reaction === true && !unreadable.has(index);
+        if (!mayReadReaction && !update.call && listRankAt === undefined) return null;
+        const prefs = participant.user;
+        const lastReaction = mayReadReaction
+          ? resolveConversationLastReaction(reactionRow as LastReactionRow | null, {
+              viewerLanguages: prefs
+                ? resolveUserLanguagesOrdered(prefs, { deviceLocale: prefs.deviceLocale ?? undefined })
+                : [],
+              historyFloor: floors[index] ?? null,
+            })
+          : undefined;
+        return {
+          conversationId,
+          updatedBy: { id: updatedByUserId },
+          updatedAt,
+          ...(lastReaction !== undefined ? { lastReaction } : {}),
+          ...(listRankAt !== undefined ? { listRankAt } : {}),
+          ...(update.call ? { activeCall } : {}),
+        };
+      },
+      (error) => onError?.(error),
+    );
   } catch (error) {
     onError?.(error);
   }

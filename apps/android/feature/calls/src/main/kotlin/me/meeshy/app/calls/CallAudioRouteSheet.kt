@@ -57,7 +57,7 @@ internal fun CallAudioRouteKind.icon(): ImageVector = when (this) {
 }
 
 @Composable
-private fun CallAudioRoute.displayName(): String = name.ifBlank {
+internal fun CallAudioRoute.displayName(): String = name.ifBlank {
     stringResource(
         when (kind) {
             CallAudioRouteKind.Earpiece -> R.string.call_audio_earpiece

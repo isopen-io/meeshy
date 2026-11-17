@@ -423,7 +423,13 @@ describe('ConversationMediaSection — l’aperçu de la feuille de détails (#7
     await until(() => $$('[data-conversation-details-media-strip] [data-media-hub-tile]').length === 4);
     expect($$('[data-conversation-details-media-strip] [data-media-hub-tile]')).toHaveLength(4);
     expect(client.getQueryData(mediaHubQueryKey('c1', 'visual', null))).toBeDefined();
-    expect($('[data-conversation-details-media-open]')?.textContent).toContain('Médias, liens et documents');
+    const open = $('[data-conversation-details-media-open]');
+    expect(open?.textContent).toBe('Tout voir');
+    const name = (open?.getAttribute('aria-labelledby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ');
+    expect(name).toBe('Tout voir MÉDIAS, LIENS ET DOCUMENTS');
   });
 });
 

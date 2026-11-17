@@ -45,6 +45,8 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
@@ -55,10 +57,12 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.CallSpeakerColor
 import me.meeshy.sdk.model.call.CallButtonRole
+import me.meeshy.sdk.model.call.CallCaptionsFooter
 import me.meeshy.sdk.model.call.CallJournalFollow
 import me.meeshy.sdk.model.call.CallJournalSizing
 import me.meeshy.sdk.model.call.CallLiveCaptionLine
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
@@ -70,7 +74,8 @@ private val CAPTION_TARGET = 48.dp
  * offers « Back to live ». The switch is the journal's OWN (the band does not follow, law 7, P13.5); a touch on a sentence
  * flips it in the journal only. The list has the height of [CallJournalSizing]; the base row of the pill stays under it
  * and stays touchable. It keeps the whole call, captions on or off (#17342), each sentence dated by the time in the
- * call. The (…), the « Journal » button and the back button (TalkBack's escape) close it.
+ * call. The (…) stows it; « Journal », at its foot, in a white disc, closes it and gives back the captions or the base pill
+ * (#17964, P9b, P13.9); the back button (TalkBack's escape) closes it too.
  */
 @Composable
 internal fun CallJournalPanel(
@@ -82,6 +87,8 @@ internal fun CallJournalPanel(
     peerName: String = "",
     /** W2.6 — who is who in the call, by speaker id (`CallUiState.participantNames`): each sentence carries its author's name. */
     participantNames: Map<String, String> = emptyMap(),
+    /** #18488 — the height of the list when the stage is compact (a duo audio call, [CallDuoAudioFit]); `null` = the share of the window. */
+    listHeightDp: Float? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val view by viewModel.journalView.collectAsStateWithLifecycle()
@@ -100,7 +107,7 @@ internal fun CallJournalPanel(
         CallJournalList(
             lines = lines,
             onToggleOriginal = toggle,
-            modifier = Modifier.height(CallJournalSizing.heightDp(windowHeight).dp),
+            modifier = Modifier.height((listHeightDp ?: CallJournalSizing.heightDp(windowHeight)).dp),
             captures = captures,
             peerName = peerName,
         )
@@ -110,6 +117,63 @@ internal fun CallJournalPanel(
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = 0.55f),
                 modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+            )
+        }
+        CallJournalFooter(lines = lines, onClose = onClose)
+    }
+}
+
+/** The foot of the captions, at the same place: the note, then « Journal » on, which closes the journal (#17964, P13.9). */
+@Composable
+private fun CallJournalFooter(lines: List<CallLiveCaptionLine>, onClose: () -> Unit) {
+    val footer = remember(lines) { CallCaptionsFooter.journal(lines.takeLast(JOURNAL_FOOT_LINES)) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+    ) {
+        CallCaptionsFootNote(footer, modifier = Modifier.weight(1f))
+        CallJournalButton(isOpen = true, onClick = onClose)
+    }
+}
+
+private const val JOURNAL_FOOT_LINES = 2
+
+/**
+ * #17964 — « Journal » at the foot: at rest under the captions, a glass chip that opens the journal; journal open in the
+ * pill, at the same place, a solid white disc with dark icon and text that closes it (P6, P9b — as the column of the wide
+ * screen, #17932). ONE piece for both states, of the same glass atom as the other buttons of the call, a 48 dp target:
+ * TalkBack reads a toggle, and the hint « Opens every sentence of the call » stays on the state that opens. Mirrors iOS
+ * `CallJournalButton(isOpen:)`.
+ */
+@Composable
+internal fun CallJournalButton(isOpen: Boolean, onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val hint = stringResource(R.string.call_captions_journal_hint)
+    val ink = if (isOpen) MeeshyPalette.Indigo950 else Color.White
+    CallGlassButtonSurface(
+        role = if (isOpen) CallButtonRole.Active else CallButtonRole.Neutral,
+        shape = CircleShape,
+        isPressed = pressed,
+        modifier = Modifier
+            .defaultMinSize(minHeight = CAPTION_TARGET, minWidth = CAPTION_TARGET)
+            .clip(CircleShape)
+            .clickable(interactionSource = source, indication = null, onClickLabel = hint.takeUnless { isOpen }, role = Role.Button, onClick = onClick)
+            .semantics { toggleableState = ToggleableState(isOpen) },
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = MeeshySpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+        ) {
+            if (isOpen) Icon(MeeshyIcons.ListChecklist, contentDescription = null, tint = ink, modifier = Modifier.size(16.dp))
+            Text(
+                text = stringResource(R.string.call_captions_journal),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = ink,
+                maxLines = 1,
             )
         }
     }

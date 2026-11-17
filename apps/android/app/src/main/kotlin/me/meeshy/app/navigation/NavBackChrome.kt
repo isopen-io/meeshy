@@ -183,6 +183,16 @@ internal object NavBackChrome {
 
     fun of(route: String?): BackChrome? = route?.let(byRoute::get)
 
+    private val iosByRoute: Map<String, IosPresentation> = entries.associate { it.route to it.ios }
+
+    /**
+     * L'écran est-il POUSSÉ, comme sur iOS ? Vrai pour un écran fléché et pour un écran poussé derrière une croix
+     * ([IosPresentation.PUSH_CLOSE], `MoodSpotlightView`) : tous deux prennent la poussée de la pile, alors que le
+     * glissé du bord ([edgeSwipeBackEnabled]) reste réservé à la flèche.
+     */
+    fun isPushed(route: String?): Boolean =
+        of(route) == BackChrome.ARROW || route?.let(iosByRoute::get) == IosPresentation.PUSH_CLOSE
+
     /** Le glissé depuis le bord n'est armé que sur un écran empilé qui porte la flèche — jamais sur une racine ni une feuille. */
     fun edgeSwipeBackEnabled(route: String?): Boolean = of(route) == BackChrome.ARROW
 }

@@ -18,7 +18,7 @@ fun FeedUiState.body(hasPending: Boolean): FeedBody = when {
     else -> FeedBody.EMPTY
 }
 
-/** Le bandeau « Hors ligne — les publications déjà vues restent affichées » ne se pose que sur des publications lisibles. */
+/** Le bandeau « Hors ligne » ne se pose que sur des publications lisibles : sans elles, l'état vide hors ligne parle seul. */
 val FeedUiState.showsOfflineBand: Boolean get() = showsOfflineBand(hasPending = false)
 
 fun FeedUiState.showsOfflineBand(hasPending: Boolean): Boolean = isOffline && body(hasPending) == FeedBody.POSTS

@@ -173,18 +173,9 @@ extension FeedPostCard {
     }
 
     func imageMediaView(_ media: FeedMedia) -> some View {
-        ProgressiveCachedImage(
-            thumbHash: media.thumbHash,
-            thumbnailUrl: media.thumbnailUrl,
-            fullUrl: media.url,
-            autoLoad: true
-        ) {
-            Color(hex: media.thumbnailColor)
-                .shimmer()
-        }
         // Pas de ratio explicite : l'image remplit le cadre que
         // `fittedMediaHeight` lui donne, et le débord est rogné.
-        .aspectRatio(contentMode: .fill)
+        FeedMediaImage(media: media)
         .fittedMediaHeight(mediaWidth: media.width, mediaHeight: media.height)
         .clipped()
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))

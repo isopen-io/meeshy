@@ -1,15 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
+import { cornerAfterArrow, isTileDrag, scaleAfterPinch, scaleAfterWheel } from './call-self-tile-gestures';
 import {
-  cornerAfterArrow,
   defaultSelfCorner,
   DEFAULT_SELF_CORNER,
   DEFAULT_SELF_TILE,
   isLandscapeWindow,
-  isTileDrag,
   nearestSelfCorner,
-  scaleAfterPinch,
-  scaleAfterWheel,
   selfTileBox,
   selfTileCornerInsets,
   selfTileCornerFor,

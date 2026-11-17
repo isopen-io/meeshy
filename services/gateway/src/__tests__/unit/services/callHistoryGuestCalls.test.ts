@@ -14,7 +14,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 
 jest.mock('../../../services/PresenceVisibilityService', () => ({
-  getPresenceVisibilityService: () => ({ resolveForTargets: jest.fn<any>().mockResolvedValue(new Map()) }),
+  getPresenceVisibilityService: () => ({ resolveForTargets: async () => new Map() }),
 }));
 
 import { clearCallHistory, hideCallFromHistory, listCallHistory } from '../../../services/calls/callHistoryList';
@@ -38,6 +38,18 @@ type Call = {
   hiddenForUserIds?: string[];
 };
 type Where = Record<string, unknown>;
+/** Les seules formes de condition que ce faux évalue — toute autre clé jette. */
+type Condition = {
+  readonly in?: readonly string[];
+  readonly notIn?: readonly string[];
+  readonly gte?: Date;
+  readonly not?: string;
+  readonly has?: string;
+  readonly participants?: { readonly some: { readonly isActive?: boolean; readonly userId?: string } };
+  readonly some?: { readonly participant: { readonly userId: string } };
+  readonly none?: { readonly participant: { readonly userId: string } };
+};
+type SessionSelect = { readonly conversation?: { readonly select?: { readonly participants?: { readonly where?: { readonly userId: string } } } } };
 
 const SECRET_GROUP: Conversation = {
   id: 'conv-group',
@@ -52,7 +64,7 @@ const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000);
 
 const evaluate = (call: Call, where: Where, conversations: readonly Conversation[]): boolean =>
   Object.entries(where).every(([key, cond]) => {
-    const c = cond as Record<string, any>;
+    const c = cond as Condition;
     const conversation = conversations.find((conv) => conv.id === call.conversationId)!;
     switch (key) {
       case 'AND':
@@ -96,13 +108,13 @@ const prismaOver = (calls: Call[], conversations: readonly Conversation[] = [SEC
   const participantId = (userId: string) => `p-${userId}`;
   const prisma = {
     callSession: {
-      findMany: jest.fn(async (args: { where: Where; select: Record<string, any> }) =>
+      findMany: jest.fn(async (args: { where: Where; select: SessionSelect }) =>
         calls
           .filter((call) => evaluate(call, args.where, conversations))
           .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())
           .map((call) => {
             const conversation = conversations.find((conv) => conv.id === call.conversationId)!;
-            const membership = args.select.conversation?.select?.participants?.where as { userId: string } | undefined;
+            const membership = args.select.conversation?.select?.participants?.where;
             return {
               ...call,
               mode: 'sfu',
@@ -154,9 +166,11 @@ const prismaOver = (calls: Call[], conversations: readonly Conversation[] = [SEC
       ),
     },
     callParticipant: {
-      findMany: jest.fn(async (args: { where: { callSessionId: { in: string[] }; participant?: { userId: string } } }) =>
+      // Les lignes de ce faux ne portent pas la clé `answeredAt` (appel non suivi, #18242 B-1) :
+      // la lecture `answeredAt: { isSet: true }` n'en trouve aucune.
+      findMany: jest.fn(async (args: { where: { callSessionId: { in: string[] }; participant?: { userId: string }; answeredAt?: { isSet: boolean } } }) =>
         calls
-          .filter((call) => args.where.callSessionId.in.includes(call.id))
+          .filter((call) => args.where.callSessionId.in.includes(call.id) && args.where.answeredAt?.isSet !== true)
           .flatMap((call) =>
             call.joined
               .filter((userId) => !args.where.participant || args.where.participant.userId === userId)

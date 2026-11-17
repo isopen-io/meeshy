@@ -94,6 +94,10 @@ struct HeaderPeerListening: ViewModifier {
                     AvatarListeningLive(userId: userId, avatarSize: avatarSize, source: ListeningCenter.shared.source)
                 }
             }
+            // La batterie du pair (#14147), dans l'en-tête comme sur la ligne de liste.
+            .modifier(AvatarBatteryOverlay(userId: userId, avatarSize: avatarSize))
+            // Le téléphone injoignable du pair (#18737), dans l'en-tête comme sur la ligne de liste.
+            .modifier(AvatarPhoneReachabilityOverlay(userId: userId, avatarSize: avatarSize))
     }
 }
 

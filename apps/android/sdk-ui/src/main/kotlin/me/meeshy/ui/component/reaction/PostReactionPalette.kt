@@ -1,16 +1,16 @@
 package me.meeshy.ui.component.reaction
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -23,8 +23,9 @@ import androidx.compose.ui.window.PopupProperties
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.EmojiQuickStrip
-
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.motion.meeshyEnter
+import me.meeshy.ui.motion.meeshyExit
 import me.meeshy.ui.theme.MeeshyMotion
 
 /** Du côté de la cible où la palette s'aligne. */
@@ -38,8 +39,9 @@ public enum class PostReactionPaletteAnchor { Start, End }
  * Ce composant porte l'état et le geste, ni la mise en page ni l'envoi : l'hôte le pose DANS le
  * conteneur de sa cible (l'ancrage suit ses bornes), décide [isOpen] et exécute [onPick] — chaque
  * surface garde son envoi optimiste. Choisir un émoji ou toucher à l'extérieur ferme ; le choix
- * s'accompagne d'un haptique léger. Entrée en ressort (réponse 0,3 / amortissement 0,7), en fondu
- * quand « Réduire les animations » est actif.
+ * s'accompagne d'un haptique léger. Entrée et sortie en ressort (réponse 0,3 / amortissement 0,7) : échelle 0,85
+ * ancrée côté [anchor] et fondu ; la fenêtre reste ouverte le temps de la sortie, sans rejouer un choix. Fondu court
+ * seul quand « Réduire les animations » est actif.
  */
 @Composable
 public fun PostReactionPalette(
@@ -50,46 +52,41 @@ public fun PostReactionPalette(
     emojis: List<String> = EmojiCatalog.defaultQuickReactions,
     anchor: PostReactionPaletteAnchor = PostReactionPaletteAnchor.End,
 ) {
-    if (!isOpen) return
+    val visibility = remember { MutableTransitionState(false) }
+    visibility.targetState = isOpen
+    if (!isOpen && visibility.isIdle && !visibility.currentState) return
     val haptics = rememberMeeshyHaptics()
     val reduceMotion = LocalReduceMotion.current
     val gapPx = with(LocalDensity.current) { 8.dp.roundToPx() }
     val positioner = remember(anchor, gapPx) { AnchoredAbovePositioner(anchor, gapPx) }
-    var entered by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { entered = true }
-    val scale by animateFloatAsState(
-        targetValue = if (entered || reduceMotion) 1f else ENTER_SCALE,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = MeeshyMotion.stiffnessForResponse(0.3f)),
-        label = "post-reaction-palette-scale",
-    )
-    val alpha by animateFloatAsState(
-        targetValue = if (entered) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = MeeshyMotion.stiffnessForResponse(0.3f)),
-        label = "post-reaction-palette-alpha",
-    )
+    val origin = TransformOrigin(pivotFractionX = if (anchor == PostReactionPaletteAnchor.End) 1f else 0f, pivotFractionY = 1f)
     Popup(
         popupPositionProvider = positioner,
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (isOpen) onDismiss() },
         properties = PopupProperties(focusable = true),
     ) {
-        EmojiQuickStrip(
-            emojis = emojis,
-            onReact = { emoji ->
-                haptics.light()
-                onPick(emoji)
-            },
-            modifier = modifier.graphicsLayer {
-                transformOrigin = TransformOrigin(
-                    pivotFractionX = if (anchor == PostReactionPaletteAnchor.End) 1f else 0f,
-                    pivotFractionY = 1f,
-                )
-                scaleX = scale
-                scaleY = scale
-                this.alpha = alpha
-            },
-        )
+        AnimatedVisibility(
+            visibleState = visibility,
+            enter = meeshyEnter(reduceMotion, scaleIn(paletteSpring(), ENTER_SCALE, origin) + fadeIn(paletteSpring())),
+            exit = meeshyExit(reduceMotion, scaleOut(paletteSpring(), ENTER_SCALE, origin) + fadeOut(paletteSpring())),
+            label = "post-reaction-palette",
+        ) {
+            EmojiQuickStrip(
+                emojis = emojis,
+                onReact = { emoji ->
+                    if (isOpen) {
+                        haptics.light()
+                        onPick(emoji)
+                    }
+                },
+                modifier = modifier,
+            )
+        }
     }
 }
+
+/** Le ressort d'iOS `PostReactionPalette` : réponse 0,3 s, amortissement 0,7, à l'entrée comme à la sortie. */
+private fun <T> paletteSpring() = spring<T>(dampingRatio = 0.7f, stiffness = MeeshyMotion.stiffnessForResponse(0.3f))
 
 private const val ENTER_SCALE: Float = 0.85f
 

@@ -8,6 +8,11 @@ struct SecurityEmailSection: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var authManager: AuthManager
     private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     @State private var isEditingEmail = false
     @State private var newEmail = ""
@@ -21,7 +26,9 @@ struct SecurityEmailSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            SecuritySectionHeader(title: String(localized: "settings.security.email", defaultValue: "Email", bundle: .main), icon: "envelope.fill", color: accentColor)
+            SecuritySectionHeader(title: String(localized: "settings.security.email", defaultValue: "E-mail", bundle: .main), icon: "envelope.fill", color: accentColor)
+
+            SettingsSentence(text: String(localized: "settings.security.email.summary", defaultValue: "Vérifié, il sert à récupérer votre compte et à publier.", bundle: .main))
 
             VStack(spacing: 0) {
                 currentEmailRow
@@ -40,8 +47,10 @@ struct SecurityEmailSection: View {
                         .foregroundStyle(MeeshyColors.error)
                         .padding(.horizontal, MeeshySpacing.mdPlus)
                         .padding(.bottom, MeeshySpacing.smPlus)
+                        .transition(.opacity)
                 }
             }
+            .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: emailError)
             .background(SettingsSectionBackground(tint: accentColor))
         }
         .onDisappear {
@@ -60,7 +69,7 @@ struct SecurityEmailSection: View {
             SecurityFieldIcon("envelope.fill", color: accentColor)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(String(localized: "settings.security.email.current", defaultValue: "Email actuel", bundle: .main))
+                Text(String(localized: "settings.security.email.current", defaultValue: "E-mail actuel", bundle: .main))
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(theme.textMuted)
 
@@ -83,7 +92,7 @@ struct SecurityEmailSection: View {
         HStack(spacing: 0) {
             Button {
                 HapticFeedback.light()
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                animate {
                     isEditingEmail = true
                 }
             } label: {
@@ -105,8 +114,7 @@ struct SecurityEmailSection: View {
                     submitEmailChange()
                 } label: {
                     HStack(spacing: MeeshySpacing.sm) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.caption.weight(.semibold))
+                        SecurityVerifyGlyph(isSending: emailLoading)
                         Text(String(localized: "common.verify", defaultValue: "Vérifier", bundle: .main))
                             .font(.footnote.weight(.semibold))
                     }
@@ -114,6 +122,7 @@ struct SecurityEmailSection: View {
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.vertical, MeeshySpacing.sm)
                 }
+                .disabled(emailLoading)
             }
 
             Spacer()
@@ -127,7 +136,7 @@ struct SecurityEmailSection: View {
             HStack(spacing: MeeshySpacing.md) {
                 SecurityFieldIcon("at", color: accentColor)
 
-                TextField(String(localized: "settings.security.email.new", defaultValue: "Nouvel email", bundle: .main), text: $newEmail)
+                TextField(String(localized: "settings.security.email.new", defaultValue: "Nouvel e-mail", bundle: .main), text: $newEmail)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(theme.textPrimary)
                     .textContentType(.emailAddress)
@@ -141,7 +150,7 @@ struct SecurityEmailSection: View {
             HStack(spacing: MeeshySpacing.smPlus) {
                 Button {
                     HapticFeedback.light()
-                    withAnimation { isEditingEmail = false; newEmail = ""; emailError = nil }
+                    animate { isEditingEmail = false; newEmail = ""; emailError = nil }
                 } label: {
                     Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                         .font(.footnote.weight(.semibold))
@@ -186,7 +195,7 @@ struct SecurityEmailSection: View {
                 Image(systemName: "envelope.badge.fill")
                     .font(.subheadline)
                     .foregroundStyle(MeeshyColors.success)
-                Text(String(localized: "settings.security.email.verification_sent", defaultValue: "Email de vérification envoyé", bundle: .main))
+                Text(String(localized: "settings.security.email.verification_sent", defaultValue: "E-mail de vérification envoyé", bundle: .main))
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(MeeshyColors.success)
             }
@@ -201,7 +210,7 @@ struct SecurityEmailSection: View {
             } label: {
                 Text(resendCooldown > 0
                      ? "\(String(localized: "settings.security.email.resend", defaultValue: "Renvoyer", bundle: .main)) (\(resendCooldown)s)"
-                     : String(localized: "settings.security.email.resend_email", defaultValue: "Renvoyer l'email", bundle: .main))
+                     : String(localized: "settings.security.email.resend_email", defaultValue: "Renvoyer l'e-mail", bundle: .main))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(resendCooldown > 0 ? theme.textMuted : MeeshyColors.indigo500)
             }
@@ -212,7 +221,15 @@ struct SecurityEmailSection: View {
 
     // MARK: - Actions
 
+    /// Un changement d'étape se fond ; sous « Réduire les animations », un
+    /// fondu court remplace le ressort.
+    private func animate(_ change: () -> Void) {
+        meeshyWithAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion, change)
+    }
+
+    /// Un second toucher pendant l'envoi n'envoie pas un second e-mail.
     private func submitEmailChange() {
+        guard !emailLoading else { return }
         emailLoading = true
         emailError = nil
 
@@ -220,7 +237,7 @@ struct SecurityEmailSection: View {
             do {
                 _ = try await UserService.shared.changeEmail(ChangeEmailRequest(newEmail: newEmail))
                 HapticFeedback.success()
-                withAnimation {
+                animate {
                     emailSent = true
                     isEditingEmail = false
                 }
@@ -246,7 +263,7 @@ struct SecurityEmailSection: View {
                 startResendCooldown()
             } catch {
                 HapticFeedback.error()
-                emailError = String(localized: "settings.security.email.resend_failed", defaultValue: "Impossible de renvoyer l'email", bundle: .main)
+                emailError = String(localized: "settings.security.email.resend_failed", defaultValue: "Impossible de renvoyer l'e-mail", bundle: .main)
             }
         }
     }

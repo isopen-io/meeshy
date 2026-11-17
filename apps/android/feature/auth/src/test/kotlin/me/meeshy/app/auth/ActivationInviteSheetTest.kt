@@ -79,8 +79,8 @@ class ActivationInviteSheetTest {
         val events = mutableListOf<ActivationInviteEvent>()
         show(state(missing = emptyList(), proven = listOf(Channel.EMAIL, Channel.PHONE)), events)
         compose.onNodeWithText("Your account is verified. Thank you!").assertIsDisplayed()
-        compose.onNodeWithText("Email verified ✓").assertIsDisplayed()
-        compose.onNodeWithText("Number verified ✓").assertIsDisplayed()
+        compose.onNodeWithText("Email confirmed ✓").assertIsDisplayed()
+        compose.onNodeWithText("Number confirmed ✓").assertIsDisplayed()
         compose.onNodeWithText("Close").tap()
         assertEquals(listOf<ActivationInviteEvent>(ActivationInviteEvent.Dismiss), events)
     }

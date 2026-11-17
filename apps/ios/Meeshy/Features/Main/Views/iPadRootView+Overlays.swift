@@ -22,7 +22,8 @@ extension iPadRootView {
                 notificationManager: notifications.manager,
                 suppressToastTap: suppressToastTap,
                 onTap: handleSocketNotificationTap,
-                onPreview: openNotificationPreview(for:)
+                onPreview: openNotificationPreview(for:),
+                onPulledOpen: openNotificationPreview(for:)
             )
         }
     }

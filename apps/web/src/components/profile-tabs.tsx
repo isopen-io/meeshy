@@ -1,7 +1,5 @@
 import { useCallback, useId, useState, type KeyboardEvent, type ReactNode } from 'react';
 
-import { GlyphSvg } from '@/components/glyph';
-import { PROFILE_GLYPHS } from '@/components/glyphs-profile';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { PROFILE_TAB_PARAM, resolveProfileTab, steppedTab, type ProfileTabId } from '@/lib/profile/tabs';
@@ -26,11 +24,11 @@ import { navigate, useOptionalRoute } from '@/lib/router';
  */
 
 const TAB_COPY = {
-  posts: { label: 'userProfile.tab.posts', glyph: PROFILE_GLYPHS.quotes },
-  conversations: { label: 'userProfile.tab.conversations', glyph: PROFILE_GLYPHS.chatCircle },
-  details: { label: 'userProfile.tab.details', glyph: PROFILE_GLYPHS.identificationCard },
-  activity: { label: 'userProfile.tab.activity', glyph: PROFILE_GLYPHS.chartBar },
-} as const satisfies Readonly<Record<ProfileTabId, { readonly label: InterfaceCatalogKey; readonly glyph: (typeof PROFILE_GLYPHS)[keyof typeof PROFILE_GLYPHS] }>>;
+  posts: { label: 'userProfile.tab.posts' },
+  conversations: { label: 'userProfile.tab.conversations' },
+  details: { label: 'userProfile.tab.details' },
+  activity: { label: 'userProfile.tab.activity' },
+} as const satisfies Readonly<Record<ProfileTabId, { readonly label: InterfaceCatalogKey }>>;
 
 export const profileTabId = (base: string, tab: ProfileTabId): string => `${base}-tab-${tab}`;
 export const profileTabPanelId = (base: string, tab: ProfileTabId): string => `${base}-panel-${tab}`;
@@ -99,8 +97,7 @@ export function ProfileTabs<T extends ProfileTabId>({
               outlineColor: accent,
             }}
           >
-            <GlyphSvg glyph={copy.glyph} size={14} className="shrink-0 max-[359px]:hidden" {...(selected ? { style: { color: accent } } : {})} />
-            <span className="truncate">{label}</span>
+            <span className="whitespace-nowrap">{label}</span>
             {badge === undefined ? null : (
               <span
                 aria-hidden="true"

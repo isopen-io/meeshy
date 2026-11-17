@@ -60,7 +60,7 @@ struct EmailCodeEntry: View {
                     .font(.title3)
                     .foregroundStyle(MeeshyColors.success)
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                    Text(String(localized: "emailVerification.provenElsewhere.title", defaultValue: "Adresse confirmée ✓"))
+                    Text(String(localized: "emailVerification.success", defaultValue: "Adresse confirmée ✓"))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(theme.textPrimary)
                     Text(String(localized: "emailVerification.provenElsewhere.body", defaultValue: "Saisissez le code reçu pour vous connecter sur ce téléphone."))

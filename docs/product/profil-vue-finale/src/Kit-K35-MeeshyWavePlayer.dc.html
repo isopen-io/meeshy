@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K35 MeeshyWavePlayer</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+@property --amp{syntax:"<number>";inherits:true;initial-value:0}
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:820px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:20px;background:var(--ground)}
+.stage{flex:1;display:flex;flex-direction:column;align-items:stretch;justify-content:center;min-height:120px}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.leo{--accent:#4ECDC4;--accent-ink:#7FE3DC}
+.mx[data-theme=light].leo{--accent:#0F9A91;--accent-ink:#0F766E}
+.wp{display:flex;align-items:center;gap:14px;width:100%;min-width:0}
+.wp.cmp{gap:10px}
+.mx .wp .pb{position:relative;background:var(--accent);color:#0B0B12;box-shadow:0 8px 22px color-mix(in oklab,var(--accent) 34%,transparent),inset 0 1.5px 0 rgba(255,255,255,.4)}
+.wp .pb>.ic.s{width:18px;height:18px}
+.wp .wv{position:relative;flex:1;min-width:0;height:40px;justify-content:space-between}
+.wp.cmp .wv{height:28px}
+.wp .wv>i{animation:none;background:color-mix(in oklab,var(--accent) 30%,transparent)}
+.wp .wv>i.p{background:var(--accent)}
+.wp .tm{flex:none;min-width:34px;text-align:end;color:var(--ink2);font-variant-numeric:tabular-nums}
+.wp.play .wv>i{animation:wpLive 1.1s ease-in-out infinite}
+.mx .wp.pr .pb{transform:scale(.94);filter:brightness(1.15)}
+.mx .wp.fc .pb{outline:2px solid var(--ink);outline-offset:3px}
+.wp.buf .pb>.ic{opacity:.4}
+.wp.buf .pb::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2.5px solid color-mix(in oklab,var(--accent) 22%,transparent);border-top-color:var(--accent);animation:mxSpin 1s linear infinite}
+.wp.buf .wv>i{animation:wpBuf 1.4s ease-in-out infinite}
+.mx .wp.off .pb{background:var(--field);color:var(--ink3);box-shadow:none;border:1px solid var(--line)}
+.wp.off .wv>i{background:var(--line)}
+.wp.off .tm{color:var(--ink3)}
+.wp .th{position:absolute;top:-6px;bottom:-6px;width:3px;margin-left:-1.5px;border-radius:2px;background:var(--ink);box-shadow:0 0 0 3px color-mix(in oklab,var(--ground) 70%,transparent)}
+.wp .th>em{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);padding:3px 8px;border-radius:8px;background:var(--ink);color:var(--ground);font-style:normal;font-weight:700;font-size:12px;white-space:nowrap}
+.wp.x2{gap:28px}
+.wp.x2 .pb{width:120px;height:120px}
+.wp.x2 .pb>.ic{width:44px;height:44px}
+.wp.x2 .wv{height:80px}
+.wp.x2 .wv>i{width:6px;border-radius:4px}
+.wp.x2 .tm{font-size:25px;min-width:68px}
+.wp.x2 .th{width:6px;margin-left:-3px;top:-12px;bottom:-12px;border-radius:4px}
+.wp.x2 .th>em{font-size:22px;padding:6px 14px;border-radius:14px;bottom:calc(100% + 12px)}
+.zone{position:absolute;border:1.5px dashed color-mix(in oklab,var(--warn) 60%,transparent);border-radius:14px;pointer-events:none}
+.leg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px 28px;align-items:start}
+.leg>div{display:grid;grid-template-columns:22px minmax(0,1fr);gap:3px 12px;align-items:start}
+.leg .kan{position:static;margin-top:1px;grid-row:span 2}
+.leg b{font-size:14.5px;font-weight:700}
+.leg p{grid-column:2;font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line);margin-top:auto}
+.twin{display:grid;grid-template-columns:110px minmax(0,1.05fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;vertical-align:1px;margin-inline-end:4px}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.bub{border-radius:22px 22px 22px 8px;background:var(--field);border:1px solid var(--line);padding:12px 14px 10px 12px;display:flex;flex-direction:column;gap:8px}
+.bub.me{border-radius:22px 22px 8px 22px;background:color-mix(in oklab,var(--accent) 22%,var(--field))}
+.rule{display:flex;align-items:flex-start;gap:16px;padding:22px 26px;border-radius:26px;background:linear-gradient(120deg,color-mix(in oklab,var(--ok) 14%,var(--raised)),var(--raised) 60%);border:1px solid color-mix(in oklab,var(--ok) 35%,var(--line))}
+.todo{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;border-radius:16px;border:1.5px dashed var(--line);font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.todo>.ic{color:var(--warn);margin-top:1px}
+
+.dm{animation:wpAmp 6s linear infinite}
+.dm .wv>i{animation:wpLiveA 1.1s ease-in-out infinite}
+.dm .ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;gap:3px;clip-path:inset(-10px 100% -10px 0);animation:wpFill 6s linear infinite}
+.dm .ov>i{display:block;width:3px;border-radius:2px;background:var(--accent);animation:wpLiveA 1.1s ease-in-out infinite}
+.dm .ov>i:nth-child(3n){animation-delay:-.4s}.dm .ov>i:nth-child(3n+1){animation-delay:-.8s}.dm .ov>i:nth-child(4n){animation-delay:-.2s}
+.dm .pb{animation:wpPress 6s infinite}
+.dm .pb>.ic{position:absolute;opacity:0}
+.dm .pb>.ic:nth-child(1){animation:wpIcA 6s steps(1) infinite}
+.dm .pb>.ic:nth-child(2){animation:wpIcB 6s steps(1) infinite}
+.dm .pb>.ic:nth-child(3){animation:wpIcC 6s steps(1) infinite}
+.dm .tap{position:absolute;inset:8px;border-radius:50%;background:rgba(255,255,255,.35);border:2px solid rgba(255,255,255,.8);opacity:0;animation:wpTap 6s infinite}
+.tk{display:block;height:18px;overflow:hidden;line-height:18px}
+.tk>span{display:flex;flex-direction:column;animation:wpTick 6s infinite}
+.hap{width:12px;height:12px;border-radius:50%;background:var(--warn);opacity:.22;animation:wpHap 6s infinite}
+.ds .th{animation:wpThumb 5s cubic-bezier(.4,0,.2,1) infinite}
+.ds .ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;gap:3px;animation:wpClip 5s cubic-bezier(.4,0,.2,1) infinite}
+.ds .ov>i{display:block;width:3px;border-radius:2px;background:var(--accent)}
+.ds .wv{animation:wpGrow 5s infinite}
+.ds .th>em{padding:3px 8px}
+.ds .tk>span{animation:wpTick2 5s infinite}
+.ds .fg{position:absolute;top:50%;width:40px;height:40px;margin:2px 0 0 -20px;border-radius:50%;background:rgba(255,255,255,.16);border:2px solid rgba(255,255,255,.55);animation:wpThumb 5s cubic-bezier(.4,0,.2,1) infinite}
+@keyframes wpLive{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.62)}}
+@keyframes wpLiveA{0%,100%{transform:scaleY(1)}50%{transform:scaleY(calc(1 - var(--amp) * .4))}}
+@keyframes wpBuf{0%,100%{opacity:.35}50%{opacity:1}}
+@keyframes wpAmp{0%,10%{--amp:0}14%,70%{--amp:1}74%,100%{--amp:0}}
+@keyframes wpFill{0%,12%{clip-path:inset(-10px 100% -10px 0);opacity:1}72%,92%{clip-path:inset(-10px 0 -10px 0);opacity:1}97%,100%{clip-path:inset(-10px 0 -10px 0);opacity:0}}
+@keyframes wpPress{0%,8%{transform:scale(1)}11%{transform:scale(.92);animation-timing-function:cubic-bezier(.3,1.6,.5,1)}17%,100%{transform:scale(1)}}
+@keyframes wpIcA{0%{opacity:1}12%{opacity:0}97%,100%{opacity:1}}
+@keyframes wpIcB{0%{opacity:0}12%{opacity:1}72%,100%{opacity:0}}
+@keyframes wpIcC{0%{opacity:0}72%{opacity:1}97%,100%{opacity:0}}
+@keyframes wpTap{0%,5%{opacity:0;transform:scale(1.5)}9%{opacity:1;transform:scale(1)}12%{opacity:1;transform:scale(.8)}17%,100%{opacity:0;transform:scale(.8)}}
+@keyframes wpTick{0%,12%{transform:translateY(0);animation-timing-function:steps(9,end)}72%,96%{transform:translateY(-162px);animation-timing-function:steps(1,end)}100%{transform:translateY(0)}}
+@keyframes wpHap{0%,10%{opacity:.22;transform:scale(1)}12%{opacity:1;transform:scale(1.9)}20%,70%{opacity:.22;transform:scale(1)}72%{opacity:1;transform:scale(1.9)}80%,100%{opacity:.22;transform:scale(1)}}
+@keyframes wpThumb{0%,12%{left:33%;opacity:0}18%,22%{left:33%;opacity:1}50%,56%{left:78%;opacity:1}76%,84%{left:56%;opacity:1}90%,100%{left:56%;opacity:0}}
+@keyframes wpClip{0%,22%{clip-path:inset(-10px 67% -10px 0)}50%,56%{clip-path:inset(-10px 22% -10px 0)}76%,100%{clip-path:inset(-10px 44% -10px 0)}}
+@keyframes wpGrow{0%,14%{transform:scaleY(1)}18%,84%{transform:scaleY(1.12)}90%,100%{transform:scaleY(1)}}
+@keyframes wpTick2{0%,22%{transform:translateY(-54px);animation-timing-function:steps(4,end)}50%,56%{transform:translateY(-126px);animation-timing-function:steps(2,end)}76%,100%{transform:translateY(-90px)}}
+</style>
+</helmet>
+<div class="mx leo" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 32px">
+<div class="orb" style="width: 300px; height: 300px; right: 120px; top: -60px; background: var(--accent); opacity: .16"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #6366F1; opacity: .22; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 960px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K35 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyWavePlayer</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Un son court se joue sur une seule forme d'onde vivante</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 800px">Un disque pour lire, une onde qui se remplit et respire, une durée qui ne bouge pas de place. Le même lecteur pour une voix, un vocal, le son d'une story.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il montre un son et le laisse parcourir, il ne le joue pas</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dessine <b>un disque, une onde, une durée</b> à partir de valeurs : <code>samples</code>, <code>progress</code>, <code>isPlaying</code>, <code>duration</code>.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Remplit l'onde jusqu'à <code>progress</code> et la fait <b>respirer</b> tant que <code>isPlaying</code> est vrai.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Rend le geste : toucher le disque appelle <code>onToggle</code>, glisser sur l'onde appelle <code>onScrub</code> avec une fraction de 0 à 1.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dit ses phases sans changer de forme : repos, lecture, pause, tampon, glissement, terminé, indisponible.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Jouer, charger, mettre en cache, extraire les niveaux : <b>l'app</b> et ses services (<code>AudioPlayerManager</code>, <code>WaveformExtractor</code>). Il n'ouvre aucun fichier.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Décider qu'un seul son joue à la fois, enchaîner les non-écoutés, garder la lecture en quittant l'écran : <b>l'hôte</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>La transcription, les langues, la vitesse, le téléchargement : <b>l'hôte</b>, par l'emplacement <code>trailing</code> ou autour du lecteur.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le verre et la carte qui le portent : <b>K01</b> et l'hôte. Le disque : la face de <b>K02</b>, teintée. Les ressorts et les durées : <b>K26</b>. L'anneau de transfert : <b>K09</b>.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Trois parties sur une ligne, et un repère sous le doigt</h2><p>Le lecteur à deux fois sa taille, en plein glissement pour montrer le repère. Le cadre pointillé est la zone de glissement : elle déborde l'onde pour atteindre 44 de haut.</p></header>
+<div class="kcell" style="padding: 96px 110px 72px; background: radial-gradient(60% 90% at 30% 50%, color-mix(in oklab, var(--accent) 12%, var(--raised)), var(--raised))">
+<div style="position: relative; width: 100%">
+<div class="wp x2">
+<button class="ib lg pb" aria-label="Mettre en pause">[[ic:pause-fill]]</button>
+<div class="wave wv"><i class="p" style="height: 95%"></i><i class="p" style="height: 95%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 70%"></i><i class="p" style="height: 95%"></i><i class="p" style="height: 70%"></i><i class="p" style="height: 85%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 50%"></i><i class="p" style="height: 35%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 35%"></i><i class="p" style="height: 50%"></i><i class="p" style="height: 45%"></i><i class="p" style="height: 70%"></i><i class="p" style="height: 45%"></i><i class="p" style="height: 65%"></i><i style="height: 40%"></i><i style="height: 45%"></i><i style="height: 50%"></i><i style="height: 45%"></i><i style="height: 70%"></i><i style="height: 65%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 100%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 55%"></i><i style="height: 65%"></i><i style="height: 35%"></i><i style="height: 40%"></i><i style="height: 35%"></i><b class="th" style="left: 62%"><em class="mono">0:05</em></b></div>
+<span class="mono tm">0:09</span>
+<span aria-hidden="true" style="width: 64px; height: 64px; flex: none; border-radius: 50%; border: 1.5px dashed var(--line)"></span>
+</div>
+<span class="zone" style="left: 138px; right: 196px; top: 10px; bottom: 10px"></span>
+<span class="kan" style="left: -34px; top: 49px">1</span>
+<span class="kan" style="left: 98px; top: -2px">2</span>
+<span class="kan" style="left: 300px; top: -22px">3</span>
+<span class="kan" style="right: 250px; top: -22px">4</span>
+<span class="kan" style="left: calc(148px + (100% - 336px) * .62 + 46px); top: -40px">5</span>
+<span class="kan" style="right: 112px; top: 8px">6</span>
+<span class="kan" style="right: 184px; bottom: -2px">7</span>
+<span class="kan" style="right: 21px; top: -4px">8</span>
+</div>
+</div>
+<div class="card leg" style="padding: 28px">
+<div><span class="kan">1</span><b>Rangée</b><p>Une ligne, alignée au centre. <code>row</code> : écart 14, hauteur 60. <code>compact</code> : écart 10, hauteur 44. Elle prend toute la largeur offerte.</p></div>
+<div><span class="kan">2</span><b>Disque de lecture</b><p>La face de K02, pleine à la teinte <code>tint</code>, glyphe sombre <code>#0B0B12</code>. 60 en <code>row</code> (glyphe 22), 44 en <code>compact</code> (glyphe 18). Lecture, pause ou rejouer.</p></div>
+<div><span class="kan">3</span><b>Barres jouées</b><p>Largeur 3, rayon 2, écart 3 au moins. Pleine teinte. Hauteur de 22 à 100 % de l'onde : 40 en <code>row</code>, 28 en <code>compact</code>.</p></div>
+<div><span class="kan">4</span><b>Barres à venir</b><p>Mêmes barres, teinte à 30 %. Sans <code>samples</code> : barres plates de 3, jamais une onde inventée.</p></div>
+<div><span class="kan">5</span><b>Repère</b><p>Trait de 3 à l'encre <code>--ink</code>, qui dépasse de 6 en haut et en bas, et bulle du temps visé en chasse fixe. Présent seulement doigt posé.</p></div>
+<div><span class="kan">6</span><b>Durée</b><p><code>JetBrains Mono</code> 12,5, chiffres tabulaires, largeur réservée 34, alignée à la fin. Temps restant en lecture, durée totale au repos.</p></div>
+<div><span class="kan">7</span><b>Zone de glissement</b><p>L'onde, étendue à 44 de haut. Un toucher bref y place la lecture ; un glissement la déplace. Absente si <code>onScrub</code> est nul.</p></div>
+<div><span class="kan">8</span><b>Emplacement <code>trailing</code></b><p>Après la durée, ici en pointillé : une puce de vitesse, une langue, un menu. Vide par défaut. Le lecteur ne sait pas ce qu'il contient.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Une forme, sept phases, deux tailles</h2><p>Tout est à taille réelle. La forme ne change jamais : seuls le glyphe du disque, le remplissage et la vie des barres disent où en est le son.</p></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage"><div class="wp ">
+<button class="ib lg pb" aria-label="Lire, 9 secondes">[[ic:play-fill]]</button>
+<div class="wave wv" aria-hidden="true"><i style="height: 95%"></i><i style="height: 90%"></i><i style="height: 65%"></i><i style="height: 75%"></i><i style="height: 55%"></i><i style="height: 85%"></i><i style="height: 80%"></i><i style="height: 80%"></i><i style="height: 60%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 35%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 60%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 45%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 60%"></i><i style="height: 55%"></i><i style="height: 25%"></i></div>
+<span class="mono tm">0:09</span>
+</div></div>
+<div class="cp"><b>Repos</b><span class="kcap"><code>progress 0</code>, <code>isPlaying false</code>. Aucune barre ne bouge. La durée totale est affichée.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="wp play">
+<button class="ib lg pb" aria-label="Mettre en pause">[[ic:pause-fill]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 85%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i style="height: 20%"></i><i style="height: 35%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 60%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 45%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 60%"></i><i style="height: 55%"></i><i style="height: 25%"></i></div>
+<span class="mono tm">0:05</span>
+</div></div>
+<div class="cp"><b>Lecture</b><span class="kcap">Glyphe pause. Les barres respirent, le remplissage avance en continu, la durée décompte le temps restant.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="wp ">
+<button class="ib lg pb" aria-label="Reprendre">[[ic:play-fill]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 85%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i style="height: 20%"></i><i style="height: 35%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 60%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 45%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 60%"></i><i style="height: 55%"></i><i style="height: 25%"></i></div>
+<span class="mono tm">0:05</span>
+</div></div>
+<div class="cp"><b>Pause</b><span class="kcap">Le remplissage reste où il est, les barres se figent en 200 ms. Le glyphe redevient lecture.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="wp buf">
+<button class="ib lg pb" aria-label="Chargement">[[ic:pause-fill]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 85%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i style="height: 20%"></i><i style="height: 35%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 60%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 45%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 60%"></i><i style="height: 55%"></i><i style="height: 25%"></i></div>
+<span class="mono tm">0:05</span>
+</div></div>
+<div class="cp"><b>Tampon</b><span class="kcap"><code>phase: buffering</code>. Anneau autour du disque, barres à venir qui battent. Toucher met en pause, sans attendre.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="wp play">
+<button class="ib lg pb" aria-label="Mettre en pause">[[ic:pause-fill]]</button>
+<div class="wave wv"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 85%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 35%"></i><i class="p" style="height: 40%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 60%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 45%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 60%"></i><i style="height: 55%"></i><i style="height: 25%"></i><b class="th" style="left: 62%"><em class="mono">0:05</em></b></div>
+<span class="mono tm">0:09</span>
+</div></div>
+<div class="cp"><b>Glissement</b><span class="kcap">Doigt posé sur l'onde : repère et temps visé. Le remplissage suit le doigt, le son suit au relâcher.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="wp ">
+<button class="ib lg pb" aria-label="Rejouer">[[ic:arrow-counter-clockwise]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 85%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 35%"></i><i class="p" style="height: 40%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 40%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 45%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 95%"></i><i class="p" style="height: 100%"></i><i class="p" style="height: 95%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 25%"></i></div>
+<span class="mono tm">0:09</span>
+</div></div>
+<div class="cp"><b>Terminé</b><span class="kcap"><code>progress 1</code>, <code>isPlaying false</code>. Tout est plein, le disque propose de rejouer. Retour au repos après 1,2 s si l'hôte remet <code>progress</code> à 0.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="wp off">
+<button class="ib lg pb" aria-label="Son indisponible">[[ic:speaker-slash]]</button>
+<div class="wave wv" aria-hidden="true"><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i></div>
+<span class="mono tm">–:––</span>
+</div></div>
+<div class="cp"><b>Indisponible</b><span class="kcap"><code>phase: unavailable</code>. Disque éteint, barres plates, pas de durée. Ni action ni tic. L'hôte dit pourquoi, à côté.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="wp pr">
+<button class="ib lg pb" aria-label="Lire">[[ic:play-fill]]</button>
+<div class="wave wv" aria-hidden="true"><i style="height: 95%"></i><i style="height: 90%"></i><i style="height: 65%"></i><i style="height: 75%"></i><i style="height: 55%"></i><i style="height: 85%"></i><i style="height: 80%"></i><i style="height: 80%"></i><i style="height: 60%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 35%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 60%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 45%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 60%"></i><i style="height: 55%"></i><i style="height: 25%"></i></div>
+<span class="mono tm">0:09</span>
+</div></div>
+<div class="cp"><b>Pressé</b><span class="kcap">Le disque s'enfonce à 0,94 et s'éclaircit, en moins d'une image. L'onde et la durée ne bougent pas.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="wp fc">
+<button class="ib lg pb" aria-label="Lire">[[ic:play-fill]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 85%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i style="height: 20%"></i><i style="height: 35%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 60%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 45%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 60%"></i><i style="height: 55%"></i><i style="height: 25%"></i></div>
+<span class="mono tm">0:05</span>
+</div></div>
+<div class="cp"><b>Focus clavier</b><span class="kcap">Anneau de 2 décalé de 3 autour du disque. Les flèches déplacent la lecture de 5 %, Espace bascule.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div style="max-width: 250px"><div class="wp cmp">
+<button class="ib pb" aria-label="Lire">[[ic:play-fill s]]</button>
+<div class="wave wv" aria-hidden="true"><i style="height: 95%"></i><i style="height: 90%"></i><i style="height: 60%"></i><i style="height: 75%"></i><i style="height: 55%"></i><i style="height: 90%"></i><i style="height: 80%"></i><i style="height: 65%"></i><i style="height: 40%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 55%"></i><i style="height: 50%"></i><i style="height: 55%"></i><i style="height: 50%"></i><i style="height: 40%"></i><i style="height: 75%"></i><i style="height: 80%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 75%"></i><i style="height: 50%"></i><i style="height: 25%"></i></div>
+<span class="mono tm">0:14</span>
+</div></div></div>
+<div class="cp"><b>Compact, repos</b><span class="kcap"><code>size: compact</code>. Disque 44, onde 28, écart 10. Pour une bulle, une puce, une rangée de liste.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div style="max-width: 250px"><div class="wp cmp play">
+<button class="ib pb" aria-label="Mettre en pause">[[ic:pause-fill s]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 40%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 55%"></i><i style="height: 50%"></i><i style="height: 55%"></i><i style="height: 50%"></i><i style="height: 40%"></i><i style="height: 75%"></i><i style="height: 80%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 75%"></i><i style="height: 50%"></i><i style="height: 25%"></i></div>
+<span class="mono tm">0:06</span>
+</div></div></div>
+<div class="cp"><b>Compact, lecture</b><span class="kcap">Mêmes règles. Le nombre de barres suit la largeur : une barre tous les 6 px, les niveaux sont rééchantillonnés.</span></div>
+</div>
+<div class="kcell kc" style="padding: 0; overflow: hidden; background: #fff"><div class="mx leo" data-theme="light" style="display: flex; flex-direction: column; gap: 20px; padding: 28px; flex: 1; background: #fff"><div class="stage"><div class="wp play">
+<button class="ib lg pb" aria-label="Lire">[[ic:pause-fill]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 85%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i style="height: 20%"></i><i style="height: 35%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 60%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 45%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 60%"></i><i style="height: 55%"></i><i style="height: 25%"></i></div>
+<span class="mono tm">0:05</span>
+</div></div><div class="cp"><b>Thème clair</b><span class="kcap">La teinte fonce pour tenir 3:1 sur blanc. Le glyphe reste sombre tant qu'il garde 4,5:1 sur le disque.</span></div></div></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage"><div class="mx" style="background: none; --accent:#A855F7"><div class="wp play">
+<button class="ib lg pb" aria-label="Lire">[[ic:pause-fill]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 85%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 80%"></i><i style="height: 60%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 35%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 60%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 45%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 60%"></i><i style="height: 55%"></i><i style="height: 25%"></i></div>
+<span class="mono tm">0:11</span>
+</div></div></div>
+<div class="cp"><b>Teinté</b><span class="kcap"><code>tint</code> opaque. Ici l'accent d'Aïssa. Le lecteur ne sait pas d'où vient la couleur.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="wp ">
+<button class="ib lg pb" aria-label="Lire">[[ic:play-fill]]</button>
+<div class="wave wv" aria-hidden="true"><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i><i style="height: 12%"></i></div>
+<span class="mono tm">0:09</span>
+</div></div>
+<div class="cp"><b>Sans niveaux</b><span class="kcap"><code>samples</code> vide : barres plates, lecture possible. Les niveaux arrivent, les barres montent en 300 ms.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div dir="rtl"><div class="wp play">
+<button class="ib lg pb" aria-label="Lire">[[ic:pause-fill]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 85%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i style="height: 20%"></i><i style="height: 35%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 60%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 45%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 60%"></i><i style="height: 55%"></i><i style="height: 25%"></i></div>
+<span class="mono tm">0:05</span>
+</div></div></div>
+<div class="cp"><b>Droite à gauche</b><span class="kcap">L'ordre des parties se reflète, le disque passe à droite. Le temps avance toujours dans le sens de lecture de la langue.</span></div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px"><span class="tag">04 · Évolutions</span><h3 class="d" style="font-size: 24px">Un indicateur sans lecture, une légende, et un transport pour ce qui n'est pas un son</h3></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div class="leo" style="display: flex; align-items: center; gap: 12px"><div class="wave" aria-hidden="true" style="height: 22px; gap: 2.5px"><i style="height: 60%"></i><i style="height: 100%"></i><i style="height: 45%"></i><i style="height: 80%"></i><i style="height: 55%"></i></div><div style="display: flex; flex-direction: column; gap: 1px"><b style="font-size: 13.5px">Écoute en cours</b><span class="kcap">Lisbon Story · Madredeus</span></div></div></div><span class="kcap"><b style="color: var(--ink)"><code>variant: indicator</code></b> L'égaliseur ou la mini-onde, seuls : ni disque, ni durée, ni geste. Il dit « ça joue » ; il se fige quand ça s'arrête.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div class="leo" style="display: flex; flex-direction: column; gap: 8px; width: 100%"><div class="wp cmp"><button class="ib pb" aria-label="Lire la voix de Léo">[[ic:play-fill s]]</button><div class="wave wv" aria-hidden="true"><i style="height: 95%"></i><i style="height: 90%"></i><i style="height: 60%"></i><i style="height: 75%"></i><i style="height: 55%"></i><i style="height: 90%"></i><i style="height: 80%"></i><i style="height: 65%"></i><i style="height: 40%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 55%"></i><i style="height: 50%"></i><i style="height: 55%"></i><i style="height: 40%"></i><i style="height: 75%"></i><i style="height: 80%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 75%"></i><i style="height: 50%"></i><i style="height: 25%"></i></div><span class="mono tm">0:14</span></div><span class="kcap" style="padding-left: 54px">Voix de Léo · italien</span></div></div><span class="kcap"><b style="color: var(--ink)"><code>caption</code></b> Une légende sous l'onde, alignée sur elle. Elle nomme ce qu'on entend ; le <code>label</code> dit reste obligatoire.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div class="glass" style="display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px 10px 10px; border-radius: 24px"><button class="ib" aria-label="Mettre en pause" style="background: var(--ink); color: var(--ground)">[[ic:pause-fill s]]</button><div style="position: relative; flex: 1; height: 28px"><span style="position: absolute; left: 0; right: 0; top: 12px; height: 4px; border-radius: 4px; background: var(--field)"></span><span style="position: absolute; left: 0; width: 58%; top: 12px; height: 4px; border-radius: 4px; background: var(--accent)"></span><span style="position: absolute; left: 22%; top: 8px; width: 2px; height: 12px; border-radius: 2px; background: var(--ink2)"></span><span style="position: absolute; left: 74%; top: 8px; width: 2px; height: 12px; border-radius: 2px; background: var(--ink2)"></span><span style="position: absolute; left: 58%; top: 5px; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%; background: var(--ink); box-shadow: 0 4px 10px rgba(0,0,0,.4)"></span></div><span class="mono" style="color: var(--ink2)">14:32</span></div></div><span class="kcap"><b style="color: var(--ink)"><code>variant: transport</code></b> Pour relire autre chose qu'un son (un trajet, une journée) : lecture ou pause, piste de <b>K05</b> avec repères et pouce, heure courante, conteneur de verre.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">L'onde respire quand ça joue, et seulement quand ça joue</h2><p>Trois mouvements, pas un de plus : le disque répond au doigt, les barres vivent pendant la lecture, le remplissage suit le temps. À l'arrêt, tout est immobile.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px">
+<div class="kcell kc" style="padding: 36px 40px 28px; background: radial-gradient(70% 100% at 20% 40%, color-mix(in oklab, var(--accent) 10%, var(--ground)), var(--ground))">
+<div class="stage" style="min-height: 190px"><div class="wp dm">
+<button class="ib lg pb" aria-label="Lire l'échantillon">[[ic:play-fill]][[ic:pause-fill]][[ic:arrow-counter-clockwise]]<span class="tap" aria-hidden="true"></span></button>
+<div class="wave wv" aria-hidden="true"><i style="height: 95%"></i><i style="height: 95%"></i><i style="height: 75%"></i><i style="height: 90%"></i><i style="height: 55%"></i><i style="height: 75%"></i><i style="height: 55%"></i><i style="height: 65%"></i><i style="height: 80%"></i><i style="height: 70%"></i><i style="height: 95%"></i><i style="height: 70%"></i><i style="height: 85%"></i><i style="height: 60%"></i><i style="height: 50%"></i><i style="height: 35%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 35%"></i><i style="height: 50%"></i><i style="height: 45%"></i><i style="height: 70%"></i><i style="height: 45%"></i><i style="height: 65%"></i><i style="height: 40%"></i><i style="height: 45%"></i><i style="height: 50%"></i><i style="height: 45%"></i><i style="height: 70%"></i><i style="height: 65%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 100%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 55%"></i><i style="height: 65%"></i><i style="height: 35%"></i><i style="height: 40%"></i><i style="height: 35%"></i><span class="ov"><i style="height: 95%"></i><i style="height: 95%"></i><i style="height: 75%"></i><i style="height: 90%"></i><i style="height: 55%"></i><i style="height: 75%"></i><i style="height: 55%"></i><i style="height: 65%"></i><i style="height: 80%"></i><i style="height: 70%"></i><i style="height: 95%"></i><i style="height: 70%"></i><i style="height: 85%"></i><i style="height: 60%"></i><i style="height: 50%"></i><i style="height: 35%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 35%"></i><i style="height: 50%"></i><i style="height: 45%"></i><i style="height: 70%"></i><i style="height: 45%"></i><i style="height: 65%"></i><i style="height: 40%"></i><i style="height: 45%"></i><i style="height: 50%"></i><i style="height: 45%"></i><i style="height: 70%"></i><i style="height: 65%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 100%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 55%"></i><i style="height: 65%"></i><i style="height: 35%"></i><i style="height: 40%"></i><i style="height: 35%"></i></span></div>
+<span class="mono tm"><span class="tk"><span><span>0:00</span><span>0:01</span><span>0:02</span><span>0:03</span><span>0:04</span><span>0:05</span><span>0:06</span><span>0:07</span><span>0:08</span><span>0:09</span></span></span></span>
+</div></div>
+<div style="display: flex; align-items: center; gap: 10px"><span class="hap" aria-hidden="true"></span><span class="kcap">Tic léger au toucher du disque, tic de fin quand le son se termine. Boucle de 6 s.</span></div>
+</div>
+<div class="kcell kc" style="padding: 36px 32px 28px">
+<div class="stage" style="min-height: 190px"><div class="wp ds">
+<button class="ib lg pb" aria-label="Mettre en pause">[[ic:pause-fill]]</button>
+<div class="wave wv"><i style="height: 95%"></i><i style="height: 95%"></i><i style="height: 70%"></i><i style="height: 75%"></i><i style="height: 50%"></i><i style="height: 80%"></i><i style="height: 75%"></i><i style="height: 85%"></i><i style="height: 85%"></i><i style="height: 50%"></i><i style="height: 50%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 30%"></i><i style="height: 50%"></i><i style="height: 50%"></i><i style="height: 70%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 85%"></i><i style="height: 90%"></i><i style="height: 100%"></i><i style="height: 90%"></i><i style="height: 90%"></i><i style="height: 50%"></i><i style="height: 45%"></i><i style="height: 35%"></i><span class="ov" aria-hidden="true"><i style="height: 95%"></i><i style="height: 95%"></i><i style="height: 70%"></i><i style="height: 75%"></i><i style="height: 50%"></i><i style="height: 80%"></i><i style="height: 75%"></i><i style="height: 85%"></i><i style="height: 85%"></i><i style="height: 50%"></i><i style="height: 50%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 30%"></i><i style="height: 50%"></i><i style="height: 50%"></i><i style="height: 70%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 85%"></i><i style="height: 90%"></i><i style="height: 100%"></i><i style="height: 90%"></i><i style="height: 90%"></i><i style="height: 50%"></i><i style="height: 45%"></i><i style="height: 35%"></i></span><b class="th" style="left: 33%"><em class="mono"><span class="tk"><span><span>0:00</span><span>0:01</span><span>0:02</span><span>0:03</span><span>0:04</span><span>0:05</span><span>0:06</span><span>0:07</span><span>0:08</span><span>0:09</span></span></span></em></b><span class="fg" aria-hidden="true"></span></div>
+<span class="mono tm">0:09</span>
+</div></div>
+<span class="kcap">Glissement : l'onde grandit de 12 %, le repère suit le doigt sans retard, le temps visé saute de seconde en seconde. Au relâcher, le repère s'efface en 200 ms.</span>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc"><div style="display: flex; align-items: center; gap: 10px"><span class="step">1</span><b style="font-size: 14.5px">Doigt posé</b></div><div class="stage" style="min-height: 80px"><div class="wp pr">
+<button class="ib lg pb" aria-label="Lire">[[ic:play-fill]]</button>
+<div class="wave wv" aria-hidden="true"><i style="height: 95%"></i><i style="height: 90%"></i><i style="height: 65%"></i><i style="height: 75%"></i><i style="height: 55%"></i><i style="height: 85%"></i><i style="height: 80%"></i><i style="height: 80%"></i><i style="height: 60%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 35%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 60%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 45%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 60%"></i><i style="height: 55%"></i><i style="height: 25%"></i></div>
+<span class="mono tm">0:09</span>
+</div></div><span class="kcap">Le disque s'enfonce à 0,94. Rien d'autre ne bouge : la réponse ne dépend pas du réseau.</span></div>
+<div class="kcell kc"><div style="display: flex; align-items: center; gap: 10px"><span class="step">2</span><b style="font-size: 14.5px">Lecture</b></div><div class="stage" style="min-height: 80px"><div class="wp play">
+<button class="ib lg pb" aria-label="Lire">[[ic:pause-fill]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 85%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 35%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 60%"></i><i style="height: 40%"></i><i style="height: 55%"></i><i style="height: 45%"></i><i style="height: 90%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 60%"></i><i style="height: 55%"></i><i style="height: 25%"></i></div>
+<span class="mono tm">0:04</span>
+</div></div><span class="kcap">Le glyphe se métamorphose en pause. Les barres battent entre 62 et 100 % de leur hauteur, décalées par tiers.</span></div>
+<div class="kcell kc"><div style="display: flex; align-items: center; gap: 10px"><span class="step">3</span><b style="font-size: 14.5px">Terminé</b></div><div class="stage" style="min-height: 80px"><div class="wp ">
+<button class="ib lg pb" aria-label="Lire">[[ic:arrow-counter-clockwise]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 85%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 35%"></i><i class="p" style="height: 40%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 40%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 45%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 95%"></i><i class="p" style="height: 100%"></i><i class="p" style="height: 95%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 25%"></i></div>
+<span class="mono tm">0:09</span>
+</div></div><span class="kcap">Les barres se posent, pleines. Le glyphe devient « rejouer ». Un tic de fin, une fois.</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div class="spec"><b style="color: var(--ink)">motion.morph</b> (disque, glyphe lecture ↔ pause ↔ rejouer) · 260 ms · ressort vif, rebond 1,07 · déclencheur : toucher du disque, changement de <code>isPlaying</code> · haptique : un tic léger au relâcher · mouvement réduit : fondu de 120 ms, sans échelle</div>
+<div class="spec"><b style="color: var(--ink)">motion.pulse</b> (barres vivantes) · 1,1 s en boucle, trois phases décalées de 0,4 s · ease-in-out · déclencheur : <code>isPlaying</code> vrai, arrêt hors écran · haptique : aucune · mouvement réduit : barres fixes, seul le remplissage avance</div>
+<div class="spec"><b style="color: var(--ink)">remplissage</b> (sans jeton : il suit <code>progress</code>) · continu, interpolé entre deux valeurs reçues, jamais d'animation propre · glissement : suit le doigt image par image · fin : tic de fin, puis <b style="color: var(--ink)">motion.rise</b> inversé si l'hôte revient à 0 · mouvement réduit : identique</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Que des valeurs opaques. Aucun message, aucune pièce jointe, aucun profil, aucune URL dans une signature : le lecteur ne sait pas ce qu'il joue.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<div class="h">Élément</div><div class="h">iOS · MeeshyUI/Kit/MeeshyWavePlayer.swift</div><div class="h">Android · me.meeshy.ui.component.kit</div><div class="h">Web · components/kit/meeshy-wave-player.tsx</div>
+<div style="font-weight: 700">Composant</div><div><code>MeeshyWavePlayer(label:samples:progress:isPlaying:duration:onToggle:)</code></div><div><code>MeeshyWavePlayer(label, samples, progress, isPlaying, duration, onToggle, modifier)</code></div><div><code>&lt;MeeshyWavePlayer label samples progress isPlaying duration onToggle /&gt;</code></div>
+<div style="font-weight: 700">Onde seule</div><div><code>MeeshyWaveBars(samples:progress:isLive:tint:)</code></div><div><code>MeeshyWaveBars(samples, progress, isLive, tint)</code></div><div><code>&lt;MeeshyWaveBars samples progress isLive tint /&gt;</code></div>
+<div style="font-weight: 700">Variantes</div><div><code>MeeshyWavePlayerVariant { player, indicator, transport }</code></div><div><code>enum class</code> identique</div><div><code>'player' | 'indicator' | 'transport'</code></div>
+<div style="font-weight: 700">Tailles</div><div><code>MeeshyWavePlayerSize { row, compact }</code></div><div><code>enum class</code> identique</div><div><code>'row' | 'compact'</code></div>
+<div style="font-weight: 700">Phases</div><div><code>MeeshyWavePlayerPhase { ready, buffering, unavailable }</code></div><div><code>enum class</code> identique</div><div><code>'ready' | 'buffering' | 'unavailable'</code></div>
+<div style="font-weight: 700">Durée affichée</div><div><code>MeeshyWavePlayerClock { remaining, elapsed, total }</code></div><div><code>enum class</code> identique</div><div><code>'remaining' | 'elapsed' | 'total'</code></div>
+<div style="font-weight: 700">Emplacement <span style="font-weight: 400; color: var(--ink2)">(slot)</span></div><div><code>@ViewBuilder trailing</code></div><div><code>trailing: @Composable () -> Unit</code></div><div><code>trailing: ComponentChildren</code></div>
+<div style="font-weight: 700">Recette en valeurs</div><div><code>MeeshyWavePlayerRecipe.resolve(size:phase:isPlaying:progress:isScrubbing:tint:isEnabled:)</code></div><div>idem</div><div><code>meeshyWavePlayerRecipe(…)</code> : classes et propriétés <code>--kit-wave-*</code></div>
+<div style="font-weight: 700">Loi des barres</div><div><code>MeeshyWaveBarsLaw.resample(samples:width:)</code></div><div>idem</div><div><code>meeshyWaveBarsLaw.resample(samples, width)</code></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px">
+<div class="par"><code>label: String</code><span>Obligatoire, non vide. Le nom dit par le lecteur d'écran : « Voix de Léo », « Vocal de Mina ».</span></div>
+<div class="par"><code>samples: [Float] = []</code><span>Niveaux de 0 à 1, en nombre quelconque. Vide : barres plates.</span></div>
+<div class="par"><code>progress: Double</code><span>De 0 à 1. La seule source du remplissage.</span></div>
+<div class="par"><code>isPlaying: Bool</code><span>Vrai : glyphe pause, barres vivantes.</span></div>
+<div class="par"><code>duration: Duration</code><span>Durée totale. Nulle ou inconnue : « –:–– ».</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Teinte du disque et des barres. Nul : la teinte de l'hôte.</span></div>
+<div class="par"><code>variant = .player</code><span><code>indicator</code> : l'onde ou l'égaliseur seuls, sans disque ni durée. <code>transport</code> : lecture, piste de <b>K05</b> à repères, heure courante, sur un verre de <b>K01</b>.</span></div>
+<div class="par"><code>caption: String? = nil</code><span>Une ligne sous l'onde : ce qui joue, en mots.</span></div>
+<div class="par"><code>size = .row</code><span>row : 60 / 40. compact : 44 / 28.</span></div>
+<div class="par"><code>phase = .ready</code><span>buffering : anneau. unavailable : éteint, sans action.</span></div>
+<div class="par"><code>clock = .remaining</code><span>Ce que la durée montre en lecture. Au repos, toujours le total.</span></div>
+<div class="par"><code>onToggle: () -> Void</code><span>Toucher du disque. Une fois, au relâcher dans la cible.</span></div>
+<div class="par"><code>onScrub: ((Double) -> Void)? = nil</code><span>Fraction visée, au relâcher. Nul : l'onde ne se touche pas.</span></div>
+<div class="par"><code>onScrubbingChange: ((Bool) -> Void)? = nil</code><span>Doigt posé, doigt levé. Pour que l'hôte suspende sa propre mise à jour.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Même dessin, moteur du système</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<h3 class="d" style="font-size: 20px">iOS · SwiftUI</h3></div>
+<ul>
+<li>Les barres sont un seul <code>Canvas</code> : une passe de dessin, pas une vue par barre.</li>
+<li>La vie des barres vient d'un <code>TimelineView(.animation)</code> mis en pause quand <code>isPlaying</code> est faux ou que la scène n'est plus active.</li>
+<li>Glyphe : <code>contentTransition(.symbolEffect(.replace))</code>. Tics : <code>sensoryFeedback</code>.</li>
+<li>Glissement : <code>DragGesture(minimumDistance: 0)</code> sur la zone de 44, et <code>accessibilityAdjustableAction</code> pour VoiceOver.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 : fondu du glyphe au lieu de l'effet de symbole, tics par <code>HapticFeedback.light()</code>. Mode économie d'énergie : barres fixes, seul le remplissage avance.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<h3 class="d" style="font-size: 20px">Android · Compose</h3></div>
+<ul>
+<li>Un <code>Canvas</code> ; <code>progress</code> et la phase des barres sont lus en phase de dessin : aucune recomposition par image.</li>
+<li>Vie des barres : <code>rememberInfiniteTransition</code>, coupé hors lecture et sous l'échelle d'animation 0.</li>
+<li>Glissement : <code>pointerInput</code> avec <code>detectHorizontalDragGestures</code> et un toucher bref ; <code>progressBarRangeInfo</code> et <code>setProgress</code> pour TalkBack.</li>
+<li>Tics : <code>HapticFeedback</code> par <code>MeeshyHaptics.light()</code>. Disque : forme ronde, sans <code>Morph</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Pas de verre : le lecteur se pose sur la surface tonale de l'hôte. Cible portée à 48 dp, le disque de 44 déborde de 2.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<h3 class="d" style="font-size: 20px">Web · Preact</h3></div>
+<ul>
+<li>Barres en <code>span</code>, remplissage par une propriété <code>--kit-wave-progress</code> et un <code>clip-path</code> : aucun rendu par image côté script.</li>
+<li>Vie des barres : <code>@keyframes</code> sur <code>transform</code>, mise en pause par <code>animation-play-state</code>.</li>
+<li>L'onde est un <code>role="slider"</code> : flèches, Début, Fin. Le disque est un <code>&lt;button&gt;</code>, <code>:active</code> et <code>:focus-visible</code> en CSS.</li>
+<li>Glissement : <code>pointerdown</code> avec <code>setPointerCapture</code>, <code>touch-action: pan-y</code> pour laisser défiler la page.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>color-mix</code> : barres à venir en opacité 30 %. Pas de tic hors de la coque : <code>impact('light')</code> ne fait rien dans un navigateur.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Les vocaux ont déjà un lecteur : on l'extrait, on n'en écrit pas un autre</h2><p>Relevé dans le dépôt le 16 novembre 2026. Chaque plateforme joue déjà les messages vocaux avec une onde, un remplissage et un glissement. Ce code est le plus complet : il devient K35, et le profil en est le premier client hors conversation.</p></header>
+<div class="rule">
+<span style="color: var(--ok); display: inline-flex; margin-top: 2px">[[ic:arrows-merge l]]</span>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<b class="d" style="font-size: 20px">On extrait avant de créer</b>
+<p style="font-size: 14.5px; line-height: 1.5; color: var(--ink2); max-width: 1040px">Le lot K35 sort la bande d'onde, le disque et les lois pures du lecteur des vocaux, leur retire tout type du domaine, et laisse le reste à sa place : transcription, langues, vitesse, enchaînement, mini-lecteur. Le lot ne rebranche aucun écran ; l'adoption par la bulle, la fiche et les réglages revient aux lots d'intégration, avec captures.</p>
+</div>
+</div>
+<div class="card" style="overflow: hidden">
+<div class="twin"><span class="pf">iOS</span><span class="mono">MeeshyUI/Media/AudioPlayerView.swift</span><p><span class="be">Devient le composant</span> Le lecteur des vocaux (759 lignes). Sa bande d'onde, son remplissage et son glissement deviennent K35. Il garde <code>MeeshyMessageAttachment</code>, la transcription et les langues, et pose K35 à la place de sa bande.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">MeeshyUI/Media/AudioPlayerPlayControl.swift</span><p>Le disque de lecture et son anneau de transfert : il devient le disque de K35 et sa phase <code>buffering</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">MeeshyUI/Media/AudioWaveformStripLayout.swift</span><p>Les mesures de l'onde (bande 46, barres 28, minimum 3, courbe 0,5) : elles entrent dans <code>MeeshyWavePlayerRecipe</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">MeeshyUI/Profile/UserProfileSheet+DetailsTab.swift</span><p>L'échantillon de voix de la fiche : premier client de K35 hors conversation.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">sdk-ui/…/ui/component/audio/AudioPlayerWaveform.kt</span><p><span class="be">Devient le composant</span> L'onde des vocaux : <code>samples</code>, <code>onSeek</code>, <code>onScrubbingChange</code> y sont déjà. Avec <code>AudioPlayerButton.kt</code>, voisin, elle devient K35.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">core/model/…/sdk/model/waveform/AudioScrubLaw.kt</span><p>La loi pure du glissement, avec <code>WaveformBarsLayout.kt</code> et <code>AudioProgressDisplay.kt</code> du même dossier : réemployées telles quelles.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">sdk-ui/…/ui/component/audio/MeeshyVoiceSamplePlayer.kt</span><p>Le lecteur d'échantillon de voix : un disque et une jauge, sans onde. Remplacé par K35 à l'intégration ; sa lecture reste à l'hôte.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">feature/profile/…/app/profile/ProfileVoiceSection.kt</span><p>La section « voix » de la fiche (<code>ProfileVoiceCard</code>) : cliente de K35, elle ne dessine plus rien elle-même.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/attachment-blocks.tsx</span><p><span class="be">Devient le composant</span> Le vocal d'une conversation (<code>VoiceAttachment</code>, fonction privée du fichier) : son onde et son disque deviennent K35.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/lib/view/waveform.ts</span><p>La loi des barres (<code>waveformBarCount</code>, <code>interpolatedLevel</code>, barres de 2,5) : elle devient <code>meeshyWaveBarsLaw</code>.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/quote-media.tsx</span><p><code>QuoteAudioPreview</code>, le vocal cité : jumeau réduit, remplacé par K35 <code>compact</code> sans <code>onScrub</code>.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">échantillon de voix d'un profil</span><p>Aucun jumeau — à créer avec K35 : hors dossier d'administration, <code>apps/web/src</code> ne lit pas encore l'échantillon de voix.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Le même lecteur, quatre autres endroits</h2><p>Aucun de ces écrans n'est un profil. Seuls changent la taille, la teinte et ce qui entoure le lecteur.</p></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage"><div style="display: flex; align-items: flex-end; gap: 8px"><span class="av" style="width: 30px; height: 30px; font-size: 11px; --accent:#FF6B6B">MO</span><div class="bub" style="flex: 1; min-width: 0; --accent:#FF6B6B"><div class="wp cmp play">
+<button class="ib pb" aria-label="Mettre en pause">[[ic:pause-fill s]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 95%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 25%"></i><i class="p" style="height: 20%"></i><i style="height: 20%"></i><i style="height: 55%"></i><i style="height: 45%"></i><i style="height: 60%"></i><i style="height: 40%"></i><i style="height: 60%"></i><i style="height: 95%"></i><i style="height: 100%"></i><i style="height: 100%"></i><i style="height: 45%"></i><i style="height: 45%"></i></div>
+<span class="mono tm">0:08</span>
+</div><span style="font-size: 12px; color: var(--ink2); display: flex; align-items: center; gap: 6px">[[ic:translate s]]<span>Traduit en français</span></span></div></div></div>
+<div class="cp"><b>Conversation</b><span class="kcap">Le message vocal de Mina dans sa bulle : <code>compact</code>, teinte de la conversation. La traduction est à l'hôte.</span></div>
+</div>
+<div class="kcell kc" style="--accent:#A855F7">
+<div class="stage"><div style="display: flex; flex-direction: column; gap: 12px"><div style="display: flex; align-items: center; justify-content: space-between"><b style="font-size: 14px">Ma voix</b><span class="chip" style="min-height: 26px; font-size: 11.5px">[[ic:seal-check s]]<span>Prête</span></span></div><div class="wp ">
+<button class="ib lg pb" aria-label="Écouter ma voix">[[ic:play-fill]]</button>
+<div class="wave wv" aria-hidden="true"><i style="height: 95%"></i><i style="height: 90%"></i><i style="height: 60%"></i><i style="height: 75%"></i><i style="height: 60%"></i><i style="height: 95%"></i><i style="height: 70%"></i><i style="height: 50%"></i><i style="height: 20%"></i><i style="height: 20%"></i><i style="height: 30%"></i><i style="height: 35%"></i><i style="height: 65%"></i><i style="height: 45%"></i><i style="height: 45%"></i><i style="height: 55%"></i><i style="height: 65%"></i><i style="height: 100%"></i><i style="height: 95%"></i><i style="height: 95%"></i><i style="height: 45%"></i><i style="height: 35%"></i></div>
+<span class="mono tm">0:12</span>
+</div></div></div>
+<div class="cp"><b>Réglages</b><span class="kcap">L'échantillon de son propre clone vocal, avant de le rendre public : <code>row</code>, teinte d'accent.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="ph" style="height: 190px; position: relative; padding: 0; align-items: stretch"><span style="position: absolute; left: 10px; top: 8px">story</span><div class="glass" style="align-self: flex-end; margin: 10px; padding: 8px 12px 8px 8px; border-radius: 999px; flex: 1; min-width: 0"><div class="wp cmp play">
+<button class="ib pb" aria-label="Mettre en pause">[[ic:pause-fill s]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 80%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 95%"></i><i style="height: 60%"></i><i style="height: 30%"></i><i style="height: 20%"></i><i style="height: 45%"></i><i style="height: 60%"></i><i style="height: 35%"></i><i style="height: 80%"></i><i style="height: 95%"></i><i style="height: 95%"></i><i style="height: 35%"></i></div>
+<span class="mono tm">0:21</span>
+</div></div></div></div>
+<div class="cp"><b>Story</b><span class="kcap">Le son d'une story, dans une pilule de verre de K10 : <code>compact</code>, sans <code>onScrub</code>, la story mène le temps.</span></div>
+</div>
+<div class="kcell kc" style="--accent:#F8B500">
+<div class="stage"><div style="display: flex; flex-direction: column; gap: 4px"><div style="display: flex; align-items: center; justify-content: space-between; gap: 10px"><span style="display: flex; flex-direction: column"><b style="font-size: 14px">Voix « Griot »</b><span style="font-size: 12px; color: var(--ink2)">Pack Sahel · 6 voix</span></span><span class="chip" style="min-height: 26px; font-size: 11.5px">[[ic:sparkle s]]<span>240</span></span></div><div style="padding-top: 10px"><div class="wp cmp">
+<button class="ib pb" aria-label="Lire">[[ic:arrow-counter-clockwise s]]</button>
+<div class="wave wv" aria-hidden="true"><i class="p" style="height: 95%"></i><i class="p" style="height: 90%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 75%"></i><i class="p" style="height: 65%"></i><i class="p" style="height: 95%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 25%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 20%"></i><i class="p" style="height: 55%"></i><i class="p" style="height: 45%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 40%"></i><i class="p" style="height: 60%"></i><i class="p" style="height: 95%"></i><i class="p" style="height: 100%"></i><i class="p" style="height: 100%"></i><i class="p" style="height: 45%"></i><i class="p" style="height: 45%"></i></div>
+<span class="mono tm">0:07</span>
+</div></div></div></div>
+<div class="cp"><b>Boutique</b><span class="kcap">L'aperçu d'un pack de voix, écouté jusqu'au bout : <code>compact</code>, état terminé, rejouer.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque taille × phase × lecture rend le diamètre, le glyphe, la hauteur d'onde, les deux encres des barres et le texte de la durée du tableau. Vecteurs <code>K35-MeeshyWavePlayer.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Barres.</b> Pour toute largeur de 80 à 600 et tout nombre de niveaux de 0 à 2 000 : une barre tous les 6 px au plus, jamais de barre sous 3 de haut, même résultat sur les trois plateformes. Zéro niveau : barres plates.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Remplissage.</b> Le nombre de barres pleines ne dépend que de <code>progress</code>. À 0 aucune, à 1 toutes. Pendant un glissement, il suit le doigt et ignore le <code>progress</code> reçu.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Gestes.</b> <code>onToggle</code> part une fois au relâcher. <code>onScrub</code> part une fois au relâcher, borné de 0 à 1, reflété en RTL. Un défilement vertical de la page ne déclenche aucun glissement. <code>unavailable</code> : ni action ni tic.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Deux éléments : le disque (bouton, « Lire » ou « Mettre en pause », suivi de <code>label</code>) et l'onde (réglable, valeur « 5 secondes sur 9 »). Les barres sont muettes. Tampon et indisponible sont dits en mots.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> Disque de 44 pt, 48 dp, 44 px au moins dans les deux tailles ; zone de glissement de 44 de haut. Barres jouées à 3:1 sur le fond, durée à 4,5:1, glyphe à 4,5:1 sur la teinte, en clair et en sombre.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Mouvement réduit et voisins.</b> Sous « réduire les animations », aucune barre ne bouge et le remplissage avance quand même. Une lecture en cours ne re-rend ni ne repeint aucun voisin : dans une liste de vingt vocaux, un seul lecteur se redessine. Garde de source : aucun type du domaine, aucun singleton, aucun appel de lecture dans les fichiers de K35.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> L'état ne tient jamais à la couleur seule : le glyphe change, et un mot le dit. La durée ne grandit pas au-delà de 150 % ; elle reste sur une ligne. Tout ce que le doigt fait sur l'onde, les flèches et le lecteur d'écran le font aussi.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Une passe de dessin par lecteur. Seules la transformation, l'opacité et le découpage s'animent. Les barres s'arrêtent hors écran et hors lecture : un lecteur au repos ne coûte rien. Rien de retenu une fois l'écran quitté.</span></p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+<div class="todo">[[ic:warning-circle]]<span><b style="color: var(--ink)">À trancher · le disque.</b> K35 le demande à K02 : 60 et 44, plein à la teinte. K02 s'arrête à 48 et son actif est blanc. Il lui faut un diamètre remis par recette et un plein teinté, comme pour K32.</span></div>
+<div class="todo">[[ic:warning-circle]]<span><b style="color: var(--ink)">À trancher · les barres.</b> Le canevas dessine 3 px, le web joue 2,5 px, iOS mesure une bande de 46. Une seule mesure doit entrer dans la recette.</span></div>
+<div class="todo">[[ic:warning-circle]]<span><b style="color: var(--ink)">À trancher · le numéro.</b> K35 est proposé. Il se confirme à l'ouverture du lot, avec son issue et son milestone.</span></div>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8189}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -74,6 +74,11 @@ export interface PreviewGroupReaderContext {
    * `GET /conversations` la sert : aucun texte, l'échéance de cette mort.
    */
   readonly quotedDeathAt?: Date | null;
+  /**
+   * #18556 — l'échéance d'éphémère SERVIE à ce lecteur (`ephemeralDeadlineForReader`).
+   * Passée ⇒ la ligne part « expirée », sans texte, datée d'elle.
+   */
+  readonly servedExpiresAt?: Date | null;
 }
 
 export type LastMessagePreviewGroup = LastMessagePreviewPrism &
@@ -122,7 +127,9 @@ export function resolveLastMessagePreviewGroup(
   reader: PreviewGroupReaderContext = {},
 ): LastMessagePreviewGroup {
   const quotedDeathAt = reader.quotedDeathAt ?? null;
-  const protection = message != null ? resolvePreviewProtection({ ...message, quotedDeathAt }, now) : null;
+  const servedExpiresAt = reader.servedExpiresAt ?? null;
+  const protection = message != null ? resolvePreviewProtection({ ...message, quotedDeathAt, servedExpiresAt }, now) : null;
+  const readerExpiredAt = servedExpiresAt !== null && servedExpiresAt.getTime() <= now.getTime() ? servedExpiresAt : null;
   const withheld = isPreviewWithheld(protection);
   const media = resolvePreviewMediaFields(message, protection);
   const place = withheld ? null : sharedPlaceFromMetadata(message?.metadata);
@@ -136,6 +143,7 @@ export function resolveLastMessagePreviewGroup(
     // servir (même règle que `message:new`). Le client décompte depuis SA
     // réception, et `message:countdown-started` lui porte l'échéance serveur.
     ...(isEphemeral(message) ? { lastMessageExpiresAt: null } : {}),
+    ...(isEphemeral(message) && readerExpiredAt ? { lastMessageExpiresAt: readerExpiredAt.toISOString() } : {}),
     ...(quotedDeathAt ? { lastMessageExpiresAt: diedWithItsQuoteAt(message, quotedDeathAt) } : {}),
     lastMessageType: message?.messageType ?? null,
     lastMessageEffectFlags: message?.effectFlags ?? null,

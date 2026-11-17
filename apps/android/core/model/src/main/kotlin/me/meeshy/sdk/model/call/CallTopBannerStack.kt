@@ -1,11 +1,29 @@
 package me.meeshy.sdk.model.call
 
-/** Les bandeaux du haut de l'appel établi, dans l'ordre où la pile les pose (miroir de iOS `CallTopBanner`). */
+/**
+ * Les bandeaux du haut de l'appel établi, dans l'ordre où la pile les pose (miroir de iOS `CallTopBanner`). Les pastilles de
+ * service ([Hold], [VideoNotice], #18227, planche E3 · E4) viennent après la capture et AVANT le cadre en direct : ma vignette
+ * descend sous elles ([countedForSelfTile]) et ignore le cadre, qui ne doit donc jamais se poser au-dessus d'elles.
+ */
 enum class CallTopBanner {
     ScreenShare,
     Recording,
     Capture,
+    Hold,
+    VideoNotice,
     LiveFrame,
+}
+
+/**
+ * L1.8 (#17965 point 2) — où se pose la pile des bannières : sa largeur visible ([maxWidthDp], `null` = presque toute la
+ * largeur) et si ma vignette descend dessous ([pushesSelfTile]) ou garde son coin à côté.
+ */
+data class CallTopBannerSpan(val maxWidthDp: Float?, val pushesSelfTile: Boolean) {
+    /** La largeur du porteur de la pile : la largeur visible plus la marge que chaque bandeau garde de chaque côté. */
+    val hostMaxWidthDp: Float? get() = maxWidthDp?.let { it + 2 * CallTopBannerStack.HORIZONTAL_MARGIN_DP }
+
+    /** La place que ma vignette descend sous la pile ([stackDp], sa hauteur mesurée) : rien quand elle garde son coin. */
+    fun selfTileClearanceDp(stackDp: Float): Float = if (pushesSelfTile) stackDp else 0f
 }
 
 /**
@@ -29,7 +47,32 @@ object CallTopBannerStack {
     /** P16.5 — la hauteur du bandeau de partage : la cible de « Arrêter » tient les 48 dp d'Android. */
     const val BANNER_HEIGHT_DP: Float = 48f
 
+    /** L1.8 (#17965) — en paysage, la pile a la borne de toute pilule sur fenêtre large (#17935). */
+    const val LANDSCAPE_MAX_WIDTH_DP: Float = CallPillWidth.TEXT_DP
+
+    /** L1.8 — sous cette largeur, « Vous partagez votre écran » et « Arrêter » ne tiennent plus côte à côte. */
+    const val LANDSCAPE_MIN_WIDTH_DP: Float = 300f
+
     private const val PRIORITY_STEP = 10
+
+    /** Les maillons des pastilles de service (#18227) : seuls ceux-là passent par le paramètre `service`. */
+    private val SERVICE = setOf(CallTopBanner.Hold, CallTopBanner.VideoNotice)
+
+    private val Portrait = CallTopBannerSpan(maxWidthDp = null, pushesSelfTile = true)
+
+    /**
+     * L1.8 (#17965 point 2) — en portrait, la pile tient presque toute la largeur et ma vignette descend dessous (P16.8). En
+     * paysage (la forme de la fenêtre décide, [CallSelfTileLaw.isLandscape]), elle est bornée à 560 et centrée, et se resserre
+     * symétriquement pour longer ma vignette en haut ([selfTileReserveDp], [CallSelfTileLaw.bannerReserveDp]) : ma vignette
+     * garde son coin à côté d'elle. Une fenêtre couchée trop étroite pour qu'elle y tienne ([LANDSCAPE_MIN_WIDTH_DP]) garde la
+     * pile bornée et rend la règle du portrait : ma vignette descend.
+     */
+    fun span(window: CallTileSize, selfTileReserveDp: Float): CallTopBannerSpan {
+        if (!CallSelfTileLaw.isLandscape(window)) return Portrait
+        val beside = minOf(LANDSCAPE_MAX_WIDTH_DP, window.widthDp - 2 * maxOf(HORIZONTAL_MARGIN_DP, selfTileReserveDp))
+        if (beside >= LANDSCAPE_MIN_WIDTH_DP) return CallTopBannerSpan(maxWidthDp = beside, pushesSelfTile = false)
+        return CallTopBannerSpan(minOf(LANDSCAPE_MAX_WIDTH_DP, window.widthDp - 2 * HORIZONTAL_MARGIN_DP), pushesSelfTile = true)
+    }
 
     /** Ordre fixe, quel que soit l'ordre d'arrivée : partage → enregistrement → capture → cadre. Un absent ne laisse pas de trou. */
     fun ordered(present: Set<CallTopBanner>): List<CallTopBanner> = CallTopBanner.entries.filter(present::contains)
@@ -41,14 +84,21 @@ object CallTopBannerStack {
     fun priority(banner: CallTopBanner): Int = (CallTopBanner.entries.size - banner.ordinal) * PRIORITY_STEP
 
     /**
-     * R1.6 · R3.10 — les bandeaux dont la place revient à ma vignette : mon partage, l'enregistrement (carte, capsule ou avis) et
-     * la capsule de capture. Un partage REÇU n'y est pas : sa place est en décision porteur (#17730).
+     * R1.6 · R3.10 — les bandeaux dont la place revient à ma vignette : mon partage, l'enregistrement (carte, capsule ou avis),
+     * la capsule de capture et les pastilles de service montrées ([service], `CallServicePills.banners`, E3 · E4 : ma vignette
+     * n'est jamais couverte). Un partage REÇU n'y est pas : sa place est en décision porteur (#17730).
      */
-    fun countedForSelfTile(isLocalScreenShareShown: Boolean, isRecordingShown: Boolean, isCaptureAlertShown: Boolean): Set<CallTopBanner> =
+    fun countedForSelfTile(
+        isLocalScreenShareShown: Boolean,
+        isRecordingShown: Boolean,
+        isCaptureAlertShown: Boolean,
+        service: Set<CallTopBanner> = emptySet(),
+    ): Set<CallTopBanner> =
         buildSet {
             if (isLocalScreenShareShown) add(CallTopBanner.ScreenShare)
             if (isRecordingShown) add(CallTopBanner.Recording)
             if (isCaptureAlertShown) add(CallTopBanner.Capture)
+            addAll(service intersect SERVICE)
         }
 
     /**
@@ -61,14 +111,16 @@ object CallTopBannerStack {
 
     /**
      * #17845 (L4.11) — les bandeaux présents à l'écran : un partage (le mien ou reçu), l'enregistrement, la capture, le cadre en
-     * direct. Le site UNIQUE de la présence que la grille de groupe lit, miroir de iOS `CallTopBannerStack.present`.
+     * direct, les pastilles de service ([service]). Le site UNIQUE de la présence que la grille de groupe lit, miroir de iOS
+     * `CallTopBannerStack.present`.
      */
     fun present(
         isScreenShareShown: Boolean,
         isRecordingShown: Boolean,
         isCaptureAlertShown: Boolean,
         isLiveFrameShown: Boolean,
-    ): Set<CallTopBanner> = countedForSelfTile(isScreenShareShown, isRecordingShown, isCaptureAlertShown) +
+        service: Set<CallTopBanner> = emptySet(),
+    ): Set<CallTopBanner> = countedForSelfTile(isScreenShareShown, isRecordingShown, isCaptureAlertShown, service) +
         if (isLiveFrameShown) setOf(CallTopBanner.LiveFrame) else emptySet()
 
     /**
@@ -78,6 +130,31 @@ object CallTopBannerStack {
      */
     fun groupGridClearanceDp(present: Set<CallTopBanner>, heightsDp: Map<CallTopBanner, Float>, isStageFullScreen: Boolean): Float =
         if (isStageFullScreen) 0f else stackHeightDp(present, heightsDp)
+
+    /** La scène de groupe sous la rangée d'en-tête : la rangée et ses marges, depuis la zone sûre (la place d'avant P11.1). */
+    const val GROUP_STAGE_UNDER_HEADER_DP: Float = 52f
+
+    /** L'écart entre deux vignettes, et celui de la scène de groupe à la zone sûre en plein écran. */
+    const val GROUP_STAGE_SPACING_DP: Float = 8f
+
+    /**
+     * P11.1 (#18220) — en groupe, l'en-tête flotte sur la grille (planche P11). Pas en hauteur compacte (L4.2 : la rangée de
+     * quatre reste entre l'en-tête et la pilule), ni sur la une (P14.1 · U1.3 : la vignette à la une, sa capsule et la puce
+     * d'écran restent sous l'en-tête). Miroir de iOS `CallTopBannerStack.headerFloatsOverGroupStage`, mêmes vecteurs.
+     */
+    fun headerFloatsOverGroupStage(isGrid: Boolean, isCompactHeight: Boolean): Boolean = isGrid && !isCompactHeight
+
+    /**
+     * P11.1 · L4.11 · U2 — le haut de la scène de groupe depuis la zone sûre, pile des bandeaux comprise ([stackDp], mesurée par
+     * [groupGridClearanceDp]). L'en-tête flotte et aucun bandeau n'est là : la grille part de la zone sûre. Plein écran : la zone
+     * sûre et l'écart d'une vignette. Sinon, sous la rangée d'en-tête, puis sous la pile, qui se pose sous l'en-tête et à
+     * laquelle la grille cède sa place. Miroir de iOS `groupStageTopBase` suivi de l'écart de la scène et de la pile.
+     */
+    fun groupStageTopDp(headerFloats: Boolean, stackDp: Float, isStageFullScreen: Boolean): Float = when {
+        isStageFullScreen -> GROUP_STAGE_SPACING_DP
+        headerFloats && stackDp <= 0f -> 0f
+        else -> GROUP_STAGE_UNDER_HEADER_DP + stackDp
+    }
 
     private fun stackHeightDp(banners: Set<CallTopBanner>, heightsDp: Map<CallTopBanner, Float>): Float =
         ordered(banners).sumOf { ((heightsDp[it] ?: 0f).coerceAtLeast(BANNER_HEIGHT_DP) + GAP_DP).toDouble() }.toFloat()

@@ -91,6 +91,8 @@ struct SettingsRowLabel<Trailing: View>: View {
 
             trailing
         }
+        // Un titre qui passe sur deux lignes (grand texte) s'aligne à gauche : un `Button` centre le texte qu'il porte.
+        .multilineTextAlignment(.leading)
         .padding(.horizontal, MeeshySpacing.md + 2)
         .padding(.vertical, MeeshySpacing.sm + 2)
     }
@@ -132,11 +134,11 @@ enum SettingsOrientation {
     }
 
     static var progression: String {
-        String(localized: "settings.tools.progression.hint", defaultValue: "Vos badges, votre niveau et votre série de jours actifs", bundle: .main)
+        String(localized: "settings.tools.progression.hint", defaultValue: "Vos médailles, votre niveau et votre Flamme", bundle: .main)
     }
 
     static var affiliate: String {
-        String(localized: "settings.tools.affiliate.hint", defaultValue: "Inviter des amis et gagner des récompenses", bundle: .main)
+        String(localized: "links.hub.affiliate.description", defaultValue: "Invitez et suivez qui s'inscrit par vos liens", bundle: .main)
     }
 
     static var lentilleList: String {
@@ -275,7 +277,7 @@ enum SettingsInfoNotes {
     static var contactSearch: MeeshyInfoNote {
         MeeshyInfoNote(
             question: String(localized: "settings.privacy.hide_from_contact_search.question", defaultValue: "Qui peut me trouver par mon numéro ?", bundle: .main),
-            text: String(localized: "settings.privacy.hide_from_contact_search.info", defaultValue: "Activé, votre profil ne ressort plus d'une recherche par numéro ou par e-mail, et vos contacts ne sont pas prévenus de votre arrivée sur Meeshy.", bundle: .main)
+            text: String(localized: "settings.privacy.hide_from_contact_search.info", defaultValue: "Activé, vos contacts ne sont pas non plus prévenus de votre arrivée sur Meeshy.", bundle: .main)
         )
     }
 
@@ -300,8 +302,15 @@ enum SettingsInfoNotes {
         )
     }
 
+    static var bringOff: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "settings.notifications.bring.question", defaultValue: "Que se passe-t-il si je le coupe ?", bundle: .main),
+            text: String(localized: "settings.notifications.bring.note", defaultValue: "Coupé, personne ne peut plus faire sonner votre téléphone.", bundle: .main)
+        )
+    }
+
     static var all: [MeeshyInfoNote] {
         [galleryAutosave, renderedCapture, captureOriginal, cameraArming, libraryOpening, readingModes, compression, transcriptionAuto, encryption,
-         onlineStatus, returnAnnouncement, readReceipts, contactSearch, callsFromNonContacts, analytics, hiddenCallAddress]
+         onlineStatus, returnAnnouncement, readReceipts, contactSearch, callsFromNonContacts, analytics, hiddenCallAddress, bringOff]
     }
 }

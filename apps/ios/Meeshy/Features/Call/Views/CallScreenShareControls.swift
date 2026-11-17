@@ -122,19 +122,11 @@ struct CallScreenShareBanner: View, Equatable {
                 .minimumScaleFactor(0.8)
             Spacer(minLength: 0)
             if showsStop {
-                Button(action: onStop) {
-                    Text(CallScreenShareCopy.stopCaption)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Color.white)
-                        .padding(.horizontal, MeeshySpacing.md)
-                        .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel(CallScreenShareCopy.label(isSharing: true))
+                CallShareStopButton(stop: onStop)
             }
         }
         .padding(.leading, MeeshySpacing.mdPlus)
-        .padding(.trailing, showsStop ? 4 : 14)
+        .padding(.trailing, showsStop ? MeeshySpacing.xs : 14)
         .frame(maxWidth: .infinity, minHeight: 44)
         .adaptiveLiquidGlass(in: Capsule(), tint: MeeshyColors.error.opacity(MeeshyOpacity.medium), interactive: showsStop)
         .modifier(CallTopBannerHeightReporter(banner: .screenShare))

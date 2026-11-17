@@ -97,12 +97,6 @@ internal fun StoryExpiredContent(
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                 )
-                Text(
-                    stringResource(R.string.story_notification_expired_subtitle),
-                    color = ink.copy(alpha = MeeshyOpacity.intense),
-                    style = MaterialTheme.typography.bodyLarge,
-                    textAlign = TextAlign.Center,
-                )
             }
             Spacer(Modifier.weight(1f))
             Box(

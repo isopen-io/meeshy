@@ -182,6 +182,7 @@ internal fun CallReactionsPanel(
     val haptics = LocalHapticFeedback.current
     Row(
         modifier = modifier
+            .callScrollEdgeFade(horizontal = true)
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.sm),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),

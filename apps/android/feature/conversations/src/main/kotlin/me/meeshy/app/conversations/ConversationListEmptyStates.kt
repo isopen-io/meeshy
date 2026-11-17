@@ -72,8 +72,8 @@ internal fun LazyListScope.conversationListStateItems(
 }
 
 /**
- * The iconified empty-state card (parity §B): glyph in a tinted disc + title +
- * subtitle + optional retry CTA, laid on a [MeeshyGlassSurface]. The copy/icon
+ * The iconified empty-state card (parity §B): glyph in a tinted disc + one line +
+ * optional action, laid on a [MeeshyGlassSurface]. The copy/icon
  * choice is the pure [EmptyStateVisual]; this glue only renders it. The error
  * glyph tints red, the others accent-indigo, keeping the palette coherent.
  */
@@ -120,17 +120,6 @@ internal fun EmptyStateCard(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = MeeshySpacing.lg),
                 )
-                visual.subtitle?.let { subtitle ->
-                    Text(
-                        text = when (subtitle) {
-                            is EmptyStateSubtitle.Resource -> stringResource(subtitle.copy.resId())
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MeeshyTheme.tokens.textSecondary,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = MeeshySpacing.sm),
-                    )
-                }
                 visual.cta?.let { cta ->
                     Button(
                         onClick = if (cta == EmptyStateCopy.NewConversation) onNewConversation else onRetry,
@@ -151,14 +140,10 @@ private fun EmptyStateGlyph.icon() = when (this) {
 }
 
 private fun EmptyStateCopy.resId(): Int = when (this) {
-    EmptyStateCopy.ErrorTitle -> R.string.conversations_error_title
-    EmptyStateCopy.ErrorSubtitle -> R.string.conversations_error_subtitle
+    EmptyStateCopy.ErrorMessage -> R.string.conversations_error_subtitle
     EmptyStateCopy.Retry -> R.string.conversations_retry
     EmptyStateCopy.FilteredTitle -> R.string.conversations_no_results
-    EmptyStateCopy.FilteredSubtitle -> R.string.conversations_no_results_subtitle
     EmptyStateCopy.ColdTitle -> R.string.conversations_empty
-    EmptyStateCopy.ColdSubtitle -> R.string.conversations_empty_subtitle
     EmptyStateCopy.NewConversation -> R.string.empty_states_new_conversation
     EmptyStateCopy.SearchNoResultsTitle -> R.string.empty_states_search_no_results
-    EmptyStateCopy.SearchNoResultsSubtitle -> R.string.empty_states_search_try_other_terms
 }

@@ -230,67 +230,198 @@ button.view-once-chip {
 }
 
 /**
- * **LA COMBUSTION D'UN ÉPHÉMÈRE** (#7468) — précision du porteur : « sa
- * destruction doit avoir un effet visuel si on est dans la conversation au
- * moment de la destruction ».
+ * **LA COMBUSTION D'UN ÉPHÉMÈRE** (#7468, #17938, #18556) — la loi partagée
+ * (`@meeshy/shared/utils/ephemeral-burn`) donne la durée (1 200 ms, fondu de
+ * 250 ms sous « Réduire les animations ») et les trois temps : ignition
+ * jusqu'à 15 %, propagation jusqu'à 80 %, cendres ensuite.
  *
- * POSÉE SUR LE NŒUD DE RANGÉE, jamais dans une peau : `thread-modes.tsx`
- * l'applique au `<div role="article">` qui enveloppe la rangée plate ET la
- * bulle, si bien qu'un mode ajouté demain l'a sans rien câbler.
+ * POSÉE SUR LE NŒUD DE RANGÉE (`thread-modes.tsx`), qui enveloppe la rangée
+ * plate ET la bulle. `data-burn-front` dit où file le front, d'après le côté
+ * de la bulle (`burnFrontOf`).
  *
- * LE REPLI DES VOISINS VIENT DE LA GRILLE, pas d'un `max-height` deviné :
- * `grid-template-rows: 1fr → 0fr` anime une hauteur RÉELLE, que le
- * `ResizeObserver` du virtualiseur suit à chaque image — les rangées
- * suivantes remontent à mesure, au lieu de sauter quand la ligne quitte la
- * liste. C'est aussi pourquoi la durée est la MÊME que `DESTRUCTION_MS`
- * (`lib/view/ephemeral-destruction.ts`) : une animation plus longue que la
- * fenêtre se ferait couper au milieu, une fenêtre plus longue laisserait une
- * rangée vide à l'écran.
+ * Le feu se peint par masque, `translate`, `scale` et `opacity` : aucune mise
+ * en page pendant que les lettres brûlent. Seuls les cendres replient la
+ * rangée (`grid-template-rows`, que le virtualiseur suit), une fois le
+ * contenu entièrement consumé.
  */
 .ephemeral-destroying {
-  --ephemeral-destruction-ms: 700ms;
+  --ephemeral-destruction-ms: 1200ms;
+  --burn-to: to right;
+  --burn-mask-from: 100%;
+  --burn-mask-ignite: 72%;
+  --burn-mask-end: 15%;
+  --burn-x-from: -50%;
+  --burn-x-to: 50%;
+  --burn-drift: 1;
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-rows: 1fr;
-  overflow: hidden;
-  animation: ephemeral-burn var(--ephemeral-destruction-ms) ease-in forwards;
+  animation: ephemeral-burn-collapse var(--ephemeral-destruction-ms) linear forwards;
   pointer-events: none;
 }
 
-/* `min-height: 0` — sans lui, l'enfant refuse de descendre sous sa hauteur
-   intrinsèque et la grille ne se replie pas. */
-.ephemeral-destroying > * {
-  min-height: 0;
+.ephemeral-destroying[data-burn-front='left'] {
+  --burn-to: to left;
+  --burn-mask-from: 0%;
+  --burn-mask-ignite: 28%;
+  --burn-mask-end: 85%;
+  --burn-x-from: 50%;
+  --burn-x-to: -50%;
+  --burn-drift: -1;
 }
 
-@keyframes ephemeral-burn {
+.ephemeral-destroying > * {
+  min-height: 0;
+  -webkit-mask-image: linear-gradient(var(--burn-to), transparent 45%, black 55%);
+  mask-image: linear-gradient(var(--burn-to), transparent 45%, black 55%);
+  -webkit-mask-size: 300% 100%;
+  mask-size: 300% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: var(--burn-mask-from) 0;
+  mask-position: var(--burn-mask-from) 0;
+  animation: ephemeral-burn-front var(--ephemeral-destruction-ms) linear forwards;
+}
+
+.ephemeral-destroying::before,
+.ephemeral-destroying::after {
+  content: '';
+  position: absolute;
+  inset: -32px 0 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  will-change: translate, opacity;
+}
+
+.ephemeral-destroying::before {
+  background:
+    radial-gradient(ellipse 10px 70% at 50% 100%, var(--color-warning), transparent 70%),
+    linear-gradient(
+      to right,
+      transparent calc(50% - 20px),
+      color-mix(in srgb, var(--color-danger) 75%, transparent) calc(50% - 7px),
+      var(--color-warning) 50%,
+      color-mix(in srgb, var(--color-danger) 75%, transparent) calc(50% + 7px),
+      transparent calc(50% + 20px)
+    );
+  -webkit-mask-image: linear-gradient(to top, black 35%, transparent);
+  mask-image: linear-gradient(to top, black 35%, transparent);
+  filter: blur(1.5px);
+  transform-origin: 50% 100%;
+  translate: var(--burn-x-from) 0;
+  animation: ephemeral-burn-ember var(--ephemeral-destruction-ms) linear forwards;
+}
+
+.ephemeral-destroying::after {
+  background:
+    radial-gradient(circle 1.5px at 18% 78%, var(--color-warning), transparent),
+    radial-gradient(circle 1px at 32% 60%, var(--color-danger), transparent),
+    radial-gradient(circle 1.5px at 47% 84%, var(--color-warning), transparent),
+    radial-gradient(circle 1px at 58% 52%, var(--color-warning), transparent),
+    radial-gradient(circle 1.5px at 71% 70%, var(--color-danger), transparent),
+    radial-gradient(circle 1px at 84% 58%, var(--color-warning), transparent),
+    radial-gradient(circle 1px at 26% 40%, color-mix(in srgb, var(--color-warning) 60%, transparent), transparent),
+    radial-gradient(circle 1px at 66% 34%, color-mix(in srgb, var(--color-danger) 60%, transparent), transparent);
+  translate: 0 8px;
+  animation: ephemeral-burn-sparks var(--ephemeral-destruction-ms) ease-out forwards;
+}
+
+@keyframes ephemeral-burn-front {
   0% {
-    grid-template-rows: 1fr;
+    -webkit-mask-position: var(--burn-mask-from) 0;
+    mask-position: var(--burn-mask-from) 0;
+  }
+  15% {
+    -webkit-mask-position: var(--burn-mask-ignite) 0;
+    mask-position: var(--burn-mask-ignite) 0;
+  }
+  80% {
+    -webkit-mask-position: var(--burn-mask-end) 0;
+    mask-position: var(--burn-mask-end) 0;
+  }
+  100% {
+    -webkit-mask-position: var(--burn-mask-end) 0;
+    mask-position: var(--burn-mask-end) 0;
+  }
+}
+
+@keyframes ephemeral-burn-ember {
+  0% {
+    opacity: 0;
+    translate: var(--burn-x-from) 0;
+    scale: 1 0.4;
+  }
+  15% {
     opacity: 1;
-    filter: none;
+    scale: 1 1;
   }
   45% {
+    scale: 1 1.25;
+  }
+  80% {
+    opacity: 0.9;
+    translate: var(--burn-x-to) 0;
+    scale: 1 0.9;
+  }
+  100% {
+    opacity: 0;
+    translate: var(--burn-x-to) 0;
+    scale: 1 0.3;
+  }
+}
+
+@keyframes ephemeral-burn-sparks {
+  0% {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  15% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    translate: calc(var(--burn-drift) * 36px) -28px;
+  }
+}
+
+@keyframes ephemeral-burn-collapse {
+  0% {
     grid-template-rows: 1fr;
-    opacity: 0.55;
-    filter: blur(1.5px) saturate(1.7) brightness(1.2);
+  }
+  80% {
+    grid-template-rows: 1fr;
   }
   100% {
     grid-template-rows: 0fr;
-    opacity: 0;
-    filter: blur(6px) saturate(2) brightness(1.4);
   }
 }
 
 /**
- * RÉDUCTION DES ANIMATIONS : « un simple fondu » (#7468, verbatim). Ni
- * flou, ni saturation, ni repli — un repli EST un mouvement, et c'est
- * précisément ce que ce réglage demande d'éviter. La rangée garde sa place
- * jusqu'au retrait ; le fondu suffit à dire que quelque chose part.
+ * RÉDUCTION DES ANIMATIONS : « un simple fondu » (#7468, verbatim) de 250 ms,
+ * ni flamme, ni étincelle, ni repli. La minuterie de retrait lit la même
+ * durée (`destructionWindowMs`).
  */
 @media (prefers-reduced-motion: reduce) {
   .ephemeral-destroying {
+    --ephemeral-destruction-ms: 250ms;
     display: block;
-    overflow: visible;
     animation: ephemeral-fade var(--ephemeral-destruction-ms) linear forwards;
+  }
+
+  .ephemeral-destroying > * {
+    -webkit-mask-image: none;
+    mask-image: none;
+    animation: none;
+  }
+
+  .ephemeral-destroying::before,
+  .ephemeral-destroying::after {
+    content: none;
   }
 
   @keyframes ephemeral-fade {

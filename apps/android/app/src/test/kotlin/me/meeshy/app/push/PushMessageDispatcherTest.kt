@@ -27,6 +27,8 @@ class PushMessageDispatcherTest {
         val messagePresenter: MessageNotificationPresenter = mockk(relaxed = true)
         val ringer = RecordingRinger()
         val waker = RecordingWaker()
+        var batteryPulls = 0
+        var probeAnswers = 0
         val freshness: me.meeshy.sdk.call.CallFreshnessChecker = mockk {
             io.mockk.coEvery { check(any()) } returns me.meeshy.sdk.model.call.CallFreshness.Live
         }
@@ -38,6 +40,16 @@ class PushMessageDispatcherTest {
             revocationHandler = revocationHandler,
             bringHandler = me.meeshy.app.bring.BringPushHandler(ringer),
             talkieHandler = me.meeshy.app.talkie.TalkieWakeHandler(waker),
+            batteryHandler = me.meeshy.app.battery.BatteryPushHandler(
+                notices = me.meeshy.sdk.battery.BatteryForegroundNotices(),
+                foreground = { false },
+                pullRunner = { batteryPulls += 1 },
+            ),
+            phoneReachabilityHandler = me.meeshy.app.phonereachability.PhoneReachabilityPushHandler(
+                notices = me.meeshy.sdk.phonereachability.PhoneReachabilityForegroundNotices(),
+                foreground = { false },
+                responder = { probeAnswers += 1 },
+            ),
             messagePresenter = messagePresenter,
             freshness = freshness,
             observers = observers,
@@ -66,6 +78,45 @@ class PushMessageDispatcherTest {
 
         assertThat(fixture.waker.woken).containsExactly("t1")
         verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `un push battery_pull fait un releve et jamais une banniere`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "battery_pull", "requestedAt" to "2026-11-15T10:00:00.000Z"))
+
+        assertThat(fixture.batteryPulls).isEqualTo(1)
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `une sonde device_probe repond par un signe de vie et jamais une banniere`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "device_probe", "requestedAt" to "2026-11-15T10:00:00.000Z"))
+
+        assertThat(fixture.probeAnswers).isEqualTo(1)
+        assertThat(fixture.batteryPulls).isEqualTo(0)
+        verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `un push device_unreachable app fermee part en banniere`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "device_unreachable", "title" to "Ada", "body" to "Injoignable depuis 14:10"))
+
+        verify(exactly = 1) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `un push device_battery app fermee part en banniere`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "device_battery", "title" to "Alice", "body" to "5 %"))
+
+        verify(exactly = 1) { fixture.messagePresenter.present(any()) }
     }
 
     @Test

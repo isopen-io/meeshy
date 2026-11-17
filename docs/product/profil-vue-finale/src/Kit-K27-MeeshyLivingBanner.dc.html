@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K27 MeeshyLivingBanner</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:820px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>.ic{margin-top:2px}
+.li b{font-weight:700}
+.lb{position:relative;overflow:hidden;--tint:var(--accent);--t2:#6366F1;background:linear-gradient(165deg,color-mix(in oklab,var(--tint) 72%,#1E1B4B) 0%,color-mix(in oklab,var(--tint) 34%,var(--ground)) 48%,var(--ground) 100%);color:var(--ink)}
+.mx[data-theme=light] .lb{background:linear-gradient(165deg,color-mix(in oklab,var(--tint) 52%,#fff) 0%,color-mix(in oklab,var(--tint) 20%,#fff) 48%,var(--ground) 100%)}
+.lb .par{position:absolute}
+.lb .par>.orb{inset:0}
+.lb .fade{position:absolute;left:0;right:0;bottom:0;height:38%;background:linear-gradient(180deg,color-mix(in srgb,var(--ground) 0%,transparent),var(--ground))}
+.lb .top{position:relative;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:16px 16px 0}
+.lb .bot{position:absolute;left:16px;right:16px;bottom:40px;display:flex;justify-content:flex-end;gap:8px}
+.lb .mini{min-height:36px;padding:0 12px;font-size:12.5px}
+.lb.mute{background:linear-gradient(165deg,#4B5563 0%,#27272F 48%,var(--ground) 100%)}
+.lb.mute .orb{animation:none;background:#9CA3AF}
+.cell{flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0;overflow:hidden}
+.cell>.cp{display:flex;flex-direction:column;gap:4px;padding:16px 20px 20px}
+.cell>.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.live .p1{animation:lbNear 6s cubic-bezier(.45,0,.3,1) infinite}
+.live .p2{animation:lbFar 6s cubic-bezier(.45,0,.3,1) infinite}
+.phone{display:inline-flex;animation:lbPhone 6s cubic-bezier(.45,0,.3,1) infinite}
+.gauge{position:relative;height:6px;border-radius:999px;background:var(--field);border:1px solid var(--line)}
+.gauge>i{position:absolute;top:-6px;left:50%;width:16px;height:16px;margin-left:-8px;border-radius:50%;background:var(--accent);animation:lbGauge 6s cubic-bezier(.45,0,.3,1) infinite}
+.shot{animation:lbShot 8s ease-in-out infinite}
+.shot-orbs{animation:lbOrbs 8s ease-in-out infinite}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:150px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+@keyframes lbNear{0%,14%{transform:translate(0,0)}34%,48%{transform:translate(12px,-5px)}68%,82%{transform:translate(-12px,5px)}100%{transform:translate(0,0)}}
+@keyframes lbFar{0%,14%{transform:translate(0,0)}34%,48%{transform:translate(-6px,3px)}68%,82%{transform:translate(6px,-3px)}100%{transform:translate(0,0)}}
+@keyframes lbPhone{0%,14%{transform:rotate(0)}34%,48%{transform:rotate(14deg)}68%,82%{transform:rotate(-14deg)}100%{transform:rotate(0)}}
+@keyframes lbGauge{0%,14%{transform:translateX(0)}34%,48%{transform:translateX(96px)}68%,82%{transform:translateX(-96px)}100%{transform:translateX(0)}}
+@keyframes lbShot{0%,30%{opacity:0}45%,85%{opacity:1}100%{opacity:0}}
+@keyframes lbOrbs{0%,30%{opacity:1}45%,85%{opacity:.12}100%{opacity:1}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 160px; top: -130px; background: #A855F7; opacity: .22"></div>
+<div class="orb" style="width: 230px; height: 230px; right: -30px; top: -40px; background: #6366F1; opacity: .26; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 960px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K27 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyLivingBanner</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Une bannière vit (orbes, parallaxe, couleur d'accent) partout où une entité se présente</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 760px">Un dégradé tiré d'une seule couleur, deux orbes qui flottent, une parallaxe au gyroscope, un fondu vers le fond. Tu lui donnes une teinte et trois emplacements : elle fait le reste.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px; padding-top: 4px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Un décor qui porte, jamais un écran</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok); display: inline-flex">[[ic:check-circle]]</span><span>Peint un <b>dégradé à trois arrêts</b> depuis une seule teinte, en sombre comme en clair.</span></div>
+<div class="li"><span style="color: var(--ok); display: inline-flex">[[ic:check-circle]]</span><span>Fait <b>flotter deux orbes</b> et les décale de ±12 px quand le téléphone s'incline.</span></div>
+<div class="li"><span style="color: var(--ok); display: inline-flex">[[ic:check-circle]]</span><span>Pose une <b>image</b> déjà chargée par-dessus : les orbes s'effacent, un voile garde le texte lisible.</span></div>
+<div class="li"><span style="color: var(--ok); display: inline-flex">[[ic:check-circle]]</span><span>Se <b>fond dans le fond</b> de l'écran et range trois emplacements : haut début, haut fin, bas.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--ink3); display: inline-flex">[[ic:minus-circle]]</span><span>Le verre des commandes posées dessus : <b>K01</b> et <b>K02</b>.</span></div>
+<div class="li"><span style="color: var(--ink3); display: inline-flex">[[ic:minus-circle]]</span><span>Le repli au défilement, la barre de verre, l'avatar qui chevauche : <b>K28</b> lui donne sa hauteur et son avancée.</span></div>
+<div class="li"><span style="color: var(--ink3); display: inline-flex">[[ic:minus-circle]]</span><span>L'avatar, son anneau, son voyage : <b>K29</b>. Les durées et les ressorts : <b>K26</b>.</span></div>
+<div class="li"><span style="color: var(--ink3); display: inline-flex">[[ic:minus-circle]]</span><span>Choisir la teinte, charger l'image, l'ouvrir en grand, savoir qui est bloqué : <b>l'app</b>.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Quatre couches, trois emplacements</h2></header>
+<div style="display: grid; grid-template-columns: 720px minmax(0, 1fr); gap: 40px; align-items: center">
+<div class="kcell" style="padding: 44px 48px">
+<div style="position: relative; width: 624px; height: 509px">
+<div class="lb" style="width: 390px; height: 318px; zoom: 1.6; border-radius: 14px">
+<div class="par" style="width: 220px; height: 220px; left: -50px; top: 30px"><div class="orb" style="background: var(--tint); opacity: .75"></div></div>
+<div class="par" style="width: 180px; height: 180px; right: -40px; top: 110px"><div class="orb" style="background: var(--t2); opacity: .7; animation-delay: -4s"></div></div>
+<div class="fade"></div>
+<div class="top" style="padding-top: 54px">
+<button class="ib g" aria-label="Réglages">[[ic:gear-six]]</button>
+<div style="display: flex; align-items: center; gap: 8px">
+<button class="btn g sm" style="padding: 0 14px">[[ic:eye s]]<span>Vue par : Moi</span>[[ic:caret-down s]]</button>
+<button class="ib g" aria-label="Modifier">[[ic:pencil-simple]]</button>
+</div>
+</div>
+<div class="bot" style="bottom: 76px">
+<button class="btn g sm mini">[[ic:sparkle s]]<span>Niv. 24 · 1 860</span></button>
+<button class="btn g sm mini">[[ic:trophy s]]<span>Or III</span></button>
+</div>
+</div>
+<span class="kan" style="left: 300px; top: 18px">1</span>
+<span class="kan" style="left: 96px; top: 214px">2</span>
+<span class="kan" style="left: 522px; top: 300px">3</span>
+<span class="kan" style="left: 300px; top: 448px">4</span>
+<span class="kan" style="left: 14px; top: 72px">5</span>
+<span class="kan" style="left: 588px; top: 72px">6</span>
+<span class="kan" style="left: 588px; top: 322px">7</span>
+<span class="kan" style="left: -11px; top: 244px">8</span>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 14px 14px; align-items: start">
+<span class="kan" style="position: static">1</span>
+<div><b>Fond dégradé</b><p class="kcap">165°, trois arrêts : teinte à 72 % · teinte à 34 % · fond de l'écran. <code>banner.gradient</code></p></div>
+<span class="kan" style="position: static">2</span>
+<div><b>Orbe proche</b><p class="kcap">Disque de 220, flou 28, opacité 75 %, à la teinte. Parallaxe ±12 px. <code>banner.orb.near</code></p></div>
+<span class="kan" style="position: static">3</span>
+<div><b>Orbe lointaine</b><p class="kcap">Disque de 180, opacité 70 %, teinte voisine (−30° sur la roue). Parallaxe ±6 px, à contresens. <code>banner.orb.far</code></p></div>
+<span class="kan" style="position: static">4</span>
+<div><b>Fondu</b><p class="kcap">38 % de la hauteur (120 sur 318), vers le fond de l'écran. Aucune arête. <code>banner.fade</code></p></div>
+<span class="kan" style="position: static">5</span>
+<div><b>Emplacement <code>topLeading</code></b><p class="kcap">À 16 du bord, sous la zone sûre. Une commande de 44.</p></div>
+<span class="kan" style="position: static">6</span>
+<div><b>Emplacement <code>topTrailing</code></b><p class="kcap">À 16 du bord de fin, écart 8 entre deux commandes.</p></div>
+<span class="kan" style="position: static">7</span>
+<div><b>Emplacement <code>bottom</code></b><p class="kcap">Aligné en fin, à 76 du bas : au-dessus du fondu, jamais dedans.</p></div>
+<span class="kan" style="position: static">8</span>
+<div><b>Hauteur <code>height</code></b><p class="kcap">Libre. Trois jalons : barre 96 · carte 130 · héros 318.</p></div>
+</div>
+</div>
+<p class="kcap" style="max-width: 820px">Dessinée ici à 1,6 fois sa taille. Les emplacements reçoivent n'importe quoi : la bannière ne connaît ni réglages, ni niveau, ni rang.</p>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Une teinte entre, tout le reste en sort</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+
+<div class="kcell cell">
+<div class="lb" style="height: 230px">
+<div class="par" style="width: 190px; height: 190px; left: -40px; top: 0"><div class="orb" style="background: var(--tint); opacity: .75"></div></div>
+<div class="par" style="width: 150px; height: 150px; right: -30px; top: 70px"><div class="orb" style="background: var(--t2); opacity: .7; animation-delay: -4s"></div></div>
+<div class="fade"></div>
+<div class="top"><button class="ib g" aria-label="Réglages">[[ic:gear-six]]</button><button class="ib g" aria-label="Modifier">[[ic:pencil-simple]]</button></div>
+<div class="bot"><button class="btn g sm mini">[[ic:trophy s]]<span>Or III</span></button></div>
+</div>
+<div class="cp"><b>Violet</b><span class="kcap"><code>tint #A855F7</code> · la fiche d'Aïssa</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="lb" style="height: 230px; --tint: #4ECDC4; --t2: #3498DB">
+<div class="par" style="width: 190px; height: 190px; left: -40px; top: 0"><div class="orb" style="background: var(--tint); opacity: .7"></div></div>
+<div class="par" style="width: 150px; height: 150px; right: -30px; top: 70px"><div class="orb" style="background: var(--t2); opacity: .65; animation-delay: -4s"></div></div>
+<div class="fade"></div>
+<div class="top"><button class="ib g" aria-label="Retour">[[ic:caret-left]]</button><button class="ib g" aria-label="Plus">[[ic:dots-three]]</button></div>
+<div class="bot"><button class="btn g sm mini">[[ic:smiley s]]<span>En vadrouille</span></button></div>
+</div>
+<div class="cp"><b>Sarcelle</b><span class="kcap"><code>tint #4ECDC4</code> · la fiche de Léo</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="lb" style="height: 230px; --tint: #F8B500; --t2: #F97316">
+<div class="par" style="width: 190px; height: 190px; left: -40px; top: 0"><div class="orb" style="background: var(--tint); opacity: .6"></div></div>
+<div class="par" style="width: 150px; height: 150px; right: -30px; top: 70px"><div class="orb" style="background: var(--t2); opacity: .6; animation-delay: -4s"></div></div>
+<div class="fade"></div>
+<div class="top"><button class="ib g" aria-label="Retour">[[ic:caret-left]]</button><button class="ib g" aria-label="Plus">[[ic:dots-three]]</button></div>
+<div class="bot"><button class="btn g sm mini">[[ic:map-pin s]]<span>Cascais</span></button></div>
+</div>
+<div class="cp"><b>Ambre</b><span class="kcap"><code>tint #F8B500</code> · la fiche de Tomás</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="lb mute" style="height: 230px">
+<div class="par" style="width: 190px; height: 190px; left: -40px; top: 0"><div class="orb" style="opacity: .22"></div></div>
+<div class="par" style="width: 150px; height: 150px; right: -30px; top: 70px"><div class="orb" style="opacity: .16"></div></div>
+<div class="fade"></div>
+<div class="top"><button class="ib g" aria-label="Retour">[[ic:caret-left]]</button><button class="ib g" aria-label="Plus">[[ic:dots-three]]</button></div>
+</div>
+<div class="cp"><b>Neutre désaturé</b><span class="kcap"><code>isMuted</code> · gris, orbes figées, aucune parallaxe. Le compte bloqué de Rui.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="lb" style="height: 230px">
+<div class="ph" style="position: absolute; inset: 0; border-radius: 0; border: 0; padding: 0 0 78px 16px">photo</div>
+<div class="par" style="width: 190px; height: 190px; left: -40px; top: 0"><div class="orb" style="background: var(--tint); opacity: .12"></div></div>
+<div style="position: absolute; inset: 0; background: linear-gradient(180deg, rgba(9,9,11,.42), rgba(9,9,11,0) 46%)"></div>
+<div class="fade"></div>
+<div class="top"><button class="ib g" aria-label="Réglages">[[ic:gear-six]]</button><button class="ib g" aria-label="Modifier">[[ic:pencil-simple]]</button></div>
+<div class="bot"><button class="btn g sm mini">[[ic:trophy s]]<span>Or III</span></button></div>
+</div>
+<div class="cp"><b>Avec photo</b><span class="kcap"><code>image</code> · les orbes s'effacent, un voile de 42 % tient le haut, le fondu reste.</span></div>
+</div>
+
+<div class="kcell cell" style="background: #fff; border-color: transparent">
+<div class="mx" data-theme="light" style="display: flex; flex-direction: column; flex: 1">
+<div class="lb" style="height: 230px">
+<div class="par" style="width: 190px; height: 190px; left: -40px; top: 0"><div class="orb" style="background: var(--tint); opacity: .5"></div></div>
+<div class="par" style="width: 150px; height: 150px; right: -30px; top: 70px"><div class="orb" style="background: var(--t2); opacity: .4; animation-delay: -4s"></div></div>
+<div class="fade"></div>
+<div class="top"><button class="ib g" aria-label="Réglages">[[ic:gear-six]]</button><button class="ib g" aria-label="Modifier">[[ic:pencil-simple]]</button></div>
+<div class="bot"><button class="btn g sm mini">[[ic:trophy s]]<span>Or III</span></button></div>
+</div>
+<div class="cp" style="display: flex; flex-direction: column; gap: 4px; padding: 16px 20px 20px"><b style="font-size: 14.5px">Claire</b><span class="kcap">Même teinte, mêlée au blanc : 52 % puis 20 %. Les orbes tombent à 50 et 40 %.</span></div>
+</div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 bis · États</span><h2 class="d">Repos, incliné, replié, squelette</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px">
+
+<div class="kcell cell">
+<div class="lb" style="height: 200px">
+<div class="par" style="width: 160px; height: 160px; left: -40px; top: 6px"><div class="orb" style="background: var(--tint); opacity: .75"></div></div>
+<div class="par" style="width: 130px; height: 130px; right: -30px; top: 60px"><div class="orb" style="background: var(--t2); opacity: .7; animation-delay: -4s"></div></div>
+<div class="fade"></div>
+</div>
+<div class="cp"><b>Repos</b><span class="kcap">Les orbes flottent seules, 9 s par cycle. Rien d'autre ne bouge.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="lb" style="height: 200px">
+<div class="par" style="width: 160px; height: 160px; left: -28px; top: 1px"><div class="orb" style="background: var(--tint); opacity: .75; animation: none"></div></div>
+<div class="par" style="width: 130px; height: 130px; right: -24px; top: 63px"><div class="orb" style="background: var(--t2); opacity: .7; animation: none"></div></div>
+<div class="fade"></div>
+<div style="position: absolute; left: 0; right: 0; top: 78px; display: flex; justify-content: center"><span class="chip glass" style="color: var(--ink)"><span style="display: inline-flex; transform: rotate(14deg)">[[ic:device-mobile s]]</span><span>+12 px</span></span></div>
+</div>
+<div class="cp"><b>Incliné</b><span class="kcap">L'orbe proche suit le téléphone (±12 px), la lointaine part à l'opposé (±6 px).</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="lb" style="height: 200px; display: flex; flex-direction: column">
+<div style="position: relative; height: 104px; overflow: hidden; background: color-mix(in oklab, var(--tint) 26%, var(--ground)); border-bottom: 1px solid var(--glass-line)">
+<div class="par" style="width: 160px; height: 160px; left: -50px; top: -60px"><div class="orb" style="background: var(--tint); opacity: .55"></div></div>
+<div style="position: absolute; left: 12px; right: 12px; bottom: 8px; display: flex; align-items: center; gap: 10px">
+<button class="ib g" aria-label="Retour">[[ic:caret-left]]</button>
+<span class="av" style="width: 32px; height: 32px; font-size: 12px">AN</span>
+<span style="font-weight: 700; font-size: 15px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Aïssa Ndiaye</span>
+</div>
+</div>
+<div style="flex: 1; background: var(--ground); display: flex; flex-direction: column; gap: 9px; padding: 16px">
+<span class="sk" style="height: 9px; width: 84%; animation: none"></span>
+<span class="sk" style="height: 9px; width: 62%; animation: none"></span>
+<span class="sk" style="height: 9px; width: 74%; animation: none"></span>
+</div>
+</div>
+<div class="cp"><b>Replié</b><span class="kcap"><code>collapse = 1</code> · hauteur 96, l'orbe lointaine a disparu, le fondu aussi. K28 pose la barre.</span></div>
+</div>
+
+<div class="kcell cell">
+<div style="position: relative; height: 200px; overflow: hidden">
+<div class="sk" style="position: absolute; inset: 0; border-radius: 0"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 38%; background: linear-gradient(180deg, rgba(9,9,11,0), var(--ground))"></div>
+</div>
+<div class="cp"><b>Squelette</b><span class="kcap"><code>isLoading</code> · cache vide seulement. C'est <code>MeeshySkeleton(.card)</code> de <b>K38</b>. Ni teinte, ni orbe, ni emplacement.</span></div>
+</div>
+
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px"><span class="tag">04 · Évolutions</span><h3 class="d" style="font-size: 24px">Trois modes hors de l'en-tête, et un rendu figé</h3></div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px">
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div class="lb" style="width: 100%; height: 146px; border-radius: 18px; background: linear-gradient(165deg, color-mix(in oklab, var(--tint) 46%, var(--ground)) 0%, var(--ground) 100%)"><div class="par" style="width: 150px; height: 150px; left: -30px; top: -20px"><div class="orb" style="background: var(--tint); opacity: .6"></div></div><div class="par" style="width: 120px; height: 120px; right: -20px; top: 50px"><div class="orb" style="background: var(--t2); opacity: .55"></div></div><div style="position: relative; display: flex; flex-direction: column; gap: 4px; padding: 18px"><b class="d" style="font-size: 17px">Carte de profil</b><span class="kcap">plein écran</span></div></div></div><span class="kcap"><b style="color: var(--ink)"><code>mode: ambient</code></b> Fond sans cadre ni fondu, teinte libre, jusqu'au plein écran. Sur écran large, les halos suivent le pointeur en parallaxe.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="position: relative; width: 100%; height: 146px; border-radius: 18px; overflow: hidden"><div class="ph" style="position: absolute; inset: 0; border-radius: 0">photo</div><div style="position: absolute; inset: 0; background: linear-gradient(180deg, color-mix(in oklab, var(--accent) 70%, #1E1B4B) 0%, color-mix(in srgb, var(--accent) 0%, transparent) 78%)"></div><div style="position: absolute; left: -24px; top: -30px; width: 120px; height: 120px"><div class="orb" style="inset: 0; background: var(--accent); opacity: .6"></div></div></div></div><span class="kcap"><b style="color: var(--ink)"><code>mode: veil</code></b> Transparente vers le bas, posée sur un autre fond (photo, carte). Les emplacements restent.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div class="lb" style="width: 100%; border-radius: 22px; background: color-mix(in oklab, var(--tint) 30%, var(--raised)); border: 1px solid color-mix(in oklab, var(--tint) 46%, transparent)"><div class="par" style="width: 130px; height: 130px; right: -34px; top: -40px"><div class="orb" style="background: var(--tint); opacity: .6"></div></div><div style="position: relative; display: flex; flex-direction: column; gap: 4px; padding: 20px"><span class="tag" style="color: var(--ink2)">Parrainage</span><b class="d" style="font-size: 24px">14 filleuls</b></div></div></div><span class="kcap"><b style="color: var(--ink)"><code>mode: fill</code></b> Le remplissage d'une carte <b>K43</b> <code>accent</code> : une seule orbe, pas de fondu, la hauteur du contenu.</span></div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div class="kcell" style="min-height: 190px; padding: 22px"><div style="display: flex; align-items: center; gap: 18px"><div class="lb" style="width: 68px; height: 68px; border-radius: 16px; flex: none"><div class="par" style="width: 56px; height: 56px; left: -14px; top: -8px"><div class="orb" style="background: var(--tint); opacity: .75; animation: none; filter: blur(12px)"></div></div><div class="par" style="width: 44px; height: 44px; right: -10px; top: 22px"><div class="orb" style="background: var(--t2); opacity: .7; animation: none; filter: blur(12px)"></div></div></div><div style="display: flex; flex-direction: column; gap: 4px"><b style="font-size: 14px">Miniature 68</b><span class="kcap" style="display: inline-flex; align-items: center; gap: 6px">[[ic:image s]]image exportable</span></div></div></div><span class="kcap"><b style="color: var(--ink)">Rendu figé</b> <code>motion: off</code> rend une image fixe et exportable : image partagée, miniature de 68. Le ton éteint du chargement reste <code>isLoading</code>, le gris <code>isMuted</code>.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Trois mouvements, un seul qui répond au geste</h2><p>Les durées et les courbes sont celles de K26 : la bannière cite <code>motion.float</code>, <code>motion.rise</code> et <code>motion.collapse</code>, elle n'en écrit aucune.</p></header>
+<div style="display: grid; grid-template-columns: 560px minmax(0, 1fr); gap: 40px; align-items: stretch">
+
+<div class="kcell cell live">
+<div class="lb" style="height: 440px">
+<div class="par p1" style="width: 260px; height: 260px; left: -20px; top: 40px"><div class="orb" style="background: var(--tint); opacity: .75"></div></div>
+<div class="par p2" style="width: 210px; height: 210px; right: 0; top: 150px"><div class="orb" style="background: var(--t2); opacity: .7; animation-delay: -4s"></div></div>
+<div class="ph shot" style="position: absolute; inset: 0; border-radius: 0; border: 0; padding: 0 0 180px 20px">photo</div>
+<div class="fade"></div>
+<div class="top" style="padding: 22px 20px 0"><button class="ib g" aria-label="Réglages">[[ic:gear-six]]</button><button class="ib g" aria-label="Modifier">[[ic:pencil-simple]]</button></div>
+<div class="bot" style="bottom: 120px; right: 20px"><button class="btn g sm mini">[[ic:sparkle s]]<span>Niv. 24 · 1 860</span></button></div>
+</div>
+<div class="cp" style="flex: 1; justify-content: center; gap: 16px; padding: 4px 28px 26px">
+<div style="display: flex; align-items: center; gap: 18px">
+<span class="phone" style="color: var(--accent-ink)">[[ic:device-mobile l]]</span>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 9px">
+<span class="gauge"><i></i></span>
+<span style="display: flex; justify-content: space-between" class="mono"><span style="color: var(--ink3)">−12 px</span><span style="color: var(--ink3)">0</span><span style="color: var(--ink3)">+12 px</span></span>
+</div>
+</div>
+<span class="kcap">En direct : le téléphone penche, l'orbe proche suit, la lointaine part à l'opposé. Toutes les 8 s, une photo arrive et les orbes s'effacent.</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 20px; justify-content: space-between">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="lb" style="height: 150px; border-radius: 20px; border: 1px solid var(--line)">
+<div class="par" style="width: 120px; height: 120px; left: -30px; top: 0"><div class="orb" style="background: var(--tint); opacity: .75; animation: none"></div></div>
+<div class="par" style="width: 100px; height: 100px; right: -20px; top: 46px"><div class="orb" style="background: var(--t2); opacity: .7; animation: none"></div></div>
+<div class="fade"></div>
+</div>
+<div style="display: flex; align-items: flex-start; gap: 10px"><span class="step">1</span><span class="kcap"><b style="color: var(--ink)">Flotter.</b> Chaque orbe dérive de 18 × 14 px et gonfle à 1,12, à contretemps.</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="lb" style="height: 150px; border-radius: 20px; border: 1px solid var(--line)">
+<div class="par" style="width: 120px; height: 120px; left: -18px; top: -5px"><div class="orb" style="background: var(--tint); opacity: .75; animation: none"></div></div>
+<div class="par" style="width: 100px; height: 100px; right: -14px; top: 49px"><div class="orb" style="background: var(--t2); opacity: .7; animation: none"></div></div>
+<div class="fade"></div>
+<span style="position: absolute; right: 12px; top: 12px; display: inline-flex; transform: rotate(14deg); color: var(--ink)">[[ic:device-mobile]]</span>
+</div>
+<div style="display: flex; align-items: flex-start; gap: 10px"><span class="step">2</span><span class="kcap"><b style="color: var(--ink)">Pencher.</b> ±15° d'inclinaison donnent ±12 px, puis ça plafonne. Retour doux au repos.</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div class="lb" style="height: 150px; border-radius: 20px; border: 1px solid var(--line)">
+<div class="ph" style="position: absolute; inset: 0; border-radius: 0; border: 0">photo</div>
+<div class="par" style="width: 120px; height: 120px; left: -30px; top: 0"><div class="orb" style="background: var(--tint); opacity: .12; animation: none"></div></div>
+<div class="fade"></div>
+</div>
+<div style="display: flex; align-items: flex-start; gap: 10px"><span class="step">3</span><span class="kcap"><b style="color: var(--ink)">Céder.</b> L'image arrive en fondu, les orbes tombent à 12 % puis s'arrêtent.</span></div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div class="spec"><b style="color: var(--ink)">motion.float</b> · 9 s · va-et-vient doux · déclencheur : à l'écran · haptique : aucune · mouvement réduit : orbes figées au repos</div>
+<div class="spec"><b style="color: var(--ink)">parallaxe</b> · pilotée comme motion.collapse : le capteur mène, sans durée propre · déclencheur : inclinaison, plafond ±12 px · haptique : aucune · mouvement réduit : capteur jamais démarré</div>
+<div class="spec"><b style="color: var(--ink)">motion.rise</b> (image) · 360 ms · sortie douce · déclencheur : image prête · haptique : aucune · mouvement réduit : fondu 160 ms</div>
+<div class="spec"><b style="color: var(--ink)">motion.collapse</b> · piloté par le défilement, sans durée propre · déclencheur : <span style="color: var(--accent-ink)">collapse</span> de 0 à 1, donné par K28 · mouvement réduit : inchangé, c'est le doigt qui mène</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+<div class="tonal" style="border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px"><code>motion: on</code><span class="kcap">Flotte et suit le téléphone.</span></div>
+<div class="tonal" style="border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px"><code>motion: reduced</code><span class="kcap">Flotte, sans capteur. Défaut hors héros.</span></div>
+<div class="tonal" style="border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px"><code>motion: off</code><span class="kcap">Rien ne bouge. Listes, captures, économie d'énergie.</span></div>
+</div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Mêmes noms sur les trois plateformes</h2></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span>
+<span class="h">iOS · MeeshyUI/Kit/<wbr>MeeshyLivingBanner.swift</span>
+<span class="h">Android · me.meeshy.ui.component.kit</span>
+<span class="h">Web · components/kit/meeshy-living-banner.tsx</span>
+
+<span><b>Composant</b></span>
+<span><code>MeeshyLivingBanner(tint:<wbr>mode:<wbr>image:<wbr>height:<wbr>motion:<wbr>isMuted:<wbr>isLoading:<wbr>collapse:<wbr>topLeading:<wbr>topTrailing:<wbr>bottom:)</code></span>
+<span><code>MeeshyLivingBanner(tint, modifier, mode, image, height, motion, isMuted, isLoading, collapse, topLeading, topTrailing, bottom)</code></span>
+<span><code>&lt;MeeshyLivingBanner tint mode image height motion isMuted isLoading collapse topLeading topTrailing bottom /&gt;</code></span>
+
+<span><b>Mode</b></span>
+<span><code>MeeshyLivingBannerMode { banner, ambient, veil, fill }</code></span>
+<span><code>enum class</code> identique</span>
+<span><code>'banner' | 'ambient' | 'veil' | 'fill'</code></span>
+
+<span><b>Mouvement</b></span>
+<span><code>MeeshyLivingBannerMotion { on, reduced, off }</code></span>
+<span><code>enum class</code> identique</span>
+<span><code>'on' | 'reduced' | 'off'</code></span>
+
+<span><b>Hauteur</b></span>
+<span><code>height: CGFloat</code> · jalons <code>MeeshyLivingBannerHeight.bar / .card / .hero</code></span>
+<span><code>height: Dp</code> · mêmes jalons</span>
+<span><code>height: number</code> · mêmes jalons, en <code>rem</code></span>
+
+<span><b>Image</b></span>
+<span><code>image: Image?</code>, déjà chargée par l'hôte</span>
+<span><code>image: Painter?</code></span>
+<span><code>image?: string</code>, adresse déjà résolue</span>
+
+<span><b>Emplacements</b></span>
+<span><code>topLeading</code>, <code>topTrailing</code>, <code>bottom</code> : <code>@ViewBuilder</code></span>
+<span>trois <code>@Composable () -&gt; Unit</code></span>
+<span>trois <code>ComponentChildren</code></span>
+
+<span style="border-bottom: 0"><b>Recette</b></span>
+<span style="border-bottom: 0"><code>MeeshyLivingBannerRecipe.resolve(tint:<wbr>mode:<wbr>scheme:<wbr>hasImage:<wbr>isMuted:<wbr>motion:<wbr>tilt:<wbr>collapse:)</code></span>
+<span style="border-bottom: 0"><code>MeeshyLivingBannerRecipe.resolve(…)</code>, mêmes arguments</span>
+<span style="border-bottom: 0"><code>meeshyLivingBannerRecipe(…)</code> : propriétés <code>--kit-banner-*</code></span>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="tag">Paramètres opaques, mêmes défauts partout</span>
+<div class="li"><span><code>tint</code> (obligatoire) : une couleur. La teinte voisine, les arrêts et les opacités en sortent.</span></div>
+<div class="li"><span><code>image = nil</code> · <code>height = hero</code> (318) · <code>motion = on</code></span></div>
+<div class="li"><span><code>mode = banner</code> : <code>ambient</code> sans cadre ni fondu, <code>veil</code> transparent vers le bas, <code>fill</code> à une orbe dans une K43.</span></div>
+<div class="li"><span><code>isMuted = false</code> : désature, fige les orbes, coupe le capteur.</span></div>
+<div class="li"><span><code>isLoading = false</code> : squelette, emplacements non rendus.</span></div>
+<div class="li"><span><code>collapse = 0</code> (de 0 à 1) : hauteur, orbe lointaine et fondu suivent.</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<span class="tag">Ce que la recette rend, en valeurs</span>
+<div class="li"><span>Trois arrêts du dégradé et son angle.</span></div>
+<div class="li"><span>Deux orbes : couleur, diamètre, centre, opacité, flou, décalage de parallaxe.</span></div>
+<div class="li"><span>Hauteur du fondu, opacité du voile d'image, hauteur courante.</span></div>
+<div class="li"><span>Un booléen : le capteur doit-il tourner (<code>motion</code>, visible, non atténué, mouvement réduit).</span></div>
+<div class="li"><span style="color: var(--ink2)">Aucun type du domaine dans une signature : ni personne, ni communauté, ni relation.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Le même résultat, la matière de chacun</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<span style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<span class="d" style="font-size: 22px">iOS</span></span>
+<ul>
+<li><code>LinearGradient</code> et deux <code>Circle().blur</code>, aplatis en une texture par <code>.drawingGroup()</code>.</li>
+<li>Flottement par <code>TimelineView(.animation)</code>, mis en pause hors écran.</li>
+<li>Inclinaison par <code>CMMotionManager.deviceMotion</code> à 30 Hz, lue au dessin.</li>
+<li><code>accessibilityReduceMotion</code> ramène <code>on</code> à <code>off</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Pas de capteur (simulateur, Mac) : la bannière flotte, sans parallaxe. Mode économie d'énergie : <code>off</code>.</p>
+</div>
+<div class="plat">
+<span style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<span class="d" style="font-size: 22px">Android</span></span>
+<ul>
+<li>Un seul <code>Canvas</code> : <code>Brush.linearGradient</code> puis deux <code>Brush.radialGradient</code>. Pas de flou.</li>
+<li>Phase par <code>rememberInfiniteTransition</code>, lue en phase de dessin : zéro recomposition.</li>
+<li>Inclinaison par <code>SensorManager</code>, <code>TYPE_GAME_ROTATION_VECTOR</code>, arrêté à <code>ON_PAUSE</code>.</li>
+<li><code>rememberAnimationsReduced()</code> ne crée aucune transition infinie.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Pas de gyroscope : flottement seul. Le dégradé radial remplace le flou sur tous les appareils, même rendu partout.</p>
+</div>
+<div class="plat">
+<span style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<span class="d" style="font-size: 22px">Web</span></span>
+<ul>
+<li><code>color-mix(in oklab)</code> sur <code>--kit-banner-tint</code> : la teinte change sans re-rendu.</li>
+<li><code>@keyframes</code> sur <code>transform</code> seul, orbes sur leur propre calque.</li>
+<li>Parallaxe par <code>pointermove</code> au pointeur fin ; <code>deviceorientation</code> seulement si l'hôte a déjà la permission.</li>
+<li><code>prefers-reduced-motion</code> coupe tout, <code>IntersectionObserver</code> met en pause hors écran.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>color-mix</code> : les arrêts sont calculés par la recette et posés en dur. La bannière ne demande jamais de permission.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Elle existe déjà, en trois exemplaires qui ne bougent pas</h2></header>
+<div class="card" style="display: flex; flex-direction: column; overflow: hidden">
+<div class="twin"><span class="pf">iOS · SDK</span><span class="mono">MeeshyUI/Profile/UserProfileSheet+Header.swift</span><p><span class="be">Devient le composant</span> <code>defaultBannerGradient</code> : dégradé d'accent, deux orbes (200 et 150), gris quand le compte est bloqué. Il lui manque le flottement et la parallaxe.</p></div>
+<div class="twin"><span class="pf">iOS · SDK</span><span class="mono">MeeshyUI/Profile/ProfileHeaderMetrics.swift</span><p>Hauteurs 130 et 52 et l'avancée du repli : passent dans les jalons de la recette, puis à K28.</p></div>
+<div class="twin"><span class="pf">iOS · app</span><span class="mono">Features/Profile/Views/ProfileView.swift</span><p><code>bannerBlock</code>, 120 de haut, coins arrondis : ma propre fiche a sa bannière à part. Rebranchée par le lot d'intégration.</p></div>
+<div class="twin"><span class="pf">iOS · app</span><span class="mono">Features/Main/Views/FeedAmbientBackdrop.swift</span><p>Les orbes floutées aplaties par <code>.drawingGroup()</code> : la technique de rendu est reprise telle quelle.</p></div>
+<div class="twin"><span class="pf">iOS · app</span><span class="mono">Features/Game/Choreography/GameTilt.swift</span><p>La loi « le capteur tourne-t-il ? » (actif, visible, mouvement réduit) : promue dans la recette.</p></div>
+<div class="twin"><span class="pf">iOS · SDK</span><span class="mono">MeeshySDK/Theme/ColorGeneration.swift</span><p><code>DynamicColorGenerator</code> reste où il est : l'app y prend la teinte et la remet en <code>tint</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">sdk-ui/…/ui/profile/ProfileBanner.kt</span><p><span class="be">Devient le composant</span> <code>BannerGradient</code> : même dégradé, mêmes deux disques, gris bloqué. La photo et le plein écran restent à <code>ProfileBanner</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">sdk-ui/…/ui/component/auth/AmbientHalos.kt</span><p>Halos en dégradé radial, phase lue au dessin, aucun travail sous mouvement réduit : la mécanique du flottement.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">routes/user-profile-header.tsx</span><p><span class="be">Devient le composant</span> Le dégradé <code>color-mix</code> de l'accent (42 % puis 12 %), 120 de haut. Aucune orbe aujourd'hui.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">routes/communities-parts.tsx</span><p><code>CommunityBanner</code> : un second dégradé d'accent, déjà hors du profil. Rebranché par le lot d'intégration.</p></div>
+</div>
+<p class="kcap" style="max-width: 860px">K27 promeut la grammaire et les lois du plus complet. Il ne rebranche aucun écran : chaque jumeau est remplacé par un lot d'intégration, avec ses captures.</p>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Quatre écrans qui n'ont rien d'un profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px">
+
+<div class="kcell cell">
+<div class="lb" style="height: 250px; --tint: #FBBF24; --t2: #F97316">
+<div class="par" style="width: 170px; height: 170px; left: -40px; top: 0"><div class="orb" style="background: var(--tint); opacity: .55"></div></div>
+<div class="par" style="width: 130px; height: 130px; right: -30px; top: 70px"><div class="orb" style="background: var(--t2); opacity: .55; animation-delay: -4s"></div></div>
+<div class="fade"></div>
+<div class="top"><button class="ib g" aria-label="Retour">[[ic:caret-left]]</button><button class="ib g" aria-label="Plus">[[ic:dots-three]]</button></div>
+<div style="position: absolute; left: 16px; right: 16px; bottom: 18px; display: flex; flex-direction: column; gap: 4px">
+<span class="d" style="font-size: 22px">Beatmakers Dakar</span>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink2)">[[ic:users-four s]]<span>342 membres</span></span>
+</div>
+</div>
+<div class="cp"><b>En-tête de communauté</b><span class="kcap">La teinte est celle de la communauté. <code>bottom</code> porte le nom.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="lb" style="height: 250px; --tint: #818CF8; --t2: #A855F7">
+<div class="par" style="width: 170px; height: 170px; left: -40px; top: 0"><div class="orb" style="background: var(--tint); opacity: .6"></div></div>
+<div class="par" style="width: 130px; height: 130px; right: -30px; top: 70px"><div class="orb" style="background: var(--t2); opacity: .55; animation-delay: -4s"></div></div>
+<div class="fade"></div>
+<div class="top"><button class="ib g" aria-label="Retour">[[ic:caret-left]]</button><button class="ib g" aria-label="Appeler le groupe">[[ic:phone]]</button></div>
+<div style="position: absolute; left: 16px; right: 16px; bottom: 18px; display: flex; flex-direction: column; gap: 10px">
+<span style="display: flex">
+<span class="av" style="width: 36px; height: 36px; font-size: 12px; border: 2px solid var(--ground)">AN</span>
+<span class="av" style="width: 36px; height: 36px; font-size: 12px; margin-left: -6px; border: 2px solid var(--ground); --accent: #4ECDC4">LM</span>
+<span class="av" style="width: 36px; height: 36px; font-size: 12px; margin-left: -6px; border: 2px solid var(--ground); --accent: #FF6B6B">MO</span>
+<span class="av" style="width: 36px; height: 36px; font-size: 12px; margin-left: -6px; border: 2px solid var(--ground); --accent: #3498DB">YT</span>
+</span>
+<span class="d" style="font-size: 22px">Studio — invités</span>
+</div>
+</div>
+<div class="cp"><b>Conversation de groupe</b><span class="kcap">La couleur d'accent de la conversation entre en <code>tint</code>. Rien d'autre à régler.</span></div>
+</div>
+
+<div class="kcell cell" style="--accent: #4ECDC4">
+<div class="lb" style="height: 250px; --tint: #4ECDC4; --t2: #3498DB">
+<div class="par" style="width: 190px; height: 190px; left: -50px; top: -20px"><div class="orb" style="background: var(--tint); opacity: .7"></div></div>
+<div class="par" style="width: 150px; height: 150px; right: -40px; top: 90px"><div class="orb" style="background: var(--t2); opacity: .65; animation-delay: -4s"></div></div>
+<div class="fade" style="height: 22%"></div>
+<div style="position: absolute; left: 0; right: 0; top: 22px; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<span class="ring"><span class="av" style="width: 64px; height: 64px; font-size: 23px">LM</span></span>
+<span class="d" style="font-size: 20px">Léo Marchetti</span>
+<span style="font-size: 12.5px; color: var(--ink2)">Appel vidéo entrant</span>
+</div>
+<div style="position: absolute; left: 0; right: 0; bottom: 16px; display: flex; justify-content: center; gap: 36px">
+<button class="ib" aria-label="Refuser" style="width: 52px; height: 52px; background: #E5484D; color: #0B0B12">[[ic:phone-x]]</button>
+<button class="ib" aria-label="Accepter" style="width: 52px; height: 52px; background: #34D399; color: #0B0B12">[[ic:video-camera-fill]]</button>
+</div>
+</div>
+<div class="cp"><b>Appel entrant</b><span class="kcap">Plein écran, <code>height</code> = l'écran. La teinte est celle de qui appelle.</span></div>
+</div>
+
+<div class="kcell cell">
+<div class="lb" style="height: 250px; --tint: #F8B500; --t2: #FDE68A; border-radius: 0">
+<div class="par" style="width: 170px; height: 170px; left: -40px; top: 0"><div class="orb" style="background: var(--tint); opacity: .55"></div></div>
+<div class="par" style="width: 130px; height: 130px; right: -30px; top: 70px"><div class="orb" style="background: var(--t2); opacity: .4; animation-delay: -4s"></div></div>
+<div class="fade"></div>
+<div class="top"><span class="chip glass" style="color: var(--ink)">[[ic:calendar-star s]]<span>Saison 4</span></span><span class="chip glass" style="color: var(--ink)">encore 14 j</span></div>
+<div style="position: absolute; left: 16px; right: 16px; bottom: 18px; display: flex; flex-direction: column; gap: 10px">
+<span style="display: flex; align-items: center; gap: 8px">[[ic:trophy-fill]]<span class="d" style="font-size: 22px">Or III</span></span>
+<span class="bar" style="--accent: #F8B500"><i style="width: 68%"></i></span>
+</div>
+</div>
+<div class="cp"><b>Carte de saison du jeu</b><span class="kcap">Jalon <code>card</code>, <code>motion: reduced</code> dans une liste : elle flotte, sans capteur.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Pour chaque teinte × thème × image × atténué, les arrêts, les deux orbes et le fondu sont ceux des vecteurs, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Parallaxe.</b> ±15° donnent ±12 px et ±6 px à contresens ; au-delà, ça plafonne. À plat, décalage nul.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Capteur.</b> Il ne tourne que si <code>motion = on</code>, bannière visible, non atténuée, sans mouvement réduit. Il s'arrête à la sortie d'écran.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit.</b> Aucune animation infinie créée, aucun capteur démarré, image posée par le fondu réduit de K26 (160 ms).</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Contraste.</b> Encre sur le haut du dégradé et sur une image blanche sous le voile : 4,5:1 au moins, calculé depuis la recette, en sombre et en clair.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Voisins.</b> Flottement et inclinaison ne re-rendent ni les emplacements ni l'hôte : zéro recomposition comptée pendant dix secondes.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Sens de lecture.</b> En RTL, <code>topLeading</code> passe à droite, les orbes se reflètent, la parallaxe garde son sens physique.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Silence.</b> Dégradé, orbes et fondu sont masqués au lecteur d'écran ; seuls les emplacements parlent, dans l'ordre début, fin, bas.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Pureté.</b> Garde de source : aucun type du domaine, aucun singleton, aucun chargement d'image dans les fichiers de K27.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> La bannière est un décor : elle n'a ni nom ni rôle. Les commandes posées dessus gardent leur cible de 44 et leur contraste, quelle que soit la teinte ou l'image.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Une texture, deux transformations : jamais de flou recalculé par image. 120 images par seconde au défilement d'un héros de 318 ; rien de retenu une fois l'écran quitté.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":6757}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -84,7 +84,7 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
         let connected = try view("CallView+Connected.swift")
         let duo = try block("private var duoLayout: some View {", until: "private var swipeDownToLeaveGesture: some Gesture {", in: connected)
         XCTAssertTrue(duo.contains(".onTapGesture { if exposesTheTapToggle { toggleControls() } }"), "Le fond de l'audio est la scène")
-        XCTAssertTrue(duo.contains("if pillText.compactsAudioLayout {"), "L'avatar compact suit le journal servi, rangé ou non")
+        XCTAssertTrue(duo.contains("CallAudioStage(isJournalOpen: pillText.compactsAudioLayout"), "L'avatar compact suit le journal servi, rangé ou non (P9b.15 : par morphisme)")
         let exposes = try block("private var exposesTheTapToggle: Bool {", until: "\n    }\n", in: connected)
         XCTAssertTrue(exposes.contains("CallChromeVisibility.mayToggleByTap(isTapStage: isTapStage, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning)"))
         let stage = try block("private var isTapStage: Bool {", until: "\n    }\n", in: connected)
@@ -314,8 +314,9 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
         let stow = try block("struct CallSelfTileStow: ViewModifier {", until: "\n}\n", in: glass)
         XCTAssertTrue(stow.contains(".scaleEffect(factor, anchor: anchor)"))
         XCTAssertFalse(stow.contains("clipShape"), "L'échelle ne redécoupe pas : ombre et badges restent hors découpe")
-        XCTAssertTrue(stow.contains(".animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isChromeVisible)"),
+        XCTAssertTrue(stow.contains(".animation(CallChromeStow.transform(reduceMotion: reduceMotion), value: isChromeVisible)"),
                       "Réduire les animations : la vignette change de taille sans mouvement")
+        XCTAssertTrue(stow.contains(".opacity(fade.opacity(at: context.date))"), "… et en fondu court, jamais une bascule sèche (loi 17.10, #18207)")
     }
 
     /// G1.9 (loi 15) — contrôles cachés, toucher ma vignette rend d'abord les contrôles ; la

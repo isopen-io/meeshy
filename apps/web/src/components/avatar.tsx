@@ -20,6 +20,10 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
 import type { ListeningBand } from '@/lib/now-playing/listening-band';
 import { ListeningMarquee } from './listening-marquee';
+import type { BatteryBadge } from '@/lib/battery/battery-view';
+import type { PhoneUnreachableBadge } from '@/lib/phone-reachability/phone-reachability-view';
+import { AvatarBatteryBadge } from './battery-glyph';
+import { AvatarPhoneUnreachableBadge } from './phone-reachability-glyph';
 
 /**
  * L'AVATAR, avec sa geometrie derivee — les memes formules que
@@ -237,6 +241,18 @@ type AvatarProps = {
    * d'écran l'entend avec le nom. Absent : rien.
    */
   listening?: ListeningBand;
+  /**
+   * **SA BATTERIE, PENDANT UN ÉPISODE** (#14147) — telle que le serveur l'a servie à ce lecteur
+   * (`useBatteryBadge`) : une icône en haut du cercle, que le lecteur d'écran entend avec le nom. Absent (hors
+   * épisode, non partagée) : rien.
+   */
+  battery?: BatteryBadge;
+  /**
+   * **SON TÉLÉPHONE INJOIGNABLE** (#18737) — tel que le serveur l'a servi à ce lecteur (`usePhoneUnreachableBadge`) :
+   * un téléphone barré à la place de l'icône batterie, qu'il EMPORTE quand les deux sont servis ; le lecteur
+   * d'écran l'entend avec le nom. Absent (le téléphone répond, non partagé) : rien.
+   */
+  unreachable?: PhoneUnreachableBadge;
 };
 
 /**
@@ -301,6 +317,8 @@ function renderAvatar({
   redundant,
   outOfTabOrder,
   listening,
+  battery,
+  unreachable,
 }: Omit<AvatarProps, 'ring'>, storyRingSeparated = false) {
   const showsImage = src !== undefined && src !== '';
   const resolvedSrc = showsImage ? attachmentSrc(src) : undefined;
@@ -323,7 +341,9 @@ function renderAvatar({
     name === undefined || humeur === undefined
       ? name
       : translate(currentInterfaceLanguage(), 'a11y.avatar.mood', { name, mood: humeur });
-  const spoken = named === undefined || listening === undefined ? named : `${named}, ${listening.spoken}`;
+  const heard = named === undefined || listening === undefined ? named : `${named}, ${listening.spoken}`;
+  const device = unreachable?.spoken ?? battery?.spoken;
+  const spoken = heard === undefined || device === undefined ? heard : `${heard}, ${device}`;
 
   const corps = (
     /* `block` — et ce n'est pas décoratif : un `<span>` reste INLINE, et un
@@ -378,6 +398,7 @@ function renderAvatar({
         {initials}
       </span>
       {listening === undefined ? null : <ListeningMarquee band={listening} size={size} />}
+      {unreachable !== undefined ? <AvatarPhoneUnreachableBadge size={size} /> : battery === undefined ? null : <AvatarBatteryBadge badge={battery} size={size} />}
       {humeur === undefined ? (
         /* `data-presence` — L'ANCRE de la pastille (revue #5935) : elle porte
            l'ÉTAT servi (`here`/`online`/`away`/`idle`), donc « point VERT » se

@@ -16,54 +16,18 @@ struct LinksHubView: View {
     @State private var showCreateShareLink = false
     @State private var showCreateTrackingLink = false
     @State private var showCreateAffiliate = false
-    @State private var scrollRelay = ScrollOffsetRelay()
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-
-            ScrollView(showsIndicators: false) {
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: ScrollOffsetPreferenceKey.self,
-                            value: geo.frame(in: .named("scroll")).minY
-                        )
-                    }
-                    .frame(height: 0)
-
-                    Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
-
-                    VStack(spacing: MeeshySpacing.xl) {
-                        headerBanner
-                            .padding(.horizontal, MeeshySpacing.lg)
-                            .padding(.top, MeeshySpacing.sm)
-
-                        linkCategoryCards
-                            .padding(.horizontal, MeeshySpacing.lg)
-                    }
-                    .padding(.bottom, 40)
-                }
-                .coordinateSpace(name: "scroll")
-                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }   // iOS 16–17
-                .trackScrollContentOffset { scrollRelay.offset = -$0 }                            // iOS 18+ (preference path is dead there)
-
-            VStack(spacing: 0) {
-                // Seul ce reader se re-rend au fil du scroll — la racine écrit
-                // `scrollRelay.offset` sans s'y abonner (P1-1).
-                ScrollOffsetReader(relay: scrollRelay) { offset in
-                    CollapsibleHeader(
-                        title: String(localized: "links.hub.title", defaultValue: "Mes liens", bundle: .main),
-                        scrollOffset: offset,
-                        onBack: { router.pop() },
-                        titleColor: theme.textPrimary,
-                        backArrowColor: MeeshyColors.communityAccent,
-                        backgroundColor: theme.backgroundPrimary
-                    )
-                }
-                Spacer()
-            }
+        LinksPage(
+            title: String(localized: "links.hub.title", defaultValue: "Mes liens", bundle: .main),
+            accent: MeeshyColors.communityAccent,
+            onBack: { router.pop() }
+        ) {
+            linkCategoryCards
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.sm)
+                .padding(.bottom, 40)
         }
-        .navigationBarHidden(true)
         #if DEBUG
         // La vitrine (#9904) : le hub prête son routeur, la scène y ouvre l'affiliation comme le toucher de sa carte.
         .onAppear { VitrineRendu.shared.liensAffiches { router.push($0) } }
@@ -81,38 +45,6 @@ struct LinksHubView: View {
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
-    }
-
-    // MARK: - Header Banner
-
-    private var headerBanner: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            HStack(spacing: MeeshySpacing.md) {
-                Image(systemName: "link.badge.plus")
-                    .font(.title.weight(.bold))
-                    .foregroundColor(MeeshyColors.communityAccent)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(String(localized: "links.hub.banner.title", defaultValue: "Gérez vos liens", bundle: .main))
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(theme.textPrimary)
-                    Text(String(localized: "links.hub.banner.subtitle", defaultValue: "Partagez, suivez et monétisez votre audience", bundle: .main))
-                        .font(.footnote)
-                        .foregroundStyle(theme.textSecondary)
-                }
-                Spacer()
-            }
-        }
-        .padding(MeeshySpacing.lg)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                        .stroke(theme.border(tint: MeeshyColors.communityAccentHex), lineWidth: 1)
-                )
-        )
-        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Category Cards
@@ -135,7 +67,7 @@ struct LinksHubView: View {
                 description: String(localized: "links.hub.tracking.description", defaultValue: "Suivez les performances de vos liens de référence", bundle: .main),
                 accentHex: MeeshyColors.trackingAccentHex,
                 route: .trackingLinks,
-                createLabel: String(localized: "links.hub.tracking.create.a11y", defaultValue: "Créer un lien de tracking", bundle: .main),
+                createLabel: String(localized: "links.hub.tracking.create.a11y", defaultValue: "Créer un lien de suivi", bundle: .main),
                 onCreate: { showCreateTrackingLink = true }
             )
 
@@ -150,11 +82,11 @@ struct LinksHubView: View {
 
             linkCard(
                 icon: "dollarsign.circle.fill",
-                title: String(localized: "links.hub.affiliate.title", defaultValue: "Liens affiliés", bundle: .main),
-                description: String(localized: "links.hub.affiliate.description", defaultValue: "Monétisez votre réseau avec des tokens d'affiliation", bundle: .main),
+                title: String(localized: "links.hub.affiliate.title", defaultValue: "Parrainage", bundle: .main),
+                description: String(localized: "links.hub.affiliate.description", defaultValue: "Invitez et suivez qui s'inscrit par vos liens", bundle: .main),
                 accentHex: MeeshyColors.successHex,
                 route: .affiliate,
-                createLabel: String(localized: "links.hub.affiliate.create.a11y", defaultValue: "Créer un lien affilié", bundle: .main),
+                createLabel: String(localized: "links.hub.affiliate.create.a11y", defaultValue: "Créer un lien de parrainage", bundle: .main),
                 onCreate: { showCreateAffiliate = true }
             )
         }
@@ -206,15 +138,13 @@ struct LinksHubView: View {
                 // Actions: bouton créer + chevron
                 HStack(spacing: MeeshySpacing.sm) {
                     if let onCreate {
-                        Button {
-                            HapticFeedback.medium()
-                            onCreate()
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(accent)
-                        }
-                        .buttonStyle(.plain)
+                        MeeshyGlassButton(
+                            systemImage: "plus",
+                            label: createLabel ?? title,
+                            size: .s36,
+                            glyphTint: accent,
+                            action: onCreate
+                        )
                         // Re-exposé via l'action rotor « Créer… » de la carte (idiome 183i) :
                         // ce Button secondaire imbriqué dans le Button de navigation est
                         // masqué à VoiceOver pour éviter un élément interactif ambigu.
@@ -257,6 +187,159 @@ private struct LinkCardCreateAction: ViewModifier {
             content.accessibilityAction(named: Text(verbatim: label)) { onCreate() }
         } else {
             content
+        }
+    }
+}
+
+// MARK: - L'en-tête des pages de liens
+
+/// L'action de l'en-tête d'une page de liens : un disque de verre du kit, à droite.
+struct LinksPageAction {
+    let label: String
+    let systemImage: String
+    let perform: () -> Void
+
+    init(label: String, systemImage: String = "plus", perform: @escaping () -> Void) {
+        self.label = label
+        self.systemImage = systemImage
+        self.perform = perform
+    }
+}
+
+/// L'EN-TÊTE DE PARRAINAGE, pour toutes les pages de liens (#18429).
+///
+/// Directive porteur (#18429) : chaque page de liens reprend l'en-tête de
+/// Parrainage — retour en disque de verre, même hauteur, même réduction au
+/// défilement, action en disque de verre du kit. Cette page le porte UNE fois,
+/// sur `CollapsibleHeaderPage` : l'écran ne fournit que son titre, sa teinte,
+/// son action et son contenu. Une feuille passe `glyph: .close` : son disque
+/// ferme au lieu de revenir.
+///
+/// Le contenu se pose sur le thème (`meeshyGlassTone(.theme)`) : les champs,
+/// lignes, puces et boutons du kit y prennent l'encre du thème, pas celle d'un
+/// média.
+struct LinksPage<Content: View>: View {
+    let title: String
+    let accent: Color
+    let glyph: CollapsibleHeaderBackGlyph
+    let action: LinksPageAction?
+    let onBack: (() -> Void)?
+    let content: () -> Content
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    init(
+        title: String,
+        accent: Color,
+        glyph: CollapsibleHeaderBackGlyph = .back,
+        action: LinksPageAction? = nil,
+        onBack: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.title = title
+        self.accent = accent
+        self.glyph = glyph
+        self.action = action
+        self.onBack = onBack
+        self.content = content
+    }
+
+    /// Retour opérant dans les trois contextes de présentation : pile iPhone,
+    /// panneau droit iPad, feuille.
+    private func back() {
+        if let onBack { return onBack() }
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)()
+    }
+
+    var body: some View {
+        ZStack {
+            theme.backgroundGradient.ignoresSafeArea()
+            CollapsibleHeaderPage(
+                title: title,
+                onBack: back,
+                titleColor: theme.textPrimary,
+                backArrowColor: accent,
+                backgroundColor: theme.backgroundPrimary,
+                trailing: { trailing },
+                content: { content().meeshyGlassTone(.theme) }
+            )
+            .backGlyph(glyph)
+        }
+        .navigationBarHidden(true)
+    }
+
+    @ViewBuilder
+    private var trailing: some View {
+        if let action {
+            MeeshyGlassButton(
+                systemImage: action.systemImage,
+                label: action.label,
+                size: .s40,
+                glyphTint: accent,
+                action: action.perform
+            )
+        }
+    }
+}
+
+// MARK: - Copier un lien
+
+/// Copier un lien se DIT (#18311) : le retour haptique ne suffisait pas, rien
+/// ne se voyait ni ne s'entendait. Une page qui montre sa propre confirmation
+/// (« Lien copié » dans le bouton) passe `.inline` ; une rangée, qui n'a pas la
+/// place, laisse le toast la montrer.
+enum LinksClipboard {
+    enum Confirmation {
+        case toast
+        case inline
+    }
+
+    @MainActor
+    static func copy(_ value: String, confirmation: Confirmation = .toast, message: String = ShareLinkDetailCopy.copied) {
+        UIPasteboard.general.string = value
+        switch confirmation {
+        case .toast:
+            FeedbackToastManager.shared.showSuccess(message)
+        case .inline:
+            HapticFeedback.success()
+            UIAccessibility.post(notification: .announcement, argument: message)
+        }
+    }
+}
+
+// MARK: - Le champ d'un formulaire de lien
+
+/// Le champ des formulaires de liens : la légende visible au-dessus, le champ du
+/// kit dessous (#18429). `MeeshyField` ne dessine pas sa légende — il en fait
+/// son nom accessible — donc la légende visible est masquée à VoiceOver : un
+/// seul arrêt, qui dit à quoi sert le champ.
+struct LinksFormField: View {
+    let label: String
+    let prompt: String?
+    let text: Binding<String>
+    var input: MeeshyFieldInput = .sentence
+    var caption: String?
+    var accessibilityLabel: String?
+    var hint: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+            Text(label)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                .foregroundStyle(ThemeManager.shared.textSecondary)
+                .accessibilityHidden(true)
+            MeeshyField(
+                accessibilityLabel ?? label,
+                text: text.wrappedValue,
+                input: input,
+                prompt: prompt,
+                caption: caption,
+                onChange: { text.wrappedValue = $0 }
+            )
+            .accessibilityHint(hint ?? caption ?? "")
         }
     }
 }

@@ -2,7 +2,7 @@
   "views": {
     "about": {
       "total": 1223,
-      "firstScreen": 137
+      "firstScreen": 129
     },
     "account-deletion": {
       "total": 276,
@@ -89,8 +89,8 @@
       "firstScreen": 14
     },
     "auth-magic-link": {
-      "total": 14,
-      "firstScreen": 14
+      "total": 26,
+      "firstScreen": 26
     },
     "auth-magic-link-validate": {
       "total": 26,
@@ -106,43 +106,43 @@
     },
     "c-conversation": {
       "total": 136,
-      "firstScreen": 103
+      "firstScreen": 104
     },
     "calls": {
-      "total": 79,
-      "firstScreen": 79
+      "total": 47,
+      "firstScreen": 47
     },
     "calls-keypad": {
-      "total": 37,
-      "firstScreen": 37
+      "total": 21,
+      "firstScreen": 21
     },
     "chats": {
-      "total": 329,
-      "firstScreen": 137
+      "total": 274,
+      "firstScreen": 100
     },
     "child-safety": {
       "total": 707,
-      "firstScreen": 156
+      "firstScreen": 143
     },
     "communities": {
-      "total": 70,
-      "firstScreen": 70
+      "total": 21,
+      "firstScreen": 21
     },
     "communities-new": {
-      "total": 23,
-      "firstScreen": 23
+      "total": 15,
+      "firstScreen": 15
     },
     "contact": {
       "total": 171,
       "firstScreen": 63
     },
     "conversations-new": {
-      "total": 83,
-      "firstScreen": 83
+      "total": 43,
+      "firstScreen": 43
     },
     "discover": {
-      "total": 70,
-      "firstScreen": 70
+      "total": 38,
+      "firstScreen": 38
     },
     "download": {
       "total": 54,
@@ -150,11 +150,11 @@
     },
     "faq": {
       "total": 875,
-      "firstScreen": 107
+      "firstScreen": 95
     },
     "feed": {
-      "total": 468,
-      "firstScreen": 66
+      "total": 357,
+      "firstScreen": 29
     },
     "forgot-password": {
       "total": 28,
@@ -169,8 +169,8 @@
       "firstScreen": 69
     },
     "links": {
-      "total": 70,
-      "firstScreen": 70
+      "total": 38,
+      "firstScreen": 38
     },
     "links-affiliate": {
       "total": 35,
@@ -185,96 +185,96 @@
       "firstScreen": 18
     },
     "links-share": {
-      "total": 61,
-      "firstScreen": 61
+      "total": 56,
+      "firstScreen": 56
     },
     "links-share-new": {
-      "total": 95,
-      "firstScreen": 58
+      "total": 84,
+      "firstScreen": 51
     },
     "links-tracking": {
-      "total": 37,
-      "firstScreen": 37
+      "total": 55,
+      "firstScreen": 55
     },
     "links-tracking-new": {
       "total": 37,
       "firstScreen": 37
     },
     "login": {
-      "total": 37,
-      "firstScreen": 37
+      "total": 50,
+      "firstScreen": 48
     },
     "me": {
-      "total": 122,
-      "firstScreen": 69
+      "total": 103,
+      "firstScreen": 37
     },
     "me-bookmarks": {
-      "total": 98,
-      "firstScreen": 39
+      "total": 84,
+      "firstScreen": 35
     },
     "me-progression": {
-      "total": 178,
+      "total": 162,
       "firstScreen": 108
     },
     "me-progression-atlas": {
-      "total": 136,
-      "firstScreen": 78
+      "total": 75,
+      "firstScreen": 73
     },
     "me-progression-badges": {
-      "total": 475,
-      "firstScreen": 122
+      "total": 162,
+      "firstScreen": 70
     },
     "me-progression-carnet": {
-      "total": 45,
-      "firstScreen": 45
+      "total": 43,
+      "firstScreen": 43
     },
     "me-progression-defis": {
-      "total": 189,
-      "firstScreen": 86
+      "total": 186,
+      "firstScreen": 82
     },
     "me-progression-ligue": {
-      "total": 222,
+      "total": 190,
       "firstScreen": 71
     },
     "me-progression-prestige": {
-      "total": 33,
-      "firstScreen": 33
+      "total": 30,
+      "firstScreen": 30
     },
     "me-progression-reglages": {
-      "total": 304,
-      "firstScreen": 119
+      "total": 141,
+      "firstScreen": 62
     },
     "me-progression-regles": {
-      "total": 2917,
-      "firstScreen": 167
+      "total": 387,
+      "firstScreen": 129
     },
     "me-progression-saison": {
-      "total": 169,
-      "firstScreen": 110
+      "total": 136,
+      "firstScreen": 98
     },
     "me-progression-succes": {
-      "total": 50,
-      "firstScreen": 50
+      "total": 48,
+      "firstScreen": 48
     },
     "me-progression-tableau-de-bord": {
-      "total": 170,
+      "total": 154,
       "firstScreen": 100
     },
     "me-progression-vitrine": {
-      "total": 105,
-      "firstScreen": 105
+      "total": 76,
+      "firstScreen": 76
     },
     "me-sounds": {
-      "total": 21,
-      "firstScreen": 21
+      "total": 4,
+      "firstScreen": 4
     },
     "me-starred-messages": {
       "total": 62,
       "firstScreen": 62
     },
     "notifications": {
-      "total": 156,
-      "firstScreen": 133
+      "total": 116,
+      "firstScreen": 93
     },
     "onboarding": {
       "total": 64,
@@ -285,8 +285,8 @@
       "firstScreen": 74
     },
     "post-post": {
-      "total": 74,
-      "firstScreen": 74
+      "total": 70,
+      "firstScreen": 70
     },
     "privacy": {
       "total": 1725,
@@ -301,12 +301,12 @@
       "firstScreen": 27
     },
     "settings": {
-      "total": 299,
-      "firstScreen": 106
+      "total": 284,
+      "firstScreen": 61
     },
     "settings-appareils-chiffres": {
-      "total": 121,
-      "firstScreen": 121
+      "total": 71,
+      "firstScreen": 71
     },
     "settings-data-export": {
       "total": 5,
@@ -317,20 +317,20 @@
       "firstScreen": 16
     },
     "settings-packs": {
-      "total": 76,
-      "firstScreen": 76
+      "total": 36,
+      "firstScreen": 36
     },
     "settings-securite": {
-      "total": 64,
-      "firstScreen": 64
+      "total": 52,
+      "firstScreen": 52
     },
     "settings-verify-email-change": {
       "total": 20,
       "firstScreen": 20
     },
     "share": {
-      "total": 329,
-      "firstScreen": 137
+      "total": 297,
+      "firstScreen": 105
     },
     "signup": {
       "total": 52,
@@ -353,8 +353,8 @@
       "firstScreen": 97
     },
     "welcome": {
-      "total": 23,
-      "firstScreen": 23
+      "total": 16,
+      "firstScreen": 16
     },
     "world": {
       "total": 25,
@@ -460,15 +460,15 @@
     },
     "links-tracking": {
       "de": {
-        "total": 34,
-        "firstScreen": 34
-      },
-      "a": {
         "total": 37,
         "firstScreen": 37
       },
-      "motif": "Chaque lien de suivi montre sa date de création",
-      "issue": 17641
+      "a": {
+        "total": 55,
+        "firstScreen": 55
+      },
+      "motif": "Chaque lien de suivi montre son dernier clic sous sa date de création : de quoi reconnaître un lien qui sert encore",
+      "issue": 17584
     },
     "links-tracking-new": {
       "de": {
@@ -481,6 +481,162 @@
       },
       "motif": "Une phrase dit ce que fait un lien de suivi ; le rôle des UTM et la consigne du jeton sont visibles",
       "issue": 17641
+    },
+    "about": {
+      "de": {
+        "total": 1223,
+        "firstScreen": 126
+      },
+      "a": {
+        "total": 1223,
+        "firstScreen": 129
+      },
+      "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
+      "issue": 18238
+    },
+    "account-deletion": {
+      "de": {
+        "total": 276,
+        "firstScreen": 100
+      },
+      "a": {
+        "total": 276,
+        "firstScreen": 110
+      },
+      "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
+      "issue": 18238
+    },
+    "child-safety": {
+      "de": {
+        "total": 707,
+        "firstScreen": 132
+      },
+      "a": {
+        "total": 707,
+        "firstScreen": 143
+      },
+      "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
+      "issue": 18238
+    },
+    "faq": {
+      "de": {
+        "total": 875,
+        "firstScreen": 91
+      },
+      "a": {
+        "total": 875,
+        "firstScreen": 95
+      },
+      "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
+      "issue": 18238
+    },
+    "me-progression-atlas": {
+      "de": {
+        "total": 75,
+        "firstScreen": 72
+      },
+      "a": {
+        "total": 75,
+        "firstScreen": 73
+      },
+      "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
+      "issue": 18238
+    },
+    "me-progression-badges": {
+      "de": {
+        "total": 162,
+        "firstScreen": 67
+      },
+      "a": {
+        "total": 162,
+        "firstScreen": 70
+      },
+      "motif": "Le premier écran avait été capturé hors CI, plus bas que ce que la CI mesure ; le total ne bouge pas",
+      "issue": 18238
+    },
+    "c-conversation": {
+      "de": {
+        "total": 136,
+        "firstScreen": 103
+      },
+      "a": {
+        "total": 136,
+        "firstScreen": 104
+      },
+      "motif": "La citation d'un média coule nom et libellé sur une ligne au lieu de trois étages : un mot de plus du fil entre dans le premier écran, le total ne bouge pas",
+      "issue": 18392
+    },
+    "me-progression-ligue": {
+      "de": {
+        "total": 199,
+        "firstScreen": 66
+      },
+      "a": {
+        "total": 190,
+        "firstScreen": 71
+      },
+      "motif": "Une phrase dit ce qu'est la joute (groupe de 30, 7 qui montent, 5 qui descendent) ; la légende « étincelles » ne se répète plus sur chaque ligne du classement, seule la valeur reste vue",
+      "issue": 18148
+    },
+    "me-progression-reglages": {
+      "de": {
+        "total": 141,
+        "firstScreen": 59
+      },
+      "a": {
+        "total": 141,
+        "firstScreen": 62
+      },
+      "motif": "Le premier écran avait été capturé hors CI à 59 ; la CI en mesure 62 à total inchangé (141), toujours sous les 69 d'avant l'épure du jeu",
+      "issue": 18238
+    },
+    "login": {
+      "de": {
+        "total": 37,
+        "firstScreen": 37
+      },
+      "a": {
+        "total": 50,
+        "firstScreen": 48
+      },
+      "motif": "L'écran se nomme (« Connexion ») et la phrase du lien e-mail dit, au repos, ce que « Recevoir le lien » déclenche",
+      "issue": 17584
+    },
+    "auth-magic-link": {
+      "de": {
+        "total": 14,
+        "firstScreen": 14
+      },
+      "a": {
+        "total": 26,
+        "firstScreen": 26
+      },
+      "motif": "Le panneau du lien e-mail dit au repos ce que « Recevoir le lien » déclenche ; le (i) ne garde que la durée du lien",
+      "issue": 17584
+    },
+    "settings-securite": {
+      "de": {
+        "total": 32,
+        "firstScreen": 32
+      },
+      "a": {
+        "total": 52,
+        "firstScreen": 52
+      },
+      "motif": "Le bloc « Chiffrement de bout en bout » dit ce qu'il est (choisi par conversation, irréversible) avant de mener aux appareils",
+      "issue": 17584
+    },
+    "me": {
+      "de": {
+        "total": 100,
+        "firstScreen": 37
+      },
+      "a": {
+        "total": 103,
+        "firstScreen": 37
+      },
+      "motif": "La carte « Mon téléphone » (ex « Batterie ») accueille la coupure du téléphone injoignable (« Téléphone injoignable ») au lieu d'une section de plus ; qui est prévenu se lit sur la fiche de chaque personne",
+      "issue": 18737
     }
   }
 }

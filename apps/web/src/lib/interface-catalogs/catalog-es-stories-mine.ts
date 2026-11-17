@@ -4,7 +4,6 @@ const esStoriesMine = {
   'storiesMine.title': 'Mis historias',
   'storiesMine.manage': 'Gestionar mis historias',
   'storiesMine.empty.title': 'No hay historias enviadas',
-  'storiesMine.empty.subtitle': 'Tus historias publicadas aparecerán aquí mientras estén activas.',
   'storiesMine.action.open': 'Abrir',
   'storiesMine.action.edit': 'Editar',
   'storiesMine.action.delete': 'Eliminar',

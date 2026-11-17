@@ -4,6 +4,7 @@ import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engage
 
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { engagementPillModel, localDayOf } from '@/lib/view/engagement-pill';
+import { useLayerPresence } from '@/lib/view/dialog-exit';
 import { useMinute } from '@/lib/view/use-minute';
 import { Link } from '@/routes/route-table';
 
@@ -58,6 +59,7 @@ export function EngagementPill({
 }) {
   const minute = useMinute();
   const [cardOpen, setCardOpen] = useState(false);
+  const card = useLayerPresence(cardOpen ? true : null);
   const cardId = useId();
   const interfaceLanguage = language ?? currentInterfaceLanguage();
   const today = localDayOf(now === undefined ? minute * 60_000 : now());
@@ -95,14 +97,15 @@ export function EngagementPill({
           onClick={() => setCardOpen((open) => !open)}
           aria-expanded={cardOpen}
           aria-controls={cardOpen ? cardId : undefined}
-          className="inline-flex min-h-11 shrink-0 items-center"
+          className="btn-press inline-flex min-h-11 shrink-0 items-center"
         >
           <span className={className}>{body}</span>
         </button>
-        {cardOpen ? (
+        {card.value !== null ? (
           <Suspense fallback={null}>
             <FlameCard
               id={cardId}
+              leaving={card.leaving}
               snapshot={snapshot}
               day={today}
               language={interfaceLanguage}
@@ -123,7 +126,7 @@ export function EngagementPill({
   }
 
   return interactive ? (
-    <Link to="progression" data-engagement-pill={model.kind} className="inline-flex min-h-11 shrink-0 items-center">
+    <Link to="progression" data-engagement-pill={model.kind} className="btn-press inline-flex min-h-11 shrink-0 items-center">
       <span className={className}>{body}</span>
     </Link>
   ) : (

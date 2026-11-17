@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { memo, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import { apiDeps } from '@/lib/api/deps';
@@ -14,6 +14,7 @@ import { cachedDirectWith } from '@/lib/mood/reply';
 import { togetherStore, type TogetherInviteOutcome, type TogetherStoreApi } from '@/lib/together/together-live';
 import { useTogetherClient } from '@/lib/together/use-together-client';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 
 import { BRAND, BRAND_FILL, FOCUS, INK, INK_2 } from './user-profile-style';
 
@@ -86,13 +87,16 @@ export const ProfileTogetherRowView = memo(function ProfileTogetherRowView({
   name,
   pieces,
   onInvite,
+  inviting = null,
 }: {
   readonly language: InterfaceLanguage;
   readonly name: string;
   readonly pieces: readonly TogetherPiece[] | null;
   readonly onInvite: (piece: TogetherPiece) => void;
+  readonly inviting?: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  const list = useLayerPresence(open ? true : null);
   return (
     <div data-together-row="" className="grid gap-2 rounded-card px-3.5 py-3" style={{ backgroundColor: BRAND_FILL }}>
       <button
@@ -100,7 +104,7 @@ export const ProfileTogetherRowView = memo(function ProfileTogetherRowView({
         data-together-open=""
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className={`grid place-items-center rounded-chip px-4 text-body font-bold ${FOCUS}`}
+        className={`btn-press grid place-items-center rounded-chip px-4 text-body font-bold ${FOCUS}`}
         style={{ minHeight: 52, color: BRAND, border: `1.5px solid ${BRAND}`, outlineColor: BRAND }}
       >
         <span>
@@ -108,36 +112,40 @@ export const ProfileTogetherRowView = memo(function ProfileTogetherRowView({
           {translateCircles(language, 'together.row.title')}
         </span>
       </button>
-      {open ? (
-        pieces === null || pieces.length === 0 ? (
-          <p data-together-empty="" className="text-caption" style={{ color: INK_2 }}>
-            {translateCircles(language, 'together.row.empty')}
-          </p>
-        ) : (
-          <>
-            <p className="text-caption" style={{ color: INK_2 }}>
-              {translateCircles(language, 'together.row.explain', { name })}
+      {list.value === null ? null : (
+        <div data-together-list="" className="grid gap-2" {...layerMotion(list.leaving)}>
+          {pieces === null || pieces.length === 0 ? (
+            <p data-together-empty="" className="text-caption" style={{ color: INK_2 }}>
+              {translateCircles(language, 'together.row.empty')}
             </p>
-            <ul className="grid gap-1">
-              {pieces.map((piece) => (
-                <li key={piece.attachment.id}>
-                  <button
-                    type="button"
-                    data-together-piece={piece.attachment.id}
-                    aria-label={translateCircles(language, 'together.row.invite.a11y', { name, file: piece.attachment.originalName })}
-                    onClick={() => onInvite(piece)}
-                    className={`flex w-full items-center gap-2 rounded-chip px-3 text-start text-body ${FOCUS}`}
-                    style={{ minHeight: 44, color: INK, outlineColor: BRAND }}
-                  >
-                    <span aria-hidden="true">{piece.media === 'video' ? '🎬' : '🎧'}</span>
-                    <span className="truncate">{piece.attachment.originalName}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </>
-        )
-      ) : null}
+          ) : (
+            <>
+              <p className="text-caption" style={{ color: INK_2 }}>
+                {translateCircles(language, 'together.row.explain', { name })}
+              </p>
+              <ul className="grid gap-1">
+                {pieces.map((piece) => (
+                  <li key={piece.attachment.id}>
+                    <button
+                      type="button"
+                      data-together-piece={piece.attachment.id}
+                      aria-label={translateCircles(language, 'together.row.invite.a11y', { name, file: piece.attachment.originalName })}
+                      onClick={() => onInvite(piece)}
+                      disabled={inviting !== null}
+                      aria-busy={inviting === piece.attachment.id}
+                      className={`btn-press flex w-full items-center gap-2 rounded-chip px-3 text-start text-body disabled:opacity-60 ${FOCUS}`}
+                      style={{ minHeight: 44, color: INK, outlineColor: BRAND }}
+                    >
+                      <span aria-hidden="true">{piece.media === 'video' ? '🎬' : '🎧'}</span>
+                      <span className="truncate">{piece.attachment.originalName}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 });
@@ -197,12 +205,20 @@ export function ProfileTogetherRow({
   const conversationId = allowed ? cachedDirectWith(appQueryClient, person.id) : undefined;
   const pieces = useDirectPieces(deps, conversationId);
   const client = useTogetherClient({ watch, store, listen: false });
+  const [inviting, setInviting] = useState<string | null>(null);
+  const invitingRef = useRef<string | null>(null);
 
   if (!ready || !allowed) return null;
   const name = person.displayName ?? person.username;
   const invite = (piece: TogetherPiece): void => {
-    if (conversationId === undefined) return;
-    void client.invite({ toUserId: person.id, conversationId, attachmentId: piece.attachment.id }).then((outcome) => onNotice(translateCircles(language, OUTCOME_NOTICE[outcome], { name }), outcome !== 'invited'));
+    if (conversationId === undefined || invitingRef.current !== null) return;
+    invitingRef.current = piece.attachment.id;
+    setInviting(piece.attachment.id);
+    void client.invite({ toUserId: person.id, conversationId, attachmentId: piece.attachment.id }).then((outcome) => {
+      invitingRef.current = null;
+      setInviting(null);
+      onNotice(translateCircles(language, OUTCOME_NOTICE[outcome], { name }), outcome !== 'invited');
+    });
   };
-  return <ProfileTogetherRowView language={language} name={name} pieces={pieces} onInvite={invite} />;
+  return <ProfileTogetherRowView language={language} name={name} pieces={pieces} onInvite={invite} inviting={inviting} />;
 }

@@ -110,6 +110,14 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   'conversations/messages-search.ts': { kind: 'applies', reads: 3, applications: 1 },
   'conversations/threads.ts': { kind: 'applies', reads: 2, applications: 2 },
   'links/utils/prisma-queries.ts': { kind: 'applies', reads: 2, applications: 2 },
+  // #18617 — la relecture du RENVOI (`writeLinkMessageIdempotently`) charge
+  // `sender` avec sa `language`, donc elle est exposée comme toute autre
+  // lecture : un expéditeur disparu ferait rejeter la relecture entière, et le
+  // renvoi retomberait en 500 pour une raison étrangère au renvoi. La
+  // projection est LOCALE (la partagée ne porte pas `sender.language`), donc la
+  // réparation que `findExistingMessage` apporte gratuitement est branchée ici
+  // à la main.
+  'links/messageIdempotency.ts': { kind: 'applies', reads: 1, applications: 1 },
   // Les 2 autres lectures (`/translations`, `/status-details`) vérifient
   // l'existence du message sans jamais charger `sender`.
   'messages-reads.ts': { kind: 'applies', reads: 3, applications: 1 },
@@ -176,9 +184,12 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   // `sender`. Absent du garde du masquage personnel : une `findUnique`, hors
   // de son périmètre (`findMany`/`count`), et elle ne sert aucun contenu.
   'readerSignedDelivery.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
-  // #16685 — la garde de vivacité du rejeu : elle ne lit que `deletedAt`/`expiresAt`
-  // (`MESSAGE_LIVENESS_SELECT`), jamais `sender`.
-  'queuedMessageLiveness.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #18615 — la lecture PARTAGÉE des faits de message du rejeu : `createdAt`
+  // pour le PLANCHER D'HISTOIRE, plus `MESSAGE_LIVENESS_SELECT`
+  // (`deletedAt`/`expiresAt`) pour la garde de vivacité, qui la lisait
+  // elle-même jusqu'ici (#16685) et est redevenue PURE. Jamais `sender` :
+  // aucune des deux questions ne porte sur un expéditeur.
+  'queuedMessageFacts.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #12822 — relit le seul régime du message enrichi (`encryptionMode`, et
   // celui de sa conversation) pour sceller son entrée de file hors ligne.
   'emitAttachmentUpdated.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -203,6 +214,7 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
 
 /** `services/` — même règle, troisième racine. */
 const SERVICE_SURFACES: Record<string, Classification> = {
+  'battery/batteryContext.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 2 },
   // #17076 — DEUX lectures, UNE réparation, et l'écart est une DÉCISION.
   // `recompute()` est le chemin AUTORITATIF : il répare. `foldFlooredWindow`
@@ -315,6 +327,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // expéditeur disparu n'ouvre donc aucune trajectoire d'erreur : l'annonce
   // part vers la room du `Participant.id`, qui est exactement l'adresse que
   // `ROOMS.user()` attend d'un participant sans ligne `User`.
+  // #18556 — le départ du lecteur relit `{ select: { id, effectFlags, expiresAt } }`,
+  // jamais `sender`.
+  'messaging/afterReadDeparture.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #8302 — la flamme-œil consommée : `{ select: { id, senderId, effectFlags } }`,
   // jamais `sender`. `senderId` sert à refuser qu'un auteur consomme le sien.
   'messaging/consumeAfterReadMessages.ts': {
@@ -361,7 +376,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #9617 — la capture déclarée relit les messages désignés par
   // `CAPTURED_MESSAGE_SELECT` : identité, horloge, auteur par son seul
   // `senderId` et colonnes de la loi de sortie — jamais la relation `sender`.
-  'messaging/contentCaptureNotices.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #18830 — la seconde lecture relit l'avis à compter (id, conversation, suppression, métadonnée).
+  'messaging/contentCaptureNotices.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'messaging/forwardAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageMentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #16557 — la troisième lecture est celle de `loadMessageReadableByReader` (la forme « demande »), même projection sans contenu.

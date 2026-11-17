@@ -183,6 +183,17 @@ class NavBackChromeTest {
     }
 
     @Test
+    fun `a screen iOS pushes behind a cross is pushed, yet keeps the edge swipe closed`() {
+        assertThat(NavBackChrome.isPushed(Routes.MOOD_SPOTLIGHT)).isTrue()
+        assertThat(NavBackChrome.edgeSwipeBackEnabled(Routes.MOOD_SPOTLIGHT)).isFalse()
+        assertThat(NavBackChrome.isPushed(Routes.SETTINGS)).isTrue()
+        assertThat(NavBackChrome.isPushed(Routes.POST_DETAIL)).isFalse()
+        assertThat(NavBackChrome.isPushed(Routes.CONVERSATIONS)).isFalse()
+        assertThat(NavBackChrome.isPushed(Routes.REELS)).isFalse()
+        assertThat(NavBackChrome.isPushed(null)).isFalse()
+    }
+
+    @Test
     fun `roots and immersive screens follow iOS and carry no edge swipe`() {
         assertThat(NavBackChrome.entries.filter { it.chrome == BackChrome.ROOT }.map { it.source }).containsExactly(
             "Routes.LOGIN", "Routes.MAGIC_LINK_VALIDATE", "Routes.VERIFY_EMAIL_LINK", "Routes.CONVERSATIONS", "Routes.FEED",

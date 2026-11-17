@@ -53,7 +53,14 @@ public struct DiskCacheImageLoader: StoryMediaImageLoading {
     /// Les octets bruts, servis par la MÊME pile que `image(for:)` — L1 NSCache,
     /// L2 disque, réseau. Aucun second chemin de téléchargement : ce serait une
     /// jumelle du cache, avec sa propre politique et ses propres ratés.
+    ///
+    /// Un fichier LOCAL (la pièce qu'on vient d'envoyer, avant l'accusé) se lit
+    /// sur place : le cache ne sait télécharger que de l'http(s), et un GIF
+    /// juste envoyé restait figé dans sa propre bulle (#4984).
     public nonisolated func data(for urlString: String) async -> Data? {
-        try? await CacheCoordinator.shared.images.data(for: urlString)
+        if let url = URL(string: urlString), url.isFileURL {
+            return try? Data(contentsOf: url, options: .mappedIfSafe)
+        }
+        return try? await CacheCoordinator.shared.images.data(for: urlString)
     }
 }

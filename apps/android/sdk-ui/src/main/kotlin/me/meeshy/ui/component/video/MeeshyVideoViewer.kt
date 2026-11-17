@@ -6,7 +6,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -105,7 +104,7 @@ public fun MeeshyVideoViewer(
         val density = LocalDensity.current
         val scope = rememberCoroutineScope()
         val dragY = remember { Animatable(0f) }
-        val latestDismiss by rememberUpdatedState(onDismiss)
+        val leave: () -> Unit = this::dismiss
         val dismissDistancePx = with(density) { FullscreenVideoGestures.DISMISS_DISTANCE.dp.toPx() }
 
         LaunchedEffect(handle) {
@@ -142,7 +141,7 @@ public fun MeeshyVideoViewer(
                         onDragEnd = {
                             val travelDp = with(density) { travel.toDp().value }
                             when (FullscreenVideoGestures.swipeDownEnded(travelDp, isPlaying = false, pipActive = false)) {
-                                is SwipeDownOutcome.Dismiss -> latestDismiss()
+                                is SwipeDownOutcome.Dismiss -> leave()
                                 SwipeDownOutcome.SnapBack -> scope.launch { dragY.animateTo(0f, spring()) }
                             }
                         },
@@ -182,7 +181,7 @@ public fun MeeshyVideoViewer(
                 exit = fadeOut(),
             ) {
                 IconButton(
-                    onClick = onDismiss,
+                    onClick = leave,
                     modifier = Modifier
                         .statusBarsPadding()
                         .padding(MeeshySpacing.sm)

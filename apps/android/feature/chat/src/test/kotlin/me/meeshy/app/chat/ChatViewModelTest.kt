@@ -80,6 +80,7 @@ import me.meeshy.sdk.model.LiveLocationUpdatedEvent
 import me.meeshy.sdk.model.TranscriptionPayload
 import me.meeshy.sdk.model.TranscriptionReadyEvent
 import me.meeshy.sdk.model.TranslatedAudioPayload
+import me.meeshy.sdk.model.TranslationEntry
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.PresenceSnapshotEvent
@@ -2266,34 +2267,39 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         translationReceived.emit(
-            TranslationEvent(
-                messageId = "m2",
-                conversationId = "c1",
-                targetLanguage = "fr",
-                translatedContent = "Bonjour",
-            ),
+            TranslationEvent("m2", listOf(TranslationEntry(targetLanguage = "fr", translatedContent = "Bonjour"))),
         )
         advanceUntilIdle()
 
         coVerify(exactly = 1) { h.repo.applyTranslation("m2", "fr", "Bonjour") }
     }
 
+    /**
+     * Le témoin « une trame d'une AUTRE conversation est ignorée » vivait ici, et il était faux :
+     * `message:translation` ne porte pas de `conversationId` (#18069), donc le filtre qu'il exerçait
+     * n'existe pas sur le fil. Ce qu'il faut garder à sa place est la forme RÉELLE — une trame peut
+     * porter PLUSIEURS traductions, et chacune doit atteindre le dépôt.
+     */
     @Test
-    fun a_translation_event_elsewhere_is_ignored() = runTest(dispatcher) {
+    fun a_translation_event_applies_every_translation_it_carries() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()
 
         translationReceived.emit(
             TranslationEvent(
-                messageId = "m2",
-                conversationId = "other",
-                targetLanguage = "fr",
-                translatedContent = "Bonjour",
+                "m2",
+                listOf(
+                    TranslationEntry(targetLanguage = "fr", translatedContent = "Bonjour"),
+                    TranslationEntry(targetLanguage = "es", translatedContent = "Hola"),
+                    TranslationEntry(targetLanguage = "", translatedContent = "ignorée"),
+                ),
             ),
         )
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { h.repo.applyTranslation(any(), any(), any()) }
+        coVerify(exactly = 1) { h.repo.applyTranslation("m2", "fr", "Bonjour") }
+        coVerify(exactly = 1) { h.repo.applyTranslation("m2", "es", "Hola") }
+        coVerify(exactly = 2) { h.repo.applyTranslation(any(), any(), any()) }
     }
 
     @Test

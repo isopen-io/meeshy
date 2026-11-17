@@ -29,6 +29,7 @@ import me.meeshy.sdk.model.call.CallDuoStageLayout
 import me.meeshy.sdk.model.call.CallSelfTileCorner
 import me.meeshy.sdk.model.call.CallSelfTileLaw
 import me.meeshy.sdk.model.call.CallSelfTileMemory
+import me.meeshy.sdk.model.call.CallSelfTilePlate
 import me.meeshy.sdk.model.call.CallSelfTileScale
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.ui.theme.MeeshyTheme
@@ -194,6 +195,33 @@ class CallStageSemanticsTest {
         }
         val node = rule.onNodeWithContentDescription("Swap videos").fetchSemanticsNode()
         assertThat(node.config.getOrNull(SemanticsProperties.StateDescription)).isEqualTo("Small thumbnail")
+    }
+
+    private fun plateOf(plate: CallSelfTilePlate, controlsVisible: Boolean = true): List<String> {
+        rule.setContent {
+            MeeshyTheme {
+                CallSelfTile(
+                    "c", CallSelfTileMemory(), paused = false, reduceMotion = true, onSwap = {},
+                    controlsVisible = controlsVisible, plate = plate, modifier = Modifier.fillMaxSize(),
+                ) { Box(Modifier.fillMaxSize()) }
+            }
+        }
+        return rule.onNodeWithContentDescription("Swap videos").fetchSemanticsNode().config[SemanticsProperties.ContentDescription]
+    }
+
+    @Test
+    fun `my duo tile carries the You plate, read with the tile (P1_4, #17982)`() {
+        assertThat(plateOf(CallSelfTilePlate.You)).contains("You")
+    }
+
+    @Test
+    fun `the You plate stays on my tile when a touch stows the controls (G1_2, #17982)`() {
+        assertThat(plateOf(CallSelfTilePlate.You, controlsVisible = false)).contains("You")
+    }
+
+    @Test
+    fun `swapped, my tile names who it shows (P1_4, #17982)`() {
+        assertThat(plateOf(CallSelfTilePlate.Named("Alice"))).contains("Alice")
     }
 
     @Test

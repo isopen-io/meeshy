@@ -28,7 +28,7 @@ import { CircleLinkRow, CircleLinkSheet, CircleRequestRow, CircleSectionHeader, 
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-const { mount, unmountAll, click, settle } = createActMounter();
+const { mount, rerender, unmountAll, click, settle } = createActMounter();
 
 beforeAll(async () => {
   ensureHappyDomRegistered();
@@ -196,6 +196,42 @@ describe('l’onglet « Cercles », câblé', () => {
     expect(raised).toEqual([['u-ada', 'CLOSE']]);
   });
 
+  test('une demande acceptée ou refusée quitte la liste en se repliant, et la section « Demandes » part avec la dernière', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link(), link({ userId: 'u-bob' })]);
+    const first = request({ id: 'r-1', targetLevel: 'CLOSE' });
+    const second = request({ id: 'r-2', senderId: 'u-bob', sender: { ...ada, id: 'u-bob', displayName: 'Bob' }, targetLevel: 'CLOSE' });
+    const withReceived = (received: FriendRequestRecord[]) => (
+      <CirclesPanel language="fr" enabled={false} online now={NOW} received={received} sent={[]} accepted={accepted} requestHandlers={handlers} onRaise={noop} onFindContacts={noop} />
+    );
+    const realMatchMedia = window.matchMedia;
+    const proto = HTMLElement.prototype;
+    const ownAnimate = Object.getOwnPropertyDescriptor(proto, 'animate');
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('no-preference'),
+      media: query,
+      addEventListener: noop,
+      removeEventListener: noop,
+    })) as unknown as typeof window.matchMedia;
+    proto.animate = function () {
+      return { finished: new Promise<void>(noop), cancel: noop } as unknown as Animation;
+    } as typeof proto.animate;
+    try {
+      const host = await mount(withReceived([first, second]));
+      expect(host.querySelector('[data-circle-request="r-1"]')).not.toBeNull();
+      await rerender(host, withReceived([second]));
+      expect(host.querySelector('[data-circle-request="r-1"]')?.hasAttribute('data-row-exiting')).toBe(true);
+      expect(host.querySelector('[data-circle-request="r-1"]')?.hasAttribute('inert')).toBe(true);
+      expect(host.querySelector('[data-circle-request="r-2"]')?.hasAttribute('data-row-exiting')).toBe(false);
+      await rerender(host, withReceived([]));
+      expect(host.querySelector('[data-circle-requests-section]')?.hasAttribute('data-row-exiting')).toBe(true);
+      expect(host.querySelector('[data-circle-requests-section]')?.textContent).toContain('Bob');
+    } finally {
+      window.matchMedia = realMatchMedia;
+      if (ownAnimate === undefined) Reflect.deleteProperty(proto, 'animate');
+      else Object.defineProperty(proto, 'animate', ownAnimate);
+    }
+  });
+
   test('aucun lien : l’état vide dit pourquoi et mène à la découverte', async () => {
     appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, []);
     const found: string[] = [];
@@ -203,6 +239,44 @@ describe('l’onglet « Cercles », câblé', () => {
     expect(host.textContent).toContain('Vos liens apparaîtront ici');
     await click(host.querySelector<HTMLButtonElement>('[data-circles-find]'));
     expect(found).toEqual(['find']);
+  });
+
+  test('l’état vide dit CE QU’EST un cercle au repos ; « comment on y entre » passe derrière un (i) en forme de question (épure #17584, règle 7)', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, []);
+    const host = await mount(panel([]));
+    const empty = host.querySelector('[data-circles-empty]');
+    const intro = empty?.querySelector('[data-circles-empty-intro]');
+    expect(intro?.textContent).toBe('Chaque cercle dit ce que la personne voit de vous : plus il est proche, plus vous partagez.');
+    expect(intro?.className).not.toContain('sr-only');
+    expect(empty?.textContent).toContain('Vos liens apparaîtront ici');
+    const info = empty?.querySelector<HTMLButtonElement>('button[aria-expanded]');
+    expect(info?.getAttribute('aria-label')).toBe('Comment les personnes rejoignent-elles mes cercles ?');
+    const noteId = info?.getAttribute('aria-controls') ?? '';
+    const note = document.getElementById(noteId);
+    expect(note?.textContent).toBe('À mesure que vous échangez avec des personnes, elles rejoignent vos cercles.');
+    expect(note?.className).toContain('sr-only');
+    await click(info ?? null);
+    expect(document.getElementById(noteId)?.className).not.toContain('sr-only');
+    expect(host.querySelector('[data-circles-find]')).not.toBeNull();
+  });
+
+  test('l’état vide se lit d’un bloc : la phrase du cercle et son (i) sont sous le titre, pas reléguées près du bouton (épure #18196)', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, []);
+    const host = await mount(panel([]));
+    const block = host.querySelector('[data-circles-empty] [data-discover-empty]');
+    expect(block?.textContent).toContain('Vos liens apparaîtront ici');
+    expect(block?.querySelector('[data-circles-empty-intro]')).not.toBeNull();
+    expect(block?.querySelector('button[aria-expanded]')).not.toBeNull();
+  });
+
+  test('la phrase d’orientation est lisible au repos, une ligne au-dessus de la liste, sans clic (épure #17584, règle 7)', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link()]);
+    const host = await mount(panel([]));
+    const intro = host.querySelector('[data-circles-intro]');
+    expect(intro?.textContent).toBe('Chaque cercle dit ce que la personne voit de vous : plus il est proche, plus vous partagez.');
+    expect(intro?.className).not.toContain('sr-only');
+    const list = host.querySelector('[data-circle-list]');
+    expect(intro !== null && list !== null && intro.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   test('« Positions partagées » mène à la carte de ce que mes liens me partagent (#16984)', async () => {

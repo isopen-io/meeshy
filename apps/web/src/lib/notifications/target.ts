@@ -132,9 +132,11 @@ const REQUEST_TYPES: ReadonlySet<string> = new Set(['friend_request', 'contact_r
 /**
  * Les types qui annoncent une PERSONNE : « X a rejoint Meeshy » (#8105) et
  * « X était sur Meeshy récemment » (#8285) ouvrent le profil de X, où l'on
- * trouve « Se connecter » et « Écrire ».
+ * trouve « Se connecter » et « Écrire » ; la batterie d'un Proche ou d'un Sang
+ * (`device_battery`, #14147) ouvre sa fiche, où se lit le détail de l'épisode ; son téléphone injoignable
+ * (`device_unreachable`, #18737) aussi, où se lisent l'heure et la cause probable.
  */
-const PROFILE_TYPES: ReadonlySet<string> = new Set(['contact_joined', 'contact_recently_active']);
+const PROFILE_TYPES: ReadonlySet<string> = new Set(['contact_joined', 'contact_recently_active', 'device_battery', 'device_unreachable']);
 
 /**
  * UN APPEL MANQUÉ SANS CONVERSATION NOMMÉE (#9177, suite de #9115) — une

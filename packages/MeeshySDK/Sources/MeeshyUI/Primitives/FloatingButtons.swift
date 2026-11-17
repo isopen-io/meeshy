@@ -90,6 +90,11 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
     public let onRightTap: () -> Void
     public var onLeftLongPress: (() -> Void)? = nil
     public var onRightLongPress: (() -> Void)? = nil
+    /// La course VIVE du bouton de gauche / de droite, à chaque image du glisser
+    /// (`nil` à la levée). C'est ce que l'échelle du menu suit (#18201) ; rien
+    /// n'en est persisté — `onDragEnded` reste le seul producteur d'une position.
+    public var onLeftDragChanged: ((CGSize?) -> Void)? = nil
+    public var onRightDragChanged: ((CGSize?) -> Void)? = nil
     public var leftA11yLabel: String
     public var leftA11yHint: String? = nil
     public var leftA11yValue: String? = nil
@@ -108,6 +113,8 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         onRightTap: @escaping () -> Void,
         onLeftLongPress: (() -> Void)? = nil,
         onRightLongPress: (() -> Void)? = nil,
+        onLeftDragChanged: ((CGSize?) -> Void)? = nil,
+        onRightDragChanged: ((CGSize?) -> Void)? = nil,
         leftA11yHint: String? = nil,
         leftA11yValue: String? = nil,
         leftA11yActionName: String? = nil,
@@ -123,6 +130,8 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
         self.onRightTap = onRightTap
         self.onLeftLongPress = onLeftLongPress
         self.onRightLongPress = onRightLongPress
+        self.onLeftDragChanged = onLeftDragChanged
+        self.onRightDragChanged = onRightDragChanged
         self.leftA11yLabel = leftA11yLabel
         self.leftA11yHint = leftA11yHint
         self.leftA11yValue = leftA11yValue
@@ -155,6 +164,7 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
                 },
                 onTap: onLeftTap,
                 onLongPress: onLeftLongPress,
+                onDragChanged: onLeftDragChanged,
                 a11yLabel: leftA11yLabel,
                 a11yHint: leftA11yHint,
                 a11yValue: leftA11yValue,
@@ -172,6 +182,7 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
                 },
                 onTap: onRightTap,
                 onLongPress: onRightLongPress,
+                onDragChanged: onRightDragChanged,
                 a11yLabel: rightA11yLabel,
                 a11yHint: rightA11yHint,
                 a11yValue: rightA11yValue,
@@ -190,12 +201,17 @@ public struct FreeFloatingButtonsContainer<LeftContent: View, RightContent: View
 /// le doigt image par image pendant le glisser ; à la levée, `onDragEnded`
 /// reçoit la course, et la géométrie décide s'il y a quelque chose à écrire
 /// (`FloatingButtonGeometry.storage(afterDragFrom:…)`).
+///
+/// Pendant le geste, `onDragChanged` publie la course à chaque image, puis `nil`
+/// à la levée : ce qui s'accroche au disque (l'échelle du menu, #18201) le suit
+/// sans attendre la position persistée, et sans rien persister lui-même.
 public struct FreeFloatingButton<Content: View>: View {
     public let center: CGPoint
     public let buttonSize: CGFloat
     public let onDragEnded: (CGSize) -> Void
     public let onTap: () -> Void
     public var onLongPress: (() -> Void)? = nil
+    public var onDragChanged: ((CGSize?) -> Void)? = nil
     public var a11yLabel: String? = nil
     public var a11yHint: String? = nil
     public var a11yValue: String? = nil
@@ -204,6 +220,13 @@ public struct FreeFloatingButton<Content: View>: View {
 
     @State private var dragOffset: CGSize = .zero
     @State private var isDragging = false
+    @State private var isPressed = false
+    @GestureState private var isHolding = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
 
     public init(
         center: CGPoint,
@@ -211,6 +234,7 @@ public struct FreeFloatingButton<Content: View>: View {
         onDragEnded: @escaping (CGSize) -> Void,
         onTap: @escaping () -> Void,
         onLongPress: (() -> Void)? = nil,
+        onDragChanged: ((CGSize?) -> Void)? = nil,
         a11yLabel: String? = nil,
         a11yHint: String? = nil,
         a11yValue: String? = nil,
@@ -222,6 +246,7 @@ public struct FreeFloatingButton<Content: View>: View {
         self.onDragEnded = onDragEnded
         self.onTap = onTap
         self.onLongPress = onLongPress
+        self.onDragChanged = onDragChanged
         self.a11yLabel = a11yLabel
         self.a11yHint = a11yHint
         self.a11yValue = a11yValue
@@ -232,29 +257,16 @@ public struct FreeFloatingButton<Content: View>: View {
     public var body: some View {
         content
             .frame(width: buttonSize, height: buttonSize)
-            .background(
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 10, x: 0, y: 5)
-            )
-            .overlay(
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.white.opacity(MeeshyOpacity.medium), Color.white.opacity(MeeshyOpacity.subtle)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.5
-                    )
-            )
-            .scaleEffect(isDragging ? 1.15 : 1.0)
+            .meeshyGlass(in: Circle(), isInteractive: true, isPressed: isPressed)
+            .scaleEffect(FloatingButtonPress.dragScale(isDragging: isDragging, reduceMotion: reduceMotion))
+            .modifier(FloatingButtonHoldSquashEffect(isHolding: isHolding, hasLongPress: onLongPress != nil))
             .position(x: center.x + dragOffset.width, y: center.y + dragOffset.height)
             .gesture(dragGesture)
+            .simultaneousGesture(pressGesture)
             .simultaneousGesture(tapGesture)
             .simultaneousGesture(longPressGesture)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: center)
+            .meeshyAnimation(MeeshyAnimation.springFast, value: isDragging)
+            .meeshyAnimation(MeeshyAnimation.springDefault, value: center)
             .floatingButtonAccessibility(
                 label: a11yLabel,
                 hint: a11yHint,
@@ -270,15 +282,21 @@ public struct FreeFloatingButton<Content: View>: View {
             .onChanged { value in
                 isDragging = true
                 dragOffset = value.translation
+                onDragChanged?(value.translation)
             }
             .onEnded { value in
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduceMotion) {
                     onDragEnded(value.translation)
                     dragOffset = .zero
                     isDragging = false
+                    onDragChanged?(nil)
                 }
                 HapticFeedback.light()
             }
+    }
+
+    private var pressGesture: some Gesture {
+        FloatingButtonPress.gesture(threshold: FloatingButtonGeometry.dragThreshold) { isPressed = $0 }
     }
 
     private var tapGesture: some Gesture {
@@ -290,11 +308,56 @@ public struct FreeFloatingButton<Content: View>: View {
     }
 
     private var longPressGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.5)
+        LongPressGesture(minimumDuration: FloatingButtonHoldSquash.holdDuration)
+            .updating($isHolding) { pressing, holding, _ in holding = pressing }
             .onEnded { _ in
                 HapticFeedback.medium()
                 onLongPress?()
             }
+    }
+}
+
+// MARK: - Floating Button Press
+
+/// **L'appui d'un bouton flottant** : le doigt posé enfonce le disque (le verre
+/// du kit répond), le doigt levé le relâche, et un glisser au-delà du seuil
+/// n'est plus un appui : c'est un déplacement, que l'échelle de glisser montre.
+/// Sous « Réduire les animations », le disque ne grossit pas au glisser.
+nonisolated enum FloatingButtonPress {
+    enum Phase: Equatable {
+        case changed(CGSize)
+        case ended(CGSize)
+    }
+
+    /// Le seuil du `DragGesture()` par défaut du bouton hérité.
+    static let legacyDragThreshold: CGFloat = 10
+    /// Le grossissement au glisser du bouton hérité.
+    static let legacyLiftScale: CGFloat = 1.12
+
+    static func isPressed(after phase: Phase, threshold: CGFloat) -> Bool {
+        switch phase {
+        case .changed(let translation):
+            return hypot(translation.width, translation.height) < threshold
+        case .ended:
+            return false
+        }
+    }
+
+    static func dragScale(
+        isDragging: Bool,
+        reduceMotion: Bool,
+        lifted: CGFloat = FloatingMenuLadderFollow.discScale
+    ) -> CGFloat {
+        isDragging && !reduceMotion ? lifted : 1
+    }
+
+    /// Le geste qui suit le doigt dès qu'il se pose et rend l'état pressé de la
+    /// loi ; il ne change l'état que s'il bascule.
+    @MainActor
+    static func gesture(threshold: CGFloat, update: @escaping @MainActor (Bool) -> Void) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in update(isPressed(after: .changed(value.translation), threshold: threshold)) }
+            .onEnded { value in update(isPressed(after: .ended(value.translation), threshold: threshold)) }
     }
 }
 
@@ -448,7 +511,7 @@ public struct FloatingButtonsContainer<LeftContent: View, RightContent: View>: V
             }
         }
         .ignoresSafeArea()
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isSearchBarVisible)
+        .meeshyAnimation(MeeshyAnimation.springDefault, value: isSearchBarVisible)
     }
 }
 
@@ -471,6 +534,13 @@ public struct LegacyFloatingButton<Content: View>: View {
 
     @State private var dragOffset: CGSize = .zero
     @State private var isDragging = false
+    @State private var isPressed = false
+    @GestureState private var isHolding = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+    }
 
     public init(
         corner: Binding<ButtonCorner>,
@@ -524,28 +594,17 @@ public struct LegacyFloatingButton<Content: View>: View {
 
         content
             .frame(width: buttonSize, height: buttonSize)
-            .background(
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 10, x: 0, y: 5)
-            )
-            .overlay(
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.white.opacity(MeeshyOpacity.medium), Color.white.opacity(MeeshyOpacity.subtle)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.5
-                    )
-            )
-            .scaleEffect(isDragging ? 1.12 : 1.0)
+            .meeshyGlass(in: Circle(), isInteractive: true, isPressed: isPressed)
+            .scaleEffect(FloatingButtonPress.dragScale(
+                isDragging: isDragging, reduceMotion: reduceMotion, lifted: FloatingButtonPress.legacyLiftScale
+            ))
+            .modifier(FloatingButtonHoldSquashEffect(isHolding: isHolding, hasLongPress: onLongPress != nil))
             .position(x: pos.x + dragOffset.width, y: pos.y + dragOffset.height)
             .gesture(dragGesture(from: pos))
+            .simultaneousGesture(pressGesture)
             .simultaneousGesture(tapGesture)
             .simultaneousGesture(longPressGesture)
-            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isDragging)
+            .meeshyAnimation(MeeshyAnimation.springFast, value: isDragging)
             .floatingButtonAccessibility(
                 label: a11yLabel,
                 hint: a11yHint,
@@ -568,12 +627,16 @@ public struct LegacyFloatingButton<Content: View>: View {
                     y: startPos.y + value.translation.height
                 )
                 let newCorner = findNearestCorner(to: endPoint)
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduceMotion) {
                     corner = newCorner
                     dragOffset = .zero
                     isDragging = false
                 }
             }
+    }
+
+    private var pressGesture: some Gesture {
+        FloatingButtonPress.gesture(threshold: FloatingButtonPress.legacyDragThreshold) { isPressed = $0 }
     }
 
     private var tapGesture: some Gesture {
@@ -585,7 +648,8 @@ public struct LegacyFloatingButton<Content: View>: View {
     }
 
     private var longPressGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.5)
+        LongPressGesture(minimumDuration: FloatingButtonHoldSquash.holdDuration)
+            .updating($isHolding) { pressing, holding, _ in holding = pressing }
             .onEnded { _ in
                 HapticFeedback.medium()
                 onLongPress?()

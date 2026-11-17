@@ -185,8 +185,8 @@ describe('avant un geste : ce qu’il manque est une phrase, avec son but', () =
     expect(page).not.toContain('Restera');
   });
 
-  test('un niveau requis', () => {
-    expect(text(renderToStaticMarkup(<GameRequirementLine concept="league" current={8} required={10} record />))).toContain('Il manque 2 niveaux pour l’ouvrir.');
+  test('un niveau requis : les pastilles Niveau et Requis disent le manque, aucune phrase ne le répète', () => {
+    expect(text(renderToStaticMarkup(<GameRequirementLine concept="league" current={8} required={10} record />))).not.toContain('Il manque');
   });
 
   test('la frappe : le prix et ta lumière en une phrase, puis le manque, avec son but (#11178)', () => {

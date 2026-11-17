@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du fil (#17697, lot 1/3) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="participant_profile_entry_link_languages">Idiomas permitidos</string>
+    <string name="participant_profile_entry_link_requires">Se pide al llegar</string>
+    <string name="participant_profile_require_email">correo</string>
+    <string name="chat_exit_blocked_view_once">Es de visualización única: se queda aquí hasta que se vea.</string>
+    <string name="share_blocked_view_once">Es de visualización única: se queda aquí hasta que se vea.</string>
+    <string name="chat_exit_blocked_after_read">Desaparece tras leerse.</string>
+    <string name="share_blocked_after_read">Desaparece tras leerse.</string>
+    <string name="conversation_settings_auto_translate_hint">Los mensajes llegan en el idioma de cada miembro.</string>
+    <string name="conversation_settings_announcement_hint">Solo los roles autorizados escriben, los demás leen.</string>
+    <string name="chat_header_flame_card_orientation">Chispas ganadas al escribir en esta conversación</string>
+    <string name="chat_header_flame_card_today_sparks">Chispas hoy</string>
+    <string name="chat_header_flame_card_total_sparks">Chispas en total</string>
+    <string name="export_card_typeface_pairs_question">¿A qué se aplica la fuente?</string>
+    <string name="encryption_fact_encrypted_on_server_server_reads">Tus mensajes se cifran en nuestros servidores, que pueden leerlos.</string>
+    <string name="encryption_safety_number_title">Número de seguridad</string>
+    <string name="encryption_safety_number_subtitle">Compáralo con tu contacto para verificar el cifrado.</string>
+</resources>

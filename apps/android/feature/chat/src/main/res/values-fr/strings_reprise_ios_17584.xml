@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="conversation_options_section_actions">Actions</string>
+    <string name="encryption_fact_not_yet_decrypted_notifications">Le déchiffrement des notifications sur l’appareil, pour en afficher le texte, n’est pas encore disponible.</string>
+    <string name="participant_profile_allowed_can_send_audios">Envoyer de l’audio</string>
+    <string name="participant_profile_allowed_can_send_files">Envoyer des fichiers</string>
+    <string name="participant_profile_allowed_can_send_images">Envoyer des photos</string>
+    <string name="participant_profile_allowed_can_send_links">Envoyer des liens</string>
+    <string name="participant_profile_allowed_can_send_locations">Partager sa position</string>
+    <string name="participant_profile_allowed_can_send_messages">Écrire des messages</string>
+    <string name="participant_profile_allowed_can_send_videos">Envoyer des vidéos</string>
+    <string name="participant_profile_allowed_can_view_history">Voir les messages antérieurs</string>
+    <string name="participant_profile_denied_can_send_audios">Ne peut pas envoyer d’audio</string>
+    <string name="participant_profile_denied_can_send_files">Ne peut pas envoyer de fichiers</string>
+    <string name="participant_profile_denied_can_send_images">Ne peut pas envoyer d’images</string>
+    <string name="participant_profile_denied_can_send_links">Ne peut pas envoyer de liens</string>
+    <string name="participant_profile_denied_can_send_locations">Ne peut pas partager sa position</string>
+    <string name="participant_profile_denied_can_send_messages">Ne peut pas écrire</string>
+    <string name="participant_profile_denied_can_send_videos">Ne peut pas envoyer de vidéos</string>
+</resources>

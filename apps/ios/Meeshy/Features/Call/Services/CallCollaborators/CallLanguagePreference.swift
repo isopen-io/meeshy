@@ -14,6 +14,8 @@ enum CallLanguagePreference {
     ///   4. `deviceLocale`              — OS-level locale (4th priority, normalised to ISO 639-1)
     ///   5. `"fr"`                      — ultimate fallback
     /// Pure + static — no side effects, no async, safe to unit test directly.
+    /// UNE langue, celle dans laquelle on PARLE : elle ne sert jamais la LECTURE. Ce qui affiche une
+    /// traduction descend le prisme ordonné (`ReaderPrism.resolve` + `PrismTranslationResolver`, A1.7).
     static func preferredCallLanguage(for user: MeeshyUser?) -> String {
         user?.systemLanguage
             ?? user?.regionalLanguage

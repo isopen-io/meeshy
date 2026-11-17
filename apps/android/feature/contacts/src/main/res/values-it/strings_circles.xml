@@ -3,7 +3,6 @@
 <resources>
     <string name="circles_empty_action">Trova contatti</string>
     <string name="circles_empty_subtitle">Man mano che scambi con le persone, entrano nei tuoi cerchi</string>
-    <string name="circles_empty_title">I tuoi legami appariranno qui</string>
     <string name="circles_error_load">Impossibile caricare i tuoi cerchi</string>
     <string name="circles_error_retry">Riprova</string>
     <string name="circles_offline_banner">Offline: ecco gli ultimi cerchi noti</string>
@@ -37,7 +36,7 @@
     <string name="circles_ritual_consent_withdrawal">Potrai ritirare ogni condivisione in qualsiasi momento, dalla scheda di questa persona. Presto disponibile.</string>
     <string name="circles_ritual_hold">Tieni premuto per sigillare</string>
     <string name="circles_ritual_hold_hint">Dovete entrambi tenere premuto lo schermo nello stesso momento.</string>
-    <string name="circles_ritual_lapsed">L\'altra persona ha lasciato. Non è stato registrato nulla, nulla è cambiato.</string>
+    <string name="circles_ritual_lapsed">L\'altra persona ha mollato la presa. Non è stato registrato nulla, non è cambiato nulla.</string>
     <string name="circles_ritual_open_failed">Impossibile aprire il rituale</string>
     <string name="circles_ritual_other_waiting">%1$s ti aspetta</string>
     <string name="circles_ritual_retry">Ricomincia</string>
@@ -54,6 +53,6 @@
     <string name="circles_sheet_close">Chiudi</string>
     <string name="circles_sheet_settings_none">Niente da impostare a questo livello.</string>
     <string name="circles_sheet_settings_title">Impostazioni per questa persona</string>
-    <string name="circles_sheet_settings_unavailable">Queste impostazioni arriveranno con la prossima fase di Meeshy. Per ora sono disattivate.</string>
+    <string name="circles_sheet_settings_unavailable">Presto disponibile</string>
     <string name="contacts_tab_circles">Cerchie</string>
 </resources>

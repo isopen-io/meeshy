@@ -29,6 +29,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.auth.AuthActionButtonState
 import me.meeshy.ui.theme.MeeshyGradients
+import me.meeshy.sdk.model.accessibility.MotionSpecs
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.motion.meeshySpec
 import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -49,8 +52,8 @@ private const val PRESSED_SCALE = 0.92f
  * - **Envoi en cours** ([isLoading]) : un indicateur remplace le libellé, mais le lecteur
  *   d'écran GARDE le libellé — un bouton qui ne s'annonce plus que « en cours » ne dit plus
  *   ce qu'il fait. Le toucher est ignoré : un envoi ne part pas deux fois.
- * - **Au toucher** : le bouton rebondit (ressort à 0,92) et le téléphone vibre d'un tic
- *   léger, le temps que le réseau réponde.
+ * - **Au toucher** : le bouton rebondit (ressort à 0,92, aucune échelle sous « Réduire les
+ *   animations ») et le téléphone vibre d'un tic léger, le temps que le réseau réponde.
  *
  * La logique des états est dans [AuthActionButtonState] (`:core:model`), prouvée sans écran.
  */
@@ -66,9 +69,10 @@ public fun AuthActionButton(
     val haptic = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val reduceMotion = LocalReduceMotion.current
     val scale by animateFloatAsState(
-        targetValue = if (isPressed && state.acceptsTaps) PRESSED_SCALE else 1f,
-        animationSpec = MeeshyMotion.bouncySpring(),
+        targetValue = MotionSpecs.pressScale(isPressed && state.acceptsTaps, PRESSED_SCALE, reduceMotion),
+        animationSpec = meeshySpec(reduceMotion, MeeshyMotion.bouncySpring()),
         label = "authActionScale",
     )
     val alpha by animateFloatAsState(

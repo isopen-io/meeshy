@@ -220,18 +220,7 @@ struct BookmarksView: View {
         String(localized: "bookmarks.empty.title", defaultValue: "Aucun favori", bundle: .main)
     }
 
-    private var bookmarksEmptySubtitle: String {
-        String(localized: "bookmarks.empty.subtitle", defaultValue: "Les posts et les réels que vous enregistrez apparaîtront ici", bundle: .main)
-    }
-
-    // Reconstruit localement le rendu de `EmptyStateView` : ce composant
-    // partagé encapsule son icône, ce qui empêche de la masquer
-    // individuellement depuis un site d'appel. Le glyphe (bookmark) est
-    // purement décoratif — le titre et le sous-titre disent déjà tout — donc
-    // `.accessibilityHidden(true)` l'exclut explicitement avant que
-    // `.accessibilityElement(children: .combine)` ne fusionne le reste
-    // (titre + sous-titre) en un seul arrêt VoiceOver ; sans ce masquage, le
-    // nom brut du symbole ("bookmark") s'ajoutait à l'annonce.
+    // Le glyphe est décoratif : masqué pour que VoiceOver n'annonce que le titre.
     private var emptyState: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "bookmark")
@@ -242,12 +231,6 @@ struct BookmarksView: View {
             Text(bookmarksEmptyTitle)
                 .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold))
                 .foregroundStyle(theme.textPrimary)
-
-            Text(bookmarksEmptySubtitle)
-                .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .foregroundStyle(theme.textMuted)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, MeeshySpacing.xxxl)
         }
         .padding(.top, 80)
         .accessibilityElement(children: .combine)

@@ -53,6 +53,10 @@ import me.meeshy.sdk.model.profile.ProfileLayout
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.profile.ProfileTab
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.component.battery.BatteryPersonSection
+import me.meeshy.ui.component.battery.BatteryPersonSurface
+import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSection
+import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSurface
 import me.meeshy.ui.profile.ProfileFullscreenImage
 import me.meeshy.ui.profile.ProfileFullscreenImageViewer
 import me.meeshy.ui.theme.MeeshyMotion
@@ -155,6 +159,20 @@ internal fun ProfileSheetLoadedContent(
                             .padding(top = MeeshySpacing.lg),
                         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
                     ) {
+                        // La batterie (#14147) : le détail, seulement en épisode.
+                        if (!state.isSelf) {
+                            BatteryPersonSection(
+                                userId = profile.id,
+                                name = header.displayName,
+                                surface = BatteryPersonSurface.PROFILE,
+                            )
+                            // Le téléphone injoignable (#18737) : depuis quand, la cause, et le partage dès Proche.
+                            PhoneReachabilityPersonSection(
+                                userId = profile.id,
+                                name = header.displayName,
+                                surface = PhoneReachabilityPersonSurface.PROFILE,
+                            )
+                        }
                         AnimatedContent(
                             targetState = tabs.selected,
                             transitionSpec = { profileTabTransition(initialState, targetState, reduceMotion) },

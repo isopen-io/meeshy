@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// Compteur vivant affiché en pastille sur un barreau de l'échelle. Le
 /// descripteur reste pur — `RootView` résout la valeur au rendu.
@@ -91,6 +92,28 @@ enum RootMenuLadderEntry: CaseIterable, Hashable {
         case .notifications: return .unreadNotifications
         case .discover: return .pendingFriendRequests
         case .game, .links, .calls, .communities, .settings: return nil
+        }
+    }
+
+    /// Le point de « Ma Légende » (#18165) : l'Offrande prête ou la Flamme en danger. Seul le barreau du jeu le porte —
+    /// un SIGNAL sans chiffre, jamais une pastille de compte.
+    func showsAttentionDot(_ attention: GameAttention) -> Bool {
+        self == .game && attention.isRaised
+    }
+
+    /// Le nom que VoiceOver lit : celui du barreau, et pour « Ma Légende » ce que le jeu signale. Une phrase entière par
+    /// cas, jamais une concaténation — l'arabe et l'allemand ne joignent pas comme le français.
+    func accessibilityLabel(attention: GameAttention) -> String {
+        guard self == .game else { return label }
+        switch (attention.chestReady, attention.flameAtRisk) {
+        case (true, true):
+            return String(localized: "a11y.floating.rung.game.both", defaultValue: "Ma Légende, Offrande prête, Flamme en danger")
+        case (true, false):
+            return String(localized: "a11y.floating.rung.game.chest-ready", defaultValue: "Ma Légende, Offrande prête")
+        case (false, true):
+            return String(localized: "a11y.floating.rung.game.flame-at-risk", defaultValue: "Ma Légende, Flamme en danger")
+        case (false, false):
+            return label
         }
     }
 

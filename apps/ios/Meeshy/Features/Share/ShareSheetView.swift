@@ -46,6 +46,7 @@ struct ShareSheetView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var searchText = ""
     @State var pendingCapture: PublicationTarget?
+    @State var openNoteID: String?
     /// Le lien d'une story frappé au geste « Partager hors de Meeshy » (#12644).
     @State var outgoingLink: ShareOutgoingLink?
     @State private var toastFired = false
@@ -142,7 +143,7 @@ struct ShareSheetView: View {
             .accessibilityLabel(ShareSheetCopy.loading)
         } else if model.conversations.isEmpty && model.people.isEmpty && model.searchResults == nil {
             EmptyStateView(
-                icon: "person.2", title: ShareSheetCopy.emptyTitle, subtitle: ShareSheetCopy.emptyBody,
+                icon: "person.2", title: ShareSheetCopy.emptyTitle, subtitle: "",
                 accentColor: accentColor, compact: true
             )
         } else {

@@ -90,9 +90,10 @@ class RequestRowsTest {
     }
 
     @Test
-    fun `a request without a note states the default intent`() {
+    fun `a request without a note adds no default intent under the name`() {
         show(state(RequestsDirection.Received, received()))
-        compose.onNodeWithText("Wants to connect with you").assertExists()
+
+        compose.onNodeWithText("Wants to connect with you").assertDoesNotExist()
     }
 
     @Test
@@ -126,17 +127,18 @@ class RequestRowsTest {
     }
 
     @Test
-    fun `an empty received direction is illustrated and explained`() {
+    fun `an empty received direction holds in one line`() {
         show(state(RequestsDirection.Received))
 
         compose.onNodeWithText("No requests received").assertExists()
-        compose.onNodeWithText("Contact requests you receive will appear here").assertExists()
+        compose.onNodeWithText("Contact requests you receive will appear here").assertDoesNotExist()
     }
 
     @Test
-    fun `an empty sent direction is illustrated and explained`() {
+    fun `an empty sent direction holds in one line`() {
         show(state(RequestsDirection.Sent))
 
         compose.onNodeWithText("No requests sent").assertExists()
+        compose.onNodeWithText("Requests you send will appear here").assertDoesNotExist()
     }
 }

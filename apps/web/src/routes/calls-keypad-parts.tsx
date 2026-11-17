@@ -133,16 +133,18 @@ export function KeypadPad({ onKey }: { readonly onKey: (digit: string) => void }
 
 export type KeypadStatus = 'idle' | 'searching' | 'none' | 'error' | 'offline';
 
-const STATUS_COPY: Readonly<Record<KeypadStatus, readonly ['keypad.prompt.title' | 'keypad.searching' | 'keypad.noMatch.title' | 'keypad.error.title' | 'keypad.offline.title', 'keypad.prompt.subtitle' | 'keypad.noMatch.subtitle' | 'keypad.error.body' | 'keypad.offline.body' | null]>> = {
-  idle: ['keypad.prompt.title', 'keypad.prompt.subtitle'],
+const STATUS_COPY: Readonly<Record<KeypadStatus, readonly ['keypad.searching' | 'keypad.noMatch.title' | 'keypad.error.title' | 'keypad.offline.title', 'keypad.error.body' | 'keypad.offline.body' | null] | null>> = {
+  idle: null,
   searching: ['keypad.searching', null],
-  none: ['keypad.noMatch.title', 'keypad.noMatch.subtitle'],
+  none: ['keypad.noMatch.title', null],
   error: ['keypad.error.title', 'keypad.error.body'],
   offline: ['keypad.offline.title', 'keypad.offline.body'],
 };
 
 export function KeypadStatusView({ language, status, onRetry }: { readonly language: InterfaceLanguage; readonly status: KeypadStatus; readonly onRetry: () => void }) {
-  const [title, body] = STATUS_COPY[status];
+  const copy = STATUS_COPY[status];
+  if (copy === null) return <div role="status" data-keypad-status={status} className="flex-1" />;
+  const [title, body] = copy;
   return (
     <div
       role={status === 'error' ? 'alert' : 'status'}

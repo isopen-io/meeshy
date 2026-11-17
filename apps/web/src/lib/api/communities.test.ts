@@ -113,6 +113,19 @@ describe('une communauté décodée est une PROJECTION', () => {
   });
 });
 
+describe('« N en ligne » — un agrégat servi par le détail (#18014)', () => {
+  test('le compte servi est lu ; null dit « trop petite pour être anonyme » ; absent, il n’est pas promis', () => {
+    expect(decodeCommunity(wireCommunity({ onlineMemberCount: 7 }))?.onlineMemberCount).toBe(7);
+    expect(decodeCommunity(wireCommunity({ onlineMemberCount: null }))?.onlineMemberCount).toBeNull();
+    expect('onlineMemberCount' in (decodeCommunity(wireCommunity()) ?? {})).toBe(false);
+  });
+
+  test('un compte illisible ne devient jamais un nombre inventé', () => {
+    expect(decodeCommunity(wireCommunity({ onlineMemberCount: -3 }))?.onlineMemberCount).toBeNull();
+    expect(decodeCommunity(wireCommunity({ onlineMemberCount: 2.6 }))?.onlineMemberCount).toBe(2);
+  });
+});
+
 describe('la liste de SES communautés — `GET /api/v1/communities`', () => {
   test('page 1 sans recherche : offset 0, limite 20, et la page suivante commence après les lignes reçues', async () => {
     const { calls, deps } = gatewayReplying([

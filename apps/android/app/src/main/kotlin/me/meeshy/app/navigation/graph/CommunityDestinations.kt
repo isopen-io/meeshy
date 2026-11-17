@@ -1,5 +1,10 @@
 package me.meeshy.app.navigation.graph
 
+import me.meeshy.app.navigation.navigateSingleTop
+import me.meeshy.app.navigation.popFrom
+import me.meeshy.app.navigation.popToOrRoot
+import me.meeshy.app.navigation.pushFrom
+import me.meeshy.app.navigation.rememberConversationOpener
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -46,29 +51,29 @@ object CommunityRoutes {
  */
 class CommunityDestinations @Inject constructor() : NavGraphContributor {
     override fun contribute(builder: NavGraphBuilder, navController: NavHostController) {
-        builder.composable(CommunityRoutes.LIST) {
+        builder.composable(CommunityRoutes.LIST) { entry ->
             CommunityListScreen(
-                onBack = { navController.popBackStack() },
-                onOpenCommunity = { navController.navigate(CommunityRoutes.detail(it)) },
-                onCreateCommunity = { navController.navigate(CommunityRoutes.CREATE) },
+                onBack = { navController.popFrom(entry) },
+                onOpenCommunity = { navController.pushFrom(entry, CommunityRoutes.detail(it)) },
+                onCreateCommunity = { navController.pushFrom(entry, CommunityRoutes.CREATE) },
             )
         }
-        builder.composable(CommunityRoutes.CREATE) {
+        builder.composable(CommunityRoutes.CREATE) { entry ->
             CommunityCreateScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.popFrom(entry) },
                 onCreated = { id ->
-                    navController.navigate(CommunityRoutes.detail(id)) { popUpTo(CommunityRoutes.CREATE) { inclusive = true } }
+                    navController.navigateSingleTop(CommunityRoutes.detail(id)) { popUpTo(CommunityRoutes.CREATE) { inclusive = true } }
                 },
             )
         }
         builder.composable(
             route = CommunityRoutes.SETTINGS,
             arguments = listOf(navArgument(CommunityDetailViewModel.COMMUNITY_ID_ARG) { type = NavType.StringType }),
-        ) {
+        ) { entry ->
             CommunitySettingsScreen(
-                onCancel = { navController.popBackStack() },
-                onSaved = { navController.popBackStack() },
-                onDeleted = { navController.popBackStack(CommunityRoutes.LIST, inclusive = false) },
+                onCancel = { navController.popFrom(entry) },
+                onSaved = { navController.popFrom(entry) },
+                onDeleted = { navController.popToOrRoot(entry, CommunityRoutes.LIST) },
             )
         }
         builder.composable(
@@ -77,27 +82,28 @@ class CommunityDestinations @Inject constructor() : NavGraphContributor {
         ) { entry ->
             val id = entry.arguments?.getString(CommunityDetailViewModel.COMMUNITY_ID_ARG).orEmpty()
             CommunityMembersScreen(
-                onBack = { navController.popBackStack() },
-                onInvite = { navController.navigate(CommunityRoutes.invite(id)) },
+                onBack = { navController.popFrom(entry) },
+                onInvite = { navController.pushFrom(entry, CommunityRoutes.invite(id)) },
             )
         }
         builder.composable(
             route = CommunityRoutes.INVITE,
             arguments = listOf(navArgument(CommunityDetailViewModel.COMMUNITY_ID_ARG) { type = NavType.StringType }),
-        ) {
-            CommunityInviteScreen(onDone = { navController.popBackStack() })
+        ) { entry ->
+            CommunityInviteScreen(onDone = { navController.popFrom(entry) })
         }
         builder.composable(
             route = CommunityRoutes.DETAIL,
             arguments = listOf(navArgument(CommunityDetailViewModel.COMMUNITY_ID_ARG) { type = NavType.StringType }),
-        ) {
+        ) { entry ->
+            val openConversation = rememberConversationOpener(navController, entry)
             CommunityDetailScreen(
                 navigation = CommunityDetailNavigation(
-                    onBack = { navController.popBackStack() },
-                    onOpenChannel = { navController.navigate(Routes.chat(it)) },
-                    onOpenMembers = { navController.navigate(CommunityRoutes.members(it)) },
-                    onInvite = { navController.navigate(CommunityRoutes.invite(it)) },
-                    onOpenSettings = { navController.navigate(CommunityRoutes.settings(it)) },
+                    onBack = { navController.popFrom(entry) },
+                    onOpenChannel = { openConversation(it, null) },
+                    onOpenMembers = { navController.pushFrom(entry, CommunityRoutes.members(it)) },
+                    onInvite = { navController.pushFrom(entry, CommunityRoutes.invite(it)) },
+                    onOpenSettings = { navController.pushFrom(entry, CommunityRoutes.settings(it)) },
                     addChannelSheet = { id, onAdded, onDismiss -> CommunityAddChannelSheet(id, onAdded, onDismiss) },
                 ),
             )

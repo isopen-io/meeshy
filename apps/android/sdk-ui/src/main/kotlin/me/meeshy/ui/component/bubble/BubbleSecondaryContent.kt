@@ -1,6 +1,5 @@
 package me.meeshy.ui.component.bubble
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -25,7 +24,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.BubbleSecondaryPanel
-import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.motion.MeeshyAnimatedVisibility
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyOpacity
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
@@ -33,7 +33,8 @@ import me.meeshy.ui.theme.hexColor
 /**
  * Le panneau SECONDAIRE sous le texte (iOS `BubbleSecondaryContent`) : le séparateur trait-point-trait à la couleur
  * de la langue (traits à 0,4), le drapeau et le nom de la langue, puis la traduction — plus discrète que le texte
- * principal (opacité intense) — dont mentions, hashtags et liens sont teintés. Réduire les animations : fondu seul.
+ * principal (opacité intense) — dont mentions, hashtags et liens sont teintés. Refermé, le panneau sort avec sa
+ * dernière traduction ; réduire les animations : fondu court seul.
  */
 @Composable
 internal fun BubbleSecondaryContent(
@@ -44,15 +45,13 @@ internal fun BubbleSecondaryContent(
     linksActive: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val reduceMotion = LocalReduceMotion.current
-    AnimatedVisibility(
-        visible = panel != null,
-        enter = if (reduceMotion) fadeIn() else fadeIn() + expandVertically(),
-        exit = if (reduceMotion) fadeOut() else fadeOut() + shrinkVertically(),
+    MeeshyAnimatedVisibility(
+        value = panel,
+        enter = fadeIn(MeeshyMotion.springDefault()) + expandVertically(MeeshyMotion.springDefault()),
+        exit = fadeOut(MeeshyMotion.springDefault()) + shrinkVertically(MeeshyMotion.springDefault()),
         modifier = modifier,
-    ) {
-        if (panel != null) SecondaryPanelBody(panel, onColor, tint, decor, linksActive)
-    }
+        label = "bubble-secondary-panel",
+    ) { shown -> SecondaryPanelBody(shown, onColor, tint, decor, linksActive) }
 }
 
 @Composable

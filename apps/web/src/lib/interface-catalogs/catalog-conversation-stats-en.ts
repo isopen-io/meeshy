@@ -25,7 +25,7 @@ const en = {
   'conversationStats.loading': 'Loading statistics',
   'conversationStats.error': 'Couldn’t load the statistics.',
   'conversationStats.retry': 'Try again',
-  'conversationStats.empty': 'No messages yet — statistics will come with the conversation.',
+  'conversationStats.empty': 'No messages',
   'conversationStats.offline': 'Offline — last known statistics.',
   'conversationStats.offline_empty': 'Offline — the statistics haven’t been loaded yet.',
 } satisfies ConversationStatsCatalog;

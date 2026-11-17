@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- lot: refus-types-limite-du-jour-mode-lent — bannière du mode lent des nouveaux comptes (#14885). -->
 <resources>
-    <string name="gesture_refusal_slow_mode">New accounts can send one message every 30 seconds. You can write again in %1$d s.</string>
+    <string name="gesture_refusal_slow_mode">New accounts: one message every 30 s. Try again in %1$d s.</string>
 </resources>

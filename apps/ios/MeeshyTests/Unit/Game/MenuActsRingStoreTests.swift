@@ -103,4 +103,42 @@ final class MenuActsRingStoreTests: XCTestCase {
         await fulfillment(of: [lit], timeout: 2)
         cancellable.cancel()
     }
+
+    // MARK: - Ce que le jeu signale au barreau « Ma Légende » (#18165)
+
+    func test_activate_withAnOfferingReadyInTheCache_raisesTheAttention_withoutAnyRequest() async {
+        let (sut, source) = makeSUT(cached: GameFixture.game(missions: acts([true, false, false]), chestStatus: .ready))
+
+        await sut.activate(hidden: false)
+
+        XCTAssertEqual(sut.attention, GameAttention(chestReady: true, flameAtRisk: false))
+        XCTAssertEqual(source.fetchCalls, 0, "le point se lit dans le cache, comme l'anneau")
+    }
+
+    func test_activate_withAFlameAtRisk_raisesTheAttention() async {
+        let (sut, _) = makeSUT(cached: GameFixture.game(flameStatus: .atRisk, missions: acts([false, false, false])))
+
+        await sut.activate(hidden: false)
+
+        XCTAssertEqual(sut.attention, GameAttention(chestReady: false, flameAtRisk: true))
+    }
+
+    func test_readCache_afterTheOfferingIsOpened_lowersTheAttention() async {
+        let (sut, source) = makeSUT(cached: GameFixture.game(missions: acts([true, true, true]), chestStatus: .ready))
+        await sut.activate(hidden: false)
+
+        source.cachedBlock = GameFixture.game(missions: acts([true, true, true]), chestStatus: .claimed)
+        await sut.readCache()
+
+        XCTAssertEqual(sut.attention, .none)
+    }
+
+    func test_activate_whenTheGameIsHidden_signalsNothing() async {
+        let (sut, _) = makeSUT(cached: GameFixture.game(flameStatus: .atRisk, missions: acts([true, true, true]), chestStatus: .ready))
+        await sut.activate(hidden: false)
+
+        await sut.activate(hidden: true)
+
+        XCTAssertEqual(sut.attention, .none, "« Jeu masqué » : aucun point")
+    }
 }

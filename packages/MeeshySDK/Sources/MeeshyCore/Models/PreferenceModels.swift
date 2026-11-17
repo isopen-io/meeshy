@@ -1,163 +1,5 @@
 import Foundation
 
-// MARK: - CodableValue (type-erased JSON value for extensible preferences)
-
-public enum CodableValue: Codable, Equatable, Sendable {
-    case bool(Bool)
-    case int(Int)
-    case double(Double)
-    case string(String)
-    case array([CodableValue])
-    case dict([String: CodableValue])
-    case null
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.singleValueContainer()
-        if container.decodeNil() {
-            self = .null
-        } else if let v = try? container.decode(Bool.self) {
-            self = .bool(v)
-        } else if let v = try? container.decode(Int.self) {
-            self = .int(v)
-        } else if let v = try? container.decode(Double.self) {
-            self = .double(v)
-        } else if let v = try? container.decode(String.self) {
-            self = .string(v)
-        } else if let v = try? container.decode([CodableValue].self) {
-            self = .array(v)
-        } else if let v = try? container.decode([String: CodableValue].self) {
-            self = .dict(v)
-        } else {
-            self = .null
-        }
-    }
-
-    public func encode(to encoder: Encoder) throws {
-        var container = encoder.singleValueContainer()
-        switch self {
-        case .bool(let v): try container.encode(v)
-        case .int(let v): try container.encode(v)
-        case .double(let v): try container.encode(v)
-        case .string(let v): try container.encode(v)
-        case .array(let v): try container.encode(v)
-        case .dict(let v): try container.encode(v)
-        case .null: try container.encodeNil()
-        }
-    }
-
-    public var boolValue: Bool? { if case .bool(let v) = self { return v }; return nil }
-    public var intValue: Int? { if case .int(let v) = self { return v }; return nil }
-    public var doubleValue: Double? { if case .double(let v) = self { return v }; return nil }
-    public var stringValue: String? { if case .string(let v) = self { return v }; return nil }
-}
-
-// MARK: - Preference Category
-
-public enum PreferenceCategory: String, CaseIterable, Codable, Sendable {
-    case privacy, audio, message, notification, video, document, application
-}
-
-// MARK: - Enums
-
-public enum EncryptionPreference: String, Codable, CaseIterable, Sendable {
-    case disabled, optional, always
-}
-
-public enum AudioQuality: String, Codable, CaseIterable, Sendable {
-    case low, medium, high, lossless
-}
-
-public enum TranscriptionSource: String, Codable, CaseIterable, Sendable {
-    case auto, mobile, server
-}
-
-public enum TranslatedAudioFormat: String, Codable, CaseIterable, Sendable {
-    case mp3, wav, ogg
-}
-
-public enum VoiceCloneQuality: String, Codable, CaseIterable, Sendable {
-    case fast, balanced, quality
-}
-
-public enum VideoQuality: String, Codable, CaseIterable, Sendable {
-    case low, medium, high, auto
-}
-
-public enum VideoFrameRate: String, Codable, CaseIterable, Sendable {
-    case fps15 = "15"
-    case fps24 = "24"
-    case fps30 = "30"
-    case fps60 = "60"
-}
-
-public enum VideoResolution: String, Codable, CaseIterable, Sendable {
-    case r480p = "480p"
-    case r720p = "720p"
-    case r1080p = "1080p"
-    case auto
-}
-
-public enum VideoCodec: String, Codable, CaseIterable, Sendable {
-    case vp8 = "VP8"
-    case vp9 = "VP9"
-    case h264 = "H264"
-    case h265 = "H265"
-    case av1 = "AV1"
-}
-
-public enum VideoLayout: String, Codable, CaseIterable, Sendable {
-    case grid, speaker, sidebar
-}
-
-public enum SelfViewPosition: String, Codable, CaseIterable, Sendable {
-    case topLeft = "top-left"
-    case topRight = "top-right"
-    case bottomLeft = "bottom-left"
-    case bottomRight = "bottom-right"
-}
-
-public enum EmojiSkinTone: String, Codable, CaseIterable, Sendable {
-    case `default`, light, mediumLight = "medium-light", medium, mediumDark = "medium-dark", dark
-}
-
-public enum FontSize: String, Codable, CaseIterable, Sendable {
-    case small, medium, large
-}
-
-public enum TextAlign: String, Codable, CaseIterable, Sendable {
-    case left, center, right
-}
-
-public enum AppThemeMode: String, Codable, CaseIterable, Sendable {
-    case light, dark, auto
-}
-
-public enum LineHeight: String, Codable, CaseIterable, Sendable {
-    case tight, normal, relaxed, loose
-}
-
-public enum SidebarPosition: String, Codable, CaseIterable, Sendable {
-    case left, right
-}
-
-public enum DndDay: String, Codable, CaseIterable, Sendable {
-    case mon, tue, wed, thu, fri, sat, sun
-
-    /// Map from `Calendar.Component.weekday` (1 = Sunday … 7 = Saturday).
-    public static func fromCalendarWeekday(_ weekday: Int) -> DndDay? {
-        switch weekday {
-        case 1: return .sun
-        case 2: return .mon
-        case 3: return .tue
-        case 4: return .wed
-        case 5: return .thu
-        case 6: return .fri
-        case 7: return .sat
-        default: return nil
-        }
-    }
-}
-
 // MARK: - Privacy Preferences
 
 public struct PrivacyPreferences: Codable, Equatable, Sendable {
@@ -444,6 +286,23 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         get { bringEnabled ?? true }
         set { bringEnabled = newValue }
     }
+    /// « Batterie de mes proches » (`notification.deviceBatteryEnabled`, #14147) — le push `device_battery`.
+    /// `nil` = jamais appris, absent du corps envoyé (même règle que `bringEnabled`). L'écran lit
+    /// `receivesDeviceBattery`. Ne coupe que le PUSH : la SyncPill et l'icône d'état suivent le mode de chaque
+    /// conversation.
+    public var deviceBatteryEnabled: Bool?
+    public var receivesDeviceBattery: Bool {
+        get { deviceBatteryEnabled ?? true }
+        set { deviceBatteryEnabled = newValue }
+    }
+    /// « Téléphone injoignable de mes Proches » (`notification.deviceUnreachableEnabled`, #18737) — le push
+    /// `device_unreachable`. `nil` = jamais appris, absent du corps envoyé (même règle que `bringEnabled`). L'écran
+    /// lit `receivesDeviceUnreachable`. Ne coupe que le PUSH : la SyncPill et l'icône d'état restent.
+    public var deviceUnreachableEnabled: Bool?
+    public var receivesDeviceUnreachable: Bool {
+        get { deviceUnreachableEnabled ?? true }
+        set { deviceUnreachableEnabled = newValue }
+    }
     public var dndEnabled: Bool
     public var dndStartTime: String
     public var dndEndTime: String
@@ -481,7 +340,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         postLikeEnabled: Bool = true, postCommentEnabled: Bool = true, postRepostEnabled: Bool = true,
         storyReactionEnabled: Bool = true, commentReplyEnabled: Bool = true, commentLikeEnabled: Bool = true,
         friendContentEnabled: Bool = true, contactActivityEnabled: Bool = true, gameEnabled: Bool = true,
-        bringEnabled: Bool? = nil, dndEnabled: Bool = false, dndStartTime: String = "22:00", dndEndTime: String = "08:00", dndDays: [DndDay] = [],
+        bringEnabled: Bool? = nil, deviceBatteryEnabled: Bool? = nil, deviceUnreachableEnabled: Bool? = nil, dndEnabled: Bool = false, dndStartTime: String = "22:00", dndEndTime: String = "08:00", dndDays: [DndDay] = [],
         dndUtcOffsetMinutes: Int = 0,
         showPreview: Bool = true, showSenderName: Bool = true, groupNotifications: Bool = true,
         notificationBadgeEnabled: Bool = true, extras: [String: CodableValue] = [:]
@@ -502,6 +361,8 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         self.contactActivityEnabled = contactActivityEnabled
         self.gameEnabled = gameEnabled
         self.bringEnabled = bringEnabled
+        self.deviceBatteryEnabled = deviceBatteryEnabled
+        self.deviceUnreachableEnabled = deviceUnreachableEnabled
         self.dndEnabled = dndEnabled; self.dndStartTime = dndStartTime; self.dndEndTime = dndEndTime
         self.dndUtcOffsetMinutes = dndUtcOffsetMinutes
         self.dndDays = dndDays; self.showPreview = showPreview; self.showSenderName = showSenderName
@@ -516,7 +377,7 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         case contactRequestEnabled, groupInviteEnabled, memberJoinedEnabled, memberLeftEnabled
         case postLikeEnabled, postCommentEnabled, postRepostEnabled, storyReactionEnabled
         case commentReplyEnabled, commentLikeEnabled, friendContentEnabled, contactActivityEnabled, gameEnabled
-        case bringEnabled
+        case bringEnabled, deviceBatteryEnabled, deviceUnreachableEnabled
         case dndEnabled, dndStartTime, dndEndTime, dndDays, dndUtcOffsetMinutes
         case showPreview, showSenderName, groupNotifications, notificationBadgeEnabled
         case extras
@@ -551,6 +412,8 @@ public struct UserNotificationPreferences: Codable, Equatable, Sendable {
         contactActivityEnabled = try c.decodeIfPresent(Bool.self, forKey: .contactActivityEnabled) ?? Self.defaults.contactActivityEnabled
         gameEnabled = try c.decodeIfPresent(Bool.self, forKey: .gameEnabled) ?? Self.defaults.gameEnabled
         bringEnabled = try c.decodeIfPresent(Bool.self, forKey: .bringEnabled)
+        deviceBatteryEnabled = try c.decodeIfPresent(Bool.self, forKey: .deviceBatteryEnabled)
+        deviceUnreachableEnabled = try c.decodeIfPresent(Bool.self, forKey: .deviceUnreachableEnabled)
         dndEnabled = try c.decodeIfPresent(Bool.self, forKey: .dndEnabled) ?? Self.defaults.dndEnabled
         dndStartTime = try c.decodeIfPresent(String.self, forKey: .dndStartTime) ?? Self.defaults.dndStartTime
         dndEndTime = try c.decodeIfPresent(String.self, forKey: .dndEndTime) ?? Self.defaults.dndEndTime

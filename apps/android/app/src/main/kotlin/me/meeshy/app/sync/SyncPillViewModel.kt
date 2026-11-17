@@ -16,13 +16,18 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.connection.ConnectionStatusStore
+import me.meeshy.sdk.model.battery.BatteryPillAnnouncements
 import me.meeshy.sdk.model.connection.ConnectionPill
 import me.meeshy.sdk.model.connection.ConnectionPillState
+import me.meeshy.sdk.model.connection.SyncPillEntry
 import me.meeshy.sdk.model.connection.SyncPillReducer
+import me.meeshy.sdk.model.phonereachability.PhoneReachabilityPillAnnouncements
 import me.meeshy.sdk.model.sync.OutboxNavigationSource
 import me.meeshy.sdk.model.sync.OutboxUiItem
 import me.meeshy.sdk.model.sync.OutboxUiProjection
@@ -56,8 +61,12 @@ class SyncPillViewModel @Inject constructor(
     private val connection: ConnectionStatusStore,
     private val queuePort: OfflineQueuePillProviding,
     private val typing: SyncPillTypingSource,
+    private val batterySource: SyncPillBatterySource = SyncPillBatterySource.None,
+    private val phoneSource: SyncPillPhoneReachabilitySource = SyncPillPhoneReachabilitySource.None,
     private val clock: SyncPillClock,
 ) : ViewModel() {
+    private val battery = MutableStateFlow(BatteryPillAnnouncements())
+    private val phone = MutableStateFlow(PhoneReachabilityPillAnnouncements())
     private val typers = MutableStateFlow<Map<String, Map<String, String>>>(emptyMap())
     private val typingExpiry = HashMap<String, Job>()
     private val effects = Channel<SyncPillEffect>(Channel.BUFFERED)
@@ -69,13 +78,16 @@ class SyncPillViewModel @Inject constructor(
         queueItems(),
         typers,
         typing.openConversationId,
-    ) { pill, items, typerState, open ->
-        val entries = SyncPillReducer.entries(items, SyncPillTypers.typers(typerState), open)
+        announcementEntries(),
+    ) { pill, items, typerState, open, announcements ->
+        val entries = SyncPillReducer.entries(items, SyncPillTypers.typers(typerState), open) + announcements
         SyncPillUiState(SyncPillPresenter.rows(pill, entries))
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncPillUiState())
 
     init {
         observeTyping()
+        observeBattery()
+        observePhoneReachability()
     }
 
     fun onEvent(event: SyncPillUiEvent) {
@@ -133,6 +145,48 @@ class SyncPillViewModel @Inject constructor(
         }
         viewModelScope.launch {
             typing.sent.collect { (conversationId, userId) -> endTyping(conversationId, userId) }
+        }
+    }
+
+    /**
+     * Les annonces de batterie (#14147) défilent puis quittent la pastille à leur échéance ; une annonce déjà montrée ne
+     * revient jamais, seule une NOUVELLE annonce la rappelle.
+     */
+    private fun observeBattery() {
+        viewModelScope.launch {
+            batterySource.announcements.collect { item ->
+                battery.update { it.announce(item.id, item.userId, item.label, clock.nowMs()) }
+            }
+        }
+        viewModelScope.launch {
+            battery.map { it.nextExpiryMs() }.distinctUntilChanged().collectLatest { expiry ->
+                if (expiry == null) return@collectLatest
+                delay((expiry - clock.nowMs()).coerceAtLeast(1L))
+                battery.update { it.expire(clock.nowMs()) }
+            }
+        }
+    }
+
+    /** Les annonces passagères (batterie #14147, téléphone injoignable #18737), dans l'ordre de leurs sources. */
+    private fun announcementEntries(): Flow<List<SyncPillEntry>> =
+        combine(battery, phone) { b, p -> b.entries() + p.entries() }.distinctUntilChanged()
+
+    /**
+     * Les annonces du téléphone injoignable (#18737) défilent puis quittent la pastille à leur échéance ; une annonce
+     * déjà montrée ne revient jamais, seule une NOUVELLE annonce la rappelle.
+     */
+    private fun observePhoneReachability() {
+        viewModelScope.launch {
+            phoneSource.announcements.collect { item ->
+                phone.update { it.announce(item.id, item.userId, item.label, clock.nowMs()) }
+            }
+        }
+        viewModelScope.launch {
+            phone.map { it.nextExpiryMs() }.distinctUntilChanged().collectLatest { expiry ->
+                if (expiry == null) return@collectLatest
+                delay((expiry - clock.nowMs()).coerceAtLeast(1L))
+                phone.update { it.expire(clock.nowMs()) }
+            }
         }
     }
 

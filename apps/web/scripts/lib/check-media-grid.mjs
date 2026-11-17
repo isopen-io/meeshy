@@ -667,6 +667,13 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   expect(quadIds.length === 4 && quadIds.every((id) => id !== ''), `[${skin}/${scheme}] media-13 nomme ses 4 pièces (${JSON.stringify(quadIds)})`);
   await secondTile.click();
   await page.waitForSelector('[data-media-viewer]');
+  /* L'ENTRÉE DE LA VISIONNEUSE, relevée à l'ouverture (#18460). En peau
+     « bulles », le choix du mode de lecture a ouvert puis refermé un menu, qui
+     est désormais une couche : son entrée RENDUE reste en avant du curseur, et
+     le `pushState` de la visionneuse la remplace au lieu d'allonger
+     l'historique. La longueur à l'ouverture vaut donc relevé ou relevé + 1 ;
+     ce qui prouve qu'Échap REND l'entrée est que le curseur la quitte. */
+  const viewerEntry = await page.evaluate(() => ({ length: window.history.length, marker: window.history.state?.backDismiss ?? null }));
 
   const dialog = page.locator('[data-media-viewer]');
   expect((await dialog.getAttribute('role')) === 'dialog', `[${skin}/${scheme}] la visionneuse porte role="dialog"`);
@@ -802,13 +809,17 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   const focusReturnedToTile = await page.evaluate(() => document.activeElement?.hasAttribute('data-media-tile') ?? false);
   expect(focusReturnedToTile, `[${skin}/${scheme}] Échap restitue le focus à la tuile cliquée`);
 
-  const lengthAfterEscape = await page.evaluate(() => window.history.length);
+  await page.waitForFunction((marker) => (window.history.state?.backDismiss ?? null) !== marker, viewerEntry.marker);
+  const afterEscape = await page.evaluate(() => ({ length: window.history.length, marker: window.history.state?.backDismiss ?? null }));
   // Voir la correction de spécification en tête de fichier : l'entrée poussée
   // à l'ouverture est RENDUE (le curseur recule d'un cran), jamais EFFACÉE —
-  // `history.length` ne peut donc que rester à `relevé + 1`, pour toujours.
+  // `history.length` reste donc celle de l'ouverture, et le curseur a quitté l'entrée.
   expect(
-    lengthAfterEscape === historyLengthBefore + 1,
-    `[${skin}/${scheme}] Échap REND son entrée : history.length reste à relevé+1 (relevé ${historyLengthBefore}, obtenu ${lengthAfterEscape})`,
+    typeof viewerEntry.marker === 'string' &&
+      (viewerEntry.length === historyLengthBefore + 1 || viewerEntry.length === historyLengthBefore) &&
+      afterEscape.length === viewerEntry.length &&
+      afterEscape.marker !== viewerEntry.marker,
+    `[${skin}/${scheme}] Échap REND son entrée : la longueur reste celle de l'ouverture et le curseur quitte l'entrée (relevé ${historyLengthBefore}, ouverture ${JSON.stringify(viewerEntry)}, après Échap ${JSON.stringify(afterEscape)})`,
   );
   const urlAfterEscape = new URL(page.url()).pathname;
   expect(

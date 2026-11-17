@@ -472,6 +472,12 @@ struct EditPostSheet: View {
             }
             .disabled(isSaving)
 
+            Text(selectedVisibility.who)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundStyle(theme.textMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+
             if selectedVisibility.requiresUserSelection {
                 Button {
                     isFocused = false

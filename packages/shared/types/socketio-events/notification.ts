@@ -7,6 +7,7 @@
 
 // Prédicat des marquages de notifications en masse
 import type {
+  NotificationActor,
   NotificationContext,
   NotificationDeletedBulkScope,
   NotificationMetadata,
@@ -41,12 +42,17 @@ export interface NotificationEventData {
    *  and non-message notification types. */
   readonly subtitle?: string;
   readonly content: string;
-  readonly actor?: {
-    readonly id?: string;
-    readonly username?: string;
-    readonly displayName?: string;
-    readonly avatar?: string;
-  };
+  /**
+   * L'auteur du geste — le TYPE PARTAGÉ, jamais une redéclaration.
+   *
+   * Ce champ portait une jumelle anonyme dont les quatre clés étaient optionnelles, quand
+   * `NotificationActor` (`types/notification.ts`, le type que l'émetteur manipule de bout en bout :
+   * `createNotification` → `sanitizeNotificationInputs` → `formatNotification`) exige `id` et
+   * `username`. Le contrat déclarait donc plus lâche que son propre producteur — et une garde de
+   * forme ne pouvait pas distinguer un miroir client trop exigeant d'un contrat qui ment sur ce
+   * qu'il émet (#18245).
+   */
+  readonly actor?: NotificationActor;
   /**
    * Déclaré `NotificationContext` — le type RÉEL du producteur — et non plus
    * `Record<string, unknown>` (cycle 105).
@@ -81,19 +87,31 @@ export interface NotificationEventData {
    *
    * C'est le signal de détection de TROU du SyncEngine : un client qui reçoit
    * `_seq = N+2` après `N` sait qu'un événement lui a échappé et déclenche une
-   * resynchronisation. **Les trois clients l'OBSERVENT** — web
-   * (`observeSyncSeq(this.syncSeq, data?._seq)`,
-   * `notification-socketio.singleton.ts`), iOS (`case seq = "_seq"` →
-   * `SyncSeqTracker.observe`, `MeeshySDK/Sockets/MessageSocketManager.swift`),
-   * Android (`syncSeqTracker.observe(raw.opt("_seq"))`,
-   * `sdk-core/.../socket/MessageSocketManager.kt`).
+   * resynchronisation.
    *
-   * Ce paragraphe a dit « les trois le lisent » pendant que **Android le
-   * jetait** : son décodeur (`Json.ignoreUnknownKeys`) déposait le champ, et la
-   * preuve citée — `MessageSocketManagerNotificationTest` — n'assertait rien sur
-   * `_seq` ; elle prouvait exactement l'inverse, que le décodage SURVIT au champ.
-   * Une citation n'est pas une mesure : le test cité prouvait la tolérance, pas
-   * la lecture. Android observe depuis que ce miroir a été écrit (cycle 108).
+   * **Qui l'observe ne se lit PAS ici, et ce paragraphe est la raison pour
+   * laquelle la règle a désormais un cliquet.** Il a affirmé « les trois
+   * clients l'OBSERVENT » deux fois, et il a eu tort deux fois, sur deux
+   * plateformes différentes :
+   *
+   * 1. pendant que **Android le jetait** — son décodeur
+   *    (`Json.ignoreUnknownKeys`) déposait le champ, et la preuve citée
+   *    (`MessageSocketManagerNotificationTest`) n'assertait rien sur `_seq` ;
+   *    elle prouvait l'inverse, que le décodage SURVIT au champ. Une citation
+   *    n'est pas une mesure. Android observe depuis le cycle 108 ;
+   * 2. pendant que **le web n'en avait aucun** — il nommait
+   *    `notification-socketio.singleton.ts`, un fichier de l'application web
+   *    LEGACY sortie du dépôt au #7668, et `apps/web` n'observe aucun curseur
+   *    (mesuré au cycle 168 ; suivi produit : #18601). Le chemin iOS cité était
+   *    périmé lui aussi : l'observation vit dans
+   *    `MeeshySDK/Sockets/MessageSocketRoutes+Notifications.swift`.
+   *
+   * Deux fois, le même paragraphe, par le même mécanisme : une énumération de
+   * CONSOMMATEURS est une affirmation, et elle survit à la disparition de ce
+   * qu'elle décrit sans jamais rougir. L'état se lit donc au cliquet
+   * `packages/shared/__tests__/ci/socket-seq-lockstep-gate.test.ts` (#18602),
+   * qui dérive des sources ce que la passerelle estampille et ce que chaque
+   * client observe, et rougit sur l'écart dans les deux sens.
    *
    * **Déclaré ici parce qu'il ne l'était NULLE PART** (cycle 105). Il ne
    * voyageait que parce que `emitWithSeq` prenait

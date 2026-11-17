@@ -52,7 +52,8 @@ describe('la proposition au niveau 100', () => {
   });
 
   test('les étoiles déjà posées sont dites et dessinées ; sans étoile, pas de trophée', () => {
-    expect(text(html)).toContain('Renaissances : 1 sur 5');
+    expect(html).toContain('aria-label="Renaissances : 2 sur 5 : voir les précisions"');
+    expect(text(html)).not.toContain('Renaissances : 1 sur 5');
     expect(html).toContain('data-game-prestige-star');
     const withStar = renderToStaticMarkup(<GamePrestige {...props(undefined, 0)} />);
     expect(withStar).not.toContain('data-game-prestige-trophy');
@@ -136,8 +137,21 @@ describe('les états fermés', () => {
     const html = renderToStaticMarkup(<GamePrestige {...props(5_000, 0)} />);
     expect(text(html)).toContain('s’ouvre au niveau 100');
     expect(text(html)).toContain('Requis 100');
-    expect(text(html)).toMatch(/Il manque \d+ niveaux/);
+    expect(text(html)).not.toMatch(/Il manque/);
+    expect(text(html)).not.toContain('Tu es au niveau');
+    expect(text(html)).toContain('Niveau');
     expect(html).not.toContain('data-game-prestige-go');
+  });
+
+  test('sous le niveau 100 : une phrase dit, au repos, ce que la Renaissance fera (règle 7, un repère du jeu)', () => {
+    const t = text(renderToStaticMarkup(<GamePrestige {...props(5_000, 0)} />));
+    expect(t).toContain('Renaître remet ton niveau à 1 et ouvre un nouvel Âge ; ton rang reste.');
+  });
+
+  test('le titre de carte n’est plus vu (la barre le dit), mais nomme encore la région ; le compteur N sur 5 n’est pas redit', () => {
+    const html = renderToStaticMarkup(<GamePrestige {...props(5_000, 0)} />);
+    expect(html).toContain('<h2 id="game-prestige-title" class="sr-only">Renaissance</h2>');
+    expect(text(html.replace(/<h2[^>]*>.*?<\/h2>/g, ''))).not.toContain('Renaissances : 0 sur 5');
   });
 
   test('aux cinq étoiles : on le fête, aucune offre', () => {

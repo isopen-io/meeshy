@@ -57,20 +57,6 @@ export const selfTileRestingFactor = (chosen: SelfTileScale, chromeVisible: bool
 /** Ce qui ne doit pas rapetisser avec la vignette rangée (liseré, coins) : divisé par le facteur, dessiné à sa taille de petite vignette. */
 export const selfTileCounterScaled = (length: number, factor: number): number => (Number.isFinite(factor) && factor > 0 ? length / factor : length);
 
-const clampScale = (value: number): SelfTileScale => (value <= 1 ? 1 : value >= 3 ? 3 : 2);
-
-const pinchSteps = (ratio: number): number => {
-  if (ratio >= 1.8) return 2;
-  if (ratio >= 1.15) return 1;
-  if (ratio <= 0.55) return -2;
-  if (ratio <= 0.87) return -1;
-  return 0;
-};
-
-export const scaleAfterPinch = (scale: SelfTileScale, ratio: number): SelfTileScale => clampScale(scale + pinchSteps(ratio));
-
-export const scaleAfterWheel = (scale: SelfTileScale, deltaY: number): SelfTileScale => clampScale(scale + Math.sign(-deltaY));
-
 /**
  * **ELLE SE GLISSE DE COIN EN COIN** (#8747, miroir de `pipCenter` /
  * `nearestCorner` dans `CallView+SelfView.swift`) — quatre coins à 16 px du
@@ -110,15 +96,34 @@ export const SELF_TILE_BOTTOM_LANDSCAPE = 130;
 export const selfTileCornerInsets = (viewport: TileSize): { readonly top: number; readonly bottom: number } =>
   isLandscapeWindow(viewport) ? { top: SELF_TILE_TOP_LANDSCAPE, bottom: SELF_TILE_BOTTOM_LANDSCAPE } : { top: SELF_TILE_TOP, bottom: SELF_TILE_BOTTOM };
 
-const DRAG_THRESHOLD = 8;
-
 export type TileBox = TileSize & { readonly x: number; readonly y: number };
 
 /** Ma vignette quand l'autre partage son écran : en haut à droite, 4,5 rem sous la zone sûre, à la taille x2. */
 export const SCREEN_SELF_TILE = { y: 72, width: 112, height: 160 } as const;
 
-/** Ma vignette en coin et son coin, dans les mesures de la scène sous sa zone sûre (l'écran, moins la colonne du journal quand elle est ouverte). */
-export type TileFootprint = TileBox & { readonly corner: SelfTileCorner };
+/**
+ * Ma vignette en coin et son coin, dans les mesures de la scène sous sa zone sûre (l'écran, moins la colonne du journal quand elle est ouverte).
+ * `yields` : elle cède le coin au rail de son bord ({@link selfTileRailShift}), qui reste alors à ce bord, ouvert comme sortant.
+ */
+export type TileFootprint = TileBox & { readonly corner: SelfTileCorner; readonly yields?: boolean };
+
+/**
+ * **L2.8 — EN PAYSAGE, MA VIGNETTE CÈDE LE COIN AU RAIL** (décision porteur du 2026-11-13, #17965 point 1 ; capture L2 ;
+ * le web s'aligne, #17438). Dans une fenêtre plus large que haute, `(…)` ouvert, le rail de son bord reste à ce bord,
+ * centré sur toute sa hauteur, et ma vignette glisse vers l'intérieur, contre lui ; les rails rangés, elle revient à son
+ * coin. Debout, rien ne change : le rail se pose sous elle (P2, `call-rails-clearance.ts`).
+ *
+ * Le pas est celui du rail : posé à 12 du bord (`call-rails.tsx`, `EDGE`), large de 60 (un bouton de 44 et 8 de verre
+ * de chaque côté, `railLength(1)`), plus l'écart de 8 (`RAIL_TILE_GAP`), moins la marge de ma vignette — recopiés ici,
+ * car le chunk des rails n'importe rien de l'écran d'appel ; un témoin tient les deux ensemble.
+ */
+export const RAIL_YIELD = 64;
+
+/** Le décalage horizontal de ma vignette, en pixels : vers la gauche pour un coin droit, vers la droite pour un coin gauche. Les coins sont physiques, le sens de lecture n'y change rien. */
+export function selfTileRailShift({ corner, viewport, railsOpen }: { readonly corner: SelfTileCorner; readonly viewport: TileSize; readonly railsOpen: boolean }): number {
+  if (!railsOpen || !isLandscapeWindow(viewport)) return 0;
+  return corner.endsWith('right') ? -RAIL_YIELD : RAIL_YIELD;
+}
 
 /** Ce que l'écran d'appel sait de ma vignette ; son coin et sa taille sont ceux que je lui ai choisis (`selfTileStore`). */
 type FootprintInput = {
@@ -137,13 +142,16 @@ type FootprintInput = {
   readonly topInset: number;
   /** Ce que la colonne du journal retire à la scène (W1) : ma vignette se mesure dans la scène qui reste. */
   readonly bleed?: number;
+  /** Les rails du duo sont sortis : en paysage, ma vignette leur cède le coin (L2.8). */
+  readonly railsOpen?: boolean;
 };
 
-/** La vignette du coin que la scène pose (`call-stage.tsx`), à sa taille choisie — les rails du duo l'évitent (#17429). */
-export function selfTileFootprint({ layout, cameraOn, swapped, framed, immersive, corner, scale, viewport, topInset, bleed = 0 }: FootprintInput): TileFootprint | null {
+/** La vignette du coin que la scène pose (`call-stage.tsx`), à sa taille choisie — les rails du duo l'évitent (#17429), ou, en paysage, elle leur cède le coin (L2.8). L'écran reçu de l'autre garde sa place (#17730). */
+export function selfTileFootprint({ layout, cameraOn, swapped, framed, immersive, corner, scale, viewport, topInset, bleed = 0, railsOpen = false }: FootprintInput): TileFootprint | null {
   if (layout === 'screen') return cameraOn && !immersive ? { corner: 'top-right', x: viewport.width - bleed - SELF_TILE_MARGIN - SCREEN_SELF_TILE.width, ...SCREEN_SELF_TILE } : null;
   if (layout !== 'video-duo' || !(swapped || cameraOn) || (framed && !swapped)) return null;
-  return { corner, ...selfTileBox({ corner, size: selfTileSize(scale, viewport), viewport, topInset, bleed }) };
+  const box = selfTileBox({ corner, size: selfTileSize(scale, viewport), viewport, topInset, bleed });
+  return { corner, ...box, x: box.x + selfTileRailShift({ corner, viewport, railsOpen }), yields: isLandscapeWindow(viewport) };
 }
 
 /** L'écran de l'appel ; hors navigateur, celui de la planche. */
@@ -172,17 +180,6 @@ export function nearestSelfCorner({ center, size, viewport, topInset = 0, bleed 
     return Math.hypot(center.x - (box.x + box.width / 2), center.y - (box.y + box.height / 2));
   };
   return SELF_CORNERS.reduce((best, corner) => (away(corner) < away(best) ? corner : best), DEFAULT_SELF_CORNER);
-}
-
-export const isTileDrag = ({ dx, dy }: { readonly dx: number; readonly dy: number }): boolean => Math.hypot(dx, dy) >= DRAG_THRESHOLD;
-
-const cornerOf = (top: boolean, left: boolean): SelfTileCorner => `${top ? 'top' : 'bottom'}-${left ? 'left' : 'right'}`;
-
-export function cornerAfterArrow(corner: SelfTileCorner, key: string): SelfTileCorner | null {
-  const top = onTop(corner);
-  const left = onLeft(corner);
-  const next = key === 'ArrowUp' ? cornerOf(true, left) : key === 'ArrowDown' ? cornerOf(false, left) : key === 'ArrowLeft' ? cornerOf(top, true) : key === 'ArrowRight' ? cornerOf(top, false) : null;
-  return next === corner ? null : next;
 }
 
 type SelfTileState = { readonly callId: string | null; readonly scale: SelfTileScale; readonly corner: SelfTileCorner };

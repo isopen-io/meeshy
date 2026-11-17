@@ -18,8 +18,16 @@ from typing import Dict, Optional
 from .zmq_models import TranslationTask
 from .zmq_pool.translation_processor import unsupported_language
 from .zmq_pool.connection_manager import summarize_task_ids
+from .zmq_request_frame import parse_request_frame
 
 logger = logging.getLogger(__name__)
+
+# Refus TRANSITOIRE (#17189) : pool saturé ou arrêt en cours, la passerelle
+# laisse la requête armée et le renvoie. Le libellé reste émis pour les
+# passerelles qui ne lisent pas encore le code. Contrat confronté à
+# `services/gateway/src/services/zmq-translation/types.ts` par les deux côtés.
+TRANSLATION_POOL_FULL = 'TRANSLATION_POOL_FULL'
+POOL_FULL_ERROR = 'translation pool full'
 
 
 def _accepted_error_codes(request_data: dict) -> tuple:
@@ -177,11 +185,8 @@ class TranslationHandler:
         # Extraire les frames binaires si présents
         binary_frames = frames[1:] if len(frames) > 1 else []
 
-        # Parser le JSON
-        try:
-            request_data = json.loads(json_frame.decode('utf-8'))
-        except json.JSONDecodeError as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur parsing JSON multipart: {type(e).__name__}")
+        request_data = parse_request_frame(json_frame)
+        if request_data is None:
             return
 
         # Extraire les infos des frames binaires
@@ -396,10 +401,6 @@ class TranslationHandler:
             if not success:
                 await self.publish_pool_full([task])
 
-        except json.JSONDecodeError as e:
-            logger.error(f"[TRANSLATOR] Erreur de décodage JSON: {type(e).__name__}")
-            if not outcome_owned:
-                await self._report_unprocessed(task, claimed_task_id)
         except Exception as e:
             logger.error(f"[TRANSLATOR] Erreur lors du traitement de la requête: {type(e).__name__}")
             if not outcome_owned:
@@ -428,8 +429,9 @@ class TranslationHandler:
             'type': 'translation_error',
             'taskId': task.task_id,
             'messageId': task.message_id,
-            'error': 'translation pool full',
-            'conversationId': task.conversation_id
+            'error': POOL_FULL_ERROR,
+            'conversationId': task.conversation_id,
+            'errorCode': TRANSLATION_POOL_FULL
         }
 
     def release_inflight(self, task_id: str) -> None:
@@ -837,7 +839,7 @@ class TranslationHandler:
             deleted = await forget_cached_content(get_audio_cache_service(), get_translation_cache_service(), request)
         except ErasureNotConfirmedError as error:
             # Fail-closed : sans confirmation de Redis, aucun acquittement — la passerelle rejoue.
-            logger.warning(f"[TRANSLATOR] Oubli NON confirmé, non acquitté (rejeu attendu) : {error}")
+            logger.warning(f"[TRANSLATOR] Oubli NON confirmé, non acquitté (rejeu attendu) : {type(error).__name__}")
             return
         logger.info(f"[TRANSLATOR] Oubli : {len(request['attachmentIds'])} pièce(s), {len(request['messageIds'])} message(s), {deleted} clé(s) effacée(s)")
         if self.pub_socket and request['requestId']:

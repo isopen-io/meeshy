@@ -19,8 +19,10 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { EPHEMERAL_UNAVAILABILITY_GRACE_MS } from '@meeshy/shared/utils/ephemeral-countdown';
 
 import {
+  EPHEMERAL_DEADLINE_SCAN_CAP,
   isEphemeralServableToReader,
   loadEphemeralReaderDeadlines,
+  readEphemeralReaderResolution,
 } from '../ephemeralReaderDeadlines';
 import { mapMessageProtectionFields } from '../messageProtectionProjection';
 
@@ -100,6 +102,75 @@ describe('loadEphemeralReaderDeadlines', () => {
 
     expect((await loadEphemeralReaderDeadlines(prisma, [ephemere()], LECTEUR)).get(MESSAGE_ID))
       .toEqual({ isSender: false, readerDeadline: null, latestRecipientDeadline: null });
+  });
+});
+
+describe('le feu annoncé à l’AUTEUR d’une flamme-œil est sa propre échéance (#18556)', () => {
+  const FLAMME = 1 | 8;
+  const FEU = new Date('2026-09-22T11:20:00.000Z');
+
+  it('la page rend à l’auteur SA ligne — le feu annoncé — et la projection la sert', async () => {
+    entryFindMany.mockResolvedValue([
+      { messageId: MESSAGE_ID, participantId: LECTEUR, ephemeralExpiresAt: D_LECTEUR },
+      { messageId: MESSAGE_ID, participantId: EXPEDITEUR, ephemeralExpiresAt: FEU },
+    ]);
+    const flamme = ephemere({ ephemeralDuration: null, effectFlags: FLAMME });
+
+    const resolution = (await loadEphemeralReaderDeadlines(prisma, [flamme], EXPEDITEUR)).get(MESSAGE_ID);
+
+    expect(resolution).toMatchObject({ isSender: true, readerDeadline: FEU });
+    expect(mapMessageProtectionFields(flamme, resolution).expiresAt).toEqual(FEU);
+    expect(isEphemeralServableToReader(flamme, resolution, new Date(FEU.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS))).toBe(false);
+  });
+
+  it('tant que le feu n’est pas annoncé, l’auteur ne reçoit aucune échéance, même si un lecteur a consommé', async () => {
+    entryFindMany.mockResolvedValue([{ messageId: MESSAGE_ID, participantId: LECTEUR, ephemeralExpiresAt: D_LECTEUR }]);
+    const flamme = ephemere({ ephemeralDuration: null, effectFlags: FLAMME });
+
+    const resolution = (await loadEphemeralReaderDeadlines(prisma, [flamme], EXPEDITEUR)).get(MESSAGE_ID);
+
+    expect(mapMessageProtectionFields(flamme, resolution).expiresAt).toBeNull();
+  });
+
+  it('la lecture CIBLÉE lit la ligne de l’auteur d’une flamme-œil par son couple, jamais la plus tardive des lecteurs', async () => {
+    const findFirst = jest.fn<any>().mockResolvedValue({ ephemeralExpiresAt: FEU });
+    const cible = { messageStatusEntry: { findFirst } } as any;
+
+    const resolution = await readEphemeralReaderResolution(
+      cible,
+      ephemere({ ephemeralDuration: null, effectFlags: FLAMME }),
+      EXPEDITEUR,
+    );
+
+    expect(resolution).toEqual({ isSender: true, readerDeadline: FEU, latestRecipientDeadline: null });
+    expect(findFirst.mock.calls[0][0].where).toMatchObject({ messageId: MESSAGE_ID, participantId: EXPEDITEUR });
+    expect(findFirst.mock.calls[0][0].orderBy).toBeUndefined();
+  });
+
+  it('la lecture CIBLÉE garde la plus tardive pour l’auteur d’un éphémère à DURÉE', async () => {
+    const findFirst = jest.fn<any>().mockResolvedValue({ ephemeralExpiresAt: D_AUTRE });
+    const cible = { messageStatusEntry: { findFirst } } as any;
+
+    const resolution = await readEphemeralReaderResolution(cible, ephemere(), EXPEDITEUR);
+
+    expect(resolution).toEqual({ isSender: true, readerDeadline: null, latestRecipientDeadline: D_AUTRE });
+    expect(findFirst.mock.calls[0][0].orderBy).toEqual({ ephemeralExpiresAt: 'desc' });
+  });
+
+  it('une tranche PLEINE ne coûte pas sa ligne au lecteur : elle est relue par son couple', async () => {
+    const etrangers = Array.from({ length: EPHEMERAL_DEADLINE_SCAN_CAP }, (_, index) => ({
+      messageId: MESSAGE_ID,
+      participantId: `etranger-${index}`,
+      ephemeralExpiresAt: D_AUTRE,
+    }));
+    entryFindMany
+      .mockResolvedValueOnce(etrangers)
+      .mockResolvedValueOnce([{ messageId: MESSAGE_ID, participantId: LECTEUR, ephemeralExpiresAt: D_LECTEUR }]);
+
+    const resolution = (await loadEphemeralReaderDeadlines(prisma, [ephemere()], LECTEUR)).get(MESSAGE_ID);
+
+    expect(resolution?.readerDeadline).toEqual(D_LECTEUR);
+    expect(entryFindMany.mock.calls[1][0].where).toMatchObject({ participantId: LECTEUR });
   });
 });
 

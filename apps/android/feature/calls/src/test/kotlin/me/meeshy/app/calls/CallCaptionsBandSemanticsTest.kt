@@ -17,6 +17,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
@@ -216,6 +218,27 @@ class CallCaptionsBandSemanticsTest {
         rule.onNodeWithText("Transcript").assertHeightIsAtLeast(48.dp).performClick()
 
         assertThat(opened).isEqualTo(1)
+    }
+
+    /** #17964 — « Journal » is ONE toggle in two states: off under the captions (it opens), on at the foot of the open journal. */
+    @Test
+    fun `the Journal button of the band is a toggle at rest that TalkBack reads off`() {
+        rule.setContent {
+            MeeshyTheme { CallCaptionsBand(lines = listOf(line("a", "Bonjour")), onToggleOriginal = {}, onOpenJournal = {}) }
+        }
+
+        rule.onNodeWithText("Transcript").assertIsOff()
+    }
+
+    /** P13.9 · P9b — at the foot of the journal open in the pill, « Journal » is on (white disc, dark ink), a 48 dp target, and touching it closes the journal. */
+    @Test
+    fun `the open Journal button is on, a 48 dp target, and touching it closes the journal`() {
+        var closed = 0
+        rule.setContent { MeeshyTheme { CallJournalButton(isOpen = true, onClick = { closed++ }) } }
+
+        rule.onNodeWithText("Transcript").assertIsOn().assertHeightIsAtLeast(48.dp).performClick()
+
+        assertThat(closed).isEqualTo(1)
     }
 
     @Test

@@ -86,6 +86,59 @@ public func meeshyWithAnimation<Result>(
     try withAnimation(MeeshyMotion.animation(animation, reduce: reduceMotion), body)
 }
 
+public extension MeeshyMotion {
+    /// Ce que la racine laisse passer d'une animation explicite : rien sous
+    /// « Réduire les animations », sauf le fondu court qu'un site a demandé
+    /// pour ce mode (`meeshyWithAnimation(_:reduced:reduceMotion:_:)`).
+    nonisolated static func rootAnimation(_ animation: Animation?, reduce: Bool, preserved: Bool) -> Animation? {
+        reduce && !preserved ? nil : animation
+    }
+
+    /// Le fondu court du mode réduit : la valeur réduite des pilules du kit
+    /// (K10, K16), sans nouveau littéral.
+    nonisolated static var reducedFade: Animation {
+        .easeOut(duration: MeeshyGlassPillRecipe.reducedStowDuration)
+    }
+
+    static func transition(_ full: AnyTransition, reduced: AnyTransition = .opacity, reduce: Bool) -> AnyTransition {
+        reduce ? reduced : full
+    }
+}
+
+nonisolated private struct MeeshyPreservedMotionKey: TransactionKey {
+    static let defaultValue = false
+}
+
+extension Transaction {
+    /// Marque une transaction dont l'animation est déjà la variante réduite :
+    /// la racine la laisse passer. iOS 16 n'a pas de clé de transaction ; le
+    /// fondu réduit y devient un changement immédiat.
+    var meeshyPreservesMotion: Bool {
+        get {
+            guard #available(iOS 17, *) else { return false }
+            return self[MeeshyPreservedMotionKey.self]
+        }
+        set {
+            guard #available(iOS 17, *) else { return }
+            self[MeeshyPreservedMotionKey.self] = newValue
+        }
+    }
+}
+
+/// `full` hors réduction ; sous réduction, `reduced`, marqué pour traverser
+/// la racine (`View.meeshyMotionRoot()`).
+public func meeshyWithAnimation<Result>(
+    _ full: Animation?,
+    reduced: Animation?,
+    reduceMotion: Bool,
+    _ body: () throws -> Result
+) rethrows -> Result {
+    guard reduceMotion else { return try withAnimation(full, body) }
+    var transaction = Transaction(animation: reduced)
+    transaction.meeshyPreservesMotion = true
+    return try withTransaction(transaction, body)
+}
+
 /// App-level Reduce Motion override, injected at the root from
 /// `MeeshyAccessibilityPreferences`. Defaults to `false` so SDK views behave
 /// exactly like system-only Reduce Motion when the app never sets it.
@@ -111,6 +164,72 @@ private struct MeeshyAnimationModifier<V: Equatable>: ViewModifier {
     func body(content: Content) -> some View {
         let reduce = MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced)
         return content.animation(MeeshyMotion.animation(animation, reduce: reduce), value: value)
+    }
+}
+
+private struct MeeshyMotionRootModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.meeshyForceReduceMotion) private var userForced
+
+    func body(content: Content) -> some View {
+        let reduce = MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced)
+        return content.transaction { transaction in
+            transaction.animation = MeeshyMotion.rootAnimation(
+                transaction.animation,
+                reduce: reduce,
+                preserved: transaction.meeshyPreservesMotion
+            )
+        }
+    }
+}
+
+private struct MeeshyReducedAnimationModifier<V: Equatable>: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.meeshyForceReduceMotion) private var userForced
+    let full: Animation?
+    let reduced: Animation?
+    let value: V
+
+    func body(content: Content) -> some View {
+        let reduce = MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced)
+        return content.animation(reduce ? reduced : full, value: value)
+    }
+}
+
+private struct MeeshyTransitionModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.meeshyForceReduceMotion) private var userForced
+    let full: AnyTransition
+    let reduced: AnyTransition
+
+    func body(content: Content) -> some View {
+        let reduce = MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced)
+        return content.transition(MeeshyMotion.transition(full, reduced: reduced, reduce: reduce))
+    }
+}
+
+public extension View {
+    /// La racine du mouvement d'une fenêtre ou d'une surface présentée : sous
+    /// « Réduire les animations » (système OU préférence de l'app), toute
+    /// animation explicite qui la traverse devient un changement immédiat,
+    /// sauf la variante réduite marquée par
+    /// `meeshyWithAnimation(_:reduced:reduceMotion:_:)`. Elle ne touche jamais
+    /// `disablesAnimations`. À poser AVANT l'injection de
+    /// `meeshyForceReduceMotion`, pour la lire.
+    func meeshyMotionRoot() -> some View {
+        modifier(MeeshyMotionRootModifier())
+    }
+
+    /// `.animation(_:value:)` à deux variantes : `full` hors réduction,
+    /// `reduced` (un fondu court, ou `nil`) sous réduction.
+    func meeshyAnimation<V: Equatable>(_ full: Animation?, reduced: Animation?, value: V) -> some View {
+        modifier(MeeshyReducedAnimationModifier(full: full, reduced: reduced, value: value))
+    }
+
+    /// `.transition(_:)` à deux variantes, qui lit les deux moitiés de la
+    /// préférence.
+    func meeshyTransition(_ full: AnyTransition, reduced: AnyTransition = .opacity) -> some View {
+        modifier(MeeshyTransitionModifier(full: full, reduced: reduced))
     }
 }
 

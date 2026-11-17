@@ -214,6 +214,40 @@ final class CallReducedRuleTests: XCTestCase {
         XCTAssertEqual(CallReducedRule.caption(title: nil, duration: "04:12"), "04:12")
     }
 
+    // MARK: - P18.3 — l'étiquette unique de l'appel réduit, quelle que soit sa forme (#17731)
+
+    func test_label_connected_isTheGivenNameDotTheDuration() {
+        XCTAssertEqual(CallReducedRule.label(title: "Maman", duration: "04:12", isConnected: true, unknown: "Inconnu"), "Maman · 04:12")
+    }
+
+    func test_label_connectedWithoutName_isTheDurationAlone_likeTheBubble() {
+        XCTAssertEqual(CallReducedRule.label(title: nil, duration: "04:12", isConnected: true, unknown: "Inconnu"), "04:12")
+    }
+
+    /// Avant l'établissement, la phase est un glyphe : l'étiquette ne dit jamais « 00:00 ».
+    func test_label_beforeConnection_isTheNameAlone_neverAZeroDuration() {
+        XCTAssertEqual(CallReducedRule.label(title: "Awa", duration: "00:00", isConnected: false, unknown: "Inconnu"), "Awa")
+        XCTAssertEqual(CallReducedRule.label(title: nil, duration: "00:00", isConnected: false, unknown: "Inconnu"), "Inconnu")
+    }
+
+    // MARK: - P18.2 — la clé de la couleur de l'autre (mêmes vecteurs qu'Android `CallTileRim.peerAvatar`, #18449)
+
+    func test_colorKey_isThePeerIdentity_first() {
+        XCTAssertEqual(CallReducedRule.colorKey(peerId: "u-awa", peerName: "Awa"), "u-awa")
+    }
+
+    func test_colorKey_withoutIdentity_isTheName_onTheSamePalette() {
+        XCTAssertEqual(CallReducedRule.colorKey(peerId: "", peerName: "Awa"), "Awa")
+        XCTAssertEqual(CallReducedRule.colorKey(peerId: "  ", peerName: "Awa"), "Awa")
+        XCTAssertEqual(CallReducedRule.colorKey(peerId: nil, peerName: "Awa"), "Awa")
+        XCTAssertEqual(CallPeerSpeech.colorHex(forPeer: CallReducedRule.colorKey(peerId: nil, peerName: "Awa")), CallSpeakerColor.hex(for: "Awa"))
+    }
+
+    func test_colorKey_withNothingToFoundIt_inventsNoColor() {
+        XCTAssertNil(CallReducedRule.colorKey(peerId: nil, peerName: nil))
+        XCTAssertNil(CallReducedRule.colorKey(peerId: "", peerName: " "))
+    }
+
     // MARK: - La couleur de l'autre (fonction partagée)
 
     func test_peerColor_isTheSharedSpeakerColor_andIsStablePerPerson() {
@@ -233,17 +267,52 @@ final class CallReducedWiringTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/\(path)"))
     }
 
-    func test_participantVisual_ringAndAvatarTakeThePeerColor_fromTheSharedFunction() throws {
+    /// P18.2 — quelle que soit la forme de l'appel réduit (#17731), son liseré et son avatar
+    /// sont à la couleur de l'autre : plus d'option « bannière blanche, indigo de marque ».
+    func test_participantVisual_ringAndAvatarTakeThePeerColor_fromTheSharedFunction_whateverTheForm() throws {
         let source = try code("CallParticipantVisual.swift")
-        XCTAssertTrue(source.contains("CallPeerSpeech.colorHex(forPeer: callManager.remoteUserId)"))
-        XCTAssertTrue(source.contains("accentColor: ringsInPeerColor ? peerColorHex"))
-        XCTAssertTrue(source.contains("CallSelfTileStroke.color(forKey: callManager.remoteUserId)"), "le liseré des vignettes, pas une teinte de plus")
-        XCTAssertTrue(source.contains("lineWidth: ringsInPeerColor ? CallSelfTileStroke.lineWidth : 1"))
+        XCTAssertTrue(source.contains("CallReducedRule.colorKey(peerId: callManager.remoteUserId, peerName: callManager.remoteUsername)"))
+        XCTAssertTrue(source.contains("CallPeerSpeech.colorHex(forPeer: colorKey)"))
+        XCTAssertTrue(source.contains("accentColor: peerColorHex"))
+        XCTAssertTrue(source.contains("CallSelfTileStroke.color(forKey: colorKey)"), "le liseré des vignettes, pas une teinte de plus")
+        XCTAssertTrue(source.contains("lineWidth: colorKey == nil ? 1 : CallSelfTileStroke.lineWidth"))
+        XCTAssertFalse(source.contains("ringsInPeerColor"), "une seule couleur pour l'appel réduit, bannière comme bulle")
+        XCTAssertFalse(source.contains("MeeshyColors.brandPrimaryHex"), "jamais l'indigo de marque à la place de la couleur de l'autre")
+        let avatar = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var avatarView", in: source))
+        XCTAssertTrue(avatar.contains(".overlay { ring }"), "l'avatar porte le liseré, comme la vidéo")
     }
 
-    func test_bubble_asksForThePeerRing_andCarriesTheGlassNameplate() throws {
+    func test_banner_andBubble_drawTheSameVisual() throws {
+        XCTAssertTrue(try code("FloatingCallPillView.swift").contains("CallParticipantVisual(diameter: 44, callManager: callManager)"))
+        XCTAssertTrue(try code("CallBubbleView.swift").contains("CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)"))
+    }
+
+    /// P18.3 — hors partage, la bannière porte UNE étiquette « nom · durée », avec le nom
+    /// que j'ai donné (les noms de l'en-tête, lus dans la conversation en cache).
+    func test_banner_outsideTheShare_carriesOneLabel_withTheGivenName() throws {
+        let source = try code("FloatingCallPillView.swift")
+        XCTAssertFalse(source.contains("private var userInfoSection"), "plus de nom et de durée sur deux étiquettes")
+        XCTAssertFalse(source.contains("Text(callManager.remoteUsername"), "le nom donné prime sur le nom d'affichage")
+        XCTAssertTrue(source.contains("CallReducedRule.title("))
+        XCTAssertTrue(source.contains("CallReducedRule.label("))
+        XCTAssertTrue(source.contains("await CallReducedCaption.names(conversationId: callManager.conversationId)"))
+        let identity = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var identitySection", in: source))
+        XCTAssertTrue(identity.contains("CallParticipantVisual(diameter: 44, callManager: callManager)"))
+        XCTAssertTrue(identity.contains("statusEntry"))
+        let line = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var statusLine", in: source))
+        XCTAssertTrue(line.contains("CallDurationClock {"), "l'étiquette se redessine sous l'horloge, sans observer la durée")
+        XCTAssertTrue(line.contains("reducedLabel"))
+        XCTAssertTrue(source.contains("reducedTitle.map { \" — \\($0)\" }"), "VoiceOver nomme la personne comme l'étiquette")
+    }
+
+    func test_caption_sharesItsNameLookup_withTheBanner() throws {
+        let source = try code("CallReducedCaption.swift")
+        XCTAssertTrue(source.contains("static func names(conversationId: String?) async -> CallHeaderNames"))
+        XCTAssertTrue(source.contains("names = await Self.names(conversationId: callManager.conversationId)"))
+    }
+
+    func test_bubble_carriesTheGlassNameplate() throws {
         let source = try code("CallBubbleView.swift")
-        XCTAssertTrue(source.contains("ringsInPeerColor: true"))
         XCTAssertTrue(source.contains("CallReducedCaption(callManager: callManager, style: .glass)"))
         XCTAssertTrue(source.contains(".opacity(isCircleRegion && isMenuRevealed ? 0 : 1)"), "sous le cercle, l'étiquette laisse la place à Raccrocher")
         XCTAssertTrue(source.contains("value: isCircleRegion)"), "elle change de place en mouvement, jamais d'un coup")

@@ -50,6 +50,7 @@
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { awaitCondition } from './lib/await-fact.mjs';
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 
@@ -235,7 +236,15 @@ try {
   await capture(page, 'profil-feuille');
   await page.click('[data-profile-peek-open-page]');
   await page.waitForURL(`**/u/${HANDLE}`);
-  check(await page.$('[data-profile-peek]') === null, 'la page complète ouverte, la feuille s’est refermée');
+  /* LA FEUILLE SE FERME AU TOUCHER, ET SA SORTIE EST JOUÉE PAR UN FANTÔME (#18362) : le vrai dialogue
+     quitte l'arbre tout de suite, et une copie inerte (`[data-dialog-ghost]`) porte encore son contenu
+     le temps de la descente. Lire « plus aucun `[data-profile-peek]` » à cet instant mesurerait
+     l'animation, pas la fermeture. Les deux moitiés se mesurent : aucune feuille VIVANTE ne reste, puis
+     le fantôme s'en va — un fantôme qui resterait est un défaut, et il rougit ici. */
+  const vivantes = await page.$$eval('[data-profile-peek]', (els) => els.filter((el) => el.closest('[data-dialog-ghost]') === null).length);
+  check(vivantes === 0, `la page complète ouverte, la feuille s’est refermée (${vivantes} feuille(s) vivante(s))`);
+  const fantomeParti = await awaitCondition(page, () => document.querySelector('[data-profile-peek], [data-dialog-ghost]') === null, null, { timeoutMs: 3000 });
+  check(fantomeParti, 'et le fantôme de sa sortie a quitté le document — rien de la feuille ne reste dans l’arbre');
   /* ATTENDRE LA PERSONNE, PAS L'ÉCRAN. `[data-user-profile]` est posé par les
      TROIS états de la route — squelette, refus, profil servi : l'attendre ne
      prouve donc rien, et le témoin suivant lisait « Profil » (le titre du

@@ -217,7 +217,7 @@ struct IncomingCallView: View {
             .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.xsPlus)
-            .adaptiveGlass(in: Capsule())
+            .adaptiveLiquidGlass(in: Capsule())
             .accessibilityElement(children: .combine)
     }
 
@@ -317,7 +317,7 @@ struct IncomingCallView: View {
             .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.xl)
             .frame(minHeight: 44)
-            .adaptiveGlass(in: Capsule())
+            .adaptiveLiquidGlass(in: Capsule())
         }
         .pressable()
         .accessibilityLabel(String(localized: "call.decline.open.label", defaultValue: "Refuser avec un message", bundle: .main))
@@ -508,7 +508,7 @@ struct IncomingCallView: View {
                             .font(MeeshyFont.fixedGlyph(26, weight: .medium))
                             .foregroundStyle(tint)
                             .frame(width: 70, height: 70)
-                            .adaptiveGlass(in: Circle())
+                            .adaptiveLiquidGlass(in: Circle(), interactive: true)
                     }
                 }
 

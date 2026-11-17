@@ -64,7 +64,7 @@ internal fun ActivationInviteBandHost(
         message = invite?.daysLeft?.let { stringResource(R.string.activation_invite_banner_days, it) }
             ?: stringResource(R.string.activation_invite_banner_no_days),
         dismissLabel = stringResource(R.string.activation_invite_banner_later),
-        onOpen = { navController.navigate(Routes.SECURITY) },
+        onOpen = { navController.navigateSingleTop(Routes.SECURITY) },
         onDismiss = { dismissed = true },
         modifier = modifier,
         content = content,

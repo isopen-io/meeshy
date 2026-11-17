@@ -14,11 +14,32 @@ import type { MessageSticker } from '../message-sticker.js';
 import type { LastMessageSystemEvent } from '../conversation-preview.js';
 
 /**
- * Données pour l'événement de suppression de message
+ * Données pour l'événement de suppression de message.
+ *
+ * `deletedAt` (ISO 8601) est l'heure SERVEUR du retrait — la valeur EXACTE que
+ * l'écriture `Message.deletedAt` vient de committer, jamais une horloge
+ * recomposée au moment de l'émission. Elle est déclarée parce que les TROIS
+ * clients datent la pierre tombale, et qu'aucun ne pouvait le faire avec autre
+ * chose que l'horloge de son appareil : Android fait `deletedAt ?: now`
+ * (`MessageRealtimeApplier.kt`), iOS pose `Date()` (`ConversationSyncEngine`),
+ * le web `new Date()` (`applyMessageDeleted`). Deux appareils du même compte
+ * dataient donc la même suppression différemment, et un rejeu de la file hors
+ * ligne la datait de la RECONNEXION — des heures après le retrait.
+ *
+ * Le type est énoncé parce qu'un horodatage dont le type ne l'est pas est
+ * décidé par l'encodeur : `Date` et chaîne ISO sortent identiques de
+ * `JSON.stringify`, et tout témoin posé sur la forme `Date` atteste alors une
+ * charge que personne ne reçoit.
+ *
+ * **Un client la lit comme OPTIONNELLE** : une entrée de la file hors ligne
+ * écrite avant #18159 est rejouée telle qu'elle a été stockée, sans ce champ,
+ * et un client neuf doit tourner contre un serveur ancien. Le repli reste
+ * l'horloge locale — exactement le comportement d'avant.
  */
 export interface MessageDeletedEventData {
   readonly messageId: string;
   readonly conversationId: string;
+  readonly deletedAt: string;
 }
 
 /**
@@ -217,9 +238,14 @@ export interface ReadStatusUpdatedEventData {
 export interface MessageConsumedEventData {
   readonly messageId: string;
   readonly conversationId: string;
-  /** Identité de celui qui a ouvert (`User.id`, ou `Participant.id` d'un invité). */
+  /**
+   * Identité de celui qui a ouvert (`User.id`, ou `Participant.id` d'un invité)
+   * — servie à SES appareils seuls, pour qu'ils scellent sa bulle. Tout autre
+   * destinataire reçoit une chaîne VIDE (#18556) : une ouverture nominative est
+   * un accusé de lecture, et personne d'autre n'en a l'usage.
+   */
   readonly userId: string;
-  /** `Participant.id` de celui qui a ouvert — toujours présent, anonyme compris. */
+  /** `Participant.id` de celui qui a ouvert — présent pour l'ouvreur seul. */
   readonly participantId?: string;
   /** L'AUTEUR a ouvert son propre message : n'entre jamais dans l'audience. */
   readonly byAuthor?: boolean;

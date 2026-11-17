@@ -448,50 +448,41 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
     // MARK: - Le repli < iOS 26 : l'entrée sous Réduire les animations
 
     func test_entrance_reduceMotion_neverStartsFromTheRow() {
-        XCTAssertFalse(ConversationPreviewEntranceMotion.emergesFromRow(reduceMotion: true))
-        XCTAssertTrue(ConversationPreviewEntranceMotion.emergesFromRow(reduceMotion: false))
+        XCTAssertFalse(ConversationPreviewMorph.morphsFromRow(hasSource: true, reduceMotion: true))
+        XCTAssertTrue(ConversationPreviewMorph.morphsFromRow(hasSource: true, reduceMotion: false))
     }
 
-    func test_entrance_reduceMotion_hasNoBlur() {
-        XCTAssertEqual(ConversationPreviewEntranceMotion.blurRadius(previewScale: 0.3, reduceMotion: true), 0)
-        XCTAssertGreaterThan(ConversationPreviewEntranceMotion.blurRadius(previewScale: 0.3, reduceMotion: false), 0)
-    }
-
-    func test_entrance_blur_isNeverNegativeOnOvershoot() {
-        XCTAssertEqual(ConversationPreviewEntranceMotion.blurRadius(previewScale: 1.2, reduceMotion: false), 0)
+    /// Le flou d'émergence est parti avec l'échelle (#18722) : la carte naît
+    /// du cadre de la rangée, nette, et sous Réduire les animations elle
+    /// n'apparaît qu'en fondu.
+    func test_entrance_hasNoBlur() throws {
+        let overlays = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift"))
+        XCTAssertFalse(overlays.contains(".blur(radius: ConversationPreviewEntranceMotion"))
     }
 
     func test_placement_reduceMotion_startsInPlace() {
-        let start = ConversationPreviewEntranceMotion.placement(
-            source: CGRect(x: 0, y: 500, width: 393, height: 76), rest: CGRect(x: 0, y: 100, width: 340, height: 380), reduceMotion: true
-        )
-
-        XCTAssertEqual(start.scale, 1.0)
-        XCTAssertEqual(start.offset, 0)
+        XCTAssertEqual(ConversationPreviewMorph.startProgress(hasSource: true, reduceMotion: true), 1)
     }
 
-    /// La carte part de la ligne pressée : réduite à la hauteur de la ligne,
-    /// son centre visuel posé sur celui de la ligne.
-    func test_placement_fromTheRow_centersOnThePressedRow() {
-        let rest = CGRect(x: 0, y: 100, width: 340, height: 380)
+    /// La carte part de la ligne pressée : à progression nulle, son cadre EST
+    /// celui de la rangée, exprimé dans l'espace de la carte.
+    func test_placement_fromTheRow_startsOnThePressedRow() {
+        let slot = CGRect(x: 46, y: 100, width: 300, height: 380)
         let source = CGRect(x: 0, y: 500, width: 393, height: 76)
+        let local = ConversationPreviewMorph.sourceInSlot(source, slot: slot)
 
-        let start = ConversationPreviewEntranceMotion.placement(source: source, rest: rest, reduceMotion: false)
-
-        XCTAssertEqual(start.scale, 0.22, accuracy: 0.0001, "76 / 380 = 0.2, relevé au plancher 0.22")
-        XCTAssertEqual(rest.maxY - start.scale * rest.height / 2 + start.offset, source.midY, accuracy: 0.0001)
+        XCTAssertEqual(ConversationPreviewMorph.startProgress(hasSource: true, reduceMotion: false), 0)
+        XCTAssertEqual(local.map { ConversationPreviewMorph.frame(progress: 0, from: $0, to: CGRect(origin: .zero, size: slot.size)) },
+                       CGRect(x: -46, y: 400, width: 393, height: 76))
     }
 
-    func test_placement_unknownRow_zoomsFromTheCenter() {
-        let start = ConversationPreviewEntranceMotion.placement(source: nil, rest: CGRect(x: 0, y: 0, width: 340, height: 380), reduceMotion: false)
-
-        XCTAssertEqual(start.scale, 0.7)
-        XCTAssertEqual(start.offset, 0)
+    func test_placement_unknownRow_appearsInPlace() {
+        XCTAssertEqual(ConversationPreviewMorph.startProgress(hasSource: false, reduceMotion: false), 1)
     }
 
     func test_entrance_menuRise_isNullUnderReduceMotion() {
-        XCTAssertEqual(ConversationPreviewEntranceMotion.menuRestOffset(reduceMotion: true), 0)
-        XCTAssertGreaterThan(ConversationPreviewEntranceMotion.menuRestOffset(reduceMotion: false), 0)
+        XCTAssertEqual(ConversationPreviewMorph.menuRise(progress: 0.85, reduceMotion: true), 0)
+        XCTAssertGreaterThan(ConversationPreviewMorph.menuRise(progress: 0.85, reduceMotion: false), 0)
     }
 
     /// Le ressort de pression de la rangée : à peine perceptible, à la

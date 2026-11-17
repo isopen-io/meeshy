@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="conversations_title">Meeshy Chats</string>
-    <string name="conversations_no_results_subtitle">Try a different search or filter.</string>
     <string name="conversations_no_messages">No messages yet</string>
     <string name="conversations_preview_expired_content_description">last message expired</string>
     <string name="conversations_preview_hidden_content_description">last message hidden</string>
@@ -9,16 +8,11 @@
     <string name="conversations_action_all_notifications">All notifications</string>
     <string name="conversations_lock_title_unlock">Unlock conversation</string>
     <string name="conversations_lock_title_unlock_all">Unlock everything</string>
-    <string name="conversations_lock_subtitle_verify_master">Enter your master PIN to authorize the lock</string>
     <string name="conversations_lock_subtitle_open">Enter the code for %1$s to open it</string>
-    <string name="conversations_lock_subtitle_unlock_all">Enter your master PIN to unlock every conversation</string>
     <string name="conversations_change_master_pin">Change master PIN</string>
     <string name="conversations_lock_security_menu">Lock settings</string>
     <string name="conversations_unlock_all">Unlock all conversations</string>
     <string name="conversations_lock_dots_a11y">%1$d of %2$d digits entered</string>
-    <string name="conversations_action_rename">Rename conversation</string>
-    <string name="conversations_rename_dialog_title">Rename conversation</string>
-    <string name="conversations_rename_field_label">Conversation name</string>
     <string name="conversations_action_remove_favorite">Remove favorite</string>
     <string name="conversations_favorite_set_content_description">Set favorite reaction %1$s</string>
     <string name="conversations_tags_add_content_description">Add tag</string>
@@ -26,28 +20,16 @@
     <string name="conversations_action_move_to_category">Move to category</string>
     <string name="conversations_category_search_hint">Search or create a category…</string>
     <string name="conversations_action_discard_draft">Discard draft</string>
-    <string name="conversations_leave_confirm_message">You will leave \"%1$s\". You won\'t receive new messages from this conversation.</string>
-    <string name="conversations_delete_for_me_confirm_message">\"%1$s\" will be permanently deleted from your devices only. Other participants keep it.</string>
     <string name="conversations_delete_for_all_confirm_message">\"%1$s\" will be closed for every participant. No one will be able to write anymore.</string>
-    <string name="new_conversation_search_hint">Search people</string>
-    <string name="share_link_field_slug">Custom URL slug (optional)</string>
-    <string name="share_link_field_max_uses">Maximum uses</string>
     <string name="share_link_created_title">Link created</string>
-    <string name="share_link_created_subtitle">Share it to invite people to the conversation.</string>
     <string name="my_share_links_share">Share link</string>
     <string name="my_share_links_delete">Delete link</string>
     <string name="my_share_links_extend">Extend expiry</string>
-    <string name="share_link_detail_open">Open link details</string>
-    <string name="share_link_detail_stats_max">Maximum</string>
-    <string name="share_link_detail_created">Created</string>
     <string name="share_link_detail_not_found">This link is no longer available.</string>
-    <string name="share_link_detail_dismiss">Dismiss</string>
 
     <!-- Search bar trailing icons -->
 
     <!-- Global search screen -->
-    <string name="global_search_empty_title">Search Meeshy</string>
-    <string name="global_search_no_results_hint">Try different keywords</string>
 
     <!-- Dashboard screen -->
 
@@ -56,7 +38,6 @@
     <string name="global_search_tab_users">Users</string>
     <string name="conversations_action_mark_unread">Mark as unread</string>
     <string name="conversations_empty">No conversations yet</string>
-    <string name="conversations_empty_subtitle">Start a new conversation to see it here.</string>
     <string name="conversations_no_results">No conversations match</string>
     <string name="conversations_open_global_search">Global search</string>
     <string name="conversations_section_all">My conversations</string>

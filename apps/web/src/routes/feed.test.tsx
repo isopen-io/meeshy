@@ -49,10 +49,10 @@ describe('les quatre états du fil sont DESSINÉS, jamais un écran blanc', () =
     expect(html).toContain('Réessayer');
   });
 
-  test('vide : le corpus est absent, l’écran le DIT et annonce ce qui viendra', () => {
+  test('vide : le corpus est absent, l’écran le DIT en une ligne', () => {
     const html = renderToStaticMarkup(<FeedEmpty />);
     expect(html).toContain('Aucune publication');
-    expect(html).toContain('Les publications de vos contacts');
+    expect(html).not.toContain('apparaîtront ici');
   });
 
   /** Le squelette est un DÉCOR — l'annonce « Chargement » vit sur le

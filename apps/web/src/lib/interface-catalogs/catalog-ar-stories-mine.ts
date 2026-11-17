@@ -4,7 +4,6 @@ const arStoriesMine = {
   'storiesMine.title': 'قصصي',
   'storiesMine.manage': 'إدارة قصصي',
   'storiesMine.empty.title': 'لا توجد قصص مرسلة',
-  'storiesMine.empty.subtitle': 'ستظهر هنا قصصك المنشورة طالما أنها نشطة.',
   'storiesMine.action.open': 'فتح',
   'storiesMine.action.edit': 'تعديل',
   'storiesMine.action.delete': 'حذف',

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="game2_duo_no_friends">تحتاج إلى صديق مقبول لتعقد تحالفًا.</string>
+    <string name="game2_league_locked">تُفتح المبارزة عند المستوى ⁦%1$s⁩ · أنت في المستوى ⁦%2$s⁩</string>
+    <string name="game2_settings_hidden_card">اللعبة مخفية على هذا الجهاز.</string>
+    <string name="game_atlas_tiers_prestige">يُتاح الانبعاث عند المستوى %1$s: وهو اختياري، ويمكن لنورك أن يواصل النمو.</string>
+    <string name="game_concept_atlas_tip_2">انتظر ردّه: لا بد من رسالة في كل اتجاه.</string>
+    <string name="game_frappe_refused_shadow">ظلّ يحجب نورك. شراراتك القادمة ستبدّده، ثم نسكّ.</string>
+    <string name="game_rules_concept_showcase_body">رفّ كؤوسك: كؤوس المبارزة والرحلة والانبعاث واللهب.</string>
+    <string name="game_rules_intro">ثماني قواعد، واللعبة كلها بداخلها. ميو يشرحها، ومي تُريك الإجراء.</string>
+    <string name="game_state_points_missing">نورك يضمّ %1$s، أي %2$s. ستصوغ Meesh رقم %3$s منه %4$s: ينقصك %5$s.</string>
+    <string name="game_state_points_ready">نورك يضمّ %1$s، أي %2$s: ما يكفي لسكّ Meesh رقم %3$s، التي ستصوغ منه %4$s.</string>
+    <string name="game_state_points_missing_plain">نورك يضمّ %1$s. ستصوغ Meesh رقم %2$s منه %3$s: ينقصك %4$s.</string>
+    <string name="game_state_season_progress">الرحلة %1$s، الأسبوع %2$s من %3$s: المحطة %4$s من %5$s، و%6$s حتى التالية.</string>
+</resources>

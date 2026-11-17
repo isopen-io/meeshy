@@ -7,8 +7,9 @@ import { gameText } from '@/lib/view/game-copy';
  * L'ÉCHELLE D'UN BADGE (#9639) — ses sept paliers, du cuivre au prisme : les
  * atteints (datés quand la passerelle sert la date), la prochaine étoile (ce
  * qu'il manque) et ceux à venir (leur seuil). `BadgeLadder` est l'échelle
- * entière de la fiche ; `BadgeUpcoming` la SUITE compacte de la page des
- * badges. Les deux lisent `badgeGuideView` : un badge dit la même chose partout.
+ * entière de la fiche — la page des médailles ne la répète plus sous chaque
+ * médaille (épure #17584) : l'échelle vit une fois, dans « Comprendre les
+ * médailles ». Elle lit `badgeGuideView` : un badge dit la même chose partout.
  */
 
 /** La pastille de métal d'un palier : les deux teintes de la matière, éteinte quand le palier est à venir. */
@@ -76,37 +77,5 @@ export function BadgeLadder({ view }: { readonly view: BadgeGuideView }) {
         ))}
       </ol>
     </section>
-  );
-}
-
-/** Sous le nom, à droite de la médaille — en style et non en classe arbitraire :
- * une classe arbitraire de retrait (60 px) entrait dans la feuille CRITIQUE et
- * faisait passer la première peinture au-dessus de son plafond (#9639). Tailwind
- * lit aussi les commentaires : ne pas y écrire le nom de la classe. */
-const UPCOMING_INSET = { paddingInlineStart: 60 } as const;
-
-/** La suite compacte : les paliers à venir, leur matière et leur seuil ; « Échelle complète » au Prisme. */
-export function BadgeUpcoming({ view, axisLabel }: { readonly view: BadgeGuideView; readonly axisLabel: string }) {
-  return (
-    <div data-badge-upcoming={view.upcoming.length} className="flex flex-wrap items-center gap-x-3 gap-y-1 pb-2" style={UPCOMING_INSET}>
-      {view.upcoming.length === 0 ? (
-        <span className="text-check" style={{ color: INK_2 }}>
-          {view.next}
-        </span>
-      ) : (
-        <>
-          <span className="sr-only">{`${axisLabel} — ${gameText('game.badge.upcoming_title')}`}</span>
-          <span aria-hidden="true" className="text-check font-semibold uppercase tracking-wide" style={{ color: INK_2 }}>
-            {gameText('game.badge.upcoming_title')}
-          </span>
-          {view.upcoming.map((rung) => (
-            <span key={rung.threshold} data-badge-upcoming-rung={rung.state} className="inline-flex items-center gap-1 text-check tabular-nums" style={{ color: rung.state === 'next' ? BRAND : INK_2 }}>
-              <Swatch material={rung.material} lit={false} size={10} />
-              {rung.materialName} {rung.thresholdLabel}
-            </span>
-          ))}
-        </>
-      )}
-    </div>
   );
 }

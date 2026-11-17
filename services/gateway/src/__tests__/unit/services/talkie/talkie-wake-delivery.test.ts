@@ -17,6 +17,7 @@ type Token = { readonly id: string; readonly type: string; readonly platform: st
 const PTT: Token = { id: 'ptt', type: 'pushtotalk', platform: 'ios', appVersion: '1.1.8', bundleId: 'me.meeshy.app', sessionId: 's-ok' };
 const IOS_CAPABLE: Token = { id: 'ios', type: 'apns', platform: 'ios', appVersion: '1.1.8', bundleId: 'me.meeshy.app', sessionId: null };
 const IOS_OLD: Token = { id: 'ios-old', type: 'apns', platform: 'ios', appVersion: '1.0.0', bundleId: 'me.meeshy.app', sessionId: null };
+const ANDROID_310: Token = { id: 'android', type: 'fcm', platform: 'android', appVersion: '3.1.0', bundleId: 'me.meeshy.app', sessionId: null };
 
 const prismaWith = (tokens: readonly Token[]) => ({
   pushToken: {
@@ -47,6 +48,11 @@ describe('#17249 — le réveil ne s’annonce que s’il peut partir', () => {
   it('jeton APNs d’un client qui route talkie_incoming : push si APNs est prêt, sinon la cause', async () => {
     expect(await resolveTalkieWake(prismaWith([IOS_CAPABLE]) as never, U, LIVE, NOW)).toBe('push');
     expect(await resolveTalkieWake(prismaWith([IOS_CAPABLE]) as never, U, NOTHING, NOW)).toEqual({ miss: 'apns-not-configured' });
+  });
+
+  it('#17144 — jeton FCM de l’Android natif 3.1.0 : push si FCM est prêt, sinon la cause', async () => {
+    expect(await resolveTalkieWake(prismaWith([ANDROID_310]) as never, U, LIVE, NOW)).toBe('push');
+    expect(await resolveTalkieWake(prismaWith([ANDROID_310]) as never, U, NOTHING, NOW)).toEqual({ miss: 'fcm-not-configured' });
   });
 
   it('aucun jeton capable de réveiller : no-token, quels que soient les transports', async () => {

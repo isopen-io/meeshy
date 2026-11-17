@@ -38,7 +38,7 @@ const esIdentity = {
   'conversation.details.role.moderator': 'Moderador',
   'conversation.details.share': 'Compartir un enlace',
   'conversation.details.share.busy': 'Creando el enlace…',
-  'conversation.details.share.copied': 'Enlace copiado: solo falta pegarlo.',
+  'conversation.details.share.copied': 'Enlace copiado.',
   'conversation.details.share.failed': 'No se pudo crear el enlace. Inténtalo de nuevo en un momento.',
   'conversation.details.share.unavailable': 'No se puede compartir aquí. Copia el enlace: {url}',
   'thread.header.active_members': 'Miembros más activos',

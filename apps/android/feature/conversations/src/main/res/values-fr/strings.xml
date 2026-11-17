@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="conversations_title">Meeshy Chats</string>
-    <string name="conversations_no_results_subtitle">Essayez une autre recherche ou un autre filtre.</string>
     <string name="conversations_no_messages">Aucun message pour l\'instant</string>
     <string name="conversations_preview_expired_content_description">dernier message expiré</string>
     <string name="conversations_preview_hidden_content_description">dernier message masqué</string>
@@ -9,44 +8,27 @@
     <string name="conversations_action_all_notifications">Toutes les notifications</string>
     <string name="conversations_lock_title_unlock">Déverrouiller la conversation</string>
     <string name="conversations_lock_title_unlock_all">Tout déverrouiller</string>
-    <string name="conversations_lock_subtitle_verify_master">Saisissez votre master PIN pour autoriser le verrouillage</string>
     <string name="conversations_lock_subtitle_open">Saisissez le code de %1$s pour l\'ouvrir</string>
-    <string name="conversations_lock_subtitle_unlock_all">Saisissez votre master PIN pour déverrouiller toutes les conversations</string>
-    <string name="conversations_change_master_pin">Changer le master PIN</string>
+    <string name="conversations_change_master_pin">Changer le code PIN principal</string>
     <string name="conversations_lock_security_menu">Réglages de verrouillage</string>
     <string name="conversations_unlock_all">Déverrouiller toutes les conversations</string>
     <string name="conversations_lock_dots_a11y">%1$d chiffres saisis sur %2$d</string>
-    <string name="conversations_action_rename">Renommer la conversation</string>
-    <string name="conversations_rename_dialog_title">Renommer la conversation</string>
-    <string name="conversations_rename_field_label">Nom de la conversation</string>
     <string name="conversations_action_remove_favorite">Retirer le favori</string>
     <string name="conversations_favorite_set_content_description">Définir la réaction favorite %1$s</string>
     <string name="conversations_tags_add_content_description">Ajouter le tag</string>
     <string name="conversations_action_move_to_category">Déplacer vers une catégorie</string>
     <string name="conversations_category_search_hint">Rechercher ou créer une catégorie…</string>
     <string name="conversations_action_discard_draft">Supprimer le brouillon</string>
-    <string name="conversations_leave_confirm_message">Vous allez quitter « %1$s ». Vous ne recevrez plus de nouveaux messages de cette conversation.</string>
-    <string name="conversations_delete_for_me_confirm_message">« %1$s » sera définitivement supprimée de vos appareils uniquement. Les autres participants la conservent.</string>
     <string name="conversations_delete_for_all_confirm_message">« %1$s » sera fermée pour tous les participants. Plus personne ne pourra y écrire.</string>
-    <string name="new_conversation_search_hint">Rechercher des personnes</string>
-    <string name="share_link_field_slug">Slug URL personnalisé (optionnel)</string>
-    <string name="share_link_field_max_uses">Utilisations maximum</string>
     <string name="share_link_created_title">Lien créé</string>
-    <string name="share_link_created_subtitle">Partagez-le pour inviter des personnes dans la conversation.</string>
     <string name="my_share_links_share">Partager le lien</string>
     <string name="my_share_links_delete">Supprimer le lien</string>
     <string name="my_share_links_extend">Prolonger l\'expiration</string>
-    <string name="share_link_detail_open">Ouvrir les détails du lien</string>
-    <string name="share_link_detail_stats_max">Maximum</string>
-    <string name="share_link_detail_created">Créé le</string>
     <string name="share_link_detail_not_found">Ce lien n\'est plus disponible.</string>
-    <string name="share_link_detail_dismiss">Ignorer</string>
 
     <!-- Search bar trailing icons -->
 
     <!-- Global search screen -->
-    <string name="global_search_empty_title">Rechercher dans Meeshy</string>
-    <string name="global_search_no_results_hint">Essayez avec d\'autres termes</string>
 
     <!-- Dashboard screen -->
 
@@ -55,7 +37,6 @@
     <string name="global_search_tab_users">Utilisateurs</string>
     <string name="conversations_action_mark_unread">Marquer comme non lu</string>
     <string name="conversations_empty">Aucune conversation pour l\'instant</string>
-    <string name="conversations_empty_subtitle">Démarrez une conversation pour la voir ici.</string>
     <string name="conversations_no_results">Aucune conversation ne correspond</string>
     <string name="conversations_open_global_search">Recherche globale</string>
     <string name="conversations_section_all">Mes conversations</string>

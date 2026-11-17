@@ -3,8 +3,6 @@
     <string name="contacts_requests_filter_received">Ricevute (%1$d)</string>
     <string name="contacts_requests_filter_sent">Inviate (%1$d)</string>
     <string name="contacts_requests_empty_received">Nessuna richiesta ricevuta</string>
-    <string name="contacts_requests_empty_received_subtitle">Le richieste di contatto ricevute appariranno qui</string>
     <string name="contacts_requests_empty_sent">Nessuna richiesta inviata</string>
-    <string name="contacts_requests_empty_sent_subtitle">Le richieste che invii appariranno qui</string>
     <string name="friends_requests_title">Richieste di amicizia</string>
 </resources>

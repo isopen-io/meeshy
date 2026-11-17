@@ -68,7 +68,9 @@ class GlobalOverlaysTest {
         compose.mainClock.advanceTimeBy(600)
         compose.onNodeWithTag(MeeshyA11yId.TOAST_CONTAINER).assertIsDisplayed()
 
-        toasts.show("Annuler", FeedbackToastKind.INFO) { tapped += 1 }
+        /* `onTap` NOMMÉ : `show(message, kind, onTap, info)` a reçu un quatrième paramètre, et une
+           lambda en position finale se lie au DERNIER — ici `info: FeedbackToastInfo?`, pas l'action. */
+        toasts.show("Annuler", FeedbackToastKind.INFO, onTap = { tapped += 1 })
         compose.mainClock.advanceTimeBy(600)
 
         compose.onNodeWithTag(MeeshyA11yId.TOAST_CONTAINER).performClick()
@@ -86,7 +88,10 @@ class GlobalOverlaysTest {
 
         val toast = toasts.current.value
         assertThat(toast?.kind).isEqualTo(FeedbackToastKind.ERROR)
-        assertThat(toast?.message).contains("comments allowed today")
+        /* Le texte livré par l'épure #18099 : `post_daily_limit_comment_untimed`, servi par
+           `dailyGestureLimitMessage` quand la limite n'a pas d'heure de remise à zéro. L'ancienne
+           formule (« X comments allowed today ») n'existe plus dans aucune langue. */
+        assertThat(toast?.message).contains("Daily comment limit reached")
     }
 
     @Test

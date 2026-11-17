@@ -590,6 +590,9 @@ export function LanguagesSection({
   const codes: Readonly<Record<PrismRank, string | null>> = { systemLanguage, regionalLanguage, customDestinationLanguage };
   return (
     <Section id="profile-languages" title={translate(language, 'profile.section.languages')} glyph="globe">
+      <p data-profile-languages-intro className="px-3.5 pt-2.5 text-caption" style={{ color: INK_2 }}>
+        {translate(language, 'profile.language.intro')}
+      </p>
       <ol className="grid">
         {PRISM_RANKS.map(({ rank, title, clear }) => {
           const code = codes[rank];
@@ -608,11 +611,6 @@ export function LanguagesSection({
                   <span className="text-body font-medium" style={{ color: INK }}>
                     {translate(language, title)}
                   </span>
-                  {rank === 'systemLanguage' && code !== null ? (
-                    <span className="text-caption" style={{ color: INK_2 }}>
-                      {translate(language, 'profile.language.primary.subtitle')}
-                    </span>
-                  ) : null}
                 </span>
                 {code === null || info === null ? (
                   <span className="shrink-0 text-caption font-medium" style={{ color: INK_2 }}>
@@ -781,7 +779,7 @@ export function RequestsSection({ language, pending }: { readonly language: Inte
       ? title
       : `${title}, ${translate(language, pending.count === 1 && !pending.more ? 'profile.friend_requests.count.one' : 'profile.friend_requests.count.other', { count: shown })}`;
   return (
-    <Section id="profile-requests" title={translate(language, 'profile.section.requests')} glyph="userPlus">
+    <div className="grid overflow-hidden rounded-card" style={CARD_STYLE}>
       <Link to="discover" data-profile-requests aria-label={label} className={ENTRY_CLASS} style={{ minHeight: 52, outlineColor: 'var(--color-ios-brand)' }}>
         <FieldIcon spec={{ set: 'socle', name: 'users' }} />
         <span className="min-w-0 flex-1 text-body font-medium" style={{ color: INK }}>
@@ -800,7 +798,7 @@ export function RequestsSection({ language, pending }: { readonly language: Inte
           <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
         </span>
       </Link>
-    </Section>
+    </div>
   );
 }
 

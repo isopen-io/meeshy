@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.PersonSearch
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
 import me.meeshy.sdk.model.chrome.RootChromeVisibility
+import me.meeshy.sdk.model.game.GameAttention
 
 /** Compteur vivant affiche en pastille sur un barreau — miroir de `RootMenuBadge` iOS. */
 internal enum class RootMenuBadge { UNREAD_NOTIFICATIONS, PENDING_FRIEND_REQUESTS }
@@ -41,6 +42,21 @@ internal enum class RootMenuLadderEntry(val labelKey: String, val colorHex: Stri
         RootMenuBadge.UNREAD_NOTIFICATIONS -> unreadNotifications.coerceAtLeast(0)
         RootMenuBadge.PENDING_FRIEND_REQUESTS -> pendingFriendRequests.coerceAtLeast(0)
         null -> 0
+    }
+
+    /** Le point sans chiffre de « Ma Legende » (#18165) : l'Offrande prete ou la Flamme en danger ; iOS `showsAttentionDot`. */
+    fun showsAttentionDot(attention: GameAttention): Boolean = this == GAME && attention.isRaised
+
+    /**
+     * Le nom qui dit ce que le jeu signale, une phrase entiere par cas (jamais une concatenation) ; `null` = le nom du
+     * barreau. iOS `accessibilityLabel(attention:)`, web `gameRungLabelKey`.
+     */
+    fun attentionLabelKey(attention: GameAttention): String? = when {
+        this != GAME -> null
+        attention.chestReady && attention.flameAtRisk -> "a11y_floating_rung_game_both"
+        attention.chestReady -> "a11y_floating_rung_game_chest_ready"
+        attention.flameAtRisk -> "a11y_floating_rung_game_flame_at_risk"
+        else -> null
     }
 }
 

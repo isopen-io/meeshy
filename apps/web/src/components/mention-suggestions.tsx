@@ -2,6 +2,7 @@ import type { MentionCandidate } from '@/lib/api/mention-suggestions';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
 import { mentionOptionId, type MentionField } from '@/lib/view/use-mention-field';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
@@ -30,12 +31,14 @@ export function MentionFieldPanel({
   readonly language: InterfaceLanguage;
   readonly placement?: MentionPlacement;
 }) {
-  if (!field.suggestions.open) return null;
+  const shown = useLayerPresence(field.suggestions.open ? field.suggestions : null);
+  if (shown.value === null) return null;
   return (
     <MentionSuggestions
       listId={field.listId}
-      items={field.suggestions.items}
-      activeIndex={field.suggestions.activeIndex}
+      items={shown.value.items}
+      activeIndex={shown.value.activeIndex}
+      leaving={shown.leaving}
       language={language}
       onPick={field.pick}
       onHighlight={field.suggestions.highlight}
@@ -69,8 +72,10 @@ export function MentionSuggestions({
   onPick,
   onHighlight,
   placement = 'above',
+  leaving = false,
 }: {
   readonly placement?: MentionPlacement;
+  readonly leaving?: boolean;
   readonly listId: string;
   readonly items: readonly MentionCandidate[];
   readonly activeIndex: number;
@@ -83,7 +88,7 @@ export function MentionSuggestions({
     <div
       data-mention-suggestions
       className={`glass-prominent absolute inset-x-3 ${PLACEMENT_CLASS[placement]} overflow-hidden rounded-card shadow-cast`}
-      style={{ zIndex: 5 }}
+      {...layerMotion(leaving, { zIndex: 5 })}
     >
       <p role="status" className="sr-only">
         {translate(language, 'composer.mention.count', { count: String(items.length) })}
@@ -106,7 +111,7 @@ export function MentionSuggestions({
                 onPointerDown={(e) => e.preventDefault()}
                 onPointerEnter={() => onHighlight(index)}
                 onClick={() => onPick(candidate)}
-                className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2"
+                className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 active:opacity-80"
                 style={selected ? { backgroundColor: 'color-mix(in srgb, var(--accent) 14%, transparent)' } : undefined}
               >
                 <PeerAvatar

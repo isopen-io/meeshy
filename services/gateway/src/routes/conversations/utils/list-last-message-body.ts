@@ -11,6 +11,9 @@ import {
 } from './last-message-media';
 import type { PreviewProtection } from '@meeshy/shared/types/conversation-preview';
 
+/** #18242 B2 — le nom des participants d'un résumé d'appel se lit à la lecture : une requête pour la page de liste. */
+export { callSummariesWithParticipantNames as namedCallSummaryPreviews } from '../../../services/calls/callSummaryParticipantNames';
+
 /**
  * Le CORPS de `lastMessage` servi par `GET /conversations` — tout sauf
  * l'auteur, dont la présence dépend du lecteur et reste chez la route.

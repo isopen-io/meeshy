@@ -16,6 +16,7 @@ import { conversationStore, effectiveFlagsOf } from '@/lib/conversation-store';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { translateConversationManage } from '@/lib/i18n-conversation-manage-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { peerOf } from '@/lib/view/conversation';
 import { managementOf } from '@/lib/view/conversation-management';
 import { rowConversationActions } from '@/lib/view/row-actions';
 import { shareConversationLink, type ConversationShareOutcome } from '@/lib/view/conversation-share-link';
@@ -50,6 +51,14 @@ const ConversationStatsSection = lazy(() => import('./conversation-stats-section
  * pas montrée. Placée, comme la rangée de sécurité d'iOS, sous les actions.
  */
 const ConversationEncryptionSection = lazy(() => import('./conversation-encryption-section').then((m) => ({ default: m.ConversationEncryptionSection })));
+
+/**
+ * LA BATTERIE DE L'AUTRE, À LA DEMANDE (#14147) — dans un direct avec un Proche ou un Sang seulement : le détail
+ * pendant un épisode, le relevé à la demande entre Sangs, et ce que je reçois de sa batterie.
+ */
+const ConversationBatterySection = lazy(() => import('./battery-panel').then((m) => ({ default: m.ConversationBatterySection })));
+/** LE TÉLÉPHONE INJOIGNABLE DE L'AUTRE (#18737) — dans un direct, seulement pendant un état servi : l'heure et la cause probable. */
+const ConversationPhoneReachabilitySection = lazy(() => import('./phone-reachability-panel').then((m) => ({ default: m.ConversationPhoneReachabilitySection })));
 
 /**
  * **LES DÉTAILS D'UNE CONVERSATION** (#7829) — premier incrément de
@@ -165,6 +174,8 @@ export function ConversationDetailsSheet({
    */
   const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated') || deps.source === 'fixtures';
   const canViewStats = signedIn;
+  const batteryPeer = peerOf(conversation, viewerId);
+  const batteryPeerId = batteryPeer?.userId ?? batteryPeer?.user?.id ?? undefined;
   const createdOn = createdOnOf(conversation.createdAt, language);
 
   /* #12966 — la conversation non chiffrée à côté d'un tête-à-tête chiffré : la feuille se referme, le fil s'ouvre. */
@@ -277,6 +288,13 @@ export function ConversationDetailsSheet({
         <Suspense fallback={null}>
           <ConversationEncryptionSection conversation={conversation} plaintextDirect={plaintextDirect} modeSwitch={modeSwitch} />
         </Suspense>
+
+        {signedIn && batteryPeerId !== undefined ? (
+          <Suspense fallback={null}>
+            <ConversationPhoneReachabilitySection userId={batteryPeerId} language={language} />
+            <ConversationBatterySection userId={batteryPeerId} name={title} language={language} deps={deps} />
+          </Suspense>
+        ) : null}
 
         <ConversationMediaSection
           conversationId={conversation.id}

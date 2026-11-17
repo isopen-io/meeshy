@@ -117,7 +117,6 @@ struct ConversationListEmptyState: View {
                     EmptyStateView(
                         icon: "exclamationmark.arrow.triangle.2.circlepath",
                         title: String(localized: "conversations.error.title"),
-                        subtitle: String(localized: "conversations.error.subtitle"),
                         actionLabel: String(localized: "conversations.error.retry"),
                         compact: true,
                         onAction: {
@@ -128,7 +127,6 @@ struct ConversationListEmptyState: View {
                     EmptyStateView(
                         icon: "exclamationmark.arrow.triangle.2.circlepath",
                         title: String(localized: "conversations.error.title"),
-                        subtitle: String(localized: "conversations.error.subtitle"),
                         actionLabel: String(localized: "conversations.error.retry"),
                         onAction: {
                             onRetry()
@@ -152,7 +150,6 @@ struct ConversationListEmptyState: View {
                     EmptyStateView(
                         icon: "bubble.left.and.bubble.right",
                         title: String(localized: "conversations.empty.title"),
-                        subtitle: String(localized: "conversations.empty.subtitle"),
                         actionLabel: String(localized: "conversations.empty.action"),
                         onAction: {
                             onNewConversation?()
@@ -180,14 +177,12 @@ struct ConversationSearchNoResultsState: View {
                     EmptyStateView(
                         icon: "magnifyingglass",
                         title: String(localized: "search.no_results"),
-                        subtitle: String(localized: "search.try_other_terms"),
                         compact: true
                     )
                 } else {
                     EmptyStateView(
                         icon: "magnifyingglass",
-                        title: String(localized: "search.no_results"),
-                        subtitle: String(localized: "search.try_other_terms")
+                        title: String(localized: "search.no_results")
                     )
                 }
             }

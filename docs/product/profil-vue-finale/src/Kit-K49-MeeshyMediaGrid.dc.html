@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K49 MeeshyMediaGrid</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:880px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:18px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;align-items:center;justify-content:center;flex:1;min-height:120px;gap:16px}
+.mx .ph{text-align:left}
+.badge{position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;gap:4px;min-height:26px;padding:0 9px;border-radius:999px;font-size:11.5px;font-weight:700;color:var(--ink)}
+.cap{display:flex;align-items:flex-start;gap:7px;width:100%;padding:9px 10px;border-radius:13px;font-size:12.5px;font-weight:600;line-height:1.3;color:var(--ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.26)}
+.cap>span:first-child{color:var(--accent-ink);display:inline-flex;margin-top:1px}
+.txt{width:100%;min-height:150px;padding:16px;border-radius:18px;background:var(--accent);color:#0B0B12;display:flex;flex-direction:column;justify-content:space-between;gap:14px}
+.txt>.ov{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.txt>.d{font-size:21px;text-wrap:balance}
+.gh{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border-radius:18px;color:var(--ink3);font-size:11px;font-weight:600;border:1.5px dashed rgba(165,180,252,.34);background:rgba(165,180,252,.035);animation:mgBreath 4.6s ease-in-out infinite}
+.mx[data-theme=light] .gh{border-color:rgba(67,56,202,.34);background:rgba(67,56,202,.03)}
+.mx .ph.pr{transform:scale(.96);box-shadow:inset 0 0 0 999px rgba(238,242,255,.12)}
+.mx .ph.fo,.wt.fo{outline:2px solid var(--ink);outline-offset:3px}
+.wt{position:relative;display:block;width:100%;border-radius:18px;transition:transform .3s cubic-bezier(.3,1.4,.5,1),box-shadow .3s}
+.wt>.ph{width:100%;height:100%}
+.wt.hov{transform:translateY(-8px) scale(1.025);box-shadow:0 26px 50px rgba(67,56,202,.30);z-index:2}
+.wt.hov>.ph{border-color:var(--accent);background:repeating-linear-gradient(135deg,#EDE9FE 0 10px,#F8F7FF 10px 20px)}
+.wbadge{position:absolute;left:10px;top:10px;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border-radius:999px;background:rgba(255,255,255,.86);border:1px solid var(--line);font-size:11.5px;font-weight:700;color:var(--ink2)}
+.abar{position:absolute;left:8px;right:8px;bottom:8px;display:flex;align-items:center;gap:2px;padding:5px 5px 5px 14px;border-radius:999px;color:var(--ink)}
+.abar>span:first-child{flex:1;min-width:0;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.abar>.ib{width:40px;height:40px}
+.cur{position:absolute;right:30%;top:44%;color:var(--ink);filter:drop-shadow(0 3px 5px rgba(30,27,75,.35))}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.pit{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:26px 20px;border-radius:22px;background:var(--raised);border:1px solid var(--line);flex:1;min-width:0}
+.say{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.swap{display:grid;min-width:0}
+.swap>*{grid-area:1/1}
+.tap{position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:rgba(238,242,255,.55);opacity:0;pointer-events:none;animation:mgTap 6s ease-out infinite}
+.mk{animation:mgSk 6s ease-in-out infinite,mxShimmer 1.6s linear infinite}
+.mi.a{animation:mgInA 6s cubic-bezier(.2,.9,.25,1) infinite}
+.mi.b{animation:mgInB 6s cubic-bezier(.2,.9,.25,1) infinite}
+.mi.c{animation:mgInC 6s cubic-bezier(.2,.9,.25,1) infinite}
+.wt.lift{animation:mgLift 5s cubic-bezier(.3,1.4,.5,1) infinite}
+.wt.lift>.abar{animation:mgBar 5s ease-in-out infinite}
+.wt.lift>.ph{animation:mgEdge 5s ease-in-out infinite}
+.wt.lift>.cur{animation:mgCur 5s cubic-bezier(.2,.9,.25,1) infinite}
+@keyframes mgBreath{0%,100%{opacity:.72;transform:scale(1)}50%{opacity:1;transform:scale(1.012)}}
+@keyframes mgSk{0%,24%{opacity:1}32%,90%{opacity:0}96%,100%{opacity:1}}
+@keyframes mgInA{0%,24%{opacity:0;transform:translateY(18px) scale(.97)}34%,90%{opacity:1;transform:none}95%,100%{opacity:0;transform:none}}
+@keyframes mgInB{0%,27%{opacity:0;transform:translateY(18px) scale(.97)}37%,58%{opacity:1;transform:none}62%{opacity:1;transform:scale(.96)}68%,90%{opacity:1;transform:none}95%,100%{opacity:0;transform:none}}
+@keyframes mgInC{0%,30%{opacity:0;transform:translateY(18px) scale(.97)}40%,90%{opacity:1;transform:none}95%,100%{opacity:0;transform:none}}
+@keyframes mgTap{0%,55%{opacity:0;transform:scale(.6)}60%{opacity:.5;transform:scale(1)}68%,100%{opacity:0;transform:scale(1.6)}}
+@keyframes mgLift{0%,22%,90%,100%{transform:none;box-shadow:0 0 0 rgba(67,56,202,0)}32%,80%{transform:translateY(-8px) scale(1.025);box-shadow:0 26px 50px rgba(67,56,202,.30)}}
+@keyframes mgEdge{0%,22%,90%,100%{border-color:var(--line)}32%,80%{border-color:var(--accent)}}
+@keyframes mgBar{0%,26%,88%,100%{opacity:0;transform:translateY(8px)}36%,80%{opacity:1;transform:none}}
+@keyframes mgCur{0%,6%{transform:translate(90px,70px);opacity:0}22%,80%{transform:none;opacity:1}94%,100%{transform:translate(90px,70px);opacity:0}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #6366F1; opacity: .24"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #A855F7; opacity: .16; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K49 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyMediaGrid</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Des médias en lecture seule se rangent dans une grille à colonnes, chaque tuile disant son type</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 840px">Les publications d'une vitrine, les médias échangés avec quelqu'un, la page publique. Le profil pose cette grille neuf fois, avec trois écarts et deux pastilles. K49 en fait une seule : des colonnes, une tuile, et ce que la tuile dit dans ses coins.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il range, il annonce le type, il ouvre</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Range des tuiles dans <b>2 ou 3 colonnes</b>, écart 6 à 8, rayon 18, selon trois dispositions : <code>regular</code>, <code>masonry</code>, <code>row</code>.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose sur chaque tuile ce qui dit <b>son type</b> : pastille de durée ou de compte en coin, légende en bas, aplat teinté pour un texte.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Tient le <b>vide</b> et le <b>chargement</b> dans la même géométrie : tuiles fantômes au glyphe du type, tuiles squelettes.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span><b>Recycle</b> ses cellules et rend un seul geste : toucher une tuile rend son identifiant à l'hôte.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Sélectionner, ajouter par un « + », réordonner, retirer : c'est le rail <b>K20</b> <code>MeeshyThumbnailRow</code>. Une rangée qui défile de côté : <b>K19</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Peindre l'image, la charger, la mettre en cache, lire la vidéo : <b>l'app</b>, dans l'emplacement <code>content</code>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le verre des surimpressions : <b>K01</b>. La pastille et la légende : <b>K41</b>. La marque de traduction : <b>K51</b>. Les boutons ronds du survol : <b>K02</b> dans <b>K10</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le titre « Publications » et « Tout voir » : <b>K44</b>. La phrase et la sortie d'un état vide, et l'atome du squelette : <b>K38</b>. La mosaïque d'un message à 1, 2, 3 ou 4 pièces : la bulle.</span></div>
+</div>
+</div>
+<div class="law">
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; flex: none; background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent-ink)">[[ic:squares-four l]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 22px">La loi : la grille montre, elle ne range rien pour toi</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 1000px">Aucune coche, aucun « + », aucune poignée. L'ordre est celui que l'hôte donne, et une tuile touchée s'ouvre. Dès qu'une grille choisit, ajoute ou déplace, ce n'est plus K49 : c'est K20.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Une grille, quatre sortes de tuiles, deux surimpressions</h2><p>Deux colonnes de la grille de Léo, agrandies deux fois, avec chaque sorte de tuile une fois. En dessous, à taille réelle, la rangée de trois de la vitrine. Les mesures de la légende sont celles de la taille réelle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="padding: 40px 40px 30px; flex-direction: column; gap: 30px">
+<div style="position: relative; width: 600px">
+<div style="zoom: 2; width: 300px"><div style="display: flex; gap: 8px; align-items: flex-start">
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<div class="ph" style="position: relative; height: 148px"><span>réel · Alfama</span><span class="badge glass">[[ic:play-fill s]]<span>0:24</span></span></div>
+<div class="txt" style="height: 160px; min-height: 0; padding: 14px">
+<span class="ov">[[ic:smiley s]]<span>Statut</span></span>
+<span class="d" style="font-size: 19px">Lumière de 18&nbsp;h sur le Tage.</span>
+</div>
+</div>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<div class="ph" style="position: relative; height: 172px; padding: 8px"><span class="cap glass"><span>[[ic:translate s]]</span><span>Le tram 28, avant tout le monde.</span></span></div>
+<div class="gh" style="height: 64px; flex-direction: row; animation: none">[[ic:film-reel]]<span>réel</span></div>
+<div class="sk" style="height: 64px; border-radius: 18px"></div>
+</div>
+</div></div>
+<span class="kan" style="left: 289px; top: 96px">1</span>
+<span class="kan" style="left: 36px; top: 150px">2</span>
+<span class="kan" style="left: 118px; top: 31px">3</span>
+<span class="kan" style="left: 589px; top: 280px">4</span>
+<span class="kan" style="left: -11px; top: 420px">5</span>
+<span class="kan" style="left: 589px; top: 413px">6</span>
+<span class="kan" style="left: 589px; top: 557px">7</span>
+</div>
+<div style="align-self: stretch; display: flex; align-items: center; gap: 28px; padding-top: 26px; border-top: 1.5px dashed var(--line)">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 350px; flex: none">
+<div class="ph" style="height: 168px">réel 0:24</div>
+<div class="ph" style="height: 168px">photo</div>
+<div class="ph" style="height: 168px">story à la une</div>
+</div>
+<span class="kcap" style="font-size: 13px"><b style="color: var(--ink)">Taille réelle.</b> La rangée de la vitrine : trois colonnes égales dans 350 px, écart 8, tuiles de 111 × 168. L'emplacement hachuré est l'image que l'hôte peint.</span>
+</div>
+</div>
+<div class="card" style="padding: 28px">
+<div class="lgd">
+<span class="kan">1</span><div><b>Grille</b><span>2 ou 3 colonnes égales. Écart 6 (serré) ou 8 (courant), le même en large et en haut : <code>MeeshyMediaGridSpacing</code>. Elle prend la largeur de l'hôte, sans marge propre.</span></div>
+<span class="kan">2</span><div><b>Tuile média</b><span>Rayon 18, filet de 1. Carrée, haute (2:3) ou libre. L'image vient de l'emplacement <code>content</code> ; elle est rognée au rayon, jamais étirée.</span></div>
+<span class="kan">3</span><div><b>Pastille de type</b><span>K41 sur verre de K01. Coin haut de fin, à 8 du bord, hauteur 26, glyphe de 16 et valeur en 11,5 : « 0:24 », « 4 ». Absente sur une photo seule.</span></div>
+<span class="kan">4</span><div><b>Légende basse</b><span>K41 sur plusieurs lignes, à 8 des bords, rayon 13, marge 9 × 10, texte 12,5. Trois lignes au plus. Sa tête reçoit la marque K51 quand le texte est traduit.</span></div>
+<span class="kan">5</span><div><b>Tuile de texte</b><span>Aplat à la teinte <code>tint</code>, encre sombre. Sur-titre 11 en capitales avec son glyphe, phrase Nunito 21, marge 16, hauteur minimale 150.</span></div>
+<span class="kan">6</span><div><b>Tuile fantôme</b><span>Bord pointillé de 1,5, fond à 3,5 %. Glyphe du type en 28 et son nom en 11. Elle tient la place d'un média qui n'existe pas encore.</span></div>
+<span class="kan">7</span><div style="border-bottom: 0; padding-bottom: 0"><b>Tuile squelette</b><span>Même cadre, rempli par l'atome <code>MeeshySkeleton</code> de K38 : son reflet passe en 1,6 s. Montrée seulement quand le cache est vide.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Trois dispositions, cinq états de tuile</h2><p>Tout est à taille réelle, dans les 350 px qu'un téléphone laisse à la grille. Les spécimens sont ceux des écrans du profil : mêmes libellés, mêmes hauteurs, mêmes écarts.</p></header>
+
+<span class="tag">Dispositions</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div style="display: flex; flex-direction: column; gap: 20px">
+<div class="kcell kc" style="flex: 1">
+<div class="stage">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: 350px">
+<div class="ph" style="aspect-ratio: 1">Alfama, 6 mai</div>
+<div class="ph" style="aspect-ratio: 1">tram 28</div>
+<div class="ph" style="aspect-ratio: 1">studio</div>
+<div class="ph" style="aspect-ratio: 1">marché</div>
+<div class="ph" style="aspect-ratio: 1">Dakar la nuit</div>
+<div class="ph" style="aspect-ratio: 1">photo</div>
+</div>
+</div>
+<div class="cp"><b>regular · carrée</b><span class="kcap">Trois colonnes, écart 6. Les médias échangés avec Léo (Autre-Commun).</span></div>
+</div>
+<div class="kcell kc" style="flex: 1">
+<div class="stage">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 350px">
+<div class="ph" style="height: 168px">réel 0:24</div>
+<div class="ph" style="height: 168px">photo</div>
+<div class="ph" style="height: 168px">story à la une</div>
+</div>
+</div>
+<div class="cp"><b>row</b><span class="kcap">Une seule ligne de trois, jamais paresseuse. L'aperçu d'une vitrine (Main, Moi-Apercu, Autre-Inconnu).</span></div>
+</div>
+</div>
+<div class="kcell kc" style="--accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage" style="align-items: flex-start">
+<div style="display: flex; gap: 8px; align-items: flex-start; width: 350px">
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<button class="ph" aria-label="Réel, 24 secondes" style="position: relative; width: 100%; height: 232px"><span>réel · Alfama</span><span class="badge glass">[[ic:play-fill s]]<span>0:24</span></span></button>
+<button class="txt" aria-label="Statut : Lumière de 18 h sur le Tage.">
+<span class="ov">[[ic:smiley s]]<span>Statut</span></span>
+<span class="d">Lumière de 18&nbsp;h sur le Tage.</span>
+</button>
+<button class="ph" aria-label="Carrousel de 4 photos" style="position: relative; width: 100%; height: 178px"><span>photos · Feira da Ladra</span><span class="badge glass">[[ic:images s]]<span>4</span></span></button>
+</div>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<button class="ph" aria-label="Photo" style="width: 100%; height: 148px">photo · miradouro</button>
+<button class="ph" aria-label="Photo, légende traduite : Le tram 28, avant tout le monde." style="position: relative; width: 100%; height: 252px; padding: 8px; align-items: flex-end">
+<span class="cap glass"><span>[[ic:translate s]]</span><span>Le tram 28, avant tout le monde.</span></span>
+</button>
+<button class="ph" aria-label="Réel, 41 secondes" style="position: relative; width: 100%; height: 196px"><span>réel · quais du Rhône</span><span class="badge glass">[[ic:play-fill s]]<span>0:41</span></span></button>
+</div>
+</div>
+</div>
+<div class="cp"><b>masonry</b><span class="kcap">Deux colonnes décalées, hauteurs libres, écart 8. Chaque tuile va dans la colonne la plus courte. Les publications de Léo (Autre-Publications).</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="mx" data-theme="light" style="border-radius: 20px; padding: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div class="ph" style="height: 150px">réel 0:24</div>
+<div class="ph" style="height: 150px">photo</div>
+<div class="ph" style="height: 150px">photo</div>
+<div class="ph" style="height: 150px">photo</div>
+<div class="ph" style="height: 150px">réel 0:41</div>
+<div class="ph" style="height: 150px">photo</div>
+</div>
+<div class="cp"><b>regular · haute, thème clair</b><span class="kcap">Trois colonnes, écart 8, tuiles de 150. La page publique sur téléphone (Web-Public-Mobile).</span></div>
+</div>
+<div class="kcell kc" style="flex: 1; padding: 20px">
+<div class="stage">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%">
+<div class="ph" style="height: 168px; border-radius: 20px">réel 0:24</div>
+<div class="ph" style="height: 168px; border-radius: 20px">photo</div>
+<div class="ph" style="height: 168px; border-radius: 20px">story à la une</div>
+</div>
+</div>
+<div class="cp"><b>Android · rayon 20</b><span class="kcap">Même grille. La recette rend le rayon du thème Material ; rien d'autre ne change (Android-Moi).</span></div>
+</div>
+</div>
+</div>
+
+<span class="tag" style="padding-top: 10px">États de tuile</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 350px">
+<button class="ph" aria-label="Ouvrir le réel de 18 secondes" style="position: relative; height: 168px"><span>réel</span><span class="badge glass" style="top: 6px; right: 6px">[[ic:play-fill s]]<span>0:18</span></span></button>
+<button class="ph" aria-label="Ouvrir la photo de l'atelier" style="height: 168px">photo · atelier</button>
+<button class="ph" aria-label="Ouvrir la photo de la guitare" style="height: 168px">photo · guitare</button>
+</div>
+</div>
+<div class="cp"><b>Repos</b><span class="kcap">Chaque tuile est un bouton nommé par l'hôte : « Ouvrir le réel de 18 secondes ».</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 350px">
+<div class="ph" style="position: relative; height: 168px"><span>réel</span><span class="badge glass" style="top: 6px; right: 6px">[[ic:play-fill s]]<span>0:18</span></span></div>
+<div class="ph pr" style="height: 168px">photo · atelier</div>
+<div class="ph" style="height: 168px">photo · guitare</div>
+</div>
+</div>
+<div class="cp"><b>Pressée</b><span class="kcap">Échelle 0,96 et voile de 12 %, en moins d'une image. Les voisines ne bougent pas.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 350px">
+<div class="sk" style="height: 168px; border-radius: 18px"></div>
+<div class="sk" style="height: 168px; border-radius: 18px; animation-delay: -.3s"></div>
+<div class="sk" style="height: 168px; border-radius: 18px; animation-delay: -.6s"></div>
+</div>
+</div>
+<div class="cp"><b>Chargement</b><span class="kcap">Des squelettes au format des tuiles attendues. Jamais montrés si le cache répond, même périmé.</span></div>
+</div>
+<div class="kcell kc" style="grid-column: span 2; padding: 20px">
+<div class="mx" data-theme="light" style="border-radius: 22px; padding: 30px 24px 26px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+<a href="#" class="wt" style="height: 250px"><span class="ph">photo · plage de Yoff</span></a>
+<a href="#" class="wt hov" style="height: 250px"><span class="ph" style="padding-bottom: 76px">Session au studio</span><span class="wbadge">[[ic:play-fill s]]<span>0:41</span></span>
+<span class="abar glass">
+<span>Ouvrir</span>
+<span class="ib">[[ic:heart]]</span>
+<span class="ib">[[ic:chat-circle]]</span>
+<span class="ib" style="background: var(--brand-fill); color: #fff">[[ic:export]]</span>
+</span>
+<span class="cur" aria-hidden="true">[[ic:cursor-fill l]]</span>
+</a>
+<a href="#" class="wt fo" style="height: 250px"><span class="ph">Prise de son, Gorée</span><span class="wbadge">[[ic:play-fill s]]<span>1:02</span></span></a>
+</div>
+<div class="cp"><b>Survol et focus clavier (web, pointeur)</b><span class="kcap">Au survol : liseré d'accent, élévation de 8, échelle 1,025, et la barre d'actions que l'hôte pose dans <code>hoverActions</code> (une pilule K10, des boutons K02). Au clavier : anneau de 2 à 3 du bord, la même barre. Au doigt : ni l'un ni l'autre.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 350px">
+<div class="gh" style="height: 156px">[[ic:film-reel l]]<span>réel</span></div>
+<div class="gh" style="height: 156px; animation-delay: -1.5s">[[ic:image l]]<span>photo</span></div>
+<div class="gh" style="height: 156px; animation-delay: -3s">[[ic:circle-dashed l]]<span>story</span></div>
+</div>
+</div>
+<div class="cp"><b>Vide fantôme</b><span class="kcap">Trois tuiles qui respirent, au glyphe de ce qui viendra. La phrase et le bouton sont à K38 (Etat-Vide).</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Les tuiles montent en cascade, une seule répond au doigt</h2><p>Sur cache vide, les squelettes cèdent la place aux tuiles, qui entrent une à une par <code>motion.rise</code>. Une tuile touchée s'enfonce et revient sur le ressort de <code>motion.morph</code>. Le fantôme respire sur <code>motion.float</code>. Le voyage vers la visionneuse (<code>motion.travel</code>) appartient à l'hôte : la tuile lui donne son cadre.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell kc" style="gap: 22px">
+<div style="display: flex; gap: 20px; flex: 1">
+<div class="pit">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 350px">
+<div class="swap"><div class="sk mk" style="height: 168px; border-radius: 18px"></div><div class="ph mi a" style="position: relative; height: 168px"><span>réel</span><span class="badge glass" style="top: 6px; right: 6px">[[ic:play-fill s]]<span>0:24</span></span></div></div>
+<div class="swap" style="position: relative"><div class="sk mk" style="height: 168px; border-radius: 18px"></div><div class="ph mi b" style="height: 168px">photo</div><span class="tap"></span></div>
+<div class="swap"><div class="sk mk" style="height: 168px; border-radius: 18px"></div><div class="ph mi c" style="height: 168px">story à la une</div></div>
+</div>
+<span class="say">[[ic:speaker-high s]]<span>« Publications, grille, 3 éléments. Photo, bouton, 2 sur 3 »</span></span>
+<b style="font-size: 14.5px">Cache vide : squelettes, cascade, appui</b>
+</div>
+<div class="pit" style="flex: 0 0 300px; padding: 16px">
+<div class="mx" data-theme="light" style="align-self: stretch; border-radius: 18px; padding: 26px 22px 20px">
+<div class="wt lift" style="height: 216px"><span class="ph" style="padding-bottom: 72px">Session au studio</span><span class="wbadge">[[ic:play-fill s]]<span>0:41</span></span>
+<span class="abar glass">
+<span>Ouvrir</span>
+<span class="ib">[[ic:heart]]</span>
+<span class="ib">[[ic:chat-circle]]</span>
+<span class="ib" style="background: var(--brand-fill); color: #fff">[[ic:export]]</span>
+</span>
+<span class="cur" aria-hidden="true">[[ic:cursor-fill l]]</span>
+</div>
+</div>
+<b style="font-size: 14.5px">Pointeur : la tuile se lève</b>
+</div>
+</div>
+<span class="spec">durée : entrée 700 ms par tuile (motion.rise), décalée de 60 ms, six tuiles au plus, les suivantes sans délai · fondu squelette vers image 220 ms · appui 90 ms, retour 200 ms (motion.morph) · survol 300 ms · fantôme 4,6 s en boucle (motion.float) · courbe : ressorts de K26, aucun dépassement à l'entrée · déclencheur : première peinture sur cache vide ; doigt posé ; pointeur entré · haptique : léger au doigt levé dans la tuile, rien à l'entrée ni au survol · mouvement réduit : ni montée ni échelle ni respiration, fondu de 120 ms</span>
+<span class="kcap">La boucle ci-dessus est ralentie trois fois pour se lire. Quand le cache répond, rien n'entre : les tuiles sont là à la première image.</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">1</span><b style="font-size: 14.5px">Les squelettes tiennent la place</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><div style="display: grid; grid-template-columns: repeat(3, 44px); gap: 4px; flex: none"><div class="sk" style="height: 66px; border-radius: 10px"></div><div class="sk" style="height: 66px; border-radius: 10px"></div><div class="sk" style="height: 66px; border-radius: 10px"></div></div><span class="kcap">Même grille, mêmes formats. La hauteur de la section est déjà la bonne : rien ne saute à l'arrivée.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">2</span><b style="font-size: 14.5px">Les tuiles montent une à une</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><div style="display: grid; grid-template-columns: repeat(3, 44px); gap: 4px; flex: none"><div class="ph" style="height: 66px; border-radius: 10px; padding: 0"></div><div class="ph" style="height: 66px; border-radius: 10px; padding: 0; opacity: .6; transform: translateY(7px)"></div><div class="ph" style="height: 66px; border-radius: 10px; padding: 0; opacity: .25; transform: translateY(14px) scale(.97)"></div></div><span class="kcap"><code>motion.rise</code> : 18 de montée, échelle de 0,97 à 1, opacité de 0 à 1. Une tuile toutes les 60 ms, dans l'ordre de lecture.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">3</span><b style="font-size: 14.5px">Une tuile répond, puis s'ouvre</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><div style="display: grid; grid-template-columns: repeat(3, 44px); gap: 4px; flex: none"><div class="ph" style="height: 66px; border-radius: 10px; padding: 0"></div><div class="ph pr" style="height: 66px; border-radius: 10px; padding: 0"></div><div class="ph" style="height: 66px; border-radius: 10px; padding: 0"></div></div><span class="kcap">Échelle 0,96 au doigt posé. Au doigt levé, <code>onOpen</code> part une fois ; l'hôte fait voyager le cadre par <code>motion.travel</code>.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Une liste d'éléments opaques, une disposition, un emplacement pour l'image. Aucune signature ne nomme une publication, un réel, une story ou une pièce jointe : l'hôte passe des identifiants, des textes, des glyphes, un rapport de forme et une teinte.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyMediaGrid.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-media-grid.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyMediaGrid(label:items:layout:columns:…onOpen:content:)</code></span><span><code>MeeshyMediaGrid(label, items, onOpen, modifier, layout, columns, …, content)</code></span><span><code>&lt;MeeshyMediaGrid label items layout columns onOpen content … /&gt;</code></span>
+<span><b>Tuile seule</b></span><span><code>MeeshyMediaTile(item:shape:…content:)</code>, pour un hôte qui pose sa grille</span><span><code>MeeshyMediaTile(item, shape, …, content)</code></span><span><code>&lt;MeeshyMediaTile item shape … /&gt;</code></span>
+<span><b>Élément</b></span><span><code>MeeshyMediaGridItem(id:kind:label:aspect:badge:caption:overline:text:tint:)</code></span><span><code>data class</code> identique, <code>@Immutable</code></span><span><code>type MeeshyMediaGridItem</code>, en lecture seule</span>
+<span><b>Sorte de tuile</b></span><span><code>MeeshyMediaTileKind { media, text, ghost, skeleton }</code></span><span><code>enum class</code> identique</span><span><code>'media' | 'text' | 'ghost' | 'skeleton'</code></span>
+<span><b>Disposition</b></span><span><code>MeeshyMediaGridLayout { regular, masonry, row }</code></span><span>idem</span><span><code>'regular' | 'masonry' | 'row'</code></span>
+<span><b>Forme</b></span><span><code>MeeshyMediaTileShape { square, tall, free }</code> ; <code>free</code> lit <code>aspect</code></span><span>idem</span><span><code>'square' | 'tall' | 'free'</code></span>
+<span><b>Tailles</b></span><span><code>columns: Int</code> (2 ou 3) ; <code>MeeshyMediaGridSpacing { tight, regular }</code> : 6, 8</span><span>idem, en <code>dp</code></span><span>idem ; <code>wide</code> (14) au-delà de 700 px</span>
+<span><b>Pastille</b></span><span><code>MeeshyMediaTileBadge(systemImage:value:)</code>, rendue par K41</span><span><code>MeeshyMediaTileBadge(icon, value)</code></span><span><code>{ glyph, value }</code></span>
+<span><b>Emplacements</b></span><span><code>content</code> (l'image, reçoit l'élément et sa taille), <code>captionLeading</code> (la marque K51), <code>hoverActions</code> (pointeur)</span><span><code>content: @Composable (MeeshyMediaGridItem, DpSize) -&gt; Unit</code>, <code>captionLeading</code></span><span><code>content</code>, <code>captionLeading</code>, <code>hoverActions</code> : fonctions de rendu</span>
+<span><b>Loi de placement</b></span><span><code>MeeshyMediaGridPlacement.columns(aspects:count:spacing:width:)</code>, pure</span><span><code>object</code> identique, JVM pure</span><span><code>meeshyMediaGridPlacement(…)</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyMediaGridRecipe.resolve(layout:shape:columns:spacing:kind:isPressed:isHovered:isFocused:reduceMotion:)</code></span><span style="border-bottom: 0"><code>MeeshyMediaGridRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyMediaGridRecipe(…)</code> : classes et attributs</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>label: String</code><span>Obligatoire, non vide. Le nom dit de la grille : « Publications de Léo ».</span></div>
+<div class="par"><code>items: [MeeshyMediaGridItem]</code><span>Dans l'ordre d'affichage. <code>id</code> stable : c'est la clé de recyclage.</span></div>
+<div class="par"><code>layout = .regular</code><span><code>row</code> coupe à <code>columns</code> éléments et n'est jamais paresseuse.</span></div>
+<div class="par"><code>columns: Int = 3</code><span>2 ou 3. Toute autre valeur est ramenée dans la plage.</span></div>
+<div class="par"><code>shape = .tall</code><span>Ignorée en <code>masonry</code>, qui lit <code>aspect</code> (défaut 1).</span></div>
+<div class="par"><code>spacing = .regular</code><span>8. <code>tight</code> (6) pour une grille carrée dense.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>L'aplat des tuiles de texte : l'accent ambiant. Celui d'un élément prime.</span></div>
+<div class="par"><code>tone: MeeshyGlassTone? = nil</code><span>Remis à K01 pour le verre des surimpressions.</span></div>
+<div class="par"><code>onOpen: (String) -&gt; Void</code><span>L'identifiant touché, une fois, au doigt levé. Jamais pour un fantôme ou un squelette.</span></div>
+<div class="par"><code>onReachEnd: (() -&gt; Void)? = nil</code><span>La dernière ligne approche : l'hôte charge la suite. Absent : rien.</span></div>
+<div class="par"><code>frameOf: ((String) -&gt; CGRect?)</code><span>Rendu à l'hôte : le cadre d'une tuile, pour le voyage vers la visionneuse.</span></div>
+<div class="par"><code>haptic = .light</code><span><code>none</code> laisse l'hôte jouer le sien.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une recette, trois grilles paresseuses</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Grille : <code>LazyVGrid</code> et <code>GridItem(.flexible(), spacing:)</code> ; <code>row</code> est un <code>HStack</code> de trois, sans paresse.</li>
+<li><code>masonry</code> : un <code>LazyVStack</code> par colonne dans un <code>HStack</code>, rempli par la loi de placement.</li>
+<li>Tuile : vue <code>Equatable</code> posée avec <code>.equatable()</code> ; l'appui vit dans un <code>ButtonStyle</code> qui lit <code>configuration.isPressed</code>.</li>
+<li>Verre des surimpressions : <code>MeeshyGlassTone</code> de K01, donc <code>glassEffect</code> sur iOS 26 et le verre dessiné avant.</li>
+<li>Voyage : la tuile porte <code>matchedTransitionSource(id:in:)</code> ; l'hôte ouvre en <code>.navigationTransition(.zoom)</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Avant iOS 18 : <code>matchedGeometryEffect</code>, puis un fondu. Très grande police : trois colonnes deviennent deux, la légende garde trois lignes. <code>accessibilityReduceMotion</code> : aucune cascade.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Grille : <code>LazyVerticalGrid(GridCells.Fixed(n))</code> ; <code>masonry</code> : <code>LazyVerticalStaggeredGrid</code> à deux colonnes fixes.</li>
+<li>Recyclage : <code>key = id</code> et <code>contentType = kind</code> sur chaque élément ; entrée par <code>Modifier.animateItem()</code>.</li>
+<li>Appui : échelle lue en phase de dessin par <code>graphicsLayer</code>, aucune recomposition des voisines.</li>
+<li>Voyage : <code>SharedTransitionLayout</code> et <code>sharedBounds</code> sur le cadre de la tuile.</li>
+<li>Surimpressions : surface tonale de K01, pas de flou ; rayon du thème (20).</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Dans un écran qui défile déjà : <code>row</code>, ou des lignes de <code>Row</code> à <code>weight(1f)</code>, jamais une grille paresseuse emboîtée. <code>fontScale</code> 2,0 : deux colonnes. Échelle d'animation à zéro : pas d'entrée.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Grille : <code>grid-template-columns: repeat(n, minmax(0, 1fr))</code> et <code>aspect-ratio</code> ; liste <code>&lt;ul&gt;</code> de liens ou de boutons.</li>
+<li><code>masonry</code> : <code>columns: 3 180px</code> et <code>break-inside: avoid</code>, l'ordre du DOM restant l'ordre de lecture.</li>
+<li>Recyclage : <code>content-visibility: auto</code> et <code>contain-intrinsic-size</code> par tuile ; images en <code>loading="lazy"</code>.</li>
+<li>Survol : <code>@media (hover: hover)</code>, <code>:hover</code> et <code>:focus-visible</code> en CSS, sans état ni écouteur.</li>
+<li>Voyage : <code>view-transition-name</code> posé sur la tuile ouverte, par les View Transitions.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans <code>backdrop-filter</code> : fond plein de K01. Sans View Transitions : fondu. Sous 700 px : deux colonnes, pas de barre de survol. <code>prefers-reduced-motion</code> : ni élévation ni cascade.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">La grille de médias existe déjà dans la conversation, pas encore sur le profil</h2><p>Relevé dans le dépôt le 16 novembre 2026. Les trois plateformes ont une grille carrée de trois colonnes pour les médias d'une conversation, chacune écrite dans son écran. Sur le profil iOS, les publications sont une liste (<span class="mono">Features/Profile/Views/ProfileUserPostsList.swift</span>) : aucune grille de médias à extraire là.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/chat/…/chat/RecentMediaGrid.kt</span><p><span class="be">Devient le composant</span> Son <code>MediaGrid</code> privé : <code>LazyVerticalGrid</code> à <code>GridCells.Fixed(columns)</code>, écart de 8, cellule calculée depuis la largeur. La sélection, la tuile « ouvrir la photothèque » et les permissions restent à l'app, autour de K20.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/chat/…/chat/mediahub/MediaHubCells.kt</span><p>La tuile carrée du hub : appui à 0,94 sur ressort, action nommée pour la voix, et <code>MediaHubTileSkeleton</code>. Elle donne la tuile et le squelette ; sa grille (<span class="mono">ConversationMediaHubSheet.kt</span>, <code>contentType = "tile"</code>) est rebranchée par le lot d'intégration.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/stories/…/stories/MyStoriesGrid.kt</span><p><code>GridCells.Adaptive</code> et <code>MyStoriesSkeleton</code>, la même grille en chargement. Rebranchée ; ses menus restent à l'app.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/core/model/…/reading/focal/FocalMediaGridLayout.kt</span><p><span class="no">N'est pas un jumeau</span> La mosaïque d'un message : 1, 2, 3 ou 4 pièces et un compteur « +N ». Une géométrie de bulle, pas une grille à colonnes. Elle reste où elle est.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubCells.swift</span><p><span class="be">Devient le composant</span> <code>MediaHubVisualTile</code>, déjà <code>Equatable</code>, avec son libellé de durée, et <code>MediaHubSkeleton</code> en <code>LazyVGrid</code> de trois colonnes flexibles. Il gagne les formes haute et libre, la légende et le fantôme, et monte dans <code>MeeshyUI/Kit</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift</span><p>Trois <code>LazyVGrid</code> à <code>GridItem(.adaptive(minimum: 150))</code> pour les stories publiées, en file et en brouillon. Rebranchées ; la suppression par menu reste à l'app.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/conversation-media-hub-items.tsx</span><p><span class="be">Devient le composant</span> <code>MediaTile</code> : la tuile carrée du hub, glyphe de type en coin. Avec <span class="mono">conversation-media-section.tsx</span>, une ligne de quatre à écart 2 : c'est <code>row</code>.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/media-grid.tsx</span><p><span class="no">N'est pas un jumeau</span> La grille d'un message (<code>mediaGridSlots</code>, voile « +N »), comme <span class="mono">feed-media-mosaic.tsx</span> pour un post et <span class="mono">call-grid.tsx</span> pour un appel. Aucune n'est une grille à colonnes en lecture seule.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Quatre écrans qui ne sont pas le profil</h2><p>Même composant, mêmes paramètres. Il sert aussi le sélecteur de réels à citer : toucher une tuile y rend son identifiant, sans coche.</p></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 12px">
+<div style="display: flex; gap: 6px"><span class="chip on">Photos</span><span class="chip">Vidéos</span><span class="chip">Audio</span></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px">
+<div class="ph" style="aspect-ratio: 1; padding: 6px 7px">studio</div>
+<div class="ph" style="position: relative; aspect-ratio: 1; padding: 6px 7px"><span class="badge glass" style="top: 5px; right: 5px; min-height: 22px; padding: 0 7px; font-size: 10.5px">[[ic:play-fill s]]<span>0:12</span></span></div>
+<div class="ph" style="aspect-ratio: 1; padding: 6px 7px">console</div>
+<div class="ph" style="aspect-ratio: 1; padding: 6px 7px">micro</div>
+<div class="ph" style="aspect-ratio: 1; padding: 6px 7px">affiche</div>
+<div class="ph" style="aspect-ratio: 1; padding: 6px 7px">scène</div>
+</div>
+</div>
+<div class="cp"><b>Conversation</b><span class="kcap">Les médias partagés de « Studio », dans les détails : <code>regular</code> carrée, écart 6.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; --accent: #FBBF24">
+<div class="stage" style="align-items: flex-start">
+<div style="display: flex; gap: 8px; align-items: flex-start; width: 100%">
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<div class="ph" style="height: 132px">pochette</div>
+<div class="txt" style="min-height: 0; padding: 12px; gap: 10px"><span class="ov">[[ic:megaphone s]]<span>Annonce</span></span><span class="d" style="font-size: 16px">Scène ouverte samedi.</span></div>
+</div>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<div class="ph" style="position: relative; height: 96px"><span class="badge glass" style="top: 6px; right: 6px">[[ic:images s]]<span>6</span></span></div>
+<div class="ph" style="position: relative; height: 142px"><span>session</span><span class="badge glass" style="top: 6px; right: 6px">[[ic:play-fill s]]<span>1:02</span></span></div>
+</div>
+</div>
+</div>
+<div class="cp"><b>Communauté</b><span class="kcap">La galerie de « Beatmakers Dakar » : <code>masonry</code>, aplat à la teinte de la communauté.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 12px">
+<div class="tonal" style="display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 999px; color: var(--ink2); font-size: 13.5px; font-weight: 600">[[ic:magnifying-glass s]]<span style="color: var(--ink)">tram</span><span style="margin-left: auto; font-size: 12px; color: var(--ink3)">5 médias</span></div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div class="ph" style="height: 108px; padding: 6px 7px">tram 28</div>
+<div class="ph" style="position: relative; height: 108px; padding: 6px 7px"><span class="badge glass" style="top: 5px; right: 5px; min-height: 22px; padding: 0 7px; font-size: 10.5px">[[ic:play-fill s]]<span>0:41</span></span></div>
+<div class="ph" style="height: 108px; padding: 6px 7px">arrêt</div>
+<div class="ph" style="height: 108px; padding: 6px 7px">rails</div>
+<div class="ph" style="height: 108px; padding: 6px 7px">Alfama</div>
+<div class="gh" style="height: 108px; animation: none">[[ic:image]]</div>
+</div>
+</div>
+<div class="cp"><b>Recherche</b><span class="kcap">Les médias trouvés pour un mot : <code>regular</code> haute. La dernière ligne se complète d'un fantôme muet.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 12px">
+<span class="tag">Novembre 2026</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<div class="ph" style="position: relative; aspect-ratio: 9 / 16; padding: 6px 7px"><span>14 nov.</span><span class="badge glass" style="top: 5px; right: 5px; min-height: 22px; padding: 0 7px; font-size: 10.5px">[[ic:eye s]]<span>86</span></span></div>
+<div class="ph" style="position: relative; aspect-ratio: 9 / 16; padding: 6px 7px"><span>9 nov.</span><span class="badge glass" style="top: 5px; right: 5px; min-height: 22px; padding: 0 7px; font-size: 10.5px">[[ic:eye s]]<span>42</span></span></div>
+<div class="ph" style="position: relative; aspect-ratio: 9 / 16; padding: 6px 7px"><span>3 nov.</span><span class="badge glass" style="top: 5px; right: 5px; min-height: 22px; padding: 0 7px; font-size: 10.5px">[[ic:eye s]]<span>214</span></span></div>
+</div>
+</div>
+<div class="cp"><b>Stories</b><span class="kcap">Les archives, mois par mois : <code>regular</code> en 9:16, la pastille porte les vues.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Placement.</b> <code>regular</code> rend des colonnes égales au pixel près ; <code>masonry</code> pose chaque élément dans la colonne la plus courte, la première en cas d'égalité ; <code>row</code> coupe à <code>columns</code>. Vecteurs <code>K49-MeeshyMediaGrid.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque disposition × forme × sorte × état rend le rayon, l'écart, le bord, le fond et la place des surimpressions du tableau. Une photo seule n'a pas de pastille ; une légende ne dépasse pas trois lignes.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> La grille porte <code>label</code> et son compte. Une tuile dit son <code>label</code>, la valeur de sa pastille, sa légende, son rôle de bouton et « 2 sur 3 ». Fantômes et squelettes sont muets ; la grille en chargement dit « occupé ».</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Un geste, une fois.</b> <code>onOpen</code> part une fois, au doigt levé dans la tuile, avec le bon identifiant. Rien pour un fantôme ou un squelette. Aucune coche, aucun « + », aucune poignée n'est jamais rendue.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> Toute tuile fait 44 pt au moins dans ses deux dimensions, en trois colonnes sur 320 de large comprises. Pastille et légende tiennent 4,5:1 sur une image blanche comme sur une image noire. L'encre de l'aplat tient 4,5:1.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Clavier, RTL, mouvement réduit.</b> Tab suit l'ordre de lecture, Entrée ouvre, l'anneau est visible. En arabe, les colonnes se remplissent depuis la droite et la pastille passe au coin de fin. Sans mouvement : ni cascade ni échelle ni respiration.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisines et pureté.</b> Presser ou survoler une tuile ne re-peint aucune voisine ; l'arrivée d'une image ne change la taille d'aucune cellule. Sur mille éléments, seules les cellules visibles et une ligne d'avance existent. Garde de source : aucun type du domaine, aucun singleton, aucun chargement d'image, aucun verre dessiné dans les fichiers de K49 (K01 seulement), aucune couleur ni rayon hors de <code>MeeshyMediaGridRecipe</code>. Non-régression : le hub de médias et les stories ne changent pas à l'extraction.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Le type ne tient pas à l'image : la pastille le montre, le nom le dit. La légende traduite annonce sa langue d'origine par K51. Très grande police : une colonne de moins, la légende passe sous la tuile plutôt que de la couvrir.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Cellules recyclées par identifiant et par sorte. Un seul flou par tuile au plus, demandé à K01, et aucun pendant le défilement rapide. Seules l'opacité et la transformation s'animent. Rien n'est retenu une fois l'écran quitté.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8787}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

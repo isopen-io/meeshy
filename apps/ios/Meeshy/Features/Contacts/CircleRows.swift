@@ -133,7 +133,7 @@ struct CircleRequestRow: View {
     private var caption: String {
         let key = direction == .incoming
             ? String(localized: "circles.requests.incoming", defaultValue: "Demande le niveau %@", bundle: .main)
-            : String(localized: "circles.requests.outgoing", defaultValue: "En attente · %@", bundle: .main)
+            : String(localized: "circles.pending", defaultValue: "Demande envoyée · %@", bundle: .main)
         return String(format: key, levelTitle)
     }
 

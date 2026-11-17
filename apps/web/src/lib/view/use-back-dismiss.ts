@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
+import { layerEntryState, layerMarkerOf } from './layer-entry';
 import { openModalLayer } from './modal-layers';
 
 /**
@@ -29,9 +30,10 @@ import { openModalLayer } from './modal-layers';
  * reculer d'une entrée défaisait la navigation elle-même (mesuré : `/notifications`
  * poussée, `/` rendue, sur `dev` comme sur la branche de #6288). L'entrée
  * posée porte donc une MARQUE, et le retour n'a lieu que si l'historique est
- * encore dessus. Le prix, assumé : après une telle navigation, l'entrée de la
- * couche reste sous la destination, et un retour y ramène l'écran d'origine —
- * exactement ce qu'on quittait.
+ * encore dessus. Le prix de #6313 — l'entrée de la couche restait sous la
+ * destination, et le retour suivant l'écran d'origine ne changeait rien — est
+ * levé par #18523 : `navigate()` (`lib/router.tsx`) lit `onLayerEntry()` (`layer-entry.ts`) et fait
+ * prendre à la destination LA PLACE de l'entrée de la couche.
  *
  * **L'ENTRÉE EST POSÉE DANS LE COMMIT QUI INSÈRE LA COUCHE** (#6319). Un effet
  * passif la posait APRÈS la peinture (Preact : un `requestAnimationFrame`
@@ -141,7 +143,7 @@ export function dismissAllLayers(options: { readonly successor?: boolean } = {})
 }
 
 function carriesMarker(state: unknown, marker: string): boolean {
-  return typeof state === 'object' && state !== null && (state as { readonly backDismiss?: unknown }).backDismiss === marker;
+  return layerMarkerOf(state) === marker;
 }
 
 function leaveEntry(marker: string, layer: symbol): void {
@@ -166,6 +168,13 @@ function leaveEntry(marker: string, layer: symbol): void {
   });
 }
 
+/** Les entrées qu'une couche a reprises à une couche ÉTEINTE avant que son
+ * nettoyage ne coure (#18460) : ce nettoyage ne doit plus les rendre. */
+let adoptedEntries: readonly string[] = [];
+
+/** L'entrée annoncée au rendu par une couche qui s'éteint, jusqu'à son nettoyage. */
+let announcedEntry: string | null = null;
+
 /** L'entrée laissée par la couche précédente, si elle est TOUJOURS l'entrée
  * courante — sinon la nouvelle couche pose la sienne. */
 function adoptLeftEntry(): string | null {
@@ -174,7 +183,32 @@ function adoptLeftEntry(): string | null {
   if (!carriesMarker(window.history.state, pendingRelease)) return null;
   const adopted = pendingRelease;
   pendingRelease = null;
+  if (adopted === announcedEntry) adoptedEntries = [...adoptedEntries, adopted];
   return adopted;
+}
+
+/**
+ * **UNE COUCHE QUI S'ÉTEINT ANNONCE SON ENTRÉE AU RENDU** (#18460). Démontée,
+ * une couche est nettoyée pendant la réconciliation, avant tout effet ; ÉTEINTE
+ * (`active: false`), elle l'est par son propre effet. Sous Preact, le runtime
+ * servi, les effets de mise en page d'un commit courent composant par
+ * composant, les enfants d'abord : la feuille que le menu ouvre (« Signaler »)
+ * posait sa propre entrée AVANT que le menu, son ancêtre, ne laisse la sienne,
+ * et l'entrée du menu restait orpheline sous la feuille (mesuré : deux entrées
+ * pour une feuille). L'annonce au rendu précède tous les effets du commit, quel
+ * que soit le runtime : la feuille adopte l'entrée comme après un démontage.
+ */
+function announceLeaving(marker: string): void {
+  if (pendingRelease !== null || !carriesMarker(window.history.state, marker)) return;
+  pendingRelease = marker;
+  announcedEntry = marker;
+}
+
+function wasAdopted(marker: string): boolean {
+  if (announcedEntry === marker) announcedEntry = null;
+  if (!adoptedEntries.includes(marker)) return false;
+  adoptedEntries = adoptedEntries.filter((entry) => entry !== marker);
+  return true;
 }
 
 export type BackDismissOptions = {
@@ -189,21 +223,33 @@ export type BackDismissOptions = {
   readonly history?: boolean;
   /** `true` : `dismissAllLayers` ne la referme pas (#10539). Lu au montage. */
   readonly held?: boolean;
+  /**
+   * `false` : la couche n'existe pas encore (#18460). Un menu ancré reste monté
+   * fermé ; son passage à vrai pose (ou adopte) l'entrée et inscrit la couche
+   * dans le même commit, son passage à faux la rend comme un démontage.
+   * `held`, `history` et `escape` sont relus à chaque activation. Vrai par défaut.
+   */
+  readonly active?: boolean;
 };
 
 export function useBackDismiss(onClose: () => void, options: BackDismissOptions = {}): void {
   const escape = options.escape === true;
   const withHistory = options.history !== false;
+  const held = options.held === true;
+  const active = options.active !== false;
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
   });
+  const heldEntry = useRef<string | null>(null);
+  if (!active && heldEntry.current !== null) announceLeaving(heldEntry.current);
 
   useLayoutEffect(() => {
+    if (!active) return;
     const releaseModalLayer = openModalLayer();
     const close = () => onCloseRef.current();
     const declare = (marker: string | null): (() => void) => {
-      if (options.held === true) return releaseModalLayer;
+      if (held) return releaseModalLayer;
       const open: OpenLayer = { close, marker };
       dismissible = [...dismissible, open];
       return () => {
@@ -217,9 +263,10 @@ export function useBackDismiss(onClose: () => void, options: BackDismissOptions 
     if (marker === null) {
       nextMarker += 1;
       marker = `back-dismiss-${nextMarker}`;
-      window.history.pushState({ backDismiss: marker }, '');
+      window.history.pushState(layerEntryState(marker), '');
     }
     const ownMarker = marker;
+    heldEntry.current = ownMarker;
     const undeclare = declare(ownMarker);
     const layer = Symbol(ownMarker);
     layerStack = [...layerStack, layer];
@@ -238,9 +285,14 @@ export function useBackDismiss(onClose: () => void, options: BackDismissOptions 
     if (escape) window.addEventListener('keydown', onKeyDown);
 
     return () => {
+      heldEntry.current = null;
       undeclare();
       window.removeEventListener('popstate', onPopState);
       window.removeEventListener('keydown', onKeyDown);
+      if (wasAdopted(ownMarker)) {
+        dropLayer(layer);
+        return;
+      }
       if (!consumedByHistory && carriesMarker(window.history.state, ownMarker)) {
         closedLayers = [...closedLayers, layer];
         leaveEntry(ownMarker, layer);
@@ -248,5 +300,6 @@ export function useBackDismiss(onClose: () => void, options: BackDismissOptions 
       }
       dropLayer(layer);
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 }

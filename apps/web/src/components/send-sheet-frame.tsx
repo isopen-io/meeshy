@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useId, useImperativeHandle, useRef, type ReactNode, type Ref, type RefObject } from 'react';
+import { useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, type ReactNode, type Ref, type RefObject } from 'react';
 
 import '@/styles/send-sheet.css';
 
+import { leaveDialogAsGhost } from '@/lib/view/dialog-exit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /**
@@ -90,6 +91,17 @@ export function SendSheetFrame({
   useImperativeHandle(handleRef, () => ({ dismiss }), [dismiss]);
 
   useBackDismiss(dismiss);
+
+  /* L'hôte qui DÉMONTE la feuille (après un envoi, ou pour une autre) ne passe pas par `dismiss` : un
+     fantôme rejoue `.send-sheet[data-leaving]` (#18362). Une cleanup de mise en page, déclarée avant
+     celle qui ferme : le dialogue est encore dans le document et ouvert. Une sortie déjà en cours
+     (`data-leaving`) n'en crée pas. */
+  useLayoutEffect(() => {
+    const dialog = ref.current;
+    return () => {
+      if (dialog !== null) leaveDialogAsGhost(dialog, 'send');
+    };
+  }, []);
 
   useEffect(() => {
     const dialog = ref.current;

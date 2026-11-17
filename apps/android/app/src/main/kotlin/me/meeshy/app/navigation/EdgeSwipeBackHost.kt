@@ -1,12 +1,9 @@
 package me.meeshy.app.navigation
 
-import android.provider.Settings
 import androidx.activity.BackEventCompat
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
@@ -20,7 +17,6 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.abs
@@ -28,6 +24,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import me.meeshy.ui.component.chrome.EdgeBackGate
 import me.meeshy.ui.component.chrome.LocalEdgeBackGate
+import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.theme.MeeshyMotion
 
 /**
  * Le retour interactif GLOBAL, posé UNE fois autour du `NavHost` (#13364) : un glissé depuis le bord de début
@@ -53,10 +51,10 @@ internal fun EdgeSwipeBackHost(
     val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val gate = remember { EdgeBackGate() }
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val resolver = LocalContext.current.contentResolver
     val scope = rememberCoroutineScope()
     val enabledState = rememberUpdatedState(enabled)
     val canGoBackState = rememberUpdatedState(canGoBack)
+    val reduceMotionState = rememberUpdatedState(LocalReduceMotion.current)
     val settling = remember { SettlingFlag() }
     Box(
         modifier = modifier.pointerInput(dispatcher, isRtl) {
@@ -67,9 +65,7 @@ internal fun EdgeSwipeBackHost(
                 scope = scope,
                 settling = settling,
                 armed = { enabledState.value && gate.isOpen && canGoBackState.value() && dispatcher.hasEnabledCallbacks() },
-                reducedMotion = {
-                    Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
-                },
+                reducedMotion = { reduceMotionState.value },
             )
         },
     ) {
@@ -149,7 +145,7 @@ private suspend fun PointerInputScope.detectEdgeBack(
     }
 }
 
-/** L'annulation revient au bord par un ressort (pas de saut), puis rend la main au `NavHost` ; sans animations, elle est immédiate. */
+/** L'annulation revient au bord par le ressort `springFast` (pas de saut), puis rend la main au `NavHost` ; sous « Réduire les animations » (système ou app), elle est immédiate. */
 private fun settleBack(
     scope: CoroutineScope,
     settling: SettlingFlag,
@@ -164,7 +160,7 @@ private fun settleBack(
         try {
             Animatable(from).animateTo(
                 targetValue = 0f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+                animationSpec = MeeshyMotion.springFast(),
             ) { dispatcher.dispatchOnBackProgressed(eventAt(value)) }
         } finally {
             dispatcher.dispatchOnBackCancelled()

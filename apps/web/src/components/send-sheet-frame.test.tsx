@@ -158,3 +158,46 @@ describe('SendSheetFrame — une modale qui s’annule clairement', () => {
     expect(closed).toEqual(['close']);
   });
 });
+
+/**
+ * LE DÉMONTAGE PAR L'HÔTE JOUE AUSSI LA SORTIE (#18362) — une feuille d'envoi que l'hôte retire après
+ * un envoi, ou qu'une autre remplace, laisse un fantôme qui rejoue `.send-sheet[data-leaving]`.
+ */
+describe('SendSheetFrame — la sortie survit au démontage', () => {
+  const withPopover = async (run: () => Promise<void>): Promise<void> => {
+    Object.defineProperty(HTMLElement.prototype, 'showPopover', { configurable: true, writable: true, value() {} });
+    try {
+      await run();
+    } finally {
+      delete (HTMLElement.prototype as { showPopover?: unknown }).showPopover;
+      for (const ghost of document.querySelectorAll('[data-dialog-ghost]')) ghost.remove();
+    }
+  };
+
+  test('démontée par l’hôte, la feuille laisse un fantôme send-sheet en sortie', async () =>
+    withPopover(async () => {
+      await mounter.mount(
+        <SendSheetFrame title="Partager" cancelLabel="Annuler" onClose={() => {}}>
+          <p>corps</p>
+        </SendSheetFrame>,
+      );
+      mounter.unmountAll();
+      const ghost = document.querySelector<HTMLElement>('[data-dialog-ghost]');
+      expect(ghost?.dataset.dialogGhost).toBe('send');
+      expect(ghost?.classList.contains('send-sheet')).toBe(true);
+      expect(ghost?.hasAttribute('data-leaving')).toBe(true);
+    }));
+
+  test('démontée pendant sa propre sortie, elle n’en crée pas de seconde', async () =>
+    withPopover(async () => {
+      const host = await mounter.mount(
+        <SendSheetFrame title="Partager" cancelLabel="Annuler" onClose={() => {}}>
+          <p>corps</p>
+        </SendSheetFrame>,
+      );
+      await mounter.click(buttonNamed(host, 'Annuler'));
+      expect(dialogOf(host).hasAttribute('data-leaving')).toBe(true);
+      mounter.unmountAll();
+      expect(document.querySelectorAll('[data-dialog-ghost]')).toHaveLength(0);
+    }));
+});

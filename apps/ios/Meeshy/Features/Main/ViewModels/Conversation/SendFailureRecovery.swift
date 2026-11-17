@@ -147,7 +147,7 @@ nonisolated extension AttachmentRightRefusal {
     static var userMessage: String {
         String(
             localized: "conversation.send.attachmentRightNotPermitted",
-            defaultValue: "Vous ne pouvez pas encore envoyer ce type de pièce jointe dans cette conversation.",
+            defaultValue: "Ce type de pièce jointe n’est pas autorisé ici.",
             bundle: .main
         )
     }

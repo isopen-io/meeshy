@@ -1,3 +1,4 @@
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
@@ -139,5 +140,26 @@ describe('le Bring dans l’en-tête', () => {
     await click(document.querySelector<HTMLButtonElement>(CONFIRM));
     expect(node.querySelector(BUTTON)).toBeNull();
     expect(document.querySelector('[data-thread-bring-notice]')).toBeNull();
+  });
+});
+
+describe('le disque du Bring répond à l’appui comme les autres disques d’en-tête (#18412)', () => {
+  const DISC = `${BUTTON} [data-chrome-disc]`;
+
+  test('au repos, aucun fond ni transition en ligne : la feuille dessine le disque et le fonce à l’appui', async () => {
+    appQueryClient.setQueryData(bringAvailabilityQueryKey(PEER), availability());
+    const html = renderToStaticMarkup(slot({ deps: scripted({}).deps }));
+    const disc = /<span data-chrome-disc[^>]*>/.exec(html)?.[0] ?? '';
+    expect(disc).toContain('data-chrome-disc');
+    expect(disc).not.toContain('background');
+    expect(disc).not.toMatch(/transition|duration-/);
+  });
+
+  test('tant que ça sonne, le disque se remplit du ton du danger', async () => {
+    appQueryClient.setQueryData(bringAvailabilityQueryKey(PEER), availability({ remainingToday: 0 }));
+    const store = createBringStore();
+    store.getState().sent(sent);
+    const node = await mount(slot({ deps: scripted({}).deps, store }));
+    expect(node.querySelector<HTMLElement>(DISC)?.getAttribute('style') ?? '').toMatch(/background:\s*var\(--color-error\)/);
   });
 });

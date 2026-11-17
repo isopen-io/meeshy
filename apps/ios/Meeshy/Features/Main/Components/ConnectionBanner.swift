@@ -34,6 +34,11 @@ struct ConnectionBanner: View {
     /// la même question, que la règle `SyncPillVisibility` vient justement de
     /// rassembler.
     @ObservedObject private var inAppNotices: NotificationToastManager
+    /// Les annonces de batterie des proches (#14147) : des ÉVÉNEMENTS qui passent dans la rotation puis
+    /// s'éteignent d'eux-mêmes (`BatteryAnnouncementFeed.lifetime`) ; un nouvel événement les ramène.
+    @ObservedObject private var batteryAnnouncements: BatteryAnnouncementFeed
+    /// Le téléphone injoignable d'un proche (#18737) : même nature, même rotation, même extinction.
+    @ObservedObject private var phoneAnnouncements: PhoneReachabilityAnnouncementFeed
     @StateObject private var statusVM = ConnectionStatusViewModel()
     @StateObject private var syncPillVM = SyncPillViewModel()
     /// Source des frappes hors conversation. Injectée EXPLICITEMENT par
@@ -139,9 +144,13 @@ struct ConnectionBanner: View {
         isStoryViewerPresenting: Bool,
         onItemTap: ((OutboxUIItem.Source) -> Bool)? = nil,
         activeConversationId: (() -> String?)? = nil,
-        inAppNotices: NotificationToastManager = .shared
+        inAppNotices: NotificationToastManager = .shared,
+        batteryAnnouncements: BatteryAnnouncementFeed = .shared,
+        phoneAnnouncements: PhoneReachabilityAnnouncementFeed = .shared
     ) {
         self.inAppNotices = inAppNotices
+        self.batteryAnnouncements = batteryAnnouncements
+        self.phoneAnnouncements = phoneAnnouncements
         self.isStoryViewerPresenting = isStoryViewerPresenting
         self.onItemTap = onItemTap
         self.activeConversationId = activeConversationId
@@ -231,6 +240,9 @@ struct ConnectionBanner: View {
                 pendingPublicationId: PendingPublicationPill.cancellableId(for: item)
             ))
         }
+
+        result.append(contentsOf: batteryAnnouncements.entries)
+        result.append(contentsOf: phoneAnnouncements.entries)
 
         result.append(contentsOf: Self.typingEntries(
             typingUsers: typingSource.typingUsers,

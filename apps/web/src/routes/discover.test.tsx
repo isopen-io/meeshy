@@ -144,9 +144,10 @@ describe('les onglets', () => {
 });
 
 describe('les lignes de demandes et de bloqués', () => {
-  test('une demande reçue sans message dit l’intention, et porte son heure', () => {
+  test('une demande reçue sans message ne redit pas l’intention (le panneau la porte), et porte son heure', () => {
     const html = renderToStaticMarkup(<ReceivedRequestRow language="fr" request={request()} now={NOW} onAccept={noop} onReject={noop} />);
-    expect(html).toContain('Souhaite entrer en contact avec vous');
+    expect(html).not.toContain('Souhaite entrer en contact avec vous');
+    expect(html).not.toContain('data-request-message');
     expect(html).toMatch(/datetime="2026-09-13T09:00:00.000Z"/i);
     const withMessage = renderToStaticMarkup(<ReceivedRequestRow language="fr" request={request({ message: 'On se connaît !' })} now={NOW} onAccept={noop} onReject={noop} />);
     expect(withMessage).toContain('On se connaît !');

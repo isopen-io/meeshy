@@ -65,6 +65,7 @@ jest.mock('../../../../routes/auth/types', () => ({
 import { updateUserProfile, updateUserAvatar } from '../../../../routes/users/profile';
 
 const USER_ID = '507f1f77bcf86cd799439011';
+const OWN_AVATAR = `2026/11/${USER_ID}/avatar_a.jpg`;
 
 // displayName + bio (11 car., > 10) + phoneNumber + email présents, avatar
 // absent ⇒ 4/5 = 80 au départ ; chaque test change un seul champ de la formule
@@ -93,6 +94,7 @@ function makePrisma(written: Partial<typeof mockUser> = {}) {
       update: jest.fn<any>().mockResolvedValue({ ...mockUser, ...written }),
     },
     userVoiceModel: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    messageAttachment: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'att-own' }) },
   };
 }
 
@@ -124,14 +126,18 @@ async function patch(route: typeof updateUserProfile, url: string, payload: obje
 
 describe('#8959 — jalons de profil', () => {
   it('crédite `profile.avatar` quand un avatar est posé', async () => {
-    const ops = await patch(updateUserAvatar, '/users/me/avatar', { avatar: '/api/v1/attachments/a.jpg' }, { avatar: '/api/v1/attachments/a.jpg' });
+    const ops = await patch(updateUserAvatar, '/users/me/avatar', { avatar: OWN_AVATAR }, { avatar: OWN_AVATAR });
 
     expect(ops).toEqual(['profile.avatar']);
     expect(recordActivity).toHaveBeenCalledWith(USER_ID, 'profile.avatar');
   });
 
   it("ne crédite pas `profile.avatar` pour un avatar vide", async () => {
-    expect(await patch(updateUserAvatar, '/users/me/avatar', { avatar: '' }, { avatar: '' })).toEqual([]);
+    recordActivity.mockClear();
+    const app = await buildApp(makePrisma({ avatar: '' } as never), updateUserAvatar);
+    await app.inject({ method: 'PATCH', url: '/users/me/avatar', payload: { avatar: '' } });
+    await app.close();
+    expect(recordActivity).not.toHaveBeenCalled();
   });
 
   it('crédite `profile.bio` pour une bio de plus de dix caractères', async () => {

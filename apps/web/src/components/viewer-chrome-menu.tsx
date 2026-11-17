@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+
+import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 import { GlyphSvg } from './glyph';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
@@ -47,6 +50,10 @@ export function ViewerMenu({
     onOpenChangeRef.current?.(next);
   };
 
+  /* LE MENU OUVERT EST LA COUCHE DU DESSUS (#18326) : le retour Android et
+     Précédent le referment seul, la visionneuse dessous reste ouverte. */
+  useBackDismiss(() => change(false), { active: open });
+
   useEffect(() => {
     if (!open) return;
     /* ÉCHAP FERME LE MENU, ET LUI SEUL — écouté en CAPTURE et arrêté : sans
@@ -72,6 +79,7 @@ export function ViewerMenu({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  const menu = useLayerPresence(open ? true : null);
   const shown = items.filter((item) => item.onSelect !== undefined);
   if (shown.length === 0) return null;
 
@@ -95,12 +103,17 @@ export function ViewerMenu({
           <GlyphSvg glyph={THREAD_MENU_GLYPHS.dotsThree} size={18} />
         </span>
       </button>
-      {open ? (
+      {menu.value !== null ? (
         <div
           role="menu"
           aria-label={label}
           className="absolute end-0 top-full z-50 mt-1 grid min-w-48 overflow-hidden rounded-card py-1 shadow-cast"
-          style={{ backgroundColor: 'var(--color-ios-card)', border: '1px solid var(--color-edge)', colorScheme: 'light dark' }}
+          {...layerMotion(menu.leaving, {
+            backgroundColor: 'var(--color-ios-card)',
+            border: '1px solid var(--color-edge)',
+            colorScheme: 'light dark',
+            '--layer-shift': '0 -4px',
+          } as CSSProperties)}
         >
           {shown.map((item) => (
             <button

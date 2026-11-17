@@ -3,11 +3,11 @@
     <string name="security_section_encrypted_devices">التشفير التام بين الطرفين</string>
     <string name="encrypted_devices_title">أجهزتي المشفّرة</string>
     <string name="encrypted_devices_loading">جارٍ تحميل أجهزتك المشفّرة</string>
-    <string name="encrypted_devices_offline_empty">أنت غير متصل. اتصل لعرض أجهزتك المشفّرة.</string>
+    <string name="encrypted_devices_offline_empty">غير متصل: ستعود أجهزتك عند عودة الشبكة.</string>
     <string name="encrypted_devices_error">تعذّر تحميل أجهزتك المشفّرة.</string>
     <string name="encrypted_devices_retry">إعادة المحاولة</string>
-    <string name="encrypted_devices_offline">أنت غير متصل. قد لا تكون هذه القائمة محدّثة.</string>
-    <string name="encrypted_devices_stale">تعذّر تحديث هذه القائمة وقد لا تكون محدّثة.</string>
+    <string name="encrypted_devices_offline">غير متصل: آخر قائمة معروفة.</string>
+    <string name="encrypted_devices_stale">تعذّر التحديث: آخر قائمة معروفة.</string>
     <string name="encrypted_devices_current">هذا الجهاز</string>
     <string name="encrypted_devices_retiring">جارٍ إزالة %1$s</string>
     <string name="encrypted_devices_retire_a11y">إزالة %1$s</string>

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { callPillText, pillCompactsAudioStage, pillHasBaseRow, pillShowsCaptionsBand, pillStaysWhenChromeStowed, pillTakesBound, PILL_TEXT_MAX_WIDTH, PILL_TEXT_WIDTH_CLASS, type CallPillText } from './call-pill-text';
 import { PILL_TEXT_EXIT } from './call-pill-text-exit';
+import { STOW_REDUCED_MS } from './call-pill-motion';
 import { IDLE, nextLayer, type CallScreenLayer } from './call-screen-layer';
 
 /**
@@ -160,16 +161,16 @@ describe('le texte repart comme il est venu (#17406)', () => {
     return start < 0 ? '' : css.slice(start, css.indexOf('}\n}', start));
   };
 
-  test('un fondu de 200 ms au plus, et aucune attente sous « Réduire les animations »', () => {
+  test('un fondu de 200 ms au plus ; sous « Réduire les animations », il attend son fondu court (loi 17.10), jamais rien', () => {
     expect(PILL_TEXT_EXIT.exitMs).toBeGreaterThan(0);
     expect(PILL_TEXT_EXIT.exitMs).toBeLessThanOrEqual(200);
-    expect(PILL_TEXT_EXIT.reducedExitMs).toBe(0);
+    expect(PILL_TEXT_EXIT.reducedExitMs).toBe(STOW_REDUCED_MS);
   });
 
-  test('la feuille joue la sortie sur la durée que la pilule attend, et le texte qui part ne prend plus le doigt', () => {
+  test('la feuille joue la sortie sur la durée que la pilule attend, et le texte qui part reste touchable (loi 17.11)', () => {
     const leaving = block('[data-call-pill-text][data-leaving]');
     expect(leaving).toContain(`call-pill-text-out ${PILL_TEXT_EXIT.exitMs}ms`);
-    expect(leaving).toMatch(/pointer-events:\s*none/);
+    expect(leaving).not.toMatch(/pointer-events:\s*none/);
   });
 
   test('les sous-titres qui repartent gardent la largeur du verre qui porte du texte : la pilule ne se resserre pas sous eux', () => {

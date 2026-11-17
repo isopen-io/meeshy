@@ -296,7 +296,8 @@ describe('les langues du Prisme', () => {
     expect(html).toContain('lang="fr"');
     expect(html).toContain('lang="es"');
     expect(html).toContain('Aucune');
-    expect(html).toContain('Le contenu sera traduit dans cette langue');
+    expect(html).toContain('Le contenu est traduit dans la première de ces langues qui est disponible.');
+    expect(html).not.toContain('Le contenu sera traduit dans cette langue');
   });
 
   test('un rang secondaire posé se retire par un contrôle NOMMÉ ; la langue principale, jamais', () => {
@@ -362,6 +363,13 @@ describe('les statistiques, la progression, les demandes, l’ancienneté', () =
     expect(html).toContain('>3<');
     expect(renderToStaticMarkup(<RequestsSection language="fr" pending={{ count: 100, more: true }} />)).toContain('>100+<');
     expect(renderToStaticMarkup(<RequestsSection language="fr" pending={{ count: 0, more: false }} />)).not.toContain('>0<');
+  });
+
+  test('la rangée des demandes ne répète pas son nom en titre de section (épure #18196)', () => {
+    const html = renderToStaticMarkup(<RequestsSection language="fr" pending={{ count: 3, more: false }} />);
+    expect(html).not.toContain('DEMANDES');
+    expect(html).not.toContain('<h2');
+    expect(html.match(/Demandes d&#x27;amis/g)?.length).toBe(2);
   });
 
   test('membre depuis une date lisible dans la langue de l’interface', () => {

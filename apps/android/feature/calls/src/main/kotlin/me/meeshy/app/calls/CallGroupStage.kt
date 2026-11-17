@@ -25,7 +25,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -34,22 +33,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.call.camera.CallCameraZoom
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.call.CallInvitedUser
 import me.meeshy.sdk.model.call.GroupStageTapOutcome
 import me.meeshy.sdk.model.call.GroupStageTapRule
 import me.meeshy.sdk.model.call.group.CallInviteCandidates
+import me.meeshy.sdk.model.call.group.GroupCallFullScreenLevel
 import me.meeshy.sdk.model.call.group.GroupCallGridLayout
 import me.meeshy.sdk.model.call.group.GroupCallSpotlight
+import me.meeshy.sdk.model.call.group.GroupCallSpotlightButton
 import me.meeshy.sdk.model.call.group.GroupCallSpotlightChoice
 import me.meeshy.sdk.model.call.group.GroupCallStageFocus
 import me.meeshy.sdk.model.call.group.GroupCallStageLaw
@@ -91,27 +95,17 @@ internal fun CallGroupStage(
     onChromeRevive: () -> Unit = {},
     /** L4.1 · W2 : la fenêtre est de hauteur compacte (`CallGroupStageSizing`) — la rangée de quatre n'a lieu qu'alors. */
     isCompactHeight: Boolean = false,
+    /** U1.14 · #18181 : le zoom de MA caméra, quand ma vignette est à la une. */
+    selfCameraZoom: CallCameraZoom? = null,
 ) {
-    val tiles = GroupCallStageLaw.tiles(
-        roster = mesh.roster,
-        localName = stringResource(R.string.call_group_tile_you),
-        speakingUserIds = mesh.speakingUserIds,
-        isLocalMicMuted = state.isMuted,
-        isLocalVideoEnabled = state.isVideoCall && state.isCameraOn && localTrack != null,
-        isPrimaryVideoActive = primaryTrack != null && !state.isPeerCameraOff,
-    )
+    val tiles = groupStageTiles(state, mesh, localTrack, primaryTrack)
     var choice by remember { mutableStateOf<GroupCallSpotlightChoice?>(null) }
-    val sharer = GroupCallSpotlight.sharerId(tiles)
-    val lastSharer = remember { mutableStateOf(sharer) }
-    LaunchedEffect(sharer) {
-        if (sharer != lastSharer.value) {
-            choice = GroupCallSpotlight.choiceAfterSharerChanged(choice, lastSharer.value, sharer)
-            lastSharer.value = sharer
-        }
+    val isAnnouncedByBanner = state.isPeerScreenSharing && GroupCallSpotlight.sharerId(tiles) == mesh.primaryUserId
+    CallGroupSharerEffects(tiles, isAnnouncedByBanner) { oldSharer, newSharer ->
+        choice = GroupCallSpotlight.choiceAfterSharerChanged(choice, oldSharer, newSharer)
     }
     val focus = GroupCallSpotlight.focus(tiles, choice)
-    var zoom by remember { mutableFloatStateOf(1f) }
-    LaunchedEffect(focus) { zoom = 1f }
+    val screenZoom = remember(focus) { CallReceivedScreenZoom() }
     CallGroupFocusEffects(focus, isFullScreen, onFullScreenChange, onFocusChange)
 
     val haptics = LocalHapticFeedback.current
@@ -119,12 +113,15 @@ internal fun CallGroupStage(
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         choice = next
     }
+    val onGrid = { choose(GroupCallSpotlightChoice.Grid) }
+    val fullScreen = rememberCallSpotlightLevel(focus, isFullScreen, onFullScreenChange, onGrid)
+    val chromeShown = GroupCallSpotlight.isChromeShown(isFullScreen, isControlsVisible = isChromeVisible, isCapsuleVisible = isCapsuleVisible)
     val scope = CallGroupStageScope(
         trackOf = stageTrackOf(mesh, localTrack, primaryTrack),
         eglContext = eglContext,
         mirrorsLocal = state.isFrontCamera,
         onTileTap = { tile ->
-            when (GroupStageTapRule.outcome(isChromeVisible)) {
+            when (GroupStageTapRule.outcome(chromeShown)) {
                 GroupStageTapOutcome.RevealChrome -> onStageTap?.invoke()
                 GroupStageTapOutcome.Spotlight -> choose(GroupCallSpotlightChoice.Tile(tile.id))
             }
@@ -135,8 +132,9 @@ internal fun CallGroupStage(
     val stageModifier = modifier.semantics { contentDescription = stageLabel }
     val spotlight = focus as? GroupCallStageFocus.Spotlight
     val featured = spotlight?.let { focused -> tiles.firstOrNull { it.id == focused.tileId } }
+    val level = fullScreen.level
     BoxWithConstraints(stageModifier) {
-        val staged = scope.copy(motionOf = rememberCallStageMotion(tiles.map { it.id }, focus, isFullScreen, maxWidth, maxHeight, isCompactHeight))
+        val staged = scope.copy(motionOf = rememberCallStageMotion(tiles.map { it.id }, focus, level.hidesStrip, maxWidth, maxHeight, isCompactHeight))
         val isLandscape = maxWidth > maxHeight
         if (spotlight == null || featured == null) {
             CallGroupGrid(tiles, staged, isLandscape, isCompactHeight, onStageTap, Modifier.fillMaxSize())
@@ -145,31 +143,122 @@ internal fun CallGroupStage(
                 tiles = tiles,
                 featured = featured,
                 isScreenShare = spotlight.isScreenShare,
-                isFullScreen = isFullScreen,
+                level = level,
                 isLandscape = isLandscape,
-                zoom = zoom,
-                onPinch = { factor -> zoom = GroupCallSpotlight.clampedZoom(zoom * factor) },
-                onResetZoom = { zoom = 1f },
+                screenZoom = screenZoom,
                 onStageTap = onStageTap,
                 scope = staged,
                 modifier = Modifier.fillMaxSize(),
+                selfCameraZoom = selfCameraZoom,
+                isChipVisible = isCapsuleVisible,
+                onChromeRevive = onChromeRevive,
             )
         }
-        CallGroupFeaturedCapsule(
-            tileIds = tiles.map { it.id },
-            featuredId = featured?.id,
-            focus = focus,
-            isFullScreen = isFullScreen,
-            width = maxWidth,
-            height = maxHeight,
-            isCompactHeight = isCompactHeight,
-            isChromeVisible = isCapsuleVisible,
-            onRevive = onChromeRevive,
-            onGrid = { choose(GroupCallSpotlightChoice.Grid) },
-            onToggleFullScreen = { onFullScreenChange(!isFullScreen) },
-        )
+        CallGroupStageCapsule(tiles, featured?.id, focus, fullScreen, maxWidth, maxHeight, isCompactHeight, isCapsuleVisible, onChromeRevive)
     }
 }
+
+/** La capsule de la une, posée sur la case de la une ; ses boutons suivent le niveau du plein écran. */
+@Composable
+private fun CallGroupStageCapsule(
+    tiles: List<GroupCallStageTile>,
+    featuredId: String?,
+    focus: GroupCallStageFocus,
+    fullScreen: CallSpotlightLevel,
+    width: Dp,
+    height: Dp,
+    isCompactHeight: Boolean,
+    isCapsuleVisible: Boolean,
+    onChromeRevive: () -> Unit,
+) {
+    CallGroupFeaturedCapsule(
+        tileIds = tiles.map { it.id },
+        featuredId = featuredId,
+        focus = focus,
+        isStripHidden = fullScreen.level.hidesStrip,
+        width = width,
+        height = height,
+        isCompactHeight = isCompactHeight,
+        isChromeVisible = isCapsuleVisible,
+        buttons = fullScreen.buttons,
+        onRevive = onChromeRevive,
+        onButton = fullScreen.onButton,
+    )
+}
+
+/** Le niveau du plein écran de la une, les boutons de sa capsule et ce qu'ils font (loi 15, #17961). */
+private class CallSpotlightLevel(
+    val level: GroupCallFullScreenLevel,
+    val buttons: List<GroupCallSpotlightButton>,
+    val onButton: (GroupCallSpotlightButton) -> Unit,
+)
+
+/**
+ * #17961 (2026-11-14) — « Plein écran » monte d'un niveau à chaque appui, jusqu'au plein écran total pour un écran
+ * partagé ; « Quitter » (glyphe rentrer) en redescend d'un ; « Revenir à la grille » sort de tout, et c'est le retour à
+ * la grille qui rend le plein écran ([CallGroupFocusEffects]). Le vœu du total tombe avec la une qui change.
+ */
+@Composable
+private fun rememberCallSpotlightLevel(
+    focus: GroupCallStageFocus,
+    isFullScreen: Boolean,
+    onFullScreenChange: (Boolean) -> Unit,
+    onGrid: () -> Unit,
+): CallSpotlightLevel {
+    var wantsTotal by remember(focus) { mutableStateOf(false) }
+    val isScreenShare = (focus as? GroupCallStageFocus.Spotlight)?.isScreenShare == true
+    val level = GroupCallSpotlight.fullScreenLevel(isFullScreen, wantsTotal, isScreenShare)
+    val onButton: (GroupCallSpotlightButton) -> Unit = { button ->
+        if (button == GroupCallSpotlightButton.Grid) {
+            onGrid()
+        } else {
+            val next = GroupCallSpotlight.levelAfter(button, level, isScreenShare)
+            wantsTotal = next == GroupCallFullScreenLevel.Total
+            if (next.isFullScreen != isFullScreen) onFullScreenChange(next.isFullScreen)
+        }
+    }
+    return CallSpotlightLevel(level, GroupCallSpotlight.capsuleButtons(level, isScreenShare), onButton)
+}
+
+/**
+ * #18180 — le partage qui change rend la main à la règle (un partage qui COMMENCE prend la une, même après un choix
+ * manuel) ; le lecteur d'écran l'annonce, sauf si la bannière du pair, zone vive, le dit déjà.
+ */
+@Composable
+private fun CallGroupSharerEffects(
+    tiles: List<GroupCallStageTile>,
+    isAnnouncedByBanner: Boolean,
+    onSharerChange: (oldSharer: String?, newSharer: String?) -> Unit,
+) {
+    val sharer = GroupCallSpotlight.sharerId(tiles)
+    val lastSharer = remember { mutableStateOf(sharer) }
+    val announce = rememberCallAnnouncer()
+    val context = LocalContext.current
+    val sharerName = tiles.firstOrNull { it.id == sharer }?.displayName.orEmpty()
+    val change by rememberUpdatedState(onSharerChange)
+    val bannerSays by rememberUpdatedState(isAnnouncedByBanner)
+    LaunchedEffect(sharer) {
+        val old = lastSharer.value
+        if (sharer == old) return@LaunchedEffect
+        change(old, sharer)
+        if (GroupCallSpotlight.announcesShare(old, sharer, bannerSays) && sharerName.isNotBlank()) {
+            announce(context.getString(R.string.call_screen_share_remote_banner, sharerName))
+        }
+        lastSharer.value = sharer
+    }
+}
+
+/** Les vignettes de la scène : les membres dans l'ordre d'arrivée, puis MOI en dernier (P11.3). */
+@Composable
+private fun groupStageTiles(state: CallUiState, mesh: GroupCallMeshUi, localTrack: VideoTrack?, primaryTrack: VideoTrack?): List<GroupCallStageTile> =
+    GroupCallStageLaw.tiles(
+        roster = mesh.roster,
+        localName = stringResource(R.string.call_group_tile_you),
+        speakingUserIds = mesh.speakingUserIds,
+        isLocalMicMuted = state.isMuted,
+        isLocalVideoEnabled = state.isVideoCall && state.isCameraOn && localTrack != null,
+        isPrimaryVideoActive = primaryTrack != null && !state.isPeerCameraOff,
+    )
 
 /** La vidéo de chaque vignette : la mienne, celle du principal, ou celle du lien du maillage ; rien caméra coupée. */
 private fun stageTrackOf(

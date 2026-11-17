@@ -35,6 +35,9 @@ public sealed interface NotificationDestination {
     public data class Story(val userId: String) : NotificationDestination
     public data class Profile(val userId: String) : NotificationDestination
 
+    /** « Ajouté à la communauté Y » ouvre le détail de Y (iOS `.communityDetail`, #18061). */
+    public data class Community(val communityId: String) : NotificationDestination
+
     /**
      * Une story nommée par son id : le lecteur s'ouvre sur CETTE story (pas sur le plateau d'un auteur deviné), sur la
      * feuille de [action] (commentaires, vues) et, pour un commentaire, sur le commentaire ciblé.
@@ -76,6 +79,7 @@ public object NotificationDestinationResolver {
                 NotificationDestination.StoryContent(destination.postId, destination.action, destination.commentId, destination.parentCommentId)
             is PushTapDestination.Mood -> NotificationDestination.Mood(destination.statusId)
             is PushTapDestination.Profile -> NotificationDestination.Profile(destination.userId)
+            is PushTapDestination.Community -> NotificationDestination.Community(destination.communityId)
             is PushTapDestination.Game -> NotificationDestination.Game(destination.target)
             PushTapDestination.Notifications, PushTapDestination.None -> NotificationDestination.None
         }
@@ -91,6 +95,7 @@ public object NotificationDestinationResolver {
             senderId = notification.actor?.id.present(),
             commentId = (notification.context?.commentId ?: notification.metadata?.commentId).present(),
             parentCommentId = (notification.context?.parentCommentId ?: notification.metadata?.parentCommentId).present(),
+            communityId = notification.context?.communityId.present(),
         )
     }
 }
@@ -105,6 +110,7 @@ internal fun NotificationDestination.dispatch(
     onOpenMood: (String) -> Unit = onOpenPost,
     onOpenGame: (GameTarget) -> Unit = {},
     onOpenStoryContent: (NotificationDestination.StoryContent) -> Unit = { onOpenPost(it.postId) },
+    onOpenCommunity: (String) -> Unit = {},
 ) {
     when (this) {
         is NotificationDestination.Conversation -> onOpenConversation(conversationId)
@@ -112,6 +118,7 @@ internal fun NotificationDestination.dispatch(
         is NotificationDestination.Reel -> onOpenReel(postId)
         is NotificationDestination.Story -> onOpenStory(userId)
         is NotificationDestination.Profile -> onOpenProfile(userId)
+        is NotificationDestination.Community -> onOpenCommunity(communityId)
         is NotificationDestination.Mood -> onOpenMood(statusId)
         is NotificationDestination.StoryContent -> onOpenStoryContent(this)
         is NotificationDestination.Game -> onOpenGame(target)

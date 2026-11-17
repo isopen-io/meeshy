@@ -6,6 +6,7 @@ import java.time.Instant
 import java.io.IOException
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.MessageWindowMode
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -105,17 +106,51 @@ class MessageWindowSourceTest {
     }
 
     @Test
-    fun `dropGoneEphemerals retire les eteints echus et les supprimes`() = runHarnessTest { h ->
-        h.seed(1..3)
+    fun `dropGoneEphemerals retire les eteints echus, apres leur combustion, et les supprimes`() = runHarnessTest { h ->
+        h.seedSynced(message("m1", 1).copy(expiresAt = Instant.ofEpochMilli(500L).toString()))
+        h.seed(2..3)
         val dao = h.database.messageDao()
-        dao.upsertAll(listOf(dao.find("m1")!!.copy(expiresAt = 500L), dao.find("m2")!!.copy(deletedAt = 1L)))
+        dao.upsertAll(listOf(dao.find("m2")!!.copy(deletedAt = 1L)))
         var now = 100L
         val source = h.source(now = { now })
         source.observe().test {
             assertThat(awaitItem().map { it.message.id }).containsExactly("m1", "m3").inOrder()
             now = 600L
             source.dropGoneEphemerals()
+            expectNoEvents()
             assertThat(awaitItem().map { it.message.id }).containsExactly("m3")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `un ephemere montre qui meurt reste allume le temps de sa combustion, puis part (18556)`() = runHarnessTest { h ->
+        h.seedSynced(message("m1", 1))
+        h.seedSynced(message("m2", 2).copy(expiresAt = Instant.ofEpochMilli(5_000L).toString()))
+        h.seedSynced(message("m3", 3))
+        val dao = h.database.messageDao()
+        val source = h.source(now = { 1_000L })
+        source.observe().test {
+            assertThat(awaitItem().map { it.message.id }).containsExactly("m1", "m2", "m3").inOrder()
+            dao.upsertAll(listOf(dao.find("m2")!!.copy(deletedAt = 1L)))
+            val burning = awaitItem()
+            assertThat(burning.map { it.message.id }).containsExactly("m1", "m2", "m3").inOrder()
+            assertThat(burning[1].message.content).isEqualTo("texte m2")
+            assertThat(isoToEpochMillisOrNull(burning[1].message.expiresAt)).isEqualTo(1_000L)
+            assertThat(awaitItem().map { it.message.id }).containsExactly("m1", "m3").inOrder()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `un message ordinaire supprime part sans feu`() = runHarnessTest { h ->
+        h.seed(1..3)
+        val dao = h.database.messageDao()
+        val source = h.source(now = { 1_000L })
+        source.observe().test {
+            assertThat(awaitItem()).hasSize(3)
+            dao.upsertAll(listOf(dao.find("m2")!!.copy(deletedAt = 1L)))
+            assertThat(awaitItem().map { it.message.id }).containsExactly("m1", "m3").inOrder()
             cancelAndIgnoreRemainingEvents()
         }
     }

@@ -11,6 +11,7 @@ import { createDraftStore } from '@/lib/send/draft-store';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadSceneExportCatalog } from '@/lib/i18n-scene-export-catalog';
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { FeedPostCard } from './feed-post-card';
@@ -188,6 +189,20 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     expect(journal).toEqual(['copy:Bonjour le fil']);
   });
 
+  test('refermé par un choix, le panneau SORT en fondu : encore peint, inerte, puis retiré (#18327)', async () => {
+    const { menu } = host('u-me');
+    monte(post(), menu);
+    const entrees = await ouvre();
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'copyText')?.click());
+    const sortant = document.querySelector('[role="menu"]');
+    expect(sortant?.hasAttribute('data-leaving')).toBe(true);
+    expect(sortant?.hasAttribute('inert')).toBe(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+    });
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+  });
+
   test('MA publication : « Supprimer » part vers l’hôte', async () => {
     const { menu, journal } = host('u-other');
     monte(post(), menu);
@@ -208,6 +223,52 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     expect(motif).not.toBeNull();
     act(() => motif?.click());
     expect(journal).toEqual(['report:p1:harassment']);
+  });
+
+  /**
+   * LE MENU EST UNE COUCHE, ET LA FEUILLE QU'IL OUVRE REPREND SON ENTRÉE (#18460, #7527).
+   * « Signaler » ferme le menu et ouvre la feuille dans le même commit : la feuille
+   * adopte l'entrée du menu. Sans adoption, le retour rendu par le menu (posté à
+   * la tâche suivante par le navigateur) fermerait la feuille à peine ouverte, ou
+   * laisserait une entrée orpheline qui avalerait un retour.
+   */
+  test('« Signaler » : la feuille adopte l’entrée du menu, et un seul retour la ferme', async () => {
+    const { menu } = host('u-me');
+    monte(post(), menu);
+    let pushes = 0;
+    const originalPush = window.history.pushState.bind(window.history);
+    const originalBack = window.history.back.bind(window.history);
+    window.history.pushState = (...args: Parameters<History['pushState']>) => {
+      pushes += 1;
+      originalPush(...args);
+    };
+    window.history.back = () => {
+      originalBack();
+      setTimeout(() => window.dispatchEvent(new PopStateEvent('popstate')), 0);
+    };
+    try {
+      window.history.replaceState(null, '', window.location.href);
+      const signaler = (await ouvre()).find((e) => e.dataset.feedPostAction === 'report');
+      await act(async () => {
+        signaler?.click();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      const ouverte = document.querySelector('[data-report-reason="harassment"]') !== null;
+      await act(async () => {
+        window.history.back();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      const state = window.history.state as { readonly backDismiss?: unknown } | null;
+      expect({
+        pushes,
+        ouverte,
+        fermee: document.querySelector('[data-report-reason="harassment"]') === null,
+        entreeRestante: typeof state?.backDismiss,
+      }).toEqual({ pushes: 1, ouverte: true, fermee: true, entreeRestante: 'undefined' });
+    } finally {
+      window.history.pushState = originalPush;
+      window.history.back = originalBack;
+    }
   });
 
   test('ouvrir la feuille de signalement le dit à l’hôte (#10503), avant tout motif', async () => {

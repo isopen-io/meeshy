@@ -135,6 +135,36 @@ class CallPillControlsTest {
     }
 
     @Test
+    fun `P18-3 - the reduced call says name and duration in one label, by the name I gave the person`() {
+        show(connected(), names = CallHeaderNames(givenName = "Mamie", groupName = null))
+
+        rule.onNodeWithText("Mamie · 01:05").assertExists()
+        rule.onNodeWithText("Alice").assertDoesNotExist()
+        rule.onNodeWithText("01:05").assertDoesNotExist()
+    }
+
+    @Test
+    fun `P18-3 - without a given name, the reduced call says the display name and the duration in one label`() {
+        show(connected())
+
+        rule.onNodeWithText("Alice · 01:05").assertExists()
+    }
+
+    @Test
+    fun `P18-3 - TalkBack names the person as the label does`() {
+        show(connected(), names = CallHeaderNames(givenName = "Mamie", groupName = null))
+
+        rule.onNodeWithContentDescription("Ongoing call with Mamie").performClick()
+    }
+
+    @Test
+    fun `P18-3 - in a group the reduced call is named after the group`() {
+        show(connected(), names = CallHeaderNames(givenName = "Mamie", groupName = "Famille"))
+
+        rule.onNodeWithText("Famille · 01:05").assertExists()
+    }
+
+    @Test
     fun `starting then stopping the share swaps the pill and the capsule, both ways`() = swapsBothWays(reduce = false)
 
     @Test

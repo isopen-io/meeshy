@@ -3,11 +3,11 @@
     <string name="security_section_encrypted_devices">Ende-zu-Ende-Verschlüsselung</string>
     <string name="encrypted_devices_title">Meine verschlüsselten Geräte</string>
     <string name="encrypted_devices_loading">Deine verschlüsselten Geräte werden geladen</string>
-    <string name="encrypted_devices_offline_empty">Du bist offline. Stelle eine Verbindung her, um deine verschlüsselten Geräte zu sehen.</string>
+    <string name="encrypted_devices_offline_empty">Offline: deine Geräte kommen mit dem Netz zurück.</string>
     <string name="encrypted_devices_error">Deine verschlüsselten Geräte konnten nicht geladen werden.</string>
     <string name="encrypted_devices_retry">Erneut versuchen</string>
-    <string name="encrypted_devices_offline">Du bist offline. Diese Liste ist möglicherweise nicht aktuell.</string>
-    <string name="encrypted_devices_stale">Diese Liste konnte nicht aktualisiert werden und ist möglicherweise nicht aktuell.</string>
+    <string name="encrypted_devices_offline">Offline: zuletzt bekannte Liste.</string>
+    <string name="encrypted_devices_stale">Aktualisierung fehlgeschlagen: zuletzt bekannte Liste.</string>
     <string name="encrypted_devices_current">Dieses Gerät</string>
     <string name="encrypted_devices_retiring">%1$s wird entfernt</string>
     <string name="encrypted_devices_retire_a11y">%1$s entfernen</string>

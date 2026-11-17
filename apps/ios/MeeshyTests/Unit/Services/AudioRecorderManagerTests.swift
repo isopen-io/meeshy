@@ -198,3 +198,34 @@ final class AudioRecorderManagerTests: XCTestCase {
         XCTAssertFalse(block.contains("audioRecorder.cancelRecording()"), "le démontage ne jette plus le vocal")
     }
 }
+
+/// **Démarrer un vocal ne gèle plus l'écran** (#18489) : `record()` part hors du
+/// fil principal, et l'enregistreur revenu se juge sur la tentative courante.
+final class RecorderStartOutcomeTests: XCTestCase {
+
+    func test_sameAttempt_andStarted_isLive() {
+        XCTAssertEqual(RecorderStartOutcome.resolve(attemptAtStart: 3, attemptNow: 3, started: true), .live)
+    }
+
+    func test_sameAttempt_notStarted_isFailed() {
+        XCTAssertEqual(RecorderStartOutcome.resolve(attemptAtStart: 3, attemptNow: 3, started: false), .failed)
+    }
+
+    func test_attemptMovedOn_isStale_whetherStartedOrNot() {
+        XCTAssertEqual(RecorderStartOutcome.resolve(attemptAtStart: 3, attemptNow: 4, started: true), .stale,
+                       "un arrêt pendant le démarrage l'emporte : ce qui a démarré s'arrête")
+        XCTAssertEqual(RecorderStartOutcome.resolve(attemptAtStart: 3, attemptNow: 4, started: false), .stale)
+    }
+
+    /// Garde de source : le matériel audio ne démarre que sur la file dédiée.
+    func test_recordStartsOnTheDedicatedQueue_neverInline() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/AudioRecorderManager.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        XCTAssertFalse(code.contains("recorder?.record()"), "record() ne part plus du fil principal (#18489)")
+        XCTAssertTrue(code.contains("Self.startQueue.async"), "le démarrage passe par la file dédiée")
+        XCTAssertTrue(code.contains("$0.prepareToRecord() && $0.record()"), "préparation et départ ensemble, hors du fil principal")
+        XCTAssertTrue(code.contains("RecorderStartOutcome.resolve("), "le retour se juge par la loi de tentative")
+    }
+}

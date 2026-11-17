@@ -98,6 +98,7 @@ import type {
   CallTranslationRequestEvent,
   CallTranslationRequestedEvent,
   CallTranslationResponseEvent,
+  CallSignalAck,
 } from '../video-call.js';
 import type {
   CallRecordingAck,
@@ -192,11 +193,22 @@ import type {
   NowPlayingClearedEventData,
   NowPlayingUpdatePayload,
 } from '../now-playing.js';
+import type {
+  BatteryChangedEventData,
+  BatteryClearedEventData,
+  BatteryPullAck,
+  BatteryPullPayload,
+  BatteryPullRequestedEventData,
+  BatteryReport,
+  BatteryReportAck,
+} from '../battery.js';
+import type { PhoneReachabilityChangedEventData, PhoneReachabilityClearedEventData } from '../phone-reachability.js';
 import type { BloodProximityEventData } from '../blood-location.js';
 import type {
   SharedLocationAck,
   SharedLocationChangedEventData,
   SharedLocationEndedEventData,
+  SharedLocationOwnChangedEventData,
   SharedLocationStartPayload,
   SharedLocationStopAck,
   SharedLocationUpdatePayload,
@@ -259,6 +271,12 @@ import type {
   ParticipantRightsUpdatedEventData,
   ParticipantRoleUpdatedEventData,
 } from './participant.js';
+import type {
+  CommunityMemberJoinedEventData,
+  CommunityMemberLeftEventData,
+  CommunityMemberRoleUpdatedEventData,
+  CommunityUpdatedEventData,
+} from './community.js';
 import type {
   UserPreferencesCommunityReorderedEventData,
   UserPreferencesReorderedEventData,
@@ -383,8 +401,14 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.TALKIE_ENDED]: (data: TalkieEndedEventData) => void;
   [SERVER_EVENTS.NOW_PLAYING_CHANGED]: (data: NowPlayingChangedEventData) => void;
   [SERVER_EVENTS.NOW_PLAYING_CLEARED]: (data: NowPlayingClearedEventData) => void;
+  [SERVER_EVENTS.BATTERY_CHANGED]: (data: BatteryChangedEventData) => void;
+  [SERVER_EVENTS.BATTERY_CLEARED]: (data: BatteryClearedEventData) => void;
+  [SERVER_EVENTS.BATTERY_PULL_REQUESTED]: (data: BatteryPullRequestedEventData) => void;
+  [SERVER_EVENTS.PHONE_UNREACHABLE]: (data: PhoneReachabilityChangedEventData) => void;
+  [SERVER_EVENTS.PHONE_REACHABLE]: (data: PhoneReachabilityClearedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_CHANGED]: (data: SharedLocationChangedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_ENDED]: (data: SharedLocationEndedEventData) => void;
+  [SERVER_EVENTS.SHARED_LOCATION_OWN_CHANGED]: (data: SharedLocationOwnChangedEventData) => void;
   [SERVER_EVENTS.BLOOD_PROXIMITY]: (data: BloodProximityEventData) => void;
   [SERVER_EVENTS.TOGETHER_INVITED]: (data: TogetherInvitedEventData) => void;
   [SERVER_EVENTS.TOGETHER_STARTED]: (data: TogetherStartedEventData) => void;
@@ -469,6 +493,12 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.USER_PREFERENCES_COMMUNITY_REORDERED]: (
     data: UserPreferencesCommunityReorderedEventData
   ) => void;
+
+  // Communautés (#16857)
+  [SERVER_EVENTS.COMMUNITY_UPDATED]: (data: CommunityUpdatedEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_MEMBER_JOINED]: (data: CommunityMemberJoinedEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_MEMBER_LEFT]: (data: CommunityMemberLeftEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_MEMBER_ROLE_UPDATED]: (data: CommunityMemberRoleUpdatedEventData) => void;
 
   // Packs
   [SERVER_EVENTS.PACK_INSTALLATION_UPDATED]: (data: PackInstallationUpdatedEventData) => void;
@@ -559,6 +589,8 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.TALKIE_JOIN]: (data: TalkieJoinPayload) => void;
   [CLIENT_EVENTS.NOW_PLAYING_UPDATE]: (data: NowPlayingUpdatePayload, callback?: (response: NowPlayingAck) => void) => void;
   [CLIENT_EVENTS.NOW_PLAYING_CLEAR]: (data: Record<string, never>, callback?: (response: NowPlayingClearAck) => void) => void;
+  [CLIENT_EVENTS.BATTERY_REPORT]: (data: BatteryReport, callback?: (response: BatteryReportAck) => void) => void;
+  [CLIENT_EVENTS.BATTERY_PULL]: (data: BatteryPullPayload, callback?: (response: BatteryPullAck) => void) => void;
   [CLIENT_EVENTS.SHARED_LOCATION_START]: (data: SharedLocationStartPayload, callback?: (response: SharedLocationAck) => void) => void;
   [CLIENT_EVENTS.SHARED_LOCATION_UPDATE]: (data: SharedLocationUpdatePayload, callback?: (response: SharedLocationAck) => void) => void;
   [CLIENT_EVENTS.SHARED_LOCATION_STOP]: (data: Record<string, never>, callback?: (response: SharedLocationStopAck) => void) => void;
@@ -656,7 +688,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_INITIATE]: (data: CallInitiateEvent, ack?: (response: CallInitiateAck) => void) => void;
   [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent, ack?: (response: CallJoinAck) => void) => void;
   [CLIENT_EVENTS.CALL_LEAVE]: (data: { callId: string }) => void;
-  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack?: (response: { success: boolean }) => void) => void;
+  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack?: (response: CallSignalAck) => void) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: CallMediaToggleClientEvent) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: CallMediaToggleClientEvent) => void;
   [CLIENT_EVENTS.CALL_TOGGLE_SCREEN]: (data: CallMediaToggleClientEvent) => void;

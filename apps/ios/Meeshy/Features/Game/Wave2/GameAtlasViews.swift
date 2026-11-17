@@ -25,6 +25,7 @@ struct GameAtlasPage: View {
 struct GameAtlasScreen: View {
     @ObservedObject var model: GameWave2Model
     let game: GameBlock
+    @State private var openNoteID: String?
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -51,7 +52,7 @@ struct GameAtlasScreen: View {
 
     private func header(_ atlas: GameAtlasBlock) -> some View {
         let count = GameText.atlasCount(stamped: GameCopy.formatCount(atlas.stamped), total: GameCopy.formatCount(atlas.total))
-        return GameCard(tint: MeeshyColors.brandPrimary, title: GameText.atlasTitle) {
+        return GameCard(tint: MeeshyColors.brandPrimary) {
             Text(count)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
@@ -91,9 +92,6 @@ struct GameAtlasScreen: View {
                         .frame(width: 64, height: 64)
                         .accessibilityHidden(true)
                 }
-            }
-            if remaining > 0 {
-                GameNote(text: GameText.atlasRemaining(remaining: GameCopy.formatCount(remaining)))
             }
         }
         .accessibilityIdentifier("game.atlas.stamps")
@@ -139,7 +137,7 @@ struct GameAtlasScreen: View {
             ) { level in
                 Task { await model.setVisibility(atlas: level) }
             }
-            GameNote(text: GameText.atlasPrivacy)
+            GameNoteInfo(text: GameText.atlasPrivacy, note: GameText.atlasPrivacyNote, openNoteID: $openNoteID)
             GameErrorLine(message: model.errors.visibility, identifier: "game.atlas.visibility.error")
             GameOfflineNote(online: model.isOnline)
         }

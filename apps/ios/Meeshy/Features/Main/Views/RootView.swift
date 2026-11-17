@@ -106,6 +106,10 @@ struct RootView: View {
     /// notification toast — presented as a reusable `ConversationView` preview
     /// (last messages + simple composer) over the current page.
     @State private var notificationPreviewConversation: Conversation?
+    /// Le cran où la feuille d'aperçu s'ouvre : moyen à l'appui long, grand
+    /// quand la bannière tirée s'y transforme (#18721) — c'est le cadre où
+    /// l'enveloppe du morphisme s'est posée.
+    @State private var notificationPreviewDetent: PresentationDetent = .medium
     /// Mood à republier depuis la bulle (hôte racine) — présente le composer
     /// de statut pré-rempli. Anciennement dans ConversationListView, mort.
     @State private var republishStatusEntry: StatusEntry?
@@ -247,12 +251,7 @@ struct RootView: View {
             // 8. Toast overlay — handled at MeeshyApp level to avoid duplicates
 
             // 9. Notification toast overlay (socket real-time)
-            RootNotificationToastOverlay(
-                notificationManager: notifications.manager,
-                suppressToastTap: suppressToastTap,
-                onTap: handleSocketNotificationTap,
-                onPreview: openNotificationPreview(for:)
-            )
+            notificationToastOverlay
         }
         // Chaque couche est un `ViewModifier` NOMINAL (#5837) : la chaîne de 46
         // modificateurs imbriquait 66 niveaux dans le type de ce `body`, ~1095 Ko
@@ -277,6 +276,7 @@ struct RootView: View {
             storyViewerCoordinator: storyViewerCoordinator,
             storyZoomNamespace: storyZoomNamespace,
             notificationPreviewConversation: $notificationPreviewConversation,
+            notificationPreviewDetent: $notificationPreviewDetent,
             onOpenFullConversation: { router.navigateToConversation($0) }
         ))
         .modifier(RootStoryDoorsLayer(
@@ -741,7 +741,29 @@ struct RootView: View {
     /// of navigating away. Resolves the conversation cache-first (in-memory →
     /// GRDB → network), falling back to normal navigation when it isn't a
     /// conversation notification or can't be resolved.
-    private func openNotificationPreview(for event: SocketNotificationEvent) {
+    /// La bannière socket : toucher l'ouvre, appui long ou traction la
+    /// regarde sans la marquer lue (#18721).
+    private var notificationToastOverlay: some View {
+        RootNotificationToastOverlay(
+            notificationManager: notifications.manager,
+            suppressToastTap: suppressToastTap,
+            onTap: handleSocketNotificationTap,
+            onPreview: { openNotificationPreview(for: $0) },
+            onPulledOpen: { openNotificationPreview(for: $0, pulled: true) },
+            onPullBegan: { event in
+                guard let id = event.conversationId, !id.isEmpty else { return }
+                Task { await conversationViewModel.loadPreviewMessages(for: id) }
+            },
+            envelopeSource: BannerEnvelopeSource(loader: conversationViewModel.previewLoader) { id in
+                conversationViewModel.conversations.first { $0.id == id }
+            }
+        )
+    }
+
+    /// Tirée (`pulled`), la bannière s'est déjà transformée en la feuille au
+    /// cran grand, et la main a déjà senti l'ouverture : ni second haptique,
+    /// ni autre cran.
+    private func openNotificationPreview(for event: SocketNotificationEvent, pulled: Bool = false) {
         guard let conversationId = event.conversationId, !conversationId.isEmpty, ConversationOpenRoute.mayPreview(conversationId) else {
             handleSocketNotificationTap(event)
             return
@@ -750,7 +772,8 @@ struct RootView: View {
         // long-press / drag, then re-arm shortly after.
         suppressToastTap = true
         delayed.run(after: .milliseconds(600)) { suppressToastTap = false }
-        HapticFeedback.medium()
+        if !pulled { HapticFeedback.medium() }
+        notificationPreviewDetent = pulled ? .large : .medium
         notifications.manager.dismissToast()
 
         // Fast path: in-memory conversation list.
@@ -867,8 +890,8 @@ struct RootView: View {
         reelsRevealClosing = false
         reelsRevealMasked = true
         reelsRevealProgress = 0
-        let duration: Double = reduceMotionEnabled ? 0.18 : 0.35
-        withAnimation(.easeOut(duration: duration)) {
+        let duration = ReelsRevealMotion.duration(opening: true, reduceMotion: reduceMotionEnabled)
+        ReelsRevealMotion.animate(opening: true, reduceMotion: reduceMotionEnabled) {
             reelsRevealProgress = 1
         }
         // Wait for the reveal to FINISH before the first reel plays. Starting
@@ -907,8 +930,8 @@ struct RootView: View {
         // laissant le moteur vidéo (repris par la surface de fond du feed).
         PlaybackCoordinator.shared.stopAllAudio()
         HapticFeedback.light()
-        let duration: Double = reduceMotionEnabled ? 0.18 : 0.3
-        withAnimation(.easeIn(duration: duration)) {
+        let duration = ReelsRevealMotion.duration(opening: false, reduceMotion: reduceMotionEnabled)
+        ReelsRevealMotion.animate(opening: false, reduceMotion: reduceMotionEnabled) {
             reelsRevealProgress = 0
         }
         Task {
@@ -920,9 +943,20 @@ struct RootView: View {
 
     // MARK: - Floating chrome (boutons + menu), au-dessus du chrome global
 
-    @ViewBuilder
+    /// Le chrome entre et sort en fondu pour chaque raison qui le retire : pile
+    /// profonde, réel ouvert, onboarding ; fondu court sous « Réduire les animations ».
     private var floatingChrome: some View {
-        if !router.isDeepRoute && reelsPresenter.launch == nil && !onboardingPresence.isPresented {
+        ZStack { floatingChromeContent }
+            .meeshyAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, value: floatingChromeIsShown)
+    }
+
+    private var floatingChromeIsShown: Bool {
+        !router.isDeepRoute && reelsPresenter.launch == nil && !onboardingPresence.isPresented
+    }
+
+    @ViewBuilder
+    private var floatingChromeContent: some View {
+        if floatingChromeIsShown {
             RootFloatingChrome(
                 showFeed: $showFeed,
                 showMenu: $showMenu,
@@ -933,6 +967,7 @@ struct RootView: View {
                 peekPresence: .shared,
                 onPush: { router.push($0) }
             )
+            .meeshyTransition(.opacity)
         }
     }
 }

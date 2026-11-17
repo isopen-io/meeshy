@@ -29,10 +29,4 @@ class ConversationSectionTitleTest {
     fun `the pinned section is titled like a section in french`() {
         assertThat(title()).isEqualTo("Épinglées")
     }
-
-    @Test
-    fun `the row pin glyph keeps its own accessibility label`() {
-        val context = RuntimeEnvironment.getApplication()
-        assertThat(context.getString(R.string.conversations_badge_pinned)).isEqualTo("pinned")
-    }
 }

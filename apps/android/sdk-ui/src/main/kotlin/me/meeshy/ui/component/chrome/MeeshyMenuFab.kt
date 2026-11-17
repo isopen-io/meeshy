@@ -51,12 +51,17 @@ public data class RadialMenuItem(
     val label: String,
     val color: Color,
     val badgeCount: Int = 0,
+    /** Le point de coin sans chiffre (« quelque chose t'attend ici », #18165) ; une pastille de compte prend sa place. */
+    val dot: Boolean = false,
     val onSelect: () -> Unit,
 )
 
 /** Etiquettes de test : le voile et chaque barreau (`menu-ladder-rung-<index>`). */
 public const val MENU_LADDER_VEIL_TAG: String = "menu-ladder-veil"
 public fun menuLadderRungTag(index: Int): String = "menu-ladder-rung-$index"
+
+/** Le point de coin d'un barreau qui signale sans compter (#18165). */
+public const val MENU_LADDER_RUNG_DOT_TAG: String = "menu-ladder-rung-dot"
 
 /** Cible tactile d'un barreau : le disque de 46 dp iOS, porte a 48 dp de toucher. */
 private val RUNG_TARGET = 48.dp
@@ -194,6 +199,18 @@ private fun LadderRung(
                 contentDescription = null,
                 tint = MeeshyPalette.White,
                 modifier = Modifier.size((FloatingMenuLadder.ITEM_SIZE * 0.39f).dp),
+            )
+        }
+        if (item.dot && item.badgeCount <= 0) {
+            // Le point blanc, meme coin que la pastille — miroir de `ThemedActionButton.showsDot` iOS.
+            val shift = (FloatingMenuLadder.ITEM_SIZE * 0.33f).dp
+            Box(
+                modifier = Modifier
+                    .offset(x = shift, y = -shift)
+                    .size(10.dp)
+                    .shadow(elevation = 2.dp, shape = CircleShape)
+                    .background(MeeshyPalette.White, CircleShape)
+                    .testTag(MENU_LADDER_RUNG_DOT_TAG),
             )
         }
         if (item.badgeCount > 0) {

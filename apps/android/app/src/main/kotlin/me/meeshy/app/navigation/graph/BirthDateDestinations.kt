@@ -1,5 +1,6 @@
 package me.meeshy.app.navigation.graph
 
+import me.meeshy.app.navigation.popFrom
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
@@ -14,7 +15,7 @@ import me.meeshy.app.settings.BirthDateDeclarationScreen
 /** L'ecran de declaration de la date de naissance (`PUT me/birth-date`, une seule fois). */
 class BirthDateDestinations @Inject constructor() : NavGraphContributor {
     override fun contribute(builder: NavGraphBuilder, navController: NavHostController) {
-        builder.composable(ROUTE) { BirthDateDeclarationScreen(onBack = { navController.popBackStack() }) }
+        builder.composable(ROUTE) { entry -> BirthDateDeclarationScreen(onBack = { navController.popFrom(entry) }) }
     }
 
     companion object {

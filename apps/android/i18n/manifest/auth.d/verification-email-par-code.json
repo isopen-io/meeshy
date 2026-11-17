@@ -12,7 +12,7 @@
         },
         {
           "catalog": "app",
-          "iosKey": "emailVerification.provenElsewhere.title",
+          "iosKey": "emailVerification.success",
           "status": "adopted",
           "androidName": "email_verification_proven_elsewhere_title"
         },

@@ -9,6 +9,7 @@
 const fr = {
   'callStudio.effects.color': 'Couleur',
   'callStudio.effects.settings': 'Réglages',
+  'callStudio.effects.panel': 'Réglages de mon image',
   'callStudio.face.none': 'Aucun',
   'callStudio.face.smoothing': 'Lissage de peau',
   'callStudio.face.toad': 'Crapaud',

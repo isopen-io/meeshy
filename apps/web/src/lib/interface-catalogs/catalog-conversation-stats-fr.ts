@@ -29,7 +29,7 @@ const fr = {
   'conversationStats.loading': 'Chargement des statistiques',
   'conversationStats.error': 'Impossible de charger les statistiques.',
   'conversationStats.retry': 'Réessayer',
-  'conversationStats.empty': 'Aucun message pour l’instant — les statistiques viendront avec la conversation.',
+  'conversationStats.empty': 'Aucun message',
   'conversationStats.offline': 'Hors ligne — dernières statistiques connues.',
   'conversationStats.offline_empty': 'Hors ligne — les statistiques n’ont pas encore été chargées.',
 } as const;

@@ -4,8 +4,9 @@ import type { SoundsMineCatalog } from '@/lib/i18n-sounds-mine-catalog';
 const de = {
   'soundsMine.title': 'Meine Sounds',
   'soundsMine.back': 'Zurück zu den Einstellungen',
-  'soundsMine.empty.title': 'Keine Sounds in deiner Bibliothek',
+  'soundsMine.empty.title': 'Kein Ton',
   'soundsMine.empty.subtitle': 'Sounds, die du hochlädst oder die aus deinen Videos extrahiert werden, erscheinen hier.',
+  'soundsMine.empty.question': 'Woher kommen meine Töne?',
   'soundsMine.error.title': 'Deine Sounds konnten nicht geladen werden',
   'soundsMine.untitled': 'Originalsound',
   'soundsMine.posts.one': '{count} Beitrag',

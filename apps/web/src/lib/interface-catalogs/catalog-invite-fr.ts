@@ -35,6 +35,7 @@ const fr = {
   'invite.stats.languages.one': 'langue parlée',
   'invite.stats.languages.other': 'langues parlées',
   'invite.stats.spoken': 'On y parle',
+  'invite.more': 'Plus',
   'invite.stats.share': '{language} {percent}',
   'invite.rights.title': 'En anonyme, tu pourras',
   'invite.rights.messages': 'Écrire des messages',

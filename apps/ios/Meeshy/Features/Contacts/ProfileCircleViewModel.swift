@@ -88,6 +88,36 @@ final class ProfileCircleViewModel: ObservableObject {
         max(shownLevel ?? .public, toolLevel ?? .public) >= RelationFeature.together.minimumLevel
     }
 
+    /// La batterie de la personne (#14147) : le détail et mon partage dès Proche (`device.battery`), la demande de
+    /// relevé au Sang seulement (`device.battery.pull`). La passerelle rejuge à chaque lecture et à chaque demande.
+    var offersBattery: Bool {
+        effectiveToolLevel >= RelationFeature.deviceBattery.minimumLevel
+    }
+
+    var offersBatteryPull: Bool {
+        effectiveToolLevel >= RelationFeature.deviceBatteryPull.minimumLevel
+    }
+
+    /// Entre Sangs, le partage est actif d'office ; à Proche, il se consent une fois.
+    var batteryAsksConsent: Bool {
+        effectiveToolLevel == .close
+    }
+
+    /// « Prévenir {name} si mon téléphone est injoignable » (#18737) : dès Proche (`device.unreachable`). La passerelle
+    /// rejuge à chaque lecture.
+    var offersPhoneReachability: Bool {
+        effectiveToolLevel >= RelationFeature.deviceUnreachable.minimumLevel
+    }
+
+    /// Entre Sangs, le partage est actif d'office ; à Proche, il se consent une fois — comme la batterie.
+    var phoneReachabilityAsksConsent: Bool {
+        effectiveToolLevel == .close
+    }
+
+    private var effectiveToolLevel: RelationLevel {
+        max(shownLevel ?? .public, toolLevel ?? .public)
+    }
+
     /// « Partager ma position » se PROPOSE dès Ami (feature `location.temporary`, #16983), par le lien affiché ou par le
     /// verdict servi. La passerelle rejuge la loi à chaque envoi et ne sert rien sous Ami.
     var offersSharedLocation: Bool {

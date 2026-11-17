@@ -336,3 +336,27 @@ describe('resolveLastMessagePreviewGroup — la nature du dernier message', () =
     expect(group.location).toMatchObject({ latitude: 48.85, longitude: 2.35 });
   });
 });
+
+describe('resolveLastMessagePreviewGroup — l’échéance de CE lecteur (#18556)', () => {
+  const durationEphemeral = () =>
+    makeMessage({ effectFlags: 1, ephemeralDuration: 30, expiresAt: new Date('2026-09-30T12:00:00Z') });
+
+  it('un éphémère à durée échu pour ce lecteur part expiré, sans texte, daté de son échéance', () => {
+    const deadline = new Date('2026-09-23T11:59:00Z');
+
+    const group = resolveLastMessagePreviewGroup(reader, durationEphemeral(), NOW, { servedExpiresAt: deadline });
+
+    expect(group.lastMessagePreview).toBe('');
+    expect(group.lastMessageTranslations).toBeNull();
+    expect(group.lastMessageExpiresAt).toBe(deadline.toISOString());
+  });
+
+  it('le même éphémère, encore vivant pour ce lecteur, garde son aperçu', () => {
+    const group = resolveLastMessagePreviewGroup(reader, durationEphemeral(), NOW, {
+      servedExpiresAt: new Date('2026-09-23T12:00:30Z'),
+    });
+
+    expect(group.lastMessagePreview).not.toBe('');
+    expect(group.lastMessageExpiresAt).toBeNull();
+  });
+});

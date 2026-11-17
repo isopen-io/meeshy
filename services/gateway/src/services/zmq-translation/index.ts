@@ -15,6 +15,7 @@ export type {
   TranslationResult,
   TranslationCompletedEvent,
   TranslationErrorEvent,
+  TranslationErrorPayload,
   TranslationEvent,
 
   // Audio types

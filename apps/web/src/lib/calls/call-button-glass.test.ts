@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { CALL_BUTTON_TONES, callButtonGlassTreatment } from './call-button-glass';
+import { CALL_BUTTON_TONES, callButtonGlassTreatment, callOutputButtonTone } from './call-button-glass';
+import { callOutputRouting } from './call-output';
 
 /**
  * #17345 · #17418 — la loi pure qui choisit le verre de CHAQUE bouton de
@@ -50,5 +51,52 @@ describe('le verre de chaque bouton de l’appel', () => {
     expect(callButtonGlassTreatment('disc').drawsPressHighlight).toBe(true);
     expect(callButtonGlassTreatment('active').drawsPressHighlight).toBe(false);
     expect(callButtonGlassTreatment('danger').drawsPressHighlight).toBe(false);
+  });
+});
+
+/**
+ * P1.6 · #17843 — l'état de « Sortie » dans la pilule, miroir de `CallOutputButtonRule` (iOS,
+ * `CallButtonGlassRuleTests`) et d'Android (#18411), mêmes vecteurs. En appel vidéo le haut-parleur
+ * démarre allumé d'office : c'est le repos, un disque. Un appareil externe est un choix : disque blanc,
+ * en audio comme en vidéo.
+ */
+describe('« Sortie » suit la loi de la sortie (P1.6, #17843)', () => {
+  test('en appel vidéo, Sortie reste un disque au repos, même haut-parleur allumé', () => {
+    expect(callOutputButtonTone({ isSpeaker: true, routesExternally: false, isVideoCall: true })).toBe('disc');
+    expect(callOutputButtonTone({ isSpeaker: false, routesExternally: false, isVideoCall: true })).toBe('disc');
+  });
+
+  test('en appel audio, Sortie s’allume quand le haut-parleur est allumé', () => {
+    expect(callOutputButtonTone({ isSpeaker: true, routesExternally: false, isVideoCall: false })).toBe('active');
+    expect(callOutputButtonTone({ isSpeaker: false, routesExternally: false, isVideoCall: false })).toBe('disc');
+  });
+
+  test('vers un appareil externe, Sortie s’allume dans tout appel', () => {
+    for (const isVideoCall of [true, false]) expect(callOutputButtonTone({ isSpeaker: false, routesExternally: true, isVideoCall })).toBe('active');
+  });
+});
+
+/**
+ * Où part le son, lu par le web (P1.6) : la route que rapporte la coque décide — filaire et Bluetooth
+ * sont externes, le haut-parleur suit la loi du haut-parleur, l'écouteur est le repos (vecteurs de
+ * `CallOutputButtonRule.kind(activeRoute:)` d'Android). Hors coque, le navigateur n'a pas de
+ * haut-parleur : une sortie CHOISIE et branchée est un appareil externe, le défaut du système ne l'est pas.
+ */
+describe('où part le son, côté web', () => {
+  test('la route de la coque décide : filaire et Bluetooth allument Sortie en audio comme en vidéo', () => {
+    for (const route of ['wired', 'bluetooth'] as const)
+      for (const isVideoCall of [true, false]) expect(callOutputButtonTone({ ...callOutputRouting({ route, sinkChosen: false }), isVideoCall })).toBe('active');
+  });
+
+  test('le haut-parleur de la coque suit la loi du haut-parleur ; l’écouteur est le repos', () => {
+    expect(callOutputRouting({ route: 'speaker', sinkChosen: false })).toEqual({ isSpeaker: true, routesExternally: false });
+    expect(callOutputButtonTone({ ...callOutputRouting({ route: 'speaker', sinkChosen: false }), isVideoCall: false })).toBe('active');
+    expect(callOutputButtonTone({ ...callOutputRouting({ route: 'speaker', sinkChosen: false }), isVideoCall: true })).toBe('disc');
+    expect(callOutputRouting({ route: 'earpiece', sinkChosen: true })).toEqual({ isSpeaker: false, routesExternally: false });
+  });
+
+  test('dans le navigateur, une sortie choisie et branchée est externe ; le défaut du système ne l’est pas', () => {
+    expect(callOutputRouting({ route: null, sinkChosen: true })).toEqual({ isSpeaker: false, routesExternally: true });
+    expect(callOutputRouting({ route: null, sinkChosen: false })).toEqual({ isSpeaker: false, routesExternally: false });
   });
 });

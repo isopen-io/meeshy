@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import MeeshySDK
 
 /// **La scène se pose PAR-DESSUS le viseur, et ce que prend le viseur en devient le fond**
@@ -31,12 +32,13 @@ nonisolated enum ComposerViewfinderScene {
         replacesBackground || !effects.hasVisualBackgroundMedia
     }
 
-    /// Les objets se montrent-ils sur le viseur ? Armé ou filmant, hors retouche (plein écran,
-    /// elle cadre la prise seule), s'il y a quelque chose à montrer, et seulement si la prise en
+    /// Les objets se montrent-ils sur le viseur ? Armé, filmant ou en retouche (#18654 : le
+    /// sticker posé depuis la colonne s'y voit) — sauf pendant le recadrage, qui pose la prise
+    /// dans un cadre —, s'il y a quelque chose à montrer, et seulement si la prise en
     /// sera le fond : sinon l'aperçu mentirait sur ce qui passe dessous.
-    static func showsSceneObjects(stage: ComposerSceneCameraStage, editing: Bool,
+    static func showsSceneObjects(stage: ComposerSceneCameraStage, cropFrames: Bool,
                                   effects: StoryEffects, replacesBackground: Bool) -> Bool {
-        guard stage != .off, !editing, hasObjects(effects) else { return false }
+        guard stage != .off, !cropFrames, hasObjects(effects) else { return false }
         return captureFoundsBackground(effects: effects, replacesBackground: replacesBackground)
     }
 
@@ -54,15 +56,68 @@ nonisolated enum ComposerViewfinderScene {
         case sceneObject
         /// Une zone vide : toucher-photo, appui long-vidéo, zoom.
         case capture
+        /// Une zone vide pendant qu'on écrit : la saisie se termine, rien n'est pris.
+        case endTyping
+        /// La galerie ouverte par-dessus (#18709) : le toucher la referme, sans prise ni zoom.
+        case closeLibrary
     }
 
-    static func route(onChrome: Bool, onSceneObject: Bool, objectsTakeTouches: Bool) -> Touch {
+    static func route(onChrome: Bool, onSceneObject: Bool, objectsTakeTouches: Bool, typing: Bool = false,
+                      libraryOpen: Bool = false) -> Touch {
         if onChrome { return .chrome }
-        return onSceneObject && objectsTakeTouches ? .sceneObject : .capture
+        if libraryOpen { return .closeLibrary }
+        if onSceneObject && objectsTakeTouches { return .sceneObject }
+        return typing ? .endTyping : .capture
+    }
+
+    /// **Le texte qui se saisit SUR le viseur** (#18638) : celui du modèle, tant que l'aperçu se
+    /// montre avec les objets de la scène. `nil` : la scène saisit elle-même. Un seul canvas
+    /// tient le clavier.
+    static func typedTextId(showsViewfinder: Bool, showsSceneObjects: Bool, editingTextId: String?) -> String? {
+        showsViewfinder && showsSceneObjects ? editingTextId : nil
+    }
+
+    /// Le plancher de la saisie, à l'écran : le haut du clavier (sa barre comprise) ; sans
+    /// clavier à l'écran, aucun plancher.
+    static func typingFloor(keyboardEndFrame: CGRect, screenHeight: CGFloat) -> CGFloat {
+        keyboardEndFrame.height > 0 && keyboardEndFrame.minY < screenHeight ? keyboardEndFrame.minY : .greatestFiniteMagnitude
+    }
+
+    /// Où se posent les objets : à la place de la carte ; pendant la frappe, à celle qu'elle
+    /// avait à son début — la scène couverte se réduit pour le clavier, l'aperçu garde l'écran.
+    static func objectsFrame(card: CGRect, heldWhileTyping: CGRect?, typing: Bool) -> CGRect {
+        typing ? heldWhileTyping ?? card : card
+    }
+
+    /// Le voile posé sur TOUT l'aperçu pendant la frappe : le texte reste lisible sur l'image vive.
+    static let typingVeilOpacity: Double = 0.35
+
+    /// Pendant la frappe, le déclencheur, le rail et la phrase du geste cèdent au clavier.
+    static func servesCaptureControls(typing: Bool) -> Bool {
+        !typing
     }
 
     /// Les objets prennent le doigt viseur armé seulement : une tenue ou une prise garde le sien.
+    /// En retouche aussi (#18712) : chaque objet posé sur la prise se déplace au doigt, un toucher
+    /// à vide y cadre toujours la prise.
     static func objectsTakeTouches(stage: ComposerSceneCameraStage, holding: Bool) -> Bool {
         stage == .armed && !holding
+    }
+
+    /// Ce que fait un toucher sur un objet du viseur (#18786).
+    enum TapOutcome: Equatable, Sendable {
+        case select
+        case editText
+    }
+
+    /// **Toucher un texte ouvre sa saisie** et sa barre de réglages ; le glisser le déplace
+    /// toujours. Les autres objets se sélectionnent.
+    static func tapOutcome(kind: StoryCanvasUIView.CanvasItemKind?) -> TapOutcome {
+        kind == .text ? .editText : .select
+    }
+
+    /// **Pendant le glisser d'un objet, seuls l'objet et ses cibles restent** (#18787).
+    static func showsChrome(dragging: Bool) -> Bool {
+        !dragging
     }
 }

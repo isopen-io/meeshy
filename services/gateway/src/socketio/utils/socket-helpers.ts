@@ -51,26 +51,31 @@ export interface SocketUser {
    * marqueur, une socket absente de la room était tenue pour joignable et le
    * message n'allait nulle part — ni émission vive, ni rejeu.
    *
-   * ABSENT ou vide = joignable partout, le cas nominal. L'ensemble est
-   * RECALCULÉ à chaque authentification, donc une reconnexion qui rejoint
-   * correctement ses rooms l'efface d'elle-même.
+   * ABSENT ou vide = joignable partout, le cas nominal.
+   *
+   * **CE CHAMP EST DÉRIVÉ, il ne s'écrit plus à la main (#16726).** La
+   * joignabilité est un fait de SOCKET, et cette entrée est par COMPTE : elle
+   * porte l'INTERSECTION des verdicts des sockets vivantes du compte, que
+   * `withCombinedReachability` (`socketio/socketReachability.ts`) recalcule à
+   * chaque authentification, à chaque déconnexion et à chaque jonction de
+   * mi-session. Le fait par socket vit dans `socket.data`.
+   *
+   * L'intersection, parce qu'un compte est joignable dès qu'UNE de ses sockets
+   * est dans la room : l'union enfilerait pour un compte que la diffusion
+   * atteint (doublon à la remise), et le dernier écrit PERDRAIT — c'est ce que
+   * #16726 a coûté, le survivant malade héritant d'une entrée sans marqueur.
    *
    * **CE QUE CE MARQUEUR NE COUVRE PAS**, énuméré parce qu'un invariant annoncé
    * plus fort qu'il n'est vaut moins que pas d'invariant :
    *
-   * - **Zéro room jointe, zéro marqueur (#16719).** `_joinUserConversations`
-   *   enveloppe la LECTURE des participants et les jonctions dans un seul
-   *   `try` ; si la lecture lève, la socket ne rejoint AUCUNE room et la
-   *   fonction rend `[]`, donc aucun marqueur. C'est le cas strictement PIRE
-   *   que celui d'ici, et un `ReadonlySet` d'ids ne peut pas le dire — il
-   *   faudrait une seconde forme (« injoignable partout »).
-   * - **Le marqueur est perdu au départ de l'appareil SAIN (#16726).**
-   *   Granularité par UTILISATEUR, comme `connectedUsers` lui-même. Un second
-   *   appareil sain écrase le marqueur, ce qui est juste tant qu'il vit —
-   *   l'utilisateur EST joignable par la room. Mais `_handleDisconnect` recopie
-   *   l'entrée en ne changeant que `socketId` : quand l'appareil sain part, le
-   *   survivant malade hérite d'une entrée SANS marqueur. L'inverse (le malade
-   *   écrase un état sain) arme la file à tort pour toute la vie de sa socket.
+   * - **Zéro room jointe** quand la LECTURE des participants tombe au
+   *   handshake : un `ReadonlySet` d'ids ne peut pas dire « toutes, dont
+   *   j'ignore la liste ». C'est `allConversationRoomsUnreachable`, déclaré
+   *   juste en dessous, qui le dit (#16687 suite, #16719).
+   * - **La portée reste celle du NŒUD.** `connectedUsers` est une carte de
+   *   processus : un compte connecté à un autre nœud n'y a pas d'entrée, donc
+   *   pas de marqueur — la file l'enfile comme hors ligne, ce qui est le repli
+   *   juste. La JONCTION, elle, traverse désormais l'adaptateur (#18381).
    * - La convergence de l'appareil resté muet est une question distincte
    *   (#16688).
    */

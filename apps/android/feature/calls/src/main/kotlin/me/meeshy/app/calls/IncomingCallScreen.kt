@@ -156,7 +156,7 @@ internal fun IncomingCallScreen(
                 onToggleCamera = { cameraOn = !cameraOn },
                 actionGap = spacing.actionGap,
                 bottom = spacing.bottom,
-                actions = { IncomingActionsRow(actions, acceptsVideo, perform) },
+                actions = { IncomingActionsRow(actions, acceptsVideo, layout, perform) },
                 messageButton = messageButton,
             )
         } else {
@@ -170,7 +170,7 @@ internal fun IncomingCallScreen(
                 preview = preview,
                 onTogglePreviewSound = onTogglePreviewSound,
                 messageButton = messageButton,
-                actions = { IncomingActionsRow(actions, acceptsVideo, perform) },
+                actions = { IncomingActionsRow(actions, acceptsVideo, layout, perform) },
             )
         }
     }
@@ -357,7 +357,12 @@ private fun IncomingCallerName(title: String, modifier: Modifier = Modifier) {
 
 /** Refuser · (Sans vidéo) · Répondre, la rangée de boutons ronds légendés, commune aux deux dispositions. */
 @Composable
-private fun IncomingActionsRow(actions: List<IncomingCallAction>, acceptsVideo: Boolean, onPerform: (IncomingCallAction) -> Unit) {
+private fun IncomingActionsRow(
+    actions: List<IncomingCallAction>,
+    acceptsVideo: Boolean,
+    layout: IncomingCallLayout,
+    onPerform: (IncomingCallAction) -> Unit,
+) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(IncomingCallChoices.buttonSpacingDp(actions.size).dp),
         verticalAlignment = Alignment.Top,
@@ -366,6 +371,7 @@ private fun IncomingActionsRow(actions: List<IncomingCallAction>, acceptsVideo: 
             IncomingChoice(
                 action = action,
                 acceptsVideo = acceptsVideo,
+                layout = layout,
                 compact = actions.size > 2,
                 onPerform = { onPerform(action) },
             )
@@ -463,8 +469,8 @@ private fun DeclineWithMessageButton(onClick: () -> Unit) {
 
 /** Un bouton de l'écran entrant, tel que la règle le nomme ; son aspect vient de [IncomingChoiceLooks] (vue P17). */
 @Composable
-private fun IncomingChoice(action: IncomingCallAction, acceptsVideo: Boolean, compact: Boolean, onPerform: () -> Unit) {
-    val look = IncomingChoiceLooks.of(action, acceptsVideo)
+private fun IncomingChoice(action: IncomingCallAction, acceptsVideo: Boolean, layout: IncomingCallLayout, compact: Boolean, onPerform: () -> Unit) {
+    val look = IncomingChoiceLooks.of(action, acceptsVideo, layout)
     val (caption, description, hint) = when (action) {
         IncomingCallAction.Decline -> Triple(R.string.call_incoming_decline, R.string.call_action_decline, R.string.call_incoming_decline_hint)
         IncomingCallAction.AnswerWithoutVideo -> Triple(
@@ -499,13 +505,7 @@ private fun IncomingAction(
 ) {
     val width = if (compact) Modifier.widthIn(max = COMPACT_ACTION_MAX_WIDTH) else Modifier
     Column(width, horizontalAlignment = Alignment.CenterHorizontally) {
-        CallCircleButton(
-            icon = look.icon,
-            background = look.fill,
-            contentDescription = "$description. $hint",
-            onClick = onClick,
-            glyph = look.glyph,
-        )
+        IncomingGlassDisc(look = look, contentDescription = "$description. $hint", hint = hint, onClick = onClick)
         Spacer(Modifier.height(MeeshySpacing.smPlus))
         Text(
             text = caption,

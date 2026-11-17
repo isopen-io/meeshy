@@ -230,7 +230,10 @@ final class ContentCaptureReporterTests: XCTestCase {
 
         XCTAssertEqual(sender.reports.map(\.kind), [.recording, .recording])
         XCTAssertEqual(Set(sender.reports.map(\.captureId)), ["cap_first00001"], "UN identifiant pour tout l'enregistrement")
-        XCTAssertEqual(sender.reports.flatMap(\.messageIds), [Self.flameId, Self.onceId], "chaque éphémère une seule fois")
+        XCTAssertEqual(sender.reports.first?.messageIds, [Self.flameId], "le début déclare ce qu'il voit")
+        XCTAssertNil(sender.reports.first?.recordingSeconds)
+        XCTAssertEqual(sender.reports.last?.messageIds, [Self.flameId, Self.onceId], "la fin redit tout ce que l'enregistrement a vu")
+        XCTAssertNotNil(sender.reports.last?.recordingSeconds, "et sa durée (#18830)")
     }
 
     func test_unregisteredSource_isNoLongerAsked() async {

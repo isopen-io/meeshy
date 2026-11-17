@@ -25,7 +25,7 @@ const ar = {
   'conversationStats.loading': 'جارٍ تحميل الإحصاءات',
   'conversationStats.error': 'تعذّر تحميل الإحصاءات.',
   'conversationStats.retry': 'إعادة المحاولة',
-  'conversationStats.empty': 'لا توجد رسائل بعد — ستظهر الإحصاءات مع المحادثة.',
+  'conversationStats.empty': 'لا توجد رسائل',
   'conversationStats.offline': 'غير متصل — آخر إحصاءات معروفة.',
   'conversationStats.offline_empty': 'غير متصل — لم يتم تحميل الإحصاءات بعد.',
 } satisfies ConversationStatsCatalog;

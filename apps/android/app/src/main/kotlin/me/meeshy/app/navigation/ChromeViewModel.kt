@@ -23,6 +23,8 @@ import me.meeshy.sdk.game.GameDevicePrefsStore
 import me.meeshy.sdk.game.InMemoryGameDevicePrefsStore
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.game.GameActsRing
+import me.meeshy.sdk.model.game.GameAttention
+import me.meeshy.sdk.model.game.GameBlock
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.notification.UnreadBadgeCoordinator
@@ -91,17 +93,26 @@ class ChromeViewModel @Inject constructor(
     private val authenticated = MutableStateFlow(false)
 
     /**
-     * L'anneau des actes du jour autour du disque du menu (#17768), lu dans le bloc `game` du cache de la progression —
-     * la clé de « Ma Légende ». Cache d'abord, revalidé en silence quand il est périmé : Android n'a pas de bandeau du
-     * joueur qui le tienne à jour comme sur iOS et le web. Rien avant l'authentification, rien sous « Jeu masqué ».
+     * Le bloc `game` du cache de la progression — la clé de « Ma Légende » —, lu UNE fois pour l'anneau et pour le point
+     * du barreau. Cache d'abord, revalidé en silence quand il est périmé : Android n'a pas de bandeau du joueur qui le
+     * tienne à jour comme sur iOS et le web. Rien avant l'authentification, rien sous « Jeu masqué ».
      */
-    val actsRing: StateFlow<GameActsRing?> = combine(authenticated, gameHidden) { signedIn, hidden -> signedIn && !hidden }
+    private val shownGame: StateFlow<GameBlock?> = combine(authenticated, gameHidden) { signedIn, hidden -> signedIn && !hidden }
         .distinctUntilChanged()
-        .flatMapLatest { shown ->
-            if (!shown) flowOf(null) else engagement.progress().map { GameActsRing.of(it.valueOrNull?.game, hidden = false) }
-        }
+        .flatMapLatest { shown -> if (!shown) flowOf(null) else engagement.progress().map { it.valueOrNull?.game } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** L'anneau des actes du jour autour du disque du menu (#17768). */
+    val actsRing: StateFlow<GameActsRing?> = shownGame
+        .map { GameActsRing.of(it, hidden = false) }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Ce que le jeu signale au barreau « Ma Légende » (#18165) : l'Offrande prête, la Flamme en danger. */
+    val gameAttention: StateFlow<GameAttention> = shownGame
+        .map { GameAttention.of(it, hidden = false) }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.Eagerly, GameAttention.None)
 
     private var warmedUp = false
 

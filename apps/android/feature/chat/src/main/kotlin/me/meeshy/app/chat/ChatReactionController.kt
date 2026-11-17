@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.ReactionAnimationGate
 import me.meeshy.sdk.model.ReactionLedger
 import me.meeshy.sdk.model.ReactionUpdateEvent
+import me.meeshy.sdk.model.isOwnEcho
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.OwnReactionWithdrawal
@@ -112,7 +113,7 @@ internal class ChatReactionController(
             currentUserId = me,
             aggregate = event.aggregation?.let { ReactionLedger.Aggregate(it.count, it.participantIds) },
         ) ?: false
-        if (event.userId == me) {
+        if (event.isOwnEcho(me)) {
             if (rowsMoved) messageRepository.applyReactionDelta(event.messageId, event.emoji, delta)
             return
         }

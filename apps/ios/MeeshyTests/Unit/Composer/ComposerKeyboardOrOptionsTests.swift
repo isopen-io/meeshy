@@ -15,7 +15,7 @@ final class ComposerKeyboardOrOptionsTests: XCTestCase {
     }
 
     func test_tapped_anotherFamily_switchesTheOptions() {
-        XCTAssertEqual(ComposerKeyboardOrOptions.tapped(.surface, in: .options(.color)), .options(.surface))
+        XCTAssertEqual(ComposerKeyboardOrOptions.tapped(.frameStyle, in: .options(.color)), .options(.frameStyle))
     }
 
     func test_tapped_theOpenFamily_givesTheKeyboardBack() {
@@ -162,15 +162,62 @@ final class ComposerKeyboardDockTests: XCTestCase {
     func test_tap_aFamily_replacesTheKeyboardByThePanel() {
         let (dock, _, panneau) = makeDock()
         dock.begin()
-        dock.tap(.typography)
+        dock.touch(.typography, .longPress)
         XCTAssertEqual(dock.input, .options(.typography))
         XCTAssertTrue(dock.link.inputView === panneau)
+    }
+
+    // MARK: - #18640 — toucher change vite, l'appui long ouvre toutes les options
+
+    func test_outcome_tap_cyclesTheFirstToolOfTheFamily_andKeepsTheKeyboard() {
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .typography, in: .keyboard), .cycle(.style))
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .color, in: .keyboard), .cycle(.color))
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .effect, in: .keyboard), .cycle(.effect))
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .language, in: .keyboard), .cycle(.language))
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .outline, in: .keyboard), .cycle(.border))
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .frame, in: .keyboard), .cycle(.frame))
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .frameStyle, in: .options(.color)), .cycle(.background),
+                       "une autre famille ouverte n'empêche pas le changement rapide")
+    }
+
+    func test_outcome_longPress_opensThePanel_andClosesIt() {
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.longPress, on: .color, in: .keyboard), .show(.options(.color)))
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.longPress, on: .color, in: .options(.color)), .show(.keyboard))
+        XCTAssertEqual(ComposerKeyboardOrOptions.outcome(.tap, on: .color, in: .options(.color)), .show(.keyboard),
+                       "panneau ouvert, toucher sa commande rend le clavier")
+    }
+
+    func test_quickTool_isTheFirstToolOfEachFamily() {
+        for famille in ComposerKeyboardStyleFamily.allCases {
+            XCTAssertEqual(famille.quickTool, famille.tools.first)
+        }
+    }
+
+    func test_panel_servingABakedText_dropsTheLanguage() {
+        let cuit = ComposerKeyboardStyleFamily.language.panel(serving: StoryTextEditProfile.bakedIntoMedia.tools)
+        XCTAssertTrue(cuit.isEmpty)
+        XCTAssertEqual(ComposerKeyboardStyleFamily.language.panel(serving: StoryTextEditProfile.composer.tools),
+                       ComposerKeyboardStyleFamily.language.panel)
+    }
+
+    @MainActor
+    func test_touch_tap_changesTheTypedText_withoutLeavingTheKeyboard() throws {
+        let (dock, _, _) = makeDock()
+        let modele = StoryComposerViewModel()
+        let texte = try XCTUnwrap(modele.addText())
+        modele.enterTextEditingMode(textId: texte.id)
+        dock.begin(session: .init(viewModel: modele, mentionBox: nil, onDone: {}))
+        let avant = modele.currentEffects.textObjects.first { $0.id == texte.id }?.textColor
+        dock.touch(.color, .tap)
+        XCTAssertNotEqual(modele.currentEffects.textObjects.first { $0.id == texte.id }?.textColor, avant)
+        XCTAssertEqual(dock.input, .keyboard)
+        XCTAssertNil(dock.link.inputView)
     }
 
     func test_touchingTheText_givesTheKeyboardBack() {
         let (dock, _, _) = makeDock()
         dock.begin()
-        dock.tap(.color)
+        dock.touch(.color, .longPress)
         dock.link.onEditorTouched?()
         XCTAssertEqual(dock.input, .keyboard)
         XCTAssertNil(dock.link.inputView)
@@ -179,7 +226,7 @@ final class ComposerKeyboardDockTests: XCTestCase {
     func test_begin_afterOptions_startsAgainOnTheKeyboard() {
         let (dock, _, _) = makeDock()
         dock.begin()
-        dock.tap(.surface)
+        dock.touch(.frameStyle, .longPress)
         dock.begin()
         XCTAssertEqual(dock.input, .keyboard)
         XCTAssertNil(dock.link.inputView)
@@ -192,7 +239,7 @@ final class ComposerKeyboardDockTests: XCTestCase {
         barre.frame = CGRect(x: 0, y: 0, width: 402, height: 44)
         dock.begin()
         dock.keyboardFrameChanged(overlap: 380)
-        dock.tap(.typography)
+        dock.touch(.typography, .longPress)
         XCTAssertEqual(panneau.frame.height, 336)
     }
 

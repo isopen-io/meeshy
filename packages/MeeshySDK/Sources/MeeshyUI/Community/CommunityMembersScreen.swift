@@ -32,7 +32,6 @@ public struct CommunityMembersScreen<ViewModel: CommunityMembersModeling, Invite
                 EmptyStateView(
                     icon: "person.3",
                     title: String(localized: "community.members.empty.title", defaultValue: "No Members", bundle: .module),
-                    subtitle: String(localized: "community.members.empty.subtitle", defaultValue: "Invite people to join this community", bundle: .module),
                     actionLabel: String(localized: "community.members.empty.action", defaultValue: "Invite", bundle: .module),
                     onAction: { onInvite?() }
                 )

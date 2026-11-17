@@ -5,7 +5,6 @@
  */
 const frMediaHub = {
   'conversation.details.media.section': 'MÉDIAS, LIENS ET DOCUMENTS',
-  'conversation.details.media.open': 'Médias, liens et documents',
   'conversation.details.media.more': 'Tout voir',
   'media_hub.title': 'Médias, liens et documents',
   'media_hub.search.label': 'Rechercher dans {segment}',

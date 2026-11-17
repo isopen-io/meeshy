@@ -2,6 +2,7 @@
 <resources>
     <string name="recognition_language_title">Sprache des Audios</string>
     <string name="recognition_language_show_all">Alle Sprachen anzeigen</string>
+    <string name="recognition_language_question">Warum so wenige Sprachen?</string>
     <string name="recognition_language_hint">Standardmäßig werden nur Sprachen angezeigt, die auf diesem Gerät verfügbar sind.</string>
     <string name="recognition_language_search">Sprache suchen</string>
     <string name="recognition_language_selected">Ausgewählt</string>

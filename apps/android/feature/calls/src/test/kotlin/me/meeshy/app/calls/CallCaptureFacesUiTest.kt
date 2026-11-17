@@ -122,7 +122,7 @@ class CallCaptureFacesUiTest {
     }
 
     @Test
-    fun `apres Chaque visage la barre revient a son menu de base (#16979)`() {
+    fun `apres Chaque visage la barre revient a son menu de base, carrousel ferme (#16979, #18185)`() {
         show(live(), capture())
         openSettings()
 
@@ -130,7 +130,8 @@ class CallCaptureFacesUiTest {
         rule.waitForIdle()
 
         rule.onNodeWithContentDescription("Each face").assertDoesNotExist()
-        rule.onNodeWithText("Classics").assertExists()
+        rule.onNodeWithText("Classics").assertDoesNotExist()
+        rule.onNodeWithText("Frames").assertExists()
     }
 
     @Test

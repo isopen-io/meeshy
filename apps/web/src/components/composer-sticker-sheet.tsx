@@ -9,6 +9,8 @@ import type { StickerPackDetail } from '@meeshy/shared/types/sticker-pack';
 
 import { GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
+import { SETTINGS_GLYPHS } from './glyphs-settings';
+import { InfoHintButton, InfoHintText, useInfoHint } from './info-hint';
 import { Link } from '@/routes/route-table';
 import { Sheet } from './sheet';
 import { FavoriteStar } from './sticker-favorite-star';
@@ -107,6 +109,8 @@ export function ComposerStickerSheet({
   const [chosenTab, setTab] = useState<StickerTab>('mine');
   const [favorites, setFavorites] = useState<readonly StickerFavorite[]>(() => readFavorites());
   const [favoriteNotice, setFavoriteNotice] = useState('');
+  const pasteHintState = useInfoHint();
+  const pasteHint = { text: translate(language, 'composer.sticker.pasteHint'), label: translate(language, 'composer.sticker.pasteHint.question'), glyph: SETTINGS_GLYPHS.info };
 
   const toggle = (entry: StickerFavorite) => {
     const next = toggleFavorite(favorites, entry);
@@ -287,6 +291,7 @@ export function ComposerStickerSheet({
               <GlyphSvg glyph={COMPOSER_GLYPHS.clipboardText} size={18} />
               <span>{translate(language, 'composer.sticker.paste')}</span>
             </button>
+            <InfoHintButton hint={pasteHint} state={pasteHintState} />
             {stickers.length > 0 ? (
               <button type="button" data-sticker-manage className={ACTION} style={ACTION_STYLE} aria-pressed={managing} onClick={() => setManaging((on) => !on)}>
                 <span>{translate(language, managing ? 'composer.sticker.done' : 'composer.sticker.manage')}</span>
@@ -308,8 +313,9 @@ export function ComposerStickerSheet({
           </div>
 
           <p className="text-caption" style={{ color: notice === null ? 'var(--color-ios-ink-3)' : 'var(--ios-error)' }} role="status" aria-live="polite">
-            {busy ? translate(language, 'composer.sticker.creating') : (notice ?? translate(language, 'composer.sticker.pasteHint'))}
+            {busy ? translate(language, 'composer.sticker.creating') : (notice ?? '')}
           </p>
+          <InfoHintText hint={pasteHint} state={pasteHintState} />
 
           {library.isSuccess && stickers.length === 0 ? (
             <p data-sticker-empty className="py-6 text-center text-body" style={{ color: 'var(--color-ios-ink-2)' }}>

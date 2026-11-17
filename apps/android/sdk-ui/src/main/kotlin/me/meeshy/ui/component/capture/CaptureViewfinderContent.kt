@@ -51,6 +51,10 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.sdk.model.accessibility.MotionSpecs
+import me.meeshy.ui.motion.meeshyEnter
+import me.meeshy.ui.motion.meeshyExit
+import me.meeshy.ui.motion.meeshySpec
 import me.meeshy.sdk.model.composer.capture.CameraSwitchVeil
 import me.meeshy.sdk.model.composer.capture.CaptureFlash
 import me.meeshy.sdk.model.composer.capture.CaptureHold
@@ -166,8 +170,8 @@ private fun BoxScope.TopRow(state: CaptureSessionState, display: CaptureViewfind
     AnimatedVisibility(
         visible = state.flashSlider.visible && CaptureFlash.showsSlider(state.flash) && trailing.contains(CaptureTopRow.Item.FLASH),
         modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 12.dp + MeeshyControlSize.minTouchTarget + 6.dp, end = 14.dp + inset.dp),
-        enter = fadeIn(tween(150)) + scaleIn(tween(150), initialScale = 0.85f),
-        exit = fadeOut(tween(150)) + scaleOut(tween(150), targetScale = 0.85f),
+        enter = meeshyEnter(display.reduceMotion, fadeIn(tween(FLASH_SLIDER_MILLIS)) + scaleIn(tween(FLASH_SLIDER_MILLIS), initialScale = FLASH_SLIDER_FROM_SCALE)),
+        exit = meeshyExit(display.reduceMotion, fadeOut(tween(FLASH_SLIDER_MILLIS)) + scaleOut(tween(FLASH_SLIDER_MILLIS), targetScale = FLASH_SLIDER_FROM_SCALE)),
     ) {
         CaptureFlashIntensitySlider(state.flashIntensity, actions.onFlashIntensity, actions.onFlashSliderHold)
     }
@@ -193,12 +197,12 @@ private fun BoxScope.BottomStack(state: CaptureSessionState, display: CaptureVie
         }
         androidx.compose.runtime.CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Shutter(state, actions)
+                Shutter(state, actions, display.reduceMotion)
                 androidx.compose.animation.AnimatedVisibility(
                     visible = showsLock || display.lockSealing,
                     modifier = Modifier.align(Alignment.CenterEnd).padding(end = 14.dp),
-                    enter = fadeIn(tween(200)) + scaleIn(tween(200), initialScale = 0.8f),
-                    exit = fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.8f),
+                    enter = meeshyEnter(display.reduceMotion, fadeIn(tween(LOCK_TRACK_MILLIS)) + scaleIn(tween(LOCK_TRACK_MILLIS), initialScale = LOCK_TRACK_FROM_SCALE)),
+                    exit = meeshyExit(display.reduceMotion, fadeOut(tween(LOCK_TRACK_MILLIS)) + scaleOut(tween(LOCK_TRACK_MILLIS), targetScale = LOCK_TRACK_FROM_SCALE)),
                 ) {
                     CaptureLockTrack(if (display.lockSealing) 1f else display.lockProgress, display.lockSealing, display.reduceMotion)
                 }
@@ -209,13 +213,17 @@ private fun BoxScope.BottomStack(state: CaptureSessionState, display: CaptureVie
 }
 
 @Composable
-private fun Shutter(state: CaptureSessionState, actions: CaptureViewfinderActions) {
+private fun Shutter(state: CaptureSessionState, actions: CaptureViewfinderActions, reduceMotion: Boolean) {
     val currentActions by rememberUpdatedState(actions)
     val recording = state.stage == CaptureStage.RECORDING
     val shutterLabel = stringResource(R.string.capture_shutter)
     val filmLabel = stringResource(R.string.capture_shutter_film)
-    val inner by animateFloatAsState(if (recording) 0.45f else 1f, tween(160), label = "shutter-inner")
-    val ring by animateFloatAsState(if (state.holding) 1.12f else 1f, tween(120), label = "shutter-ring")
+    val inner by animateFloatAsState(if (recording) SHUTTER_RECORDING_INNER else 1f, tween(SHUTTER_INNER_MILLIS), label = "shutter-inner")
+    val ring by animateFloatAsState(
+        MotionSpecs.pressScale(state.holding, SHUTTER_HOLD_RING, reduceMotion),
+        meeshySpec(reduceMotion, tween(SHUTTER_RING_MILLIS)),
+        label = "shutter-ring",
+    )
     Box(
         Modifier
             .size(84.dp)
@@ -238,6 +246,15 @@ private fun Shutter(state: CaptureSessionState, actions: CaptureViewfinderAction
         )
     }
 }
+
+private const val FLASH_SLIDER_MILLIS = 150
+private const val FLASH_SLIDER_FROM_SCALE = 0.85f
+private const val LOCK_TRACK_MILLIS = 200
+private const val LOCK_TRACK_FROM_SCALE = 0.8f
+private const val SHUTTER_RECORDING_INNER = 0.45f
+private const val SHUTTER_INNER_MILLIS = 160
+private const val SHUTTER_HOLD_RING = 1.12f
+private const val SHUTTER_RING_MILLIS = 120
 
 @Composable
 private fun Hint(state: CaptureSessionState) {

@@ -69,7 +69,7 @@ struct BloodRitualView: View {
 
     private var consentList: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
-            Text(named(String(localized: "circles.ritual.consent.intro", defaultValue: "Avant de sceller, choisis ce que tu partages avec %@. Chaque partage est refusable, et tu pourras y revenir.", bundle: .main)))
+            Text(named(String(localized: "circles.ritual.consent.intro", defaultValue: "Avant de sceller, choisis ce que tu partages avec %@. Chaque partage est refusable.", bundle: .main)))
                 .font(.subheadline)
                 .foregroundStyle(theme.textSecondary)
             ForEach(RelationRitualConsentKey.allCases, id: \.self) { key in

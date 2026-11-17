@@ -38,6 +38,7 @@ const fr = {
   'listFilter.channels': 'Channels',
   'listFilter.pinned': 'Épinglés',
   'listFilter.archived': 'Archivées',
+  'listFilter.more': 'Plus',
   'listRow.muted': 'En sourdine',
   'listRow.endToEnd': 'Chiffrée de bout en bout',
   'listRow.announce.pin.on': 'Conversation épinglée',

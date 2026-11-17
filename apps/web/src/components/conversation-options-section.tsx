@@ -14,6 +14,8 @@ import { titleOf } from '@/lib/view/conversation';
 import type { RowFlagActionId } from '@/lib/view/row-actions';
 
 import { ConversationRenameDialog } from './conversation-rename-dialog';
+import { SETTINGS_GLYPHS } from './glyphs-settings';
+import { InfoHintButton, InfoHintText, useInfoHint } from './info-hint';
 import { SwitchRow } from './conversation-settings-section';
 
 /**
@@ -50,6 +52,8 @@ export function ConversationOptionsSection({
   const queryClient = useQueryClient();
   const overrides = useStore(conversationStore, (state) => state.overrides);
   const [renaming, setRenaming] = useState(false);
+  const nameInfo = useInfoHint();
+  const nameHint = { text: t('conversationManage.options.custom_name.hint'), label: t('conversationManage.options.custom_name.info'), glyph: SETTINGS_GLYPHS.info };
   const flags = effectiveFlagsOf(conversation, overrides);
   const effective = withPreferenceOverrides([conversation], overrides)[0] ?? conversation;
   const customName = customNameOf(effective);
@@ -66,22 +70,26 @@ export function ConversationOptionsSection({
         {t('conversationManage.options.section')}
       </h4>
       <div className="overflow-hidden rounded-card" style={{ backgroundColor: 'var(--color-ios-card)' }}>
-        <button
-          type="button"
-          onClick={() => void openRename()}
-          data-conversation-options-rename
-          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-start focus-visible:outline-2 focus-visible:-outline-offset-2"
-          style={{ minHeight: 52, outlineColor: 'var(--accent)' }}
-        >
-          <span className="flex min-w-0 flex-col">
-            <span className="text-body font-medium" style={{ color: 'var(--color-ios-ink)' }}>
-              {t('conversationManage.options.custom_name')}
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={() => void openRename()}
+            data-conversation-options-rename
+            className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2 text-start focus-visible:outline-2 focus-visible:-outline-offset-2"
+            style={{ minHeight: 52, outlineColor: 'var(--accent)' }}
+          >
+            <span className="flex min-w-0 flex-col">
+              <span className="text-body font-medium" style={{ color: 'var(--color-ios-ink)' }}>
+                {t('conversationManage.options.custom_name')}
+              </span>
+              <span className="truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+                {customName ?? t('conversationManage.options.custom_name.placeholder')}
+              </span>
             </span>
-            <span className="truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              {customName ?? t('conversationManage.options.custom_name.placeholder')}
-            </span>
-          </span>
-        </button>
+          </button>
+          <InfoHintButton hint={nameHint} state={nameInfo} />
+        </div>
+        <InfoHintText hint={nameHint} state={nameInfo} className="px-3 pb-2" />
         {FLAGS.filter(({ field }) => !(field === 'isArchived' && flags.archiveLocked === true)).map(({ action, field, key }) => (
           <SwitchRow
             key={action}

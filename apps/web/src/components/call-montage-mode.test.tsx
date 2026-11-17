@@ -155,6 +155,7 @@ describe('CallMontageMode', () => {
   test('deux tapes sur le style choisi l’enregistrent, et le disent ; une seule tape ne capture rien (#8625)', async () => {
     const view = mount();
     await view.press('[data-carousel-item="polaroid"]');
+    await view.press('[data-call-effects-category="frames"]');
     await view.press('[data-carousel-item="polaroid"]');
     expect(view.saved).toEqual([]);
     await view.press('[data-carousel-item="polaroid"]');
@@ -166,6 +167,7 @@ describe('CallMontageMode', () => {
 
   test('« Chaque visage » enregistre un portrait par tuile affichée', async () => {
     const view = mount({ tiles: 3 });
+    await view.press('[data-call-effects-settings-toggle]');
     await view.press('[data-call-capture-faces]');
     expect(view.saved[0]).toHaveLength(3);
     expect(view.find('[data-call-capture-status]')?.textContent).toBe('3 visages enregistrés');

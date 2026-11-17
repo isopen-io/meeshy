@@ -122,7 +122,7 @@ struct PackElementViewer: View {
                                                       defaultValue: "Élément %1$lld sur %2$lld", bundle: .module),
                                        pager.index + 1, pager.count))
             .accessibilityHint(String(localized: "shop.viewer.zoom.hint",
-                                      defaultValue: "Pince ou touche deux fois pour zoomer", bundle: .module))
+                                      defaultValue: "Pincez ou touchez deux fois pour zoomer", bundle: .module))
             .accessibilityAction(named: Text(String(localized: "shop.viewer.next", defaultValue: "Suivant", bundle: .module))) {
                 step(pager.next())
             }
@@ -254,7 +254,7 @@ struct PackViewerFooter: View {
                 action
             }
             if model.equipFailed {
-                Text(String(localized: "shop.viewer.equip.failed", defaultValue: "Impossible d’équiper cet élément. Réessaie.", bundle: .module))
+                Text(String(localized: "shop.viewer.equip.failed", defaultValue: "Impossible d’équiper cet élément. Réessayez.", bundle: .module))
                     .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundStyle(MeeshyColors.error)
             }
@@ -265,7 +265,7 @@ struct PackViewerFooter: View {
         .adaptiveOnChange(of: model.equipFailed) { _, failed in
             guard failed else { return }
             UIAccessibility.post(notification: .announcement,
-                                 argument: String(localized: "shop.viewer.equip.failed", defaultValue: "Impossible d’équiper cet élément. Réessaie.", bundle: .module))
+                                 argument: String(localized: "shop.viewer.equip.failed", defaultValue: "Impossible d’équiper cet élément. Réessayez.", bundle: .module))
         }
     }
 

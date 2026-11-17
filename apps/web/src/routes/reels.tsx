@@ -192,9 +192,6 @@ export function ReelsEmpty({ language }: { readonly language: InterfaceLanguage 
     <StateFrame data-reels-empty="">
       <GlyphSvg glyph={FEED_GLYPHS.monitorPlay} size={44} style={{ color: 'var(--color-on-media-3)' }} />
       <p className="text-body font-semibold text-on-media">{translate(language, 'reels.empty')}</p>
-      <p className="text-caption" style={{ color: 'var(--color-on-media-3)' }}>
-        {translate(language, 'reels.empty.hint')}
-      </p>
     </StateFrame>
   );
 }

@@ -3,6 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { StreamVideo } from '@/components/call-media-elements';
 import { RoundButton } from '@/components/call-round-button';
+import { CallTileNameplate } from '@/components/call-tile-nameplate';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { sessionStore } from '@/lib/api/session';
@@ -61,23 +62,25 @@ function useSelfPreview(active: boolean, deps: SelfPreviewDeps<MediaStream>): Se
   return { stream: active ? stream : null, stop };
 }
 
+/** P17.4 : ma vignette porte la plaque de verre « Vous » des vignettes de l'appel (`CallTileNameplate`, le chunk que partagent la grille et le duo), au mot de la vignette du duo. */
 function SelfTile({ stream, label, colorOf }: { readonly stream: MediaStream; readonly label: string; readonly colorOf: Props['colorOf'] }) {
   const me = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   const color = colorOf(me?.id ?? null);
   return (
     <div aria-hidden="true" className="relative size-full overflow-hidden rounded-card border-2 shadow-lg" style={{ background: 'var(--color-scrim-soft)', borderColor: color }} data-call-incoming-self="">
       <StreamVideo stream={stream} mirrored className="size-full" self />
-      <span className="absolute inset-x-0 bottom-1.5 text-center text-mini font-semibold text-on-media [text-shadow:0_1px_2px_var(--color-scrim-soft)]" data-call-incoming-self-label="">
-        {label}
-      </span>
+      <CallTileNameplate name={label} />
     </div>
   );
 }
 
-/** Une bascule de la barre : ALLUMÉE (`active`), elle se remplit de blanc, glyphe sombre — la caméra qui filme, le micro COUPÉ (P17.8) ; `aria-pressed` suit cet état. */
+/**
+ * Une bascule de la barre : ALLUMÉE (`active`), elle se remplit de blanc, glyphe sombre — la caméra qui filme, le micro COUPÉ (P17.8) ; `aria-pressed` suit cet état.
+ * Au repos, c'est le disque de verre dessiné de tout bouton posé DANS un verre (P17.13 ; la surface `drawn-disc` de `callButtonGlassTreatment('disc')`, comme `CallPillButton` d'iOS) : la barre porte le seul flou. La classe s'écrit ici, la loi vivant dans `call_overlay`, que ce chunk n'importe pas.
+ */
 function Toggle({ active, label, glyph, onPress, data }: { readonly active: boolean; readonly label: string; readonly glyph: ReactNode; readonly onPress: () => void; readonly data: Readonly<Record<`data-${string}`, string>> }) {
   return (
-    <button type="button" aria-pressed={active} aria-label={label} onClick={onPress} className={`grid size-11 shrink-0 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none ${active ? '' : 'bg-media-fill'}`} style={active ? ON : { color: INK }} {...data}>
+    <button type="button" aria-pressed={active} aria-label={label} onClick={onPress} className={`grid size-11 shrink-0 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none ${active ? '' : 'glass-call-disc'}`} style={active ? ON : { color: INK }} {...data}>
       {glyph}
     </button>
   );
@@ -126,7 +129,7 @@ export function CallIncomingAnswer({ call, language, onAccept, onDecline, onDecl
     <div className="relative flex flex-col gap-6">
       {/* Hors du flux, au-dessus des réponses : la vignette qui arrive ne déplace rien, et elle arrive comme elle repart, en fondu (P17.5). */}
       <HeldSwap value={tile} shape="fade" className="pointer-events-none absolute bottom-full end-3 z-10 mb-6 h-32 w-[5.75rem]" data-call-incoming-self-slot="">
-        {(held) => <SelfTile stream={held} label={translateCallControls(language, 'callControls.incoming.me')} colorOf={colorOf} />}
+        {(held) => <SelfTile stream={held} label={translate(language, 'call.you')} colorOf={colorOf} />}
       </HeldSwap>
       <div className="flex justify-center">
         <RoundButton label={translate(language, 'callDecline.title')} caption={translate(language, 'callDecline.open')} size={48} glyph={screenGlyph('chatCircleText', 22)} onPress={onDeclineMessage} popup control="decline-message" />

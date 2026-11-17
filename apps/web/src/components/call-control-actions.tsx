@@ -3,6 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { CallCameraPicker } from '@/components/call-camera-picker';
 import type { CallButton, CallButtonTone } from '@/components/call-glass-button';
+import { JournalGlyph } from '@/components/call-journal-toggle';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { selfCameraShown } from '@/lib/calls/call-view';
@@ -173,13 +174,8 @@ function mineAction(action: Exclude<MineAction, 'camera-picker'>, { call, langua
   }
 }
 
-/** Le Journal (#8579) : une page et ses lignes — ce qui a été dit, et sa traduction. */
-const journalGlyph = (
-  <svg aria-hidden viewBox="0 0 24 24" width={22} height={22} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M6 3.5h9l3 3v14H6z" />
-    <path d="M9 9.5h6M9 13h6M9 16.5h3.5" />
-  </svg>
-);
+/** Le Journal (#8579) : le pictogramme que « Journal » actif porte aussi (`call-journal-toggle.tsx`). */
+const journalGlyph = <JournalGlyph size={22} />;
 
 function callAction(action: Exclude<CallAction, 'record'>, context: ActionContext): ActionView {
   const { language, panels, kit } = context;

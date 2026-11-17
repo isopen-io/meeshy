@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K51 MeeshyTranslationMark</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:880px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:18px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;flex-direction:column;align-items:stretch;justify-content:center;flex:1;min-height:120px;gap:14px}
+.host{display:flex;flex-direction:column;border-radius:20px;background:var(--raised);border:1px solid var(--line);overflow:hidden}
+.tm{display:flex;align-items:center;gap:7px;min-width:0;margin:0;font-size:12.5px;line-height:1.3;color:var(--ink2);text-align:start}
+.tm>.ic{color:var(--accent-ink)}
+.tm>i{font-style:normal;color:var(--ink3)}
+.tm .tg{display:inline-flex;align-items:center;min-height:44px;font-weight:700;color:var(--accent-ink);white-space:nowrap;transition:transform .2s cubic-bezier(.3,1.6,.5,1)}
+.tm.orig>.ic{color:var(--ink3)}
+.tm.ann{gap:6px;font-size:13px;font-weight:600;color:var(--accent-ink)}
+.tm.fact{min-height:24px}
+.tm.pr .tg{transform:scale(.94);opacity:.62}
+.tm.wait .tg{opacity:.5}
+.tmi{display:inline-flex;color:var(--accent-ink)}
+.tml{display:flex;align-items:flex-start;gap:7px;width:100%;padding:9px 10px;border-radius:13px;font-size:12.5px;font-weight:600;line-height:1.3;color:var(--ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.26)}
+.tml>.ic{color:var(--accent-ink);margin-top:1px}
+.bub{display:flex;flex-direction:column;padding:12px 16px 0;border-radius:20px 20px 20px 6px;background:var(--field);border:1px solid var(--line);min-width:0}
+.bub>p:not(.tm){font-size:16px;line-height:1.4;color:var(--ink)}
+.bub.nm{padding-bottom:12px}
+.unread{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:var(--accent);color:#0B0B12;font-size:12px;font-weight:800;flex:none}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.live3{display:flex;flex-direction:column;align-items:center;gap:14px;flex:1;min-width:0}
+.live3>.pit{position:relative;display:flex;flex-direction:column;justify-content:center;height:250px;align-self:stretch;padding:20px 22px;border-radius:22px;background:var(--raised);border:1px solid var(--line);overflow:hidden}
+.live3>b{font-size:14.5px}
+.live3>span{font-size:12.5px;line-height:1.4;color:var(--ink2);text-align:center;max-width:330px}
+.swap{display:grid}
+.swap>*{grid-area:1/1}
+.bone{height:10px;border-radius:5px;background:var(--field)}
+.tap{position:absolute;width:38px;height:38px;border-radius:50%;background:color-mix(in oklab,var(--ink) 22%,transparent);border:1.5px solid color-mix(in oklab,var(--ink) 55%,transparent);opacity:0;pointer-events:none}
+.mv-a{animation:tmA 7s ease-in-out infinite}
+.mv-b{animation:tmB 7s ease-in-out infinite}
+.mv-tap{animation:tmTap 7s ease-out infinite}
+.mv-tg{animation:tmPress 7s cubic-bezier(.3,1.6,.5,1) infinite}
+.mv-o{animation:tmO 7s ease-in-out infinite}
+.mv-t{animation:tmT 7s ease-in-out infinite}
+.mv-mark{animation:tmMark 7s cubic-bezier(.2,.9,.25,1) infinite}
+@keyframes tmA{0%,34%{opacity:1}40%,84%{opacity:0}90%,100%{opacity:1}}
+@keyframes tmB{0%,34%{opacity:0}40%,84%{opacity:1}90%,100%{opacity:0}}
+@keyframes tmTap{0%,26%{opacity:0;transform:scale(1.5)}31%{opacity:1;transform:scale(1)}35%{opacity:.9;transform:scale(.82)}41%,76%{opacity:0;transform:scale(1.5)}81%{opacity:1;transform:scale(1)}85%{opacity:.9;transform:scale(.82)}91%,100%{opacity:0;transform:scale(1.5)}}
+@keyframes tmPress{0%,30%{transform:none}34%{transform:scale(.92)}40%,80%{transform:none}84%{transform:scale(.92)}90%,100%{transform:none}}
+@keyframes tmO{0%,30%{opacity:1}38%,90%{opacity:0}97%,100%{opacity:1}}
+@keyframes tmT{0%,30%{opacity:0}38%,90%{opacity:1}97%,100%{opacity:0}}
+@keyframes tmMark{0%,34%{opacity:0;transform:translateY(8px)}44%,90%{opacity:1;transform:none}97%,100%{opacity:0;transform:none}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #4ECDC4; opacity: .18"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #A855F7; opacity: .16; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K51 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyTranslationMark</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Tout contenu traduit porte la même marque discrète, qui dit d'où il vient et rend l'original d'un geste</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 840px">« Traduit de l'italien · Voir l'original. » Le profil l'écrit de sept façons : un bouton de 24 px ici, un lien souligné là, un glyphe sans mot ailleurs. K51 en fait une seule marque, en trois densités, qui ne décide de rien : elle dit ce que l'hôte lui remet.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Elle signale, elle bascule, elle ne résout rien</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Elle fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Pose <b>le glyphe de traduction</b> en accent et <b>la langue d'origine</b> en toutes lettres : « Traduit de l'italien ».</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Offre <b>une bascule en texte</b>, « Voir l'original » puis « Voir la traduction », sur une cible de 44.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Se serre en <b>trois densités</b> : le glyphe seul devant un aperçu, la ligne sous un texte, la légende de verre sur un média.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span><b>Annonce</b> avant l'envoi dans quelle langue l'autre lira : « Il le lira en portugais ». Sans bascule.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Elle ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Choisir la langue servie ni savoir s'il existe une traduction : <b>les résolveurs du Prisme</b> et l'app. Elle reçoit un nom de langue et un booléen.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Rendre le texte, ni le garder en mémoire : <b>l'hôte</b>. Elle n'a aucun état ; <code>isShowingOriginal</code> lui est remis.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le verre de la légende : <b>K01</b> <code>MeeshyGlassTone</code>. Un bouton rond de traduction sur un média : <b>K02</b>. Les puces de langue : <b>K04</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>La feuille de toutes les langues : <b>K15</b> et l'app. Un état « traduction en route » plein écran : <b>K38</b>. Une note d'aide : <b>K46</b>.</span></div>
+</div>
+</div>
+<div class="law">
+<span style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; flex: none; border-radius: 50%; background: color-mix(in oklab, var(--accent) 18%, transparent); color: var(--accent-ink)">[[ic:translate l]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 22px">La loi : la marque annonce ce que l'hôte rend, jamais autre chose</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 1000px">Une marque qui dit « Traduit de l'italien » au-dessus d'un texte resté en italien ment. Elle est donc commandée : le même booléen choisit le texte de l'hôte et le libellé de la marque, dans la même image. Sans traduction, elle n'est pas dans l'arbre. Sans <code>onToggle</code>, elle informe et ne promet aucun geste.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Un glyphe, une origine, un point, un geste</h2><p>La densité <code>line</code> porte toutes les parties ; elle est agrandie deux fois, sous le texte qu'elle qualifie. Les mesures de la légende sont celles de la taille réelle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="padding: 36px; flex-direction: column; gap: 26px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div style="position: relative; width: 660px">
+<div style="zoom: 2; width: 330px; display: flex; flex-direction: column; gap: 4px">
+<p style="font-size: 15px; line-height: 1.45; color: var(--ink)">Au marché aux puces, chaque objet attend qu'on lui invente une deuxième vie.</p>
+<p class="tm">[[ic:translate s]]<span>Traduit de l'italien</span><i aria-hidden="true">·</i><button class="tg" style="outline: 1px dashed var(--warn); outline-offset: 0; border-radius: 6px; padding: 0 4px; margin-left: -4px">Voir l'original</button></p>
+</div>
+<span class="kan" style="left: 9px; top: 92px">1</span>
+<span class="kan" style="left: 144px; top: 92px">2</span>
+<span class="kan" style="left: 264px; top: 160px">3</span>
+<span class="kan" style="left: 365px; top: 160px">4</span>
+<span class="kan" style="left: 462px; top: 84px">5</span>
+</div>
+<div style="align-self: stretch; display: flex; align-items: center; gap: 28px; padding-top: 22px; border-top: 1.5px dashed var(--line)">
+<div class="ph" style="width: 250px; height: 120px; flex: none; padding: 8px; align-items: flex-end">
+<span class="tml glass">[[ic:translate s]]<span>Le tram 28, avant tout le monde.</span></span>
+</div>
+<span class="kan" style="position: static; flex: none">6</span>
+<span class="kcap" style="flex: 1; min-width: 0">En densité <code>legend</code>, le glyphe précède la légende traduite dans une capsule de verre posée au bas du média. Le verre est demandé à K01 ; la marque n'écrit aucun flou.</span>
+</div>
+</div>
+<div class="card" style="padding: 26px; align-self: start">
+<div class="lgd">
+<span class="kan">1</span><div><b>Glyphe de traduction</b><span>16 px, <code>translate</code>, à l'encre d'accent de l'hôte. Caché à la voix. Il s'atténue en <code>ink3</code> quand l'original est montré. Jeton <code>translationMark.glyph</code>.</span></div>
+<span class="kan">2</span><div><b>Mention d'origine</b><span>12,5 px, graisse 400, <code>ink2</code>, sur une ligne. « Traduit de l'italien », puis « Original en italien ». Sans nom de langue : « Traduit ».</span></div>
+<span class="kan">3</span><div><b>Séparateur</b><span>Un point médian <code>ink3</code>, à 7 px de chaque côté. Décoratif, caché à la voix. Absent sans bascule.</span></div>
+<span class="kan">4</span><div><b>Bascule</b><span>12,5 px, graisse 700, à l'encre d'accent. Un bouton en texte, sans fond ni soulignement. « Voir l'original » ↔ « Voir la traduction ».</span></div>
+<span class="kan">5</span><div><b>Cible</b><span>44 px de haut au moins, 44 de large au moins ; elle déborde le texte sans changer l'écart avec les voisins. Jeton <code>control.tapTarget</code>.</span></div>
+<span class="kan">6</span><div style="border-bottom: 0; padding-bottom: 0"><b>Légende de verre</b><span>Rayon 13, marges 9 · 10, écart 7, texte 12,5 px demi-gras <code>ink</code>, deux lignes au plus. Matière : K01, ton de l'hôte.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Trois densités, trois modes</h2><p>Tout est à taille réelle. Les textes, les classes et les mesures sont ceux des écrans du profil où la marque est née.</p></header>
+
+<span class="tag">Densités</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 22px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage">
+<div class="host" style="padding: 4px 0">
+<button class="row">
+<span class="av" style="--accent: #818CF8; width: 50px; height: 50px">[[ic:users-three]]</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px"><span class="d" style="font-size: 16.5px">Studio</span><span style="font-size: 12px; color: var(--accent-ink); font-weight: 600">14:02</span></span>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--ink2)"><span class="tmi">[[ic:translate s]]</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Léo : J'ai trouvé le son du tram, écoute ça</span></span>
+</span>
+<span class="unread">3</span>
+</button>
+<div class="sep"></div>
+<button class="row">
+<span class="av" style="--accent: #F8B500; width: 50px; height: 50px">TR</span>
+<span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span style="display: flex; align-items: baseline; justify-content: space-between; gap: 8px"><span class="d" style="font-size: 16.5px">Week-end à Cascais</span><span style="font-size: 12px; color: var(--ink3); font-weight: 600">hier</span></span>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--ink2)"><span class="tmi">[[ic:translate s]]</span><span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Tomás : Venez à Cascais demain, je vous attends</span></span>
+</span>
+</button>
+</div>
+</div>
+<div class="cp"><b>icon</b><span class="kcap">Le glyphe seul, 16 px, devant un aperçu d'une ligne. Aucun mot, aucun geste : la rangée entière se touche (Autre-Commun).</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<p style="font-size: 16px; line-height: 1.45; text-wrap: pretty">Au marché aux puces, chaque objet attend qu'on lui invente une deuxième vie. J'ai pris trois pellicules et un vieux réveil.</p>
+<p class="tm">[[ic:translate s]]<span>Traduit de l'italien</span><i aria-hidden="true">·</i><button class="tg">Voir l'original</button></p>
+</div>
+</div>
+<div class="cp"><b>line</b><span class="kcap">Le défaut. Sous un texte, une bulle, une bio, une citation : glyphe, origine, point, bascule (Autre-Publications, Etat-Demande, Web-Public).</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage">
+<div class="ph" role="img" aria-label="Photo, légende traduite : Le tram 28, avant tout le monde." style="position: relative; width: 100%; height: 200px; padding: 8px; align-items: flex-end">
+<span class="tml glass">[[ic:translate s]]<span>Le tram 28, avant tout le monde.</span></span>
+</div>
+</div>
+<div class="cp"><b>legend</b><span class="kcap">Sur un média : le glyphe en tête de la légende, dans une capsule de verre de K01. Un toucher sur la capsule bascule (Autre-Publications).</span></div>
+</div>
+</div>
+
+<span class="tag" style="margin-top: 14px">Modes</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 22px">
+<div class="stage">
+<div style="display: flex; align-items: flex-end; gap: 10px">
+<span class="av" style="width: 34px; height: 34px; font-size: 12.5px; --accent: #2ECC71">SB</span>
+<div class="bub" style="flex: 1">
+<p>On s'est croisées au festival !</p>
+<p class="tm">[[ic:translate s]]<span>Traduit de l'arabe</span><i aria-hidden="true">·</i><button class="tg">Voir l'original</button></p>
+</div>
+</div>
+</div>
+<div class="cp"><b>translated</b><span class="kcap">Le repos. Le texte est servi dans la langue du lecteur ; la marque dit d'où il vient et offre l'original.</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px">
+<div class="stage">
+<div style="display: flex; align-items: flex-end; gap: 10px">
+<span class="av" style="width: 34px; height: 34px; font-size: 12.5px; --accent: #2ECC71">SB</span>
+<div class="bub" style="flex: 1">
+<p dir="rtl" lang="ar" style="text-align: start">التقينا في المهرجان!</p>
+<p class="tm orig">[[ic:translate s]]<span>Original en arabe</span><i aria-hidden="true">·</i><button class="tg">Voir la traduction</button></p>
+</div>
+</div>
+</div>
+<div class="cp"><b>original</b><span class="kcap">Après la bascule. Le glyphe tombe à <code>ink3</code>, la mention nomme la langue lue, le geste ramène la traduction. La marque reste à sa place.</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px; --accent: #9CA3AF; --accent-ink: #C7CDD8">
+<div class="stage">
+<div class="host" style="gap: 10px; padding: 14px">
+<span class="tag" style="padding: 2px 4px 0">Ta demande de message</span>
+<p style="padding: 12px 14px; border-radius: 14px; background: var(--field); border: 1px solid var(--line); font-size: 15px; line-height: 1.4">Bonjour Rui, j'ai une kora à faire réparer.</p>
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px">
+<p class="tm ann">[[ic:translate s]]<span>Il le lira en portugais</span></p>
+<span class="mono" style="font-size: 12px; color: var(--ink3)">43 / 300</span>
+</div>
+</div>
+</div>
+<div class="cp"><b>announce</b><span class="kcap">Avant l'envoi : la langue du destinataire, 13 px demi-gras à l'encre d'accent. Jamais de bascule, il n'y a rien à rendre (Autre-Inconnu).</span></div>
+</div>
+</div>
+
+<span class="tag" style="margin-top: 14px">États</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="gap: 2px">
+<p class="tm">[[ic:translate s]]<span>Traduit de l'italien</span><i aria-hidden="true">·</i><button class="tg">Voir l'original</button></p>
+<p class="tm pr">[[ic:translate s]]<span>Traduit de l'italien</span><i aria-hidden="true">·</i><button class="tg">Voir l'original</button></p>
+</div>
+<div class="cp"><b>Repos, pressé</b><span class="kcap">À l'appui, seule la bascule répond : échelle 0,94, encre à 62 %, en moins d'une image. Le glyphe et la mention ne bougent pas.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="gap: 4px">
+<div class="swap">
+<p style="font-size: 15px; line-height: 1.45; opacity: .14">Au marché aux puces, chaque objet attend une deuxième vie.</p>
+<p lang="it" style="font-size: 15px; line-height: 1.45; opacity: .62">Al mercato delle pulci, ogni oggetto aspetta una seconda vita.</p>
+</div>
+<p class="tm wait">[[ic:translate s]]<span>Traduit de l'italien</span><i aria-hidden="true">·</i><button class="tg">Voir l'original</button></p>
+</div>
+<div class="cp"><b>Bascule en cours</b><span class="kcap">Les deux textes se croisent en fondu, 200 ms. La bascule s'efface à 50 % et ignore un second toucher ; son libellé change à la fin du fondu.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="bub nm" style="align-self: flex-start; max-width: 86%"><p>Tu passes au studio ce soir ?</p></div>
+<div style="display: flex; align-items: center; gap: 8px; align-self: flex-start; min-height: 30px; padding: 0 12px; border-radius: 10px; border: 1.5px dashed var(--line); font-size: 12px; color: var(--ink3)">[[ic:prohibit s]]<span>aucune marque, aucune place réservée</span></div>
+</div>
+<div class="cp"><b>Sans traduction : absente</b><span class="kcap">Le texte est déjà dans la langue du lecteur. L'hôte ne monte pas la marque : ni glyphe grisé, ni hauteur vide.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage">
+<div class="bub nm" style="align-self: flex-start; max-width: 92%; gap: 6px"><p style="font-size: 15px">Le rendez-vous est déplacé à jeudi, même heure.</p><p class="tm fact">[[ic:translate s]]<span>Traduit de l'italien</span></p></div>
+</div>
+<div class="cp"><b>Sans geste</b><span class="kcap">Sans <code>onToggle</code>, la marque informe : un texte, pas un bouton. Ni point, ni halte de clavier, ni verbe. Elle tient en 24 px.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px">
+<div class="stage" style="gap: 10px">
+<p class="tm" style="max-width: 220px; align-items: flex-start">[[ic:translate s]]<span style="display: flex; flex-direction: column; align-items: flex-start"><span>Traduit du portugais du Brésil</span><button class="tg">Voir l'original</button></span></p>
+<p class="tm" dir="rtl" style="align-self: stretch">[[ic:translate s]]<span>مترجم من الإيطالية</span><i aria-hidden="true">·</i><button class="tg">عرض الأصل</button></p>
+</div>
+<div class="cp"><b>Étroit, droite à gauche</b><span class="kcap">Quand la ligne ne tient plus, le point s'en va et la bascule passe dessous, alignée sur la mention. En arabe, tout se reflète sauf le glyphe.</span></div>
+</div>
+<div class="kcell kc" style="padding: 0; overflow: hidden">
+<div class="mx" data-theme="light" style="display: flex; flex-direction: column; gap: 14px; padding: 20px; flex: 1; background: linear-gradient(160deg, #F5F3FF, #EEF2FF)">
+<div class="stage">
+<div style="align-self: flex-start; max-width: 96%; display: flex; flex-direction: column; padding: 12px 16px 0; border-radius: 20px 20px 20px 6px; background: #fff; border: 1px solid var(--line); box-shadow: 0 8px 20px rgba(67,56,202,.10)">
+<span style="font-size: 15.5px; color: var(--ink)">Je t'envoie le mix ce soir. Dis-moi ce que tu en penses.</span>
+<p class="tm">[[ic:translate s]]<span>Traduit du wolof</span><i aria-hidden="true">·</i><button class="tg">Voir l'original</button></p>
+</div>
+</div>
+<div class="cp"><b>Thème clair</b><span class="kcap">Mêmes parts, jetons clairs : l'encre d'accent s'assombrit pour tenir 4,5:1 sur blanc (Web-Public).</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Le texte fond, la marque reste</h2><p>Deux mouvements, tous deux sur l'opacité. La bascule croise les deux textes sur <code>motion.morph</code> ; la marque change de libellé sans bouger d'un pixel. Quand une traduction arrive après l'original, le texte fond de même et la marque entre sur <code>motion.rise</code>, une fois.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell kc" style="gap: 22px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div style="display: flex; gap: 20px; flex: 1">
+<div class="live3">
+<div class="pit">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div class="swap">
+<p class="mv-a" style="font-size: 16px; line-height: 1.45">Au marché aux puces, chaque objet attend qu'on lui invente une deuxième vie. J'ai pris trois pellicules et un vieux réveil.</p>
+<p class="mv-b" lang="it" style="font-size: 16px; line-height: 1.45">Al mercato delle pulci, ogni oggetto aspetta che gli si inventi una seconda vita. Ho preso tre rullini e una vecchia sveglia.</p>
+</div>
+<div class="swap" style="position: relative">
+<p class="tm mv-a">[[ic:translate s]]<span>Traduit de l'italien</span><i aria-hidden="true">·</i><span class="tg mv-tg">Voir l'original</span></p>
+<p class="tm orig mv-b">[[ic:translate s]]<span>Original en italien</span><i aria-hidden="true">·</i><span class="tg mv-tg">Voir la traduction</span></p>
+<span class="tap mv-tap" aria-hidden="true" style="left: 172px; top: 3px"></span>
+</div>
+</div>
+</div>
+<b>Elle bascule</b><span><code>motion.morph</code> · fondu enchaîné des deux textes, 200 ms. Le libellé de la marque change avec lui, à la même place.</span>
+</div>
+<div class="live3">
+<div class="pit">
+<div style="display: flex; align-items: flex-end; gap: 10px">
+<span class="av" style="width: 34px; height: 34px; font-size: 12.5px">LM</span>
+<div class="bub" style="flex: 1; padding-bottom: 0">
+<div class="swap">
+<p class="mv-o" lang="it">Ho trovato il suono del tram, ascolta.</p>
+<p class="mv-t">J'ai trouvé le son du tram, écoute ça.</p>
+</div>
+<p class="tm mv-mark">[[ic:translate s]]<span>Traduit de l'italien</span><i aria-hidden="true">·</i><span class="tg">Voir l'original</span></p>
+</div>
+</div>
+</div>
+<b>Elle arrive avec la traduction</b><span><code>motion.rise</code> · l'original est déjà lisible ; la traduction le remplace en fondu et la marque monte de 8 px, une seule fois.</span>
+</div>
+</div>
+<span class="spec">durée : motion.morph 200 ms sur le texte et le libellé · motion.rise à la première apparition de la marque · courbe : ressorts de K26, sans dépassement sur l'opacité · déclencheur : isShowingOriginal change ; la marque entre dans l'arbre · haptique : un tic de sélection à la bascule, aucun à l'arrivée · mouvement réduit : remplacement sec du texte, marque posée sans translation</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">1</span><b style="font-size: 14.5px">Le doigt se pose</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><div class="host" style="width: 150px; flex: none; padding: 12px; gap: 8px"><div class="bone" style="width: 92%"></div><div class="bone" style="width: 64%"></div><p class="tm" style="font-size: 10px; gap: 5px; margin-top: 2px">[[ic:translate s]]<span style="display: inline-flex; padding: 3px 7px; border-radius: 999px; background: color-mix(in oklab, var(--accent) 22%, transparent); color: var(--accent-ink); font-weight: 700">Voir l'original</span></p></div><span class="kcap">La bascule répond seule, au toucher. Le texte ne bouge pas encore.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">2</span><b style="font-size: 14.5px">Les deux textes se croisent</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><div class="host" style="width: 150px; flex: none; padding: 12px; gap: 8px"><div class="bone" style="width: 92%; opacity: .45"></div><div class="bone" style="width: 78%; opacity: .45; background: var(--accent)"></div><p class="tm wait" style="font-size: 10px; gap: 5px; margin-top: 2px">[[ic:translate s]]<span class="tg" style="min-height: 0">Voir l'original</span></p></div><span class="kcap"><code>motion.morph</code> : l'hôte fond son texte ; la marque attend, à 50 %.</span></div>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 12px; min-height: 0; flex: 1">
+<div style="display: flex; align-items: center; gap: 10px"><span class="step">3</span><b style="font-size: 14.5px">L'original est là</b></div>
+<div style="display: flex; align-items: center; gap: 16px"><div class="host" style="width: 150px; flex: none; padding: 12px; gap: 8px"><div class="bone" style="width: 78%; background: color-mix(in oklab, var(--accent) 60%, var(--field))"></div><div class="bone" style="width: 88%; background: color-mix(in oklab, var(--accent) 60%, var(--field))"></div><p class="tm orig" style="font-size: 10px; gap: 5px; margin-top: 2px">[[ic:translate s]]<span class="tg" style="min-height: 0">Voir la traduction</span></p></div><span class="kcap">Glyphe atténué, geste inversé. La voix dit « original affiché ».</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Un nom de langue, un booléen, un geste. Aucune signature ne nomme un message, une traduction, un utilisateur ni un code de langue : l'hôte passe des mots déjà écrits dans la langue de l'interface.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyTranslationMark.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-translation-mark.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyTranslationMark(sourceLanguageName:isShowingOriginal:onToggle:…)</code></span><span><code>MeeshyTranslationMark(sourceLanguageName, isShowingOriginal, onToggle, modifier, …)</code></span><span><code>&lt;MeeshyTranslationMark sourceLanguageName isShowingOriginal onToggle … /&gt;</code></span>
+<span><b>Densité</b></span><span><code>MeeshyTranslationMarkDensity { icon, line, legend }</code></span><span><code>enum class</code> identique</span><span><code>'icon' | 'line' | 'legend'</code></span>
+<span><b>Mode</b></span><span><code>MeeshyTranslationMarkMode { translated, original, announce }</code></span><span>idem</span><span><code>'translated' | 'original' | 'announce'</code></span>
+<span><b>Tailles</b></span><span>Une seule : glyphe 16, texte 12,5 (13 en <code>announce</code>). La police suit Dynamic Type.</span><span>idem, en <code>sp</code></span><span>idem, en <code>rem</code></span>
+<span><b>Emplacements</b></span><span><code>glyph</code> : <code>@ViewBuilder</code>, à la place du glyphe ; <code>caption</code> : la légende, en <code>legend</code></span><span><code>glyph</code>, <code>caption: (@Composable () -&gt; Unit)?</code></span><span><code>glyph</code>, <code>caption</code> : <code>ComponentChildren</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyTranslationMarkRecipe.resolve(density:mode:hasToggle:isPressed:isPending:width:tone:reduceMotion:)</code></span><span style="border-bottom: 0"><code>MeeshyTranslationMarkRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyTranslationMarkRecipe(…)</code> : classes et attributs</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>sourceLanguageName: String?</code><span>Déjà accordé par l'hôte : « de l'italien », « du wolof ». <code>nil</code> : « Traduit », sans langue.</span></div>
+<div class="par"><code>isShowingOriginal: Bool = false</code><span>Remis par l'hôte, jamais gardé. Le même booléen choisit son texte.</span></div>
+<div class="par"><code>onToggle: (() -&gt; Void)? = nil</code><span>Absent : la marque informe, sans point ni bouton.</span></div>
+<div class="par"><code>density = .line</code><span><code>icon</code> ignore mention et bascule. <code>legend</code> attend <code>caption</code>.</span></div>
+<div class="par"><code>mode = nil</code><span>Déduit de <code>isShowingOriginal</code>. Se passe pour <code>announce</code>.</span></div>
+<div class="par"><code>announcement: String? = nil</code><span>La phrase d'annonce entière : « Il le lira en portugais ».</span></div>
+<div class="par"><code>isPending: Bool = false</code><span>Bascule à 50 %, un second toucher est ignoré.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Encre du glyphe et de la bascule. Sans elle : l'accent de l'hôte.</span></div>
+<div class="par"><code>tone: MeeshyGlassTone? = nil</code><span>En <code>legend</code> seulement, remis tel quel à K01.</span></div>
+<div class="par"><code>onExplore: (() -&gt; Void)? = nil</code><span>Appui long : l'hôte ouvre sa feuille des langues. Doublé d'une action nommée.</span></div>
+<div class="par"><code>label: String? = nil</code><span>Ce que la voix lit, quand l'hôte veut nommer le contenu : « Afficher le message d'origine ».</span></div>
+<div class="par"><code>haptic = .selection</code><span><code>none</code> laisse l'hôte jouer le sien. Rien en <code>announce</code>.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une recette, trois façons de la dire</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Ligne : <code>HStack(alignment: .firstTextBaseline)</code> ; <code>ViewThatFits</code> passe la bascule sous la mention.</li>
+<li>Bascule : <code>Button</code> en <code>.plain</code>, <code>contentShape(Rectangle())</code> de 44 pt, libellé en <code>contentTransition(.opacity)</code>.</li>
+<li>Tic : <code>sensoryFeedback(.selection, trigger: isShowingOriginal)</code>.</li>
+<li>Légende : la capsule demande son verre à K01 (<code>glassEffect</code> sous iOS 26, verre dessiné avant).</li>
+<li>Voix : <code>accessibilityValue</code> dit « traduction affichée » ou « original affiché » ; l'appui long est une <code>accessibilityAction(named:)</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sous iOS 17, le tic passe par le site unique <code>HapticFeedback</code>. <code>accessibilityReduceMotion</code> : aucun fondu, aucune translation. Très grande police : la bascule passe dessous, rien n'est tronqué.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Ligne : <code>FlowRow</code> ; la bascule passe à la ligne d'elle-même, alignée sur la mention.</li>
+<li>Bascule : <code>Modifier.clickable(role = Role.Button)</code> et <code>minimumInteractiveComponentSize()</code> : 48 dp.</li>
+<li>Libellé : <code>AnimatedContent</code> en <code>fadeIn togetherWith fadeOut</code>, 200 ms.</li>
+<li>Légende : surface tonale de K01, sans flou.</li>
+<li>Voix : <code>stateDescription</code> pour l'état, <code>onClickLabel</code> pour le geste ; sans action, le glyphe sort de l'arbre.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Échelle d'animation à zéro : remplacement sec. Sans retour haptique de sélection : aucun tic. <code>fontScale</code> 2,0 : deux lignes, cible intacte.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Élément : <code>&lt;button type="button" aria-pressed&gt;</code> ; sans <code>onToggle</code>, un <code>&lt;span&gt;</code>, ni halte de tabulation ni verbe.</li>
+<li>Texte de l'hôte : il pose <code>lang</code> et <code>dir</code> sur ce qu'il rend ; la marque n'y touche pas.</li>
+<li>Fondu : <code>transition: opacity</code> ; <code>:active</code> et <code>:focus-visible</code> en CSS, aucun état.</li>
+<li>Passage à la ligne : <code>flex-wrap</code> ; la cible de 44 px est un pseudo-élément.</li>
+<li>Légende : <code>MeeshyGlass</code> de K01 ; aucun <code>backdrop-filter</code> dans le fichier.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> <code>prefers-reduced-motion</code> : aucune transition. Sans vibration du navigateur : aucun tic. Au clavier : Entrée et Espace basculent, Maj+F10 ouvre les langues.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">La marque existe trois fois, sous trois noms, et aucune n'est partagée</h2><p>Relevé dans le dépôt le 16 novembre 2026. Chaque plateforme a une pastille de traduction et une bascule vers l'original, écrites dans l'app, liées à un type de contenu. Le <code>TranslationToggle</code> et son relais <code>onDisplayedChange</code>, cités par le <code>CLAUDE.md</code> racine, n'existent plus dans <code>apps/web/src</code> : la loi qu'ils portaient devient un témoin de K51.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/message-blocks.tsx</span><p><span class="be">Devient le composant</span> <code>PrismPastille</code> : le glyphe du pied, un <code>aria-pressed</code>, et déjà la règle « sans <code>onToggle</code>, elle informe et ne promet rien ». Elle perd son <code>PrismSubject</code> (message, commentaire, post), remplacé par <code>label</code>, et gagne mention et densités.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/call-unfolded-original.tsx</span><p>« Original · … » déplié sous une phrase d'appel, et « Traduit · » quand le journal inverse les deux. C'est le mode <code>original</code> ; le dépliage reste à l'appel, la mention passe à K51. <span class="mono">call-transcript-panel.tsx</span> porte la bascule « Voir l'original » du journal.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/publication-language-bar.tsx</span><p>La barre rapide des langues d'une story, « Original » en tête. Elle n'est pas la marque : c'est ce que <code>onExplore</code> ouvre. Elle reste à l'app.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Components/LanguageFlagChip.swift</span><p><span class="be">Devient le composant</span> <code>CommentTranslationToggle</code> (un <code>showOriginal</code> lié, ressort 0,3) et <code>TranslationsBadge</code> (le glyphe qui ouvre la feuille). Les deux fusionnent, perdent le type du commentaire et montent dans <code>MeeshyUI/Kit</code>. <code>LanguageFlagChip</code> reste : c'est une puce, K04.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift</span><p>Le glyphe <code>translate</code> en tête du pied d'une bulle, avant les drapeaux. Densité <code>icon</code>, rebranchée ; l'ordre du pied reste à la bulle.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Stories/Views/StoryCommentRowView.swift</span><p>Un <code>@State showOriginal</code> local et un fondu de 0,2 s : exactement la bascule de K51, sur un média. <span class="mono">Main/Views/MediaCaptionTranslationRow.swift</span> donne la densité <code>legend</code> ; ses drapeaux restent à l'app.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/ViewModels/Conversation/PrismTranslationLaw.swift</span><p><code>translatedFromLanguage(of:)</code> : la loi qui trouve la langue d'origine. Elle reste à l'app et fournit <code>sourceLanguageName</code>. Rien de cela n'entre dans le kit.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/feed/…/app/feed/PostTranslationsBadge.kt</span><p><span class="be">Devient le composant</span> Le glyphe de 14 dp qui, sans action, sort de l'arbre d'accessibilité, et avec action devient un bouton nommé. Il gagne mention et bascule, et passe dans <code>component/kit</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/stories/…/app/stories/StoryCommentRow.kt</span><p>La bascule en mots : <code>stories_comments_overlay_show_original</code> et <code>…_show_translated</code>, « Voir l'original » et « Voir la traduction ». Ces deux chaînes deviennent celles du kit ; <code>chat_action_show_original</code> les rejoint.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/…/ui/component/bubble/BubbleContentBuilder.kt</span><p>Le <code>showOriginal</code> qui choisit le texte d'une bulle, nourri par <span class="mono">feature/chat/…/ChatBubbleProjection.kt</span>. C'est la résolution : elle reste où elle est et remet son booléen à la marque.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Elle sert aussi ailleurs</span><h2 class="d">Quatre écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 22px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="stage">
+<div class="bub" style="align-self: flex-start; max-width: 80%">
+<p>Je passe prendre les tirages à 18 h, garde-moi les deux grands.</p>
+<p class="tm" style="justify-content: space-between"><span style="display: inline-flex; align-items: center; gap: 7px; min-width: 0">[[ic:translate s]]<span>Traduit de l'italien</span><i aria-hidden="true">·</i><button class="tg">Voir l'original</button></span><span style="font-size: 11.5px; color: var(--ink3)">17:42</span></p>
+</div>
+<div style="align-self: flex-end; max-width: 78%; padding: 12px 16px; border-radius: 20px 20px 6px 20px; background: var(--brand-fill); color: #fff; font-size: 16px">Promis, ils sont de côté.</div>
+</div>
+<div class="cp"><b>Bulle de message</b><span class="kcap">Densité <code>line</code> dans le pied d'une bulle reçue. L'heure et l'accusé restent à la bulle, après la marque.</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px; --accent: #FF6B6B; --accent-ink: #FFA3A3">
+<div class="stage">
+<div class="host" style="padding: 14px 16px 2px; gap: 10px">
+<div style="display: flex; align-items: center; gap: 12px"><span class="ib" style="background: var(--accent); color: #0B0B12" aria-hidden="true">[[ic:play-fill]]</span><span class="wave" style="flex: 1; justify-content: space-between; max-width: 300px"><i style="height: 40%"></i><i style="height: 80%"></i><i style="height: 55%"></i><i style="height: 100%"></i><i style="height: 65%"></i><i style="height: 35%"></i><i style="height: 90%"></i><i style="height: 50%"></i><i style="height: 75%"></i><i style="height: 45%"></i><i style="height: 85%"></i><i style="height: 30%"></i><i style="height: 60%"></i><i style="height: 95%"></i><i style="height: 40%"></i><i style="height: 70%"></i><i style="height: 55%"></i><i style="height: 25%"></i></span><span class="mono" style="color: var(--ink2)">0:12</span></div>
+<div style="display: flex; flex-direction: column">
+<p style="font-size: 14.5px; line-height: 1.45; color: var(--ink)">« J'arrive dans dix minutes, commencez sans moi. »</p>
+<p class="tm">[[ic:translate s]]<span>Traduit de l'igbo</span><i aria-hidden="true">·</i><button class="tg">Voir l'original</button></p>
+</div>
+</div>
+</div>
+<div class="cp"><b>Transcription d'un vocal</b><span class="kcap">Sous la transcription. La bascule change le texte ; la piste jouée suit par l'hôte, élue par la langue du texte servi.</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px; --accent: #3498DB; --accent-ink: #8CC8F2">
+<div class="stage" style="flex-direction: row; align-items: stretch; gap: 20px">
+<div class="ph" style="position: relative; width: 190px; height: 300px; flex: none; padding: 8px; align-items: flex-end; border-radius: 22px">
+<span style="position: absolute; left: 10px; right: 10px; top: 10px; display: flex; gap: 4px"><i style="flex: 1; height: 3px; border-radius: 2px; background: var(--ink)"></i><i style="flex: 1; height: 3px; border-radius: 2px; background: var(--ink3)"></i><i style="flex: 1; height: 3px; border-radius: 2px; background: var(--ink3)"></i></span>
+<span class="tml glass">[[ic:translate s]]<span>Premier matin à Kyoto, tout est bleu.</span></span>
+</div>
+<div style="display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; flex: 1; min-width: 0">
+<span class="kcap">Touchée, la capsule rend la légende d'origine, à la même place :</span>
+<span class="tml glass" style="width: auto">[[ic:translate s]]<span lang="ja" style="color: var(--ink)">京都の最初の朝、すべてが青い。</span></span>
+</div>
+</div>
+<div class="cp"><b>Légende d'une story</b><span class="kcap">Densité <code>legend</code>, sur le média plein cadre. Aucune mention : la place manque, la voix dit « légende traduite du japonais ».</span></div>
+</div>
+<div class="kcell kc" style="padding: 22px; --accent: #FBBF24; --accent-ink: #FCD34D">
+<div class="stage">
+<div class="host" style="padding: 18px 18px 4px; gap: 12px">
+<div style="display: flex; align-items: center; gap: 12px"><span class="av" style="width: 46px; height: 46px; border-radius: 15px">[[ic:users-four]]</span><div style="display: flex; flex-direction: column; min-width: 0"><span class="d" style="font-size: 17px">Photo de rue</span><span style="font-size: 12.5px; color: var(--ink2)">1 204 membres</span></div></div>
+<div style="display: flex; flex-direction: column">
+<p style="font-size: 14.5px; line-height: 1.45; color: var(--ink)">On marche, on regarde, on déclenche. Une sortie par mois, dans une ville différente.</p>
+<p class="tm">[[ic:translate s]]<span>Traduit du portugais</span><i aria-hidden="true">·</i><button class="tg">Voir l'original</button></p>
+</div>
+</div>
+</div>
+<div class="cp"><b>Description d'une communauté</b><span class="kcap">Densité <code>line</code> sous un texte long, à l'accent de la communauté. La même sous une bio, un commentaire, un post du fil.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque densité × mode rend les valeurs de la fiche : glyphe 16, textes 12,5 et 13, graisses, écart 7, encre du glyphe en <code>original</code>. Vecteurs <code>K51-MeeshyTranslationMark.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Elle annonce ce qui est rendu.</b> Toucher la bascule appelle <code>onToggle</code> une fois et ne change rien d'elle-même : le libellé ne s'inverse que si l'hôte remet <code>isShowingOriginal</code>. Aucun état dans le composant.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Sans geste, sans promesse.</b> Sans <code>onToggle</code> : aucun bouton, aucune halte de clavier, aucun point, aucun verbe. En <code>announce</code> et en <code>icon</code> : jamais de bascule, quels que soient les paramètres.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Un bouton nommé « Voir l'original », valeur « traduction affichée » ; le glyphe et le point sont cachés. La mention se lit avec lui, une fois. L'appui long est une action nommée.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> 44 pt, 48 dp, 44 px au moins, sans décaler les voisins. Mention et bascule tiennent 4,5:1 sur le fond de l'hôte, en clair et en sombre, et sur le verre dense de la légende.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Texte long et RTL.</b> Très grande police ou largeur étroite : la bascule passe dessous, rien n'est tronqué. En arabe, l'ordre se reflète, le glyphe non. Le nom de langue n'est jamais recomposé par le composant.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins, mouvement et pureté.</b> La bascule ne re-peint ni le pied de la bulle ni les rangées voisines, et la marque garde sa hauteur d'un mode à l'autre. Mouvement réduit : remplacement sec, aucun déplacement. Garde de source : aucun type du domaine, aucun code de langue, aucun appel à un résolveur du Prisme, aucun singleton, aucun verre dessiné dans les fichiers de K51. Non-régression : les suites du Prisme des trois apps restent vertes sans être touchées.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> La couleur ne porte jamais seule le fait : le glyphe et les mots le disent. La voix annonce le changement de langue une fois, poliment, sans voler le focus ; le texte rendu par l'hôte porte sa langue pour être lu avec la bonne voix.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Trois nœuds, aucune ombre, aucun flou hors de la légende. Seule l'opacité s'anime. Dans une liste de mille bulles, la marque est égale à elle-même tant que ses trois valeurs ne changent pas : elle ne se redessine pas.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":8130}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

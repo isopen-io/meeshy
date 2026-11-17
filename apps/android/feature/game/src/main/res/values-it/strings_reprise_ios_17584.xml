@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="game2_duo_no_friends">Ti serve un amico accettato per stringere un’alleanza.</string>
+    <string name="game2_league_locked">Il torneo si apre al livello %1$s · sei al livello %2$s</string>
+    <string name="game2_settings_hidden_card">Il gioco è nascosto su questo dispositivo.</string>
+    <string name="game_atlas_tiers_prestige">La rinascita si offre al livello %1$s: è facoltativa, la tua luce può anche continuare a crescere.</string>
+    <string name="game_concept_atlas_tip_2">Aspetta la risposta: serve un messaggio in ogni direzione.</string>
+    <string name="game_frappe_refused_shadow">Un’ombra vela la tua luce. Le tue prossime scintille la dissiperanno, e conieremo.</string>
+    <string name="game_rules_concept_showcase_body">Lo scaffale dei tuoi trofei: coppe del torneo e del viaggio, trofei di rinascita e della Fiamma.</string>
+    <string name="game_rules_intro">Otto regole, e tutto il gioco ci sta dentro. Meo le spiega, Mee ti mostra il gesto.</string>
+    <string name="game_state_points_missing">La tua luce conta %1$s, cioè %2$s. La Meesh n. %3$s ne fisserà %4$s: mancano %5$s.</string>
+    <string name="game_state_points_ready">La tua luce conta %1$s, cioè %2$s: abbastanza per coniare la Meesh n. %3$s, che ne fisserà %4$s.</string>
+    <string name="game_state_points_missing_plain">La tua luce conta %1$s. La Meesh n. %2$s ne fisserà %3$s: mancano %4$s.</string>
+    <string name="game_state_season_progress">Viaggio %1$s, settimana %2$s su %3$s: sosta %4$s su %5$s, e %6$s fino alla successiva.</string>
+</resources>

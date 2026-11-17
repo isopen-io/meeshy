@@ -13,6 +13,14 @@
           "status": "android-only"
         },
         {
+          "androidName": "game2_guide_moment_league_relegated_means",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_league_consent_how_question",
+          "status": "android-only"
+        },
+        {
           "androidName": "game2_league_pseudonym_drawn",
           "status": "android-only"
         },
@@ -41,6 +49,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "game2_season_none",
+          "status": "android-only"
+        },
+        {
           "androidName": "game2_season_seal_body",
           "status": "android-only"
         },
@@ -53,15 +65,31 @@
           "status": "android-only"
         },
         {
-          "androidName": "game2_settings_notifications_body",
+          "androidName": "game2_settings_friends_league_effects",
           "status": "android-only"
         },
         {
-          "androidName": "game2_settings_notifications_switch",
+          "androidName": "game2_settings_friends_league_question",
           "status": "android-only"
         },
         {
-          "androidName": "game2_settings_visibility_body",
+          "androidName": "game2_settings_hidden_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_hidden_effects",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_hidden_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_visibility_presence",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_visibility_question",
           "status": "android-only"
         },
         {
@@ -77,11 +105,31 @@
           "status": "android-only"
         },
         {
+          "androidName": "game_concept_flame_what",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_concept_league_use",
+          "status": "android-only"
+        },
+        {
           "androidName": "game_concept_level_what",
           "status": "android-only"
         },
         {
           "androidName": "game_concept_missions_use",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_concept_points_what",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_concept_prestige_use",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_concept_prestige_what",
           "status": "android-only"
         },
         {
@@ -98,10 +146,6 @@
         },
         {
           "androidName": "game_error_league_pseudonym_invalid",
-          "status": "android-only"
-        },
-        {
-          "androidName": "game_flame_panel_freeze_full",
           "status": "android-only"
         },
         {
@@ -137,7 +181,35 @@
           "status": "android-only"
         },
         {
+          "androidName": "game_progression_offline_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_1_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_1_more",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_1_question",
+          "status": "android-only"
+        },
+        {
           "androidName": "game_rules_2_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_3_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_3_more",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_3_question",
           "status": "android-only"
         },
         {
@@ -157,6 +229,22 @@
           "status": "android-only"
         },
         {
+          "androidName": "game_rules_8_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_badges_ribbon_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_concept_duo_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_concept_tailwind_body",
+          "status": "android-only"
+        },
+        {
           "androidName": "game_rules_section_concepts",
           "status": "android-only"
         },
@@ -170,6 +258,22 @@
         },
         {
           "androidName": "game_state_elans_idle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_state_missions_progress",
+          "status": "android-only"
+        },
+        {
+          "androidName": "progression_elans_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "reveal_badge_axis_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "reveal_streak_subtitle",
           "status": "android-only"
         }
       ]

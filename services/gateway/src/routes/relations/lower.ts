@@ -5,6 +5,7 @@ import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/response';
 import { logError } from '../../utils/logger';
 import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { captureBatteryBefore, refreshBatteryAfter } from '../../services/battery/batteryDeps';
 import { captureSharedLocationBefore, refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
@@ -62,6 +63,8 @@ export function registerRelationLower(fastify: FastifyInstance): void {
       const now = new Date();
       const ecoute = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, 'Now playing not refreshed after drop:', error) };
       const ecouteAvant = await captureNowPlayingBefore(ecoute, { userA: viewerId, userB: otherId });
+      const batterie = { ...ecoute, report: (error: unknown) => logError(fastify.log, 'Battery not refreshed after drop:', error) };
+      const batterieAvant = await captureBatteryBefore(batterie, { userA: viewerId, userB: otherId });
       const position = { ...ecoute, report: (error: unknown) => logError(fastify.log, 'Shared location not refreshed after drop:', error) };
       const positionAvant = await captureSharedLocationBefore(position, { userA: viewerId, userB: otherId });
       await asseoirLienHerite(fastify.prisma, viewerId, otherId, now);
@@ -78,6 +81,8 @@ export function registerRelationLower(fastify: FastifyInstance): void {
       // sous Proche (#13934), aucun accord de catégorie d'écoute. L'écoute s'efface chez qui la voyait.
       await withdrawSharesAfterDrop(fastify.prisma, { actorId: viewerId, otherId, level: link.effectiveLevel, at: now });
       await refreshNowPlayingAfter(ecoute, { userA: viewerId, userB: otherId, before: ecouteAvant });
+      // #14147 — sous Proche, la batterie s'efface chez qui la voyait.
+      await refreshBatteryAfter(batterie, { userA: viewerId, userB: otherId, before: batterieAvant });
       // #16980 — sous Ami, la position partagée s'efface chez qui la voyait.
       await refreshSharedLocationAfter(position, { userA: viewerId, userB: otherId, before: positionAvant });
       // #17012 — sous Proche, la séance « ensemble » de la paire s'arrête chez les deux.

@@ -439,11 +439,11 @@ struct HeaderFlameDecoration: ViewModifier {
         let replay = replayCount
         phase = 0
         isPlaying = true
-        let duration = reduceMotion ? 0.6 : HeaderFlameOrbit.duration
+        let duration = HeaderFlameReplayMotion.duration(reduceMotion: reduceMotion)
         let release = duration * Double(HeaderFlameOrbit.valueRelease)
         Task { @MainActor in
             _ = await cancellableSleep(for: .milliseconds(16))
-            withAnimation(.linear(duration: duration)) { phase = 1 }
+            HeaderFlameReplayMotion.animate(reduceMotion: reduceMotion) { phase = 1 }
             _ = await cancellableSleep(for: .seconds(release))
             guard replay == replayCount else { return }
             heldPoints = nil
@@ -451,6 +451,23 @@ struct HeaderFlameDecoration: ViewModifier {
             guard replay == replayCount else { return }
             isPlaying = false
         }
+    }
+}
+
+/// Le tour de la lueur à chaque envoi : sous « Réduire les animations », un
+/// fondu de la lueur en 0,6 s, sans tour (`HeaderFlameGlow`), qui traverse la
+/// racine du mouvement (#18354).
+enum HeaderFlameReplayMotion {
+    static let reducedDuration: Double = 0.6
+
+    static func duration(reduceMotion: Bool) -> Double {
+        reduceMotion ? reducedDuration : HeaderFlameOrbit.duration
+    }
+
+    static func animate(reduceMotion: Bool, _ body: () -> Void) {
+        meeshyWithAnimation(.linear(duration: HeaderFlameOrbit.duration),
+                            reduced: .linear(duration: reducedDuration),
+                            reduceMotion: reduceMotion, body)
     }
 }
 

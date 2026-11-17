@@ -282,3 +282,43 @@ describe('mes options (#7836)', () => {
     }
   });
 });
+
+/**
+ * ÉPURE #18361 — la fiche du groupe nomme au lieu d'expliquer (règles 1 et 3) : le titre de section porte le verbe,
+ * les rangées sont des noms, le Prisme se dit en une phrase visible, la consigne du surnom est derrière un (i).
+ */
+describe('la fiche du groupe, épurée (#18361)', () => {
+  test('la section garde le mot d’iOS (« Permissions ») et le choix du rôle se comprend hors de son titre', async () => {
+    await mount(conversation());
+    const headings = [...document.querySelectorAll('[data-conversation-settings] h5')].map((node) => node.textContent);
+    expect(headings).toEqual(['Permissions']);
+    expect($('[data-conversation-write-role] legend')?.textContent).toBe('Qui peut écrire');
+  });
+
+  test('le Prisme se dit en une phrase visible : « Chacun lit dans sa langue. »', async () => {
+    await mount(conversation());
+    const row = $('[data-conversation-auto-translate]')?.closest('div');
+    expect(row?.textContent).toContain('Traduction automatique');
+    expect(row?.textContent).toContain('Chacun lit dans sa langue.');
+    expect(row?.textContent).not.toContain('Les messages sont traduits automatiquement');
+  });
+
+  test('le surnom : « Surnom » à l’écran, la consigne derrière un (i) « À quoi sert le surnom ? »', async () => {
+    sessionStore.setState({
+      session: { status: 'authenticated', user: { id: 'u-moi', username: 'moi', displayName: 'Moi Même' }, token: 'jwt', sessionToken: 's', expiresAt: Number.MAX_SAFE_INTEGER },
+    } as Parameters<typeof sessionStore.setState>[0]);
+    try {
+    await mount(conversation());
+    expect($('[data-conversation-options-rename]')?.textContent).toContain('Surnom');
+    expect($('[data-conversation-options-rename]')?.textContent).not.toContain('Donnez un surnom');
+    const info = document.querySelector<HTMLButtonElement>('[data-conversation-options] button[aria-label="À quoi sert le surnom ?"]');
+    expect(info).not.toBeNull();
+    expect(info?.closest('[data-conversation-options-rename]')).toBeNull();
+    const note = document.getElementById(info?.getAttribute('aria-controls') ?? '');
+    expect(note?.textContent).toBe('Donnez un surnom à cette conversation : vous seul le voyez.');
+    expect(note?.className).toContain('sr-only');
+    } finally {
+      sessionStore.setState({ session: { status: 'anonymous' } });
+    }
+  });
+});

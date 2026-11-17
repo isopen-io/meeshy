@@ -7,8 +7,8 @@ import me.meeshy.sdk.model.call.group.GroupCallRoster
 
 /**
  * #16665 — a capture of the call in progress, as the live journal and the captions band show it
- * (`docs/product/appels-vue-finale.md` loi 13): a peer's screenshot or screen recording, or a
- * bound of the consented call recording. [elapsedLabel] is the call clock when it arrived;
+ * (`docs/product/appels-vue-finale.md` loi 13): a peer's screenshot or screen recording (or mine,
+ * [isLocal]), or a bound of the consented call recording. [elapsedLabel] is the call clock when it arrived;
  * [atMs] its arrival, never before what the band already shows.
  */
 data class CallLiveCapture(
@@ -20,6 +20,8 @@ data class CallLiveCapture(
     val elapsedLabel: String,
     /** Who captured, as the call names them ([CallCapturerName]) — blank until the screen resolves it. */
     val name: String = "",
+    /** R1.8 — my own capture (iOS `CallCaptureSignal.isLocal`): it enters my journal, named « You », never my chip. */
+    val isLocal: Boolean = false,
 )
 
 /** In a group, a capture is named by its author in the roster; the call's name only stands in (duo, unknown member). */

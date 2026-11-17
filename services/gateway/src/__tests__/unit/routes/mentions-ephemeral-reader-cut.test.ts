@@ -57,12 +57,15 @@ const MSG_PLAIN = '507f1f77bcf86cd799439601';
 const MSG_GONE_A = '507f1f77bcf86cd799439602';
 const MSG_LIVE_B = '507f1f77bcf86cd799439603';
 const MSG_GONE_B = '507f1f77bcf86cd799439604';
+const MSG_GRACE_A = '507f1f77bcf86cd799439605';
 
 /** Horloge réelle : la route construit son propre `new Date()`. */
 const NOW = new Date();
 const EPHEMERAL_SECONDS = 30;
 const GONE = new Date(NOW.getTime() - EPHEMERAL_UNAVAILABILITY_GRACE_MS - 60_000);
 const LIVE = new Date(NOW.getTime() + 10 * 60_000);
+/** Échu pour ce lecteur, mais encore dans la grâce : servi en pierre tombale. */
+const IN_GRACE = new Date(NOW.getTime() - 60_000);
 /** La colonne INTERNE de destruction — le plafond de rétention de sept jours. */
 const RAW_DESTRUCTION = new Date(NOW.getTime() + 7 * 24 * 60 * 60 * 1000);
 
@@ -154,7 +157,13 @@ const GONE_IN_B: MentionFixture = {
  * Les échéances par (message, participant). La clé de lecteur DIFFÈRE selon la
  * conversation — c'est ce que le témoin à deux conversations exerce.
  */
+const GRACE_IN_A: MentionFixture = {
+  messageId: MSG_GRACE_A, conversationId: CONV_A,
+  content: 'Le mot de passe du wifi est tournesol', ephemeralDuration: EPHEMERAL_SECONDS, expiresAt: RAW_DESTRUCTION,
+};
+
 const STATUS_ENTRIES = [
+  { messageId: MSG_GRACE_A, participantId: PART_A, ephemeralExpiresAt: IN_GRACE },
   { messageId: MSG_GONE_A, participantId: PART_A, ephemeralExpiresAt: GONE },
   { messageId: MSG_LIVE_B, participantId: PART_B, ephemeralExpiresAt: LIVE },
   { messageId: MSG_GONE_B, participantId: PART_B, ephemeralExpiresAt: GONE },
@@ -242,6 +251,15 @@ describe('GET /mentions/me — la coupure de service par lecteur (#16583)', () =
     // Une clé de lecteur UNIQUE ne pourrait pas rendre ces trois verdicts.
     expect(idsOf(rows)).toEqual([MSG_LIVE_B, MSG_PLAIN].sort());
     expect(JSON.stringify(rows)).not.toContain('rue des Lilas');
+  });
+
+  it('#18556 — une flamme consommée (échue pour ce lecteur, dans la GRÂCE) n’apparaît plus : ni existence, ni expéditeur, ni date', async () => {
+    const { status, rows } = await servedMentions([GRACE_IN_A, ORDINARY]);
+
+    expect(status).toBe(200);
+    expect(rows.map((r) => r.messageId)).toEqual([MSG_PLAIN]);
+    expect(JSON.stringify(rows)).not.toContain(MSG_GRACE_A);
+    expect(JSON.stringify(rows)).not.toContain('tournesol');
   });
 
   it("un éphémère VIVANT porte l'échéance DU LECTEUR, jamais la colonne interne de destruction", async () => {

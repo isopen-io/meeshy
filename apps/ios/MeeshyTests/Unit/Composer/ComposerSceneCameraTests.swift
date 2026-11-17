@@ -171,7 +171,7 @@ final class ComposerSceneCameraOverlayTests: XCTestCase {
         XCTAssertFalse(ComposerSceneCameraOverlay.isServed(.rails, stage: .recording))
         XCTAssertTrue(ComposerSceneCameraOverlay.isServed(.rails, stage: .off))
         XCTAssertEqual(ComposerViewfinderColumn.entries(composesScene: true, context: ComposerCaptureGestureContext()),
-                       [.gallery, .text, .background, .sticker],
+                       [.gallery, .text, .background, .sticker, .sound],
                        "le viseur armé n'est plus un viseur seul : la scène s'y compose")
     }
 
@@ -270,15 +270,22 @@ final class ComposerViewfinderColumnTests: XCTestCase {
         ComposerCaptureGestureContext(stage: stage, editing: editing, holding: holding, pendingSegments: pendingSegments)
     }
 
-    /// Directive porteur du 2026-11-10 : « Galerie (en premier), Texte, Fond, Stickers ».
-    func test_entries_composerViewfinder_servesGalleryFirstThenTextBackgroundStickers() {
+    /// Directives porteur du 2026-11-10 et du 2026-11-15 (#18654) : « Galerie, Texte, Fond, Sticker, Son ».
+    func test_entries_composerViewfinder_servesGalleryFirstThenTextBackgroundStickersSound() {
         XCTAssertEqual(ComposerViewfinderColumn.entries(composesScene: true, context: context()),
-                       [.gallery, .text, .background, .sticker])
+                       [.gallery, .text, .background, .sticker, .sound])
+    }
+
+    func test_soundEntry_opensTheSceneSoundDoor_andKeepsTheCamera() {
+        XCTAssertEqual(ComposerViewfinderEntry.sound.door, .sound)
+        XCTAssertEqual(ComposerViewfinderEntry.sound.camera(after: .chosen), .kept)
+        XCTAssertEqual(ComposerViewfinderColumn.label(.sound), ComposerCaptureCopy.editToolName(.sound),
+                       "un seul mot pour « Son », au viseur comme en retouche")
     }
 
     func test_label_namesTheEntriesSimply() throws {
         let labels = ComposerViewfinderEntry.allCases.map(ComposerViewfinderColumn.label)
-        XCTAssertFalse(labels.contains { $0.hasPrefix("composer.viewfinder.") }, "chaque libellé est traduit")
+        XCTAssertFalse(labels.contains { $0.hasPrefix("composer.") }, "chaque libellé est traduit")
         let path = try XCTUnwrap(Bundle.main.path(forResource: "fr", ofType: "lproj"))
         let francais = try XCTUnwrap(Bundle(path: path))
         let mots = ["gallery", "text", "background", "stickers"].map {
@@ -302,7 +309,7 @@ final class ComposerViewfinderColumnTests: XCTestCase {
     /// Seule la Galerie peut couper la caméra (au choix) : avec des segments en attente, elle se retire.
     func test_entries_pendingSegments_keepOnlyWhatNeverCutsTheCamera() {
         XCTAssertEqual(ComposerViewfinderColumn.entries(composesScene: true, context: context(pendingSegments: 2)),
-                       [.text, .background, .sticker], "choisir en Galerie couperait la caméra et ses segments en attente")
+                       [.text, .background, .sticker, .sound], "choisir en Galerie couperait la caméra et ses segments en attente")
     }
 
     /// **La caméra, pour chaque entrée et chaque issue** (directive porteur du 2026-11-10) : le viseur
@@ -366,6 +373,19 @@ final class ComposerViewfinderColumnTests: XCTestCase {
             XCTAssertFalse(entree.symbol.isEmpty)
             XCTAssertEqual(entree.accessibilityIdentifier, "composer.viewfinder.\(entree.rawValue)")
         }
+    }
+
+    /// **« Son » porte le MÊME glyphe au viseur et en retouche** (#18711) : celui de la retouche,
+    /// déclaré une fois, que la colonne du viseur lit.
+    func test_soundEntry_wearsTheRetouchGlyph_onBothColumns() {
+        XCTAssertEqual(ComposerViewfinderEntry.sound.symbol, ComposerCaptureCopy.editToolSymbol(.sound),
+                       "le viseur lit le glyphe de la retouche")
+        let retouche = ComposerRetouchRail.items(composesScene: true, tools: [.crop])
+        XCTAssertTrue(retouche.contains(.scene(.sound)), "sans son de prise, « Son » de la retouche est l'entrée du viseur")
+        XCTAssertTrue(ComposerRetouchRail.items(composesScene: true, tools: [.sound]).contains(.tool(.sound)),
+                      "avec un son de prise, c'est l'outil — même glyphe, `editToolSymbol(.sound)`")
+        XCTAssertNotEqual(ComposerViewfinderEntry.sound.symbol, ComposerRailDoor.sound.symbolName,
+                          "le glyphe du rail de la scène n'est plus celui de la colonne")
     }
 
     func test_bottomRow_mountsTheSceneEntries_beforeTheLookFamilies() throws {

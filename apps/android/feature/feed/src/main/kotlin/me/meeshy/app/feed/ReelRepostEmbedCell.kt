@@ -151,6 +151,7 @@ private fun AuthorRow(embed: RepostEmbedPresentation) {
 
 @Composable
 private fun LikesRow(likes: Int) {
+    if (likes <= 0) return
     val label = pluralStringResource(R.plurals.feed_repost_likes_count, likes, likes)
     Row(
         verticalAlignment = Alignment.CenterVertically,

@@ -163,12 +163,17 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    /// P18.4 — la bannière et la bulle partagent LE déploiement (`CallPipMorph.expand`) :
+    /// c'est lui qui saute le morphisme sous « Réduire les animations ».
     func test_expandToFullScreen_respectsReduceMotion() throws {
         let source = try pillSource()
-        let fn = try XCTUnwrap(source.range(of: "private func expandToFullScreen()"), "expandToFullScreen not found")
+        let fn = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func expandToFullScreen()", in: source), "expandToFullScreen not found")
+        XCTAssertTrue(fn.contains("reduceMotion: reduceMotion)"), "the pill hands its Reduce Motion preference to the shared expansion")
+        let morph = try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallPipMorph.swift")
+        let expand = try XCTUnwrap(DeclarationBodyScanner.body(containing: "static func expand(", in: morph))
         XCTAssertTrue(
-            source[fn.lowerBound...].prefix(400).contains("guard !reduceMotion else"),
-            "expandToFullScreen() must skip the expansion morph when reduceMotion is enabled — " +
+            expand.contains("guard !reduceMotion else"),
+            "The shared expansion must skip the morph when reduceMotion is enabled — " +
             "the morph is a large movement that can cause vestibular discomfort."
         )
     }
@@ -178,24 +183,23 @@ final class FloatingCallPillViewTests: XCTestCase {
     // La réduction/expansion entre le plein écran et la bannière est un MORPH
     // interne (contraction/étirement vers le haut), pas l'animation système du
     // fullScreenCover : les deux bascules de displayMode passent par
-    // withTransaction(disablesAnimations) et CallView porte le trio
-    // scale/opacité/coins (pipMorphProgress).
+    // withTransaction(disablesAnimations) et CallView porte l'échelle et
+    // l'opacité (pipMorphProgress, `CallPipMorphEffect`).
 
     func test_expandToFullScreen_usesMorphNotSystemCoverAnimation() throws {
         let source = try pillSource()
         XCTAssertTrue(
-            source.contains("callManager.requestPipExpansionMorph()"),
-            "expandToFullScreen() must arm the one-shot expansion hint so " +
-            "CallView plays the grow-from-banner morph on appear."
+            source.contains("CallPipMorph.expand(callManager, from:"),
+            "expandToFullScreen() must go through the shared expansion, which arms the " +
+            "one-shot expansion hint so CallView plays the grow-from-banner morph on appear."
         )
-        guard let fnRange = source.range(of: "private func expandToFullScreen()") else {
-            XCTFail("expandToFullScreen not found"); return
-        }
-        let body = String(source[fnRange.lowerBound...].prefix(900))
+        let morph = try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallPipMorph.swift")
+        let body = try XCTUnwrap(DeclarationBodyScanner.body(containing: "static func expand(", in: morph))
+        XCTAssertTrue(body.contains("manager.requestPipExpansionMorph(from: origin)"))
         XCTAssertTrue(
             body.contains("disablesAnimations = true"),
-            "expandToFullScreen() must present the fullScreenCover without the " +
-            "system slide animation — the CallView morph IS the transition."
+            "The expansion must present the call without the system animation — " +
+            "the CallView morph IS the transition."
         )
     }
 
@@ -204,10 +208,9 @@ final class FloatingCallPillViewTests: XCTestCase {
         // `CallView+Header.swift` depuis le découpage.
         let source = try AppSourceGuard.callViewSource()
         XCTAssertTrue(
-            source.contains("pipMorphProgress, anchor: .top") ||
-            source.contains("scaleEffect(1 - 0.9 * pipMorphProgress, anchor: .top)"),
-            "CallView must scale its root content toward .top during the PiP " +
-            "morph — the banner lives at the top of the viewport."
+            source.contains(".modifier(CallPipMorphEffect(target: pipMorphTarget, progress: $pipMorphProgress))"),
+            "CallView must scale its root content toward the reduced call during the PiP " +
+            "morph — the banner at the top, the bubble where it floats (P18.4)."
         )
         XCTAssertTrue(
             source.contains("func collapseIntoPip()"),
@@ -769,7 +772,7 @@ final class CallParticipantVisualTests: XCTestCase {
     func test_circularInit_derivesSquareFrameAndHalfRadius() throws {
         let src = try source()
         XCTAssertTrue(
-            src.contains("init(diameter: CGFloat, ringsInPeerColor: Bool = false, callManager: CallManager)"),
+            src.contains("init(diameter: CGFloat, callManager: CallManager)"),
             "The circular convenience initializer must stay so existing call sites " +
             "(pill 44pt, bubble circle tier) keep compiling unchanged."
         )

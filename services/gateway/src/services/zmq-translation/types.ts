@@ -57,6 +57,17 @@ export interface TranslationCompletedEvent {
  */
 export const UNSUPPORTED_LANGUAGE_ERROR_CODE = 'UNSUPPORTED_LANGUAGE';
 
+/**
+ * Code d'un refus TRANSITOIRE du translator : pool saturé ou arrêt en cours
+ * (#17189). La requête reste armée, le disjoncteur ne compte rien (#17004).
+ * Additif, donc non négocié par `acceptsErrorCodes` : le translator émet aussi
+ * le libellé historique, seul lu par les passerelles plus anciennes.
+ */
+export const TRANSLATION_POOL_FULL_ERROR_CODE = 'TRANSLATION_POOL_FULL';
+
+/** Libellé historique du même refus, seul émis par un translator plus ancien. */
+export const LEGACY_POOL_FULL_ERROR = 'translation pool full';
+
 export interface TranslationErrorEvent {
   type: 'translation_error';
   taskId: string;

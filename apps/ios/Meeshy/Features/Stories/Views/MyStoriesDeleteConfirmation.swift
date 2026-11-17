@@ -40,7 +40,7 @@ enum MyStoriesDeleteConfirmation {
                           defaultValue: "Cette action est définitive. Le brouillon et ses médias seront supprimés.")
         case .failedItem:
             return String(localized: "story.mine.failed.delete.message",
-                          defaultValue: "Cette story n'a jamais été publiée : c'est sa dernière copie, elle sera définitivement perdue. « Reprendre » permet plutôt de la convertir en brouillon.")
+                          defaultValue: "Cette story n'a jamais été publiée : sa dernière copie sera définitivement perdue.")
         }
     }
 }

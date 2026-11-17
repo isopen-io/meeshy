@@ -29,11 +29,13 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.CallSummaryMetadata
 import me.meeshy.sdk.model.reading.focal.FocalCallJournalOffer
 import me.meeshy.sdk.model.reading.focal.FocalCallNotice
+import me.meeshy.sdk.model.reading.focal.FocalCallParticipants
 import me.meeshy.sdk.model.reading.focal.FocalCallNoticePresenter
 import me.meeshy.sdk.model.reading.focal.FocalCallTitle
 import me.meeshy.sdk.model.reading.focal.FocalCallTone
@@ -82,6 +84,7 @@ internal fun FocalSpecialRowView(
                 onCallBack = callbacks.onCallBack,
                 onLongPress = callbacks.onLongPress,
                 journal = content.callJournalRequest(summary, accentColor),
+                participants = content.callParticipants,
             )
         }
         FocalSpecialRow.JoinNotice, FocalSpecialRow.SystemNotice -> SystemNoticeLine(content = content, callbacks = callbacks, accentColor = accentColor)
@@ -152,10 +155,11 @@ internal fun FocalCallNoticeRow(
     onLongPress: (() -> Unit)?,
     modifier: Modifier = Modifier,
     journal: CallJournalRequest? = null,
+    participants: FocalCallParticipants.Roster? = null,
 ) {
     val slot = LocalCallJournal.current
     Column(modifier = modifier) {
-        FocalCallNoticeCard(notice, createdAtIso, accentColor, onCallBack, onLongPress)
+        FocalCallNoticeCard(notice, createdAtIso, accentColor, onCallBack, onLongPress, participants)
         if (journal != null && slot != null) FocalCallJournalUnderBubble(journal, slot, alignEnd = notice.isOutgoing)
     }
 }
@@ -167,6 +171,7 @@ private fun FocalCallNoticeCard(
     accentColor: Color,
     onCallBack: (() -> Unit)?,
     onLongPress: (() -> Unit)?,
+    participants: FocalCallParticipants.Roster?,
 ) {
     val tokens = MeeshyTheme.tokens
     val tint = when (notice.tone) {
@@ -177,7 +182,8 @@ private fun FocalCallNoticeCard(
     val clock = remember(createdAtIso) { bubbleClockLabel(createdAtIso) }
     val title = notice.titleText()
     val direction = stringResource(if (notice.isOutgoing) R.string.focal_call_outgoing else R.string.focal_call_incoming)
-    val label = listOfNotNull(title, direction, clock, notice.durationLabel, notice.dataLabel).joinToString(", ")
+    val participantsLine = rememberCallParticipantsLine(participants)
+    val label = listOfNotNull(title, participantsLine, direction, clock, notice.durationLabel, notice.dataLabel).joinToString(", ")
     val callAction = stringResource(if (notice.isLive) R.string.focal_call_join_action else R.string.focal_call_callback_action)
     val detailsAction = stringResource(R.string.focal_call_details_action)
     val shape = RoundedCornerShape(MeeshyRadius.lg)
@@ -212,6 +218,12 @@ private fun FocalCallNoticeCard(
                 CallGlyph(notice, tint)
                 Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
                     Text(text = title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = tokens.textPrimary, maxLines = 1)
+                    if (participantsLine != null) {
+                        Text(
+                            text = participantsLine, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+                            color = tokens.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     if (notice.isLive) {
                         Text(
                             text = stringResource(R.string.focal_call_join_hint),

@@ -12,6 +12,7 @@ const itCallsErase = {
   'calls.clearAll.cancel': 'Annulla',
   'calls.erase.failed': 'La cancellazione non è riuscita. Riprova.',
   'calls.search': 'Cerca un nome',
+  'calls.search.placeholder': 'Cerca',
   'calls.search.clear': 'Cancella la ricerca',
   'calls.search.empty': 'Nessuna chiamata corrisponde a «{query}»',
   'calls.participants.more': '{names} +{count}',

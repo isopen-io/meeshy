@@ -347,3 +347,165 @@ final class StoryOptionsMenuReleaseTests: XCTestCase {
         }
     }
 }
+
+// MARK: - La story entrante joue sous sa transition (#18509)
+
+final class StoryEnteringPlaybackRuleTests: XCTestCase {
+
+    func test_resolve_storyEnteringUnderItsTransition_keepsPlaying() {
+        XCTAssertNil(StoryPlaybackHold.resolve(StoryPlaybackCauses(entering: true)))
+    }
+
+    func test_resolve_storyEnteringWhileEngaged_stillLoops() {
+        XCTAssertEqual(StoryPlaybackHold.resolve(StoryPlaybackCauses(entering: true, engaged: true)), .loop)
+    }
+
+    func test_resolve_storyEnteringUnderAReaction_stillFreezes() {
+        XCTAssertEqual(StoryPlaybackHold.resolve(StoryPlaybackCauses(reacting: true, entering: true)), .pause)
+    }
+
+    func test_playbackCauses_fadeAndInterlude_areNotGesturesInFlight() throws {
+        let causes = try StoryPlaybackHoldSource.block(try StoryPlaybackHoldSource.hold(),
+                                                       from: "var playbackCauses: StoryPlaybackCauses {")
+        let gesture = try XCTUnwrap(causes.range(of: "gestureInFlight:"))
+        let next = try XCTUnwrap(causes.range(of: "entering:", range: gesture.upperBound..<causes.endIndex))
+        let gestureTerms = String(causes[gesture.upperBound..<next.lowerBound])
+        XCTAssertFalse(gestureTerms.contains("isTransitioning"), "Le fondu ne fige plus la story entrante.")
+        XCTAssertFalse(gestureTerms.contains("showGroupIntro"), "L'interlude laisse la story jouer dessous, muette.")
+        XCTAssertTrue(gestureTerms.contains("transitionLatch.isTurningCube"), "Le cube, lui, tient encore la story qu'on quitte.")
+    }
+}
+
+// MARK: - Aucun toucher perdu en rafale (#18509)
+
+final class StoryNavigationCadenceTests: XCTestCase {
+
+    func test_admission_duringATransition_concludesItThenProceeds() {
+        XCTAssertEqual(StoryNavigationCadence.admission(isDismissing: false, isComposerEngaged: false, transitionInFlight: true),
+                       .concludeThenProceed)
+    }
+
+    func test_admission_atRest_proceeds() {
+        XCTAssertEqual(StoryNavigationCadence.admission(isDismissing: false, isComposerEngaged: false, transitionInFlight: false),
+                       .proceed)
+    }
+
+    func test_admission_whileClosingOrComposing_refuses() {
+        XCTAssertEqual(StoryNavigationCadence.admission(isDismissing: true, isComposerEngaged: false, transitionInFlight: true), .refuse)
+        XCTAssertEqual(StoryNavigationCadence.admission(isDismissing: false, isComposerEngaged: true, transitionInFlight: false), .refuse)
+    }
+
+    func test_style_anIsolatedTouch_keepsTheAuthoredTransition() {
+        XCTAssertEqual(StoryNavigationCadence.style(sinceLastChange: nil), .authored)
+        XCTAssertEqual(StoryNavigationCadence.style(sinceLastChange: 2), .authored)
+    }
+
+    func test_style_threeTouches120msApart_areThreeFrankSwaps() {
+        let intervals: [TimeInterval?] = [nil, 0.12, 0.12]
+        XCTAssertEqual(intervals.map(StoryNavigationCadence.style(sinceLastChange:)), [.authored, .franche, .franche])
+    }
+
+    func test_style_aNegativeInterval_isNeverARafale() {
+        XCTAssertEqual(StoryNavigationCadence.style(sinceLastChange: -0.1), .authored)
+    }
+}
+
+@MainActor
+final class StoryTransitionLatchTests: XCTestCase {
+
+    func test_conclude_runsThePendingFinishOnce() {
+        let latch = StoryTransitionLatch()
+        var finished = 0
+        latch.begin(.crossFade) { finished += 1 }
+        latch.conclude()
+        latch.conclude()
+        XCTAssertEqual(finished, 1)
+        XCTAssertFalse(latch.isInFlight)
+        XCTAssertNil(latch.kind)
+    }
+
+    func test_begin_whileInFlight_concludesThePreviousFirst() {
+        let latch = StoryTransitionLatch()
+        var order: [String] = []
+        latch.begin(.groupCube) { order.append("cube") }
+        latch.begin(.crossFade) { order.append("fade") }
+        XCTAssertEqual(order, ["cube"])
+        XCTAssertEqual(latch.kind, .crossFade)
+    }
+
+    func test_complete_aStaleTicket_isIgnored() {
+        let latch = StoryTransitionLatch()
+        var finished: [String] = []
+        let stale = latch.begin(.crossFade) { finished.append("first") }
+        latch.begin(.crossFade) { finished.append("second") }
+        latch.complete(stale)
+        XCTAssertEqual(finished, ["first"])
+        XCTAssertTrue(latch.isInFlight, "Le délai d'une transition déjà conclue ne conclut pas la suivante.")
+    }
+
+    func test_twentyTouchesWithoutWaiting_landTwentyChanges() {
+        let latch = StoryTransitionLatch()
+        var accepted = 0
+        var concluded = 0
+        for _ in 0..<20 {
+            guard latch.admit(isDismissing: false, isComposerEngaged: false) else { continue }
+            accepted += 1
+            _ = latch.beginChange()
+            latch.begin(.crossFade) { concluded += 1 }
+        }
+        XCTAssertEqual(accepted, 20)
+        XCTAssertEqual(concluded, 19, "Chaque toucher conclut la transition du précédent au lieu d'être jeté.")
+    }
+
+    func test_admit_whileClosing_refusesAndLeavesTheTransitionInFlight() {
+        let latch = StoryTransitionLatch()
+        var concluded = 0
+        latch.begin(.groupCube) { concluded += 1 }
+        XCTAssertFalse(latch.admit(isDismissing: true, isComposerEngaged: false))
+        XCTAssertEqual(concluded, 0)
+        XCTAssertTrue(latch.isTurningCube)
+    }
+
+    func test_noteChange_measuresTheCadenceBetweenChanges() {
+        let latch = StoryTransitionLatch()
+        XCTAssertEqual(latch.noteChange(at: 10), .authored)
+        XCTAssertEqual(latch.noteChange(at: 10.12), .franche)
+        XCTAssertEqual(latch.noteChange(at: 11), .authored)
+    }
+}
+
+// MARK: - L'interlude laisse jouer la story dessous, muette (#18509, #18516)
+
+final class StoryIdentityVeilSoundTests: XCTestCase {
+
+    func test_canvasMuted_underTheVeil_evenWhenTheUserListens() {
+        XCTAssertTrue(StoryIdentityVeilSound.canvasMuted(userMuted: false, veiled: true))
+        XCTAssertFalse(StoryIdentityVeilSound.canvasMuted(userMuted: false, veiled: false))
+        XCTAssertTrue(StoryIdentityVeilSound.canvasMuted(userMuted: true, veiled: false))
+    }
+
+    func test_broadcast_liftingTheVeil_unmutesOnlyAListeningUser() {
+        XCTAssertEqual(StoryIdentityVeilSound.broadcast(userMuted: false, changed: true, veiled: false), .storyComposerUnmuteCanvas)
+        XCTAssertNil(StoryIdentityVeilSound.broadcast(userMuted: true, changed: true, veiled: false))
+    }
+
+    func test_broadcast_layingTheVeil_mutesTheMountedCanvas() {
+        XCTAssertEqual(StoryIdentityVeilSound.broadcast(userMuted: false, changed: true, veiled: true), .storyComposerMuteCanvas)
+    }
+
+    func test_broadcast_withoutChange_saysNothing() {
+        XCTAssertNil(StoryIdentityVeilSound.broadcast(userMuted: false, changed: false, veiled: true))
+        XCTAssertNil(StoryIdentityVeilSound.broadcast(userMuted: false, changed: false, veiled: false))
+    }
+
+    @MainActor
+    func test_presenter_veilsTheSoundOnce_andLiftsItOnce() {
+        let presenter = StoryGroupIntroPresenter()
+        XCTAssertTrue(presenter.veilSound())
+        XCTAssertFalse(presenter.veilSound())
+        XCTAssertTrue(presenter.veilsSound)
+        XCTAssertTrue(presenter.liftSoundVeil())
+        XCTAssertFalse(presenter.liftSoundVeil())
+        XCTAssertFalse(presenter.veilsSound)
+    }
+}

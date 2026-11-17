@@ -242,13 +242,19 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
             // page est le maximum de lignes que cette lecture peut rendre.
             take: mentionConversationIds.length,
           });
+      // #18556 — une flamme consommée (ou un éphémère échu pour ce lecteur,
+      // encore dans sa grâce) QUITTE la liste : une mention n'a de sens que
+      // par son texte, et sa pierre tombale servirait encore l'existence du
+      // message, son expéditeur et sa date.
       const mentionReaderPage = await keepAliveForReaderAcrossConversations(
         prisma,
         mentionRows,
         new Map(mentionReaderKeys.map((row) => [row.conversationId, row.id])),
+        new Date(),
+        { lapsed: 'drop' },
       );
-      const aliveMentionIds = new Set(mentionReaderPage.alive.map((row) => row.id));
-      const servableMentions = mentions.filter((mention) => aliveMentionIds.has(mention.message.id));
+      const aliveMentionRows = new Map(mentionReaderPage.alive.map((row) => [row.id, row]));
+      const servableMentions = mentions.filter((mention) => aliveMentionRows.has(mention.message.id));
 
       /**
        * La protection servie d'une mention : l'échéance de CE lecteur, puis
@@ -270,7 +276,8 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         mentionedAt: mention.mentionedAt,
         message: {
           id: mention.message.id,
-          content: mention.message.content,
+          // La ligne SERVIE par la coupure, jamais la ligne d'origine.
+          content: (aliveMentionRows.get(mention.message.id) ?? mention.message).content,
           conversationId: mention.message.conversationId,
           senderId: mention.message.senderId,
           createdAt: mention.message.createdAt,

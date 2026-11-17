@@ -8,7 +8,17 @@ export class DeliveryQueueCleanupJob {
   private intervalId: NodeJS.Timeout | null = null;
   private intervalMinutes = 30;
 
-  constructor(private deliveryQueue: RedisDeliveryQueue) {}
+  /**
+   * #18616 — la file est OPTIONNELLE, et son absence veut dire « ce processus
+   * n'a pas de file » (outil, script, témoin), jamais « fabrique-m'en une ».
+   *
+   * Le repli d'avant — `new RedisDeliveryQueue({ getNativeClient: () => null })`
+   * — était une SECONDE instance au sens du balayage d'unicité : inoffensive
+   * ici, ce balayeur n'enfilant rien, mais c'est exactement l'inventaire qu'on
+   * refuse de porter. Un objet nul se dit en ne faisant rien, pas en
+   * construisant la chose dont on n'a pas besoin.
+   */
+  constructor(private deliveryQueue: RedisDeliveryQueue | undefined) {}
 
   start(): void {
     if (this.intervalId) {
@@ -38,6 +48,7 @@ export class DeliveryQueueCleanupJob {
   }
 
   private async run(): Promise<void> {
+    if (!this.deliveryQueue) return;
     try {
       const removed = await this.deliveryQueue.cleanup();
       if (removed > 0) {

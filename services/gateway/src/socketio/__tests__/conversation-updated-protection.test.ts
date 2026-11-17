@@ -24,6 +24,8 @@ const makePrisma = (latest: Record<string, unknown>) =>
     message: { findFirst: jest.fn(async () => latest) },
     userMessageDeletion: { findMany: jest.fn(async () => []) },
     userConversationPreferences: { findMany: jest.fn(async () => []) },
+    // Aucune échéance démarrée : la lecture RÉPOND, elle ne lève pas (#18556).
+    messageStatusEntry: { findMany: jest.fn(async () => []) },
   }) as never;
 
 const viewOnce = {

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La batterie des Proches (#14147) : android-only tant que les clés battery.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="battery_someone">شخص مقرّب</string>
+    <string name="battery_pill_low">%1$s · بطارية منخفضة (%2$d %%)</string>
+    <string name="battery_pill_threshold">%1$s · البطارية عند %2$d %%</string>
+    <string name="battery_pill_critical">%1$s · بطارية حرجة (%2$d %%)</string>
+    <string name="battery_pill_critical_drop">%1$s · البطارية تنخفض بسرعة (%2$d %%)</string>
+    <string name="battery_pill_probably_off">%1$s · الهاتف مُطفأ على الأرجح</string>
+    <string name="battery_pill_charging">%1$s · قيد الشحن</string>
+    <string name="battery_pill_back_on">%1$s · عاد الهاتف للعمل</string>
+    <string name="battery_pill_recharged">%1$s · تم شحن البطارية</string>
+    <string name="battery_pill_ended">%1$s · عادت البطارية إلى طبيعتها</string>
+    <string name="battery_pill_generic">%1$s · مستجدات البطارية</string>
+    <string name="battery_card_title">البطارية</string>
+    <string name="battery_level">%1$d %%</string>
+    <string name="battery_charging">قيد الشحن</string>
+    <string name="battery_low_power">وضع توفير الطاقة</string>
+    <string name="battery_autonomy">يتبقى نحو %1$d س %2$d د</string>
+    <string name="battery_measured_ago">منذ %1$d د</string>
+    <string name="battery_measured_now">الآن</string>
+    <string name="battery_off">الهاتف مُطفأ على الأرجح</string>
+    <string name="battery_pull">طلب قراءة</string>
+    <string name="battery_pull_sent">تم طلب القراءة</string>
+    <string name="battery_pull_episode_only">تم الطلب. لا يظهر المستوى إلا عندما ينخفض.</string>
+    <string name="battery_pull_too_soon">طُلبت بالفعل. أعد المحاولة بعد بضع دقائق.</string>
+    <string name="battery_pull_forbidden">وحدهم أهل الدم يمكنهم طلب قراءة.</string>
+    <string name="battery_pull_unavailable">الطلب غير متاح حاليًا.</string>
+    <string name="battery_a11y">بطارية %1$s: %2$d %%</string>
+    <string name="battery_a11y_charging">بطارية %1$s: %2$d %%، قيد الشحن</string>
+    <string name="battery_share_global_title">مشاركة بطاريتي</string>
+    <string name="battery_share_global_scope">لا يرى المقرّبون وأهل الدم مستواك إلا عندما ينخفض.</string>
+    <string name="battery_share_person">مشاركة بطاريتي مع %1$s</string>
+    <string name="battery_share_person_scope">لا يرى %1$s مستواك إلا عندما ينخفض.</string>
+    <string name="battery_consent_title">هل تشارك بطاريتك مع %1$s؟</string>
+    <string name="battery_consent_body">إذا انخفضت بطاريتك فسيعلم %1$s. يمكنك تغيير ذلك في أي وقت من بطاقته.</string>
+    <string name="battery_consent_checkbox">مشاركة بطاريتي مع %1$s</string>
+    <string name="battery_consent_confirm">تأكيد</string>
+    <string name="battery_consent_later">ليس الآن</string>
+    <string name="battery_receive_title">بطاريته</string>
+    <string name="battery_receive_all">الكل كإشعارات</string>
+    <string name="battery_receive_critical">الحرج فقط</string>
+    <string name="battery_receive_pill">داخل التطبيق فقط</string>
+    <string name="battery_receive_none">لا شيء</string>
+    <string name="battery_unavailable">إعدادات البطارية غير متاحة.</string>
+</resources>

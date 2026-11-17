@@ -81,6 +81,18 @@ describe('la carte de proposition (C2)', () => {
     view.done();
   });
 
+  test('C2.2 — « Non merci » est le disque de verre dessiné des boutons d’un verre (#17345, `callChipGlass` iOS), jamais un fond uni ; sans flou à lui : la carte porte le seul flou', () => {
+    const view = mountNode(status({ proposal: { frameId: 'jovial.confettis', from: 'Awa' }, answer: null, notice: null }, spy()));
+    const classes = view.find('[data-call-live-frame-decline]')?.className.split(' ') ?? [];
+    expect(classes).toContain('glass-call-disc');
+    expect(classes).not.toContain('bg-media-fill');
+    expect(classes).not.toContain('glass-call');
+    expect(classes).not.toContain('glass-call-prominent');
+    expect(classes).toContain('min-h-11');
+    expect(classes).toContain('flex-1');
+    view.done();
+  });
+
   test('sans prénom partagé, « Votre correspondant » ; un cadre inconnu du catalogue ne pose aucune carte', () => {
     const anonymous = mountNode(status({ proposal: { frameId: 'jovial.confettis', from: null }, answer: null, notice: null }, spy()));
     expect(anonymous.find('[data-call-live-frame-proposal]')?.textContent).toContain('Votre correspondant vous propose le cadre « Jovial »');
@@ -283,7 +295,7 @@ describe('la carte et la capsule entrent et repartent en mouvement (C2.1, C2.7, 
     view.rerender(status(none, spy()));
     const leaving = view.find('[data-call-live-frame-slot]');
     expect(leaving?.hasAttribute('data-leaving')).toBe(true);
-    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(false);
     expect(leaving?.querySelector('[data-call-live-frame-proposal]')).not.toBeNull();
     expect(slots()[1]?.keyframes.map((frame) => frame.transform)).toEqual(['translateY(0)', 'translateY(-100%)']);
     await finish();

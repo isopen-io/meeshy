@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.NotificationFilterCategory
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -32,17 +33,25 @@ class NotificationListStatesTest {
     }
 
     @Test
-    fun `the retry capsule relaunches the load and keeps a 44 dp target`() {
+    fun `the error says its title in one line and the retry capsule relaunches the load with a 44 dp target`() {
         var retries = 0
         compose.setContent { NotificationListErrorState(onRetry = { retries++ }) }
 
         compose.onNodeWithText("Notifications unavailable").assertIsDisplayed()
-        compose.onNodeWithText("Check your connection, then try again.").assertIsDisplayed()
+        compose.onNodeWithText("Check your connection, then try again.").assertDoesNotExist()
         val retry = compose.onNodeWithText("Retry")
         retry.assertHeightIsAtLeast(44.dp)
         retry.assertWidthIsAtLeast(44.dp)
         retry.performClick()
 
         assertThat(retries).isEqualTo(1)
+    }
+
+    @Test
+    fun `an empty category says its title and nothing else`() {
+        compose.setContent { NotificationListEmptyState(NotificationFilterCategory.ALL) }
+
+        compose.onNodeWithText("No notifications").assertIsDisplayed()
+        compose.onNodeWithText("Your notifications will appear here").assertDoesNotExist()
     }
 }

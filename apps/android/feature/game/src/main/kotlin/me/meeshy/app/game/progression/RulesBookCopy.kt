@@ -12,14 +12,17 @@ import me.meeshy.sdk.model.game.rules.OnboardingStepKey
  * `GameRulesBook` ; ici, seulement quelle chaîne dit chaque morceau.
  */
 internal object RulesBookCopy {
-    data class Rule(@StringRes val title: Int, @StringRes val body: Int)
+    /** Le détail secondaire d'une règle, rangé derrière un (i) : son nom est la [question] à laquelle [detail] répond. */
+    data class RuleInfo(@StringRes val question: Int, @StringRes val detail: Int)
+
+    data class Rule(@StringRes val title: Int, @StringRes val body: Int, val info: RuleInfo? = null)
 
     data class Step(@StringRes val what: Int, @StringRes val means: Int, @StringRes val next: Int)
 
     fun rule(index: Int): Rule = when (index) {
-        1 -> Rule(R.string.game_rules_1_title, R.string.game_rules_1_body)
+        1 -> Rule(R.string.game_rules_1_title, R.string.game_rules_1_body, RuleInfo(R.string.game_rules_1_question, R.string.game_rules_1_more))
         2 -> Rule(R.string.game_rules_2_title, R.string.game_rules_2_body)
-        3 -> Rule(R.string.game_rules_3_title, R.string.game_rules_3_body)
+        3 -> Rule(R.string.game_rules_3_title, R.string.game_rules_3_body, RuleInfo(R.string.game_rules_3_question, R.string.game_rules_3_more))
         4 -> Rule(R.string.game_rules_4_title, R.string.game_rules_4_body)
         5 -> Rule(R.string.game_rules_5_title, R.string.game_rules_5_body)
         6 -> Rule(R.string.game_rules_6_title, R.string.game_rules_6_body)

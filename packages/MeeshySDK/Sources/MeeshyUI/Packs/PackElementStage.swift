@@ -207,7 +207,7 @@ struct PackDownloadRequiredView: View {
             Text(String(localized: "shop.viewer.download.title", defaultValue: "Téléchargement requis", bundle: .module))
                 .font(MeeshyFont.relative(compact ? 13 : 17, weight: .semibold, design: .rounded))
             if !compact {
-                Text(String(localized: "shop.viewer.download.body", defaultValue: "Installe ce pack pour voir ses éléments.", bundle: .module))
+                Text(String(localized: "shop.viewer.download.body", defaultValue: "Installez ce pack pour voir ses éléments.", bundle: .module))
                     .font(MeeshyFont.relative(14))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

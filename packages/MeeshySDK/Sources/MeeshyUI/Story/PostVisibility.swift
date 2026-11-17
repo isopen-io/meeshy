@@ -64,6 +64,24 @@ public enum PostVisibility: String, CaseIterable, Sendable, Codable, Identifiabl
         }
     }
 
+    /// QUI voit la publication, en une phrase (règle 7 de l'épure, #18109) : « Public » ou « Proches » ne
+    /// disent pas à qui la publication s'adresse, la phrase le dit au repos sous le choix.
+    @MainActor public var who: String { who(in: .module) }
+
+    nonisolated func who(in bundle: Bundle) -> String {
+        switch self {
+        case .public:        return String(localized: "post.visibility.public.who", defaultValue: "Tout le monde la voit", bundle: bundle)
+        case .community:     return String(localized: "post.visibility.community.who", defaultValue: "Les membres de vos communautés la voient", bundle: bundle)
+        case .acquaintances: return String(localized: "post.visibility.acquaintances.who", defaultValue: "Vos connaissances et au-dessus la voient", bundle: bundle)
+        case .friends:       return String(localized: "post.visibility.friends.who", defaultValue: "Vos amis et au-dessus la voient", bundle: bundle)
+        case .close:         return String(localized: "post.visibility.close.who", defaultValue: "Vos proches et au-dessus la voient", bundle: bundle)
+        case .blood:         return String(localized: "post.visibility.blood.who", defaultValue: "Seul votre Sang la voit", bundle: bundle)
+        case .except:        return String(localized: "post.visibility.except.who", defaultValue: "Tout le monde la voit, sauf les personnes choisies", bundle: bundle)
+        case .only:          return String(localized: "post.visibility.only.who", defaultValue: "Seules les personnes choisies la voient", bundle: bundle)
+        case .private:       return String(localized: "post.visibility.private.who", defaultValue: "Vous seul la voyez", bundle: bundle)
+        }
+    }
+
     /// Modes proposés dans les composers : l'échelle des cercles, du plus large
     /// au plus étroit (Public → Communauté → Connaissances → Amis → Proches →
     /// Sang), puis les audiences nommées et le privé.

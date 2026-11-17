@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoAlone } from '@/components/info-hint';
 import { useStore } from 'zustand';
 
 import { PeerAvatar } from '@/components/peer-avatar';
@@ -60,9 +62,9 @@ export function StoriesEmpty({ language }: { readonly language: InterfaceLanguag
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(language, 'stories.empty.title')}
       </p>
-      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'stories.empty.subtitle')}
-      </p>
+      <InfoAlone
+        hint={{ label: translate(language, 'stories.empty.question'), text: translate(language, 'stories.empty.subtitle'), glyph: SETTINGS_GLYPHS.info }}
+      />
       <Link
         to="storyCompose"
         className={BUTTON.primary}

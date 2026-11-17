@@ -14,6 +14,8 @@ import { isZoomed, MIN_ZOOM, toggleZoom, wheelZoom, zoomBy } from '@/lib/packs/p
 import { decorItemName, useAppearanceNames, usePackItems, useProposals, type PackRef } from '@/lib/packs/use-pack-items';
 import { equipProfileDecor } from '@/lib/profile-decor/equip';
 import { useDecorDesigns } from '@/lib/profile-decor/use-decor-designs';
+import '@/styles/sheet-motion.css';
+import { DIALOG_MOTION_STYLE, useDialogExit } from '@/lib/view/dialog-exit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 import { DecorStage, DecorThumb } from './decor-stage';
@@ -41,6 +43,9 @@ import { useScheme } from './profile-banner-design';
  */
 
 const SWIPE_DISTANCE = 48;
+
+/** Le zoom de l'aperçu glisse d'un cran à l'autre ; au doigt, la scène suit sans retard (#18327). */
+export const DECOR_ZOOM_MS = 150;
 
 export type DecorPreviewProps = {
   readonly language: InterfaceLanguage;
@@ -79,8 +84,10 @@ export function DecorPreview(props: DecorPreviewProps) {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [equipFailed, setEquipFailed] = useState(false);
   const pointer = useRef<{ readonly x: number; readonly y: number; readonly id: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   useBackDismiss(onClose);
+  useDialogExit(ref, { kind: 'confirm' });
 
   useEffect(() => {
     const dialog = ref.current;
@@ -143,6 +150,7 @@ export function DecorPreview(props: DecorPreviewProps) {
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>): void => {
     pointer.current = { x: event.clientX, y: event.clientY, id: event.pointerId };
+    setDragging(true);
   };
   const onPointerMove = (event: PointerEvent<HTMLDivElement>): void => {
     const start = pointer.current;
@@ -153,6 +161,7 @@ export function DecorPreview(props: DecorPreviewProps) {
   const onPointerUp = (event: PointerEvent<HTMLDivElement>): void => {
     const start = pointer.current;
     pointer.current = null;
+    setDragging(false);
     if (start === null || zoomed) return;
     const dx = event.clientX - start.x;
     if (Math.abs(dx) < SWIPE_DISTANCE) return;
@@ -182,17 +191,18 @@ export function DecorPreview(props: DecorPreviewProps) {
       ref={ref}
       aria-labelledby={titleId}
       data-decor-preview={`${pack.domain}:${pack.slug}`}
+      data-dialog-fade=""
       onKeyDown={onKeyDown}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
       }}
       className="m-0 h-dvh max-h-none w-screen max-w-none p-0"
-      style={{ border: 0, backgroundColor: 'var(--color-ios-surface)', color: 'var(--color-ios-ink)' }}
+      style={{ ...DIALOG_MOTION_STYLE, border: 0, backgroundColor: 'var(--color-ios-surface)', color: 'var(--color-ios-ink)' }}
     >
       <div className="flex h-full flex-col pt-safe pb-safe">
         <header className="flex shrink-0 items-center gap-2 px-3 py-2">
-          <button type="button" data-decor-preview-close aria-label={tp(language, 'packs.preview.close')} onClick={onClose} className={roundButton} style={chrome}>
+          <button type="button" data-decor-preview-close aria-label={tp(language, 'packs.preview.close')} onClick={onClose} className={`btn-press ${roundButton}`} style={chrome}>
             <Glyph name="x" size={20} />
           </button>
           <div className="min-w-0 flex-1">
@@ -206,10 +216,10 @@ export function DecorPreview(props: DecorPreviewProps) {
               </p>
             )}
           </div>
-          <button type="button" data-decor-zoom-out aria-label={tp(language, 'packs.preview.zoomOut')} disabled={!zoomed} onClick={() => setScale(zoomBy(zoom, -1))} className={roundButton} style={chrome}>
+          <button type="button" data-decor-zoom-out aria-label={tp(language, 'packs.preview.zoomOut')} disabled={!zoomed} onClick={() => setScale(zoomBy(zoom, -1))} className={`btn-press ${roundButton}`} style={chrome}>
             <GlyphSvg glyph={PACK_PREVIEW_GLYPHS.minus} size={18} />
           </button>
-          <button type="button" data-decor-zoom-in aria-label={tp(language, 'packs.preview.zoomIn')} onClick={() => setScale(zoomBy(zoom, 1))} className={roundButton} style={chrome}>
+          <button type="button" data-decor-zoom-in aria-label={tp(language, 'packs.preview.zoomIn')} onClick={() => setScale(zoomBy(zoom, 1))} className={`btn-press ${roundButton}`} style={chrome}>
             <Glyph name="plus" size={18} />
           </button>
         </header>
@@ -224,14 +234,16 @@ export function DecorPreview(props: DecorPreviewProps) {
             onPointerUp={onPointerUp}
             onPointerCancel={() => {
               pointer.current = null;
+              setDragging(false);
             }}
             onDoubleClick={() => setScale(toggleZoom(zoom))}
             className="flex size-full touch-none select-none items-center justify-center"
           >
             {item !== undefined ? (
               <div
-                className="flex w-full items-center justify-center transition-transform duration-150 motion-reduce:transition-none"
-                style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+                data-dragging={dragging ? '' : undefined}
+                className="flex w-full items-center justify-center transition-transform motion-reduce:transition-none"
+                style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transitionDuration: dragging ? '0ms' : `${DECOR_ZOOM_MS}ms` }}
               >
                 <DecorStage item={item} profile={profile.data} mine={mine} accent={accent} scheme={scheme} language={language} />
               </div>
@@ -240,7 +252,7 @@ export function DecorPreview(props: DecorPreviewProps) {
                 <p role="status" className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
                   {tp(language, 'packs.sheet.failed')}
                 </p>
-                <button type="button" data-decor-retry onClick={() => void items.refetch()} className="min-h-11 rounded-full px-4 text-body font-semibold" style={chrome}>
+                <button type="button" data-decor-retry onClick={() => void items.refetch()} className="btn-press min-h-11 rounded-full px-4 text-body font-semibold" style={chrome}>
                   {t(language, 'packs.retry')}
                 </button>
               </div>
@@ -261,7 +273,7 @@ export function DecorPreview(props: DecorPreviewProps) {
                 aria-label={tp(language, 'packs.preview.previous')}
                 disabled={!canStep}
                 onClick={() => step(-1)}
-                className={`${roundButton} absolute start-3 top-1/2 -translate-y-1/2`}
+                className={`btn-press ${roundButton} absolute start-3 top-1/2 -translate-y-1/2`}
                 style={chrome}
               >
                 <Glyph name="caretLeft" size={18} className="rtl:-scale-x-100" />
@@ -272,7 +284,7 @@ export function DecorPreview(props: DecorPreviewProps) {
                 aria-label={tp(language, 'packs.preview.next')}
                 disabled={!canStep}
                 onClick={() => step(1)}
-                className={`${roundButton} absolute end-3 top-1/2 -translate-y-1/2`}
+                className={`btn-press ${roundButton} absolute end-3 top-1/2 -translate-y-1/2`}
                 style={chrome}
               >
                 <GlyphSvg glyph={PACK_PREVIEW_GLYPHS.caretRight} size={18} className="rtl:-scale-x-100" />
@@ -305,13 +317,13 @@ export function DecorPreview(props: DecorPreviewProps) {
                   aria-busy={busy}
                   aria-label={`${tp(language, 'packs.preview.equip')} ${itemName}`}
                   onClick={() => void equip()}
-                  className="min-h-11 shrink-0 rounded-full px-5 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+                  className="btn-press min-h-11 shrink-0 rounded-full px-5 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
                   style={{ backgroundColor: 'var(--accent, var(--color-ios-brand))', color: 'var(--color-ios-on-brand)', outlineColor: 'var(--color-ios-brand)' }}
                 >
                   {tp(language, 'packs.preview.equip')}
                 </button>
               ) : action.kind === 'buy' ? (
-                <button type="button" data-decor-pack-action aria-busy={busy} onClick={() => void onAction()} className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold" style={chrome}>
+                <button type="button" data-decor-pack-action aria-busy={busy} onClick={() => void onAction()} className="btn-press min-h-11 shrink-0 rounded-full px-4 text-body font-semibold" style={chrome}>
                   {action.label}
                 </button>
               ) : action.kind === 'locked' ? (
@@ -342,7 +354,7 @@ export function DecorPreview(props: DecorPreviewProps) {
                       data-decor-proposal={`${proposal.pack}/${proposal.key}`}
                       aria-label={decorItemName(names, proposal)}
                       onClick={() => onProposal(proposal)}
-                      className="grid w-full place-items-center rounded-chip p-1 focus-visible:outline-2 focus-visible:outline-offset-2"
+                      className="btn-press grid w-full place-items-center rounded-chip p-1 focus-visible:outline-2 focus-visible:outline-offset-2"
                       style={{ minHeight: 44, backgroundColor: 'var(--color-ios-fill)', outlineColor: 'var(--color-ios-brand)' }}
                     >
                       <DecorThumb item={proposal} accent={accent} scheme={scheme} />

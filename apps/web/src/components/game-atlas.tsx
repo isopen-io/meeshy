@@ -7,6 +7,8 @@ import { pendingStampDetail, stampDetail } from '@/lib/view/game-detail';
 import { AtlasStamp } from './game/atlas-stamp';
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
 import { GameTouch } from './game-touch';
+import { gameHint } from './game-hint';
+import { InfoNoted } from './info-hint';
 import { GameVisibilityPicker } from './game-visibility-picker';
 
 /**
@@ -42,12 +44,9 @@ export function GameAtlas({ atlas, visibility, online, savingVisibility, error, 
   return (
     <>
       <GameCard id="game-atlas" labelledBy="game-atlas-title" tint={GAME_BRAND}>
-        <h2 id="game-atlas-title" className="text-title font-bold" style={{ color: GAME_INK }}>
+        <h2 id="game-atlas-title" className="sr-only">
           {gameText('game.atlas.title')}
         </h2>
-        <p className="text-body font-semibold" style={{ color: GAME_INK }}>
-          {gameText('game.atlas.count', { stamped: formatCount(atlas.stamped), total: formatCount(atlas.total) })}
-        </p>
         <div
           role="progressbar"
           aria-valuemin={0}
@@ -81,9 +80,10 @@ export function GameAtlas({ atlas, visibility, online, savingVisibility, error, 
                 <span className="text-caption font-semibold" style={{ color: GAME_INK }}>
                   {languageName(stamp.language)}
                 </span>
-                <span className="text-check" style={{ color: GAME_INK_2 }}>
-                  {gameText('game.atlas.stamped_on', { date: dayLabel(stamp.stampedOn) })}
+                <span aria-hidden="true" className="text-check" style={{ color: GAME_INK_2 }}>
+                  {dayLabel(stamp.stampedOn)}
                 </span>
+                <span className="sr-only">{gameText('game.atlas.stamped_on', { date: dayLabel(stamp.stampedOn) })}</span>
               </GameTouch>
             </li>
           ))}
@@ -95,11 +95,6 @@ export function GameAtlas({ atlas, visibility, online, savingVisibility, error, 
                 </li>
               ))}
         </ul>
-        {remaining === 0 ? null : (
-          <p className="text-caption" style={{ color: GAME_INK_2 }}>
-            {gameText('game.atlas.remaining', { remaining: formatCount(remaining) })}
-          </p>
-        )}
       </GameCard>
 
       {atlas.pending.length === 0 ? null : (
@@ -131,10 +126,12 @@ export function GameAtlas({ atlas, visibility, online, savingVisibility, error, 
         <h2 id="game-atlas-privacy-title" className="text-body font-bold" style={{ color: GAME_INK }}>
           {gameText('game.atlas.visibility')}
         </h2>
-        <GameVisibilityPicker legend={gameText('game.visibility.field.atlas')} value={visibility} disabled={!online} busy={savingVisibility} onChange={onVisibility} />
-        <p className="text-caption" style={{ color: GAME_INK_2 }}>
-          {gameText('game.atlas.privacy')}
-        </p>
+        <GameVisibilityPicker legend={gameText('game.visibility.field.atlas')} legendHidden value={visibility} disabled={!online} busy={savingVisibility} onChange={onVisibility} />
+        <InfoNoted note={gameHint('game.atlas.privacy_note_q', 'game.atlas.privacy_note')}>
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {gameText('game.atlas.privacy')}
+          </p>
+        </InfoNoted>
         {error === undefined ? null : (
           <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
             {error}

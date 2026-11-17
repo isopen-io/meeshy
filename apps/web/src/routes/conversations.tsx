@@ -43,10 +43,11 @@ import { blockTargetOf } from '@/lib/api/conversation-block-target';
 import { appQueryClient } from '@/lib/api/query-client';
 import { rowBlockAction, rowPreferenceAction } from '@/lib/api/row-intents';
 import type { RowDetailsFocus, RowIntent } from '@/lib/view/row-actions';
-import { applyFilter, emptinessOf, filterLabel, LIST_FILTERS, NEUTRAL_SELECTION, orderConversations, selectionLabel, toggleFilter, type ListSelection } from '@/lib/lens/filters';
+import { applyFilter, emptinessOf, NEUTRAL_SELECTION, orderConversations, selectionLabel, toggleFilter, type ListSelection } from '@/lib/lens/filters';
 import { memoriserLienParLecteur, partagerInvitationParrainee, retourInvitationParrainee } from '@/lib/view/invitation';
 import { authorStoryRing } from '@/lib/view/author-story-ring';
 import { useStoryRailProps } from '@/lib/view/use-story-rail';
+import { ListFilterChips } from '@/components/list-filter-chips';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { resolveLensSections } from '@/lib/lens/sections';
 import { useSectionFolds } from '@/lib/view/use-section-folds';
@@ -126,6 +127,12 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 /** Référence STABLE — un `[]` littéral par rendu changerait l'identité de
  * `conversations` à chaque image et défairait les mémos qui en dépendent. */
 const EMPTY_CONVERSATIONS: readonly Conversation[] = [];
+/** Tirer la liste rappelle aussi le bandeau du joueur (#17366), chargé à la demande : la coquille n'en porte rien. */
+const recallTheBanner = (): void => void import('@/lib/view/player-banner-recall').then((m) => m.recallPlayerBanner());
+const pullTheList = (): Promise<void> => {
+  recallTheBanner();
+  return refreshListAction();
+};
 
 /* Renommer et confirmer un blocage (#10593) : chargés au geste. */
 const ConversationRowDialogs = lazy(() => import('@/components/conversation-row-dialogs'));
@@ -223,6 +230,7 @@ const actionsDeDemarrage = (language: InterfaceLanguage): readonly QuickAction[]
     key: 'inviter',
     label: translate(language, 'list.quick.invite'),
     hint: translate(language, 'list.quick.invite.hint'),
+    hintQuestion: translate(language, 'list.quick.invite.question'),
     glyph: 'linkSimple',
     // HÉROS, alors qu'iOS range `invite` en TUILE. L'écart est assumé et
     // TEMPORAIRE : les trois héros d'iOS — chercher des membres, ses contacts,
@@ -379,9 +387,9 @@ export default function ConversationsScreen() {
   /**
    * TIRER-POUR-RAFRAÎCHIR (#6195) — le MÊME scrollport que la sentinelle et
    * `useScene` : `refreshListAction` (conversations page 1 + stories/humeurs
-   * en parallèle, `lib/api/query.ts`).
+   * en parallèle, `lib/api/query.ts`) ; le geste rappelle aussi le bandeau du joueur (#17366).
    */
-  const pull = usePullToRefresh({ root: frame, onRefresh: refreshListAction, threshold: PULL_THRESHOLD });
+  const pull = usePullToRefresh({ root: frame, onRefresh: pullTheList, threshold: PULL_THRESHOLD });
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const { languages: readerLanguages } = useReaderLanguages();
@@ -708,37 +716,9 @@ export default function ConversationsScreen() {
         </li>
         <li className="-mx-2 shrink-0">
           <nav data-list-filters aria-label={rowMenuText(interfaceLanguage, 'listFilter.nav')} className="scrollbar-none overflow-x-auto">
-            <ul className="flex gap-2 px-4 py-1.5">
-              {/* LES PUCES SE COMPOSENT (#10598) — un appui pose, un second
-                  retire, « Tous » efface le reste : `toggleFilter`, la loi
-                  d'iOS (`ConversationFilterComposition`). `data-list-filter`
-                  est le crochet des gates : le nom suit la langue. */}
-              {LIST_FILTERS.map((f) => {
-                const active = selection.includes(f);
-                return (
-                  <li key={f}>
-                    <button
-                      type="button"
-                      data-list-filter={f}
-                      onClick={() => setSelection((current) => toggleFilter(f, current))}
-                      aria-pressed={active}
-                      className="rounded-chip px-3 py-1.5 text-title font-medium whitespace-nowrap transition-colors"
-                      style={
-                        active
-                          ? { backgroundColor: 'var(--color-ios-brand)', color: 'var(--color-ios-on-brand)' }
-                          : {
-                              backgroundColor: 'var(--color-ios-card)',
-                              color: 'var(--color-ios-ink-2)',
-                              border: '0.5px solid var(--color-edge)',
-                            }
-                      }
-                    >
-                      {filterLabel(f, interfaceLanguage)}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            {/* LES PUCES SE COMPOSENT (#10598) — un appui pose, un second retire, « Tous » efface le reste :
+                `toggleFilter`, la loi d'iOS. Quatre au repos, le rare derrière « Plus » (#18361). */}
+            <ListFilterChips selection={selection} language={interfaceLanguage} onToggle={(f) => setSelection((current) => toggleFilter(f, current))} />
           </nav>
         </li>
         {/*
@@ -837,8 +817,7 @@ export default function ConversationsScreen() {
               était pire — il DÉCRIVAIT l'issue sans la donner.
             */}
             <QuickActions
-              title={translate(interfaceLanguage, 'list.quick.start')}
-              subtitle={translate(interfaceLanguage, 'list.quick.subtitle')}
+              moreLabel={translate(interfaceLanguage, 'action.more')}
               actions={actionsDeDemarrage(interfaceLanguage)}
               conversationCount={0}
             />
@@ -923,8 +902,7 @@ export default function ConversationsScreen() {
         {conversations.length > 0 ? (
           <li style={{ minHeight: visible.length > 0 ? '50dvh' : 0, flexShrink: 0 }}>
             <QuickActions
-              title={translate(interfaceLanguage, 'list.quick.next')}
-              subtitle={translate(interfaceLanguage, 'list.quick.subtitle')}
+              moreLabel={translate(interfaceLanguage, 'action.more')}
               actions={actionsDeDemarrage(interfaceLanguage)}
               conversationCount={conversations.length}
             />

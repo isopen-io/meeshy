@@ -13,7 +13,7 @@
     <string name="story_place_search">Search for a place</string>
     <string name="story_place_around">Around me</string>
     <string name="story_place_here">My location</string>
-    <string name="story_place_denied">Meeshy can\'t see your location, so no nearby place is offered. You can still search for a place by name.</string>
+    <string name="story_place_denied">Location is off. Search for a place by name.</string>
     <string name="story_place_pastille_a11y">Place: %1$s</string>
     <string name="story_references_with">With %1$s</string>
     <string name="story_mention_already">Already named</string>

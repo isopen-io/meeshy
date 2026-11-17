@@ -55,8 +55,8 @@ describe('les célébrations', () => {
     expect(calls).toEqual([false]);
   });
 
-  test('le texte dit que le réglage vaut pour cet appareil seulement', () => {
-    expect(text(renderToStaticMarkup(<GameSettings {...props()} />))).toContain('Cet appareil seulement');
+  test('le texte dit où les cartes s’affichent', () => {
+    expect(text(renderToStaticMarkup(<GameSettings {...props()} />))).toContain('Les cartes de Mee et Meo s’affichent sur Progression');
   });
 });
 
@@ -102,8 +102,8 @@ describe('les notifications du jeu', () => {
 
   test('le texte dit « au plus une par jour »', () => {
     const html = renderToStaticMarkup(<GameSettings {...props({ gameNotifications: true, onGameNotifications: () => undefined })} />);
-    expect(text(html)).toContain('Notifications du jeu');
-    expect(text(html)).toContain('au plus une par jour');
+    expect(text(html)).not.toContain('Notifications du jeu');
+    expect(text(html)).toContain('Au plus une par jour');
   });
 
   test('réglage du compte éteint : l’interrupteur est décoché', () => {
@@ -188,6 +188,12 @@ describe('« Moments à immortaliser »', () => {
 });
 
 describe('qui voit quoi', () => {
+  test('une phrase d’orientation, sans redire les quatre rangées', () => {
+    const page = text(renderToStaticMarkup(<GameSettings {...props()} />));
+    expect(page).toContain('Pour chaque élément du jeu, choisis qui peut le voir.');
+    expect(page).not.toContain('Choisis qui voit ton rang');
+  });
+
   test('quatre sélecteurs : rang et niveau, trésor et Flamme, vitrine, Atlas', () => {
     const html = renderToStaticMarkup(<GameSettings {...props()} />);
     expect((html.match(/data-game-visibility/g) ?? []).length).toBe(4);

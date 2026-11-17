@@ -34,7 +34,7 @@ export const CHROME_ACTION_HIT = 44;
  * indifféremment : ce module ne choisit pas l'élément — un lien qui navigue
  * DOIT rester un lien (`route-table.tsx` § Link).
  */
-export const CHROME_ACTION_HIT_CLASS = 'relative grid size-11 shrink-0 place-items-center rounded-chip';
+export const CHROME_ACTION_HIT_CLASS = 'chrome-action relative grid size-11 shrink-0 place-items-center rounded-chip';
 
 /**
  * Le DISQUE visible au centre de la cible. `aria-hidden` n'est pas posé ici :
@@ -49,7 +49,6 @@ export function ChromeActionDisc({ children }: { readonly children: ReactNode })
       style={{
         width: 'var(--size-header-circle)',
         height: 'var(--size-header-circle)',
-        backgroundColor: 'color-mix(in srgb, currentColor 18%, transparent)',
       }}
     >
       {children}

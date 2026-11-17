@@ -81,7 +81,7 @@ internal fun CallActionRow(
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
             verticalAlignment = Alignment.Top,
             modifier = Modifier
-                .callScrollEdgeFade(scroll, horizontal = true)
+                .callScrollEdgeFade(horizontal = true)
                 .horizontalScroll(scroll)
                 .padding(horizontal = MeeshySpacing.sm),
         ) {

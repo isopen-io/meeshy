@@ -2,6 +2,6 @@
 <!-- lot: talkie-reveil (#17144) — le réveil du talkie d'urgence : canal de la notification et action « Lire ». -->
 <resources>
     <string name="talkie_wake_channel_name">اللاسلكي الطارئ</string>
-    <string name="talkie_wake_channel_description">يظهر عندما يتحدث إليك شخص مقرّب ويشغّل صوته، حتى عندما يكون Meeshy في الخلفية</string>
+    <string name="talkie_wake_channel_description">شخص مقرّب يتحدث إليك: يُشغَّل صوته، حتى في الخلفية</string>
     <string name="talkie_wake_play">تشغيل</string>
 </resources>

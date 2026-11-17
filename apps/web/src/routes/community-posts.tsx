@@ -138,9 +138,6 @@ export function CommunityPostsEmpty({ language }: { readonly language: Interface
       <p className="text-body font-semibold" style={{ color: SECTION_INK }}>
         {translateMembership(language, 'community.posts.empty.title')}
       </p>
-      <p className="text-caption" style={{ color: SECTION_INK_2 }}>
-        {translateMembership(language, 'community.posts.empty.body')}
-      </p>
     </div>
   );
 }

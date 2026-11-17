@@ -108,12 +108,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "shareLink.detail.entryConditions",
-          "androidName": "shareLink_detail_entryConditions",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "shareLink.detail.expiration",
           "androidName": "shareLink_detail_expiration",
           "status": "adopted"
@@ -156,18 +150,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "shareLink.detail.guestRights",
-          "androidName": "shareLink_detail_guestRights",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.historyRight",
-          "androidName": "shareLink_detail_historyRight",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "shareLink.detail.invalidLimits",
           "androidName": "shareLink_detail_invalidLimits",
           "status": "adopted"
@@ -198,18 +180,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "shareLink.detail.messageField",
-          "androidName": "shareLink_detail_messageField",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.nameField",
-          "androidName": "shareLink_detail_nameField",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "shareLink.detail.never",
           "androidName": "shareLink_detail_never",
           "status": "adopted"
@@ -218,30 +188,6 @@
           "catalog": "app",
           "iosKey": "shareLink.detail.optional",
           "androidName": "shareLink_detail_optional",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.requireAccount",
-          "androidName": "shareLink_detail_requireAccount",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.requireBirthday",
-          "androidName": "shareLink_detail_requireBirthday",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.requireEmail",
-          "androidName": "shareLink_detail_requireEmail",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "shareLink.detail.requireNickname",
-          "androidName": "shareLink_detail_requireNickname",
           "status": "adopted"
         },
         {

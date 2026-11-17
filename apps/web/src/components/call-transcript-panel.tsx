@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
-import { THREAD_SECONDARY_INK, UnfoldedOriginal } from '@/components/call-unfolded-original';
+import { spokenSentence, THREAD_SECONDARY_INK, UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -118,7 +118,7 @@ function NoteItem({ note, language }: { readonly note: TranscriptNote; readonly 
 
 const PRIMARY_SWAP = { 'data-call-transcript-swap': 'primary' } as const;
 
-const SECONDARY_SWAP = { 'data-call-transcript-swap': 'secondary' } as const;
+const SECONDARY_SWAP = { 'data-call-transcript-swap': 'secondary', 'aria-hidden': 'true' } as const;
 
 const SECONDARY_MARKER = { original: 'data-call-transcript-original-line', translated: 'data-call-transcript-translated-line' } as const;
 
@@ -126,19 +126,23 @@ const SECONDARY_MARKER = { original: 'data-call-transcript-original-line', trans
  * Une phrase : sa ligne EN TÊTE et, s'il y a une traduction, l'autre DESSOUS (`transcriptReading`).
  * La traduction en tête prend la couleur d'auteur, l'original en tête l'encre du thème ; la ligne
  * dessous, qu'elle dise « Original · » ou « Traduit · », est la même pièce à l'encre secondaire du fil.
+ * Le lecteur d'écran la lit d'un trait (A1.19, `spokenSentence`) : les morceaux visibles se taisent.
  */
 function SentenceItem({ line, language, inverted }: { readonly line: TranscriptLine; readonly language: InterfaceLanguage; readonly inverted: boolean }) {
   const name = line.mine ? translate(language, 'message.author.self') : (line.speakerName ?? translate(language, 'callCaptions.participant'));
   const ink = authorInkStyle({ authorId: line.speakerId, name: line.speakerName ?? '' });
-  const { primary, secondary } = transcriptReading(line, inverted);
+  const reading = transcriptReading(line, inverted);
+  const { primary, secondary } = reading;
+  const clock = formatCallJournalClock(line.offsetMs / 1000);
   const primaryInk = primary.kind === 'translated' ? { className: 'author-ink block text-[13.5px]', style: ink } : { className: 'block text-[13.5px]', style: { color: 'var(--color-ios-ink)' } };
   return (
     <li data-call-transcript-line={line.mine ? 'mine' : 'peer'}>
-      <span className="flex justify-between gap-3 text-mini font-semibold" style={muted}>
+      <span className="sr-only" data-call-transcript-spoken="">{spokenSentence({ name, clock, reading, language })}</span>
+      <span className="flex justify-between gap-3 text-mini font-semibold" style={muted} aria-hidden="true">
         <span className="author-ink" style={ink}>{name}</span>
-        <span className="tabular-nums">{formatCallJournalClock(line.offsetMs / 1000)}</span>
+        <span className="tabular-nums">{clock}</span>
       </span>
-      <span {...primaryInk} dir="auto" lang={primary.language} data-call-transcript-text={primary.kind} {...(secondary === null ? {} : PRIMARY_SWAP)}>
+      <span {...primaryInk} dir="auto" lang={primary.language} data-call-transcript-text={primary.kind} aria-hidden="true" {...(secondary === null ? {} : PRIMARY_SWAP)}>
         {primary.text}
       </span>
       {secondary === null ? null : <UnfoldedOriginal open text={secondary.text} from={secondary.language} language={language} label={secondary.kind} marker={SECONDARY_MARKER[secondary.kind]} ink={THREAD_SECONDARY_INK} attrs={SECONDARY_SWAP} />}

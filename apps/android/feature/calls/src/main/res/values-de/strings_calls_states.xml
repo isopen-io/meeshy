@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- A1.11, #12028 : ma propre ligne du journal (et ma plaque) dit « Vous » dans ma langue, comme iOS call.transcript.you. -->
+    <string name="call_avatar_you">Du</string>
+</resources>

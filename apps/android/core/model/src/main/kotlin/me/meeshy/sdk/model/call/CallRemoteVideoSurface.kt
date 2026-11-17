@@ -67,5 +67,24 @@ object CallRemoteVideoFade {
     fun veiled(surface: CallRemoteVideoSurface, previous: CallRemoteVideoSurface): CallRemoteVideoSurface =
         if (surface == CallRemoteVideoSurface.Live) previous else surface
 
+    /**
+     * Loi 17.12 — une vignette (de groupe, ou la mienne) dont la caméra se coupe : son rendu reste monté sous le voile qui
+     * fond, l'image gelée si la piste est déjà partie, jusqu'à ce que le voile la couvre ; [isLive], elle reste toujours.
+     */
+    fun keepsTileImage(isLive: Boolean, veil: Float): Boolean = isLive || veil < 1f
+
+    /**
+     * Loi 17.1 — ma vignette paraît : son cadre fond d'abord, voile opaque posé ; le voile ne se lève sur ce qu'elle montre
+     * qu'ensuite. Elle repart par le chemin inverse : le voile retombe, puis le cadre fond ([presenceFrameDelayMillis]).
+     */
+    fun presenceVeilDelayMillis(reduceMotion: Boolean, appearing: Boolean): Int =
+        if (appearing) durationMillis(reduceMotion) else 0
+
+    fun presenceFrameDelayMillis(reduceMotion: Boolean, appearing: Boolean): Int =
+        if (appearing) 0 else durationMillis(reduceMotion)
+
+    /** Ce que montre ma vignette (une image comprise) n'est monté que sous un voile qui n'est plus plein. */
+    fun mountsTileContent(veil: Float): Boolean = veil < 1f
+
     private const val CONNECTING_BACKDROP = 0.4f
 }

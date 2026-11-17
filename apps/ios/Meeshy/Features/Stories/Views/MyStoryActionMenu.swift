@@ -32,7 +32,7 @@ struct MyStoryActionMenu: View {
         Button {
             actions.onViewers()
         } label: {
-            Label(String(localized: "story.mine.viewers", defaultValue: "Listing des vues"), systemImage: "eye")
+            Label(String(localized: "story.mine.viewers", defaultValue: "Vues"), systemImage: "eye")
         }
         Button {
             actions.onEdit()
@@ -71,7 +71,7 @@ struct MyStoryActionMenu: View {
         Button {
             actions.onRepost()
         } label: {
-            Label(String(localized: "story.mine.repost", defaultValue: "Republier"), systemImage: "arrow.2.squarepath")
+            Label(String(localized: "story.mine.repost", defaultValue: "Repartager"), systemImage: "arrow.2.squarepath")
         }
         .disabled(isReposting)
         Divider()

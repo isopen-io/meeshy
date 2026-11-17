@@ -42,7 +42,7 @@ internal fun MoodBubbleHost(
             },
             onReply = {
                 onDismiss()
-                navController.navigate(Routes.moodSpotlight(shown.id))
+                navController.navigateSingleTop(Routes.moodSpotlight(shown.id))
             },
             onDismiss = onDismiss,
             onDwellEnd = statusesViewModel::endStatusDwell,

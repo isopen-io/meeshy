@@ -196,7 +196,7 @@ private fun LoadedDetail(
                 MeeshyEmptyState(
                     icon = MeeshyIcons.PhotoLibrary,
                     title = stringResource(R.string.community_detail_posts_empty_title),
-                    subtitle = stringResource(R.string.community_detail_posts_empty_subtitle),
+                    subtitle = "",
                     modifier = Modifier.fillMaxWidth().height(220.dp),
                 )
             }
@@ -302,18 +302,36 @@ private fun DetailHeader(community: Community, accentHex: String) {
 @Composable
 private fun StatsRow(community: Community) {
     val tokens = MeeshyTheme.tokens
-    Row(
+    Column(
         Modifier
             .padding(horizontal = 16.dp)
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(tokens.backgroundSecondary.copy(alpha = 0.5f))
             .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        StatItem(Modifier.weight(1f), community.memberCount, stringResource(R.string.community_detail_stats_members), MeeshyIcons.GroupFilled)
-        Box(Modifier.width(1.dp).height(30.dp).background(tokens.hairline))
-        StatItem(Modifier.weight(1f), community.conversationCount, stringResource(R.string.community_detail_stats_channels), MeeshyIcons.Chat)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            StatItem(Modifier.weight(1f), community.memberCount, stringResource(R.string.community_detail_stats_members), MeeshyIcons.GroupFilled)
+            Box(Modifier.width(1.dp).height(30.dp).background(tokens.hairline))
+            StatItem(Modifier.weight(1f), community.conversationCount, stringResource(R.string.community_detail_stats_channels), MeeshyIcons.Chat)
+        }
+        community.onlineLine?.let { OnlineLine(it) }
+    }
+}
+
+/** « N en ligne » derrière un point de la couleur de marque (iOS `onlineLine`) : un agrégat, jamais qui (#18014). */
+@Composable
+private fun OnlineLine(count: Int) {
+    val label = stringResource(R.string.community_online, count)
+    Row(
+        Modifier.semantics(mergeDescendants = true) { contentDescription = label },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(MeeshyPalette.Indigo500))
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = MeeshyTheme.tokens.textSecondary)
     }
 }
 
@@ -451,7 +469,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.channelsSection(
             MeeshyEmptyState(
                 icon = MeeshyIcons.Chat,
                 title = stringResource(R.string.community_detail_channels_empty_title),
-                subtitle = stringResource(R.string.community_detail_channels_empty_subtitle),
+                subtitle = "",
                 actionLabel = if (canAdd) stringResource(R.string.community_detail_channels_empty_action) else null,
                 onAction = if (canAdd) onAddChannel else null,
                 modifier = Modifier.fillMaxWidth().height(220.dp),
@@ -510,13 +528,13 @@ private fun DetailSkeleton() {
 private fun LoadFailureState(failure: CommunityLoadFailure, onRetry: () -> Unit, onBack: () -> Unit) {
     val (icon, title, body) = when (failure) {
         CommunityLoadFailure.REFUSED -> Triple(MeeshyIcons.Groups, R.string.community_load_refused_title, R.string.community_load_refused_body)
-        CommunityLoadFailure.NETWORK -> Triple(MeeshyIcons.WifiProblem, R.string.community_load_network_title, R.string.community_load_network_body)
-        CommunityLoadFailure.SERVER -> Triple(MeeshyIcons.WarningFilled, R.string.community_load_server_title, R.string.community_load_server_body)
+        CommunityLoadFailure.NETWORK -> Triple(MeeshyIcons.WifiProblem, R.string.community_load_network_title, null)
+        CommunityLoadFailure.SERVER -> Triple(MeeshyIcons.WarningFilled, R.string.community_load_server_title, null)
     }
     MeeshyEmptyState(
         icon = icon,
         title = stringResource(title),
-        subtitle = stringResource(body),
+        subtitle = body?.let { stringResource(it) }.orEmpty(),
         actionLabel = stringResource(if (failure.offersRetry) R.string.community_common_retry else R.string.community_load_refused_back),
         onAction = if (failure.offersRetry) onRetry else onBack,
     )

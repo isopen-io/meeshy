@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshySDK
 
 /// Verrouille le contenu de l'échelle du bouton flottant menu.
 ///
@@ -99,7 +100,7 @@ final class RootMenuLadderEntryTests: XCTestCase {
         XCTAssertNil(RootMenuLadderEntry.links.badge)
         XCTAssertNil(RootMenuLadderEntry.communities.badge)
         XCTAssertNil(RootMenuLadderEntry.settings.badge)
-        XCTAssertNil(RootMenuLadderEntry.game.badge, "le point « Offrande prête » attend #17796")
+        XCTAssertNil(RootMenuLadderEntry.game.badge, "« Ma Légende » signale par un point, sans chiffre (#18165)")
     }
 
     // MARK: - Présentation
@@ -123,5 +124,29 @@ final class RootMenuLadderEntryTests: XCTestCase {
                 "\(entry): \(entry.colorHex) n'est pas hexadécimal"
             )
         }
+    }
+
+    // MARK: - Le point de « Ma Légende » (#18165)
+
+    func test_onlyTheGameRungSignalsTheGameAttention() {
+        let raised = GameAttention(chestReady: true, flameAtRisk: true)
+        XCTAssertTrue(RootMenuLadderEntry.game.showsAttentionDot(raised))
+        for entry in RootMenuLadderEntry.allCases where entry != .game {
+            XCTAssertFalse(entry.showsAttentionDot(raised), "\(entry) ne porte pas le point du jeu")
+        }
+    }
+
+    func test_theGameRung_showsNoDot_whenNothingIsSignaled() {
+        XCTAssertFalse(RootMenuLadderEntry.game.showsAttentionDot(.none))
+    }
+
+    func test_theGameRungLabel_saysWhatTheGameSignals() {
+        XCTAssertEqual(RootMenuLadderEntry.game.accessibilityLabel(attention: .none), RootMenuLadderEntry.game.label)
+        let chest = RootMenuLadderEntry.game.accessibilityLabel(attention: GameAttention(chestReady: true, flameAtRisk: false))
+        let flame = RootMenuLadderEntry.game.accessibilityLabel(attention: GameAttention(chestReady: false, flameAtRisk: true))
+        let both = RootMenuLadderEntry.game.accessibilityLabel(attention: GameAttention(chestReady: true, flameAtRisk: true))
+        XCTAssertEqual(Set([RootMenuLadderEntry.game.label, chest, flame, both]).count, 4, "quatre états, quatre noms")
+        XCTAssertEqual(RootMenuLadderEntry.notifications.accessibilityLabel(attention: GameAttention(chestReady: true, flameAtRisk: true)),
+                       RootMenuLadderEntry.notifications.label)
     }
 }

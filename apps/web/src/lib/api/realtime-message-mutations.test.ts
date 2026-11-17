@@ -309,6 +309,49 @@ describe('message:deleted — la bulle devient « Message supprimé », comme su
     expect(row?.attachments ?? []).toEqual([]);
   });
 
+  /*
+   * #18159 — L'HEURE DU RETRAIT EST CELLE DU SERVEUR.
+   *
+   * Les trois clients datent la pierre tombale, et aucun ne pouvait le faire
+   * avec autre chose que l'horloge de son appareil : le contrat ne portait
+   * aucun horodatage. Deux appareils du même compte dataient donc la même
+   * suppression différemment, et un rejeu de la file hors ligne la datait de
+   * la RECONNEXION — des heures après le retrait.
+   *
+   * Le témoin sépare une horloge serveur BIEN ANTÉRIEURE à l'horloge locale
+   * passée en second argument : au même instant, le repli et la règle juste
+   * rendent le même verdict, et le témoin ne pourrait pas tomber.
+   */
+  test('#18159 — la pierre tombale porte l’heure SERVEUR quand le fil la sert', () => {
+    const SERVER_DELETED_AT = '2026-09-25T09:00:00.000Z';
+    const client = seeded([original()]);
+    seedList(client, [conv({ lastMessage: original(), lastMessageAt: original().createdAt })]);
+
+    deleteWith(client, deleted({ deletedAt: SERVER_DELETED_AT }), new Date(EDITED_AT));
+
+    expect(String(rowOf(client)?.deletedAt)).toBe(SERVER_DELETED_AT);
+    /* La ligne de LISTE porte la même heure : c'est le second site qui datait, et il datait à part. */
+    expect(String(listRow(client)?.lastMessage?.deletedAt)).toBe(SERVER_DELETED_AT);
+  });
+
+  /* Un serveur d'avant #18159, ou une entrée de file écrite avant, n'en porte pas : le repli LOCAL reste. */
+  test('#18159 — sans heure serveur, la pierre tombale garde l’horloge locale', () => {
+    const client = seeded([original()]);
+
+    deleteWith(client, deleted(), new Date(EDITED_AT));
+
+    expect(String(rowOf(client)?.deletedAt)).toBe(EDITED_AT);
+  });
+
+  /* Une valeur ILLISIBLE n'est pas une heure : la dater en `NaN` serait pire que l'horloge du device. */
+  test('#18159 — une heure serveur illisible retombe sur l’horloge locale', () => {
+    const client = seeded([original()]);
+
+    deleteWith(client, deleted({ deletedAt: 'pas-une-date' }), new Date(EDITED_AT));
+
+    expect(String(rowOf(client)?.deletedAt)).toBe(EDITED_AT);
+  });
+
   test('une vue unique est scellée « déjà ouverte », jamais transformée en pierre tombale', () => {
     const client = seeded([original({ isViewOnce: true })]);
 

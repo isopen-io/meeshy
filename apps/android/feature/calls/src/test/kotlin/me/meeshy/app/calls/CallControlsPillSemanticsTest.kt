@@ -8,10 +8,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.assertHasClickAction
@@ -23,6 +27,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallControlsDisposition
+import me.meeshy.sdk.model.call.CallGlassSize
 import me.meeshy.sdk.model.call.CallGroupStageSizing
 import me.meeshy.sdk.model.call.CallPillText
 import me.meeshy.sdk.model.call.CallScreenLayer
@@ -63,6 +68,7 @@ class CallControlsPillSemanticsTest {
         pillText: CallPillText = CallPillText.None,
         captions: @Composable () -> Unit = {},
         panelContent: @Composable (CallScreenPanel) -> Unit = {},
+        outputState: String? = null,
     ) {
         val state = ui(muted, cameraOn)
         val items = CallPillModel.items(state, offered)
@@ -84,12 +90,28 @@ class CallControlsPillSemanticsTest {
                     onBackToMenu = {},
                     onClosePanel = {},
                     pillText = pillText,
+                    outputKind = if (outputState == null) CallPillKind.Normal else CallPillKind.Active,
+                    outputState = outputState,
                     captions = captions,
                     panelContent = panelContent,
                     modifier = Modifier.testTag("pill"),
                 )
             }
         }
+    }
+
+    @Test
+    fun `P1_6 - routed to a device, the output tells the screen reader where the sound goes`() {
+        setPill(outputState = "AirPods")
+        rule.onNodeWithContentDescription("Audio output")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "AirPods"))
+    }
+
+    @Test
+    fun `P1_6 - with no route reported, the output carries no state of its own`() {
+        setPill()
+        rule.onNodeWithContentDescription("Audio output")
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.StateDescription))
     }
 
     @Test
@@ -198,6 +220,19 @@ class CallControlsPillSemanticsTest {
         rule.onNodeWithContentDescription("Back to actions").assertDoesNotExist()
         rule.onNodeWithContentDescription("Mute microphone").performClick()
         assertThat(taps).containsExactly("mute")
+    }
+
+    /** #17964 · P9b.3 — the journal open in the pill leaves (…) AT REST: it offers « Show actions », never « Hide actions »; « Journal » closes the journal. */
+    @Test
+    fun `the open journal leaves the more button at rest, offering Show actions`() {
+        setPill(
+            layer = CallScreenLayer.Panel(CallScreenPanel.Journal),
+            disposition = CallControlsDisposition.Rails,
+            pillText = CallPillText.Journal,
+            panelContent = { Text("Journal du direct") },
+        )
+        rule.onNodeWithContentDescription("Show actions").assertHasClickAction()
+        rule.onNodeWithContentDescription("Hide actions").assertDoesNotExist()
     }
 
     @Test
@@ -364,14 +399,16 @@ class CallControlsPillSemanticsTest {
     }
 
     @Test
-    fun `closing the open menu tightens the pill progressively, legends and rows together, never at once (G3_4)`() {
+    fun `closing the open menu tightens the pill progressively - the layout takes its resting height at once, the glass drawn from the open one joins it (G3_4, loi 17_2)`() {
         var layer by mutableStateOf<CallScreenLayer>(CallScreenLayer.Menu)
         val state = ui()
         val items = CallPillModel.items(state, offered)
         val set = CallPillModel.available(state, items) { false }
         val rows = CallGroupStageSizing.rows(CallControlsDisposition.Rows.pillRows(set, CallScreenLayer.Menu), isCompactHeight = false)
+        lateinit var glass: CallGlassMorpher
         rule.setContent {
             MeeshyTheme {
+                glass = rememberCallGlassMorpher()
                 CallControlsPill(
                     state = state,
                     layer = layer,
@@ -390,17 +427,29 @@ class CallControlsPillSemanticsTest {
                 )
             }
         }
-        val open = rule.onNodeWithTag("pill").fetchSemanticsNode().size.height
+        val pill = rule.onNodeWithTag("pill").fetchSemanticsNode().size
+        val open = Size(pill.width.toFloat(), pill.height.toFloat())
+
+        layer = CallScreenLayer.Idle
+        rule.mainClock.advanceTimeBy(1_000)
+        val laidOut = rule.onNodeWithTag("pill").fetchSemanticsNode().size
+        val resting = Size(laidOut.width.toFloat(), laidOut.height.toFloat())
+        assertThat(resting.height).isLessThan(open.height)
 
         rule.mainClock.autoAdvance = false
-        layer = CallScreenLayer.Idle
-        rule.waitForIdle()
+        fun drawnHeight(): Float = rule.runOnIdle {
+            glass.frame(resting, reduceMotion = false).seen(CallGlassSize(resting.width, resting.height)).height
+        }
+        rule.runOnIdle { glass.frame(open, reduceMotion = false) }
+        val atClose = drawnHeight()
         rule.mainClock.advanceTimeBy(100)
-        val folding = rule.onNodeWithTag("pill").fetchSemanticsNode().size.height
+        val folding = drawnHeight()
         rule.mainClock.advanceTimeBy(1_000)
-        val resting = rule.onNodeWithTag("pill").fetchSemanticsNode().size.height
+        val joined = drawnHeight()
 
-        assertThat(folding).isLessThan(open)
-        assertThat(folding).isGreaterThan(resting)
+        assertThat(atClose).isWithin(0.5f).of(open.height)
+        assertThat(folding).isLessThan(open.height)
+        assertThat(folding).isGreaterThan(resting.height)
+        assertThat(joined).isWithin(0.5f).of(resting.height)
     }
 }

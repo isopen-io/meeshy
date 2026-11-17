@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.TranslationEntry
 import me.meeshy.sdk.model.TranslationEvent
 import me.meeshy.sdk.model.playback.AudioLanguageStripLaw
 import me.meeshy.sdk.session.SessionRepository
@@ -348,27 +349,31 @@ class ChatTranslationControllerTest {
     // --- live translation frames -------------------------------------------------------------------
 
     @Test
-    fun `a translation frame of this conversation is merged into the cache`() = runTest {
+    fun `a translation frame is merged into the cache`() = runTest {
         val r = rig()
         r.controller.start()
         advanceUntilIdle()
 
         r.translationReceived.emit(
-            TranslationEvent(messageId = "m1", conversationId = "c1", targetLanguage = "it", translatedContent = "Ciao"),
+            TranslationEvent("m1", listOf(TranslationEntry(targetLanguage = "it", translatedContent = "Ciao"))),
         )
         advanceUntilIdle()
 
         coVerify(exactly = 1) { r.repo.applyTranslation("m1", "it", "Ciao") }
     }
 
+    /**
+     * Une entrée sans langue ou sans texte ne fusionne RIEN : la lecture du miroir est indulgente
+     * (une trame malformée est écartée par la fusion no-op) et c'est ici que l'indulgence se prouve.
+     */
     @Test
-    fun `a translation frame of another conversation is ignored`() = runTest {
+    fun `a blank translation entry merges nothing`() = runTest {
         val r = rig()
         r.controller.start()
         advanceUntilIdle()
 
         r.translationReceived.emit(
-            TranslationEvent(messageId = "m1", conversationId = "elsewhere", targetLanguage = "it", translatedContent = "Ciao"),
+            TranslationEvent("m1", listOf(TranslationEntry(targetLanguage = "it", translatedContent = "  "))),
         )
         advanceUntilIdle()
 

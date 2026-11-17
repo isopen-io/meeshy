@@ -2167,6 +2167,123 @@ l'inventaire à VIDE. Son discriminant est ÉTROIT par décision — `import typ
 `ServerEmitIOWithRooms` si le porteur lit aussi ses rooms), jamais d'ajouter une
 ligne à un inventaire — il n'y a pas de `Server` nu légitime pour émettre.
 
+### La QUATRIÈME forme : la porte est juste, et c'est l'ARGUMENT qu'on caste
+
+Les trois formes ci-dessus décrivent une porte MAL OBTENUE — une signature
+réécrite, un cast du porteur, le `Server` NU pris chez la dépendance. **Leurs
+trois discriminants portent sur le RECEVEUR de `.emit(`.** Aucun ne regarde ce
+qu'on lui PASSE, et c'est par là que deux sites sont passés (#18649, cycle 163) :
+
+```ts
+io?.to(ROOMS.user(userId)).emit(event as never, data as never);   // togetherRelay — porteur `ServerEmitIO`
+emitter.emit(event as keyof ServerToClientEvents, data as any);   // MeeshySocketIOManager
+```
+
+Les deux importent la BONNE porte. `as never` étant assignable à tout, le couple
+`(événement, charge)` n'est confronté **ni sur le nom ni sur la forme** — c'est
+exactement la liberté du `Server` nu du cycle 108, obtenue autrement, donc
+invisible aux deux cliquets, **qui étaient verts**. Les quatre émissions
+d'« Ensemble » voyageaient ainsi hors de tout contrat, sur un canal qui n'a
+aucun sérialiseur pour rattraper l'écart.
+
+> **La règle du cycle 105 vaut de l'ARGUMENT comme elle valait du PORTEUR** :
+> chercher une forme fautive par son NOM de déclaration, c'est manquer tous les
+> sites qui l'obtiennent autrement. Un cliquet qui garde un RECEVEUR ne dit rien
+> de ce qu'on lui remet.
+
+**Et le second site portait un commentaire qui ÉNONÇAIT la contrainte** —
+« event is always SERVER_EVENTS.TYPING_STOP » — sous un cast qui l'empêchait
+d'être vérifiée. C'est une AFFIRMATION (cycle 94) : mesurée vraie, elle devient
+un TYPE (`broadcastFn` déclare `typeof SERVER_EVENTS.TYPING_STOP` et
+`TypingEvent`) et le cast disparaît. Une contrainte qu'on écrit en prose à côté
+du code qui l'annule est le symptôme, pas la documentation.
+
+**Réparer, c'est NARROWER jusqu'au site d'appel, jamais déplacer le cast** : un
+paramètre générique `E extends ServerEventName` porte la corrélation jusqu'où un
+nom CONCRET la vérifie (`emitTo` dans `togetherRelay.ts`), et l'unique effacement
+sanctionné du dépôt reste dans `emitServerEvent`, une fois, documenté sur place.
+
+Cliquet : `sweepErasingEmitArgumentCasts` (`socketio/__tests__/server-emit-door-sweep.ts`),
+inventaire **VIDE**. Son discriminant ne retient que les cibles qui EFFACENT —
+`never`, `any`, `unknown`, `keyof ServerToClientEvents` — **ancrées en fin
+d'argument de premier niveau** :
+
+| forme | compté ? | pourquoi |
+|---|---|---|
+| `event as never` / `data as any` | **oui** | plus aucune confrontation au contrat |
+| `event as keyof ServerToClientEvents` | **oui** | la corrélation s'effondre (cycle 104) |
+| `{ code, message } as CallError` | non | cast vers le type que le canal DÉCLARE — la porte vérifie ensuite |
+| `{ id: id as any }` | non | cast de CHAMP, pas de canal — autre question |
+| un `as any` sur le 3e argument (ack) | non | ni le canal ni la charge |
+
+Le premier relevé, sur « un `as` au premier niveau », rendait **44 sites dont 40
+`as CallError`** : il mesurait la POPULARITÉ d'un idiome, pas une propriété —
+l'erreur du cycle 107, dont le balayage fut JETÉ plutôt que gelé. Narrower le
+discriminant l'a ramené à **4** (deux sites, leurs deux arguments chacun).
+
+**Mesure du lot** : les quatre charges d'« Ensemble » étaient JUSTES contre leurs
+types déclarés — la discipline tenait. Ce lot ne répare donc aucune panne : il
+rend vérifiable ce qui ne l'était pas, et le `tsc` vert APRÈS retrait des casts
+est le résultat, pas l'absence de résultat. Le ROUGE est prouvé dans les trois
+sens (champ inconnu `TS2561`, couple décorrélé `TS2353`, canal étranger `TS2345`).
+
+### La CINQUIÈME forme : le `Socket` NU, jumeau du `Server` NU
+
+Le cycle 108 a fermé le `Server` nu. Son jumeau a la même cause et le même
+effet — sans paramètres de type, socket.io retombe sur `DefaultEventsMap`, donc
+`emit(ev: string, ...args: any[])` — et `sweepRawServerEmitters` ne cherche que
+`Server`. Mesuré le 2026-11-15 (#18655, cycle 164), **un fichier de production**
+tenait le `Socket` nu pour émettre :
+
+```ts
+import { Socket } from 'socket.io';                       // ← nu
+export async function checkSocketRateLimit(socket: Socket, …, errorEvent: string = 'call:error') {
+  socket.emit(errorEvent, { code, message, retryAfter });  // ← `retryAfter` : AUCUN contrat
+}
+```
+
+`CallError` déclare `code`, `message`, `details?`, `callId?`. `retryAfter`
+voyageait à la RACINE, et **aucun des trois clients ne le lit** (toutes les
+occurrences du dépôt sont des chemins HTTP 429). Il vit désormais dans `details`,
+le champ que le contrat porte pour cela — rétrocompatible, personne ne le lisant
+d'un côté comme de l'autre.
+
+> **Le discriminant du jumeau ne se RECOPIE pas.** Celui de `Server` exige un
+> `import type`, parce que `MeeshySocketIOManager` importe `Server` en VALEUR
+> pour le CONSTRUIRE. **Personne ne construit un `Socket`** — socket.io le remet
+> à un handler — donc les deux formes d'import comptent, et ce n'est pas une
+> généralisation gratuite : le site fautif écrivait `import { Socket }` (valeur),
+> et le discriminant de `Server` recopié tel quel **l'aurait manqué**. C'est la
+> règle du cycle 91, une fois de plus : la forme juste d'à côté s'ouvre contre le
+> cas présent, elle ne se copie pas.
+
+La seconde condition est REPRISE sans changement : **détenir n'est pas ÉMETTRE.**
+`typed-socket.ts` importe `Socket` pour en DÉRIVER `MeeshySocket` ;
+`midSessionRoomAdmission`, `join-user-conversations` et `socket-helpers` le
+déclarent pour lire des rooms ou résoudre un utilisateur. Aucun n'émet, et tous
+sortent par CONSTRUCTION — pas par exemption.
+
+**Le grain est le FICHIER, et c'est une décision** : dans un fichier qui ÉMET,
+toute déclaration `: Socket` nue est relevée, même d'une fonction qui n'émet pas
+— c'est le même socket, et le gouverner de bout en bout est strictement meilleur.
+Trouvé en écrivant la fixture NÉGATIVE, qui mélangeait les deux motifs et
+rougissait : une erreur commise en écrivant un cliquet est le meilleur cas de
+test qu'il aura jamais.
+
+Cliquet : `sweepRawSocketEmitters` (`socketio/__tests__/server-emit-door-sweep.ts`),
+inventaire **VIDE**. Réparation : `MeeshySocket`, jamais une ligne d'inventaire.
+
+**Et ce site était INVISIBLE au balayage du cycle 163**, qui a conclu « 262 sites
+réels, zéro champ non déclaré » : celui-ci exigeait un nom d'événement LITTÉRAL
+pour résoudre le type, et a écarté 9 sites « nom non résolu » sans les ouvrir —
+le nom est ici une variable `string`.
+
+> **« Zéro trouvé » et « zéro existe » ne sont pas la même affirmation.** Un
+> balayage qui écarte ce qu'il ne sait pas résoudre doit PUBLIER ce qu'il écarte,
+> et quelqu'un doit l'ouvrir — sans quoi le chiffre qu'il publie se lit comme une
+> propriété du dépôt alors qu'il n'est qu'une propriété de l'instrument. Même
+> famille que la leçon 261.
+
 ### Un lot peut rendre un contournement INUTILE sans le faire disparaître
 
 Variante douce de « le lot qui rend une chose possible doit relire les
@@ -2337,9 +2454,22 @@ INCONDITIONNELLEMENT avant de regarder ce qu'elle contient. **Il ne pouvait pas
 rendre `[]`.** Le refus du message dérivé, ancien et gardé par ses propres
 témoins, retirait donc la seule émission qui compte et laissait la liste à 1.
 
-Ce que l'enveloppe seule livre : rien — son unique auditeur (le web) lit
-`data.message` ; iOS et Android n'écoutent que le `message:new` dérivé, celui
-qu'on vient de refuser. Ce que la liste non vide AFFIRME, en revanche, coûte
+Ce que l'enveloppe seule livre : rien — et pour une raison PLUS FORTE que celle
+écrite ici jusqu'au cycle 161. Ce paragraphe lui prêtait « son unique auditeur
+(le web) lit `data.message` » : mesuré, **aucun client ne cite `link:message:new`
+ni sa constante** — ni le web, ni iOS, ni Android (#18342, et le cliquet
+`socket-event-orphan-gate` le tient désormais). L'enveloppe ne livre donc rien à
+PERSONNE ; iOS et Android n'écoutent que le `message:new` dérivé, celui qu'on
+vient de refuser, et le web non plus.
+
+> **Un commentaire qui nomme un CONSOMMATEUR est une affirmation**, au même
+> titre qu'un tri (cycle 86 bis), un compte (cycle 93) ou une contrainte de
+> schéma (cycle 94) — et celle-ci a survécu à la disparition de ce qu'elle
+> décrivait. La conclusion du cycle 114 ne bouge pas (l'enveloppe seule ne
+> livre rien) ; sa PRÉMISSE était fausse, et c'est elle qu'on aurait relue pour
+> décider si l'enveloppe mérite encore d'être émise.
+
+Ce que la liste non vide AFFIRME, en revanche, coûte
 trois signaux (cycle 114) : `count` comptait la remise, `conversationIds` ne
 nommait PAS la conversation (donc rien n'envoyait le client rechercher un
 message qui est pourtant toujours en base), et — `announcesMessageArrival('link-message')`

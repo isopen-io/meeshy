@@ -16,6 +16,8 @@ import me.meeshy.sdk.model.call.CallLiveFrameReply
 import me.meeshy.sdk.model.call.CallLiveFrameSelected
 import me.meeshy.sdk.model.call.CallLiveFrameTexts
 import me.meeshy.sdk.model.call.CallState
+import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.call.frames.CallLiveFramePeerRelease
 import me.meeshy.sdk.model.call.frames.CallLiveFrameProposal
 import me.meeshy.sdk.model.call.frames.CallLiveFrameState
 import me.meeshy.sdk.session.SessionRepository
@@ -61,6 +63,46 @@ class CallLiveFrameControllerTest {
 
         assertThat(controller.state.value.frameId).isEqualTo(other)
         coVerify { social.selectCallLiveFrame("call-1", other, CallLiveFrameTexts(name = "Ana"), CallLiveFrameReply.ACCEPTED) }
+    }
+
+    /** #18367 — le retrait reçu du cadre partagé se dit au lecteur d'écran, au nom de qui l'a relâché ; jamais mon propre retrait. */
+    @Test
+    fun `le retrait recu du cadre partage s'annonce au nom de l'autre, pas le mien`() = runTest {
+        val controller = CallLiveFrameController(social, session, CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        controller.onTransition(CallState.Idle, CallState.Connected, info)
+        val heard = mutableListOf<CallLiveFramePeerRelease>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { controller.peerReleases.collect { heard += it } }
+
+        controller.apply(frame)
+        incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", frame, CallLiveFrameTexts(name = "Awa"), CallLiveFrameReply.ACCEPTED))
+        controller.apply(null)
+        assertThat(heard).isEmpty()
+
+        incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", other, CallLiveFrameTexts(name = "Awa")))
+        controller.accept()
+        incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", null, null))
+
+        assertThat(controller.state.value.frameId).isNull()
+        assertThat(heard).containsExactly(CallLiveFramePeerRelease("Awa"))
+        controller.onCleared()
+    }
+
+    @Test
+    fun `relacher un cadre que l'autre a accepte emet le retrait, et le retrait recu fait tomber le cadre partage`() = run { controller ->
+        controller.apply(frame)
+        incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", frame, CallLiveFrameTexts(name = "Bob"), CallLiveFrameReply.ACCEPTED))
+
+        controller.apply(null)
+
+        assertThat(controller.state.value.frameId).isNull()
+        coVerify(exactly = 1) { social.selectCallLiveFrame("call-1", null, null, null) }
+
+        incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", other, CallLiveFrameTexts(name = "Bob")))
+        controller.accept()
+        incoming.tryEmit(CallLiveFrameSelected("call-1", "peer", null, null))
+
+        assertThat(controller.state.value.frameId).isNull()
+        coVerify(exactly = 1) { social.selectCallLiveFrame("call-1", null, null, null) }
     }
 
     @Test

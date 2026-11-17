@@ -13,6 +13,9 @@ public struct ConversationSettingsView: View {
     @State private var avatarItem: PhotosPickerItem? = nil
     @State private var bannerItem: PhotosPickerItem? = nil
     @State private var showDeleteForMeAlert = false
+    /// Les gestes rares (supprimer, quitter) sont rangés derrière « Plus » (épure #18078, règle 6).
+    @State private var showMoreActions = false
+    @State private var openNoteID: String?
 
     public var onUpdated: ((MeeshyConversation) -> Void)? = nil
     public var onLeft: (() -> Void)? = nil
@@ -71,7 +74,7 @@ public struct ConversationSettingsView: View {
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         } message: {
-            Text(String(localized: "conversation.settings.leave.confirm.message", defaultValue: "Vous ne recevrez plus de messages. Votre historique restera lisible.", bundle: .module))
+            Text(String(localized: "conversation.settings.leave.confirm.message", defaultValue: "Vous ne recevrez plus de messages ; votre historique reste lisible.", bundle: .module))
         }
         .alert(String(localized: "conversation.settings.deleteForMe.confirm.title", defaultValue: "Supprimer pour moi ?", bundle: .module), isPresented: $showDeleteForMeAlert) {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
@@ -85,7 +88,7 @@ public struct ConversationSettingsView: View {
                 }
             }
         } message: {
-            Text(String(localized: "conversation.settings.deleteForMe.confirm.message", defaultValue: "Cette conversation disparaîtra définitivement de votre liste. Les autres membres ne seront pas affectés.", bundle: .module))
+            Text(String(localized: "conversation.settings.deleteForMe.confirm.message", defaultValue: "Retirée définitivement de votre liste ; les autres membres ne sont pas affectés.", bundle: .module))
         }
         .alert(String(localized: "conversation.settings.delete.confirm.title", defaultValue: "Supprimer la conversation", bundle: .module), isPresented: $viewModel.showDeleteConversation) {
             Button(String(localized: "conversation.settings.delete.button", defaultValue: "Supprimer", bundle: .module), role: .destructive) {
@@ -298,15 +301,17 @@ public struct ConversationSettingsView: View {
 
                 HStack {
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                        Text(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module))
-                            .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium, design: .rounded)
-                            .foregroundStyle(theme.textPrimary)
-                        Text(String(localized: "conversation.settings.permissions.announcement.subtitle", defaultValue: "Seuls les admins peuvent écrire", bundle: .module))
-                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
+                        MeeshyInfoNoted(note: ConversationSettingsNotes.announcement, openNoteID: $openNoteID, tint: theme.textMuted) {
+                            Text(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module))
+                                .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium, design: .rounded)
+                                .foregroundStyle(theme.textPrimary)
+                        }
+                        Text(String(localized: "conversation.settings.permissions.announcement.rule", defaultValue: "Seuls les admins écrivent.", bundle: .module))
+                            .meeshyScaledFont(MeeshyFont.footnoteSize, weight: .regular, design: .rounded)
                             .foregroundStyle(theme.textMuted)
                     }
                     Spacer()
-                    Toggle("", isOn: $viewModel.isAnnouncementChannel)
+                    Toggle(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module), isOn: $viewModel.isAnnouncementChannel)
                         .labelsHidden()
                         .tint(Color(hex: viewModel.accentColor))
                 }
@@ -314,7 +319,10 @@ public struct ConversationSettingsView: View {
                 .background(theme.backgroundSecondary.opacity(0.5))
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
 
-                settingsField(label: String(localized: "conversation.settings.permissions.slowMode", defaultValue: "Mode lent", bundle: .module)) {
+                settingsField(
+                    label: String(localized: "conversation.settings.permissions.slowMode", defaultValue: "Mode lent", bundle: .module),
+                    note: ConversationSettingsNotes.slowMode
+                ) {
                     Picker("", selection: $viewModel.slowModeSeconds) {
                         Text(String(localized: "conversation.settings.permissions.slowMode.off", defaultValue: "Désactivé", bundle: .module)).tag(0)
                         Text("10s").tag(10)
@@ -330,7 +338,7 @@ public struct ConversationSettingsView: View {
                         Text(String(localized: "conversation.settings.permissions.autoTranslate", defaultValue: "Traduction automatique", bundle: .module))
                             .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium, design: .rounded)
                             .foregroundStyle(theme.textPrimary)
-                        Text(String(localized: "conversation.settings.permissions.autoTranslate.subtitle", defaultValue: "Les messages sont traduits automatiquement", bundle: .module))
+                        Text(String(localized: "conversation.settings.permissions.autoTranslate.subtitle", defaultValue: "Chacun lit les messages dans sa langue.", bundle: .module))
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
                             .foregroundStyle(theme.textMuted)
                     }
@@ -466,7 +474,7 @@ public struct ConversationSettingsView: View {
         case .moderator:
             HStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "checkmark.shield.fill").meeshyScaledFont(MeeshyIconSize.xxs)
-                Text(String(localized: "conversation.role.moderator", defaultValue: "Modo", bundle: .module)).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                Text(String(localized: "conversation.role.moderator", defaultValue: "Modérateur", bundle: .module)).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             }.foregroundStyle(MeeshyColors.success)
         case .member:
             EmptyView()
@@ -495,17 +503,17 @@ public struct ConversationSettingsView: View {
         if let accountId = participant.userId {
             if viewModel.currentUserRole == .creator && targetRole < .admin {
                 Button { Task { await viewModel.updateRole(userId: accountId, newRole: "ADMIN") } } label: {
-                    Label(String(localized: "conversation.settings.member.promoteAdmin", defaultValue: "Promouvoir Admin", bundle: .module), systemImage: "shield.fill")
+                    Label(String(localized: "conversation.settings.member.promoteAdmin", defaultValue: "Promouvoir admin", bundle: .module), systemImage: "shield.fill")
                 }
             }
             if viewModel.currentUserRole.hasMinimumRole(.admin) && targetRole == .member {
                 Button { Task { await viewModel.updateRole(userId: accountId, newRole: "MODERATOR") } } label: {
-                    Label(String(localized: "conversation.settings.member.promoteModerator", defaultValue: "Promouvoir Modérateur", bundle: .module), systemImage: "checkmark.shield.fill")
+                    Label(String(localized: "conversation.settings.member.promoteModerator", defaultValue: "Promouvoir modérateur", bundle: .module), systemImage: "checkmark.shield.fill")
                 }
             }
             if viewModel.currentUserRole > targetRole && targetRole > .member {
                 Button { Task { await viewModel.updateRole(userId: accountId, newRole: "MEMBER") } } label: {
-                    Label(String(localized: "conversation.settings.member.demoteMember", defaultValue: "Rétrograder Membre", bundle: .module), systemImage: "person.fill")
+                    Label(String(localized: "conversation.settings.member.demoteMember", defaultValue: "Rétrograder en membre", bundle: .module), systemImage: "person.fill")
                 }
             }
         }
@@ -532,8 +540,34 @@ public struct ConversationSettingsView: View {
 
     private var dangerSection: some View {
         VStack(spacing: MeeshySpacing.md) {
-            sectionHeader(String(localized: "conversation.settings.section.danger", defaultValue: "Zone dangereuse", bundle: .module))
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { showMoreActions.toggle() }
+            } label: {
+                HStack {
+                    Text(String(localized: "conversation.settings.more", defaultValue: "Plus", bundle: .module))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(theme.textMuted)
+                    Spacer()
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                        .foregroundStyle(theme.textMuted)
+                        .rotationEffect(.degrees(showMoreActions ? 90 : 0))
+                        .accessibilityHidden(true)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(showMoreActions ? [.isButton, .isSelected] : .isButton)
 
+            if showMoreActions {
+                moreActions
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var moreActions: some View {
             Button(role: .destructive) {
                 showDeleteForMeAlert = true
             } label: {
@@ -580,7 +614,6 @@ public struct ConversationSettingsView: View {
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
                 }
             }
-        }
     }
 
     // MARK: - Helpers
@@ -593,11 +626,13 @@ public struct ConversationSettingsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func settingsField<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+    private func settingsField<Content: View>(label: String, note: MeeshyInfoNote? = nil, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-            Text(label)
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .rounded))
-                .foregroundStyle(theme.textSecondary)
+            MeeshyInfoNoted(note: note, openNoteID: $openNoteID, tint: theme.textSecondary) {
+                Text(label)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.textSecondary)
+            }
             content()
                 .textFieldStyle(.plain)
                 .padding(MeeshySpacing.md)
@@ -840,7 +875,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
                 conversationId: conversationId,
                 key: key
             )
-            postToast(message: String(localized: "conversation.settings.toast.memberExpelled", defaultValue: "Membre expulse", bundle: .module), isSuccess: true)
+            postToast(message: String(localized: "conversation.settings.toast.memberExpelled", defaultValue: "Membre expulsé", bundle: .module), isSuccess: true)
             await loadMembers()
         } catch {
             errorMessage = error.localizedDescription

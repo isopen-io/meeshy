@@ -119,6 +119,10 @@ enum MessageCardExportText {
         case .bulles: return text("export.card.link.bulles", "Bulles")
         case .fil: return text("export.card.link.fil", "Fil")
         case .silence: return text("export.card.link.silence", "Silence")
+        case .points: return text("export.card.link.points", "Points")
+        case .losange: return text("export.card.link.losange", "Losange")
+        case .asterisme: return text("export.card.link.asterisme", "Astérisme")
+        case .double: return text("export.card.link.double", "Double filet")
         }
     }
 
@@ -215,6 +219,22 @@ enum MessageCardExportText {
         case .fifteenSeconds: return text("export.card.clip.15", "15 s")
         case .thirtySeconds: return text("export.card.clip.30", "30 s")
         case .oneMinute: return text("export.card.clip.60", "1 min")
+        }
+    }
+
+    static func frameLabel(_ frame: MessageCardDecor.Frame) -> String {
+        switch frame {
+        case .none: return text("export.card.decor.frame.none", "Sans cadre")
+        case .panel: return text("export.card.decor.frame.panel", "Panneau")
+        case .border: return text("export.card.decor.frame.border", "Cadre")
+        }
+    }
+
+    static func ornamentLabel(_ ornament: MessageCardDecor.Ornament) -> String {
+        switch ornament {
+        case .none: return text("export.card.decor.ornament.none", "Sans ornement")
+        case .quoteMark: return text("export.card.decor.ornament.quoteMark", "Guillemet")
+        case .accentRule: return text("export.card.decor.ornament.accentRule", "Trait")
         }
     }
 

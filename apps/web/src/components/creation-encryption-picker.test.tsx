@@ -2,7 +2,7 @@ import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
-import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
+import { creationEncryptionOffer, type CreationEncryptionMode, type CreationEncryptionOffer } from '@meeshy/shared/utils/conversation-creation-encryption';
 import { chosenCreationMode, webCreationEncryptionOffer } from '@/lib/conversation-new/encryption';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -65,6 +65,16 @@ const mount = async (props: { readonly platformRole: string | null; readonly con
   for (let tries = 0; tries < 50 && document.querySelector('[data-creation-encryption]') === null; tries += 1) await settle();
 };
 
+const mountOffer = async (offer: CreationEncryptionOffer, selected: CreationEncryptionMode) => {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(<CreationEncryptionPicker offer={offer} selected={selected} onSelect={() => undefined} />);
+  });
+  for (let tries = 0; tries < 50 && document.querySelector('[data-creation-encryption]') === null; tries += 1) await settle();
+};
+
 const radio = (mode: CreationEncryptionMode) => document.querySelector<HTMLInputElement>(`input[type="radio"][value="${mode}"]`);
 const offered = () => [...document.querySelectorAll<HTMLInputElement>('input[type="radio"]')].map((input) => input.value);
 const describedText = (input: HTMLInputElement | null) =>
@@ -87,17 +97,67 @@ describe('un groupe de boutons radio nommé « Chiffrement »', () => {
     expect(new Set([...document.querySelectorAll<HTMLInputElement>('input[type="radio"]')].map((input) => input.name)).size).toBe(1);
   });
 
-  test('chaque mode porte sa phrase en description', async () => {
+  test('chaque mode tient en UNE ligne, en description', async () => {
     await mount({ platformRole: 'USER', conversationType: 'direct' });
-    expect(describedText(radio('server'))).toBe('Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.');
-    expect(describedText(radio('hybrid'))).toBe('Chiffré sur nos serveurs ; entre appareils compatibles, une seconde couche permet de vérifier qu’un message texte n’a pas été modifié en chemin. Cet appareil ne la porte pas encore.');
+    expect(describedText(radio('server'))).toBe('Chiffré sur nos serveurs ; traduction, transcription et recherche fonctionnent.');
+    expect(describedText(radio('hybrid'))).toBe('Chiffré sur nos serveurs, intégrité vérifiée entre appareils compatibles.');
     expect(describedText(radio('hybrid'))).not.toMatch(/bout en bout|chaque message/u);
   });
 
-  test('le pied du choix dit que le bout en bout ne se désactive jamais, et qu’une autre conversation reste possible', async () => {
+  test('le détail du mode retenu est derrière un (i) « Que change ce mode ? », lu même replié', async () => {
+    await mount({ platformRole: 'USER', conversationType: 'direct' });
+    await act(async () => {
+      radio('hybrid')?.click();
+    });
+    const info = document.querySelector<HTMLButtonElement>('button[aria-label="Que change ce mode ?"]');
+    expect(info).not.toBeNull();
+    expect(info?.closest('details')).toBeNull();
+    const note = document.getElementById(info?.getAttribute('aria-controls') ?? '');
+    expect(note?.textContent).toBe(
+      'Chiffré sur nos serveurs ; entre appareils compatibles, une seconde couche permet de vérifier qu’un message texte n’a pas été modifié en chemin. Cet appareil ne la porte pas encore.',
+    );
+    expect(note?.className).toContain('sr-only');
+  });
+
+  test('mode Serveur ou Hybride retenu : rien ne parle du bout en bout au repos', async () => {
     await mount({ platformRole: 'USER', conversationType: 'group' });
-    expect(document.querySelector('[data-creation-encryption-footer]')?.textContent).toBe(
-      'Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.',
+    expect(document.querySelector('[data-creation-encryption-footer]')).toBeNull();
+    const atRest = [...document.querySelectorAll('[data-creation-encryption-block] > p')].map((line) => line.textContent ?? '').join(' ');
+    expect(atRest).not.toContain('bout en bout');
+  });
+
+  test('bout en bout retenu : l’irréversibilité se dit en UNE phrase, visible sans rien déplier', async () => {
+    await mountOffer(creationEncryptionOffer({ platformRole: 'ADMIN', conversationType: 'direct', endToEndSupported: true }), 'e2ee');
+    const footers = document.querySelectorAll('[data-creation-encryption-footer]');
+    expect(footers).toHaveLength(1);
+    expect(footers[0]?.closest('details')).toBeNull();
+    expect(footers[0]?.className).not.toContain('sr-only');
+    expect(footers[0]?.textContent).toBe('Une fois activé, le chiffrement de bout en bout ne se désactive plus.');
+  });
+});
+
+describe('la ligne du mode retenu se lit au repos (règle 7, #18361)', () => {
+  test('le mode Serveur dit au repos ce qu’il garde — traduction, transcription, recherche — sans (i) qui le redise', async () => {
+    await mount({ platformRole: 'USER', conversationType: 'direct' });
+    expect(document.querySelector('[data-creation-encryption-current]')?.textContent).toContain('traduction, transcription et recherche');
+    expect(document.querySelector('[data-creation-encryption-block] button[aria-label="Que change ce mode ?"]')).toBeNull();
+  });
+
+  test('sous le résumé, hors du <details>', async () => {
+    await mount({ platformRole: 'USER', conversationType: 'direct' });
+    const line = document.querySelector('[data-creation-encryption-current]');
+    expect(line?.textContent).toBe('Chiffré sur nos serveurs ; traduction, transcription et recherche fonctionnent.');
+    expect(line?.closest('details')).toBeNull();
+    expect(line?.className).not.toContain('sr-only');
+  });
+
+  test('elle suit le mode choisi', async () => {
+    await mount({ platformRole: 'USER', conversationType: 'direct' });
+    await act(async () => {
+      radio('hybrid')?.click();
+    });
+    expect(document.querySelector('[data-creation-encryption-current]')?.textContent).toBe(
+      'Chiffré sur nos serveurs, intégrité vérifiée entre appareils compatibles.',
     );
   });
 });

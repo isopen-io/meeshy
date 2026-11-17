@@ -76,7 +76,7 @@ const mount = () => {
   const taps: Event[] = [];
   host.addEventListener('click', (event) => taps.push(event), { capture: true });
   const root = createRoot(host);
-  act(() => root.render(<CallStage call={sharing()} layout="screen" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={{ full: false, onToggle: () => undefined, zoom: 'step' as const, column: () => null }} />));
+  act(() => root.render(<CallStage call={sharing()} layout="screen" language="fr" choice={null} onChoose={() => undefined} fullScreen="off" onFullScreen={() => undefined} moderation={null} self={{ full: false, onToggle: () => undefined, zoom: 'step' as const, column: () => null }} />));
   const find = (selector: string) => host.querySelector(selector) as HTMLElement | null;
   const layer = () => find('[data-call-screen-layer]') as HTMLElement;
   const screen = () => find('[data-call-screen-surface]') as HTMLElement;

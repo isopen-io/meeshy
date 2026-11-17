@@ -20,7 +20,7 @@ struct GameHiddenCard: View {
 
     var body: some View {
         GameCard(title: GameText.settingsHiddenTitle) {
-            GameNote(text: GameText.settingsHiddenCard + " " + GameText.settingsHiddenReopenNote)
+            GameNote(text: GameText.settingsHiddenReopenNote)
             GameErrorLine(message: errorMessage, identifier: "game.hidden.error")
             GameActionButton(
                 title: GameText.settingsHiddenShow, busy: busy, tint: MeeshyColors.brandPrimary, identifier: "game.hidden.show"

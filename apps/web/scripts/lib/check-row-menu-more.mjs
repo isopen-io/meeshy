@@ -54,7 +54,9 @@ export async function checkRowMenuMore({ browser, base, check }) {
   await awaitCondition(page, (row) => document.querySelector(`[data-row="${row}"] [data-favorite]`) !== null, GROUP);
   const favorite = await page.$eval(`[data-row="${GROUP}"]`, (row) => row.querySelector('[data-favorite]')?.textContent ?? null);
   check(favorite === '🔥', `« Favori › 🔥 » pose l'emoji à côté du nom (${JSON.stringify(favorite)})`);
-  await page.click('button:text-is("Favoris")');
+  /* « Favoris » est rangé derrière « Plus » (épure #18361) : on l'ouvre comme la personne, si la puce n'est pas là. */
+  if ((await page.locator('nav[data-list-filters] button[data-list-filter="favorites"]').count()) === 0) await page.click('nav[data-list-filters] [data-list-filters-more]');
+  await page.click('nav[data-list-filters] button[data-list-filter="favorites"]');
   await awaitCondition(page, () => document.querySelectorAll('[data-row]').length === 1);
   const favorites = await rowIds(page);
   check(JSON.stringify(favorites) === JSON.stringify([GROUP]), `la puce « Favoris » ne rend que la conversation au favori (${JSON.stringify(favorites)})`);
@@ -133,7 +135,7 @@ export async function checkRowMenuMore({ browser, base, check }) {
   }));
   check(left.menu === 'Actions de conversation' && left.focus === 'Favori', `Flèche gauche ramène au menu, le focus sur « Favori » (${JSON.stringify(left)})`);
   await page.keyboard.press('Escape');
-  const closed = await page.evaluate((button) => ({ menu: document.querySelector('[role="menu"]') !== null, focus: document.activeElement?.matches(button) === true }), BUTTON);
+  const closed = await page.evaluate((button) => ({ menu: document.querySelector('[role="menu"]:not([data-leaving])') !== null, focus: document.activeElement?.matches(button) === true }), BUTTON);
   check(!closed.menu && closed.focus, `Échap referme et rend le focus au bouton (${JSON.stringify(closed)})`);
 
   // f. tenir la ligne ouvre l'aperçu au-dessus des actions (#11211) — sans `contextmenu`, comme Safari iOS

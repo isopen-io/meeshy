@@ -198,6 +198,17 @@ class CallCaptionsFooterTest {
         assertThat(CallCaptionsFooter.resolve(emptyList())).isEqualTo(CallCaptionsFooter.None)
     }
 
+    /**
+     * #17964 · P13.9 — the foot of the journal open in the pill, next to the « Journal » that closes it: the foot of the
+     * captions, without a wait — the journal draws none. Vectors shared with iOS `CallCaptionsFooter.journal(lines:)`.
+     */
+    @Test
+    fun `the foot of the journal says the pair and never a waiting translation`() {
+        assertThat(CallCaptionsFooter.journal(listOf(line("EN", "FR")))).isEqualTo(CallCaptionsFooter.TouchForOriginal("EN → FR"))
+        assertThat(CallCaptionsFooter.journal(listOf(line("EN", awaitingUntilMs = 9_000)))).isEqualTo(CallCaptionsFooter.None)
+        assertThat(CallCaptionsFooter.journal(emptyList())).isEqualTo(CallCaptionsFooter.None)
+    }
+
     /** U2.9 — in group full screen the pill is stowed with the controls: only the captions glass, without its base row, stays. */
     @Test
     fun `the full screen keeps the pill only when it carries the captions alone`() {

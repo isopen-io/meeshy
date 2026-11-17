@@ -264,9 +264,16 @@ struct ThemedMessageBubble: View {
     @State private var shareURL: URL? = nil
     @State private var fullscreenAttachment: MessageAttachment? = nil
     @State private var showCarousel: Bool = false
+    @Environment(\.carouselPresentation) private var carouselPresentation
     @State private var carouselIndex: Int = 0
     @State private var revealedAttachmentIds: Set<String> = []
     @State private var fullscreenLocationAttachment: MessageAttachment? = nil
+
+    /// L'aperçu d'appui long montre plusieurs visuels en carrousel, par la
+    /// loi qui perce aussi son masque de toucher (#18824).
+    private var previewShowsCarousel: Bool {
+        carouselPresentation == .preview && MessageOverlayPreviewTouch.presentsCarousel(message)
+    }
 
     // MARK: - Lifecycle controllers (encapsulate timers + animations)
 
@@ -376,7 +383,7 @@ struct ThemedMessageBubble: View {
                 // La destruction se VOIT. Posé sur le `Group`, donc
                 // sur la bulle comme sur le sticker : un éphémère détruit sous
                 // les yeux du lecteur se consume, puis l'hôte retire la ligne.
-                .ephemeralBurn(isBurning: content.isBurning)
+                .ephemeralBurn(isBurning: content.isBurning, side: .init(isMine: content.isMe))
                 // La flamme-œil en filigrane, à cheval sur le bord d'attaque de la bulle.
                 .afterReadWatermark(content.protection.isAfterRead, gutter: 24, tint: ComposerProtection.ephemeral.tint,
                                     edge: content.isMe ? .trailing : .leading, overhang: 10)
@@ -534,7 +541,7 @@ struct ThemedMessageBubble: View {
             shareURL: $shareURL,
             fullscreenAttachment: $fullscreenAttachment,
             fullscreenLocationAttachment: $fullscreenLocationAttachment,
-            showCarousel: $showCarousel,
+            showCarousel: previewShowsCarousel ? .constant(true) : $showCarousel,
             carouselIndex: $carouselIndex,
             revealedAttachmentIds: $revealedAttachmentIds,
             blurController: blurController,
@@ -632,7 +639,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
                 onConsumeViewOnce?(messageId) { _ in }
             }
         )
-        .ephemeralBurn(isBurning: content.isBurning)
+        .ephemeralBurn(isBurning: content.isBurning, side: .init(isMine: content.isMe))
     }
 
     static func == (lhs: ThemedMessageBubble, rhs: ThemedMessageBubble) -> Bool {

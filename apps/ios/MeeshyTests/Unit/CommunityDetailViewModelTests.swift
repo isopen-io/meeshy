@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import Meeshy
 import MeeshySDK
@@ -217,8 +218,45 @@ final class CommunityDetailViewModelTests: XCTestCase {
     }
 
     func test_causeDuRefus_seDitDansLeCatalogue_jamaisDansLeMessageDuServeur() {
-        XCTAssertFalse(CommunityLoadFailure.refused.message.contains("Access denied"))
+        XCTAssertFalse((CommunityLoadFailure.refused.message ?? "").contains("Access denied"))
         XCTAssertFalse(CommunityLoadFailure.refused.title.isEmpty)
         XCTAssertNotEqual(CommunityLoadFailure.refused.actionLabel, CommunityLoadFailure.network.actionLabel)
+    }
+
+    // MARK: - community:updated (#18439)
+
+    func test_communityUpdated_reecritLIdentiteEtGardeLeRoleDuLecteur() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", currentUserRole: "moderator"))
+        let viewModel = CommunityDetailViewModel(
+            communityId: "c1", service: service, currentUserId: { "u-mod" },
+            communityUpdates: Empty().eraseToAnyPublisher()
+        )
+        await viewModel.load()
+
+        viewModel.apply(CommunityStubs.communityUpdated(communityId: "c1", name: "Alpha renommée", memberCount: 9))
+
+        XCTAssertEqual(viewModel.community?.name, "Alpha renommée")
+        XCTAssertEqual(viewModel.community?.description, "Réglée ailleurs")
+        XCTAssertEqual(viewModel.community?.isPrivate, true)
+        XCTAssertEqual(viewModel.community?.memberCount, 9)
+        XCTAssertEqual(viewModel.currentUserRole, .moderator)
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertEqual(service.getCallCount, 1, "aucune relance réseau")
+    }
+
+    func test_communityUpdated_autreCommunaute_neTouchePasLeDetail() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator"))
+        let updates = PassthroughSubject<CommunityUpdatedEvent, Never>()
+        let viewModel = CommunityDetailViewModel(
+            communityId: "c1", service: service, currentUserId: { "u-creator" },
+            communityUpdates: updates.eraseToAnyPublisher()
+        )
+        await viewModel.load()
+
+        viewModel.apply(CommunityStubs.communityUpdated(communityId: "c2", name: "Voisine"))
+
+        XCTAssertEqual(viewModel.community?.name, "Alpha")
     }
 }

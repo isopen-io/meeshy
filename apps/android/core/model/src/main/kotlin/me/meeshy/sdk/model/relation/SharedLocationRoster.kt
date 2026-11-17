@@ -9,13 +9,32 @@ import kotlinx.serialization.json.Json
  * choisie pour CHAQUE personne, et le centre retire la personne du partage serveur à SON échéance. Le terme serveur
  * n'est jamais plus court que la plus lointaine des échéances, et c'est lui qui coupe tout si l'appareil se tait.
  *
+ * Un « Arrêter » qui n'a pas pu partir (hors ligne, accusé perdu) devient un RETRAIT EN ATTENTE (#18204), iso
+ * `SharedLocationRoster.swift` : la personne sort de la liste, son identifiant reste gardé jusqu'à ce que le serveur ait
+ * reçu une liste sans elle, au plus huit heures (aucun partage serveur ne court plus longtemps qu'un `start` de 8 h). Le
+ * doigt ne se rejoue jamais : c'est le centre qui rejoue l'intention.
+ *
  * Ce qui en est gardé sur l'appareil ([stored]) : des identifiants, des précisions et des échéances, jamais une position.
  */
-public class SharedLocationRoster private constructor(private val entries: Map<String, Entry>) {
+public class SharedLocationRoster private constructor(
+    private val entries: Map<String, Entry>,
+    withdrawals: Map<String, Long> = emptyMap(),
+) {
+    /** Les personnes retirées que le serveur peut encore servir, et jusqu'à quand il le pourrait au plus. */
+    private val withdrawals: Map<String, Long> = withdrawals.filterKeys { it !in entries }
 
     public data class Entry(val precision: SharedLocationPrecision, val untilMillis: Long)
 
-    public val isEmpty: Boolean get() = entries.isEmpty()
+    /** Rien à garder : personne à qui montrer ma position, aucun retrait à faire partir. */
+    public val isEmpty: Boolean get() = entries.isEmpty() && withdrawals.isEmpty()
+
+    /** Au moins une personne voit ma position : c'est seulement alors que l'appareil a des relevés à envoyer. */
+    public val hasRecipients: Boolean get() = entries.isNotEmpty()
+
+    /** Un retrait demandé que le serveur n'a pas encore reçu. */
+    public val hasPendingWithdrawals: Boolean get() = withdrawals.isNotEmpty()
+
+    public fun isWithdrawalPending(userId: String): Boolean = userId.lowercase() in withdrawals
 
     public fun entry(userId: String): Entry? = entries[userId.lowercase()]
 
@@ -25,19 +44,57 @@ public class SharedLocationRoster private constructor(private val entries: Map<S
         precision: SharedLocationPrecision,
         duration: SharedLocationShareDuration,
         nowMillis: Long,
-    ): SharedLocationRoster = SharedLocationRoster(entries + (userId.lowercase() to Entry(precision, nowMillis + duration.millis)))
+    ): SharedLocationRoster =
+        SharedLocationRoster(entries + (userId.lowercase() to Entry(precision, nowMillis + duration.millis)), withdrawals)
 
-    public fun removing(userId: String): SharedLocationRoster = SharedLocationRoster(entries - userId.lowercase())
+    public fun removing(userId: String): SharedLocationRoster = SharedLocationRoster(entries - userId.lowercase(), withdrawals)
+
+    /**
+     * « Arrêter » n'a pas pu partir : la personne sort de la liste et son retrait attend le réseau, au plus jusqu'au terme
+     * le plus long qu'un partage serveur puisse avoir encore. Une personne absente de la liste ne change rien.
+     */
+    public fun withdrawing(userId: String, nowMillis: Long): SharedLocationRoster {
+        val id = userId.lowercase()
+        if (id !in entries) return this
+        return SharedLocationRoster(entries - id, withdrawals + (id to nowMillis + SharedLocationShareDuration.EIGHT_HOURS.millis))
+    }
+
+    /** La liste que le serveur doit recevoir : la même, sans retrait en attente — l'envoyer les solde tous. */
+    public fun settled(): SharedLocationRoster = SharedLocationRoster(entries)
 
     /**
      * Ceux de cette liste ET de [other], [other] l'emportant pour une même personne : quand on ne sait pas laquelle des
      * deux listes le serveur sert, on garde « Arrêter » pour toutes les personnes qu'il peut servir.
      */
-    public fun union(other: SharedLocationRoster): SharedLocationRoster = SharedLocationRoster(entries + other.entries)
+    public fun union(other: SharedLocationRoster): SharedLocationRoster = SharedLocationRoster(
+        entries + other.entries,
+        (withdrawals.keys + other.withdrawals.keys).associateWith { maxOf(withdrawals[it] ?: 0L, other.withdrawals[it] ?: 0L) },
+    )
 
-    /** Sans ceux dont l'échéance est passée. */
-    public fun pruned(nowMillis: Long): SharedLocationRoster =
-        SharedLocationRoster(entries.filterValues { it.untilMillis > nowMillis })
+    /**
+     * La liste que la passerelle SERT au compte (#18389, #18578), iso `rosterOps.withServed` du web et
+     * `SharedLocationRoster.withServed` d'iOS : elle fait foi pour chacun des appareils du compte. Ses personnes et leurs
+     * échéances remplacent les miennes ; un retrait en attente d'ici GAGNE (la personne reste hors de la liste, son
+     * retrait se rejoue) tant que la passerelle la sert encore, et s'éteint dès qu'elle ne la sert plus. Une personne
+     * servie déjà échue, ou à l'identifiant illisible, n'entre pas.
+     */
+    public fun withServed(served: SharedLocationOwnSnapshot, nowMillis: Long): SharedLocationRoster {
+        val readable = served.recipients.map { it.userId.lowercase() to it }.filter { (id, _) -> OBJECT_ID.matches(id) }
+        val servedIds = readable.map { it.first }.toSet()
+        val next = readable
+            .filter { (id, recipient) -> recipient.expiresAtMillis > nowMillis && id !in withdrawals }
+            .associate { (id, recipient) -> id to Entry(recipient.precision, recipient.expiresAtMillis) }
+        return SharedLocationRoster(next, withdrawals.filterKeys { it in servedIds })
+    }
+
+    /** Sans ceux dont l'échéance est passée, ni les retraits que plus aucun partage serveur ne peut servir. */
+    public fun pruned(nowMillis: Long): SharedLocationRoster = SharedLocationRoster(
+        entries.filterValues { it.untilMillis > nowMillis },
+        withdrawals.filterValues { it > nowMillis },
+    )
+
+    /** Ce que le serveur sert est-il exactement ce que je veux : aucune échéance passée, aucun retrait en attente ? */
+    public fun isSettled(nowMillis: Long): Boolean = pruned(nowMillis).settled() == this
 
     /** La plus proche des échéances : le moment où la liste change d'elle-même. */
     public val nextDeadlineMillis: Long? get() = entries.values.minOfOrNull { it.untilMillis }
@@ -52,31 +109,56 @@ public class SharedLocationRoster private constructor(private val entries: Map<S
         }
     }
 
+    /**
+     * La liste telle que le serveur la reçoit, avec l'échéance de chaque personne qui tombe AVANT le terme du partage :
+     * la passerelle la tient, même app tuée (#18205), iso `rosterOps.deadlinedRecipients` du web. Arrondie à la seconde
+     * au-dessus, jamais nulle ; une personne échue pendant l'attente d'un relevé ne part plus du tout.
+     */
+    public fun deadlinedRecipients(nowMillis: Long): List<SharedLocationRecipient> {
+        val live = pruned(nowMillis)
+        val term = nowMillis + live.serverDuration(nowMillis).millis
+        return live.recipients.map { recipient ->
+            val until = live.entries.getValue(recipient.userId).untilMillis
+            if (until >= term) {
+                recipient
+            } else {
+                recipient.copy(expiresInSeconds = maxOf(1L, (until - nowMillis + 999L) / 1_000L).toInt())
+            }
+        }
+    }
+
     /** La liste telle que le serveur la reçoit, dans un ordre stable. */
     public val recipients: List<SharedLocationRecipient>
         get() = entries.keys.sorted().map { SharedLocationRecipient(it, entries.getValue(it).precision) }
 
     public fun stored(): String = codec.encodeToString(
         StoredRoster.serializer(),
-        StoredRoster(entries.mapValues { (_, entry) -> StoredEntry(entry.precision.wire, entry.untilMillis) }),
+        StoredRoster(entries.mapValues { (_, entry) -> StoredEntry(entry.precision.wire, entry.untilMillis) }, withdrawals),
     )
 
-    override fun equals(other: Any?): Boolean = other is SharedLocationRoster && entries == other.entries
+    override fun equals(other: Any?): Boolean =
+        other is SharedLocationRoster && entries == other.entries && withdrawals == other.withdrawals
 
-    override fun hashCode(): Int = entries.hashCode()
+    override fun hashCode(): Int = 31 * entries.hashCode() + withdrawals.hashCode()
 
-    override fun toString(): String = "SharedLocationRoster($entries)"
+    override fun toString(): String = "SharedLocationRoster($entries, withdrawals=${withdrawals.keys})"
 
     @Serializable
     private data class StoredEntry(val precision: String? = null, val untilMillis: Long)
 
+    /** Une liste gardée avant #18204 n'a pas de retraits en attente. */
     @Serializable
-    private data class StoredRoster(val entries: Map<String, StoredEntry> = emptyMap())
+    private data class StoredRoster(
+        val entries: Map<String, StoredEntry> = emptyMap(),
+        val withdrawals: Map<String, Long> = emptyMap(),
+    )
 
     public companion object {
         public val EMPTY: SharedLocationRoster = SharedLocationRoster(emptyMap())
 
         private val codec = Json { ignoreUnknownKeys = true }
+
+        private val OBJECT_ID = Regex("^[0-9a-f]{24}$")
 
         /** Une liste illisible se relit vide ; une précision inconnue se relit comme la ville, jamais plus ouverte. */
         public fun fromStored(raw: String?): SharedLocationRoster {
@@ -85,6 +167,7 @@ public class SharedLocationRoster private constructor(private val entries: Map<S
                 stored.entries.mapKeys { it.key.lowercase() }.mapValues { (_, entry) ->
                     Entry(SharedLocationPrecision.of(entry.precision) ?: SharedLocationPrecision.CITY, entry.untilMillis)
                 },
+                stored.withdrawals.mapKeys { it.key.lowercase() },
             )
         }
     }

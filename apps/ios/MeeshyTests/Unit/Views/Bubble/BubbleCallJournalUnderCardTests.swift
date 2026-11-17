@@ -75,7 +75,7 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
         let result = await BubbleCallJournalLoading.load(
             callId: "call-1",
             readCache: { _ in cached },
-            replay: { _ in replayed = true; return nil },
+            replay: { _ in replayed = true; return .nothingKept },
             willWaitOnNetwork: { waited = true }
         )
         XCTAssertEqual(result, .served(cached))
@@ -89,7 +89,7 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
         let result = await BubbleCallJournalLoading.load(
             callId: "call-1",
             readCache: { _ in nil },
-            replay: { _ in replayed },
+            replay: { _ in .served(replayed) },
             willWaitOnNetwork: { waits += 1 }
         )
         XCTAssertEqual(result, .served(replayed))
@@ -98,12 +98,12 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
 
     func test_load_nothingKept_saysSo() async {
         let result = await BubbleCallJournalLoading.load(
-            callId: "call-1", readCache: { _ in nil }, replay: { _ in nil }, willWaitOnNetwork: {}
+            callId: "call-1", readCache: { _ in nil }, replay: { _ in .nothingKept }, willWaitOnNetwork: {}
         )
         XCTAssertEqual(result, .nothingKept)
     }
 
-    /// Replier la bascule pendant le replay annule la tâche : le `try?` du replay rend alors `nil`. Ce `nil` ne dit
+    /// Replier la bascule pendant le replay annule la tâche : la lecture échoue alors (A1.13). Cet échec ne dit
     /// PAS « rien n'a été gardé » — le lire ainsi figeait « Aucune transcription » sur un appel qui en a une.
     func test_load_cancelledDuringReplay_isAbandoned_neverNothingKept() async {
         let result = await Task { @MainActor in
@@ -112,7 +112,7 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
                 readCache: { _ in nil },
                 replay: { _ in
                     withUnsafeCurrentTask { $0?.cancel() }
-                    return nil
+                    return .unreachable
                 },
                 willWaitOnNetwork: {}
             )
@@ -189,7 +189,7 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
     func test_card_reusesTheSheetsJournal_neverATwin() throws {
         let view = try card()
         XCTAssertTrue(view.contains("CallTranscriptSection("), "Phrases et lignes de capture : la section de la feuille.")
-        XCTAssertTrue(view.contains("CallTranscriptLoader.load(callId:"), "Cache chiffré d'abord, replay serveur ensuite.")
+        XCTAssertTrue(view.contains("CallTranscriptLoader.replay(callId:"), "Cache chiffré d'abord, replay serveur ensuite.")
         XCTAssertTrue(view.contains("CallTranscriptStore.shared.transcript(for:"))
     }
 
@@ -440,5 +440,176 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
             view.contains("lhs.callId == rhs.callId && lhs.accentHex == rhs.accentHex && lhs.alignsTrailing == rhs.alignsTrailing"),
             "La cellule reste égale par primitives."
         )
+    }
+
+    // MARK: - Lot #18209 — A1.3 · A1.7 · A1.13 · A1.18
+
+    private func wireSegment(
+        speakerId: String = "u2", text: String = "Hello", language: String = "en",
+        translations: [(language: String, text: String)] = []
+    ) throws -> APICallTranscriptSegment {
+        let json: [String: Any] = [
+            "id": "s1", "speakerId": speakerId, "speakerDisplayName": "Awa", "text": text, "language": language,
+            "confidence": 0.9, "capturedAtMs": 4_000,
+            "translations": translations.map { ["targetLanguage": $0.language, "translatedText": $0.text] }
+        ]
+        return try JSONDecoder().decode(APICallTranscriptSegment.self, from: JSONSerialization.data(withJSONObject: json))
+    }
+
+    private func replayed(_ wire: APICallTranscriptSegment, prism: [String]) -> CallTranscriptSegment {
+        CallTranscriptLoader.replayedSegment(wire, localUserId: "me", localName: "Vous", readerPrism: prism)
+    }
+
+    // A1.7 : le replay descend le Prisme du lecteur, rang par rang — les vecteurs d'Android (CallTranscriptReplayTest).
+
+    func test_replay_servesTheReadersPrimaryLanguage() throws {
+        let line = replayed(try wireSegment(translations: [("es", "Hola"), ("fr", "Bonjour")]), prism: ["fr"])
+        XCTAssertEqual(line.translatedText, "Bonjour")
+        XCTAssertEqual(line.translatedLanguage, "fr")
+        XCTAssertEqual(line.text, "Hello", "L'original reste sous la traduction.")
+    }
+
+    func test_replay_aLowerRankTranslationServes_whenThePrimaryLanguageIsMissing() throws {
+        let line = replayed(try wireSegment(text: "Hola", language: "es", translations: [("en", "Hello")]), prism: ["fr", "en"])
+        XCTAssertEqual(line.translatedText, "Hello", "Prisme [fr, en], phrase espagnole traduite en anglais seulement : l'anglais, jamais l'espagnol.")
+        XCTAssertEqual(line.translatedLanguage, "en")
+    }
+
+    func test_replay_theOriginalLanguageCompetesAtItsRank() throws {
+        let line = replayed(try wireSegment(translations: [("es", "Hola")]), prism: ["fr", "en", "es"])
+        XCTAssertNil(line.translatedText, "L'anglais, rang 2, est servi par l'original avant l'espagnol de rang 3.")
+    }
+
+    func test_replay_aPrimaryTranslationWins_evenWhenTheOriginalIsInTheReadersPrism() throws {
+        let line = replayed(try wireSegment(translations: [("fr", "Bonjour")]), prism: ["fr", "en"])
+        XCTAssertEqual(line.translatedText, "Bonjour", "La langue d'origine concourt à son rang, jamais en court-circuit.")
+    }
+
+    func test_replay_noTranslationInThePrism_servesTheOriginal_neverTheFirstTranslation() throws {
+        XCTAssertNil(replayed(try wireSegment(translations: [("es", "Hola")]), prism: ["fr"]).translatedText)
+        XCTAssertNil(replayed(try wireSegment(translations: [("es", "Hola")]), prism: []).translatedText,
+                     "Un prisme vide sert l'original.")
+    }
+
+    func test_replay_aBlankTranslationIsNotATranslation_theNextRankServes() throws {
+        let line = replayed(try wireSegment(text: "Hola", language: "es", translations: [("fr", "  "), ("en", "Hello")]), prism: ["fr", "en"])
+        XCTAssertEqual(line.translatedText, "Hello")
+    }
+
+    func test_replay_mySentence_readsYou_andIsNeverTranslated() throws {
+        let line = replayed(try wireSegment(speakerId: "me", text: "Salut", language: "fr", translations: [("en", "Hi")]), prism: ["en"])
+        XCTAssertTrue(line.isLocal)
+        XCTAssertEqual(line.speakerName, "Vous")
+        XCTAssertNil(line.translatedText)
+    }
+
+    func test_replay_anUnknownReader_neverClaimsASentence() throws {
+        let line = CallTranscriptLoader.replayedSegment(try wireSegment(speakerId: ""), localUserId: "", localName: "Vous", readerPrism: ["fr"])
+        XCTAssertFalse(line.isLocal)
+    }
+
+    func test_replay_readsTheStrictReaderPrism_notTheSingleCallLanguage() throws {
+        let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
+        XCTAssertTrue(section.contains("ReaderPrism.resolve(for: localUser)"))
+        XCTAssertTrue(section.contains("PrismTranslationResolver.resolve("))
+        XCTAssertFalse(section.contains("CallLanguagePreference.preferredCallLanguage"), "Une seule langue de rang 1 ne descend pas le Prisme.")
+        XCTAssertFalse(section.contains("translations.first("))
+    }
+
+    // A1.13 : un replay en échec réseau propose Réessayer ; seuls un refus et un appel inconnu disent « rien gardé ».
+
+    func test_replayFailure_forbiddenOrUnknownCall_saysNothingKept() {
+        XCTAssertEqual(CallTranscriptReplay.failing(MeeshyError.forbidden(reason: nil, body: nil)), .nothingKept)
+        XCTAssertEqual(CallTranscriptReplay.failing(MeeshyError.server(statusCode: 404, message: "")), .nothingKept)
+    }
+
+    func test_replayFailure_networkOrServerError_isUnreachable() {
+        XCTAssertEqual(CallTranscriptReplay.failing(MeeshyError.network(.noConnection)), .unreachable)
+        XCTAssertEqual(CallTranscriptReplay.failing(URLError(.notConnectedToInternet)), .unreachable)
+        XCTAssertEqual(CallTranscriptReplay.failing(MeeshyError.server(statusCode: 500, message: "")), .unreachable)
+        XCTAssertEqual(CallTranscriptReplay.failing(CancellationError()), .unreachable)
+    }
+
+    func test_replay_projectsItsTranscript_forTheDetailSheets() {
+        let served = transcript()
+        XCTAssertEqual(CallTranscriptReplay.served(served).transcript, served)
+        XCTAssertNil(CallTranscriptReplay.nothingKept.transcript)
+        XCTAssertNil(CallTranscriptReplay.unreachable.transcript)
+    }
+
+    func test_load_unreachableReplay_isUnreachable_neverNothingKept() async {
+        let result = await BubbleCallJournalLoading.load(
+            callId: "call-1", readCache: { _ in nil }, replay: { _ in .unreachable }, willWaitOnNetwork: {}
+        )
+        XCTAssertEqual(result, .unreachable)
+    }
+
+    func test_offersRetry_onlyWhenTheServerWasUnreachable() {
+        XCTAssertTrue(BubbleCallJournalOffer.offersRetry(.unreachable))
+        for phase in [BubbleCallJournalPhase.closed, .loading, .shown, .nothingKept] {
+            XCTAssertFalse(BubbleCallJournalOffer.offersRetry(phase), "\(phase)")
+        }
+        XCTAssertFalse(BubbleCallJournalOffer.saysNothingWasKept(.unreachable), "Un échec réseau n'est pas « Aucune transcription ».")
+    }
+
+    func test_card_unreachable_saysUnavailable_andRetriesWithA44ptButton() throws {
+        let view = try card()
+        XCTAssertTrue(view.contains("BubbleCallJournalOffer.offersRetry(phase)"))
+        XCTAssertTrue(view.contains("composer.audio.transcription.unavailable"), "« Transcription indisponible », déjà traduite en sept langues.")
+        XCTAssertTrue(view.contains("call.action.retry"), "« Réessayer », déjà traduit en sept langues.")
+        XCTAssertTrue(view.contains("attempt += 1"), "Réessayer relance la lecture.")
+        XCTAssertTrue(view.contains("let attempt: Int"), "La tentative fait partie de la clé de chargement.")
+        XCTAssertTrue(view.contains("case .unreachable:"))
+    }
+
+    // A1.3 : le lecteur d'écran annonce l'état déplié ou replié de la bascule.
+
+    func test_toggleValue_saysExpandedThenCollapsed() {
+        XCTAssertEqual(
+            BubbleCallJournalCopy.toggleValue(isOpen: true),
+            String(localized: "message.long.expanded", defaultValue: "Déplié", bundle: .main)
+        )
+        XCTAssertEqual(
+            BubbleCallJournalCopy.toggleValue(isOpen: false),
+            String(localized: "message.long.collapsed", defaultValue: "Replié", bundle: .main)
+        )
+        XCTAssertNotEqual(BubbleCallJournalCopy.toggleValue(isOpen: true), BubbleCallJournalCopy.toggleValue(isOpen: false))
+    }
+
+    func test_card_toggle_announcesItsState() throws {
+        let view = try card()
+        XCTAssertTrue(view.contains(".accessibilityValue(BubbleCallJournalCopy.toggleValue(isOpen: isOpen))"))
+    }
+
+    // A1.18 : « Voir l'original » ne fait que fondre — les deux états d'une phrase se superposent, sa hauteur ne
+    // change pas, et aucune phrase ne glisse.
+
+    func test_layers_translatedSentence_laysOutBothStates_andShowsOne() {
+        for showsOriginal in [false, true] {
+            let layers = CallJournalAfterCall.layers(for: segment(), showsOriginal: showsOriginal)
+            XCTAssertEqual(layers.map(\.lines), [
+                CallJournalAfterCall.lines(for: segment(), showsOriginal: false),
+                CallJournalAfterCall.lines(for: segment(), showsOriginal: true)
+            ], "Les mêmes lignes dans les deux états : la phrase garde sa hauteur.")
+            XCTAssertEqual(layers.filter(\.isShown).map(\.lines), [CallJournalAfterCall.lines(for: segment(), showsOriginal: showsOriginal)])
+        }
+    }
+
+    func test_layers_untranslatedSentence_isASingleShownLayer() {
+        for showsOriginal in [false, true] {
+            XCTAssertEqual(
+                CallJournalAfterCall.layers(for: segment(translated: nil, translatedLanguage: nil), showsOriginal: showsOriginal),
+                [CallJournalLayer(lines: CallJournalLines(primary: "Hi!", primaryIsTranslation: false, below: nil), isShown: true)]
+            )
+        }
+    }
+
+    func test_transcriptSection_flipFadesTheLayers_withoutAnimatingTheLayout() throws {
+        let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
+        XCTAssertTrue(section.contains("CallJournalAfterCall.layers(for: segment, showsOriginal: showOriginalText)"))
+        XCTAssertTrue(section.contains(".opacity(layer.isShown ? 1 : 0)"))
+        XCTAssertTrue(section.contains(".accessibilityHidden(!layer.isShown)"))
+        XCTAssertTrue(section.contains("value: showOriginalText"), "Le fondu est limité à l'opacité des couches.")
+        XCTAssertFalse(section.contains("{ showOriginalText.toggle() }"), "Une transaction autour de la bascule animait aussi la mise en page.")
     }
 }

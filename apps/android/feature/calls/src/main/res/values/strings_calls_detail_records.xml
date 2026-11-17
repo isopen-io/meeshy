@@ -28,7 +28,7 @@
     <string name="call_network_tier_good">Good</string>
     <string name="call_network_tier_fair">Fair</string>
     <string name="call_network_tier_poor">Poor</string>
-    <string name="call_transcript_disclaimer">Encrypted copy kept on this device. The call\'s transcript is also stored on the Meeshy server, readable only by the call\'s participants. It includes what the other person said, as received during the call.</string>
+    <string name="call_transcript_disclaimer">Encrypted copy on this device. The call transcript is also kept on the Meeshy server, readable only by the call’s participants.</string>
     <string name="call_transcript_delete">Delete this transcript</string>
     <string name="call_transcript_delete_confirm_title">Delete this transcript?</string>
     <string name="call_transcript_delete_confirm_message">It is removed from this device for good. The transcript kept on the server is not erased.</string>

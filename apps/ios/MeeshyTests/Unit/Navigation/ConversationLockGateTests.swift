@@ -263,7 +263,7 @@ final class ConversationLockGateTests: XCTestCase {
         let sources = try swiftSources()
         for file in ["RootView.swift", "iPadRootView+Navigation.swift"] {
             let source = try XCTUnwrap(sources.first { $0.name == file }?.text, file)
-            let start = try XCTUnwrap(source.range(of: "func openNotificationPreview(for event: SocketNotificationEvent) {"), file)
+            let start = try XCTUnwrap(source.range(of: "func openNotificationPreview(for event: SocketNotificationEvent"), file)
             XCTAssertTrue(source[start.upperBound...].prefix(250).contains("ConversationOpenRoute.mayPreview(conversationId)"), file)
         }
     }

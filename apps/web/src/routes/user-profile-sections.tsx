@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from 'react';
+import { memo, useId, useState, type ReactNode } from 'react';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { Link } from '@/routes/route-table';
@@ -45,6 +45,49 @@ import { ActionButton, ContextBanner } from './user-profile-header';
    `user-profile-header.tsx` et `user-profile-states.tsx`. Ce qui reste ici rend
    des DONNÉES : la relation et les statistiques. */
 
+/** Le rare passe derrière ⋯ (règle 6) : bloquer et signaler restent atteignables, jamais au repos. */
+const TUCKED_ACTIONS: readonly ProfileActionKind[] = ['block', 'report'];
+
+function ProfileMoreActions({
+  language,
+  kinds,
+  name,
+  disabled,
+  onAction,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly kinds: readonly ProfileActionKind[];
+  readonly name: string;
+  readonly disabled: boolean;
+  readonly onAction: (kind: ProfileActionKind) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+  return (
+    <>
+      <button
+        type="button"
+        data-profile-more
+        aria-expanded={open}
+        {...(open ? { 'aria-controls': panelId } : {})}
+        aria-label={translate(language, 'action.more')}
+        onClick={() => setOpen(!open)}
+        className={`grid w-full place-items-center rounded-card px-4 text-body font-semibold ${FOCUS}`}
+        style={{ minHeight: 48, color: INK_2, outlineColor: BRAND }}
+      >
+        <span aria-hidden="true">⋯</span>
+      </button>
+      {open ? (
+        <div id={panelId} data-profile-more-actions className="grid gap-2">
+          {kinds.map((kind) => (
+            <ActionButton key={kind} language={language} kind={kind} name={name} disabled={disabled} onAction={onAction} />
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 export const ProfileRelationSection = memo(function ProfileRelationSection({
   language,
   relation,
@@ -70,6 +113,8 @@ export const ProfileRelationSection = memo(function ProfileRelationSection({
    * et sa montée, posés au-dessus des gestes. `null` : rien à dire, la section est celle d'avant. */
   readonly circle?: ReactNode;
 }) {
+  const resting = actions.filter((kind) => !TUCKED_ACTIONS.includes(kind));
+  const tucked = actions.filter((kind) => TUCKED_ACTIONS.includes(kind));
   return (
     <GroupedSection
       id="user-profile-relation"
@@ -82,16 +127,12 @@ export const ProfileRelationSection = memo(function ProfileRelationSection({
           <>
             <ContextBanner language={language} relation={relation} name={name} />
             {circle}
-            {actions.map((kind) => (
-              <ActionButton
-                key={kind}
-                language={language}
-                kind={kind}
-                name={name}
-                disabled={busy || !online}
-                onAction={onAction}
-              />
+            {resting.map((kind) => (
+              <ActionButton key={kind} language={language} kind={kind} name={name} disabled={busy || !online} onAction={onAction} />
             ))}
+            {tucked.length === 0 ? null : (
+              <ProfileMoreActions language={language} kinds={tucked} name={name} disabled={busy || !online} onAction={onAction} />
+            )}
           </>
         ) : (
           <div data-profile-signin className="grid gap-2 rounded-card px-3.5 py-3.5" style={SECTION_CARD_STYLE}>

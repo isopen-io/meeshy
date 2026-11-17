@@ -185,6 +185,11 @@ public struct EmbeddedSceneCanvas: View {
     public var paintsSceneBackground: Bool
     /// Seuls les touchers qui tombent sur un objet restent au canvas (#17432).
     public var passesThroughEmptyTouches: Bool
+    /// Y (écran) sous lequel la saisie en place ne descend pas — le haut du clavier quand l'hôte
+    /// ne réduit pas sa scène (#18638). `.greatestFiniteMagnitude` : aucun plancher.
+    public var inlineEditFloorGlobalY: CGFloat
+    /// Le glisser d'un objet de premier plan, pour les cibles de l'hôte (#18712).
+    public var onItemDragged: ((StoryCanvasItemDrag) -> Void)?
 
     public init(
         slide: Binding<StorySlide>,
@@ -217,8 +222,12 @@ public struct EmbeddedSceneCanvas: View {
         inlineEditYieldsToManipulation: Bool = false,
         inlineEditInputLink: StoryInlineEditInputLink? = nil,
         paintsSceneBackground: Bool = true,
-        passesThroughEmptyTouches: Bool = false
+        passesThroughEmptyTouches: Bool = false,
+        inlineEditFloorGlobalY: CGFloat = .greatestFiniteMagnitude,
+        onItemDragged: ((StoryCanvasItemDrag) -> Void)? = nil
     ) {
+        self.inlineEditFloorGlobalY = inlineEditFloorGlobalY
+        self.onItemDragged = onItemDragged
         self.inlineEditInputLink = inlineEditInputLink
         self.paintsSceneBackground = paintsSceneBackground
         self.passesThroughEmptyTouches = passesThroughEmptyTouches
@@ -293,7 +302,7 @@ public struct EmbeddedSceneCanvas: View {
                 onInlineTextChanged: onInlineTextChanged,
                 onInlineTextEditEnded: onInlineTextEditEnded,
                 selectedItemId: selectedItemId,
-                selectionBadge: selectionBadge,
+                selectionBadge: selectionBadge, inlineEditFloorGlobalY: inlineEditFloorGlobalY,
                 onBackgroundTapped: onBackgroundTapped,
                 onBackgroundLongPressed: onBackgroundLongPressed,
                 onBackgroundMediaLongPressed: onBackgroundMediaLongPressed,
@@ -309,7 +318,7 @@ public struct EmbeddedSceneCanvas: View {
                 localMediaAliases: localMediaAliases,
                 inlineEditYieldsToManipulation: inlineEditYieldsToManipulation,
                 paintsSceneBackground: paintsSceneBackground, passesThroughEmptyTouches: passesThroughEmptyTouches,
-                inlineEditInputLink: inlineEditInputLink
+                inlineEditInputLink: inlineEditInputLink, onItemDragged: onItemDragged
             )
             // **Le canvas cesse de recevoir les touches pendant qu'un calque
             // les capture** — sinon le doigt qui trace déplacerait aussi

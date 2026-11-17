@@ -74,7 +74,6 @@ export function AdminInvitationPanel({ language, invitationId, deps = apiDeps, n
         <AdminEmptyState
           glyph="handshake"
           title={translateAdmin(language, 'admin.invitation.fiche.notFound')}
-          hint={translateAdmin(language, 'admin.invitation.fiche.notFoundHint')}
           action={
             <AdminLink
               target={listTarget}

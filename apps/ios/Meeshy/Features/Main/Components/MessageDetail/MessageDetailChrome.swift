@@ -11,7 +11,7 @@ import MeeshyUI
 struct MessageDetailTimelineBanner: View {
     let icon: String
     let text: String
-    let detail: String
+    var detail: String? = nil
     var count: String? = nil
     let accent: Color
 
@@ -29,9 +29,11 @@ struct MessageDetailTimelineBanner: View {
                 Text(text)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(theme.textPrimary)
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundStyle(theme.textMuted)
+                if let detail {
+                    Text(detail)
+                        .font(.caption2)
+                        .foregroundStyle(theme.textMuted)
+                }
             }
 
             Spacer()

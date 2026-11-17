@@ -168,6 +168,24 @@ final class OutgoingImagePreparerTests: XCTestCase {
                       "un PNG transparent garde son alpha")
     }
 
+    /// #4984 — un PNG ANIMÉ (APNG) qui dépasse le budget partait réduit, donc
+    /// réencodé depuis sa SEULE première image : l'animation mourait chez
+    /// l'expéditeur, avant même le téléversement. Comme un GIF, il part tel quel.
+    func test_plan_animatedPng_travelsAsIs_whateverTheBudget() {
+        let plan = OutgoingImagePlanner.plan(format: .png, pixelSize: CGSize(width: 3000, height: 2000),
+                                             byteCount: 1, carriesLocation: false, policy: Self.strong(max: 800),
+                                             isAnimated: true)
+        XCTAssertEqual(plan, .passthrough)
+    }
+
+    func test_prepare_animatedPngOverTheBudget_keepsEveryFrame() throws {
+        let data = try Self.animatedPNG(width: 1600, height: 1600)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.strong(max: 800)))
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(out.data as CFData, nil))
+        XCTAssertEqual(CGImageSourceGetCount(source), 2, "les deux images de l'APNG doivent partir")
+        XCTAssertEqual(out.encodedGenerations, 0)
+    }
+
     func test_prepare_screenshotPng_travelsLosslessly() throws {
         let data = try Self.encoded(.png, width: 1170, height: 2532)
         let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.hd()))
@@ -358,6 +376,18 @@ final class OutgoingImagePreparerTests: XCTestCase {
         let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, type.identifier as CFString, 1, nil))
         let properties = location(gps).merging([kCGImagePropertyOrientation: orientation]) { garde, _ in garde }
         CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+
+    private static func animatedPNG(width: Int, height: Int) throws -> Data {
+        let image = try XCTUnwrap(gradient(width: width, height: height, alpha: false))
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 2, nil))
+        CGImageDestinationSetProperties(destination, [kCGImagePropertyPNGDictionary: [kCGImagePropertyAPNGLoopCount: 0]] as CFDictionary)
+        let frame = [kCGImagePropertyPNGDictionary: [kCGImagePropertyAPNGDelayTime: 0.1]] as CFDictionary
+        CGImageDestinationAddImage(destination, image, frame)
+        CGImageDestinationAddImage(destination, image, frame)
         XCTAssertTrue(CGImageDestinationFinalize(destination))
         return data as Data
     }

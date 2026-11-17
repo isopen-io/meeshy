@@ -560,10 +560,6 @@ extension ConversationView {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.secondary)
             }
-            Text(String(localized: "conversation.composer.blocked.subtitle", bundle: .main))
-                .font(.caption)
-                .foregroundStyle(Color.secondary)
-                .multilineTextAlignment(.center)
             Button {
                 HapticFeedback.medium()
                 Task {

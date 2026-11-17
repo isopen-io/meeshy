@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="share_sheet_sign_in_body_reshare">Es wurde nichts kopiert. Melde dich bei Meeshy an und teile dann erneut aus der anderen App.</string>
+    <string name="share_sheet_sign_in_body_reshare">Nichts kopiert: melde dich an und teile erneut.</string>
 </resources>

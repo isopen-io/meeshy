@@ -233,11 +233,11 @@ extension StickerPickerView {
         switch onglet {
         case .favorites:
             return String(localized: "sticker.sheet.favorites.empty",
-                          defaultValue: "Appuie longuement sur une décoration pour l'épingler ici.",
+                          defaultValue: "Appuyez longuement sur une décoration pour l'épingler ici.",
                           bundle: .module)
         default:
             return String(localized: "sticker.sheet.recents.empty",
-                          defaultValue: "Ce que tu poses apparaîtra ici.",
+                          defaultValue: "Ce que vous posez apparaîtra ici.",
                           bundle: .module)
         }
     }

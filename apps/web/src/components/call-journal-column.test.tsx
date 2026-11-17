@@ -130,7 +130,7 @@ describe('le journal en colonne de verre (W1, W2)', () => {
       expect(column?.className.split(' ')).toContain('glass-call-prominent');
       expect(column?.querySelectorAll('[data-call-journal-entry]')).toHaveLength(2);
       expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).toBeNull();
-      expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
+      expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving]') === null)).toEqual([]);
       view.press('[data-call-more]');
       expect(view.find('[data-call-control-pill] [data-call-captions-panel]')).not.toBeNull();
       expect(view.find(COLUMN)).not.toBeNull();
@@ -152,6 +152,8 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     expect(title?.className).toContain('text-start');
     expect(title?.className).not.toContain('text-center');
     expect(title?.nextElementSibling?.hasAttribute('data-call-journal-view')).toBe(true);
+    /* #17964 : le pied « Journal » est celui de la pilule ; la colonne garde le sien, au pied de la bande, qui la referme. */
+    expect(column?.querySelector('[data-call-journal-toggle], [data-call-journal-foot]')).toBeNull();
     view.press('[data-call-more]');
     view.press('[data-call-control="journal"]');
     expect(view.find(COLUMN)).toBeNull();
@@ -417,7 +419,7 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('panel');
     expect(view.find(COLUMN)).toBeNull();
     expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).not.toBeNull();
-    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
+    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving]') === null)).toEqual([]);
     view.done();
   });
 
@@ -436,7 +438,7 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     await openJournal(view);
     expect(view.find(COLUMN)).toBeNull();
     expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).not.toBeNull();
-    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
+    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving]') === null)).toEqual([]);
     view.done();
   });
 });

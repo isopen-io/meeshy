@@ -50,6 +50,11 @@ import {
   applyServedRepost,
   applyStoryChanged,
 } from './feed-realtime';
+/* LES DEUX CLÉS DU REJEU SOCIAL (#18641) — `feed-realtime.ts` ci-dessus tire
+   déjà `./feed` et `./stories` : les nommer ici n'ajoute AUCUN poids au chunk
+   `realtime`, seulement la capacité de les périmer. */
+import { FEED_QUERY_KEY } from './feed';
+import { STORY_TRAY_QUERY_KEY } from './stories';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
@@ -83,6 +88,8 @@ import {
   isSocketMessage,
 } from './realtime-apply';
 import { applyTranscriptionReady, isTranscriptionReady } from './realtime-transcription-ready';
+import { mediaProcessingFailures } from './media-processing-failures';
+import { applyAudioTranslationFailed, applyTranscriptionFailed, isMediaProcessingFailed } from './realtime-media-processing-failed';
 import {
   applyMessageCountdownStarted,
   applyMessageExpired,
@@ -112,6 +119,54 @@ import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
  * pour les salles que les écrans tiennent (`publication-rooms.ts`, #7395) — la
  * passerelle ne peut pas deviner ce qu'un écran montre.
  */
+
+/**
+ * **LES FAMILLES PERSONNELLES QU'UNE SURDITÉ DU SOCKET PREND EN ENTIER**
+ * (#6288, #6321, #6974, #7378, #18573).
+ *
+ * Déclarées ICI, une fois, parce que les DEUX rattrapages d'`onAuthenticated`
+ * les doivent — la reconnexion comme la première connexion. Elles étaient
+ * épelées dans la seule branche de reconnexion, et trois lots de suite y ont
+ * ajouté la leur sans voir l'autre branche : c'est cette absence de liste, et
+ * non un arbitrage, qui a laissé la cloche mentir après chaque démarrage à
+ * froid (#18573).
+ *
+ * Chacune porte sa propre raison, et aucune n'est la racine de sa voisine :
+ *
+ * - **les LISTES de la cloche** (#6288) parce qu'aucun gestionnaire n'a vu les
+ *   lignes de l'intervalle. À la DIFFÉRENCE de `notifications-realtime.ts:92`
+ *   (`refetchType: 'none'`, qui a déjà écrit la ligne dans le cache), il faut
+ *   ici un vrai refetch : il n'y a rien d'écrit à réconcilier ;
+ * - **les COMPTES de la cloche** (#6974) parce que rien d'autre ne les
+ *   rafraîchit à cet instant — mesuré : leur unique lecteur
+ *   (`use-notification-counts.ts`) ne relit que sur FOCUS de fenêtre, et ni une
+ *   coupure du seul socket ni un démarrage à froid n'en produit un (le
+ *   navigateur n'a jamais cessé d'être « en ligne », et la fenêtre est déjà au
+ *   premier plan) ;
+ * - **les DEMANDES D'AMITIÉ** (#6321) parce qu'une demande reçue dans
+ *   l'intervalle n'a atteint aucun socket, et que la pastille du barreau
+ *   « Découvrir » la compterait trop tard ;
+ * - **les MESSAGES FAVORIS** (#7378) parce qu'un `message:starred` posé depuis
+ *   un AUTRE appareil dans l'intervalle n'a atteint aucun socket, et que
+ *   l'étoile du fil mentirait jusqu'à la prochaine relecture.
+ *
+ * Les deux familles de la cloche sont NOMMÉES plutôt que leur racine
+ * `['notifications']` balayée : c'est refuser d'emporter la prochaine requête
+ * qu'on rangera sous cette racine sans l'avoir décidé — la garde
+ * `socket.test.ts` y tient une sentinelle.
+ *
+ * Les CONVERSATIONS n'y figurent pas, et ce n'est pas un oubli : les deux
+ * branches n'en prennent pas la même portée. Une coupure invalide la racine
+ * entière (la liste, la case, la page du fil) ; la première connexion n'en
+ * prend que la liste et le fil VIVANT, parce que ni la case ni une fenêtre
+ * ancrée ne sont nourries par ce que l'intervalle a emporté (#7420).
+ */
+const CATCH_UP_PERSONAL_FAMILIES: readonly (readonly unknown[])[] = [
+  NOTIFICATION_LISTS_KEY,
+  NOTIFICATION_COUNTS_QUERY_KEY,
+  FRIENDS_QUERY_PREFIX,
+  STARRED_MESSAGES_QUERY_ROOT,
+];
 
 /** Les notifications qui annoncent l'ARRIVÉE d'un message — jamais une
  * réaction ni une édition, qui nomment un message que le fil peut ne pas avoir
@@ -434,6 +489,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
+   * `audio:transcription-failed` / `audio:translation-failed` (#18537) — L'AUTRE
+   * ISSUE DE LA MÊME DEMANDE.
+   *
+   * `onTranscriptionReady` ci-dessus porte la RÉUSSITE d'un travail mis en file.
+   * La PANNE voyage par ces deux noms, qu'iOS et Android lisent depuis toujours
+   * et que ce module ne portait pas : le lecteur attendait le plafond de SILENCE
+   * de 90 s (`ON_DEMAND_STALL_MS`) pour une panne que la passerelle avait dite
+   * en une seconde, puis rendait la main sans un mot.
+   */
+  const onTranscriptionFailed = (payload: unknown): void => {
+    if (!isMediaProcessingFailed(payload)) return;
+    applyTranscriptionFailed(mediaProcessingFailures, payload);
+  };
+
+  const onAudioTranslationFailed = (payload: unknown): void => {
+    if (!isMediaProcessingFailed(payload)) return;
+    applyAudioTranslationFailed(mediaProcessingFailures, payload);
+  };
+
+  /**
    * `attachment-status:updated` (#7226, W7) — LA FEUILLE « INFOS DU MESSAGE »
    * SUIT UNE OUVERTURE/UN TÉLÉCHARGEMENT/UNE ÉCOUTE EN DIRECT.
    *
@@ -456,7 +531,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   /** `attachment:reaction-added|removed` (#7894) — le résumé ABSOLU d'une pièce ; la règle vit dans `realtime-attachment-reactions.ts`. */
   const onAttachmentReactionChanged = (payload: unknown): void => {
     if (!isAttachmentReactionUpdate(payload)) return;
-    applyAttachmentReactionUpdate(deps.queryClient, payload);
+    applyAttachmentReactionUpdate(deps.queryClient, payload, deps.viewerId());
   };
 
   /** `attachment:deleted` (#13611) — une pièce retirée par un membre quitte le fil, l'écran des médias et la ligne de liste. Règle : `realtime-attachment-deleted.ts`. */
@@ -969,10 +1044,17 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * point de contrôle (`ConversationSyncEngine+Socket.swift:12-25`) ; ici, le
    * rejeu est une INVALIDATION TanStack — `GET /sync` est un lot séparé.
    *
-   * La PREMIÈRE authentification ne relit que la liste et le fil DÉJÀ servis
-   * (#10573) : le socket se branche après la première peinture, et ce qui est
-   * parti entre la lecture REST et l'entrée dans les rooms était perdu. Une
-   * requête encore en vol n'est jamais doublée (`catchUpFirstAuthentication`).
+   * La PREMIÈRE authentification prend la MÊME fenêtre, et donc les MÊMES
+   * familles (#18573) : le socket se branche après la première peinture, et ce
+   * qui est parti entre la lecture REST et l'entrée dans les rooms était perdu.
+   * Elle n'en relisait qu'une — la liste et le fil (#10573) — parce que la
+   * liste des familles n'existait nulle part : #6288, #6321 et #7378 ont chacun
+   * ajouté la sienne à la branche de RECONNEXION seule, et une liste qu'il faut
+   * retaper à chaque branche est une liste qu'une branche finira par ne pas
+   * avoir. Elle est déclarée une fois (`CATCH_UP_PERSONAL_FAMILIES`), et la
+   * seule différence entre les deux branches reste le PRÉDICAT : une requête
+   * encore en vol n'est jamais doublée au démarrage à froid
+   * (`catchUpFirstAuthentication`), là où une coupure les relit toutes.
    *
    * SAUF LES SALLES DE PUBLICATION (#7395), rejointes à CHAQUE
    * authentification, la première comprise : un écran ouvert avant que la
@@ -985,7 +1067,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     publicationRooms.rejoin();
     if (!authenticatedOnce) {
       authenticatedOnce = true;
-      catchUpFirstAuthentication(deps.queryClient);
+      catchUpFirstAuthentication(deps.queryClient, CATCH_UP_PERSONAL_FAMILIES);
       return;
     }
     /* UNE invalidation couvre les TROIS familles : TanStack compare les clés
@@ -994,34 +1076,44 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        `['conversations', id, 'messages']` (la page du fil). Seules les requêtes
        ACTIVES sont re-jouées — un fil fermé se contente d'être marqué périmé. */
     void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
-    /* LA CLOCHE AUSSI (#6288), PAR FAMILLE NOMMÉE (#6974) : une notification
-       émise pendant la coupure n'a jamais atteint ce socket, et
-       `notification:counts` ne se rejoue pas.
+    /* Les familles PERSONNELLES, toutes, sans prédicat : la coupure prouve que
+       ce socket n'a rien vu de l'intervalle. */
+    for (const queryKey of CATCH_UP_PERSONAL_FAMILIES) {
+      void deps.queryClient.invalidateQueries({ queryKey });
+    }
+    /* LE FIL SOCIAL ET LE RAIL DES STORIES AUSSI (#18641) — les dix `post:*`
+       et les six `story:*` que cette connexion écoute écrivent `FEED_QUERY_KEY`
+       et `STORY_TRAY_QUERY_KEY` (`feed-realtime.ts`), et RIEN ne les rattrapait
+       après une coupure du SEUL socket : `refetchOnReconnect` suit
+       `navigator.onLine`, qui ne bascule pas quand la passerelle redémarre, et
+       `staleTime` périme sans rejouer — une requête MONTÉE n'a alors aucun
+       déclencheur. Ces deux-là sont exactement les surfaces qu'on peut REGARDER
+       pendant la coupure ; les autres caisses de cartes (favoris, auteur,
+       communauté, hashtag, commentaires) se rejoignent par une navigation, donc
+       par un montage, donc par une relecture — elles se soignent seules.
 
-       Les DEUX lignes, et chacune pour sa propre raison — c'est ce que la
-       racine `['notifications']` disait en une seule sans le dire :
-       - les LISTES parce qu'aucun gestionnaire n'a vu les lignes de
-         l'intervalle. À la DIFFÉRENCE de `notifications-realtime.ts:92`
-         (`refetchType: 'none'`, qui a déjà écrit la ligne dans le cache), il
-         faut ici un vrai refetch : il n'y a rien d'écrit à réconcilier ;
-       - les COMPTES parce que rien d'autre ne les rafraîchit à cet instant
-         (mesuré : leur unique lecteur, `use-notification-counts.ts`, ne relit
-         que sur focus de fenêtre, et une coupure du SEUL socket n'en produit
-         aucun — le navigateur n'a jamais cessé d'être « en ligne »).
+       `exact` sur le fil : `['feed', 'new-count']` est un ENTIER qui partage sa
+       racine (`feed-new-count.ts`), et TanStack compare par PRÉFIXE. Même règle
+       qu'au #6974 — nommer la famille, jamais balayer la racine.
 
-       Nommer les deux plutôt que balayer leur racine, c'est refuser d'emporter
-       la prochaine requête qu'on rangera sous `['notifications']` sans l'avoir
-       décidé — la garde `socket.test.ts` y tient une sentinelle. */
-    void deps.queryClient.invalidateQueries({ queryKey: NOTIFICATION_LISTS_KEY });
-    void deps.queryClient.invalidateQueries({ queryKey: NOTIFICATION_COUNTS_QUERY_KEY });
-    /* LES DEMANDES D'AMITIÉ AUSSI (#6321) : une demande reçue pendant la
-       coupure n'a jamais atteint ce socket, et la pastille du barreau
-       « Découvrir » la compterait trop tard. */
-    void deps.queryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
-    /* LES MESSAGES FAVORIS AUSSI (#7378) : un `message:starred` émis pendant
-       la coupure n'a jamais atteint ce socket, et l'étoile du fil mentirait
-       jusqu'à la prochaine relecture. L'ensemble ET la liste de l'écran. */
-    void deps.queryClient.invalidateQueries({ queryKey: STARRED_MESSAGES_QUERY_ROOT });
+       LE FIL DES RÉELS RESTE DEHORS, par décision : `card-caches.ts` le déclare
+       `frozen: true` (D-66) — son ordre est gelé, il ne se relit ni au focus ni
+       à la reconnexion. */
+    void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY, exact: true });
+    void deps.queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
+    /* ET LES CATEGORIES DE CONVERSATION (#18641) — `['conversation-categories']`
+       est une RACINE A PART, jamais couverte par le prefixe `['conversations']`
+       ci-dessus : TanStack compare les cles ELEMENT PAR ELEMENT, et le premier
+       differe deja. Les quatre `category:*` que cette connexion ecoute
+       n'ecrivent que cette cle, et les onglets qu'elle sert vivent sur l'ecran
+       de la liste — donc MONTES pendant la coupure, comme le fil et le rail.
+       iOS la rehydrate sur le meme signal (`didReconnect` →
+       `categoryStore.hydrate()`, « to resync server-side deletions »).
+
+       Ces deux cles voisines sont le piege que ce lot a failli rejouer : une
+       enumeration affirme AUSSI qu'elle est complete, et celle-ci s'etait
+       arretee a ce qui RESSEMBLAIT au defaut (des caisses de cartes). */
+    void deps.queryClient.invalidateQueries({ queryKey: CONVERSATION_CATEGORIES_QUERY_KEY });
   };
 
   /** `conversation:encryption-changed` — pour fermer, jamais pour rouvrir le clair (#12949). */
@@ -1042,6 +1134,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
   socket.on<unknown>(SERVER_EVENTS.TRANSCRIPTION_READY, onTranscriptionReady);
+  socket.on<unknown>(SERVER_EVENTS.TRANSCRIPTION_FAILED, onTranscriptionFailed);
+  socket.on<unknown>(SERVER_EVENTS.AUDIO_TRANSLATION_FAILED, onAudioTranslationFailed);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);
@@ -1142,6 +1236,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
       socket.off<unknown>(SERVER_EVENTS.TRANSCRIPTION_READY, onTranscriptionReady);
+      socket.off<unknown>(SERVER_EVENTS.TRANSCRIPTION_FAILED, onTranscriptionFailed);
+      socket.off<unknown>(SERVER_EVENTS.AUDIO_TRANSLATION_FAILED, onAudioTranslationFailed);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);

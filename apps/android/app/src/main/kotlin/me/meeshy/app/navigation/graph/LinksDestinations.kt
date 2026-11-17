@@ -1,5 +1,7 @@
 package me.meeshy.app.navigation.graph
 
+import me.meeshy.app.navigation.popFrom
+import me.meeshy.app.navigation.pushFrom
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -63,12 +65,13 @@ class LinksDestinations @Inject constructor() : NavGraphContributor {
         builder.composable(
             route = LinksRoutes.HUB,
             deepLinks = LinksRoutes.HUB_DEEP_LINKS.map { pattern -> navDeepLink { uriPattern = pattern } },
-        ) {
+        ) { entry ->
             LinksHubScreen(
-                onBack = { navController.popBackStack() },
-                onOpen = { entry ->
-                    navController.navigate(
-                        when (entry) {
+                onBack = { navController.popFrom(entry) },
+                onOpen = { hubEntry ->
+                    navController.pushFrom(
+                        entry,
+                        when (hubEntry) {
                             LinksHubEntry.SHARE -> Routes.MY_SHARE_LINKS
                             LinksHubEntry.TRACKING -> LinksRoutes.tracking()
                             LinksHubEntry.COMMUNITY -> LinksRoutes.COMMUNITY
@@ -76,9 +79,10 @@ class LinksDestinations @Inject constructor() : NavGraphContributor {
                         },
                     )
                 },
-                onCreate = { entry ->
-                    navController.navigate(
-                        when (entry) {
+                onCreate = { hubEntry ->
+                    navController.pushFrom(
+                        entry,
+                        when (hubEntry) {
                             LinksHubEntry.SHARE -> Routes.SHARE_LINK_PICKER
                             LinksHubEntry.TRACKING -> LinksRoutes.tracking(create = true)
                             LinksHubEntry.COMMUNITY -> CommunityRoutes.CREATE
@@ -93,36 +97,36 @@ class LinksDestinations @Inject constructor() : NavGraphContributor {
             arguments = listOf(createArgument()),
         ) { entry ->
             TrackingLinksScreen(
-                onBack = { navController.popBackStack() },
-                onOpenLink = { navController.navigate(LinksRoutes.trackingDetail(it.token)) },
+                onBack = { navController.popFrom(entry) },
+                onOpenLink = { navController.pushFrom(entry, LinksRoutes.trackingDetail(it.token)) },
                 openCreate = entry.arguments?.getBoolean(LinksRoutes.CREATE_ARG) == true,
             )
         }
         builder.composable(
             route = LinksRoutes.TRACKING_DETAIL,
             arguments = listOf(navArgument(TrackingLinkDetailViewModel.TOKEN_ARG) { type = NavType.StringType }),
-        ) {
-            TrackingLinkDetailScreen(onBack = { navController.popBackStack() })
+        ) { entry ->
+            TrackingLinkDetailScreen(onBack = { navController.popFrom(entry) })
         }
-        builder.composable(LinksRoutes.COMMUNITY) {
+        builder.composable(LinksRoutes.COMMUNITY) { entry ->
             CommunityLinksScreen(
-                onBack = { navController.popBackStack() },
-                onOpenLink = { navController.navigate(LinksRoutes.communityDetail(it.id)) },
-                onCreateCommunity = { navController.navigate(CommunityRoutes.CREATE) },
+                onBack = { navController.popFrom(entry) },
+                onOpenLink = { navController.pushFrom(entry, LinksRoutes.communityDetail(it.id)) },
+                onCreateCommunity = { navController.pushFrom(entry, CommunityRoutes.CREATE) },
             )
         }
         builder.composable(
             route = LinksRoutes.COMMUNITY_DETAIL,
             arguments = listOf(navArgument(CommunityLinkDetailViewModel.COMMUNITY_ID_ARG) { type = NavType.StringType }),
-        ) {
-            CommunityLinkDetailScreen(onBack = { navController.popBackStack() })
+        ) { entry ->
+            CommunityLinkDetailScreen(onBack = { navController.popFrom(entry) })
         }
         builder.composable(
             route = LinksRoutes.AFFILIATE,
             arguments = listOf(createArgument()),
         ) { entry ->
             AffiliateScreen(
-                onBack = { navController.popBackStack() },
+                onBack = { navController.popFrom(entry) },
                 openCreate = entry.arguments?.getBoolean(LinksRoutes.CREATE_ARG) == true,
             )
         }

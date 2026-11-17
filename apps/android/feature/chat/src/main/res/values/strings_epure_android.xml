@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="action_more">More</string>
+    <string name="encryption_note_devices_question">How many encrypted devices can I have?</string>
+    <string name="encryption_note_switching_question">Who can change the mode, and what happens to the history?</string>
+    <string name="share_content_refused_source">Meeshy can\'t open a file path. Share the file itself.</string>
+    <string name="share_capture_warning">Publishing this capture shows it beyond this conversation.</string>
+    <string name="share_offline">Offline: unsent items go out when you\'re back.</string>
+    <string name="encryption_fact_hybrid_is_server_today">Hybrid is not end-to-end encryption: the server can read your messages.</string>
+    <string name="encryption_fact_hybrid_second_layer">Between two compatible devices, a second layer also lets you check that a text message was not altered on the way; when it is missing, nothing is presented as verified.</string>
+    <string name="encryption_note_second_layer_question">What does the second layer check?</string>
+    <string name="encryption_detail_served_gap">The server presents this conversation without end-to-end encryption, but this device has seen it end-to-end encrypted: it stays so here.</string>
+    <string name="encryption_mode_hybrid_description">Encrypted on our servers, which can read your messages. Texts checked intact between compatible devices.</string>
+    <string name="encryption_e2ee_direct_only_here">On this phone, end-to-end encryption exists for one-to-one conversations only.</string>
+    <string name="participant_profile_info_email">Email</string>
+    <string name="starred_more_options">More</string>
+    <string name="riviere_bubble_actions">More</string>
+    <string name="conversation_appearance_shop">Shop</string>
+    <string name="export_card_gallery_empty">No style</string>
+    <string name="encryption_fact_end_to_end_never_turned_off_direct">End-to-end encryption can never be turned off: this one-to-one chat stays encrypted. To go back to plain, open another conversation.</string>
+    <string name="encryption_note_permanence_question">What if the server presents it differently?</string>
+</resources>

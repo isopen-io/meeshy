@@ -121,15 +121,15 @@ extension MeeshyComposerHost {
     }
 
     /// **Une entrée du viseur** (#17432) : aucune ne coupe la caméra ; une feuille se pose sur le
-    /// viseur vivant, le texte prend la scène. Seul un choix en Galerie l'arrête (`closeOpeningLibraryForPick`).
+    /// viseur vivant, le texte s'y saisit (#18638). Seule UNE image choisie en Galerie au viseur l'arrête (#18710).
     func handleViewfinderEntry(_ entree: ComposerViewfinderEntry) {
         guard let porte = entree.door else {
-            openingPickFoundsScenes = true
+            (openingPickFoundsScenes, viewfinderLibrary) = (true, .opened)
             showsOpeningLibrary = true
             return
         }
         handleRailDoor(porte)
-        viewfinderYieldsToScene = ComposerViewfinderColumn.yieldsToScene(toolPresentsSheet: presentedPortal != nil)
+        viewfinderYieldsToScene = ComposerViewfinderTyping.yieldsToScene(self, after: entree)
     }
 
     var viewfinderEntryToolIsOpen: Bool {

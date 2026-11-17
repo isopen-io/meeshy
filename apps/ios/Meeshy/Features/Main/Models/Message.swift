@@ -70,10 +70,15 @@ nonisolated struct MessageExitOffer: Equatable, Sendable {
 
     var nature: ContentExitLaw.Nature { law.nature }
 
-    /// Le verdict de capture d'écran, tel que la loi le rend : `blocked` (vue
-    /// unique) se rend dans la couche sécurisée (#9574), `announced` (les deux
-    /// flammes) reste capturable et se déclare (#9617), `free` ne fait rien.
-    var capture: ContentExitLaw.CaptureVerdict { law.capture }
+    /// Le verdict de capture d'écran RENDU : celui de la loi — `blocked` (vue
+    /// unique) et `announced` (les deux flammes) sortent NOIRS (#9574, #18831),
+    /// les flammes se déclarant en plus (#9617) — et `blocked` pour un message
+    /// FLOUTÉ que la loi laisse libre : son contenu révélé sort noir lui aussi
+    /// (#18831). Ce qui se DÉCLARE à la passerelle lit `law.capture`, jamais ce
+    /// verdict : le flou n'a rien à annoncer.
+    var capture: ContentExitLaw.CaptureVerdict {
+        law.capture == .free && holdsBlur ? .blocked : law.capture
+    }
 
     func offers(_ exit: MessageExit) -> Bool {
         // D8 (#10949): un flouté se TRANSFÈRE, son flou
@@ -140,6 +145,24 @@ extension Message {
     /// (#8009) ? Son appui long ne laisse sortir aucun contenu : ni copie, ni
     /// traduction, ni transfert, ni enregistrement, et son aperçu reste flou.
     nonisolated var holdsBlur: Bool { isBlurred || attachments.contains { $0.declaresBlur } }
+
+    /// **Le message que l'aperçu d'appui long rend : son flou levé** (#18856).
+    /// L'appui long est un coup d'œil : il montre le texte et chaque pièce en
+    /// clair. Seul le FLOU se lève — vue
+    /// unique, flamme et chiffrement restent tels quels — et le message rendu
+    /// ne sert qu'à l'aperçu : le menu lit toujours `holdsBlur` sur l'original.
+    nonisolated var unveiledForPreview: Message {
+        guard holdsBlur else { return self }
+        var unveiled = self
+        unveiled.isBlurred = false
+        unveiled.attachments = attachments.map { attachment in
+            var clear = attachment
+            clear.isBlurred = false
+            clear.effectFlags = attachment.effectFlags.map { $0 & ~MessageEffectFlags.blurred.rawValue }
+            return clear
+        }
+        return unveiled
+    }
 }
 
 // MARK: - Ce qu'un aperçu dit d'un message HORS de sa conversation (#9622)

@@ -9,6 +9,9 @@ struct ThemedActionButton: View {
     let label: String
     let hint: String
     var badge: Int = 0
+    /// Le point de coin sans chiffre (#18165) : « quelque chose t'attend ici ». Même coin et même blanc que la pastille,
+    /// qu'il ne double jamais — une pastille de compte prend la place.
+    var showsDot: Bool = false
     var size: CGFloat = 46
     /// `false` = glow ET pulse ÉTEINTS. L'échelle de menu (`menuLadder`) reste
     /// MONTÉE menu fermé (opacité 0 via `menuAnimation`, zIndex −1) pour que le
@@ -20,7 +23,6 @@ struct ThemedActionButton: View {
     var isGlowEnabled: Bool = true
     let action: () -> Void
 
-    @State private var isPressed = false
     @State private var isGlowing = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
@@ -31,7 +33,6 @@ struct ThemedActionButton: View {
     var body: some View {
         Button(action: {
             HapticFeedback.light()
-            withAnimation(.spring(response: 0.15, dampingFraction: 0.5)) { isPressed = true }
             action()
         }) {
             ZStack {
@@ -53,8 +54,15 @@ struct ThemedActionButton: View {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(iconSize, weight: .semibold))
                     .foregroundStyle(Color.white)
-                    .scaleEffect(isPressed ? 1.2 : 1.0)
-                    .rotationEffect(.degrees(isPressed ? -8 : 0))
+
+                if showsDot && badge <= 0 {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 10, height: 10)
+                        .shadow(color: Color.black.opacity(0.25), radius: 1.5, y: 1)
+                        .offset(x: size * 0.33, y: -size * 0.33)
+                        .accessibilityHidden(true)
+                }
 
                 if badge > 0 {
                     Text(NotificationBadge.displayed(badge))
@@ -70,11 +78,12 @@ struct ThemedActionButton: View {
                         .ifTrue(isGlowEnabled) { $0.pulse(intensity: 0.08) }
                 }
             }
-            .scaleEffect(isPressed ? 0.82 : 1)
         }
+        // L'appui du kit (#18428) : le barreau s'enfonce dès que le doigt se pose,
+        // par `springFast`, et garde son voile sans échelle sous « Réduire les animations ».
+        .buttonStyle(PressableButtonStyle())
         .accessibilityLabel(label)
         .accessibilityHint(hint)
-        .settling($isPressed, to: false, after: .milliseconds(100), animation: .spring(response: 0.25, dampingFraction: 0.5))
         .onAppear { syncGlow() }
         // Le menu s'ouvre/se ferme SANS remonter les boutons (l'échelle reste
         // dans la hiérarchie) : c'est ce changement-ci, pas `onAppear`, qui

@@ -149,13 +149,25 @@ describe('la barre de ce qui part en décrochant', () => {
     const view = answer(ringing());
     const mic = () => view.find('[data-call-incoming-mic]');
     expect(mic()?.getAttribute('aria-pressed')).toBe('false');
-    expect(mic()?.className).toContain('bg-media-fill');
+    expect(mic()?.className.split(' ')).toContain('glass-call-disc');
     view.press('[data-call-incoming-mic]');
     expect(mic()?.getAttribute('aria-pressed')).toBe('true');
-    expect(mic()?.className).not.toContain('bg-media-fill');
+    expect(mic()?.className.split(' ')).not.toContain('glass-call-disc');
     expect(mic()?.style.background).toBe('var(--color-on-media)');
     expect(mic()?.style.color).toBe('var(--ios-indigo-950)');
     expect(mic()?.getAttribute('aria-label')).toBe('Réactiver le micro');
+    view.done();
+  });
+
+  test('P17.13 — les deux bascules au repos sont le disque de verre dessiné des boutons d’un verre (`callButtonGlassTreatment`), jamais un fond uni ; sans flou à elles : la barre porte le seul flou', () => {
+    const view = answer(ringing());
+    view.press('[data-call-incoming-camera]');
+    for (const selector of ['[data-call-incoming-mic]', '[data-call-incoming-camera]']) {
+      const classes = view.find(selector)?.className.split(' ') ?? [];
+      expect(classes).toContain('glass-call-disc');
+      expect(classes).not.toContain('bg-media-fill');
+      expect(classes).not.toContain('glass-call');
+    }
     view.done();
   });
 
@@ -223,13 +235,14 @@ describe('ma vignette pendant la sonnerie', () => {
     expect(tile).not.toBeNull();
     expect(tile?.getAttribute('aria-hidden')).toBe('true');
     expect(tile?.style.borderColor).not.toBe('');
-    expect(tile?.querySelector('[data-call-incoming-self-label]')?.textContent).toBe('moi');
+    expect(tile?.querySelector('[data-call-tile-plate]')?.textContent).toBe('Vous');
+    expect(tile?.querySelector('[data-call-tile-plate]')?.className.split(' ')).toContain('glass-tone');
     view.press('[data-call-incoming-camera]');
     expect(camera.readyState).toBe('ended');
     view.done();
   });
 
-  test('elle arrive et repart en fondu (P17.5) : couper la caméra la marque sortante, elle reste montée le temps du fondu, sans prendre le doigt', async () => {
+  test('elle arrive et repart en fondu (P17.5) : couper la caméra la marque sortante, elle reste montée le temps du fondu, touchable (loi 17.11)', async () => {
     const view = answer(ringing(), granted());
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     const slot = () => view.find('[data-call-incoming-self-slot]');
@@ -237,7 +250,7 @@ describe('ma vignette pendant la sonnerie', () => {
     expect(slot()?.hasAttribute('data-leaving')).toBe(false);
     view.press('[data-call-incoming-camera]');
     expect(slot()?.hasAttribute('data-leaving')).toBe(true);
-    expect(slot()?.hasAttribute('inert')).toBe(true);
+    expect(slot()?.hasAttribute('inert')).toBe(false);
     view.done();
   });
 

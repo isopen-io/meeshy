@@ -37,11 +37,13 @@ struct CallEffectsFamily {
 }
 
 /// #16979 · P8 · C1 — LA rangée de genres de la barre, la même en Effets et en Montage : Visage ·
-/// Couleur · Cadres. Le genre affiché est pressé ; toucher un autre genre le montre, dans le mode
-/// qui le porte. En grand texte, la rangée défile, effacée en fondu à ses deux bords.
+/// Couleur · Cadres. Le genre dont le carrousel est ouvert est pressé ; au menu de base, aucun
+/// (`selected` nul). Toucher un genre ouvre son carrousel, dans le mode qui le porte ; retoucher le
+/// genre ouvert le referme (l'hôte en décide par `CallEffectsBarRule.afterGenre`). En grand texte,
+/// la rangée défile, effacée en fondu à ses deux bords.
 struct CallEffectsGenreChips: View {
     let genres: [CallEffectKind]
-    let selected: CallEffectKind
+    let selected: CallEffectKind?
     let onSelect: (CallEffectKind) -> Void
 
     var body: some View {
@@ -78,7 +80,6 @@ struct CallEffectsGenreChips: View {
     private func chip(_ genre: CallEffectKind) -> some View {
         let isSelected = genre == selected
         return Button {
-            guard !isSelected else { return }
             onSelect(genre)
         } label: {
             Text(CallModeCopy.genreName(genre))
@@ -94,10 +95,26 @@ struct CallEffectsGenreChips: View {
     }
 }
 
+/// #17927 — ce qui se pose au-dessus de la barre (carrousel, ambiances, option « Cadre », panneaux,
+/// sous-titres) : tel quel quand la hauteur le permet, et sinon dans un défilement vertical. À
+/// hauteur compacte (paysage téléphone), c'est ce contenu qui se resserre ou défile, jamais la barre,
+/// que l'hôte pose à côté, hors de ce conteneur.
+struct CallAboveBarOverflow<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ViewThatFits(in: .vertical) {
+            content()
+            ScrollView(.vertical, showsIndicators: false) { content() }
+        }
+    }
+}
+
 /// P8 · P8b · C1 — la barre d'Effets, LA barre de la famille d'outils (Effets, filtres, cadres :
 /// Effets et Montage la partagent, #16979) : UN verre d'une pièce (l'atome partagé de la pilule),
-/// qui parle la langue du composer. En haut, la rangée de puces des looks et son filet ; en bas, la
-/// rangée de base ‹ · Réglages · (+). Réglages (ou la liste des effets appliqués) ouvert, la MÊME
+/// qui parle la langue du composer. En haut, la rangée de genres et son filet ; en bas, la rangée de
+/// base ‹ · Réglages · (+) — le menu de base, auquel la barre revient après chaque choix (C1
+/// généralisée, #18184). Réglages (ou la liste des effets appliqués) ouvert, la MÊME
 /// barre perd sa rangée de puces, en fondu, et se resserre par morphisme sur ‹ · Réglages · (+) ;
 /// le panneau vit au-dessus d'elle, dans son propre verre. Retoucher Réglages (disque blanc), ou ‹
 /// (#17947), rend les puces par le chemin inverse ; un réglage continu laisse le panneau ouvert.
@@ -231,6 +248,9 @@ struct CallEffectsAddButton: View {
 /// P8b · C1 — le verre SÉPARÉ posé au-dessus de la barre, à la place de la bande de looks : celui
 /// des réglages, celui de la liste des effets appliqués.
 struct CallEffectsPanel<Content: View>: View {
+    /// P8b.1 — le nom que VoiceOver donne au groupe : « Réglages de mon image » pour les réglages ;
+    /// la liste des effets appliqués se nomme par son propre titre, visible dans le verre.
+    var label = ""
     @ViewBuilder let content: () -> Content
 
     private static var shape: RoundedRectangle {
@@ -246,6 +266,7 @@ struct CallEffectsPanel<Content: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .callChromeGlass(in: Self.shape)
         .accessibilityElement(children: .contain)
+        .accessibilityLabel(label)
         .padding(.horizontal, MeeshySpacing.lg)
     }
 }

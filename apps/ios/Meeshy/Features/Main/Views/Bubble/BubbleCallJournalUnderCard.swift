@@ -18,6 +18,30 @@ enum BubbleCallJournalOffer {
     static func saysNothingWasKept(_ phase: BubbleCallJournalPhase) -> Bool {
         phase == .nothingKept
     }
+
+    /// A1.13 — un serveur injoignable n'est pas « rien gardé » : la bulle le dit et propose Réessayer, comme
+    /// Android et le web.
+    static func offersRetry(_ phase: BubbleCallJournalPhase) -> Bool {
+        phase == .unreachable
+    }
+}
+
+/// Les mots de la bascule et de l'échec, tous déjà traduits dans les sept langues.
+enum BubbleCallJournalCopy {
+    /// A1.3 — l'état que le lecteur d'écran annonce avec « Masquer / Afficher la transcription ».
+    static func toggleValue(isOpen: Bool) -> String {
+        isOpen
+            ? String(localized: "message.long.expanded", defaultValue: "Déplié", bundle: .main)
+            : String(localized: "message.long.collapsed", defaultValue: "Replié", bundle: .main)
+    }
+
+    static var unavailable: String {
+        String(localized: "composer.audio.transcription.unavailable", defaultValue: "Transcription indisponible", bundle: .main)
+    }
+
+    static var retry: String {
+        String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main)
+    }
 }
 
 enum BubbleCallJournalPhase: Equatable {
@@ -25,13 +49,16 @@ enum BubbleCallJournalPhase: Equatable {
     case loading
     case shown
     case nothingKept
+    case unreachable
 }
 
 /// Ce que rend le chargement du journal. `abandoned` : la bascule s'est repliée (ou la cellule est partie) pendant
-/// l'attente — le `nil` d'un replay annulé ne dit rien de l'appel, et ne doit pas s'afficher « Aucune transcription ».
+/// l'attente — l'échec d'un replay annulé ne dit rien de l'appel, et ne doit pas s'afficher « Aucune transcription ».
+/// `unreachable` : le serveur n'a pas répondu, la bulle propose Réessayer (A1.13).
 enum BubbleCallJournalOutcome: Equatable {
     case served(CallTranscript)
     case nothingKept
+    case unreachable
     case abandoned
 }
 
@@ -43,7 +70,7 @@ enum BubbleCallJournalLoading {
     static func load(
         callId: String,
         readCache: @MainActor (String) async -> CallTranscript? = { await CallTranscriptStore.shared.transcript(for: $0) },
-        replay: @MainActor (String) async -> CallTranscript? = { await CallTranscriptLoader.load(callId: $0) },
+        replay: @MainActor (String) async -> CallTranscriptReplay = { await CallTranscriptLoader.replay(callId: $0) },
         willWaitOnNetwork: @MainActor () -> Void
     ) async -> BubbleCallJournalOutcome {
         if let cached = await readCache(callId) { return .served(cached) }
@@ -51,7 +78,11 @@ enum BubbleCallJournalLoading {
         willWaitOnNetwork()
         let replayed = await replay(callId)
         guard !Task.isCancelled else { return .abandoned }
-        return replayed.map(BubbleCallJournalOutcome.served) ?? .nothingKept
+        switch replayed {
+        case .served(let transcript): return .served(transcript)
+        case .nothingKept: return .nothingKept
+        case .unreachable: return .unreachable
+        }
     }
 }
 
@@ -99,6 +130,7 @@ struct BubbleCallJournalUnderCard: View, Equatable {
     @State private var isOpen: Bool
     @State private var phase: BubbleCallJournalPhase = .closed
     @State private var transcript: CallTranscript?
+    @State private var attempt = 0
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
@@ -122,6 +154,7 @@ struct BubbleCallJournalUnderCard: View, Equatable {
     private struct LoadKey: Equatable {
         let callId: String
         let isOpen: Bool
+        let attempt: Int
     }
 
     var body: some View {
@@ -134,8 +167,11 @@ struct BubbleCallJournalUnderCard: View, Equatable {
             }
         }
         .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.35, dampingFraction: 0.85), value: isOpen)
-        .task(id: LoadKey(callId: callId, isOpen: isOpen)) { await load() }
+        .task(id: LoadKey(callId: callId, isOpen: isOpen, attempt: attempt)) { await load() }
     }
+
+    /// La couleur de la conversation, lue une fois pour la bascule, Réessayer et le journal.
+    private var accent: Color { Color(hex: accentHex) }
 
     private var toggleTitle: String {
         isOpen
@@ -151,12 +187,13 @@ struct BubbleCallJournalUnderCard: View, Equatable {
         } label: {
             Text(toggleTitle)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                .foregroundStyle(Color(hex: accentHex))
+                .foregroundStyle(accent)
                 .padding(.horizontal, MeeshySpacing.sm)
                 .meeshyTapTarget()
         }
         .buttonStyle(.plain)
         .accessibilityLabel(toggleTitle)
+        .accessibilityValue(BubbleCallJournalCopy.toggleValue(isOpen: isOpen))
     }
 
     @ViewBuilder private var journal: some View {
@@ -167,13 +204,39 @@ struct BubbleCallJournalUnderCard: View, Equatable {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, MeeshySpacing.sm)
         } else if let transcript {
-            CallTranscriptSection(transcript: transcript, accentHex: accentHex, tint: Color(hex: accentHex)) {
+            CallTranscriptSection(transcript: transcript, accentHex: accentHex, tint: accent) {
                 self.transcript = nil
                 phase = .nothingKept
             }
+        } else if BubbleCallJournalOffer.offersRetry(phase) {
+            unreachableNotice
         } else if phase == .loading {
             ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(.vertical, MeeshySpacing.sm)
         }
+    }
+
+    /// A1.13 — « Transcription indisponible · Réessayer ». Réessayer relance la lecture (la tentative entre dans la
+    /// clé du chargement) ; le cache étant vide, l'attente s'annonce alors comme au premier chargement.
+    private var unreachableNotice: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Text(BubbleCallJournalCopy.unavailable)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                .foregroundStyle(theme.textMuted)
+            Button {
+                HapticFeedback.light()
+                attempt += 1
+            } label: {
+                Text(BubbleCallJournalCopy.retry)
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+                    .foregroundStyle(accent)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .meeshyTapTarget()
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, MeeshySpacing.xs)
+        .accessibilityElement(children: .contain)
     }
 
     @MainActor
@@ -186,6 +249,8 @@ struct BubbleCallJournalUnderCard: View, Equatable {
             phase = .shown
         case .nothingKept:
             phase = .nothingKept
+        case .unreachable:
+            phase = .unreachable
         case .abandoned:
             return
         }

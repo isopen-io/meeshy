@@ -527,7 +527,7 @@ const counted = (concept: Counted, done: number, total: number): Body => {
   return {
     value: fraction(done, total),
     valueId: `${concept}_earned`,
-    line: chip(gameText('game.concept.chip.left', { count: formatCount(Math.max(0, total - done)) }), ref, `${concept}_left`),
+    line: null,
     gauge: ratio(done, total),
     primary: ref,
     facts: [fact(`${concept}_earned`, gameText('game.fact.earned'), fraction(done, total), ref)],
@@ -570,7 +570,7 @@ function atlas(view: EngagementWithGame): Body {
   return {
     value: stamps,
     valueId: 'atlas_stamps',
-    line: chip(gameText('game.concept.chip.left', { count: formatCount(Math.max(0, served.total - served.stamped)) }), about('atlas_stamps'), 'atlas_left'),
+    line: null,
     gauge: ratio(served.stamped, served.total),
     primary: about('atlas_stamps'),
     facts: [

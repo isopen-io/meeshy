@@ -358,17 +358,19 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                     revealCompleted: true,
                     safeArea: proxy.safeAreaInsets,
                     onClose: { reelsPresenter.dismiss() },
+                    // Le lecteur est une surface déclarée (`.reels`) : le routeur le referme, et le
+                    // profil ou la story ne montent qu'une fois sa sortie finie (#18443).
                     onOpenProfile: { userId, username in
-                        reelsPresenter.dismiss()
-                        router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
+                        router.presentProfileSheet(ProfileSheetUser(userId: userId, username: username))
                     },
                     onOpenStory: { userId in
-                        reelsPresenter.dismiss()
-                        storyViewerCoordinator.present(StoryViewerRequest(
-                            id: userId,
-                            startAtFirstUnviewed: true,
-                            singleGroup: true
-                        ))
+                        router.present(afterPresentedSurfacesLeave: {
+                            storyViewerCoordinator.present(StoryViewerRequest(
+                                id: userId,
+                                startAtFirstUnviewed: true,
+                                singleGroup: true
+                            ))
+                        })
                     },
                     onOpenDetail: { postId in
                         reelsPresenter.dismiss()

@@ -17,13 +17,21 @@ extension ComposerCaptureCopy {
         }
     }
 
-    static func editToolSymbol(_ tool: ComposerEditTool) -> String {
+    nonisolated static func editToolSymbol(_ tool: ComposerEditTool) -> String {
         switch tool {
         case .crop: return "crop"
         case .text: return "textformat"
         case .trim: return "scissors"
         case .sound: return "waveform"
         }
+    }
+
+    static var cancelCrop: String {
+        String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)
+    }
+
+    static var cancelCropLabel: String {
+        String(localized: "composer.capture.crop.cancel.a11y", defaultValue: "Annuler le recadrage", bundle: .main)
     }
 
     static var addText: String {

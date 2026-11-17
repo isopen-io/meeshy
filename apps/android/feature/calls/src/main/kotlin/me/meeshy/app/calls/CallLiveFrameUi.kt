@@ -1,5 +1,6 @@
 package me.meeshy.app.calls
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -29,7 +30,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -51,8 +54,11 @@ import me.meeshy.sdk.model.call.CallTopBannerStack
 import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import me.meeshy.sdk.model.call.frames.CallFramePerson
 import me.meeshy.sdk.model.call.frames.CallLiveFrameDisplay
+import me.meeshy.sdk.model.call.frames.CallLiveFramePeerRelease
 import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
 import me.meeshy.sdk.model.call.frames.CallLiveFrameSuspension
+import me.meeshy.ui.accessibility.AccessibilityAnnouncer
+import me.meeshy.ui.accessibility.AnnouncementPriority
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -195,6 +201,7 @@ private sealed interface LiveFrameFace {
 internal fun CallLiveFrameStatus(controller: CallLiveFrameController, offersProposal: Boolean = true, modifier: Modifier = Modifier) {
     val state by controller.state.collectAsState()
     val notice by controller.notices.collectAsState()
+    CallLiveFramePeerReleaseAnnouncer(controller)
     val proposed = state.proposal?.takeIf { offersProposal }
         ?.let { p -> CallLiveFrameRule.frames().firstOrNull { it.id == p.frameId }?.let { p to it } }
     val answer = state.answer
@@ -233,6 +240,30 @@ internal fun CallLiveFrameStatus(controller: CallLiveFrameController, offersProp
             is LiveFrameFace.Proposal -> CallLiveFrameProposalCard(shown.text, onAccept = controller::accept, onDecline = controller::decline, modifier = place)
             is LiveFrameFace.Line -> CallLiveFrameNotice(shown.text, modifier = place)
         }
+    }
+}
+
+/**
+ * #18367 — l'autre a relâché le cadre que nous partagions : TalkBack dit poliment pourquoi l'image a changé, sans rien dessiner
+ * (iOS `announceQueued`, #18415). Mon propre retrait ne passe jamais ici : seul un retrait REÇU fait tomber le cadre partagé.
+ */
+@Composable
+private fun CallLiveFramePeerReleaseAnnouncer(controller: CallLiveFrameController) {
+    val view = LocalView.current
+    val context = LocalContext.current
+    LaunchedEffect(controller, view) {
+        val announcer = AccessibilityAnnouncer.forView(view)
+        controller.peerReleases.collect { announcer.announce(peerReleasedText(context, it), AnnouncementPriority.POLITE) }
+    }
+}
+
+/** « Awa a retiré le cadre », ou « Votre correspondant a retiré le cadre » sans prénom partagé (clés iOS `call.liveFrame.peerReleased`). */
+internal fun peerReleasedText(context: Context, release: CallLiveFramePeerRelease): String {
+    val by = release.by?.trim().orEmpty()
+    return if (by.isEmpty()) {
+        context.getString(R.string.call_live_frame_peer_released_anonymous)
+    } else {
+        context.getString(R.string.call_live_frame_peer_released, by)
     }
 }
 

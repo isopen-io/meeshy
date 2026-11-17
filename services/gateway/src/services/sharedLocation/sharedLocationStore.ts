@@ -25,7 +25,13 @@ import { hasValidSecretsKey, isSealedSecret, openSecret, sealSecret } from '../.
 /** Le centre de la maille que le lecteur flouté voit : retenu tant que l'émetteur ne s'en éloigne pas d'une marge. */
 export type SharedLocationCell = { readonly latitude: number; readonly longitude: number };
 
-export type SharedLocationRecipient = { readonly userId: string; readonly precision: SharedLocationPrecision; readonly cell?: SharedLocationCell };
+/** `expiresAt` : l'échéance de CETTE personne, plus proche que le terme du partage (#18205) ; absente, le terme vaut. */
+export type SharedLocationRecipient = {
+  readonly userId: string;
+  readonly precision: SharedLocationPrecision;
+  readonly cell?: SharedLocationCell;
+  readonly expiresAt?: string;
+};
 
 export type SharedLocationState = {
   /** Le partage auquel cet état appartient : chaque `start` en ouvre un nouveau, que seul le pointeur rend courant. */
@@ -73,7 +79,9 @@ function parseRecipient(value: unknown): SharedLocationRecipient | null {
   const row = value as Record<string, unknown>;
   if (typeof row.userId !== 'string' || !isPrecision(row.precision)) return null;
   const cell = parseCell(row.cell);
-  return { userId: row.userId, precision: row.precision, ...(cell ? { cell } : {}) };
+  if (row.expiresAt !== undefined && (typeof row.expiresAt !== 'string' || Number.isNaN(Date.parse(row.expiresAt)))) return null;
+  const expiresAt = typeof row.expiresAt === 'string' ? { expiresAt: row.expiresAt } : {};
+  return { userId: row.userId, precision: row.precision, ...(cell ? { cell } : {}), ...expiresAt };
 }
 
 function parsePosition(value: unknown): SharedLocationPosition | null {

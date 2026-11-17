@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="context_more_options">Altro</string>
+    <string name="share_link_permission_messages">Messaggi</string>
+    <string name="share_link_permission_images">Immagini</string>
+    <string name="share_link_permission_files">File</string>
+    <string name="share_link_permission_history">Cronologia</string>
+    <string name="share_link_section_permissions">Consenti</string>
+    <string name="share_link_section_access">Chiedi agli ospiti</string>
+    <string name="share_link_access_account">Account Meeshy</string>
+    <string name="share_link_access_nickname">Nome utente</string>
+    <string name="share_link_access_email">E-mail</string>
+    <string name="share_link_access_birthday">Data di nascita</string>
+    <string name="invite_access_account">Account Meeshy</string>
+    <string name="invite_access_nickname">Nome utente</string>
+    <string name="invite_access_email">E-mail</string>
+    <string name="invite_section_permissions">Consenti</string>
+    <string name="invite_section_access">Chiedi agli ospiti</string>
+    <string name="shareLink_detail_requireAccount">Account Meeshy</string>
+    <string name="shareLink_detail_requireBirthday">Data di nascita</string>
+    <string name="shareLink_detail_requireEmail">E-mail</string>
+    <string name="shareLink_detail_requireNickname">Nome utente</string>
+    <string name="shareLink_detail_historyRight">Cronologia</string>
+    <string name="encryption_mode_hybrid_description">Cifrato sui nostri server, che possono leggere i tuoi messaggi. Testi verificati intatti tra dispositivi compatibili.</string>
+    <string name="share_link_field_description">Descrizione</string>
+    <string name="share_link_field_slug">Indirizzo del link</string>
+    <string name="links_hub_share_title">Condivisione</string>
+    <string name="links_hub_tracking_title">Tracciamento</string>
+    <string name="links_hub_affiliate_title">Referral</string>
+    <string name="links_hub_community_title">Community</string>
+</resources>

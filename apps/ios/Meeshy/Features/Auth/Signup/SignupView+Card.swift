@@ -283,8 +283,8 @@ extension SignupView {
     //
     // UNE saisie, FACULTATIVE depuis #6424 sans le dire (#6582 web, #7897) : le
     // bouton actif sans lui le prouve. Il paraît quand l'identité est DÉFINIE,
-    // et sa conséquence se déplie sous « Pourquoi mettre un mot de passe
-    // maintenant ? ».
+    // et sa conséquence se lit AU REPOS sous le champ (#17671, règle 7) : « sans
+    // mot de passe, la porte est le lien reçu par e-mail » est propre à Meeshy.
 
     var passwordWhyDetail: String {
         String(
@@ -315,36 +315,10 @@ extension SignupView {
                 .foregroundColor(theme.textPrimary)
             }
 
-            Button {
-                HapticFeedback.light()
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
-                    isPasswordWhyExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: MeeshySpacing.xs) {
-                    Text(String(
-                        localized: "auth.signup.password.why",
-                        defaultValue: "Pourquoi mettre un mot de passe maintenant ?",
-                        bundle: .main
-                    ))
-                    Image(systemName: "chevron.down")
-                        .rotationEffect(.degrees(isPasswordWhyExpanded ? 180 : 0))
-                        .accessibilityHidden(true)
-                }
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
-                .frame(minHeight: MeeshyControlSize.tapTarget)
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint(passwordWhyDetail)
-
-            if isPasswordWhyExpanded {
-                Text(passwordWhyDetail)
+            Text(passwordWhyDetail)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
         }
     }
 

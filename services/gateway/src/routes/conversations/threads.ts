@@ -31,6 +31,7 @@ import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFil
 import { captureNoticeWithheldFrom } from '../../services/messaging/captureNoticeVisibility';
 import { AT_REST_MESSAGE_SELECT, revealAtRestRowsForWire } from '../../services/messaging/serverAtRest';
 import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
+import { withCallSummaryParticipantNames } from '../../services/calls/callSummaryParticipantNames';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -360,24 +361,26 @@ export function registerThreadsRoutes(
       if (!readerPage.alive.some((m) => m.id === parent.id)) {
         return sendNotFound(reply, 'Message not found');
       }
+      const servedRoot = readerPage.alive.find((m) => m.id === parent.id) ?? parent;
       const replies = readerPage.alive.filter((m) => m.id !== parent.id);
 
       // #7950 — la citation d'une story retirée sort expurgée : UNE requête
       // pour le parent et toutes ses réponses.
       const readers: QuotedReaders = {
-        deadlines: await loadQuotedEphemeralReaders(prisma, [parent, ...replies], async () => readerParticipantId),
+        deadlines: await loadQuotedEphemeralReaders(prisma, [servedRoot, ...replies], async () => readerParticipantId),
         now,
       };
       const served = (m: ThreadMessage) =>
         withInheritedExpiry(formatThreadMessage(m as unknown as Record<string, unknown>, readers) as Record<string, unknown> & { id: string }, readerPage.inherited);
-      const opened = await revealAtRestRowsForWire([parent, ...replies], gatewayKeyring(prisma));
+      const opened = await revealAtRestRowsForWire([servedRoot, ...replies], gatewayKeyring(prisma));
       const [servedParent, ...servedReplies] = await servePostReplyCitations(prisma, opened.map((m) => served(m as unknown as ThreadMessage)));
       // #9646 — les pièces d'un message protégé du fil, signées pour CE lecteur.
-      const [signedParent, ...signedReplies] = await signMessagesAttachmentsForReader(prisma, {
+      // #18242 B2 — et le nom des participants d'un résumé d'appel, lu à la lecture.
+      const [signedParent, ...signedReplies] = await withCallSummaryParticipantNames(prisma, await signMessagesAttachmentsForReader(prisma, {
         messages: [servedParent, ...servedReplies],
         readerParticipantId,
         signer: readerFileUrlSignerFromEnv(new Date()),
-      });
+      }), { conversationId });
       return sendSuccess(reply, {
         parent: signedParent,
         replies: signedReplies,

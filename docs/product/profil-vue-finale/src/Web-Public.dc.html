@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Page publique — web grand écran</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+body{background:#fff}
+.mx kbd{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:7px;background:#fff;border:1px solid var(--line);border-bottom-width:2.5px;font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;color:var(--ink2);line-height:1}
+.mx .btn.p kbd{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4);color:#fff}
+.mx .btn.q{background:#fff}
+.mx .btn.q:hover,.mx .ib.q:hover{border-color:var(--brand-fill);background:var(--raised)}
+.mx .btn.p:hover{transform:translateY(-2px)}
+.ib.q{background:#fff;border:1.5px solid var(--line);color:var(--ink2)}
+.navlink{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border-radius:999px;font-weight:700;font-size:14px;color:var(--ink)}
+.navlink:hover{background:rgba(255,255,255,.7);color:var(--ink)}
+.plx{position:absolute;inset:-40px;animation:webDrift 16s ease-in-out infinite}
+.plx.b{animation-duration:26s;animation-direction:reverse}
+.halo{position:absolute;border-radius:50%;border:1.5px solid rgba(126,34,206,.22)}
+.spark{position:absolute;width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 0 6px rgba(255,255,255,.35)}
+.tile{position:relative;display:block;width:100%;break-inside:avoid;margin:0 0 14px;border-radius:18px;transition:transform .3s cubic-bezier(.3,1.4,.5,1),box-shadow .3s}
+.tile>.ph{width:100%;height:100%}
+.tile:hover,.tile.hov{transform:translateY(-8px) scale(1.025);box-shadow:0 26px 50px rgba(67,56,202,.30);z-index:2}
+.tile.hov>.ph{border-color:var(--accent);background:repeating-linear-gradient(135deg,#EDE9FE 0 10px,#F8F7FF 10px 20px)}
+.badge{position:absolute;left:10px;top:10px;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 9px;border-radius:999px;background:rgba(255,255,255,.86);border:1px solid var(--line);font-size:11.5px;font-weight:700;color:var(--ink2)}
+.addr{display:flex;align-items:center;gap:12px;min-height:62px;padding:10px 16px;--cut:50%;transition:transform .25s cubic-bezier(.3,1.4,.5,1)}
+.addr:hover{transform:translateX(4px);border-color:var(--brand-fill)}
+.qr{position:relative;width:180px;height:180px;border-radius:22px;background:#fff;border:1px solid var(--line);box-shadow:0 14px 30px rgba(67,56,202,.16);flex:none}
+.qr>i{position:absolute;left:9px;top:9px;width:6px;height:6px;border-radius:1.5px;color:#1E1B4B;background:transparent;box-shadow:0px 0px,6px 0px,12px 0px,18px 0px,24px 0px,30px 0px,36px 0px,48px 0px,60px 0px,66px 0px,78px 0px,84px 0px,90px 0px,96px 0px,120px 0px,126px 0px,132px 0px,138px 0px,144px 0px,150px 0px,156px 0px,0px 6px,36px 6px,54px 6px,60px 6px,66px 6px,78px 6px,84px 6px,96px 6px,120px 6px,156px 6px,0px 12px,12px 12px,18px 12px,24px 12px,36px 12px,48px 12px,54px 12px,60px 12px,66px 12px,78px 12px,84px 12px,120px 12px,132px 12px,138px 12px,144px 12px,156px 12px,0px 18px,12px 18px,18px 18px,24px 18px,36px 18px,48px 18px,60px 18px,72px 18px,90px 18px,96px 18px,108px 18px,120px 18px,132px 18px,138px 18px,144px 18px,156px 18px,0px 24px,12px 24px,18px 24px,24px 24px,36px 24px,54px 24px,96px 24px,120px 24px,132px 24px,138px 24px,144px 24px,156px 24px,0px 30px,36px 30px,72px 30px,84px 30px,96px 30px,102px 30px,120px 30px,156px 30px,0px 36px,6px 36px,12px 36px,18px 36px,24px 36px,30px 36px,36px 36px,54px 36px,66px 36px,72px 36px,90px 36px,102px 36px,108px 36px,120px 36px,126px 36px,132px 36px,138px 36px,144px 36px,150px 36px,156px 36px,48px 42px,60px 42px,72px 42px,78px 42px,84px 42px,96px 42px,108px 42px,0px 48px,6px 48px,12px 48px,42px 48px,48px 48px,72px 48px,90px 48px,96px 48px,102px 48px,108px 48px,114px 48px,156px 48px,48px 54px,96px 54px,108px 54px,120px 54px,132px 54px,150px 54px,156px 54px,0px 60px,12px 60px,18px 60px,24px 60px,30px 60px,54px 60px,102px 60px,108px 60px,114px 60px,120px 60px,126px 60px,24px 66px,30px 66px,36px 66px,54px 66px,102px 66px,120px 66px,132px 66px,138px 66px,144px 66px,0px 72px,6px 72px,12px 72px,30px 72px,36px 72px,42px 72px,54px 72px,144px 72px,150px 72px,18px 78px,30px 78px,48px 78px,108px 78px,132px 78px,144px 78px,150px 78px,0px 84px,6px 84px,12px 84px,48px 84px,102px 84px,126px 84px,138px 84px,144px 84px,150px 84px,0px 90px,30px 90px,36px 90px,42px 90px,48px 90px,54px 90px,102px 90px,108px 90px,126px 90px,132px 90px,144px 90px,150px 90px,42px 96px,54px 96px,108px 96px,144px 96px,150px 96px,0px 102px,6px 102px,12px 102px,18px 102px,54px 102px,72px 102px,78px 102px,84px 102px,96px 102px,114px 102px,120px 102px,126px 102px,132px 102px,138px 102px,144px 102px,150px 102px,0px 108px,6px 108px,18px 108px,48px 108px,84px 108px,90px 108px,96px 108px,102px 108px,108px 108px,120px 108px,138px 108px,150px 108px,156px 108px,54px 114px,60px 114px,72px 114px,96px 114px,102px 114px,114px 114px,120px 114px,132px 114px,138px 114px,156px 114px,0px 120px,6px 120px,12px 120px,18px 120px,24px 120px,30px 120px,36px 120px,48px 120px,66px 120px,72px 120px,84px 120px,90px 120px,96px 120px,108px 120px,114px 120px,120px 120px,126px 120px,150px 120px,156px 120px,0px 126px,36px 126px,54px 126px,78px 126px,90px 126px,120px 126px,132px 126px,138px 126px,144px 126px,150px 126px,156px 126px,0px 132px,12px 132px,18px 132px,24px 132px,36px 132px,60px 132px,72px 132px,78px 132px,90px 132px,96px 132px,102px 132px,108px 132px,114px 132px,120px 132px,126px 132px,132px 132px,144px 132px,150px 132px,156px 132px,0px 138px,12px 138px,18px 138px,24px 138px,36px 138px,48px 138px,60px 138px,84px 138px,90px 138px,96px 138px,102px 138px,108px 138px,132px 138px,156px 138px,0px 144px,12px 144px,18px 144px,24px 144px,36px 144px,48px 144px,54px 144px,66px 144px,72px 144px,78px 144px,84px 144px,90px 144px,102px 144px,108px 144px,114px 144px,120px 144px,126px 144px,132px 144px,150px 144px,0px 150px,36px 150px,60px 150px,78px 150px,96px 150px,108px 150px,126px 150px,150px 150px,156px 150px,0px 156px,6px 156px,12px 156px,18px 156px,24px 156px,30px 156px,36px 156px,54px 156px,66px 156px,102px 156px,108px 156px,126px 156px,144px 156px,150px 156px}
+.qr>b{position:absolute;left:50%;top:50%;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:12px;background:var(--brand-fill);color:#fff;display:flex;align-items:center;justify-content:center;font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:20px;box-shadow:0 0 0 4px #fff}
+.scan{position:absolute;left:14px;right:14px;top:14px;height:2px;border-radius:2px;background:var(--accent);box-shadow:0 0 14px 3px rgba(168,85,247,.5);animation:webScan 3.2s ease-in-out infinite}
+@keyframes webDrift{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(-28px,14px,0)}}
+@keyframes webScan{0%,100%{transform:translateY(0);opacity:.9}50%{transform:translateY(150px);opacity:.5}}
+@media (max-width:700px){.wide{display:none!important}}
+</style>
+</helmet>
+<div class="mx" data-theme="light" style="width: 100%; min-height: 900px; display: flex; flex-direction: column">
+
+<div style="position: relative; z-index: 7; background: var(--raised); border-bottom: 1px solid var(--line)">
+<div style="max-width: 1240px; margin: 0 auto; padding: 8px 24px; display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap">
+<span style="display: inline-flex; align-items: center; gap: 8px; flex: 0 1 380px; min-width: 0; min-height: 36px; padding: 0 16px 0 12px; border-radius: 999px; background: var(--field); border: 1px solid var(--line); color: var(--ink3)">[[ic:lock-simple s]]<span class="mono" style="font-size: 13.5px; color: var(--ink)">meeshy.me/u/aissa</span></span>
+<span style="font-size: 13px; color: var(--ink3)">raccourci : <span class="mono" style="color: var(--ink2)">meeshy.me/@aissa</span></span>
+</div>
+</div>
+
+<nav aria-label="Meeshy" style="position: sticky; top: 0; z-index: 6; height: 64px; background: rgba(255,255,255,.55); -webkit-backdrop-filter: blur(22px) saturate(1.7); backdrop-filter: blur(22px) saturate(1.7); border-bottom: 1px solid rgba(255,255,255,.7)">
+<div style="max-width: 1240px; height: 100%; margin: 0 auto; padding: 0 24px; display: flex; align-items: center; gap: 10px">
+<a href="#" class="d" style="font-size: 26px; font-weight: 900; color: var(--ink); min-height: 44px; display: inline-flex; align-items: center">Meeshy</a>
+<span style="flex: 1"></span>
+<button class="wide" style="display: inline-flex; align-items: center; gap: 10px; min-height: 44px; width: 250px; padding: 0 10px 0 14px; border-radius: 999px; background: rgba(255,255,255,.75); border: 1px solid var(--line); color: var(--ink3); font-size: 14px">[[ic:magnifying-glass s]]<span style="flex: 1">Chercher quelqu'un</span><kbd>/</kbd></button>
+<a href="#" class="navlink wide">Se connecter</a>
+<button class="btn p sm">Créer mon compte</button>
+</div>
+</nav>
+
+<header style="position: relative; height: 380px; margin-top: -64px; overflow: hidden; background: linear-gradient(180deg, #C4B5FD 0%, #EDE9FE 60%, #fff 100%)">
+<div class="plx b" aria-hidden="true">
+<div class="halo" style="width: 620px; height: 620px; left: 52%; top: -260px"></div>
+<div class="halo" style="width: 900px; height: 900px; left: 44%; top: -400px; border-color: rgba(126,34,206,.13)"></div>
+<div class="halo" style="width: 300px; height: 300px; left: 6%; top: 150px; border-color: rgba(79,70,229,.2)"></div>
+</div>
+<div class="orb" style="width: 560px; height: 560px; left: -120px; top: -240px; background: #A855F7; opacity: .55; filter: blur(60px)"></div>
+<div class="orb" style="width: 480px; height: 480px; right: -60px; top: -120px; background: #818CF8; opacity: .55; filter: blur(60px); animation-delay: -4s"></div>
+<div class="plx" aria-hidden="true">
+<span class="spark" style="left: 22%; top: 150px"></span>
+<span class="spark" style="left: 61%; top: 110px; width: 7px; height: 7px"></span>
+<span class="spark" style="left: 84%; top: 210px; width: 14px; height: 14px"></span>
+<span class="spark" style="left: 40%; top: 240px; width: 6px; height: 6px"></span>
+<span class="spark" style="left: 72%; top: 280px; width: 8px; height: 8px"></span>
+</div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 150px; background: linear-gradient(180deg, rgba(255,255,255,0), #fff)"></div>
+<div style="position: absolute; left: 0; right: 0; top: 96px">
+<div style="max-width: 1240px; margin: 0 auto; padding: 0 24px; display: flex; justify-content: flex-end">
+<span class="chip" style="background: rgba(255,255,255,.7); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); color: var(--ink)">[[ic:globe s]]<span>Profil public</span></span>
+</div>
+</div>
+</header>
+
+<section class="rise" style="position: relative; z-index: 2; margin-top: -112px">
+<div style="max-width: 1240px; margin: 0 auto; padding: 0 24px; display: flex; flex-direction: column; gap: 22px">
+<span class="av" style="width: 148px; height: 148px; font-size: 54px; border: 6px solid #fff; box-shadow: 0 22px 44px rgba(126,34,206,.34)">AN</span>
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 24px 40px">
+<div style="flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 14px">
+<h1 class="d" style="font-size: clamp(42px, 6vw, 64px); font-weight: 900; line-height: 1.02">Aïssa Ndiaye</h1>
+<div style="display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap">
+<span class="mono" style="font-size: 17px; font-weight: 700; color: var(--accent-ink)">@aissa</span>
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; color: var(--ink2)">[[ic:map-pin s]]<span>Dakar</span></span>
+<span style="font-size: 15px; color: var(--ink3)">Sur Meeshy depuis mars 2026</span>
+</div>
+<p style="font-size: 20px; line-height: 1.45; color: var(--ink); max-width: 620px; text-wrap: pretty">Designer sonore à Dakar. Je parle wolof, j'écris en français, je rêve en anglais.</p>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<span class="chip">[[ic:translate s]]<span>Français</span></span>
+<span class="chip">Wolof</span>
+<span class="chip">Anglais</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px; padding-top: 6px">
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+<button class="btn p" style="min-height: 56px; padding: 0 20px 0 24px; font-size: 16px">[[ic:chat-circle]]<span>Lui écrire sur Meeshy</span><kbd>M</kbd></button>
+<button class="btn q" style="min-height: 56px">[[ic:copy]]<span>Copier le lien</span><kbd>C</kbd></button>
+<button class="ib q" aria-label="Afficher le QR du profil" style="width: 56px; height: 56px">[[ic:qr-code]]</button>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--ink3)">
+<span class="mono" style="color: var(--ink2)">meeshy.me/@aissa</span>
+<span style="flex: 1"></span>
+<kbd>Q</kbd><span>QR</span>
+<kbd>?</kbd><span>Tous les raccourcis</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<main style="padding: 56px 0 0">
+<div style="max-width: 1240px; margin: 0 auto; padding: 0 24px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 48px 44px">
+
+<section class="rise" style="animation-delay: .1s; flex: 2 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+<h2 class="d" style="font-size: 32px">Publications</h2>
+<span style="font-size: 15px; font-weight: 600; color: var(--ink3)">9 publiques</span>
+<span style="flex: 1"></span>
+<div style="display: flex; gap: 6px">
+<button class="chip on">Tout</button>
+<button class="chip">Réels</button>
+<button class="chip">Photos</button>
+</div>
+<span class="wide" style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink3)"><kbd>J</kbd><kbd>K</kbd><span>parcourir</span></span>
+</div>
+
+<div style="columns: 3 180px; column-gap: 14px; padding-top: 6px">
+<a href="#" class="tile" style="height: 300px"><span class="ph">Dakar la nuit</span><span class="badge">[[ic:play-fill s]]<span>0:24</span></span></a>
+<a href="#" class="tile" style="height: 210px"><span class="ph">photo · console du studio</span></a>
+<a href="#" class="tile" style="height: 250px"><span class="ph">photo · plage de Yoff</span></a>
+<a href="#" class="tile" style="height: 230px"><span class="ph">story à la une</span></a>
+<a href="#" class="tile hov" style="height: 320px"><span class="ph" style="padding-bottom: 76px">Session au studio</span><span class="badge">[[ic:play-fill s]]<span>0:41</span></span>
+<span class="glass" style="position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; align-items: center; gap: 2px; padding: 5px 5px 5px 14px; border-radius: 999px; color: var(--ink)">
+<span style="flex: 1; min-width: 0; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Ouvrir</span>
+<span class="ib" style="width: 40px; height: 40px">[[ic:heart]]</span>
+<span class="ib" style="width: 40px; height: 40px">[[ic:chat-circle]]</span>
+<span class="ib" style="width: 40px; height: 40px; background: var(--brand-fill); color: #fff">[[ic:export]]</span>
+</span>
+<span aria-hidden="true" style="position: absolute; right: 34%; top: 46%; color: var(--ink); filter: drop-shadow(0 3px 5px rgba(30,27,75,.35))">[[ic:cursor-fill l]]</span>
+</a>
+<a href="#" class="tile" style="height: 200px"><span class="ph">photo · marché Sandaga</span></a>
+<a href="#" class="tile" style="height: 270px"><span class="ph">photo · micro et vinyles</span></a>
+<a href="#" class="tile" style="height: 220px"><span class="ph">Prise de son, Gorée</span><span class="badge">[[ic:play-fill s]]<span>1:02</span></span></a>
+<a href="#" class="tile" style="height: 260px"><span class="ph">photo · coucher de soleil</span></a>
+</div>
+
+<div style="display: flex; align-items: center; gap: 12px; margin-top: 6px; padding: 14px 18px; border-radius: 18px; border: 1.5px dashed var(--line); color: var(--ink3)">
+[[ic:lock-simple]]
+<span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 600">Présence, cercles et jeu : visibles par ses amis</span>
+<span class="wide" style="display: inline-flex; gap: 10px">[[ic:circles-three s]][[ic:trophy s]]</span>
+</div>
+</section>
+
+<aside class="rise" style="animation-delay: .2s; flex: 1 1 340px; min-width: 0; position: sticky; top: 88px; display: flex; flex-direction: column; gap: 34px">
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<h3 class="d" style="font-size: 22px">Sa voix</h3>
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink3)"><kbd>Espace</kbd><span>écouter</span></span>
+</div>
+<div class="card" style="display: flex; align-items: center; gap: 14px; padding: 14px 18px 14px 14px">
+<button class="ib lg" aria-label="Écouter l'échantillon de sa voix" style="background: var(--accent); color: #0B0B12; box-shadow: 0 10px 22px rgba(168,85,247,.4)">[[ic:play-fill]]</button>
+<div class="wave" style="flex: 1; min-width: 0; height: 40px; justify-content: space-between; overflow: hidden">
+<i style="height: 30%"></i><i style="height: 60%"></i><i style="height: 90%"></i><i style="height: 45%"></i><i style="height: 75%"></i><i style="height: 100%"></i><i style="height: 55%"></i><i style="height: 35%"></i><i style="height: 80%"></i><i style="height: 60%"></i><i style="height: 95%"></i><i style="height: 40%"></i><i style="height: 70%"></i><i style="height: 50%"></i><i style="height: 85%"></i><i style="height: 30%"></i><i style="height: 65%"></i><i style="height: 45%"></i><i style="height: 75%"></i><i style="height: 35%"></i><i style="height: 55%"></i><i style="height: 25%"></i><i style="height: 70%"></i><i style="height: 45%"></i>
+</div>
+<span class="mono" style="color: var(--ink2)">0:12</span>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 10px">
+<h3 class="d" style="font-size: 22px">Ses adresses</h3>
+<span class="new">Nouveau</span>
+</div>
+<a href="#" class="ticket addr">
+<span class="ib" style="background: var(--field); color: var(--ink2)">[[ic:globe-hemisphere-west]]</span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span class="mono" style="font-size: 14px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis">aissandiaye.studio</span><span style="font-size: 12.5px; color: var(--ink3)">Site</span></span>
+<span style="color: var(--ink3)">[[ic:arrow-square-out s]]</span>
+</a>
+<a href="#" class="ticket addr">
+<span class="ib" style="background: var(--field); color: var(--ink2)">[[ic:vinyl-record]]</span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span class="mono" style="font-size: 14px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis">soundcloud.com/aissa</span><span style="font-size: 12.5px; color: var(--ink3)">Musique</span></span>
+<span style="color: var(--ink3)">[[ic:arrow-square-out s]]</span>
+</a>
+<a href="#" class="ticket addr">
+<span class="ib" style="background: var(--field); color: var(--ink2)">[[ic:camera]]</span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span class="mono" style="font-size: 14px; font-weight: 700; color: var(--ink); overflow: hidden; text-overflow: ellipsis">instagram.com/aissa.snd</span><span style="font-size: 12.5px; color: var(--ink3)">Photos</span></span>
+<span style="color: var(--ink3)">[[ic:arrow-square-out s]]</span>
+</a>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h3 class="d" style="font-size: 22px">Son QR</h3>
+<div class="ticket" style="--cut: 50%; display: flex; flex-wrap: wrap; align-items: center; gap: 20px; padding: 20px">
+<div class="qr" role="img" aria-label="QR du profil meeshy.me/@aissa"><i></i><b>M</b><span class="scan"></span></div>
+<div style="flex: 1 1 110px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+<span class="d" style="font-size: 18px; line-height: 1.2">Scanne pour ouvrir dans l'app</span>
+<span class="mono" style="color: var(--ink2)">meeshy.me/@aissa</span>
+<button class="btn q sm" style="align-self: flex-start">[[ic:download-simple s]]<span>Image</span></button>
+</div>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 12px">
+<h3 class="d" style="font-size: 22px">Le Prisme</h3>
+<div class="card" style="display: flex; flex-direction: column; gap: 14px; padding: 20px; background: linear-gradient(160deg, #F5F3FF, #EEF2FF)">
+<p style="font-size: 15px; line-height: 1.5; color: var(--ink)">Aïssa écrit dans sa langue. Tu la lis dans la tienne, sans rien régler.</p>
+<div style="align-self: flex-start; max-width: 92%; display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-radius: 20px 20px 20px 6px; background: #fff; border: 1px solid var(--line); box-shadow: 0 8px 20px rgba(67,56,202,.10)">
+<span style="font-size: 15.5px; color: var(--ink)">Je t'envoie le mix ce soir. Dis-moi ce que tu en penses.</span>
+<span style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; font-weight: 600; color: var(--accent-ink)">[[ic:translate s]]<span>Traduit du wolof</span><a href="#" style="margin-left: 6px; color: var(--ink3); text-decoration: underline">Voir l'original</a></span>
+</div>
+</div>
+</section>
+
+</aside>
+</div>
+</main>
+
+<section class="rise" style="animation-delay: .3s; padding: 72px 0 0">
+<div style="max-width: 1240px; margin: 0 auto; padding: 0 24px">
+<div style="position: relative; overflow: hidden; border-radius: 36px; padding: 56px clamp(24px, 5vw, 64px); background: linear-gradient(120deg, #EDE9FE, #E0E7FF 60%, #F5F3FF); border: 1px solid var(--line); display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); align-items: center; gap: 28px 40px">
+<div class="orb" style="width: 320px; height: 320px; right: -60px; top: -140px; background: #A855F7; opacity: .35; filter: blur(50px)"></div>
+<div class="orb" style="width: 260px; height: 260px; left: 30%; bottom: -170px; background: #818CF8; opacity: .4; filter: blur(50px); animation-delay: -5s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 12px">
+<h2 class="d" style="font-size: clamp(32px, 4.4vw, 44px); font-weight: 900">Parle à Aïssa dans ta langue.</h2>
+<p style="font-size: 17px; color: var(--ink2); max-width: 460px">Elle te répond dans la sienne. Meeshy traduit entre vous deux, texte et voix.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap">
+<button class="btn p" style="min-height: 58px; padding: 0 28px; font-size: 17px">[[ic:user-plus]]<span>Créer mon compte</span></button>
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; font-weight: 700; color: var(--ink2); text-decoration: underline">J'ai déjà un compte</a>
+</div>
+</div>
+</div>
+</section>
+
+<footer style="margin-top: 56px; border-top: 1px solid var(--line)">
+<div style="max-width: 1240px; margin: 0 auto; padding: 14px 24px 24px; display: flex; align-items: center; gap: 4px 22px; flex-wrap: wrap">
+<a href="#" class="d" style="font-size: 20px; font-weight: 900; color: var(--ink); min-height: 44px; display: inline-flex; align-items: center">Meeshy</a>
+<span style="flex: 1"></span>
+<a href="#" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 600; color: var(--ink2)">Confidentialité</a>
+<a href="#" style="display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 14px; font-weight: 600; color: var(--err)">[[ic:flag s]]<span>Signaler ce profil</span></a>
+</div>
+</footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2232}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

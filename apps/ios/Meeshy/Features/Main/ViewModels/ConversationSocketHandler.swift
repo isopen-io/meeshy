@@ -107,8 +107,9 @@ final class ConversationSocketHandler {
     /// sur des singletons partagés → doit être appelé hors évaluation de body
     /// (le `.task` de la vue, via `ConversationViewModel.start()`, satisfait
     /// cette contrainte). Idempotent.
-    func activate() {
-        guard !didActivate else { return }
+    @discardableResult
+    func activate() -> Bool {
+        guard !didActivate else { return false }
         didActivate = true
         // **L'oreille AVANT la question** (#5947). `joinConversation` pose au
         // serveur la seule question dont la réponse dit « tu n'es plus membre » ;
@@ -131,6 +132,26 @@ final class ConversationSocketHandler {
         ConversationViewingReporter.shared.conversationOpened(conversationId)
         NotificationToastManager.shared.onConversationOpened(conversationId)
         NotificationCoordinator.shared.markConversationRead(conversationId)
+        return true
+    }
+
+    /// Vrai entre `activate()` et `deactivate()` : la conversation est à l'écran.
+    nonisolated var isActive: Bool { didActivate }
+
+    /// L'écran QUITTÉ, sans attendre la `deinit` (#18556) : un modèle encore
+    /// retenu après le retour à la liste gardait la conversation « ouverte » —
+    /// ses bannières in-app restaient tues jusqu'à l'ouverture d'une autre.
+    /// `activate()` rouvre au retour de l'écran.
+    @discardableResult
+    func deactivate() -> Bool {
+        guard didActivate else { return false }
+        didActivate = false
+        stopTypingEmission()
+        NotificationToastManager.shared.onConversationClosed(conversationId)
+        if ConversationViewingReporter.shared.conversationClosed(conversationId) {
+            MessageSocketManager.shared.leaveConversation(conversationId)
+        }
+        return true
     }
 
     // UNE file ordonnée par handler ACTIVÉ, créée ici et jamais pour les
@@ -665,8 +686,16 @@ final class ConversationSocketHandler {
     /// retrouvait un registre vide entre les deux et stampait une réception
     /// NEUVE. #7453 — le balayage des bannières est le seul à savoir qu'un
     /// message PRÉCIS vient de mourir pendant que l'application est à l'écran.
+    ///
+    /// **Un éphémère ENCORE À L'ÉCRAN brûle avant de partir** (#17938) :
+    /// l'annonce demande la combustion à l'hôte AVANT de graver — l'hôte ne la
+    /// rallume pas si elle joue déjà, et le magasin garde une ligne qui vient
+    /// de mourir le temps de son feu (`MessageStore.burning`,
+    /// `EphemeralBurn.freshDeathWindow`). L'écriture destructrice, elle, reste
+    /// IMMÉDIATE : une mort différée survivrait à une app tuée dans la fenêtre.
     private func applyExpired(_ event: MessageExpiredEvent) async {
         StarredMessagesStore.shared.remove(messageId: event.messageId)
+        delegate?.burnAnnouncedEphemerals([event.messageId])
         EphemeralReceiptLedger.shared.noteDestruction(of: event.messageId)
         if let persistence {
             let msgId = event.messageId

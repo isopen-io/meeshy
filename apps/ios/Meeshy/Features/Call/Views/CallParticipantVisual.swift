@@ -26,43 +26,46 @@ struct CallParticipantVisual: View {
     // reconstructs this struct; a defaulted @ObservedObject would tear down
     // and rebuild its objectWillChange subscription on every such tick.
     @ObservedObject var callManager: CallManager
-    /// P18.4 — la bulle d'appel réduit porte le liseré et l'avatar à la couleur de
-    /// l'autre ; la bannière garde son visuel (trait blanc sur la vidéo, indigo de marque).
-    let ringsInPeerColor: Bool
     @State private var remoteProfile: MeeshyUser?
 
     /// Initialiseur circulaire — les deux sites d'appel préexistants (avatar
     /// de la pilule, palier cercle de la bulle) continuent de passer un seul
     /// `diameter:`.
-    init(diameter: CGFloat, ringsInPeerColor: Bool = false, callManager: CallManager) {
+    init(diameter: CGFloat, callManager: CallManager) {
         self.width = diameter
         self.height = diameter
         self.cornerRadius = diameter / 2
-        self.ringsInPeerColor = ringsInPeerColor
         self.callManager = callManager
     }
 
     /// Initialiseur rectangle — paliers small/medium/large de `CallBubbleView`,
     /// où largeur et hauteur divergent et le rayon de coin ne dérive plus
     /// d'un diamètre unique.
-    init(width: CGFloat, height: CGFloat, cornerRadius: CGFloat, ringsInPeerColor: Bool = false, callManager: CallManager) {
+    init(width: CGFloat, height: CGFloat, cornerRadius: CGFloat, callManager: CallManager) {
         self.width = width
         self.height = height
         self.cornerRadius = cornerRadius
-        self.ringsInPeerColor = ringsInPeerColor
         self.callManager = callManager
+    }
+
+    /// P18.2 — quelle que soit la forme de l'appel réduit (#17731), bannière ou
+    /// bulle : la clé de la couleur de l'autre, son identifiant sinon son nom.
+    private var colorKey: String? {
+        CallReducedRule.colorKey(peerId: callManager.remoteUserId, peerName: callManager.remoteUsername)
     }
 
     /// La couleur de la personne : la fonction partagée de ses sous-titres et de sa vignette.
     private var peerColorHex: String {
-        CallPeerSpeech.colorHex(forPeer: callManager.remoteUserId)
+        CallPeerSpeech.colorHex(forPeer: colorKey)
     }
 
+    /// Le liseré des vignettes, à la couleur de l'autre ; sans rien pour la fonder,
+    /// le trait neutre et fin des vignettes (aucune couleur inventée).
     private var ring: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .stroke(
-                ringsInPeerColor ? CallSelfTileStroke.color(forKey: callManager.remoteUserId) : Color.white.opacity(MeeshyOpacity.medium),
-                lineWidth: ringsInPeerColor ? CallSelfTileStroke.lineWidth : 1
+                CallSelfTileStroke.color(forKey: colorKey),
+                lineWidth: colorKey == nil ? 1 : CallSelfTileStroke.lineWidth
             )
     }
 
@@ -84,8 +87,8 @@ struct CallParticipantVisual: View {
     }
 
     private var avatarView: some View {
-        // CachedAvatarImage : échec silencieux (initiales 2 lettres + accent
-        // indigo), zéro bouton retry sur un cercle d'appel 44-56pt — la
+        // CachedAvatarImage : échec silencieux (initiales 2 lettres sur la
+        // couleur de l'autre), zéro bouton retry sur un cercle d'appel 44-56pt — la
         // résolution du profil reste cache-first via resolveRemoteProfile.
         // Aux paliers rectangle (width != height), l'avatar reste à sa
         // taille naturelle (min(width, height)) et centré sur un fond
@@ -101,11 +104,11 @@ struct CallParticipantVisual: View {
                 thumbHash: remoteProfile?.avatarThumbHash,
                 name: callManager.remoteUsername ?? "?",
                 size: min(width, height),
-                accentColor: ringsInPeerColor ? peerColorHex : MeeshyColors.brandPrimaryHex
+                accentColor: peerColorHex
             )
         }
         .frame(width: width, height: height)
-        .overlay { if ringsInPeerColor { ring } }
+        .overlay { ring }
         .accessibilityHidden(true)
     }
 

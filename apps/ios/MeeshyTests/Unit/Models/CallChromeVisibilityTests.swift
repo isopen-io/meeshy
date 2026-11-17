@@ -8,7 +8,7 @@ import XCTest
 @MainActor
 final class CallChromeVisibilityTests: XCTestCase {
 
-    private let hideable: [CallChromeElement] = [.header, .controls, .openPanel, .recordingStatus, .screenShareBanner, .featuredCapsule]
+    private let hideable: [CallChromeElement] = [.header, .controls, .openPanel, .recordingStatus, .screenShareBanner, .featuredCapsule, .captureAlert, .servicePill]
     private let permanent: [CallChromeElement] = [.captions, .selfView, .recordingConsent]
 
     func test_isVisible_revealed_showsEveryElement() {
@@ -56,6 +56,25 @@ final class CallChromeVisibilityTests: XCTestCase {
 
     func test_toggled_keepsTheStageFullScreenChoice() {
         XCTAssertTrue(CallChromeVisibility(isRevealed: true, isStageFullScreen: true).toggled().isStageFullScreen)
+    }
+
+    /// #17963 (R1.6, loi 11) — la puce « X capture l'écran de l'appel » est une BANNIÈRE : elle se
+    /// range au premier toucher avec « Vous partagez votre écran » et la capsule d'enregistrement,
+    /// et revient avec elles. Mêmes vecteurs que le bandeau de partage : toucher, plein écran, mode.
+    func test_captureAlert_stowsAndReturnsWithTheBanners() {
+        let states = [true, false].flatMap { revealed in
+            [true, false].flatMap { fullScreen in
+                [true, false].map { mode in CallChromeVisibility(isRevealed: revealed, isStageFullScreen: fullScreen, isModeActive: mode) }
+            }
+        }
+        for state in states {
+            XCTAssertEqual(state.isVisible(.captureAlert), state.isVisible(.screenShareBanner), "\(state)")
+            XCTAssertEqual(state.isVisible(.captureAlert), state.isVisible(.recordingStatus), "\(state)")
+        }
+        let start = CallChromeVisibility(isRevealed: true)
+        XCTAssertTrue(start.isVisible(.captureAlert))
+        XCTAssertFalse(start.toggled().isVisible(.captureAlert), "le premier toucher la range")
+        XCTAssertTrue(start.toggled().toggled().isVisible(.captureAlert), "le second la rend")
     }
 
     // MARK: - Un mode libère l'écran (#8578)

@@ -66,7 +66,8 @@ const CONVERSATION_TYPES: readonly ConversationType[] = ['direct', 'group', 'pub
  * Les champs STRUCTURÉS de `metadata` que la ligne lit (#8724) : les extraits
  * du commentaire, de son parent et du POST qui le porte, le média d'un contenu
  * sans texte, la clé du palier d'engagement, la section du jeu (`gameSection`,
- * #9490) et le MOTIF d'un retrait par la modération (`reason`, #11150) —
+ * #9490), le MOTIF d'un retrait par la modération (`reason`, #11150), le palier de la
+ * batterie (`batteryKind`, #14147) et le pas du téléphone injoignable (`reachabilityKind`, #18737) —
  * jamais la prose du corps.
  */
 type MetadataField =
@@ -83,7 +84,9 @@ type MetadataField =
   | 'axisKey'
   | 'achievementKey'
   | 'gameSection'
-  | 'reason';
+  | 'reason'
+  | 'batteryKind'
+  | 'reachabilityKind';
 
 const METADATA_FIELDS: readonly MetadataField[] = [
   'postType',
@@ -100,6 +103,8 @@ const METADATA_FIELDS: readonly MetadataField[] = [
   'achievementKey',
   'gameSection',
   'reason',
+  'batteryKind',
+  'reachabilityKind',
 ];
 
 /** `tierRank` (#10298) : présent ⇒ le palier est composé par le serveur, titre et corps compris. */

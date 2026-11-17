@@ -97,6 +97,22 @@ internal object CardLabels {
         },
     )
 
+    @Composable fun frame(frame: CardDecor.Frame) = stringResource(
+        when (frame) {
+            CardDecor.Frame.NONE -> R.string.export_card_decor_frame_none
+            CardDecor.Frame.PANEL -> R.string.export_card_decor_frame_panel
+            CardDecor.Frame.BORDER -> R.string.export_card_decor_frame_border
+        },
+    )
+
+    @Composable fun ornament(ornament: CardDecor.Ornament) = stringResource(
+        when (ornament) {
+            CardDecor.Ornament.NONE -> R.string.export_card_decor_ornament_none
+            CardDecor.Ornament.QUOTE_MARK -> R.string.export_card_decor_ornament_quoteMark
+            CardDecor.Ornament.ACCENT_RULE -> R.string.export_card_decor_ornament_accentRule
+        },
+    )
+
     @Composable fun tilt(tilt: CardTilt) = stringResource(
         when (tilt) {
             CardTilt.NONE -> R.string.export_card_tilt_none

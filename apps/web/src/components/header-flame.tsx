@@ -5,6 +5,7 @@ import { conversationEngagementForDay, type ConversationEngagementSnapshot } fro
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { compactCount } from '@/lib/view/compact-count';
 import { engagementPillModel, localDayOf } from '@/lib/view/engagement-pill';
+import { useLayerPresence } from '@/lib/view/dialog-exit';
 import { useMinute } from '@/lib/view/use-minute';
 
 import { Glyph } from './glyph';
@@ -71,6 +72,7 @@ export function HeaderFlame({
   const model = engagementPillModel(snapshot, day, interfaceLanguage);
   const today = snapshot === undefined ? 0 : conversationEngagementForDay(snapshot, day).todayPoints;
   const [cardOpen, setCardOpen] = useState(false);
+  const card = useLayerPresence(cardOpen ? true : null);
   const cardId = useId();
   const latest = useRef(today);
   latest.current = today;
@@ -102,7 +104,7 @@ export function HeaderFlame({
           aria-label={label}
           aria-expanded={cardOpen}
           aria-controls={cardOpen ? cardId : undefined}
-          className="header-flame-mark pointer-events-auto text-mini"
+          className="btn-press header-flame-mark pointer-events-auto text-mini"
         >
           <span className="header-flame-burner" aria-hidden="true">
             <span className="header-flame-glyph">
@@ -121,10 +123,11 @@ export function HeaderFlame({
             {compactCount(shown, interfaceLanguage)}
           </span>
         </button>
-        {cardOpen ? (
+        {card.value !== null ? (
           <Suspense fallback={null}>
             <FlameCard
               id={cardId}
+              leaving={card.leaving}
               snapshot={snapshot}
               day={day}
               language={interfaceLanguage}

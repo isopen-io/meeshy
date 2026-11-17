@@ -147,9 +147,6 @@ export const ProfileConversationsSection = memo(function ProfileConversationsSec
             <p className="text-body font-semibold" style={{ color: INK }}>
               {translate(language, 'userProfile.conversations.empty')}
             </p>
-            <p className="text-caption" style={{ color: INK_2 }}>
-              {translate(language, 'userProfile.conversations.emptyBody')}
-            </p>
           </li>
         ) : (
           conversations.map((conversation) => (

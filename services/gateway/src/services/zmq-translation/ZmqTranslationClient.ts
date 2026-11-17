@@ -30,6 +30,7 @@ import type {
   TranslationErrorPayload
 } from './types';
 import { UNSUPPORTED_LANGUAGE_ERROR_CODE } from './types';
+import { isTransientPoolRefusal } from './utils/zmq-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { guardedInterval, guardedTimeout } from '../../utils/guarded-timer';
 // Logger dédié pour ZmqTranslationClient
@@ -48,6 +49,14 @@ export type TranslationDeadline = {
   readonly retryEnabled?: boolean;
   readonly timeoutMs?: number;
 };
+
+type TypedTimeoutErrors = {
+  translationError: TranslationErrorPayload;
+};
+
+type TimeoutErrorEvent<E extends string> = E extends keyof TypedTimeoutErrors
+  ? TypedTimeoutErrors[E]
+  : Record<string, unknown>;
 
 export interface ZMQClientStats {
   requests_sent: number;
@@ -178,10 +187,10 @@ export class ZmqTranslationClient extends EventEmitter {
    * @param opts.retryEnabled - When false, no retry; one shot with the long deadman
    * @param opts.timeoutMs - Override timeout (defaults to ZMQ_REQUEST_TIMEOUT_MS)
    */
-  private _registerRequestTimeout(
+  private _registerRequestTimeout<E extends string>(
     taskId: string,
-    errorEventName: string,
-    errorEvent: Record<string, unknown>,
+    errorEventName: E,
+    errorEvent: TimeoutErrorEvent<E>,
     resend: (existingTaskId: string, pendingLanguages?: string[]) => Promise<string>,
     opts: TranslationDeadline = {}
   ): void {
@@ -367,7 +376,8 @@ export class ZmqTranslationClient extends EventEmitter {
       // ARRÊT : un arrêt chargé ouvrait le disjoncteur et bloquait TOUTES les
       // traductions 30 s (#17004). Le refus est neutre : il ne compte pas, et
       // ne remet pas non plus la série à zéro — ce n'est pas un succès.
-      if (event.error !== 'translation pool full') this._cbRecordError();
+      const transientRefusal = isTransientPoolRefusal(event);
+      if (!transientRefusal) this._cbRecordError();
 
       // « pool full » est un refus TRANSITOIRE, pas un échec : le pool de
       // workers du translator est saturé à l'instant t, et la même requête
@@ -387,7 +397,7 @@ export class ZmqTranslationClient extends EventEmitter {
       // Un refus qui arrive pour un taskId DÉJÀ soldé (dernière langue rendue,
       // ou deadman tombé) n'a plus rien à réarmer — il s'annonce tout de suite,
       // sinon personne ne l'apprend jamais.
-      if (event.error === 'translation pool full') {
+      if (transientRefusal) {
         this.stats.pool_full_rejections++;
         if (event.taskId && this.requestSender.hasPendingRequest(event.taskId)) return;
       }
@@ -653,7 +663,7 @@ export class ZmqTranslationClient extends EventEmitter {
     this._registerRequestTimeout(
       taskId,
       'translationError',
-      { taskId, messageId: request.messageId, error: 'ZMQ timeout: no response from translator', conversationId: request.conversationId },
+      { taskId, messageId: request.messageId, error: 'ZMQ timeout: no response from translator', conversationId: request.conversationId, metadata: {} },
       async (existingTaskId: string, pendingLanguages?: string[]) => {
         // Ne redemander QUE les langues encore manquantes : re-pousser une langue
         // déjà rendue duplique le travail du worker pool ML pour rien.

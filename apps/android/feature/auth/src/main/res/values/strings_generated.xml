@@ -2,14 +2,14 @@
 <resources>
     <string name="activation_close">Close</string>
     <string name="activation_complete">Your account is verified. Thank you!</string>
-    <string name="activation_email_done">Email verified ✓</string>
+    <string name="activation_email_done">Email confirmed ✓</string>
     <string name="activation_email_label">Confirm your email address</string>
     <string name="activation_email_send">Get the code</string>
     <string name="activation_email_sending">Sending…</string>
     <string name="activation_invite_title">Verify your account</string>
     <string name="activation_later">Later</string>
     <string name="activation_phone_add">Add my number</string>
-    <string name="activation_phone_done">Number verified ✓</string>
+    <string name="activation_phone_done">Number confirmed ✓</string>
     <string name="activation_phone_label">Add a phone number to secure and recover your account</string>
     <string name="ageGate_body">This account can\'t use Meeshy yet. You can join us when you turn 13.</string>
     <string name="arrival_celebration_lead">Getting your conversations ready…</string>
@@ -22,9 +22,9 @@
     <string name="auth_forgot_never_had_text">The same link lets you create one.</string>
     <string name="auth_forgot_subtitle">Get a link by email to choose a new password.</string>
     <string name="auth_forgot_title">Forgot password</string>
-    <string name="auth_login_two_factor_label">Two-factor verification code</string>
+    <string name="auth_login_two_factor_label">Verification code</string>
     <string name="auth_login_two_factor_placeholder">Verification code</string>
-    <string name="auth_login_two_factor_title">Two-Factor</string>
+    <string name="auth_login_two_factor_title">Two-factor authentication</string>
     <string name="auth_magic_cancel">Cancel</string>
     <string name="auth_magic_countdown_a11y">The link expires in</string>
     <string name="auth_magic_expired">Link expired, send a new one</string>
@@ -38,7 +38,7 @@
     <string name="email_gate_later">Later</string>
     <string name="email_gate_send">Get the code</string>
     <string name="email_gate_sending">Sending…</string>
-    <string name="email_gate_title">Verify your email address</string>
+    <string name="email_gate_title">Confirm your email address</string>
     <string name="email_verification_code_a11y_label">Verification code</string>
     <string name="email_verification_code_placeholder">000000</string>
     <string name="email_verification_error_expired_code">This code has expired. Request a new one.</string>

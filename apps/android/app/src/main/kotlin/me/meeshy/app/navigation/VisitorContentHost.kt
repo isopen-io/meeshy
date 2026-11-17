@@ -11,6 +11,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import me.meeshy.app.auth.visitor.VisitorContentScreen
 import me.meeshy.sdk.model.rootnav.RootPresentationRules
+import me.meeshy.ui.component.presentation.MeeshyCoverHost
 
 @HiltViewModel
 class VisitorContentHostViewModel @Inject constructor(val presenter: VisitorContentPresenter) : ViewModel()
@@ -19,7 +20,8 @@ class VisitorContentHostViewModel @Inject constructor(val presenter: VisitorCont
  * Le contenu public d'un lien ouvert sans session, au-dessus de la connexion (iOS `visitorContentCover`). L'eligibilite est
  * la loi de [RootPresentationRules] : ni compte, ni session invitee, et jamais sous le rideau de demarrage. « Creer un
  * compte » referme l'ecran et ouvre l'inscription ; « Se connecter » le referme sur la connexion. Le lien en attente
- * n'est pas touche : il s'ouvre apres la connexion.
+ * n'est pas touche : il s'ouvre apres la connexion. L'ecran monte du bas et redescend ([MeeshyCoverHost]) ; le retour
+ * systeme le referme.
  */
 @Composable
 internal fun VisitorContentHost(navController: NavHostController, isAuthenticated: Boolean) {
@@ -31,14 +33,15 @@ internal fun VisitorContentHost(navController: NavHostController, isAuthenticate
         splashPhase = rootSplashPhase(),
     )
     LaunchedEffect(isAuthenticated) { if (isAuthenticated) presenter.dismiss() }
-    val current = request?.takeIf { eligible } ?: return
-    VisitorContentScreen(
-        request = current,
-        onSignUp = {
-            presenter.dismiss()
-            navController.navigate(Routes.REGISTRATION) { launchSingleTop = true }
-        },
-        onSignIn = presenter::dismiss,
-        onClose = presenter::dismiss,
-    )
+    MeeshyCoverHost(value = request?.takeIf { eligible }, onBack = presenter::dismiss) { current ->
+        VisitorContentScreen(
+            request = current,
+            onSignUp = {
+                presenter.dismiss()
+                navController.navigate(Routes.REGISTRATION) { launchSingleTop = true }
+            },
+            onSignIn = presenter::dismiss,
+            onClose = presenter::dismiss,
+        )
+    }
 }

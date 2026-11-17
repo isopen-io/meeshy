@@ -1,6 +1,7 @@
 package me.meeshy.app.navigation
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.game.GameAttention
 import org.junit.Test
 
 /**
@@ -111,5 +112,24 @@ class MeeshyAppMenuItemsTest {
         val hidden = rootMenuLadderEntries(communitiesAvailable = true, gameHidden = true)
         assertThat(hidden).doesNotContain(RootMenuLadderEntry.GAME)
         assertThat(hidden).isEqualTo(rootMenuLadderEntries(communitiesAvailable = true).drop(1))
+    }
+
+    @Test
+    fun `only the game rung carries the game attention dot (#18165)`() {
+        val raised = GameAttention(chestReady = true, flameAtRisk = true)
+        assertThat(RootMenuLadderEntry.GAME.showsAttentionDot(raised)).isTrue()
+        assertThat(RootMenuLadderEntry.GAME.showsAttentionDot(GameAttention.None)).isFalse()
+        assertThat(RootMenuLadderEntry.entries.filter { it != RootMenuLadderEntry.GAME }.map { it.showsAttentionDot(raised) })
+            .doesNotContain(true)
+    }
+
+    @Test
+    fun `the game rung names what the game signals, one whole sentence per case (#18165)`() {
+        val game = RootMenuLadderEntry.GAME
+        assertThat(game.attentionLabelKey(GameAttention.None)).isNull()
+        assertThat(game.attentionLabelKey(GameAttention(chestReady = true, flameAtRisk = false))).isEqualTo("a11y_floating_rung_game_chest_ready")
+        assertThat(game.attentionLabelKey(GameAttention(chestReady = false, flameAtRisk = true))).isEqualTo("a11y_floating_rung_game_flame_at_risk")
+        assertThat(game.attentionLabelKey(GameAttention(chestReady = true, flameAtRisk = true))).isEqualTo("a11y_floating_rung_game_both")
+        assertThat(RootMenuLadderEntry.NOTIFICATIONS.attentionLabelKey(GameAttention(chestReady = true, flameAtRisk = true))).isNull()
     }
 }

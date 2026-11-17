@@ -13,5 +13,4 @@
     <string name="global_search_summary_hidden">رسالة واحدة مخفية</string>
     <string name="global_search_summary_view_once">رسالة واحدة للمشاهدة مرة واحدة</string>
     <string name="global_search_summary_expired">انتهت صلاحية الرسالة</string>
-    <string name="global_search_summary_ephemeral">تختفي بعد القراءة</string>
 </resources>

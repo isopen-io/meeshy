@@ -31,6 +31,30 @@ class CallJournalGuardTest {
         assertThat(panel).contains("BackHandler(onBack = onClose)")
     }
 
+    /**
+     * #17964 · P13.9 · P9b — journal ouvert dans la pilule, son pied reprend celui des sous-titres, à la même place : la
+     * légende (« EN → FR · toucher = original »), puis « Journal » en disque blanc plein, icône et texte sombres, qui le
+     * referme. Une seule pièce, `CallJournalButton(isOpen)`, pour les deux états ; TalkBack y lit une bascule ; 48 dp.
+     * Miroir de iOS `test_journalPanel_footerCarriesTheActiveJournalButton_whichCloses`.
+     */
+    @Test
+    fun `le pied du journal porte sa legende et Journal en disque blanc qui le referme`() {
+        val panel = code("CallJournalPanel.kt")
+        val body = panel.substringAfter("internal fun CallJournalPanel(").substringBefore("private fun CallJournalHeader(")
+        assertThat(body).contains("CallJournalButton(isOpen = true, onClick = onClose)")
+        assertThat(body).contains("CallCaptionsFooter.journal(")
+
+        val band = code("CallCaptionsBand.kt")
+        assertThat(band).contains("CallJournalButton(isOpen = false, onClick = onOpenJournal)")
+        assertThat(band).doesNotContain("fun CallJournalChip(")
+
+        val chip = panel.substringAfter("internal fun CallJournalButton(").substringBefore("\n}\n")
+        assertThat(chip).contains("if (isOpen) CallButtonRole.Active else CallButtonRole.Neutral")
+        assertThat(chip).contains("MeeshyPalette.Indigo950")
+        assertThat(chip).contains("toggleableState = ToggleableState(isOpen)")
+        assertThat(chip).contains("minHeight = CAPTION_TARGET")
+    }
+
     @Test
     fun `la phrase du journal porte l'heure dans l'appel a droite, plus l'heure murale collee au nom`() {
         val row = code("CallCaptionRow.kt")

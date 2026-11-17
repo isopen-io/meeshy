@@ -247,15 +247,15 @@ private fun RequestsEmpty(direction: RequestsDirection, error: String?) {
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(top = 12.dp),
         )
-        Text(
-            text = error ?: stringResource(
-                if (received) R.string.contacts_requests_empty_received_subtitle else R.string.contacts_requests_empty_sent_subtitle,
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (error != null) MeeshyPalette.Error else MeeshyTheme.tokens.textSecondary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 4.dp),
-        )
+        error?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MeeshyPalette.Error,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
     }
 }
 

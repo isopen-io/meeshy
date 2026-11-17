@@ -38,7 +38,7 @@ struct ConversationListQuickActions: View, Equatable {
             switch self {
             case .findMembers: return String(localized: "conversations.quick.find_members", defaultValue: "Chercher des membres à qui écrire", bundle: .main)
             case .myContacts: return String(localized: "conversations.quick.my_contacts", defaultValue: "Voir mes contacts sur Meeshy", bundle: .main)
-            case .myAffiliates: return String(localized: "conversations.quick.my_affiliates", defaultValue: "Voir mes affiliations", bundle: .main)
+            case .myAffiliates: return String(localized: "conversations.quick.my_affiliates", defaultValue: "Voir mes filleuls", bundle: .main)
             case .newMessage: return String(localized: "conversations.quick.newMessage", defaultValue: "Nouveau message", bundle: .main)
             case .story: return String(localized: "conversations.quick.story", defaultValue: "Créer une story", bundle: .main)
             case .mood: return String(localized: "conversations.quick.mood", defaultValue: "Poser un mood", bundle: .main)

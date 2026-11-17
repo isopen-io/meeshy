@@ -82,10 +82,20 @@ const writesTranslationsNull = ({ source }: Source): boolean => WRITES_TRANSLATI
 const callsAnErasureEntry = ({ source }: Source): boolean =>
   ERASURE_ENTRY_CALLS.some((entry) => entry.test(source));
 
+/**
+ * Les fichiers qui posent `translations: null` sur un objet SERVI, jamais sur
+ * une ligne en base : ils n'effacent rien, donc n'ont rien à effacer à côté.
+ */
+const IN_MEMORY_PROJECTIONS: Readonly<Record<string, string>> = {
+  'routes/conversations/ephemeralTombstone.ts':
+    'Pierre tombale (#18556) : retire le contenu d’une bulle morte pour CE lecteur dans la réponse servie ; la ligne en base reste intacte.',
+};
+
 /** Les écrivains qui vident les traductions du serveur sans effacer celles de la table voisine. */
 const unguardedWriters = (sources: readonly Source[]): string[] =>
   sources
     .filter(writesTranslationsNull)
+    .filter(({ file }) => !(file in IN_MEMORY_PROJECTIONS))
     .filter((candidate) => !callsAnErasureEntry(candidate))
     .map(({ file }) => file);
 

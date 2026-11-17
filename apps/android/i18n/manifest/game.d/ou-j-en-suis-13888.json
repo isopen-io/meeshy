@@ -60,12 +60,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.state.missions.progress",
-          "androidName": "game_state_missions_progress",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.state.missions.ready",
           "androidName": "game_state_missions_ready",
           "status": "adopted"

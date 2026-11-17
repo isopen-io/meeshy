@@ -13,7 +13,6 @@
     <string name="feed_action_send">Invia</string>
     <string name="feed_action_share">Condividi</string>
     <string name="feed_action_view_profile">Vedi profilo</string>
-    <string name="feed_bookmark_success">Aggiunto ai preferiti</string>
     <string name="feed_caption_collapse">meno</string>
     <string name="feed_caption_expand">altro…</string>
     <string name="feed_carousel_a11y_position">Media %1$d di %2$d</string>
@@ -27,8 +26,7 @@
     <string name="feed_delete_cancel">Annulla</string>
     <string name="feed_delete_confirm">Elimina</string>
     <string name="feed_draft_recovered">Bozza offline ripristinata</string>
-    <string name="feed_empty">Nessun post</string>
-    <string name="feed_empty_subtitle">I post dei tuoi contatti appariranno qui</string>
+    <string name="feed_empty">Nessun post dei tuoi contatti</string>
     <string name="feed_header_nearby">Post nelle vicinanze</string>
     <string name="feed_like">Metti mi piace</string>
     <string name="feed_link_copied">Link copiato</string>
@@ -41,7 +39,6 @@
         <item quantity="many">%1$d nuovi post</item>
         <item quantity="other">%1$d nuovi post</item>
     </plurals>
-    <string name="feed_notice_bookmark_failed">Errore nel salvataggio del segnalibro</string>
     <string name="feed_notice_delete_failed">Errore durante l\'eliminazione del post</string>
     <string name="feed_notice_like_failed">Errore nel mettere Mi piace</string>
     <string name="feed_notice_pin_failed">Errore durante il fissaggio del post</string>
@@ -82,11 +79,6 @@
         <item quantity="many">%1$d risposte</item>
         <item quantity="other">%1$d risposte</item>
     </plurals>
-    <plurals name="feed_post_stat_reposts">
-        <item quantity="one">%1$d ricondivisione</item>
-        <item quantity="many">%1$d ricondivisioni</item>
-        <item quantity="other">%1$d ricondivisioni</item>
-    </plurals>
     <string name="feed_post_stat_saves">%1$d salvataggi</string>
     <string name="feed_post_stat_shares">%1$d condivisioni</string>
     <string name="feed_quote_cancel">Annulla</string>
@@ -119,7 +111,7 @@
     <string name="feed_scene_previous">Scena precedente</string>
     <string name="feed_scene_resume">Riprende la riproduzione della scena</string>
     <string name="feed_scene_sound_mute">Disattiva l’audio</string>
-    <string name="feed_scene_sound_muted">Audio disattivato — apri a schermo intero per sentirlo</string>
+    <string name="feed_scene_sound_muted">Audio disattivato</string>
     <string name="feed_scene_sound_track">Audio di sottofondo</string>
     <string name="feed_scene_sound_unmute">Riattiva l’audio</string>
     <string name="feed_scene_tile">Scena %1$d</string>
@@ -156,8 +148,6 @@
     <string name="mood_spotlight_unavailable">Questo umore non è più disponibile</string>
     <string name="nearby_back">Indietro</string>
     <string name="nearby_denied_action">Apri Impostazioni</string>
-    <string name="nearby_denied_detail">Meeshy non ha accesso alla tua posizione. Consentilo nelle Impostazioni o sposta la mappa a mano.</string>
-    <string name="nearby_denied_title">Posizione non autorizzata</string>
     <string name="nearby_retry">Riprova</string>
     <string name="nearby_title">Nelle vicinanze</string>
     <string name="post_bookmark_removed">Rimosso dai preferiti</string>
@@ -205,11 +195,8 @@
     <string name="post_detail_title">Post</string>
     <string name="post_detail_viewers">Visualizzazioni</string>
     <string name="profile_posts_empty">Nessun post</string>
-    <string name="profile_posts_empty_filter_subtitle">Tocca di nuovo il riquadro per rivedere tutto</string>
     <string name="profile_posts_empty_posts">Nessun post</string>
     <string name="profile_posts_empty_reels">Nessun reel</string>
-    <string name="profile_posts_empty_subtitle">I post appariranno qui</string>
-    <string name="profile_posts_end_of_content">Hai visto tutto</string>
     <string name="profile_posts_first_published_at">Primo contenuto pubblicato il %1$s</string>
     <string name="profile_posts_load_error">Errore durante il caricamento dei post</string>
     <string name="profile_posts_stat_posts">Post</string>

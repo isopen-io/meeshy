@@ -1,5 +1,6 @@
 package me.meeshy.app.navigation.graph
 
+import me.meeshy.app.navigation.navigateSingleTop
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.runtime.Composable
@@ -85,7 +86,7 @@ private fun ProfileRouteEntryEffect(entry: NavBackStackEntry, navController: Nav
         val target = entry.arguments?.getString("userId").orEmpty()
         val destinationId = entry.destination.id
         when (val action = ProfileRouteEntry.resolve(target, gate.resolvesToSelf(target))) {
-            ProfileEntryAction.OwnPage -> navController.navigate(ProfileRoutes.OWN) {
+            ProfileEntryAction.OwnPage -> navController.navigateSingleTop(ProfileRoutes.OWN) {
                 popUpTo(destinationId) { inclusive = true }
             }
             is ProfileEntryAction.Sheet -> {

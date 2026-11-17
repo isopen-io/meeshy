@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -20,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
 import me.meeshy.sdk.model.NotificationBannerSwipe
 import me.meeshy.ui.accessibility.LocalReduceMotion
+import me.meeshy.ui.motion.rememberHeldPresence
 import me.meeshy.ui.theme.MeeshyMotion
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +53,8 @@ fun NotificationBannerHost(
     onOpenConversation: (String) -> Unit = {},
     onOpenPost: (String) -> Unit = {},
     onOpenGame: (GameTarget) -> Unit = {},
+    /** « Ajouté à la communauté Y » : le détail de Y, comme la ligne de la cloche et le push (#18670). */
+    onOpenCommunity: (String) -> Unit = {},
     /** Appui long ou tirage vers le bas : l'aperçu de la conversation (hébergé par :app). */
     onPreviewConversation: (String) -> Unit = {},
     /** Heure de la dernière présentation modale : le tap qui la suit de peu lui appartient (iOS `suppressToastTap`). */
@@ -60,14 +64,13 @@ fun NotificationBannerHost(
 ) {
     val banner by viewModel.banner.collectAsStateWithLifecycle()
     val reduceMotion = LocalReduceMotion.current
-    var lift by remember { mutableFloatStateOf(0f) }
+    var lift by rememberBannerLift(banner)
     var previewedAt by remember { mutableStateOf<Long?>(null) }
 
     // Une notification qui parle de l'écran OUVERT se consomme en silence : le lecteur la voit
     // déjà arriver dans le fil, et la doubler d'une bannière serait dire deux fois la même
     // chose. C'est la route courante qui porte cette vérité, jamais le ViewModel — lui ne sait
     // pas ce qui est affiché.
-    LaunchedEffect(banner?.notificationId) { lift = 0f }
     LaunchedEffect(activeConversationId, activePostId) {
         viewModel.setActiveContext(activeConversationId, activePostId)
     }
@@ -87,62 +90,104 @@ fun NotificationBannerHost(
         modifier = modifier.fillMaxWidth().statusBarsPadding(),
         contentAlignment = Alignment.TopCenter,
     ) {
-        AnimatedVisibility(
-            visible = banner != null,
-            enter = if (reduceMotion) {
-                fadeIn(tween(FADE_MILLIS))
-            } else {
-                slideInVertically(MeeshyMotion.springBouncy()) { -it } + fadeIn()
-            },
-            exit = if (reduceMotion) {
-                fadeOut(tween(FADE_MILLIS))
-            } else {
-                slideOutVertically { -it } + fadeOut()
-            },
-        ) {
-            banner?.let { shown ->
-                MeeshyNotificationToast(
-                    senderName = headlineText(shown.presentation.headline),
-                    title = if (shown.previewHidden) {
-                        stringResource(R.string.notification_banner_preview_hidden)
-                    } else {
-                        presentationBodyText(shown.presentation) ?: ""
-                    },
-                    modifier = Modifier
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                        .graphicsLayer { translationY = lift }
-                        .bannerGestures(
-                            onLift = { lift = it },
-                            onDismiss = viewModel::dismiss,
-                            onPreview = {
-                                shown.conversationId?.let { id ->
-                                    previewedAt = System.currentTimeMillis()
-                                    viewModel.dismiss()
-                                    onPreviewConversation(id)
-                                }
-                            },
-                        ),
-                    avatarName = shown.avatarName,
-                    avatarUrl = shown.avatarUrl,
-                    onTap = {
-                        val now = System.currentTimeMillis()
-                        val suppressed = NotificationBannerSwipe.isTapSuppressed(now, previewedAt) ||
-                            NotificationBannerSwipe.isTapSuppressed(now, lastModalPresentedAtMillis())
-                        if (!suppressed) {
-                            // Consommée AVANT la navigation, comme une ligne de la cloche (iOS #6999).
-                            viewModel.onTapped()
-                            shown.game?.let { game ->
+        NotificationBannerTransition(banner = banner, reduceMotion = reduceMotion) { shown, live ->
+            MeeshyNotificationToast(
+                senderName = headlineText(shown.presentation.headline),
+                title = if (shown.previewHidden) {
+                    stringResource(R.string.notification_banner_preview_hidden)
+                } else {
+                    presentationBodyText(shown.presentation) ?: ""
+                },
+                modifier = Modifier
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .graphicsLayer { translationY = lift }
+                    .then(
+                        if (!live) {
+                            Modifier
+                        } else {
+                            Modifier.bannerGestures(
+                                onLift = { lift = it },
+                                onDismiss = viewModel::dismiss,
+                                onPreview = {
+                                    shown.conversationId?.let { id ->
+                                        previewedAt = System.currentTimeMillis()
+                                        viewModel.dismiss()
+                                        onPreviewConversation(id)
+                                    }
+                                },
+                            )
+                        },
+                    ),
+                avatarName = shown.avatarName,
+                avatarUrl = shown.avatarUrl,
+                onTap = onTap@{
+                    if (!live) return@onTap
+                    val now = System.currentTimeMillis()
+                    val suppressed = NotificationBannerSwipe.isTapSuppressed(now, previewedAt) ||
+                        NotificationBannerSwipe.isTapSuppressed(now, lastModalPresentedAtMillis())
+                    if (!suppressed) {
+                        // Consommée AVANT la navigation, comme une ligne de la cloche (iOS #6999).
+                        viewModel.onTapped()
+                        when (val target = shown.tapTarget()) {
+                            is BannerTap.Game -> {
                                 // Toucher le palier annoncé : il se célèbre PAR-DESSUS l'écran du jeu que le toucher ouvre.
-                                revealTap.onOpened(game)
-                                (NotificationDestinationResolver.resolve(game) as? NotificationDestination.Game)?.let { onOpenGame(it.target) }
-                            } ?: shown.conversationId?.let(onOpenConversation)
-                                ?: shown.postId?.let(onOpenPost)
+                                revealTap.onOpened(target.notification)
+                                (NotificationDestinationResolver.resolve(target.notification) as? NotificationDestination.Game)
+                                    ?.let { onOpenGame(it.target) }
+                            }
+                            is BannerTap.Community -> onOpenCommunity(target.communityId)
+                            is BannerTap.Conversation -> onOpenConversation(target.conversationId)
+                            is BannerTap.Post -> onOpenPost(target.postId)
+                            BannerTap.None -> Unit
                         }
-                    },
-                )
-            }
+                    }
+                },
+            )
         }
     }
+}
+
+/**
+ * La bannière entre en glissant du haut et ressort par le même chemin, sur le ressort `springBouncy` de l'iOS
+ * (`RootSharedLayers`) pour le glissement comme pour le fondu ; sous « Réduire les animations », un fondu de 200 ms
+ * (l'`easeOut` 0,2 s de l'iOS). Pendant la sortie, le contenu peint la DERNIÈRE bannière : celle qui s'en va, avec
+ * `live = false` — elle n'est plus qu'une image, ni touchable ni glissable (une vue retirée d'iOS ne reçoit plus de toucher).
+ */
+@Composable
+internal fun NotificationBannerTransition(
+    banner: InAppBanner?,
+    reduceMotion: Boolean,
+    content: @Composable (shown: InAppBanner, live: Boolean) -> Unit,
+) {
+    val presence = rememberHeldPresence(banner)
+    val shown = presence.value
+    AnimatedVisibility(
+        visibleState = presence.visibleState,
+        enter = if (reduceMotion) {
+            fadeIn(tween(FADE_MILLIS))
+        } else {
+            slideInVertically(MeeshyMotion.springBouncy()) { -it } + fadeIn(MeeshyMotion.springBouncy())
+        },
+        exit = if (reduceMotion) {
+            fadeOut(tween(FADE_MILLIS))
+        } else {
+            slideOutVertically(MeeshyMotion.springBouncy()) { -it } + fadeOut(MeeshyMotion.springBouncy())
+        },
+    ) {
+        if (shown != null) content(shown, banner != null)
+    }
+}
+
+/**
+ * Le décalage du doigt sur la bannière, remis à zéro quand une bannière ARRIVE — jamais quand elle part : une bannière
+ * glissée vers le haut ressort d'où le doigt l'a lâchée, au lieu de redescendre au repos avant de remonter.
+ */
+@Composable
+internal fun rememberBannerLift(banner: InAppBanner?): MutableFloatState {
+    val lift = remember { mutableFloatStateOf(0f) }
+    val arrived = banner?.notificationId
+    LaunchedEffect(arrived) { if (arrived != null) lift.floatValue = 0f }
+    return lift
 }
 
 private const val FADE_MILLIS = 200

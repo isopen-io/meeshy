@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="my_stories_queue_empty_title">Nessuna pubblicazione in corso o non riuscita</string>
+    <string name="stories_comments_empty_title">Nessun commento</string>
+    <string name="stories_viewers_empty_title">Nessuna visualizzazione</string>
+    <string name="story_sentinel_body">Aggiorna l\'app per vederla.</string>
+</resources>

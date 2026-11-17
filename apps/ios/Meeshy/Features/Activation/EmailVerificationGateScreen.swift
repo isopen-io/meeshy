@@ -62,7 +62,7 @@ struct EmailVerificationGateView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-                    Text(String(localized: "activation.gate.title", defaultValue: "Validez votre adresse e-mail", bundle: .main))
+                    Text(String(localized: "activation.gate.title", defaultValue: "Confirmez votre adresse e-mail", bundle: .main))
                         .font(.system(.title2, design: .rounded).weight(.bold))
                         .foregroundStyle(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)

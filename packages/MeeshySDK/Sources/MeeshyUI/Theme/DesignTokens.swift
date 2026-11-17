@@ -112,6 +112,32 @@ public enum MeeshyAnimation {
     public static let springDefault = Animation.spring(response: 0.4, dampingFraction: 0.75)
     public static let springBouncy = Animation.spring(response: 0.5, dampingFraction: 0.6)
     public static let staggerDelay: Double = 0.04
+    /// La bannière tirée puis relâchée revient à sa place : un ressort court, avec le dépassement qui fait sentir l'élastique (#18721).
+    public nonisolated static let bannerPullReturn = Animation.spring(response: 0.36, dampingFraction: 0.66)
+    /// La bannière qui devient la feuille de la conversation : la carte grandit jusqu'au cadre de la feuille sans rebondir, le cadre ne doit pas trembler.
+    public nonisolated static let bannerPullMorph = Animation.spring(response: 0.44, dampingFraction: 0.9)
+    /// L'enveloppe posée sous la feuille s'efface, sans disparaître d'une image.
+    public nonisolated static let bannerMorphFade = Animation.easeOut(duration: 0.2)
+    /// L'aperçu d'appui long qui naît de la ligne (#18722) : le cadre de la rangée s'étend jusqu'à la carte en un zoom qu'on VOIT (mesuré au simulateur : à 0,42 la carte était posée en 250 ms), et se pose avec un léger rebond (`PreviewSettleSpring`, retour porteur, #18722).
+    public nonisolated static let previewMorph = Animation.spring(response: PreviewSettleSpring.response, dampingFraction: PreviewSettleSpring.dampingFraction)
+    /// L'aperçu d'appui long d'un message gagne sa place avec le même léger rebond de fin.
+    public nonisolated static let messagePreviewSettle = Animation.spring(response: PreviewSettleSpring.messageResponse, dampingFraction: PreviewSettleSpring.dampingFraction)
+    /// La bulle de l'aperçu d'un message grandit jusqu'à sa taille et la dépasse d'un rien avant de s'y poser.
+    public nonisolated static let messagePreviewPop = Animation.spring(response: PreviewSettleSpring.messageResponse, dampingFraction: PreviewSettleSpring.popDampingFraction)
+    /// Le retrait de l'aperçu : la carte redevient la ligne plus vite qu'elle n'en est née, et la rejoint avant que l'overlay ne se retire.
+    public nonisolated static let previewMorphReturn = Animation.spring(response: 0.3, dampingFraction: 0.8)
+    /// La carte d'aperçu qui recule quand le menu s'étend et revient quand il se réduit (#18723) : le maillon qui suit le menu dans la chaîne élastique franche du menu flottant (deux rangs de retard, même amorti), pour qu'elle arrive après lui et dépasse sa place.
+    public nonisolated static let menuSpring = Animation.spring(
+        response: FloatingMenuLadderFollow.firstRungResponse + 2 * FloatingMenuLadderFollow.responseStepPerRung,
+        dampingFraction: FloatingMenuLadderFollow.dampingFraction
+    )
+    /// L'aperçu tiré qui décroche en ligne déplaçable (#18724) : la ligne saute vers le doigt et le suit comme le premier barreau de la chaîne élastique franche — elle colle presque, dépasse un peu sa place, puis s'y pose.
+    public nonisolated static let peekDetach = Animation.spring(
+        response: FloatingMenuLadderFollow.firstRungResponse,
+        dampingFraction: FloatingMenuLadderFollow.dampingFraction
+    )
+    /// L'aperçu tiré puis relâché avant le décrochage revient à sa place : un ressort court qui fait sentir l'élastique sans trembler.
+    public nonisolated static let peekDetachReturn = Animation.spring(response: 0.32, dampingFraction: 0.72)
 }
 
 // MARK: - iPad Layout

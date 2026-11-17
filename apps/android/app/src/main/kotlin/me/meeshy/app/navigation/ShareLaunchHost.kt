@@ -112,7 +112,7 @@ fun ShareLaunchHost(
     // Toucher une story republiée l'ouvre en plein écran, comme iOS : le lecteur de stories de son auteur, pas la fiche du post.
     // La fin d'un export (compositeur, « Imager ») s'annonce ici, une fois pour l'application : elle survit à l'écran qui l'a dite (#14557).
     val exportAnnouncer = remember { ExportAnnouncer() }
-    val openStory: (String, String) -> Unit = remember(navController) { { authorId, storyId -> navController.navigate(Routes.story(authorId, storyId)) } }
+    val openStory: (String, String) -> Unit = remember(navController) { { authorId, storyId -> navController.navigateSingleTop(Routes.story(authorId, storyId)) } }
     CompositionLocalProvider(
         LocalShareLauncher provides launcher,
         LocalRepostSceneRenderer provides repostScene,
@@ -141,7 +141,7 @@ fun ShareLaunchHost(
         AppShareSheetHost(
             subject = share.subject,
             onDismiss = shareState::dismiss,
-            onOpenConversation = { navController.navigate(Routes.chat(it)) },
+            onOpenConversation = rememberRootConversationOpener(navController),
         )
     }
 }

@@ -8,7 +8,7 @@ import {
 } from './i18n-conversation-encryption-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from './inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from './interface-language';
-import { CREATION_ENCRYPTION_KEY, CREATION_UNAVAILABILITY_KEY } from './conversation-new/encryption';
+import { CREATION_ENCRYPTION_KEY, CREATION_INFO_KEY, CREATION_UNAVAILABILITY_KEY } from './conversation-new/encryption';
 import { FACT_KEY, PLAINTEXT_DIRECT_KEY, REGIME_SUMMARY_KEY, TOPIC_KEY } from './view/conversation-encryption-explanation';
 import { SWITCH_KEY, SWITCH_REFUSAL_KEY } from './view/conversation-encryption-switch';
 
@@ -40,7 +40,7 @@ describe('chaque langue porte toutes les clés conversationEncryption.* du fran�
 
   test('chaque clé lue par la section et par l’écran de création existe, et aucune clé du catalogue n’est orpheline', async () => {
     const french = await loadConversationEncryptionCatalog('fr');
-    const creation = Object.values(CREATION_ENCRYPTION_KEY).flatMap((keys) => (keys.detail === null ? [keys.title] : [keys.title, keys.detail]));
+    const creation = [CREATION_INFO_KEY, ...Object.values(CREATION_ENCRYPTION_KEY).flatMap((keys) => [keys.title, keys.detail, keys.more].filter((key): key is NonNullable<typeof key> => key !== null))];
     const read = new Set<string>([
       'conversationEncryption.section',
       ...Object.values(REGIME_SUMMARY_KEY),
@@ -78,8 +78,9 @@ describe('chaque langue porte toutes les clés conversationEncryption.* du fran�
   test('le choix à la création porte les mots de la décision', async () => {
     await loadConversationEncryptionCatalog('fr');
     expect(translateConversationEncryption('fr', CREATION_ENCRYPTION_KEY.server.detail)).toBe(
-      'Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.',
+      'Chiffré sur nos serveurs ; traduction, transcription et recherche fonctionnent.',
     );
+    expect(CREATION_ENCRYPTION_KEY.server.more).toBeNull();
     expect(translateConversationEncryption('fr', CREATION_UNAVAILABILITY_KEY['client-not-yet'])).toBe('Bientôt disponible sur le web');
     expect(translateConversationEncryption('fr', CREATION_UNAVAILABILITY_KEY['groups-not-yet'])).toBe('Bientôt disponible pour les groupes');
   });

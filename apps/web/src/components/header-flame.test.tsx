@@ -11,6 +11,7 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import type { StorageLike } from '@/lib/reading-mode/store';
 import { compactCount } from '@/lib/view/compact-count';
+import { LAYER_MOTION_MS } from '@/lib/view/layer-presence';
 import { flameCardModel, localDayOf } from '@/lib/view/engagement-pill';
 import {
   afterFlameDismissed,
@@ -193,7 +194,7 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
   test('le toucher ouvre la série de la conversation, il ne la masque plus (#17770)', async () => {
     const touched: string[] = [];
     const host = await mounter.mount(<HeaderFlame snapshot={snapshot()} replay={0} onDismiss={() => touched.push('x')} />);
-    expect(host.querySelector('[data-flame-card]')).toBeNull();
+    expect(host.querySelector('[data-flame-card]:not([data-leaving])')).toBeNull();
     const mark = host.querySelector<HTMLElement>('[data-header-flame] button');
     expect(mark?.getAttribute('aria-expanded')).toBe('false');
     await mounter.click(mark);
@@ -213,7 +214,24 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
     expect(host.querySelector('[data-flame-card] a')?.getAttribute('href')).toContain('/me/progression');
     await mounter.click(host.querySelector<HTMLElement>('[data-flame-card-hide]'));
     expect(touched).toEqual(['x']);
+    expect(host.querySelector('[data-flame-card]:not([data-leaving])')).toBeNull();
+  });
+
+  test('refermée, la carte SORT en mouvement : encore peinte, inerte, puis retirée (#18327)', async () => {
+    const host = await mounter.mount(<HeaderFlame snapshot={snapshot()} replay={0} onDismiss={() => undefined} />);
+    const mark = host.querySelector<HTMLElement>('[data-header-flame] button');
+    await mounter.click(mark);
+    await mounter.click(mark);
+    const leaving = host.querySelector('[data-flame-card]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(mark?.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, LAYER_MOTION_MS + 30));
+    });
     expect(host.querySelector('[data-flame-card]')).toBeNull();
+    const css = readFileSync(new URL('../styles/header-flame.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.header-flame-card\[data-leaving\]\s*\{\s*animation:\s*header-flame-card-out/);
   });
 
   test('un second toucher ou Échap referme la carte (#17770)', async () => {
@@ -221,12 +239,48 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
     const mark = host.querySelector<HTMLElement>('[data-header-flame] button');
     await mounter.click(mark);
     await mounter.click(mark);
-    expect(host.querySelector('[data-flame-card]')).toBeNull();
+    expect(host.querySelector('[data-flame-card]:not([data-leaving])')).toBeNull();
     await mounter.click(mark);
     await act(async () => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      host.querySelector('[data-flame-card] a')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     });
-    expect(host.querySelector('[data-flame-card]')).toBeNull();
+    expect(host.querySelector('[data-flame-card]:not([data-leaving])')).toBeNull();
+  });
+
+  test('carte ouverte, le retour Android ou Précédent ferme la CARTE seule : la conversation reste (#18326)', async () => {
+    const left: string[] = [];
+    const onPop = () => left.push('popstate');
+    const host = await mounter.mount(<HeaderFlame snapshot={snapshot()} replay={0} onDismiss={() => undefined} />);
+    await mounter.click(host.querySelector<HTMLElement>('[data-header-flame] button'));
+    const before = window.location.href;
+    window.addEventListener('popstate', onPop);
+    try {
+      await act(async () => {
+        window.history.back();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    } finally {
+      window.removeEventListener('popstate', onPop);
+    }
+    expect(host.querySelector('[data-flame-card]:not([data-leaving])')).toBeNull();
+    expect(window.location.href).toBe(before);
+  });
+
+  test('Échap, un <dialog> ouvert dessous : ferme la carte seule et retient la fermeture du dialogue (#18326)', async () => {
+    const dialog = document.createElement('dialog');
+    document.body.append(dialog);
+    try {
+      const host = await mounter.mount(<HeaderFlame snapshot={snapshot()} replay={0} onDismiss={() => undefined} />);
+      await mounter.click(host.querySelector<HTMLElement>('[data-header-flame] button'));
+      const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+      await act(async () => {
+        host.querySelector('[data-flame-card] a')?.dispatchEvent(escape);
+      });
+      expect(host.querySelector('[data-flame-card]:not([data-leaving])')).toBeNull();
+      expect(escape.defaultPrevented).toBe(true);
+    } finally {
+      dialog.remove();
+    }
   });
 
   test('la pastille de l’en-tête déplié ouvre la MÊME carte que la flamme repliée (#17987)', async () => {
@@ -243,7 +297,7 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
     expect(card?.querySelector('a')?.getAttribute('href')).toContain('/me/progression');
     await mounter.click(host.querySelector<HTMLElement>('[data-flame-card-hide]'));
     expect(touched).toEqual(['x']);
-    expect(host.querySelector('[data-flame-card]')).toBeNull();
+    expect(host.querySelector('[data-flame-card]:not([data-leaving])')).toBeNull();
   });
 
   test('la carte relit le jour : passé minuit, aujourd’hui vaut 0 (#17770)', () => {

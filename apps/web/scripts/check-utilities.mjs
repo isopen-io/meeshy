@@ -116,11 +116,37 @@ export const ALLOWED = new Map([
   ],
 ]);
 
+/**
+ * Un fichier de TÉMOIN, que ce gate ne lit pas (#18399).
+ *
+ * Ce gate mesure ce que l'APPLICATION peint : il oppose les classes citées
+ * dans un `className=` à la feuille RÉELLEMENT produite. Un témoin ne peint
+ * rien, et une classe qu'il invente pour servir de MARQUEUR à une assertion
+ * n'est le nom d'aucun jeton — elle ne peut donc avoir aucune règle, et
+ * l'opposer à la feuille pose une question dont la seule réponse possible est
+ * « rouge ».
+ *
+ * Coût mesuré : `probe-sheet` (`dialog-exit.test.tsx`, #18362) a rendu `dev`
+ * ROUGE pour tout le monde le jour de son arrivée. Et le rouge n'est pas
+ * celui de la PR qui le déclenche — il tombe sur `dev` et sur toute PR qui
+ * s'y rebase. C'est exactement le rayon de souffle de #5958 / #5960, dont le
+ * témoin vit déjà dans ce fichier, pour une autre source de bruit ; ce lot-là
+ * a répondu en retirant le bruit du PÉRIMÈTRE plutôt qu'en exemptant une
+ * classe, et c'est la même réponse ici.
+ *
+ * **Le prédicat est ÉTROIT par décision.** Il exige le point avant `test` /
+ * `spec`, donc `latest.ts`, `contest.tsx` et `manifest.ts` restent dans le
+ * périmètre. Un filtre plus large retirerait de VRAIS écrans du balayage, ce
+ * qu'aucun rouge ne signalerait : le gate deviendrait silencieusement aveugle,
+ * et c'est le pire des deux défauts — un faux rouge se voit, un faux vert non.
+ */
+export const isWitnessFile = (file) => /\.(test|spec)\.(tsx|ts)$/.test(file);
+
 export const sourceFiles = (dir) =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
     const p = join(dir, e.name);
     if (e.isDirectory()) return sourceFiles(p);
-    return /\.(tsx|ts)$/.test(e.name) ? [p] : [];
+    return /\.(tsx|ts)$/.test(e.name) && !isWitnessFile(e.name) ? [p] : [];
   });
 
 /**

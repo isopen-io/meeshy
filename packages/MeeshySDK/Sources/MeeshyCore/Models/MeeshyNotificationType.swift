@@ -40,6 +40,12 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     /// au plus une fois toutes les 3 h par acteur, décidé par la passerelle.
     /// L'acteur est celui qui revient ; le toucher ouvre son profil.
     case contactRecentlyActive = "contact_recently_active"
+    /// La batterie d'un Proche ou d'un Sang (#14147) : un palier, la zone critique, l'extinction probable, la
+    /// recharge. L'acteur est la personne ; le toucher ouvre son profil. App ouverte, la SyncPill la dit à la place.
+    case deviceBattery = "device_battery"
+    /// Le téléphone d'un Proche ou d'un Sang est injoignable, ou répond de nouveau (#18737). L'acteur est la personne ;
+    /// le toucher ouvre son profil. App ouverte, la SyncPill la dit à la place.
+    case deviceUnreachable = "device_unreachable"
 
     // Interaction events
     case userMentioned = "user_mentioned"
@@ -171,6 +177,8 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .friendAccepted, .contactAccepted, .legacyFriendAccepted: return "person.2.fill"
         case .contactJoined: return "person.crop.circle.badge.plus"
         case .contactRecentlyActive: return "person.crop.circle.badge.clock"
+        case .deviceBattery: return "battery.25"
+        case .deviceUnreachable: return "iphone.slash"
         case .communityInvite, .legacyGroupInvite: return "person.3.fill"
         case .communityJoined, .memberJoined, .legacyGroupJoined: return "person.badge.checkmark"
         case .communityLeft, .memberLeft, .legacyGroupLeft: return "person.badge.minus"
@@ -223,7 +231,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .userMentioned, .mention, .legacyMention:
             return "9B59B6"
         case .friendRequest, .contactRequest, .legacyFriendRequest, .friendAccepted, .contactAccepted, .legacyFriendAccepted, .legacyStatusUpdate,
-             .contactJoined, .contactRecentlyActive:
+             .contactJoined, .contactRecentlyActive, .deviceBattery, .deviceUnreachable:
             return "4ECDC4"
         case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft:
             return "F8B500"

@@ -26,6 +26,7 @@ final class TogetherAVSurface: ObservableObject, TogetherPlayerSurface {
     private var timeObserver: Any?
     private var statusObservation: NSKeyValueObservation?
     private var holdsSession = false
+    private var interruption: AnyCancellable?
     var onTick: (() -> Void)?
 
     nonisolated deinit {}
@@ -42,6 +43,7 @@ final class TogetherAVSurface: ObservableObject, TogetherPlayerSurface {
         let player = AVPlayer(playerItem: item)
         player.automaticallyWaitsToMinimizeStalling = true
         self.player = player
+        silenceDuringInterruptions()
         statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             let failed = item.status == .failed
             let ready = item.status == .readyToPlay
@@ -66,8 +68,17 @@ final class TogetherAVSurface: ObservableObject, TogetherPlayerSurface {
         }
     }
 
+    /// La séance reste à l'heure du serveur : pendant une interruption de l'app (la voix d'un talkie, un appel), elle
+    /// se tait au lieu de s'arrêter, et retrouve le son à sa fin, à sa place dans la séance (#18820).
+    private func silenceDuringInterruptions() {
+        interruption = PlaybackInterruption.shared.$isActive
+            .removeDuplicates()
+            .sink { [weak self] active in self?.player?.isMuted = active }
+    }
+
     /// Le lecteur se rend : plus de son, plus d'observateur, la session audio libérée.
     func stop() {
+        interruption = nil
         if let timeObserver { player?.removeTimeObserver(timeObserver) }
         timeObserver = nil
         statusObservation = nil

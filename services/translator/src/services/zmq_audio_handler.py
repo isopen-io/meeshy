@@ -21,6 +21,7 @@ from .segment_serialization import _get_voice_similarity_score, _segment_to_dict
 from utils.audio_format import read_audio_bytes
 from config.message_limits import validate_audio_duration
 from services.task_privacy import in_at_rest_task, shown, under_declared_regime
+from utils.audio_path_guard import AUDIO_PATH_REJECTED, AUDIO_PATH_REJECTED_MESSAGE, AudioPathRejected
 
 # Import du pipeline audio.
 #
@@ -229,17 +230,17 @@ class AudioHandler:
                 audio_base64=request_data.get('audioBase64'),   # Legacy base64
                 audio_mime_type=request_data.get('audioMimeType'),
                 audio_url=request_data.get('audioUrl'),
-                audio_path=request_data.get('audioPath')  # Legacy fallback
+                audio_path=request_data.get('audioPath')  # Legacy, gardé par racine (#18628)
             )
 
             if not local_audio_path:
                 raise ValueError(
                     f"Impossible d'acquérir l'audio: "
                     f"base64={'yes' if request_data.get('audioBase64') else 'no'}, "
-                    f"url={request_data.get('audioUrl') or 'none'}"
+                    f"url={'yes' if request_data.get('audioUrl') else 'none'}"
                 )
 
-            logger.info(f"[TRANSLATOR] Audio acquis via {audio_source}: {local_audio_path}")
+            logger.info(f"[TRANSLATOR] Audio acquis via {audio_source}")
 
             # Flag pour savoir si on doit nettoyer le fichier temp après.
             # 'binary' (ZMQ multipart, le chemin PRIMAIRE) écrit aussi un fichier
@@ -406,9 +407,7 @@ class AudioHandler:
                 audio_fetcher.cleanup_temp_file(local_audio_path)
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur audio process: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur audio process: {type(e).__name__}")
             self._forget_tracks(locals().get('progressive_tracks') or [])
 
             # Nettoyer le fichier temporaire en cas d'erreur
@@ -420,12 +419,13 @@ class AudioHandler:
             except Exception:
                 pass  # Ignorer les erreurs de nettoyage
 
+            rejected = isinstance(e, AudioPathRejected)
             await self._publish_audio_error(
                 task_id=task_id,
                 message_id=request_data.get('messageId', ''),
                 attachment_id=request_data.get('attachmentId', ''),
-                error=str(e),
-                error_code="processing_failed"
+                error=AUDIO_PATH_REJECTED_MESSAGE if rejected else "Audio processing failed",
+                error_code=AUDIO_PATH_REJECTED if rejected else "processing_failed"
             )
 
     @staticmethod
@@ -520,7 +520,7 @@ class AudioHandler:
                         audio_data_base64=t.audio_data_base64,
                     )
                 except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur lecture audio {t.language}: {e}")
+                    logger.warning(f"[MULTIPART] Erreur lecture audio {t.language}: {type(e).__name__}")
 
                 if audio_bytes:
                     binary_frames.append(audio_bytes)
@@ -590,7 +590,7 @@ class AudioHandler:
 
                     logger.debug(f"[MULTIPART] Frame {frame_index-1}: embedding vocal ({len(embedding_bytes)} bytes)")
                 except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur décodage embedding: {e}")
+                    logger.warning(f"[MULTIPART] Erreur décodage embedding: {type(e).__name__}")
 
                 # Metadata sans embedding base64 (envoyé en binaire via binaryFrames)
                 new_voice_profile_metadata = {
@@ -707,9 +707,7 @@ class AudioHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour audio result")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication audio result multipart: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur publication audio result multipart: {type(e).__name__}")
 
     async def _publish_transcription_result(self, task_id: str, transcription_data: dict):
         """
@@ -780,9 +778,7 @@ class AudioHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour transcription")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription: {type(e).__name__}")
 
     async def _publish_translation_ready(self, task_id: str, translation_data: dict):
         """
@@ -819,7 +815,7 @@ class AudioHandler:
                         audio_data_base64=translation.audio_data_base64,
                     )
                 except Exception as e:
-                    logger.warning(f"[MULTIPART] Erreur lecture audio {translation.language}: {e}")
+                    logger.warning(f"[MULTIPART] Erreur lecture audio {translation.language}: {type(e).__name__}")
 
             # Préparer le metadata JSON (Frame 0)
             translated_audio_dict = {
@@ -913,9 +909,7 @@ class AudioHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour translation ready")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication translation ready: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur publication translation ready: {type(e).__name__}")
 
     async def _publish_audio_error(
         self,
@@ -944,7 +938,7 @@ class AudioHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour audio error")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication audio error: {e}")
+            logger.error(f"❌ [TRANSLATOR] Erreur publication audio error: {type(e).__name__}")
 
     # ═══════════════════════════════════════════════════════════════════════════
     # TRANSCRIPTION ONLY - Transcription sans traduction ni TTS

@@ -65,6 +65,16 @@ jest.mock('../../../../routes/me/blood-location', () => ({
   default: jest.fn(async () => {}),
 }));
 
+jest.mock('../../../../routes/me/device-battery', () => ({
+  __esModule: true,
+  default: jest.fn(async () => {}),
+}));
+
+jest.mock('../../../../routes/me/device-reachability', () => ({
+  __esModule: true,
+  default: jest.fn(async () => {}),
+}));
+
 jest.mock('../../../../routes/me/profile-decor', () => ({
   __esModule: true,
   default: jest.fn(async () => {}),

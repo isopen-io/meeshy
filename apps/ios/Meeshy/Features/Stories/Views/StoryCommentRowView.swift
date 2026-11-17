@@ -232,18 +232,16 @@ struct StoryCommentRowView: View, Equatable {
             )
             .buttonStyle(.plain)
 
+            // La flèche seule (#18808) : le mot passait à la ligne et coupait la rangée.
             Button(action: onReply) {
-                HStack(spacing: MeeshySpacing.xxs) {
-                    Image(systemName: "arrowshape.turn.up.left")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                    Text(String(localized: "story.viewer.reply", defaultValue: "Répondre", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                }
-                .foregroundColor(overlayColor.opacity(MeeshyOpacity.intense))
-                .contentShape(Rectangle())
+                Image(systemName: "arrowshape.turn.up.left")
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
+                    .foregroundColor(overlayColor.opacity(MeeshyOpacity.intense))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .frame(minHeight: 44)
+            .accessibilityLabel(String(localized: "story.viewer.reply", defaultValue: "Répondre", bundle: .main))
 
             Spacer()
 

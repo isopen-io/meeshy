@@ -350,6 +350,8 @@ const makeTranslationService = (): any => ({
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
+const READER_PART_ID = '507f1f77bcf86cd7994390b7';
+
 describe('registerMessagesAdvancedRoutes', () => {
   let prisma: ReturnType<typeof makePrisma>;
   let fastify: ReturnType<typeof createMockFastify>;
@@ -2273,16 +2275,31 @@ describe('registerMessagesAdvancedRoutes', () => {
           createdAt: new Date(),
           statusEntries: [
             {
-              participantId: PART_ID,
+              participantId: READER_PART_ID,
               deliveredAt: new Date(),
               readAt: new Date(),
               participant: {
-                id: PART_ID,
+                id: READER_PART_ID,
                 userId: USER_ID,
                 displayName: 'Alice',
                 avatar: null,
                 type: 'user',
                 user: { username: 'alice' },
+              },
+            },
+            // #18556 — la ligne que l'AUTEUR porte sur son propre message (vue
+            // unique ouverte par lui, feu annoncé) n'est pas un accusé.
+            {
+              participantId: PART_ID,
+              deliveredAt: null,
+              readAt: null,
+              participant: {
+                id: PART_ID,
+                userId: 'author-user',
+                displayName: 'Auteur',
+                avatar: null,
+                type: 'user',
+                user: { username: 'auteur' },
               },
             },
           ],
@@ -2298,6 +2315,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(result.total).toBe(1);
       expect(result.statuses[0].messageId).toBe(MSG_ID);
       expect(result.statuses[0].senderId).toBe(PART_ID);
+      expect(result.statuses[0].entries.map((entry: { participantId: string }) => entry.participantId)).toEqual([READER_PART_ID]);
       expect(result.statuses[0].entries[0].user.username).toBe('alice');
     });
 

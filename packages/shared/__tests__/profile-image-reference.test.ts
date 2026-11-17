@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isProfileImageReference } from '../utils/profile-image-reference';
+import { isProfileImageReference, profileImageStorageKey } from '../utils/profile-image-reference';
 import { updateAvatarSchema, updateBannerSchema } from '../utils/validation';
 
 /**
@@ -72,5 +72,28 @@ describe('isProfileImageReference — la branche /api/ (#16810)', () => {
     expect(isProfileImageReference('/api/v1/attachments/file/a.png#x')).toBe(false);
     expect(isProfileImageReference('/api/v1/attachments/file/%E0%A4%A')).toBe(false);
     expect(isProfileImageReference('/api/v1/attachments/file//etc/passwd')).toBe(false);
+  });
+});
+
+describe('profileImageStorageKey — le fichier du volume qu’une image d’identité désigne (#16811)', () => {
+  it('rend le chemin de stockage relatif tel quel', () => {
+    expect(profileImageStorageKey(TELEVERSE)).toBe(TELEVERSE);
+  });
+
+  it('rend la clé DÉCODÉE de la route de flux, montée v1 ou legacy', () => {
+    expect(profileImageStorageKey(`/api/v1/attachments/file/${encodeURIComponent(TELEVERSE)}`)).toBe(TELEVERSE);
+    expect(profileImageStorageKey(`/api/attachments/file/${TELEVERSE}`)).toBe(TELEVERSE);
+  });
+
+  it('rend la clé d’une adresse ABSOLUE dont le chemin est la route de flux, quel que soit l’hôte', () => {
+    expect(profileImageStorageKey(`https://gate.meeshy.me/api/v1/attachments/file/${encodeURIComponent(TELEVERSE)}`)).toBe(TELEVERSE);
+    expect(profileImageStorageKey(`http://autre.example/api/attachments/file/${TELEVERSE}`)).toBe(TELEVERSE);
+  });
+
+  it('rend null pour un hôte tiers ou une forme refusée', () => {
+    expect(profileImageStorageKey('https://cdn.example.com/a.png')).toBeNull();
+    expect(profileImageStorageKey('/api/v1/static/banner.jpg')).toBeNull();
+    expect(profileImageStorageKey('/api/v1/attachments/file/%2e%2e/x.png')).toBeNull();
+    expect(profileImageStorageKey('data:image/png;base64,AAAA')).toBeNull();
   });
 });

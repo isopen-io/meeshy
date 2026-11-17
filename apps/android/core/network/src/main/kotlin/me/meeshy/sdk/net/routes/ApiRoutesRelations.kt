@@ -12,13 +12,21 @@
 package me.meeshy.sdk.net.routes
 
 public object ApiRoutesRelations {
+    public const val BATTERY: String = "relations/battery"
     public const val BY_USER_ID: String = "relations/{userId}"
+    public const val BY_USER_ID_BATTERY: String = "relations/{userId}/battery"
+    public const val BY_USER_ID_BATTERY_PULL: String = "relations/{userId}/battery/pull"
+    public const val BY_USER_ID_BATTERY_SETTINGS: String = "relations/{userId}/battery/settings"
     public const val BY_USER_ID_LEVEL: String = "relations/{userId}/level"
     public const val BY_USER_ID_LOCATION_HISTORY: String = "relations/{userId}/location/history"
+    public const val BY_USER_ID_PHONE_REACHABILITY: String = "relations/{userId}/phone-reachability"
+    public const val BY_USER_ID_PHONE_REACHABILITY_SETTINGS: String = "relations/{userId}/phone-reachability/settings"
     public const val BY_USER_ID_RITUAL: String = "relations/{userId}/ritual"
     public const val BY_USER_ID_SETTINGS: String = "relations/{userId}/settings"
     public const val CONFIG: String = "relations/config"
     public const val LOCATIONS: String = "relations/locations"
+    public const val LOCATIONS_MINE: String = "relations/locations/mine"
     public const val NOW_PLAYING: String = "relations/now-playing"
+    public const val PHONE_REACHABILITY: String = "relations/phone-reachability"
     public const val ROOT: String = "relations"
 }

@@ -12,12 +12,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "feed.empty.subtitle",
-          "androidName": "feed_empty_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "feed.load.error",
           "androidName": "feed_load_error",
           "status": "adopted"
@@ -34,12 +28,7 @@
           "androidName": "feed_notice_like_failed",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "feed.bookmark.error",
-          "androidName": "feed_notice_bookmark_failed",
-          "status": "adopted"
-        },
+        { "androidName": "feed_notice_bookmark_failed", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "feed.repost.error",

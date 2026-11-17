@@ -1,6 +1,9 @@
 package me.meeshy.app.calls
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -19,6 +22,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.ui.component.MeeshyFeedbackToast
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -31,6 +35,10 @@ import me.meeshy.ui.theme.MeeshySpacing
  * The container is a polite live region: a screen-reader user hears the outcome
  * of what they just did without losing focus. Colour never carries the meaning
  * alone — the severity icon and the text do.
+ *
+ * Law 17.10: it comes down from the top edge and goes back up there; under
+ * « Reduce animations » ([rememberCallReduceMotion]) it only fades, shortly
+ * ([CallChromeStow.fadeMillis]) — no displacement.
  */
 @Composable
 fun CallToastHost(
@@ -40,6 +48,9 @@ fun CallToastHost(
 ) {
     var current by remember { mutableStateOf<CallToast?>(null) }
     var visible by remember { mutableStateOf(false) }
+    val reduceMotion = rememberCallReduceMotion()
+    val millis = CallChromeStow.fadeMillis(reduceMotion)
+    val slides = CallChromeStow.leavesByItsEdge(isVisible = false, reduceMotion = reduceMotion)
 
     LaunchedEffect(toasts) {
         toasts.collect { next ->
@@ -56,8 +67,8 @@ fun CallToastHost(
         modifier = modifier
             .padding(horizontal = MeeshySpacing.lg)
             .semantics { liveRegion = LiveRegionMode.Polite },
-        enter = fadeIn() + slideInVertically { -it },
-        exit = fadeOut() + slideOutVertically { -it },
+        enter = fadeIn(tween(millis)) + if (slides) slideInVertically(tween(millis)) { -it } else EnterTransition.None,
+        exit = fadeOut(tween(millis)) + if (slides) slideOutVertically(tween(millis)) { -it } else ExitTransition.None,
     ) {
         current?.let { toast -> MeeshyFeedbackToast(
             message = toast.message,

@@ -130,7 +130,7 @@ extension GameText {
         String(localized: "game2.door.season.steps", defaultValue: "Halte \(steps) sur \(total)", bundle: .main)
     }
 
-    static var doorSeasonNone: String { String(localized: "game2.door.season.none", defaultValue: "Aucun voyage en cours pour le moment", bundle: .main) }
+    static var doorSeasonNone: String { String(localized: "game2.door.season.none", defaultValue: "Aucun voyage en cours", bundle: .main) }
     /// « Ouvre le 21 décembre 2026 » — la saison à venir (#10014).
     static func doorSeasonUpcoming(date: String) -> String {
         String(localized: "game2.door.season.upcoming", defaultValue: "Ouvre le \(date)", bundle: .main)

@@ -127,6 +127,24 @@ public struct EmojiReactionPicker: View {
     public var onDismiss: (() -> Void)?
     /// When nil, the "+" expand button is hidden.
     public var onExpandFullPicker: (() -> Void)?
+    /// **Une tuile d'action posée APRÈS le « + »** — un glyphe et une action que l'hôte
+    /// nomme ; le composant ne sait pas ce qu'elle fait (il reste agnostique : la
+    /// conversation y met « Imager », une autre surface y mettra autre chose). Même
+    /// disque que le « + », même vague d'entrée, un cran après lui. Elle ne publie pas
+    /// de cadre de scrub : on la touche, on ne glisse pas dessus.
+    /// `nonisolated` : une tuile est une VALEUR que l'hôte compose où il veut (même règle
+    /// que `EmojiReactionPickerChrome`) ; seul le composant, sur le MainActor, l'appelle.
+    public nonisolated struct ExtraTile {
+        public let symbol: String
+        public let accessibilityLabel: String
+        public let accessibilityIdentifier: String?
+        public let action: () -> Void
+        public init(symbol: String, accessibilityLabel: String, accessibilityIdentifier: String? = nil, action: @escaping () -> Void) {
+            self.symbol = symbol; self.accessibilityLabel = accessibilityLabel
+            self.accessibilityIdentifier = accessibilityIdentifier; self.action = action
+        }
+    }
+    public var extraTile: ExtraTile?
     /// Index de la tuile survolée par le scrub (piloté par l'app) — ×1.35 rebond.
     public var highlightedIndex: Int?
     /// Nom du coordinateSpace dans lequel publier les cadres des tuiles.
@@ -151,8 +169,10 @@ public struct EmojiReactionPicker: View {
         onExpandFullPicker: (() -> Void)? = nil,
         highlightedIndex: Int? = nil,
         scrubFrameSpace: String? = nil,
-        onTileFrames: (([Int: CGRect]) -> Void)? = nil
+        onTileFrames: (([Int: CGRect]) -> Void)? = nil,
+        extraTile: ExtraTile? = nil
     ) {
+        self.extraTile = extraTile
         self.quickEmojis = quickEmojis; self.style = style; self.scale = scale
         self.scrollable = scrollable
         self.chrome = chrome
@@ -232,9 +252,34 @@ public struct EmojiReactionPicker: View {
                 .background(tileFrameReader(index: quickEmojis.count))
             }
             .accessibilityLabel(String(localized: "reaction.picker.more.a11y", bundle: .module))
-            // La tuile "+" cloture la vague — son index est place juste
-            // apres le dernier emoji pour qu'elle arrive en derniere.
-            .modifier(WaveTileModifier(index: quickEmojis.count, hasEntered: hasEntered))
+            // Le « + » entre avec les premières tuiles (#18812) : fermer la vague
+            // le faisait attendre 0,36 s à huit emojis.
+            .modifier(WaveTileModifier(index: ReactionStripWave.trailingRank(quickCount: quickEmojis.count), hasEntered: hasEntered))
+        }
+    }
+
+    /// La tuile supplémentaire de l'hôte, à droite du « + » : même disque, un cran plus
+    /// tard dans la vague ; elle répond à l'appui par le style du kit.
+    @ViewBuilder
+    private var extraTileButton: some View {
+        if let extraTile {
+            Button {
+                HapticFeedback.light()
+                extraTile.action()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(style == .dark ? Color.white.opacity(MeeshyOpacity.light) : Color.gray.opacity(MeeshyOpacity.light))
+                        .frame(width: 32 * scale, height: 32 * scale)
+                    Image(systemName: extraTile.symbol)
+                        .font(MeeshyFont.relative(14 * scale, weight: .bold))
+                        .foregroundStyle(style == .dark ? Color.white.opacity(MeeshyOpacity.intense) : Color.gray)
+                }
+            }
+            .buttonStyle(PressableButtonStyle())
+            .accessibilityLabel(extraTile.accessibilityLabel)
+            .accessibilityIdentifier(extraTile.accessibilityIdentifier ?? "")
+            .modifier(WaveTileModifier(index: ReactionStripWave.trailingRank(quickCount: quickEmojis.count) + 1, hasEntered: hasEntered))
         }
     }
 
@@ -256,6 +301,7 @@ public struct EmojiReactionPicker: View {
             HStack(spacing: 6 * scale) {
                 emojiList
                 expandButton
+                extraTileButton
             }
             .padding(.horizontal, 10 * scale)
             .padding(.vertical, 6 * scale)
@@ -288,8 +334,11 @@ public struct EmojiReactionPicker: View {
                     )
                 )
 
-                expandButton
-                    .padding(.trailing, 10 * scale)
+                HStack(spacing: 6 * scale) {
+                    expandButton
+                    extraTileButton
+                }
+                .padding(.trailing, 10 * scale)
             }
         )
     }
@@ -378,6 +427,18 @@ public extension View {
 /// d'entree combine fade + montee verticale (la tuile arrive depuis le bas),
 /// l'easing `.spring` rebondissant donnant l'ondulation "wave-like" propre a
 /// chaque tuile au moment de se poser.
+/// La vague d'entrée de la barre : un décalage par rang, et la queue (« + »,
+/// tuile de l'hôte) qui entre avec les premières tuiles plutôt qu'après la
+/// dernière (#18812).
+nonisolated enum ReactionStripWave {
+    static let step = 0.045
+    static let trailingRankCap = 2
+
+    static func delay(rank: Int) -> Double { Double(max(rank, 0)) * step }
+
+    static func trailingRank(quickCount: Int) -> Int { min(max(quickCount, 0), trailingRankCap) }
+}
+
 private struct WaveTileModifier: ViewModifier {
     let index: Int
     let hasEntered: Bool
@@ -385,8 +446,7 @@ private struct WaveTileModifier: ViewModifier {
     /// `t` va de 0 (tuile cachee, sous la ligne) a 1 (tuile posee).
     @State private var t: CGFloat = 0
 
-    /// Delai d'entree : decalage croissant => effet de cascade sinusoidale.
-    private var staggerDelay: Double { Double(index) * 0.045 }
+    private var staggerDelay: Double { ReactionStripWave.delay(rank: index) }
 
     // La tuile arrive depuis ~16pt sous sa position finale.
     private var riseOffset: CGFloat { 16 * (1 - t) }

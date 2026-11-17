@@ -13,7 +13,6 @@
     <string name="feed_action_send">Senden</string>
     <string name="feed_action_share">Teilen</string>
     <string name="feed_action_view_profile">Profil ansehen</string>
-    <string name="feed_bookmark_success">Zu Lesezeichen hinzugefügt</string>
     <string name="feed_caption_collapse">weniger</string>
     <string name="feed_caption_expand">mehr…</string>
     <string name="feed_carousel_a11y_position">Medium %1$d von %2$d</string>
@@ -27,8 +26,7 @@
     <string name="feed_delete_cancel">Abbrechen</string>
     <string name="feed_delete_confirm">Löschen</string>
     <string name="feed_draft_recovered">Offline-Entwurf wiederhergestellt</string>
-    <string name="feed_empty">Noch keine Beiträge</string>
-    <string name="feed_empty_subtitle">Beiträge deiner Kontakte erscheinen hier</string>
+    <string name="feed_empty">Noch keine Beiträge deiner Kontakte</string>
     <string name="feed_header_nearby">Beiträge in der Nähe</string>
     <string name="feed_like">Gefällt mir</string>
     <string name="feed_link_copied">Link kopiert</string>
@@ -40,7 +38,6 @@
         <item quantity="one">%1$d neuer Beitrag</item>
         <item quantity="other">%1$d neue Beiträge</item>
     </plurals>
-    <string name="feed_notice_bookmark_failed">Fehler beim Speichern des Lesezeichens</string>
     <string name="feed_notice_delete_failed">Fehler beim Löschen des Beitrags</string>
     <string name="feed_notice_like_failed">Fehler beim Liken des Beitrags</string>
     <string name="feed_notice_pin_failed">Fehler beim Anheften des Beitrags</string>
@@ -78,10 +75,6 @@
         <item quantity="one">%1$d Antwort</item>
         <item quantity="other">%1$d Antworten</item>
     </plurals>
-    <plurals name="feed_post_stat_reposts">
-        <item quantity="one">%1$d Repost</item>
-        <item quantity="other">%1$d Reposts</item>
-    </plurals>
     <string name="feed_post_stat_saves">%1$d Speicherungen</string>
     <string name="feed_post_stat_shares">%1$d Mal geteilt</string>
     <string name="feed_quote_cancel">Abbrechen</string>
@@ -113,7 +106,7 @@
     <string name="feed_scene_previous">Vorherige Szene</string>
     <string name="feed_scene_resume">Setzt die Wiedergabe der Szene fort</string>
     <string name="feed_scene_sound_mute">Ton stummschalten</string>
-    <string name="feed_scene_sound_muted">Ton aus – für den Ton in den Vollbildmodus wechseln</string>
+    <string name="feed_scene_sound_muted">Ton aus</string>
     <string name="feed_scene_sound_track">Hintergrundton</string>
     <string name="feed_scene_sound_unmute">Ton wieder einschalten</string>
     <string name="feed_scene_tile">Szene %1$d</string>
@@ -149,8 +142,6 @@
     <string name="mood_spotlight_unavailable">Diese Stimmung ist nicht mehr verfügbar</string>
     <string name="nearby_back">Zurück</string>
     <string name="nearby_denied_action">Einstellungen öffnen</string>
-    <string name="nearby_denied_detail">Meeshy hat keinen Zugriff auf deinen Standort. Erlaube ihn in den Einstellungen oder verschiebe die Karte von Hand.</string>
-    <string name="nearby_denied_title">Standort nicht erlaubt</string>
     <string name="nearby_retry">Erneut versuchen</string>
     <string name="nearby_title">In der Nähe</string>
     <string name="post_bookmark_removed">Aus Lesezeichen entfernt</string>
@@ -196,11 +187,8 @@
     <string name="post_detail_title">Beitrag</string>
     <string name="post_detail_viewers">Aufrufe</string>
     <string name="profile_posts_empty">Keine Beiträge</string>
-    <string name="profile_posts_empty_filter_subtitle">Tippe erneut auf die Kachel, um alles zu sehen</string>
     <string name="profile_posts_empty_posts">Keine Beiträge</string>
     <string name="profile_posts_empty_reels">Keine Reels</string>
-    <string name="profile_posts_empty_subtitle">Beiträge werden hier angezeigt</string>
-    <string name="profile_posts_end_of_content">Du hast alles gesehen</string>
     <string name="profile_posts_first_published_at">Erster Inhalt veröffentlicht am %1$s</string>
     <string name="profile_posts_load_error">Fehler beim Laden der Beiträge</string>
     <string name="profile_posts_stat_posts">Beiträge</string>
@@ -225,6 +213,6 @@
     <string name="status_queued_offline">Stimmung wartet auf Versand</string>
     <string name="status_react_error">Fehler beim Reagieren auf den Status</string>
     <string name="user_posts_back">Zurück</string>
-    <string name="user_posts_empty">Noch keine Beiträge</string>
+    <string name="user_posts_empty">Keine Beiträge</string>
     <string name="user_posts_title">Beiträge</string>
 </resources>

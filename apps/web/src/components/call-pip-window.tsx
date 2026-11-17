@@ -1,4 +1,3 @@
-import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand/react';
@@ -10,6 +9,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
 import { armAutoPip, browserPipSupport, pipSource, pipOpenStore, registerPipCloser, registerPipOpener, shellPipStore, shouldOfferPip, type AutoPipSession } from '@/lib/calls/call-pip';
+import { peerColor } from '@/lib/calls/call-speaker-color';
 import { callStore, elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -94,12 +94,12 @@ function PipClock({ call }: { readonly call: ActiveCall }) {
 }
 
 /** L'image et le nom — ce que montrent la fenêtre PiP du navigateur et l'activité qui flotte dans la coque. */
-function PipStage({ call }: { readonly call: ActiveCall }) {
+export function PipStage({ call }: { readonly call: ActiveCall }) {
   const source = pipSource(call);
   return (
     <div className="relative grid min-h-0 flex-1 place-items-center">
       {source === null ? (
-        <PeerAvatar presenceKey={call.peerKey ?? undefined} initials={initialsOf(call.title)} color={colorForName(call.title)} size={72} {...(call.avatar === null ? {} : { src: call.avatar })} />
+        <PeerAvatar presenceKey={call.peerKey ?? undefined} initials={initialsOf(call.title)} color={peerColor(call)} size={72} {...(call.avatar === null ? {} : { src: call.avatar })} />
       ) : (
         <StreamVideo stream={source.stream} mirrored={source.mirrored} fit={source.fit} className="absolute inset-0 size-full" label={call.title} />
       )}

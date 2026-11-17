@@ -3,15 +3,12 @@
     <string name="about_app_name">Meeshy</string>
     <string name="about_copy">نسخ</string>
     <string name="about_copyright">‏2024-2026 Meeshy. جميع الحقوق محفوظة.</string>
-    <string name="about_feature_cloud_sync">المزامنة السحابية</string>
     <string name="about_feature_encryption">التشفير التام بين الطرفين</string>
-    <string name="about_feature_themes">سمات قابلة للتخصيص</string>
     <string name="about_feature_translation">ترجمة فورية</string>
     <string name="about_feature_voice_cloning">استنساخ الصوت</string>
     <string name="about_info_media_tier">ملف الوسائط</string>
     <string name="about_info_platform">المنصة</string>
     <string name="about_info_sdk_version">إصدار SDK</string>
-    <string name="about_link_about">عن ميشي</string>
     <string name="about_link_contact">اتصل بنا</string>
     <string name="about_link_github">GitHub</string>
     <string name="about_link_partners">الشركاء</string>
@@ -22,7 +19,6 @@
     <string name="about_media_tier_mid">متوسط</string>
     <string name="about_media_tier_pro">احترافي</string>
     <string name="about_section_features">الميزات</string>
-    <string name="about_section_informations">معلومات</string>
     <string name="about_section_links">الروابط</string>
     <string name="about_title">حول</string>
     <string name="account_contact_cancel">إلغاء</string>
@@ -103,7 +99,6 @@
     <string name="licenses_libsignal_body">مكتبة libsignal والمكتبات التي تتضمنها، مع نص تراخيصها.</string>
     <string name="licenses_libsignal_title">إشعارات libsignal</string>
     <string name="licenses_meeshy_body">يُنشر الكود المصدري لـ Meeshy بموجب ترخيص MIT. يتضمن هذا التطبيق مكتبة libsignal ‏(Signal Messenger) المنشورة بموجب ترخيص GNU AGPL-3.0، لذا فإن التطبيق الموزَّع عمل مرخَّص بموجب ترخيص AGPL-3.0 فقط.</string>
-    <string name="licenses_meeshy_body_mit">يُنشر الكود المصدري لـ Meeshy بموجب ترخيص MIT.</string>
     <string name="licenses_meeshy_title">ترخيص Meeshy</string>
     <string name="licenses_section_open_source">مفتوح المصدر</string>
     <string name="licenses_source_body">الكود المصدري المقابل لهذا الإصدار، بما في ذلك سكربتات البناء، متاح مجانًا.</string>
@@ -143,7 +138,7 @@
     <string name="pack_shop_domain_wallpaper">خلفيات</string>
     <string name="pack_shop_empty">لا شيء لاكتشافه هنا حتى الآن.</string>
     <string name="pack_shop_error_insufficient">تحتاج إلى مزيد من Meeshes لهذه الحزمة.</string>
-    <string name="pack_shop_error_load">تعذّر تحميل المتجر. حاول مرة أخرى.</string>
+    <string name="pack_shop_error_load">تعذّر تحميل المتجر.</string>
     <string name="pack_shop_failed">تعذّر تحديث الحزمة. حاول مرة أخرى.</string>
     <string name="pack_shop_install">تثبيت</string>
     <string name="pack_shop_locked">مقفل</string>
@@ -155,10 +150,7 @@
     <string name="privacy_last_seen">آخر تسجيل دخول</string>
     <string name="privacy_online_status">حالة الاتصال</string>
     <string name="privacy_read_receipts">إيصالات القراءة</string>
-    <string name="privacy_save_media">حفظ الوسائط</string>
-    <string name="privacy_section_contacts">جهات الاتصال والمجموعات</string>
     <string name="privacy_section_encryption">التشفير</string>
-    <string name="privacy_section_media">الوسائط والبيانات</string>
     <string name="privacy_section_visibility">الظهور</string>
     <string name="privacy_typing_indicator">مؤشر الكتابة</string>
     <string name="purge_action_empty">حدد ما تريد إفراغه</string>
@@ -205,7 +197,6 @@
     <string name="sessions_empty">لا توجد جلسات نشطة</string>
     <string name="sessions_error_banner">تعذّر التحديث — اسحب لإعادة المحاولة.</string>
     <string name="sessions_error_ok">حسنًا</string>
-    <string name="sessions_error_title">خطأ</string>
     <string name="sessions_loading">جارٍ تحميل الجلسات</string>
     <string name="sessions_login_anonymous">جلسة ضيف</string>
     <string name="sessions_login_email_verification">تسجيل الدخول بالتحقق من البريد الإلكتروني</string>
@@ -225,11 +216,9 @@
     <string name="sessions_revoke_a11y">تسجيل خروج %1$s</string>
     <string name="sessions_revoke_all_action">تسجيل خروج الأجهزة الأخرى</string>
     <string name="sessions_revoke_all_confirm_message">سيبقى هذا الجهاز وحده متصلًا، وستحتاج الأجهزة الأخرى إلى تسجيل الدخول مجددًا.</string>
-    <string name="sessions_revoke_all_error">تعذّر إنهاء الجلسات</string>
     <string name="sessions_revoke_confirm_action">تسجيل الخروج</string>
     <string name="sessions_revoke_confirm_message">سيحتاج %1$s إلى تسجيل الدخول مجددًا للوصول إلى حسابك.</string>
     <string name="sessions_revoke_confirm_title">تسجيل خروج هذا الجهاز؟</string>
-    <string name="sessions_revoke_error">تعذّر إنهاء الجلسة</string>
     <string name="sessions_section_others">أجهزة أخرى</string>
     <string name="sessions_timezone">المنطقة الزمنية: %1$s</string>
     <string name="sessions_unknown_device">جهاز غير معروف</string>
@@ -262,7 +251,6 @@
     <string name="settings_media_capture_original_title">حفظ الأصل</string>
     <string name="settings_media_download">التنزيل التلقائي</string>
     <string name="settings_media_outgoing_header">عند الإرسال</string>
-    <string name="settings_media_outgoing_location_subtitle">افتراضيًا، يُزال موقع GPS من كل صورة قبل إرسالها.</string>
     <string name="settings_media_outgoing_location_title">الاحتفاظ بموقع الصور</string>
     <string name="settings_new_message_notifications">رسائل جديدة</string>
     <string name="settings_notif_cat_calls">المكالمات</string>
@@ -290,7 +278,6 @@
     <string name="settings_notifications_title">الإشعارات</string>
     <string name="settings_open_source_licenses">تراخيص المصدر المفتوح</string>
     <string name="settings_packs_domain">نوع الحزمة</string>
-    <string name="settings_privacy_encryption_coming_soon_a11y">التشفير — قريبًا، معطَّل حاليًا</string>
     <string name="settings_privacy_policy">سياسة الخصوصية</string>
     <string name="settings_privacy_title">الخصوصية</string>
     <string name="settings_push_notifications">الإشعارات الفورية</string>
@@ -319,8 +306,6 @@
     <string name="settings_tools_progression">أسطورتي</string>
     <string name="settings_tools_stats">الإحصائيات</string>
     <string name="settings_transcription_auto">تلقائي</string>
-    <string name="settings_transcription_engine">محرك النسخ النصي</string>
-    <string name="settings_transcription_engine_a11y">محرك النسخ النصي</string>
     <string name="settings_version_label">الإصدار</string>
     <string name="settings_voice_create">إنشاء</string>
     <string name="support_a11y_opens">يفتح %1$s</string>

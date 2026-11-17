@@ -45,14 +45,28 @@ struct MessageCardCanvas {
     let padX: Double
     let padY: Double
     let gutter: Double
+    /// Une carte SANS PLAFOND (#18671) : le texte garde sa taille, la vidéo le fait défiler.
+    var unbounded = false
 
     var left: Double { padX + gutter }
     var right: Double { width - padX }
     var textWidth: Double { right - left }
-    var maxHeight: Double { fixedHeight ?? MessageCardLayout.maxHeight }
+    /// La hauteur du FORMAT — celle que montre l'image, ou la fenêtre d'une vidéo qui défile.
+    var viewportHeight: Double { fixedHeight ?? MessageCardLayout.maxHeight }
+    var maxHeight: Double { unbounded ? MessageCardLayout.scrollMaxHeight : viewportHeight }
     var budget: Double { maxHeight - 2 * padY }
+    /// La place des MÉDIAS : celle du format, même quand le texte, lui, défile.
+    var mediaBudget: Double { viewportHeight - 2 * padY }
 
-    static func of(_ aspect: MessageCardAspect, verticalHeader: Bool) -> MessageCardCanvas {
+    /// La hauteur de la carte pour un contenu de `content` pixels.
+    func height(content: Double, truncated: Bool) -> Double {
+        let natural = 2 * padY + content
+        if unbounded { return truncated ? maxHeight : min(maxHeight, max(viewportHeight, natural)) }
+        if let fixedHeight { return fixedHeight }
+        return truncated ? MessageCardLayout.maxHeight : min(MessageCardLayout.maxHeight, max(MessageCardLayout.minHeight, natural))
+    }
+
+    static func of(_ aspect: MessageCardAspect, verticalHeader: Bool, unbounded: Bool = false) -> MessageCardCanvas {
         let padY: Double
         switch aspect {
         case .auto, .story: padY = MessageCardMetrics.padY
@@ -65,7 +79,8 @@ struct MessageCardCanvas {
             fixedHeight: aspect.fixedHeight,
             padX: aspect == .landscape ? 140 : MessageCardMetrics.padX,
             padY: padY,
-            gutter: verticalHeader ? MessageCardMetrics.gutter + MessageCardMetrics.gutterGap : 0
+            gutter: verticalHeader ? MessageCardMetrics.gutter + MessageCardMetrics.gutterGap : 0,
+            unbounded: unbounded
         )
     }
 }
@@ -86,6 +101,10 @@ struct MessageCardLinkGeometry {
         case .bulles: return MessageCardLinkGeometry(block: 44, quoteBar: false, bubbles: true)
         case .fil: return MessageCardLinkGeometry(block: 120, quoteBar: true, bubbles: false)
         case .silence: return MessageCardLinkGeometry(block: 88, quoteBar: false, bubbles: false)
+        case .points: return MessageCardLinkGeometry(block: 96, quoteBar: false, bubbles: false)
+        case .losange: return MessageCardLinkGeometry(block: 112, quoteBar: false, bubbles: false)
+        case .asterisme: return MessageCardLinkGeometry(block: 130, quoteBar: false, bubbles: false)
+        case .double: return MessageCardLinkGeometry(block: 104, quoteBar: false, bubbles: false)
         }
     }
 }
@@ -146,7 +165,7 @@ struct MessageCardLayoutEngine {
         let title = MessageCardText.nonBlank(input.title)
         let date = MessageCardText.nonBlank(input.date)
         let verticalHeader = disposition.headerOrientation.isVertical && (title != nil || date != nil)
-        let canvas = MessageCardCanvas.of(disposition.aspect, verticalHeader: verticalHeader)
+        let canvas = MessageCardCanvas.of(disposition.aspect, verticalHeader: verticalHeader, unbounded: input.unbounded)
         let width = canvas.width
         let textWidth = canvas.textWidth
         let bubbleWidth = textWidth - MessageCardMetrics.bubbleOffset
@@ -172,7 +191,7 @@ struct MessageCardLayoutEngine {
         // Le HERO du support : pleine largeur, avant tout texte (#10915).
         let hero = disposition.heroVisual(of: input.media)
         let heroSpan = MessageCardHero.span(canvasWidth: width, verticalHeader: verticalHeader, textLeft: canvas.left, textWidth: textWidth)
-        let heroHeight = hero.map { MessageCardHero.height(aspect: $0.aspect, aspectKnown: $0.aspectKnown, width: heroSpan.width, budget: budget) } ?? 0
+        let heroHeight = hero.map { MessageCardHero.height(aspect: $0.aspect, aspectKnown: $0.aspectKnown, width: heroSpan.width, budget: canvas.mediaBudget) } ?? 0
         let heroSpace = hero == nil ? 0 : heroHeight + MessageCardHero.gap
         let chromeOf: (MessageCardMediaPlan?) -> Chrome = { media in
             Chrome(
@@ -232,19 +251,19 @@ struct MessageCardLayoutEngine {
         minimal.quoteLines = Array(minimal.quoteLines.prefix(MessageCardMetrics.minimumQuoteLines))
         minimal.replyLines = Array(minimal.replyLines.prefix(MessageCardMetrics.minimumReplyLines))
         let mediaRoom = budget - contentHeight(minimal, hasQuote: hasQuote, chrome: textOnly) - mediaGap
-        let mediaLimit = mediaScaleLimit(room: mediaRoom, columnWidth: textWidth, canvasWidth: width, budget: budget)
+        let mediaLimit = mediaScaleLimit(room: mediaRoom, columnWidth: textWidth, canvasWidth: width, budget: canvas.mediaBudget)
         let mediaScale = min(scales[.media], mediaLimit)
         let replyWidth = replyWidthAt(mediaScale)
 
         // LA TRANSCRIPTION CÈDE D'ABORD — 3 → 2 → 1 → masquée — avant que le
         // texte ne rapetisse (revue #8979).
         var transcriptLines = MessageCardAudioMetrics.transcriptLines
-        var media = mediaPlan(columnWidth: textWidth, canvasWidth: width, budget: budget, scale: mediaScale, transcriptLines: transcriptLines)
+        var media = mediaPlan(columnWidth: textWidth, canvasWidth: width, budget: canvas.mediaBudget, scale: mediaScale, transcriptLines: transcriptLines)
         var chrome = chromeOf(media)
         let natural = sizeAt(0, replyWidth)
         while transcriptLines > 0 && contentHeight(natural, hasQuote: hasQuote, chrome: chrome) > budget {
             transcriptLines -= 1
-            media = mediaPlan(columnWidth: textWidth, canvasWidth: width, budget: budget, scale: mediaScale, transcriptLines: transcriptLines)
+            media = mediaPlan(columnWidth: textWidth, canvasWidth: width, budget: canvas.mediaBudget, scale: mediaScale, transcriptLines: transcriptLines)
             chrome = chromeOf(media)
         }
 
@@ -283,14 +302,7 @@ struct MessageCardLayoutEngine {
         let crowdedByMedia = truncated && contentHeight(beside ? sizeAt(MessageCardMetrics.floorStep, fullReplyWidth) : floorSized,
                                                         hasQuote: hasQuote, chrome: textOnly) <= budget
         let content = contentHeight(sized, hasQuote: hasQuote, chrome: chrome)
-        let height: Double
-        if let fixed = canvas.fixedHeight {
-            height = fixed
-        } else {
-            height = truncated
-                ? MessageCardLayout.maxHeight
-                : min(MessageCardLayout.maxHeight, max(MessageCardLayout.minHeight, 2 * canvas.padY + content))
-        }
+        let height = canvas.height(content: content, truncated: truncated)
 
         var painter = MessageCardPainter(
             left: canvas.left,
@@ -434,13 +446,14 @@ struct MessageCardLayoutEngine {
         return MessageCardLayout(
             width: width,
             height: height,
-            backdrop: media.backdrop.map { backdropOps($0, width: width, height: height) } ?? [],
+            backdrop: paintedBackdrop(media, width: width, height: canvas.unbounded ? canvas.viewportHeight : height),
             ops: headerOps + contentOps,
             regions: regions,
             watermark: MessageCardLayout.watermark(handle: input.handle),
             truncated: truncated,
             crowdedByMedia: crowdedByMedia,
-            mediaScaleLimit: mediaLimit
+            mediaScaleLimit: mediaLimit,
+            viewportHeight: canvas.unbounded ? canvas.viewportHeight : nil
         )
     }
 
@@ -496,6 +509,35 @@ struct MessageCardLayoutEngine {
                 .dot(MessageCardDotOp(x: x, y: y + block - 26, radius: 10, color: accent)),
             ]
         case .bulles, .silence:
+            return []
+        case .points, .losange, .asterisme, .double:
+            return centredLinkOps(link, middle: y + block / 2, canvas: canvas)
+        }
+    }
+
+    /// Les liaisons centrées sur la carte : elles ne dépendent pas du sens de lecture.
+    private func centredLinkOps(_ link: MessageCardLinkID, middle: Double, canvas: MessageCardCanvas) -> [MessageCardOp] {
+        let accent = palette.accent
+        let centre = (canvas.left + canvas.right) / 2
+        func mark(_ text: String, size: Double, lift: Double) -> MessageCardOp {
+            .text(MessageCardTextOp(
+                text: text, x: centre, y: middle + lift, font: MessageCardFont(face: .system(700), size: size),
+                color: accent, align: .center, direction: .ltr
+            ))
+        }
+        func rule(_ x1: Double, _ x2: Double, _ y: Double) -> MessageCardOp {
+            .separator(MessageCardSeparatorOp(x1: x1, x2: x2, y: y, radius: 0, color: accent, dash: [], lineWidth: 3))
+        }
+        switch link {
+        case .points:
+            return [-36.0, 0, 36].map { .dot(MessageCardDotOp(x: centre + $0, y: middle, radius: 7, color: accent)) }
+        case .losange:
+            return [rule(centre - 170, centre - 40, middle), mark("◆", size: 44, lift: 15), rule(centre + 40, centre + 170, middle)]
+        case .asterisme:
+            return [mark("⁂", size: 72, lift: 26)]
+        case .double:
+            return [rule(canvas.left, canvas.right, middle - 7), rule(canvas.left, canvas.right, middle + 7)]
+        default:
             return []
         }
     }

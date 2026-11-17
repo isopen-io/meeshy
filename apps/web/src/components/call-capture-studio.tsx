@@ -182,7 +182,7 @@ export function CaptureStatus({ status }: { readonly status: StudioStatus | null
     <p
       role="status"
       aria-live="polite"
-      className={`glass-call min-h-8 rounded-full px-4 py-1.5 text-mini font-semibold transition-opacity motion-reduce:transition-none ${status === null ? 'opacity-0' : 'opacity-100'} ${status?.tone === 'error' ? 'text-[var(--ios-error,var(--color-error))]' : 'text-on-media'}`}
+      className={`glass-call min-h-8 rounded-full px-4 py-1.5 [@media(max-height:480px)]:absolute [@media(max-height:480px)]:top-0 text-mini font-semibold transition-opacity motion-reduce:transition-none ${status === null ? 'opacity-0' : 'opacity-100'} ${status?.tone === 'error' ? 'text-[var(--ios-error,var(--color-error))]' : 'text-on-media'}`}
       data-call-capture-status={status?.tone ?? ''}
     >
       {status?.text ?? ''}

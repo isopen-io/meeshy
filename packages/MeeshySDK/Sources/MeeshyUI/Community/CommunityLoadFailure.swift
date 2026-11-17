@@ -39,14 +39,13 @@ extension CommunityLoadFailure {
         }
     }
 
-    public var message: String {
+    /// Seul un refus s'explique : le titre dit l'échec réseau ou serveur, et « Réessayer » dit quoi faire (épure #18088).
+    public var message: String? {
         switch self {
         case .refused:
             return String(localized: "community.detail.refused.body", defaultValue: "Elle n'existe pas, ou elle est privée et vous n'en êtes pas membre.", bundle: .module)
-        case .network:
-            return String(localized: "community.detail.loadFailed.body", defaultValue: "Vérifiez votre connexion, puis réessayez.", bundle: .module)
-        case .server:
-            return String(localized: "community.detail.serverFailed.body", defaultValue: "Le problème vient de notre côté. Réessayez dans un instant.", bundle: .module)
+        case .network, .server:
+            return nil
         }
     }
 

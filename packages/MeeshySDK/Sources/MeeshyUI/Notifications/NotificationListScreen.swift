@@ -263,7 +263,7 @@ public struct NotificationListScreen<ViewModel: NotificationListModeling>: View 
             case .all: return String(localized: "notifications.empty.all", defaultValue: "Aucune notification", bundle: .module)
             case .unread: return String(localized: "notifications.empty.unread", defaultValue: "Aucune notification non lue", bundle: .module)
             case .messages: return String(localized: "notifications.empty.messages", defaultValue: "Aucune notification de message", bundle: .module)
-            case .reactions: return String(localized: "notifications.empty.reactions", defaultValue: "Aucune reaction", bundle: .module)
+            case .reactions: return String(localized: "notifications.empty.reactions", defaultValue: "Aucune réaction", bundle: .module)
             case .mentions: return String(localized: "notifications.empty.mentions", defaultValue: "Aucune mention", bundle: .module)
             case .social: return String(localized: "notifications.empty.social", defaultValue: "Aucune notification sociale", bundle: .module)
             case .engagement: return String(localized: "notifications.empty.engagement", defaultValue: "Aucun engagement", bundle: .module)
@@ -284,10 +284,6 @@ public struct NotificationListScreen<ViewModel: NotificationListModeling>: View 
             Text(emptyMessage)
                 .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
-
-            Text(String(localized: "notifications.empty.subtitle", defaultValue: "Vos notifications apparaîtront ici", bundle: .module))
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundStyle(theme.textMuted)
             Spacer()
         }
     }

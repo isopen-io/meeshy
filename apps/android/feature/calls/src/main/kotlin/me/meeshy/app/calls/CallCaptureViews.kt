@@ -1,6 +1,5 @@
 package me.meeshy.app.calls
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,42 +36,48 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoSet
 import me.meeshy.sdk.model.call.CallCaptureKind
+import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallTopBanner
 import me.meeshy.sdk.model.call.CallTopBannerStack
-import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.sdk.model.call.CallVerticalEdge
+import me.meeshy.ui.theme.MeeshyPalette
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * #16665 — R1 : la capsule rouge « Karim capture l’écran de l’appel », 44 dp, un petit anneau
- * blanc puis la phrase. Elle ne suit pas le chrome : une capture ne se cache pas (iOS `CallCaptureAlertCapsule`, web
- * `CallCaptureAlerts`). TalkBack l'annonce.
+ * #16665 — R1 : la puce « Karim capture l’écran de l’appel », 44 dp, un petit anneau blanc puis la phrase, sur le verre
+ * teinté rouge du kit, la recette même du bandeau « Vous partagez votre écran » (#17963, R1.2 ; iOS
+ * `CallCaptureAlertCapsule`), par l'unique entrée du verre de l'appel ([CallGlassPlate]). Aucun bouton. TalkBack l'annonce.
  */
 @Composable
 internal fun CallCaptureCapsule(name: String, modifier: Modifier = Modifier) {
     val text = stringResource(R.string.call_peer_screen_capturing, name)
-    Row(
-        modifier = modifier
-            .height(44.dp)
-            .background(MeeshyTheme.tokens.error.copy(alpha = 0.9f), CircleShape)
-            .padding(horizontal = 14.dp)
-            .semantics {
-                contentDescription = text
-                liveRegion = LiveRegionMode.Assertive
-            },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    CallGlassPlate(
+        modifier = modifier.semantics {
+            contentDescription = text
+            liveRegion = LiveRegionMode.Assertive
+        },
+        shape = CircleShape,
+        tint = MeeshyPalette.Error.copy(alpha = BANNER_TINT_ALPHA),
     ) {
-        Box(Modifier.size(10.dp).border(2.dp, Color.White, CircleShape))
-        Text(
-            text = text,
-            color = Color.White,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.clearAndSetSemantics { },
-        )
+        Row(
+            modifier = Modifier
+                .height(44.dp)
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(Modifier.size(10.dp).border(2.dp, Color.White, CircleShape))
+            Text(
+                text = text,
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clearAndSetSemantics { },
+            )
+        }
     }
 }
 
@@ -80,10 +85,13 @@ internal fun CallCaptureCapsule(name: String, modifier: Modifier = Modifier) {
 private data class CaptureFace(val name: String)
 
 /**
- * R1.1 · R1.6 — la capsule de capture est le troisième maillon de la pile des bandeaux du haut ([CallTopBannerStack]), après le
+ * R1.1 · R1.6 — la puce de capture est le troisième maillon de la pile des bandeaux du haut ([CallTopBannerStack]), après le
  * partage et l'enregistrement : elle se range sous eux au lieu de les recouvrir, et le cadre en direct descend sous elle. Elle
- * arrive du haut et y repart ([CallBannerPresence]), en audio comme en vidéo, en duo comme en groupe, hors du fondu du chrome ;
- * elle dit sa hauteur à ma vignette, qui descend d'autant (R1.5). Absente de la fenêtre d'image dans l'image (iOS `CallTopBannerStackView`).
+ * arrive du haut et y repart ([CallBannerPresence]), en audio comme en vidéo, en duo comme en groupe, et elle se range au premier
+ * toucher AVEC les bannières (`CallChromeElement.CaptureAlert`, loi 11, #17963), par le même chemin que le bandeau de partage, et
+ * revient au second ; « Réduire les animations » : un fondu. Sous TalkBack, rien ne se range. Sa fenêtre de 5 s court pendant
+ * qu'elle est rangée. Elle dit sa hauteur à ma vignette, qui descend d'autant (R1.5). Absente de la fenêtre d'image dans l'image
+ * (iOS `CallTopBannerStackView`). Celui qui capture ne la voit jamais : sa capture n'entre qu'à son journal (R1.8).
  */
 @Singleton
 class CallCaptureBannerOverlay @Inject constructor() : CallOverlay {
@@ -96,13 +104,20 @@ class CallCaptureBannerOverlay @Inject constructor() : CallOverlay {
         val state = context.state
         val face = if (state.isPeerScreenCapturing && !context.inPip) CaptureFace(state.peerScreenCapturerName.ifBlank { state.peerName }) else null
         CallBannerPresence(face) { shown ->
-            CallCaptureCapsule(
-                name = shown.name,
-                modifier = Modifier
-                    .padding(horizontal = CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp)
-                    .padding(top = CallTopBannerStack.GAP_DP.dp)
-                    .reportsTopBannerHeight(CallTopBanner.Capture),
-            )
+            CallChromeFade(
+                isVisible = context.chrome.isVisible(CallChromeElement.CaptureAlert),
+                onRevive = context.onChromeRevive,
+                stowsToward = CallVerticalEdge.Top,
+                edgeMargin = CallTopBannerStack.HEADER_ROW_CLEARANCE_DP.dp,
+            ) {
+                CallCaptureCapsule(
+                    name = shown.name,
+                    modifier = Modifier
+                        .padding(horizontal = CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp)
+                        .padding(top = CallTopBannerStack.GAP_DP.dp)
+                        .reportsTopBannerHeight(CallTopBanner.Capture),
+                )
+            }
         }
     }
 }
@@ -149,6 +164,7 @@ internal fun captureKindPhrase(kind: CallCaptureKind): Int = when (kind) {
 /** Who a live capture names: me, or the peer (the roster name in a group arrives with the name of the duo). */
 internal fun liveCaptureName(capture: CallLiveCapture, selfId: String?, youLabel: String, peerName: String): String = when {
     !capture.kind.namesCapturer -> ""
+    capture.isLocal -> youLabel
     selfId != null && capture.userId == selfId -> youLabel
     else -> capture.name.ifBlank { peerName }
 }

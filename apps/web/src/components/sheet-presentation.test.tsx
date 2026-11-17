@@ -1,5 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 
+import { DIALOG_FADE_MS, SHEET_MOTION_MS } from '@/lib/view/dialog-exit';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -106,5 +108,98 @@ describe('Sheet — présentation', () => {
     expect(classes).toContain('w-[min(36rem,calc(100%-2rem))]');
     expect(classes).toContain('max-h-[min(90dvh,calc(100%-2rem))]');
     expect(dialog?.style.width).toBe('');
+  });
+});
+
+/**
+ * LA FEUILLE ENTRE ET SORT EN MOUVEMENT (#18362) — le ✕, le chevron et le voile ferment le dialogue
+ * au même moment qu'avant (`onClose` dans le même toucher), et un fantôme joue la sortie.
+ */
+describe('Sheet — mouvement', () => {
+  const withPopover = async (run: () => Promise<void>): Promise<void> => {
+    Object.defineProperty(HTMLElement.prototype, 'showPopover', { configurable: true, writable: true, value() {} });
+    try {
+      await run();
+    } finally {
+      delete (HTMLElement.prototype as { showPopover?: unknown }).showPopover;
+      for (const ghost of document.querySelectorAll('[data-dialog-ghost]')) ghost.remove();
+    }
+  };
+
+  test('le ✕ rappelle onClose dans le même toucher et laisse un fantôme de la feuille', async () =>
+    withPopover(async () => {
+      const closed: string[] = [];
+      const host = await mounter.mount(
+        <Sheet title="Pays" presentation="bottom" onClose={() => closed.push('close')}>
+          <li>France</li>
+        </Sheet>,
+      );
+      host.querySelector<HTMLButtonElement>('[data-sheet-close]')?.click();
+      expect(closed).toEqual(['close']);
+      expect(host.querySelector('dialog')?.open).toBe(false);
+      expect(document.querySelector('[data-dialog-ghost]')?.getAttribute('data-dialog-ghost')).toBe('bottom');
+    }));
+
+  test('le chevron et le voile font de même', async () =>
+    withPopover(async () => {
+      const closed: string[] = [];
+      const host = await mounter.mount(
+        <Sheet title="Détail" backLabel="Retour" onClose={() => closed.push('back')}>
+          <li>France</li>
+        </Sheet>,
+      );
+      host.querySelector<HTMLButtonElement>('[data-sheet-back]')?.click();
+      expect(closed).toEqual(['back']);
+      expect(document.querySelectorAll('[data-dialog-ghost="fullscreen"]')).toHaveLength(1);
+
+      const second = await mounter.mount(
+        <Sheet title="Pays" onClose={() => closed.push('veil')}>
+          <li>France</li>
+        </Sheet>,
+      );
+      second.querySelector('dialog')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      expect(closed).toEqual(['back', 'veil']);
+      expect(document.querySelectorAll('[data-dialog-ghost="fullscreen"]')).toHaveLength(2);
+    }));
+
+  test('le dialogue porte les durées de la fiche, en variables que sheet-motion.css lit', async () => {
+    const host = await mounter.mount(
+      <Sheet title="Pays" onClose={() => {}}>
+        <li>France</li>
+      </Sheet>,
+    );
+    const dialog = host.querySelector('dialog');
+    expect(dialog?.style.getPropertyValue('--dialog-rise-ms')).toBe(`${SHEET_MOTION_MS}ms`);
+    expect(dialog?.style.getPropertyValue('--dialog-fade-ms')).toBe(`${DIALOG_FADE_MS}ms`);
+    expect(dialog?.style.getPropertyValue('--dialog-motion-curve')).not.toBe('');
+  });
+
+  test('sheet-motion.css n’anime que sous no-preference, en durées de variables', () => {
+    const css = readFileSync(new URL('../styles/sheet-motion.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const start = css.indexOf('@media (prefers-reduced-motion: no-preference)');
+    const end = css.indexOf('@keyframes');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = css.slice(start, end);
+    expect(block.split('{').length).toBe(block.split('}').length);
+    expect(css.slice(0, start) + css.slice(end)).not.toMatch(/animation\s*:/);
+    const animations = [...css.matchAll(/animation\s*:\s*([^;]+);/g)].map((match) => match[1] ?? '');
+    expect(animations.length).toBeGreaterThan(0);
+    for (const animation of animations) {
+      expect(animation).toMatch(/var\(--dialog-(?:rise|fade)-ms\)/);
+      expect(animation).not.toMatch(/\d+m?s\b/);
+    }
+    expect(readFileSync(new URL('./sheet.tsx', import.meta.url), 'utf8')).toContain("import '@/styles/sheet-motion.css'");
+  });
+
+  test('le voile d’un fantôme ne prend aucun toucher, hors de toute préférence de mouvement', () => {
+    const css = readFileSync(new URL('../styles/sheet-motion.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const outside = css.slice(0, css.indexOf('@media'));
+    expect(outside).toMatch(/\[data-dialog-ghost\]::backdrop\s*\{[^}]*pointer-events\s*:\s*none/);
+  });
+
+  test('la feuille du jeu ne porte plus sa propre animation de feuille', () => {
+    const css = readFileSync(new URL('../styles/game.css', import.meta.url), 'utf8');
+    expect(css).not.toContain('data-sheet-presentation');
+    expect(css).not.toContain('gameSheetRise');
   });
 });

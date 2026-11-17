@@ -70,6 +70,7 @@ import {
 } from './sovereign-message-projection';
 import { logError } from '../../utils/logger.js';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { withCallSummaryParticipantNames } from '../../services/calls/callSummaryParticipantNames';
 import { conversationIdParams } from './admin-conversation-response-schemas';
 
 const REASON_MIN_LENGTH = 10;
@@ -205,7 +206,8 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
        * médium (leçon 275). Le détail de chaque garde vit dans le doc-comment
        * de `sovereign-message-projection.ts`.
        */
-      const data = messages.map(mapSovereignMessageRow);
+      // #18242 B2 — le nom des participants d'un résumé d'appel se lit à la lecture.
+      const data = await withCallSummaryParticipantNames(fastify.prisma, messages.map(mapSovereignMessageRow));
 
       const authContext = (request as UnifiedAuthRequest).authContext;
       // Best-effort, écrite APRÈS le succès de la lecture (cf. doc de

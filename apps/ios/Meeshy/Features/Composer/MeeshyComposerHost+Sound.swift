@@ -100,10 +100,9 @@ extension MeeshyComposerHost {
     /// qui est `public internal(set)` et le reste.
     ///
     /// > Sans la seconde moitié, la promotion « marcherait » et serait
-    /// > invisible : un fond n'a pas de position utile, donc deux sons promus
-    /// > l'un après l'autre se poseraient au même point. L'auteur verrait UNE
-    /// > puce là où le compte en annonce deux — le défaut que
-    /// > `StoryObjectPlacement` existe pour empêcher.
+    /// > invisible : un fond n'a pas de position utile, et la puce resterait
+    /// > là où le fond l'avait laissée. Elle se pose au centre, comme tout
+    /// > objet neuf (`StoryObjectPlacement`, #18719).
     func promoteBackgroundSound(_ sound: StoryAudioPlayerObject) {
         guard let id = ComposerSoundPromotion.promotableId(
             background: sound,

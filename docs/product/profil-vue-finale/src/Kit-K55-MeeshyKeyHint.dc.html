@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K55 MeeshyKeyHint</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:880px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:18px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;flex-direction:column;justify-content:center;flex:1;min-height:112px;gap:12px}
+.stage.c{align-items:center}
+.sub{display:flex;align-items:center;gap:12px;font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);padding-top:10px}
+.sub>code{text-transform:none;letter-spacing:0}
+.sub::after{content:"";flex:1;height:1px;background:var(--line)}
+
+.mx kbd{display:inline-flex;align-items:center;justify-content:center;gap:2px;min-width:26px;height:26px;padding:0 6px;border-radius:8px;background:var(--field);border:1px solid var(--line);border-bottom-width:2.5px;font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:12.5px;font-weight:700;line-height:1;color:var(--ink2);flex:none;white-space:nowrap;transition:transform .12s ease-out}
+.mx kbd .ic{width:12px;height:12px}
+.mx kbd.c{min-width:20px;height:20px;padding:0 5px;border-radius:6px;font-size:10.5px;border-bottom-width:2px}
+.mx kbd.c .ic{width:10px;height:10px}
+.kx{display:inline-flex;align-items:center;gap:4px;flex:none}
+.kx.c{gap:3px}
+.kp{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.kf{display:block;width:1px;height:18px;background:var(--glass-line);flex:none}
+.mx .btn.p kbd,.mx kbd.of{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.34);color:#fff}
+.mx .btn.a kbd,.mx kbd.oa{background:rgba(9,9,11,.1);border-color:rgba(9,9,11,.3);color:#0B0B12}
+.mx .btn.g kbd,.mx kbd.og{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.22);color:var(--ink)}
+.mx[data-theme=light] .btn.g kbd,.mx[data-theme=light] kbd.og{background:rgba(67,56,202,.07);border-color:rgba(67,56,202,.2);color:var(--ink2)}
+.mx kbd.dn{transform:translateY(1.5px);background:color-mix(in oklab,var(--accent) 30%,var(--field));border-color:var(--accent);color:var(--ink)}
+.mx .btn.p kbd.dn{background:rgba(255,255,255,.4);border-color:#fff;color:#fff}
+.lbar{display:inline-flex;align-items:center;gap:10px;height:44px;padding:0 14px 0 10px;border-radius:14px;font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;background:rgba(19,17,28,.66)}
+.mx[data-theme=light] .lbar{background:rgba(255,255,255,.72)}
+.lfoot{display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap;font-size:13px;color:var(--ink3)}
+.back{position:relative;overflow:hidden;border-radius:22px;background:radial-gradient(120% 140% at 15% 10%,color-mix(in oklab,var(--accent) 34%,var(--raised)),var(--raised) 60%),var(--raised);border:1px solid var(--line)}
+.act{display:flex;flex-direction:column;align-items:center;gap:9px;min-width:0;font-size:12.5px;font-weight:600;color:var(--ink);text-align:center}
+.vtab{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 12px 8px 14px;border-radius:18px;border:1px solid var(--line);font-weight:700;font-size:14px;color:var(--ink)}
+.vtab small{font-size:12px;font-weight:500;color:var(--ink3)}
+.menu{display:flex;flex-direction:column;border-radius:20px;padding:6px;background:var(--raised);border:1px solid var(--line);box-shadow:0 18px 40px rgba(0,0,0,.4)}
+.menu>button{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 10px 0 12px;border-radius:14px;font-size:14px;font-weight:600;color:var(--ink)}
+.menu>button>span{flex:1;min-width:0}
+.menu>button.hv{background:var(--field)}
+.menu>i{display:block;height:1px;margin:5px 10px;background:var(--line)}
+
+.z3{zoom:4}.z2{zoom:2}
+.num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;align-items:center;gap:20px;padding:26px 30px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.tk{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:8px;background:var(--field);border:1px solid var(--line);font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;color:var(--ink2);white-space:nowrap}
+
+.mx kbd.mv-key{animation:khKey 5.6s ease-out infinite}
+.mv-host{animation:khHost 5.6s cubic-bezier(.3,1.6,.5,1) infinite}
+.mv-out{animation:khOut 5.6s cubic-bezier(.2,.9,.25,1) infinite}
+.mx kbd.mv-cmd{animation:khHold 5.6s ease-out infinite}
+.mv-bar{animation:khBar 5.6s cubic-bezier(.2,.9,.25,1) infinite}
+@keyframes khKey{0%,18%{transform:none;background:var(--field);border-color:var(--line);color:var(--ink2)}21%,25%{transform:translateY(1.5px);background:color-mix(in oklab,var(--accent) 30%,var(--field));border-color:var(--accent);color:var(--ink)}31%,100%{transform:none;background:var(--field);border-color:var(--line);color:var(--ink2)}}
+@keyframes khHost{0%,24%{transform:scale(1)}28%{transform:scale(.94)}36%,100%{transform:scale(1)}}
+@keyframes khOut{0%,28%{opacity:0;transform:translateY(14px) scale(.97)}38%,82%{opacity:1;transform:none}90%,100%{opacity:0;transform:translateY(6px)}}
+@keyframes khHold{0%,14%{transform:none;background:var(--field);border-color:var(--line);color:var(--ink2)}18%,78%{transform:translateY(1.5px);background:color-mix(in oklab,var(--accent) 30%,var(--field));border-color:var(--accent);color:var(--ink)}84%,100%{transform:none;background:var(--field);border-color:var(--line);color:var(--ink2)}}
+@keyframes khBar{0%,30%{opacity:0;transform:translateY(16px) scale(.97)}40%,78%{opacity:1;transform:none}86%,100%{opacity:0;transform:translateY(8px)}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #A855F7; opacity: .22"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #6366F1; opacity: .18; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K55 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyKeyHint</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Un raccourci clavier se montre partout par la même touche, seule, dans un bouton ou en légende</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 840px">Le profil sur ordinateur et sur iPad dessine des touches à sept endroits, de cinq façons. K55 en fait une seule : une touche qui dit la bonne lettre, le bon modificateur pour la machine, et qui disparaît sans laisser de trou quand il n'y a pas de clavier.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il montre la touche, il ne l'écoute pas</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dessine <b>une touche</b> ou <b>une combinaison</b> de touches accolées, toujours le même carré-arrondi en chasse fixe.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Choisit <b>le glyphe du modificateur</b> selon la machine : la boucle de Commande sur Apple, « Ctrl » ailleurs. L'hôte écrit <code>primary</code>, jamais l'un des deux.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Se pose <b>dans le flux</b>, <b>dans un bouton</b>, sous une action ou en fin de ligne, et s'aligne en <b>légende</b> de paires touche et libellé.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span><b>Ne rend rien</b> sans clavier matériel, et dit le raccourci à la voix : « raccourci : Commande M ».</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Écouter le clavier, ni décider quelle frappe appartient à qui : la table des raccourcis et la loi de cession restent à l'app.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le bouton qui le porte : <b>K40</b> <code>MeeshyButton</code>. L'action libellée : <b>K32</b>. L'en-tête de section : <b>K44</b>. La ligne de menu : <b>K18</b> <code>MeeshyObjectMenu</code>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le verre de la barre de légende : <b>K01</b> <code>MeeshyGlassTone</code>. Le bouton rond qui la referme : <b>K02</b> <code>MeeshyGlassButton</code>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Le libellé d'une paire : un mot déjà traduit, passé par l'hôte. La page « Tous les raccourcis » : un écran de l'app, fait de légendes.</span></div>
+</div>
+</div>
+<div class="law">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:keyboard l]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<b class="d" style="font-size: 20px">Une touche affichée est une promesse : le raccourci marche ici, maintenant, sur cette machine.</b>
+<span style="font-size: 15px; line-height: 1.5; color: var(--ink2); max-width: 1020px">Pas de touche sur une commande désactivée, pas de touche quand une zone de saisie a pris la frappe, pas de touche sur un téléphone. L'hôte donne le raccourci une fois, à la commande ; K55 le montre et le fait lire depuis cette même valeur.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Une touche, une combinaison, une légende</h2><p>La combinaison « Commande M » à quatre fois sa taille, puis la barre apparue au maintien de Commande sur iPad, à deux fois. Les mesures données sont celles de la taille réelle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="flex-direction: column; align-items: center; justify-content: center; gap: 72px; padding: 76px 48px 72px">
+
+<div style="position: relative; display: inline-flex">
+<span class="kx z3"><kbd>[[ic:command s]]</kbd><kbd>M</kbd></span>
+<span class="kan" style="left: -36px; top: 41px">1</span>
+<span class="kan" style="left: 41px; top: -32px">3</span>
+<span class="kan" style="left: 41px; bottom: -32px">2</span>
+<span class="kan" style="left: 101px; bottom: -32px">5</span>
+<span class="kan" style="left: 161px; top: -32px">4</span>
+</div>
+
+<div style="align-self: stretch; height: 0; border-top: 1.5px dashed var(--line)"></div>
+
+<div class="back" style="position: relative; overflow: visible; padding: 44px 40px; display: inline-flex">
+<div class="glass lbar z2" role="note">
+<span class="kp"><span class="kx"><kbd class="og">[[ic:command s]]</kbd><kbd class="og">M</kbd></span><span>Carte</span></span>
+<span class="kf"></span>
+<span class="kp"><span class="kx"><kbd class="og">[[ic:command s]]</kbd><kbd class="og">[[ic:arrow-elbow-down-left s]]</kbd></span><span>Écrire</span></span>
+</div>
+<span class="kan" style="left: 6px; top: 76px">9</span>
+<span class="kan" style="left: 112px; top: 12px">6</span>
+<span class="kan" style="left: 265px; bottom: 12px">7</span>
+<span class="kan" style="left: 446px; top: 12px">8</span>
+</div>
+
+</div>
+<div style="display: flex; flex-direction: column; gap: 18px">
+<span class="pf">Touche et combinaison</span>
+<div class="lgd">
+<span class="kan">1</span><div><b>Touche</b><span>Carré-arrondi de 26, rayon 8, largeur minimale 26, marge intérieure 6. Fond <code>--field</code>, bord 1 <code>--line</code>. Taille <code>compact</code> : 20, rayon 6.</span></div>
+<span class="kan">2</span><div><b>Lèvre</b><span>Bord bas de 2,5 (2 en <code>compact</code>) : c'est elle qui dit « touche » et non « puce ». Elle reste quand la touche s'enfonce.</span></div>
+<span class="kan">3</span><div><b>Glyphe de modificateur</b><span>Icône de 12, encre de la touche. Commande sur Apple ; le mot « Ctrl » partout ailleurs. Résolu par la recette depuis <code>primary</code>.</span></div>
+<span class="kan">4</span><div><b>Caractère</b><span>JetBrains Mono 700, 12,5 (10,5 en <code>compact</code>), <code>--ink2</code>. Une lettre en capitale, ou un nom court : « Échap », « Espace ».</span></div>
+<span class="kan">5</span><div><b>Écart de combinaison</b><span>4 entre deux touches accolées (3 en <code>compact</code>). Jamais de signe « + » : l'accolement suffit.</span></div>
+</div>
+<span class="pf" style="padding-top: 6px">Légende</span>
+<div class="lgd">
+<span class="kan">6</span><div><b>Paire</b><span>Touche ou combinaison, puis son libellé, écart 6. La paire ne se coupe jamais en deux lignes.</span></div>
+<span class="kan">7</span><div><b>Filet</b><span>1 sur 18, <code>--glass-line</code>, entre deux groupes. Écart 10 de part et d'autre.</span></div>
+<span class="kan">8</span><div><b>Libellé</b><span>13 · 600, <code>--ink</code> sur le verre, <code>--ink3</code> dans un pied de page. Un ou deux mots, sans verbe conjugué.</span></div>
+<span class="kan" style="border-bottom: 0">9</span><div style="border-bottom: 0"><b>Conteneur, optionnel</b><span>Barre de 44, rayon 14, verre demandé à K01. Sans conteneur, la légende coule dans son hôte et passe à la ligne.</span></div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Trois contextes, deux états, une absence</h2><p>Tout est à taille réelle. Les spécimens viennent des écrans du profil sur ordinateur et sur iPad : mêmes commandes, mêmes lettres.</p></header>
+
+<span class="sub"><code>free</code><span>dans le flux, à côté de ce qu'il déclenche</span></span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage c"><kbd>/</kbd></div>
+<div class="cp"><b>Touche seule</b><span class="kcap">Un caractère. Champ de recherche de l'en-tête : « / » y place le curseur.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><span class="kx"><kbd>[[ic:command s]]</kbd><kbd>K</kbd></span><span class="tk">[[ic:apple-logo s]]Apple</span></div>
+<div class="cp"><b>Combinaison · Commande</b><span class="kcap">Mac, iPad, iPhone avec clavier. Deux touches accolées, écart 4.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><span class="kx"><kbd>Ctrl</kbd><kbd>K</kbd></span><span class="tk">[[ic:windows-logo s]]Windows · Linux · Android</span></div>
+<div class="cp"><b>Combinaison · Ctrl</b><span class="kcap">La même valeur <code>primary</code>, rendue en toutes lettres. La touche s'élargit, sa hauteur ne change pas.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><span style="display: flex; align-items: center; gap: 12px"><kbd>Échap</kbd><kbd>Espace</kbd><kbd>[[ic:arrow-elbow-down-left s]]</kbd></span></div>
+<div class="cp"><b>Touche nommée</b><span class="kcap">Nom court traduit par le kit. Entrée, Tab et Retour arrière ont un glyphe.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><span class="kp" style="font-size: 13px; color: var(--ink3)"><span class="kx"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span><span>faces</span></span></div>
+<div class="cp"><b>Suite de touches</b><span class="kcap">Plusieurs raccourcis d'une même famille, un seul libellé. Même écart que la combinaison : c'est le libellé qui lève le doute.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><span class="kp" style="font-size: 13px; color: var(--ink3)"><span class="kx"><kbd>↑</kbd><kbd>↓</kbd></span><span>changer de lien</span></span></div>
+<div class="cp"><b>Flèches</b><span class="kcap">En lecture de droite à gauche, la paire gauche et droite s'échange ; haut et bas, jamais.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><span style="display: flex; align-items: center; gap: 14px"><span class="kx"><kbd>[[ic:command s]]</kbd><kbd>M</kbd></span><span class="kx c"><kbd class="c">[[ic:command s]]</kbd><kbd class="c">M</kbd></span></span></div>
+<div class="cp"><b>Deux tailles</b><span class="kcap"><code>regular</code> 26 partout ; <code>compact</code> 20 seulement sous une action de K32, où la place manque.</span></div>
+</div>
+<div class="kcell kc" style="padding: 0; overflow: hidden">
+<div class="mx" data-theme="light" style="display: flex; flex-direction: column; gap: 18px; padding: 28px; flex: 1; background: var(--ground)">
+<div class="stage c"><span style="display: flex; align-items: center; gap: 14px"><span class="kx"><kbd>[[ic:command s]]</kbd><kbd>K</kbd></span><kbd>Échap</kbd></span></div>
+<div class="cp"><b>Thème clair</b><span class="kcap">Mêmes jetons. La lèvre reste lisible sur blanc : 3:1 au moins contre le fond.</span></div>
+</div>
+</div>
+</div>
+
+<span class="sub"><code>inset</code><span>dans une commande : il en prend la surface</span></span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage c"><button class="btn p sm" aria-keyshortcuts="N">[[ic:plus s]]<span>Nouveau lien</span><kbd>N</kbd></button></div>
+<div class="cp"><b>Dans un K40 plein · Liens</b><span class="kcap">Surface <code>onFill</code> : voile blanc 16 %, bord 34 %, encre blanche. La touche est le dernier élément.</span></div>
+</div>
+<div class="kcell kc">
+<div class="back stage c" style="min-height: 112px"><button class="btn g sm" aria-keyshortcuts="Meta+K">[[ic:magnifying-glass s]]<span>Chercher</span><span class="kx"><kbd>[[ic:command s]]</kbd><kbd>K</kbd></span></button></div>
+<div class="cp"><b>Dans un K40 de verre · en-tête</b><span class="kcap">Surface <code>onGlass</code> : voile 14 %, bord 22 %, encre <code>--ink</code>. Aucun flou propre : celui du bouton suffit.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><button class="btn a sm" aria-keyshortcuts="I">[[ic:navigation-arrow s]]<span>Itinéraire</span><kbd>I</kbd></button></div>
+<div class="cp"><b>Dans un K40 d'accent · carte</b><span class="kcap">Surface <code>onAccent</code> : voile sombre 10 %, bord 30 %, encre <code>#0B0B12</code>, quel que soit l'accent.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><button class="btn q sm" aria-keyshortcuts="C">[[ic:copy s]]<span>Copier le lien</span><kbd>C</kbd></button></div>
+<div class="cp"><b>Dans un K40 à contour · fiche publique</b><span class="kcap">Surface <code>auto</code> : la touche du flux, telle quelle.</span></div>
+</div>
+<div class="kcell kc">
+<div class="back stage c" style="min-height: 150px"><span style="display: flex; gap: 26px"><button class="act" aria-keyshortcuts="M"><span class="ib g lg">[[ic:map-trifold]]</span><span style="display: inline-flex; align-items: center; gap: 6px">Ma carte<kbd class="c og">M</kbd></span></button><button class="act"><span class="ib g lg">[[ic:qr-code]]</span><span>Mon QR</span></button></span></div>
+<div class="cp"><b>Sous une action de K32 · Actions</b><span class="kcap">Taille <code>compact</code>, à la suite du libellé. L'action sans raccourci garde sa largeur : rien n'est réservé.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage"><div class="menu" role="menu" aria-label="Actions du lien">
+<button role="menuitem" class="hv">[[ic:copy s]]<span>Copier</span><kbd>C</kbd></button>
+<button role="menuitem">[[ic:pencil-simple s]]<span>Modifier</span><kbd>E</kbd></button>
+<button role="menuitem">[[ic:qr-code s]]<span>Afficher le QR</span></button>
+</div></div>
+<div class="cp"><b>En fin de ligne de K18 · menu d'un billet</b><span class="kcap">Collé au bord de fin, aligné d'une ligne à l'autre. Une ligne sans raccourci reste pleine largeur.</span></div>
+</div>
+<div class="kcell kc" style="grid-column: span 2">
+<div class="stage"><div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px" role="tablist" aria-label="Faces du profil">
+<button class="vtab" role="tab" aria-selected="false">[[ic:link]]<span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span>Liens</span><small>Son lien de profil, ses adresses</small></span><kbd>2</kbd></button>
+<button class="vtab" role="tab" aria-selected="true" style="background: var(--ink); color: var(--ground); border-color: transparent">[[ic:lightning-fill]]<span style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span>Actions</span><small style="color: #3B3A66">La carte est ouverte</small></span><kbd style="background: rgba(9,9,11,.08); border-color: rgba(9,9,11,.28); color: #1E1B4B">3</kbd></button>
+</div></div>
+<div class="cp"><b>Sur un onglet · colonne latérale du profil d'un autre</b><span class="kcap">Sur l'onglet choisi, la surface est claire : la touche passe à la surface <code>onAccent</code>, encre sombre.</span></div>
+</div>
+</div>
+
+<span class="sub"><code>legend</code><span>plusieurs raccourcis d'un coup, groupés</span></span>
+<div style="display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 20px">
+<div class="kcell kc">
+<div class="stage"><div style="border-top: 1px solid var(--line); background: rgba(19,17,28,.6); padding: 16px 20px; border-radius: 0 0 18px 18px"><div class="lfoot" role="note" aria-label="Raccourcis de cette page">
+<span style="display: inline-flex; align-items: center; gap: 8px; color: var(--ink2); font-weight: 700">[[ic:keyboard s]]<span>Raccourcis</span></span>
+<span class="kp"><span class="kx"><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></span><span>faces</span></span>
+<span class="kp"><kbd>E</kbd><span>modifier</span></span>
+<span class="kp"><kbd>N</kbd><span>nouveau lien</span></span>
+<span class="kp"><kbd>M</kbd><span>carte</span></span>
+<span class="kp"><span class="kx"><kbd>[[ic:command s]]</kbd><kbd>K</kbd></span><span>chercher</span></span>
+</div></div></div>
+<div class="cp"><b>Bandeau de pied · mon profil sur ordinateur</b><span class="kcap">Sans conteneur : la légende coule dans le pied de page, écart 22 entre les paires, et passe à la ligne par paire entière. L'en-tête « Raccourcis » est l'emplacement <code>leading</code>.</span></div>
+</div>
+<div class="kcell kc">
+<div class="back stage c" style="min-height: 112px"><div class="glass lbar" role="note" aria-label="Raccourcis">
+<span class="kp"><span class="kx"><kbd class="og">[[ic:command s]]</kbd><kbd class="og">M</kbd></span><span>Carte</span></span>
+<span class="kf"></span>
+<span class="kp"><span class="kx"><kbd class="og">[[ic:command s]]</kbd><kbd class="og">[[ic:arrow-elbow-down-left s]]</kbd></span><span>Écrire</span></span>
+</div></div>
+<div class="cp"><b>Barre de verre · iPad, Commande maintenue</b><span class="kcap">Conteneur de K01, hauteur 44. Un filet sépare les groupes : ici la carte, puis la conversation.</span></div>
+</div>
+</div>
+
+<span class="sub"><span>états</span><span>repos, enfoncée, absent</span></span>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc">
+<div class="stage c"><button class="btn g sm">[[ic:pencil-simple s]]<span>Modifier</span><kbd>E</kbd></button></div>
+<div class="cp"><b>Repos</b><span class="kcap">La touche ne se touche pas : elle n'a ni survol ni cible. C'est le bouton qui répond.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><button class="btn g sm">[[ic:pencil-simple s]]<span>Modifier</span><kbd class="dn">E</kbd></button><span class="tk">120 ms</span></div>
+<div class="cp"><b>Enfoncée</b><span class="kcap">Quand le raccourci part : la touche descend de 1,5 et prend l'accent, puis revient. Un retour, pas un état durable.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><button class="btn g sm">[[ic:pencil-simple s]]<span>Modifier</span></button><span class="tk">[[ic:hand-tap s]]tactile, sans clavier</span></div>
+<div class="cp"><b>Absent</b><span class="kcap">Rien n'est rendu, rien n'est réservé : le bouton se resserre sur son libellé. Ni touche grisée, ni blanc à sa place.</span></div>
+</div>
+<div class="kcell kc">
+<div class="stage c"><button class="btn g sm" disabled style="opacity: .42">[[ic:pencil-simple s]]<span>Modifier</span></button><span class="tk">commande désactivée</span></div>
+<div class="cp"><b>Commande désactivée</b><span class="kcap">Même règle : une commande qui ne répond pas ne promet aucune touche.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">La touche s'enfonce, la commande répond</h2><p>Deux mouvements, pas un de plus. Quand le raccourci part, la touche affichée s'enfonce et le bouton qui la porte répond comme sous le doigt, sur <code>motion.pulse</code>. La barre de légende arrive et repart sur <code>motion.rise</code> tant que Commande est tenue.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 24px">
+<div class="kcell kc" style="gap: 22px">
+<div style="display: flex; flex-direction: column; gap: 22px; flex: 1">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px"><span class="pf">Le raccourci part</span><span class="tk">motion.pulse</span></div>
+<div class="back" style="display: flex; align-items: center; gap: 18px; padding: 22px; min-height: 108px" aria-hidden="true">
+<span class="btn g sm mv-host"><span style="display: inline-flex">[[ic:map-trifold s]]</span><span>Ma carte</span><kbd class="mv-key">M</kbd></span>
+<span class="mv-out glass" style="display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; border-radius: 14px; font-size: 13px; font-weight: 600"><span style="display: inline-flex; color: var(--accent-ink)">[[ic:map-pin s]]</span><span>Carte ouverte</span></span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px"><span class="pf">Commande maintenue</span><span class="tk">motion.rise</span></div>
+<div class="back" style="display: flex; align-items: center; gap: 18px; padding: 22px; min-height: 108px" aria-hidden="true">
+<span style="display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink2)"><kbd class="mv-cmd">[[ic:command s]]</kbd><span>tenue</span></span>
+<div class="glass lbar mv-bar">
+<span class="kp"><span class="kx"><kbd class="og">[[ic:command s]]</kbd><kbd class="og">M</kbd></span><span>Carte</span></span>
+<span class="kf"></span>
+<span class="kp"><span class="kx"><kbd class="og">[[ic:command s]]</kbd><kbd class="og">[[ic:arrow-elbow-down-left s]]</kbd></span><span>Écrire</span></span>
+</div>
+</div>
+</div>
+</div>
+
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: 1fr auto; gap: 16px">
+<div class="kcell kc" style="padding: 20px; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">1</span><b style="font-size: 14.5px">Au repos</b></div>
+<div class="stage c" style="min-height: 110px"><span class="btn g sm">[[ic:map-trifold s]]<span>Ma carte</span><kbd>M</kbd></span></div>
+<span class="kcap">La touche attend. Elle a la surface de son bouton et ne bouge pas au survol.</span>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">2</span><b style="font-size: 14.5px">« M » est frappé</b></div>
+<div class="stage c" style="min-height: 110px"><span class="btn g sm" style="transform: scale(.94)">[[ic:map-trifold s]]<span>Ma carte</span><kbd class="dn">M</kbd></span></div>
+<span class="kcap"><code>motion.pulse</code> : la touche descend de 1,5 et prend l'accent ; le bouton se contracte à 0,94 comme sous un doigt.</span>
+</div>
+<div class="kcell kc" style="padding: 20px; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="num">3</span><b style="font-size: 14.5px">L'action est partie</b></div>
+<div class="stage c" style="min-height: 110px"><span class="btn g sm">[[ic:map-trifold s]]<span>Ma carte</span><kbd>M</kbd></span><span class="tk">[[ic:map-pin s]]Carte ouverte</span></div>
+<span class="kcap">Tout est revenu en 120 ms. L'écran a déjà changé : le retour ne retarde jamais l'action.</span>
+</div>
+<div class="kcell kc" style="grid-column: span 3; padding: 20px 24px; flex-direction: row; align-items: center; gap: 18px; min-height: 0">
+<span style="display: inline-flex; color: var(--warn)">[[ic:hand-tap]]</span>
+<span class="kcap" style="font-size: 13.5px"><b style="color: var(--ink)">Le clavier arrive et repart sans secousse.</b> Brancher un clavier fait apparaître les touches en fondu, sans animer la largeur des boutons ; le retirer les efface. Une frappe refusée (commande désactivée, zone de saisie active) n'enfonce rien : une touche qui bouge sans effet mentirait.</span>
+</div>
+</div>
+</div>
+<span class="spec">durée : motion.pulse, 120 ms enfoncée puis retour · motion.rise, 280 ms à l'entrée de la barre, 160 ms à la sortie · courbe : sortie douce pour la touche, ressort de K26 pour le bouton, décélération sans dépassement pour la barre · déclencheur : le raccourci reconnu par l'hôte (jamais la frappe brute) ; Commande tenue 600 ms · haptique : aucune, la main est sur le clavier · mouvement réduit : la touche change de teinte sans descendre, la barre apparaît et disparaît sans glisser</span>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Une liste de touches, un contexte, une surface. Aucune signature ne nomme une carte, un lien, une face ou une personne : l'hôte passe des touches abstraites et des libellés déjà traduits. Le composant n'installe aucun écouteur.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyKeyHint.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-key-hint.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyKeyHint(keys:context:size:surface:isPressed:)</code></span><span><code>MeeshyKeyHint(keys, modifier, context, size, surface, isPressed)</code></span><span><code>&lt;MeeshyKeyHint keys context size surface isPressed /&gt;</code></span>
+<span><b>Légende</b></span><span><code>MeeshyKeyLegend(items:container:leading:)</code></span><span><code>MeeshyKeyLegend(items, modifier, container, leading)</code></span><span><code>&lt;MeeshyKeyLegend items container leading /&gt;</code></span>
+<span><b>Touche</b></span><span><code>MeeshyKey { character(String), primary, shift, option, control, enter, escape, space, tab, delete, up, down, left, right }</code></span><span><code>sealed interface</code> identique</span><span><code>{ character: string } | 'primary' | 'shift' | … | 'right'</code></span>
+<span><b>Entrée de légende</b></span><span><code>MeeshyKeyLegendItem(id: String, combos: [MeeshyKeyCombo], title: String, startsGroup: Bool)</code></span><span><code>data class</code> identique</span><span><code>{ id, combos, title, startsGroup? }</code></span>
+<span><b>Contexte</b></span><span><code>MeeshyKeyHintContext { free, inset, legend }</code></span><span><code>enum class</code> identique</span><span><code>'free' | 'inset' | 'legend'</code></span>
+<span><b>Tailles et surfaces</b></span><span><code>MeeshyKeyHintSize { regular, compact }</code> · <code>MeeshyKeyHintSurface { auto, onFill, onAccent, onGlass }</code></span><span>idem</span><span><code>'regular' | 'compact'</code> · <code>'auto' | 'onFill' | 'onAccent' | 'onGlass'</code></span>
+<span><b>Emplacements</b></span><span><code>leading</code> : <code>@ViewBuilder</code>, avant la première paire d'une légende</span><span>même nom, <code>@Composable () -&gt; Unit</code></span><span>même nom, <code>ComponentChildren</code></span>
+<span><b>Loi pure</b></span><span><code>MeeshyKeyHintRule.glyphs(keys:platform:)</code> · <code>.spoken(keys:platform:)</code> · <code>.isShown(hasKeyboard:isEnabled:)</code></span><span><code>MeeshyKeyHintRule</code>, JVM pure</span><span><code>meeshyKeyHintGlyphs</code> · <code>meeshyKeyHintSpoken</code> · <code>meeshyKeyHintShown</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyKeyHintRecipe.resolve(keys:context:size:surface:platform:hasKeyboard:isPressed:layoutDirection:reduceMotion:)</code></span><span style="border-bottom: 0"><code>MeeshyKeyHintRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyKeyHintRecipe(…)</code> : classes et propriétés</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>keys: [MeeshyKey]</code><span>Obligatoire, 1 à 3. Une combinaison, dans l'ordre de frappe. Vide : rien n'est rendu.</span></div>
+<div class="par"><code>context = .free</code><span><code>inset</code> lit la surface de son hôte ; <code>legend</code> est posé par <code>MeeshyKeyLegend</code>.</span></div>
+<div class="par"><code>size = .regular</code><span>26. <code>compact</code> : 20, pour la légende d'une action libellée.</span></div>
+<div class="par"><code>surface = .auto</code><span>Celui de la surface hôte. Se force quand l'hôte n'est pas un composant du kit.</span></div>
+<div class="par"><code>isPressed: Bool = false</code><span>L'hôte le passe vrai 120 ms quand il reconnaît le raccourci. Le composant ne l'apprend jamais seul.</span></div>
+<div class="par"><code>platform: MeeshyKeyPlatform? = nil</code><span><code>{ apple, other }</code>. Absent : lu de l'environnement. Se force pour une page d'aide.</span></div>
+<div class="par"><code>hasKeyboard: Bool? = nil</code><span>Absent : lu de l'environnement du kit. Faux : rien n'est rendu, aucune place réservée.</span></div>
+<div class="par"><code>spokenPrefix: String? = nil</code><span>« raccourci ». Absent : la chaîne du kit. Le reste (« Commande M ») vient de la loi.</span></div>
+<div class="par"><code>items: [MeeshyKeyLegendItem]</code><span>Légende. Chaque entrée porte <code>combos</code>, une liste de combinaisons (<code>MeeshyKeyCombo</code> = une suite de <code>MeeshyKey</code>) : « 1 », « 2 », « 3 » pour un seul libellé.</span></div>
+<div class="par"><code>startsGroup: Bool = false</code><span>Pose un filet avant la paire. Jamais avant la première.</span></div>
+<div class="par"><code>container: MeeshyKeyLegendContainer = .none</code><span><code>{ none, glassBar }</code>. La barre demande son verre à K01 par <code>MeeshyGlassTone</code>.</span></div>
+<div class="par"><code>title: String</code><span>Libellé d'une paire, déjà traduit. Un ou deux mots ; coupé d'une ellipse, jamais sur deux lignes.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Une loi de glyphes, trois façons de savoir s'il y a un clavier</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Présence du clavier : <code>GCKeyboard.coalesced</code> et ses notifications de connexion, publiées dans l'environnement du kit.</li>
+<li>Le raccourci lui-même reste un <code>.keyboardShortcut(_:modifiers:)</code> posé par l'hôte : K55 lit la même valeur pour dessiner.</li>
+<li>Glyphes : symboles <code>command</code>, <code>shift</code>, <code>option</code>, <code>return</code>, <code>escape</code>, graisse semi-grasse, taille figée.</li>
+<li>Voix : <code>accessibilityHint</code> de l'hôte complété par « raccourci : Commande M » ; la touche est masquée.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans clavier matériel : <code>EmptyView</code>. Le système affiche déjà sa propre liste au maintien de Commande ; la barre de légende n'apparaît que si l'hôte la demande, jamais en double.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Présence du clavier : <code>LocalConfiguration.current.keyboard == KEYBOARD_QWERTY</code>, recomposé au branchement.</li>
+<li>Modificateur <code>primary</code> rendu « Ctrl » ; la touche Meta reste au système.</li>
+<li>La table de l'hôte alimente aussi <code>onProvideKeyboardShortcuts</code> : l'aide du système et les touches affichées disent la même chose.</li>
+<li>TalkBack : <code>stateDescription</code> de l'hôte, la touche en <code>clearAndSetSemantics</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Téléphone sans clavier : le composable n'émet aucun nœud. Aucune surface tonale à part : la touche est un fond plein, sans verre.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Élément <code>&lt;kbd aria-hidden="true"&gt;</code> ; l'hôte porte <code>aria-keyshortcuts="Meta+M"</code> et sa description.</li>
+<li>Plateforme : <code>navigator.userAgentData?.platform</code>, puis <code>navigator.platform</code>, résolue une fois.</li>
+<li>Présence du clavier : <code>@media (hover: hover) and (pointer: fine)</code>, confirmée à la première frappe matérielle.</li>
+<li>Enfoncée : une classe posée par l'hôte, transition de <code>transform</code> et de couleur seulement.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Pointeur grossier sans frappe vue : le composant rend <code>null</code>. Pas de <code>visibility: hidden</code> : la place ne doit pas rester.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Des raccourcis qui marchent partout, une seule touche dessinée</h2><p>Relevé dans le dépôt le 16 novembre 2026. Le code écoute le clavier à beaucoup d'endroits et ne le montre presque nulle part : un seul <code>&lt;kbd&gt;</code> sur le web, aucune touche dessinée sur iOS ni sur Android. K55 a peu à extraire et beaucoup à relier.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/routes/admin-shell.tsx</span><p><span class="be">Devient le composant</span> Le seul <code>&lt;kbd aria-hidden="true"&gt;</code> de <span class="mono">apps/web/src</span> : la touche « / » en fin du champ de recherche, masquée dès qu'on tape. Le même fichier reconnaît <code>ctrlKey || metaKey</code> + « k ». Sa touche monte dans <code>components/kit</code>, son écoute reste là.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/composer-format-bar.tsx</span><p><code>emphasisShortcutOf</code> accepte Ctrl ou Commande, mais l'infobulle écrit <code>Ctrl+B</code> en dur, y compris sur Mac. Elle prend la loi <code>meeshyKeyHintSpoken</code> ; l'écart disparaît.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/lib/view/use-story-keyboard-shortcuts.ts</span><p>Échap, flèches, Espace et « M » dans le lecteur de stories : cinq raccourcis, aucun signe à l'écran. Ils reçoivent une légende de K55. L'écoute ne bouge pas.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/lib/view/shortcut-scope.ts</span><p>La loi qui dit quelle frappe appartient à l'écran et laquelle au contrôle focalisé. Elle reste à l'app ; elle décide aussi quand une touche ne doit plus être promise.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/floating-menus.tsx</span><p><code>aria-keyshortcuts="Shift+F10"</code> écrit à la main, comme <code>Shift+Enter</code> dans <span class="mono">apps/web/src/components/call-effects-bar.tsx</span>. Ces chaînes sortent désormais de la même valeur que la touche dessinée.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Navigation/MeeshyShortcut.swift</span><p><span class="be">Devient la table</span> Neuf raccourcis avec <code>key</code>, <code>modifiers</code>, <code>title</code> et <code>systemImage</code>, relayés au menu par <span class="mono">MeeshyCommands.swift</span> et coupés par le réglage <code>keyboardShortcutsEnabled</code>. Aucune touche n'est dessinée : la table est reliée à K55, qui lit ses valeurs.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyModeHeader.swift</span><p>Un <code>.keyboardShortcut(.return, modifiers: .command)</code> déjà dans le kit, sans signe visible. Avec <span class="mono">MeeshyUI/Story/Timeline/Views/Controls/TransportBar.swift</span> (Espace), ce sont les premiers hôtes : 14 appels à <code>.keyboardShortcut(</code> au total sur iOS.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/feature/chat/src/main/kotlin/me/meeshy/app/chat/ComposerKeyHandling.kt</span><p><span class="no">À créer</span> Entrée envoie, Maj + Entrée passe à la ligne ; <span class="mono">apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/accessibility/EscapeDismiss.kt</span> ferme à Échap. Des frappes écoutées, aucune touche dessinée : aucun jumeau. Le composant est écrit depuis la recette, ou n'est pas rendu.</p></div>
+<div class="twin"><span class="pf">Profil</span><span class="mono">aucun jumeau</span><p><span class="no">À créer</span> Combinaison accolée, glyphe selon la machine, surfaces <code>onFill</code>, <code>onAccent</code> et <code>onGlass</code>, taille <code>compact</code>, légende à filets et retour « enfoncée » : dessinés par ce canevas, absents du code des trois plateformes.</p></div>
+</div>
+<p style="font-size: 14px; line-height: 1.5; color: var(--ink2)"><b style="color: var(--ink)">Écarts du canevas, soldés par cette fiche.</b> Les écrans d'ordinateur dessinent la touche à 24, rayon 7 ; l'iPad à 26, rayon 8 : K55 retient 26 et 8. Trois écrans écrivent « Commande K » dans une seule touche, un autre en deux : K55 accole toujours deux touches. La fiche publique pose un fond blanc sous la touche : c'est la surface <code>auto</code> du thème clair.</p>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Cinq écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="grid-column: span 2">
+<div class="stage"><button style="display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 10px 0 16px; border-radius: 999px; background: var(--field); border: 1px solid var(--line); color: var(--ink3); font-size: 14px" aria-keyshortcuts="Meta+K">[[ic:magnifying-glass s]]<span style="flex: 1">Chercher partout</span><span class="kx"><kbd>[[ic:command s]]</kbd><kbd>K</kbd></span></button></div>
+<div class="cp"><b>Recherche globale</b><span class="kcap">Contexte <code>inset</code>, en fin de champ. La touche part dès que le champ a le focus.</span></div>
+</div>
+<div class="kcell kc" style="grid-column: span 2">
+<div class="stage"><div style="display: flex; flex-direction: column; gap: 10px"><div style="display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 6px 0 18px; border-radius: 26px; background: var(--field); border: 1px solid var(--line)"><span style="flex: 1; font-size: 15px; color: var(--ink)">On se retrouve à Alfama ?</span><button class="ib" aria-label="Envoyer" style="background: var(--brand-fill); color: #fff; width: 40px; height: 40px">[[ic:paper-plane-right-fill s]]</button></div><div class="lfoot" style="justify-content: flex-end; font-size: 12.5px; gap: 8px 16px"><span class="kp"><kbd>[[ic:arrow-elbow-down-left s]]</kbd><span>envoyer</span></span><span class="kp"><span class="kx"><kbd>[[ic:arrow-fat-up s]]</kbd><kbd>[[ic:arrow-elbow-down-left s]]</kbd></span><span>nouvelle ligne</span></span></div></div></div>
+<div class="cp"><b>Conversation · composeur web</b><span class="kcap">Contexte <code>legend</code> sans conteneur, sous le champ, tant qu'il a le focus.</span></div>
+</div>
+<div class="kcell kc" style="grid-column: span 2">
+<div class="stage"><div class="menu" role="menu" aria-label="Actions du message">
+<button role="menuitem">[[ic:arrow-bend-up-left s]]<span>Répondre</span><kbd>R</kbd></button>
+<button role="menuitem" class="hv">[[ic:translate s]]<span>Voir l'original</span><kbd>O</kbd></button>
+<i></i>
+<button role="menuitem" style="color: var(--err)">[[ic:trash s]]<span>Supprimer</span><kbd>[[ic:backspace s]]</kbd></button>
+</div></div>
+<div class="cp"><b>Menu contextuel du web</b><span class="kcap">Contexte <code>inset</code> en fin de ligne de K18. La touche garde son encre neutre sur une ligne destructive.</span></div>
+</div>
+<div class="kcell kc" style="grid-column: span 3">
+<div class="back stage c" style="min-height: 124px; --accent: #34D399"><div class="glass lbar" role="note" aria-label="Raccourcis de l'appel">
+<span class="kp"><kbd class="og">M</kbd><span>Micro</span></span>
+<span class="kp"><kbd class="og">V</kbd><span>Caméra</span></span>
+<span class="kf"></span>
+<span class="kp"><span class="kx"><kbd class="og">[[ic:command s]]</kbd><kbd class="og">D</kbd></span><span>Partager l'écran</span></span>
+<span class="kf"></span>
+<span class="kp"><kbd class="og">Échap</kbd><span>Réduire</span></span>
+</div></div>
+<div class="cp"><b>Appels · commandes au clavier</b><span class="kcap">Barre de verre de K01 au bas de la scène, trois groupes. Raccrocher n'a volontairement aucune touche.</span></div>
+</div>
+<div class="kcell kc" style="grid-column: span 3">
+<div class="back stage c" style="min-height: 124px; --accent: #FBBF24"><div class="glass lbar" role="note" aria-label="Raccourcis du lecteur">
+<span class="kp"><span class="kx"><kbd class="og">←</kbd><kbd class="og">→</kbd></span><span>Story</span></span>
+<span class="kf"></span>
+<span class="kp"><kbd class="og">Espace</kbd><span>Pause</span></span>
+<span class="kp"><kbd class="og">M</kbd><span>Son</span></span>
+<span class="kf"></span>
+<span class="kp"><kbd class="og">Échap</kbd><span>Fermer</span></span>
+</div></div>
+<div class="cp"><b>Stories · lecteur sur ordinateur</b><span class="kcap">Les cinq raccourcis déjà écoutés par le lecteur, enfin visibles. La barre s'efface après 4 s sans frappe.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Glyphe selon la machine.</b> <code>primary</code> rend la boucle de Commande sur <code>apple</code> et « Ctrl » sur <code>other</code>, depuis la même entrée ; aucun site d'appel n'écrit l'un des deux. Vecteurs <code>K55-MeeshyKeyHint.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Absence sans trace.</b> Sans clavier, ou hôte désactivé : aucun nœud rendu, et la largeur de l'hôte est celle qu'il aurait sans raccourci, au pixel.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> La touche est masquée ; l'hôte dit son nom puis « raccourci : Commande M ». Sur le web, <code>aria-keyshortcuts</code> sort de la même valeur que le dessin.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible et contraste.</b> La touche ne reçoit ni toucher, ni survol, ni focus : la cible de 44 est celle de l'hôte, inchangée par sa présence. Caractère à 4,5:1 et lèvre à 3:1 sur les quatre surfaces, en clair et en sombre, et sur le verre au pire cas (image blanche dessous).</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Mouvement réduit et RTL.</b> L'état enfoncé change la teinte sans translation ; la barre de légende apparaît sans glisser. En arabe, la paire passe libellé puis touche, les flèches gauche et droite s'échangent, l'ordre de frappe d'une combinaison ne s'inverse pas.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Légende.</b> Jamais de filet en tête ni en fin, une paire ne se coupe pas, et 0 entrée ne rend ni conteneur ni verre.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>Voisins et source.</b> L'état enfoncé ne repeint que la touche. Garde de source : le composant n'installe aucun écouteur de clavier, ne nomme aucun type du domaine ni singleton, ne dessine aucun verre (K01 seulement) et ne porte aucune valeur hors de <code>MeeshyKeyHintRecipe</code>.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Grande police : la touche grandit avec le texte jusqu'à 1,5 fois puis se fige, et la légende passe à la ligne par paire. Un raccourci n'est jamais le seul chemin : chaque commande reste atteignable au pointeur, au doigt et au lecteur d'écran.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> La plateforme et la présence du clavier sont résolues une fois et lues de l'environnement : cent touches à l'écran ne font aucune mesure. La recette est une fonction pure.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":9019}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

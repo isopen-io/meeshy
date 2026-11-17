@@ -399,7 +399,7 @@ public final class MessageStore: ObservableObject {
         // render as a "message en double" the moment a later event re-snapshots.
         // Applied before the drop diagnostic so a collapsed mirror is never
         // mistaken for an unintended drop (the prior publish was deduped too).
-        let published = ExpiredEphemeralRow.living(Self.collapsingDuplicateServerIds(next)).filter { !personalConcealment.conceals($0) }
+        let published = keptThroughBurning(Self.collapsingDuplicateServerIds(next)).filter { !personalConcealment.conceals($0) }
 
         #if DEBUG
         // BUG1 diagnostics — detect any publish that DROPS currently-displayed
@@ -489,9 +489,75 @@ public final class MessageStore: ObservableObject {
     /// qui échoit à l'écran n'en provoque aucune. L'hôte appelle ce point à la
     /// fin de la combustion ; sans mort, rien n'est publié.
     func dropGoneEphemerals() {
-        let kept = ExpiredEphemeralRow.living(messages)
+        let kept = Self.keepingBurning(
+            { ExpiredEphemeralRow.living($0) }, of: messages, burning: burning, shown: [],
+            freshlyDead: { _ in false }
+        ).kept
         guard kept.count != messages.count else { return }
         publishUnchecked(records: kept, mergeInMemory: false)
+    }
+
+    /// Les lignes vivantes, plus celles qui brûlent ou viennent de mourir à
+    /// l'écran ; ces dernières sont rendues à l'hôte HORS de la publication —
+    /// il mute son propre état, et une mutation réentrante pendant une
+    /// publication est le défaut que `EphemeralExpiryCoordinator` documente.
+    private func keptThroughBurning(_ records: [MessageRecord]) -> [MessageRecord] {
+        let outcome = Self.keepingBurning(
+            { ExpiredEphemeralRow.living($0) }, of: records, burning: burning, shown: messages,
+            freshlyDead: { ExpiredEphemeralRow.deathInstant($0).map { EphemeralBurn.isFreshDeath(at: $0, now: Date()) } ?? false }
+        )
+        if !outcome.ignite.isEmpty {
+            let ignite = outcome.ignite
+            Task { @MainActor [weak self] in self?.onFreshlyDead?(ignite) }
+        }
+        return outcome.kept
+    }
+
+    /// **Les éphémères EN COMBUSTION, que l'hôte déclare** (#17938). Une ligne
+    /// qui brûle est, pour `ExpiredEphemeralRow`, déjà morte : son échéance est
+    /// passée, et le registre peut déjà porter sa destruction (annonce du
+    /// serveur). Toute publication pendant la combustion — l'arrivée d'un
+    /// autre message, une écriture quelconque — la retirait alors au milieu de
+    /// son feu. L'hôte pose ici ce qui brûle avant d'allumer, et le retire
+    /// avant d'appeler `dropGoneEphemerals()` à la fin.
+    var burning: Set<String> = []
+
+    /// **Une ligne affichée qui VIENT de mourir est rendue à l'hôte pour qu'il
+    /// l'allume** (#17938) — la mort peut arriver par le moteur de
+    /// synchronisation (annonce du serveur gravée avant que l'écran ne
+    /// réagisse) : sans ce retour, la publication qui la relit morte la
+    /// retirait sans aucune combustion. Appelé hors de la publication.
+    var onFreshlyDead: (([String]) -> Void)?
+
+    struct BurnOutcome: Equatable {
+        let kept: [MessageRecord]
+        /// Les lignes gardées parce qu'elles viennent de mourir sous les yeux
+        /// du lecteur, et que l'hôte doit allumer.
+        let ignite: [String]
+    }
+
+    /// Les lignes vivantes, PLUS celles qui brûlent, PLUS celles qui étaient
+    /// affichées (`shown`) et viennent de mourir — dans l'ordre d'origine. Une
+    /// ligne qui vient de mourir est rendue dans sa forme AFFICHÉE (celle de
+    /// `shown`), pas dans sa forme relue : la base porte déjà `deletedAt` et
+    /// un contenu vidé, et c'est le texte qu'on voit brûler, pas une pierre
+    /// tombale.
+    static func keepingBurning(_ living: ([MessageRecord]) -> [MessageRecord],
+                               of records: [MessageRecord], burning: Set<String>,
+                               shown: [MessageRecord], freshlyDead: (MessageRecord) -> Bool) -> BurnOutcome {
+        let alive = Set(living(records).map(\.localId))
+        guard alive.count != records.count || !burning.isEmpty else { return BurnOutcome(kept: records, ignite: []) }
+        let shownById = Dictionary(shown.map { ($0.localId, $0) }, uniquingKeysWith: { a, _ in a })
+        var ignite: [String] = []
+        let kept = records.compactMap { record -> MessageRecord? in
+            if alive.contains(record.localId) { return record }
+            let id = record.serverId ?? record.localId
+            if burning.contains(record.localId) || burning.contains(id) { return shownById[record.localId] ?? record }
+            guard let previous = shownById[record.localId], freshlyDead(record) else { return nil }
+            ignite.append(id)
+            return previous
+        }
+        return BurnOutcome(kept: kept, ignite: ignite)
     }
 
     /// `true` quand publier `records` rendrait EXACTEMENT le tableau déjà

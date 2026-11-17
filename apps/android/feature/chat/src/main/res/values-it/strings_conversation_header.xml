@@ -3,7 +3,6 @@
     <!-- En-tête de conversation (parité iOS ConversationView+Header) -->
     <string name="chat_header_call">Chiama</string>
     <string name="chat_header_call_group">Chiama il gruppo</string>
-    <string name="chat_header_call_hint">Scegli una chiamata vocale o video</string>
     <string name="chat_header_call_voice">Chiamata vocale</string>
     <string name="chat_header_call_video">Videochiamata</string>
     <string name="chat_header_search">Cerca nella conversazione</string>
@@ -11,8 +10,6 @@
     <string name="chat_header_view_conversation">Vedi la conversazione %1$s</string>
     <string name="chat_header_menu_profile">Vedi profilo</string>
     <string name="chat_header_menu_conversation">Conversazione</string>
-    <string name="chat_header_expand">Espandi l’intestazione</string>
-    <string name="chat_header_collapse">Comprimi l’intestazione</string>
     <string name="chat_conversation_info_title">Conversazione</string>
     <string name="chat_header_encryption_e2ee">Crittografato end-to-end</string>
     <string name="chat_header_encryption_server">Crittografato sul server</string>

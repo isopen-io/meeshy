@@ -222,3 +222,24 @@ describe('resolveAttachmentReadVerdict — l’échéance du lecteur ferme le fi
     ).rejects.toThrow('base indisponible');
   });
 });
+
+describe('resolveAttachmentReadVerdict — le plancher d’historique ferme aussi la route par identifiant (#18470)', () => {
+  const verdictFor = (participant: Record<string, unknown>) =>
+    resolveAttachmentReadVerdict(
+      { authContext: { isAuthenticated: true, isAnonymous: false, userId: READER_USER } } as unknown as FastifyRequest,
+      { messageId: MESSAGE_ID, uploadedBy: SENDER_USER },
+      {
+        message: { findUnique: jest.fn<any>().mockResolvedValue(message({ expiresAt: null })) },
+        participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: READER_PARTICIPANT, ...participant }) },
+        messageStatusEntry: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+      } as never,
+    );
+
+  it('rend 404 au membre arrivé après le message, historique fermé', async () => {
+    expect(await verdictFor({ joinedAt: ago(MINUTE), permissions: { canViewHistory: false } })).toBe('gone');
+  });
+
+  it('sert le membre sans plancher', async () => {
+    expect(await verdictFor({ joinedAt: ago(MINUTE) })).toBe('allow');
+  });
+});

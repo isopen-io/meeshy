@@ -169,6 +169,32 @@ describe('ProfileTogetherRow', () => {
     expect(store.getState().outgoing?.toUserId).toBe(PROCHE);
   });
 
+  test('un second toucher pendant l’accusé n’envoie pas une seconde invitation, et la pièce dit qu’elle attend', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
+    seedDirect();
+    const answer: { release: (value: unknown) => void } = { release: noop };
+    const pending = new Promise((resolve) => {
+      answer.release = resolve;
+    });
+    const { row, emitted, notices } = harness(pending);
+    const node = await mount(row);
+    await settle();
+    await settle();
+    await click(node.querySelector<HTMLButtonElement>('[data-together-open]'));
+    const film = node.querySelector<HTMLButtonElement>('[data-together-piece="film"]');
+    await click(film);
+    await click(film);
+    expect(emitted.filter((sent) => sent.event === TOGETHER_CLIENT_EVENTS.TOGETHER_INVITE)).toHaveLength(1);
+    expect(film?.disabled).toBe(true);
+    expect(film?.getAttribute('aria-busy')).toBe('true');
+    await act(async () => {
+      answer.release({ success: false, error: 'x', code: 'TOGETHER_NOT_ALLOWED' });
+    });
+    await settle();
+    expect(notices).toHaveLength(1);
+    expect(node.querySelector<HTMLButtonElement>('[data-together-piece="film"]')?.disabled).toBe(false);
+  });
+
   test('un refus se dit d’une phrase neutre, sans raison', async () => {
     appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('BLOOD')]);
     seedDirect();
@@ -180,6 +206,24 @@ describe('ProfileTogetherRow', () => {
     await click(node.querySelector<HTMLButtonElement>('[data-together-piece="film"]'));
     await settle();
     expect(notices).toEqual([{ message: 'Ce média ne peut pas se lire ensemble.', failed: true }]);
+  });
+
+  test('la liste s’ouvre en fondu et, refermée, reste le temps de sa sortie, inerte (#18320)', async () => {
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
+    seedDirect();
+    const node = await mount(harness({ success: true }).row);
+    await settle();
+    await settle();
+    const open = node.querySelector<HTMLButtonElement>('[data-together-open]');
+    await click(open);
+    const list = () => node.querySelector('[data-together-list]');
+    expect(list()?.hasAttribute('data-layer-motion')).toBe(true);
+    expect(list()?.hasAttribute('data-leaving')).toBe(false);
+    await click(open);
+    expect(open?.getAttribute('aria-expanded')).toBe('false');
+    expect(list()?.hasAttribute('data-leaving')).toBe(true);
+    expect(list()?.hasAttribute('inert')).toBe(true);
+    expect(list()?.querySelector('[data-together-piece="film"]')).not.toBeNull();
   });
 
   test('sans conversation directe connue, une phrase invite à envoyer un média', async () => {

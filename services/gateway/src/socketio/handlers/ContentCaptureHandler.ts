@@ -72,7 +72,7 @@ export async function handleContentCapture(
   });
   if (!participant) return refused('Not a participant', 'NOT_A_PARTICIPANT');
 
-  const { messageIds, kind, captureId } = validation.data;
+  const { messageIds, kind, captureId, recordingSeconds } = validation.data;
   const outcome = await recordContentCapture(
     {
       prisma: deps.prisma,
@@ -82,7 +82,7 @@ export async function handleContentCapture(
       mayRead: deps.mayRead,
       now: deps.now,
     },
-    { conversationId, actorParticipantId: participant.participantId, report: { messageIds, kind, captureId } },
+    { conversationId, actorParticipantId: participant.participantId, report: { messageIds, kind, captureId, recordingSeconds } },
   );
 
   switch (outcome.kind) {

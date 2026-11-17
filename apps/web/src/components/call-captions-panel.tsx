@@ -2,6 +2,7 @@ import { memo, useEffect, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { JournalNoteCaption, noteDirection } from '@/components/call-journal-note';
+import { CallJournalToggle } from '@/components/call-journal-toggle';
 import { UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { TypingDots } from '@/components/typing-dots';
 import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionReveal, captionText, isAwaitingTranslation, revealState, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
@@ -13,7 +14,6 @@ import { CAPTIONS_EXIT, PILL_TEXT_EXIT, PILL_TEXT_LEAVING } from '@/lib/calls/ca
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { useRailFade } from '@/lib/calls/use-mode-motion';
 import { useRailPresence } from '@/lib/calls/use-rail-presence';
-import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -25,7 +25,9 @@ import '@/styles/call-captions.css';
  * paire de langues de la dernière phrase traduite et comment voir l'original
  * (« EN → FR · toucher = original »), à droite le bouton « Journal » (#17346),
  * qui ouvre tout l'appel à leur place — ou, sur grand écran, la colonne : il y
- * reste ACTIF, disque blanc plein, et le retoucher la referme (#17932). En duo
+ * reste ACTIF, disque blanc plein, et le retoucher la referme (#17932) ; ouvert
+ * dans la pilule, le journal porte à son pied le MÊME bouton, actif, qui le
+ * referme (#17964, `call-journal-toggle.tsx`). En duo
  * comme en groupe, la même bande : deux phrases, un filet, ce bouton (#17933). Ils vivent DANS la pilule, au-dessus de
  * sa rangée de base, dans le même verre (`surface="inset"` : le verre est celui
  * de la pilule, jamais un verre sur du verre) ; `(…)` les range, refermer les
@@ -98,9 +100,6 @@ function useWaitingClock(deadlines: readonly (number | null)[]): number {
 const INK = 'var(--color-on-media)';
 
 const INK_2 = 'var(--color-on-media-3)';
-
-/** « Journal » actif : la tenue `active` du bouton d'appel (`call-glass-button.tsx`), un disque blanc plein à encre sombre (loi 1). */
-const JOURNAL_ON = { background: INK, color: 'var(--ios-indigo-950)' };
 
 const NOTE_KEY = { listening: 'callCaptions.listening', unsupported: 'callCaptions.unsupported', denied: 'callCaptions.denied', sealed: 'callCaptions.sealed' } as const;
 
@@ -259,11 +258,7 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', 
             )}
             {note === null ? null : <span data-call-captions-note={call.transcription}>{translate(language, note)}</span>}
           </div>
-          {onOpenJournal === undefined ? null : (
-            <button type="button" aria-pressed={journalOpen} onClick={onOpenJournal} className={`${journalOpen ? '' : 'glass-call-disc '}min-h-11 shrink-0 rounded-full px-4 font-semibold transition-transform active:scale-95 motion-reduce:transition-none`} style={journalOpen ? JOURNAL_ON : { color: INK }} data-call-captions-journal="">
-              {translateCallControls(language, 'callControls.journal')}
-            </button>
-          )}
+          {onOpenJournal === undefined ? null : <CallJournalToggle language={language} on={journalOpen} onPress={onOpenJournal} marker="data-call-captions-journal" />}
         </div>
       )}
     </section>

@@ -1,7 +1,9 @@
 package me.meeshy.sdk.conversation
 
+import java.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -9,11 +11,15 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.flow.update
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.entity.MessageEntity
+import me.meeshy.sdk.model.EphemeralBurnHold
 import me.meeshy.sdk.model.MessageWindowMode
+import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageWindowReducer
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
 /** Ce que l'ouverture du fil SUR un message a trouvé (miroir de `ConversationViewModel+JumpToMessage` iOS). */
 internal sealed interface WindowLanding {
@@ -71,15 +77,36 @@ internal class MessageWindowSource(
 
     fun enterSearch(ids: List<String>) = modeState.update { MessageWindowReducer.enterSearch(it, ids) }
 
-    /** Le flux du fil, ancien -> récent. Un snapshot identique au précédent n'est pas republié. */
+    /**
+     * Le flux du fil, ancien -> récent. Un snapshot identique au précédent n'est pas republié. Un éphémère montré qui
+     * vient de mourir reste à sa place, allumé, le temps de sa combustion ([EphemeralBurnHold], #18556), puis part.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun observe(): Flow<List<LocalMessage>> =
-        combine(modeState.flatMapLatest { rows(it) }, concealed, clockTick) { rows, hidden, _ ->
+    fun observe(): Flow<List<LocalMessage>> {
+        var hold = EphemeralBurnHold<LocalMessage>()
+        var heldMode: MessageWindowMode? = null
+        return combine(modeState.flatMapLatest { mode -> rows(mode).map { mode to it } }, concealed, clockTick) { (mode, rows), hidden, _ ->
+            Triple(mode, rows, hidden)
+        }.transformLatest { (mode, rows, hidden) ->
             val now = nowMillis()
-            rows.filter { it.id !in hidden && !it.isGone(now) }
-        }
-            .distinctUntilChanged()
-            .map { rows -> rows.map { bubble(it) }.also { bubbles.keys.retainAll(rows.map(MessageEntity::id).toSet()) } }
+            val alive = rows.filter { it.id !in hidden && !it.isGone(now) }
+            val bubblesNow = alive.map { bubble(it) }.also { bubbles.keys.retainAll(alive.map(MessageEntity::id).toSet()) }
+            if (mode != heldMode) hold = hold.reset()
+            heldMode = mode
+            val step = hold.next(bubblesNow, now, EphemeralBurnRules, hidden)
+            hold = step.hold
+            emit(step.shown)
+            var at = now
+            var wake = hold.nextWakeMillis
+            while (wake != null) {
+                delay((wake - at).coerceAtLeast(0L))
+                at = wake
+                hold = hold.expire(wake)
+                emit(hold.next(bubblesNow, wake, EphemeralBurnRules, hidden).also { hold = it.hold }.shown)
+                wake = hold.nextWakeMillis
+            }
+        }.distinctUntilChanged()
+    }
 
     /** La conversion en bulle est mémoïsée : une ligne inchangée (même `changeVersion`) garde sa bulle. */
     private fun bubble(row: MessageEntity): LocalMessage {
@@ -147,3 +174,17 @@ internal class MessageWindowSource(
 /** Un message supprimé ou un éphémère échu n'a plus sa place dans le flux (même s'il reste une ligne avant la purge). */
 internal fun MessageEntity.isGone(nowMillis: Long): Boolean =
     deletedAt != null || expiresAt?.let { it <= nowMillis } == true
+
+/**
+ * Ce qui brûle dans un fil : un éphémère à échéance ou une flamme-œil (détruite après lecture). Allumé, son échéance
+ * est ramenée à l'instant de sa mort : la bulle se voit échue et brûle d'elle-même.
+ */
+private val EphemeralBurnRules = EphemeralBurnHold.Rules<LocalMessage>(
+    key = { it.message.id },
+    burns = { it.message.expiresAt != null || it.message.effects.has(MessageEffectFlags.EPHEMERAL_AFTER_READ) },
+    ignite = { local, now ->
+        val lit = isoToEpochMillisOrNull(local.message.expiresAt)?.takeIf { it <= now }
+        if (lit != null) local else local.copy(message = local.message.copy(expiresAt = Instant.ofEpochMilli(now).toString()))
+    },
+    order = compareBy { isoToEpochMillisOrNull(it.message.createdAt) ?: 0L },
+)

@@ -169,4 +169,60 @@ final class EmojiReactionPickerChromeTests: XCTestCase {
             .replacingOccurrences(of: "\n", with: "")
             .replacingOccurrences(of: "\t", with: "")
     }
+
+    // MARK: - Le « + » et la baguette entrent avec les premières tuiles (#18812)
+
+    /// Ils fermaient la vague : à huit emojis, le « + » attendait 0,36 s et la
+    /// baguette 0,405 s avant même leur ressort. Ils entrent désormais au rang 2
+    /// et 3 au plus, quel que soit le nombre d'emojis.
+    func test_trailingTiles_enterWithTheFirstTiles_whateverTheEmojiCount() {
+        XCTAssertEqual(ReactionStripWave.trailingRank(quickCount: 8), 2)
+        XCTAssertEqual(ReactionStripWave.trailingRank(quickCount: 1), 1)
+        XCTAssertLessThanOrEqual(ReactionStripWave.delay(rank: ReactionStripWave.trailingRank(quickCount: 12) + 1), 0.14)
+    }
+
+    func test_waveDelay_growsWithTheRank() {
+        XCTAssertEqual(ReactionStripWave.delay(rank: 0), 0)
+        XCTAssertLessThan(ReactionStripWave.delay(rank: 1), ReactionStripWave.delay(rank: 2))
+    }
+
+    // MARK: - La tuile supplémentaire de l'hôte, à droite du « + » (#16162)
+
+    /// Le composant reste agnostique : il rend un glyphe et appelle une action
+    /// qu'on lui nomme, APRÈS le « + », avec le même disque et un cran de vague
+    /// plus tard. Sans tuile, rien ne change pour les hôtes existants.
+    func test_extraTile_isRenderedAfterTheExpandButton_andIsOptional() throws {
+        let code = try source()
+        let strip = try XCTUnwrap(code.range(of: "private var quickEmojiStrip"))
+        let afterStrip = String(code[strip.lowerBound...])
+        let expand = try XCTUnwrap(afterStrip.range(of: "expandButton"))
+        let extra = try XCTUnwrap(afterStrip.range(of: "extraTileButton"))
+        XCTAssertTrue(expand.lowerBound < extra.lowerBound, "la tuile vient APRÈS le « + »")
+        XCTAssertTrue(code.contains("extraTile: ExtraTile? = nil"), "optionnelle : les hôtes existants ne passent rien")
+        XCTAssertTrue(code.contains("WaveTileModifier(index: ReactionStripWave.trailingRank(quickCount: quickEmojis.count) + 1"), "un cran de vague après le « + »")
+        XCTAssertTrue(code.contains(".buttonStyle(PressableButtonStyle())"), "elle répond à l'appui par le style du kit")
+    }
+
+    /// La rangée DÉFILANTE (beaucoup d'emojis, écran étroit) fige le « + » hors du
+    /// défilement : la tuile de l'hôte s'y fige avec lui, sans quoi elle disparaît
+    /// justement sur la barre la plus chargée.
+    func test_extraTile_isAlsoPinnedNextToThePlus_inTheScrollableStrip() throws {
+        let code = try source()
+        let strip = try XCTUnwrap(code.range(of: "private var scrollableQuickEmojiStrip"))
+        let end = try XCTUnwrap(code.range(of: "private func reactToEmoji", range: strip.upperBound..<code.endIndex))
+        let body = String(code[strip.upperBound..<end.lowerBound])
+        let expand = try XCTUnwrap(body.range(of: "expandButton"))
+        let extra = try XCTUnwrap(body.range(of: "extraTileButton"), "la rangée défilante monte la tuile")
+        XCTAssertTrue(expand.lowerBound < extra.lowerBound, "la tuile vient APRÈS le « + »")
+    }
+
+    func test_extraTile_carriesSymbolLabelAndAction() {
+        var fired = 0
+        let tile = EmojiReactionPicker.ExtraTile(symbol: "wand.and.stars", accessibilityLabel: "Imager") { fired += 1 }
+        tile.action()
+        XCTAssertEqual(tile.symbol, "wand.and.stars")
+        XCTAssertEqual(tile.accessibilityLabel, "Imager")
+        XCTAssertNil(tile.accessibilityIdentifier)
+        XCTAssertEqual(fired, 1)
+    }
 }

@@ -20,6 +20,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -32,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -50,6 +52,7 @@ import me.meeshy.sdk.model.call.SMOOTHING_INTENSITY_MIN
 import me.meeshy.sdk.model.call.VideoFilterPreset
 import me.meeshy.sdk.model.call.effects.CallEffectKind
 import me.meeshy.sdk.model.call.effects.CallEffectsBarMode
+import me.meeshy.sdk.model.call.effects.CallEffectsBarRule
 import me.meeshy.sdk.model.call.effects.CallEffectsCategory
 import me.meeshy.sdk.model.call.effects.CallEffectsGenreRule
 import me.meeshy.sdk.model.call.effects.CallEffectsModeRule
@@ -76,11 +79,15 @@ class CallEffectsViewModel @Inject constructor(val effects: CallVideoEffectsCont
 /**
  * Le mode « Effets de ma caméra » (iOS `CallScreenMode.effects`, `CallEffectsModeControls`) : MON image en
  * plein écran — telle qu'elle part, effet compris —, l'autre en vignette pour rester avec lui, et en bas
- * le choix d'UN effet à la fois : le carrousel, puis la barre de verre ‹ (revient à l'appel avec le look) · Réglages
- * (le panneau Luminosité · Flou du fond, force du lissage, prend la place du carrousel) · (+) (un genre absent de la pile ;
- * un appui long liste les effets appliqués pour en annuler un). Aucun Quitter ni Valider : chaque essai part aussitôt à l'autre et se garde.
+ * le choix d'UN effet à la fois : le carrousel, puis la barre de verre ‹ · Réglages (le panneau Luminosité · Flou du
+ * fond, force du lissage, prend la place du carrousel) · (+) (un genre absent de la pile ; un appui long liste les effets
+ * appliqués pour en annuler un). Aucun Quitter ni Valider : chaque essai part aussitôt à l'autre et se garde, et le look
+ * choisi referme le carrousel — la barre revient à son menu de base (C1 généralisée, #18185). ‹ et le retour système
+ * referment d'abord le panneau des réglages (#17947), sinon reviennent à l'appel avec le look.
  * Comme le Montage, la prise se déclenche sur l'effet CENTRÉ du carrousel (#13737) : deux tapes photographient
  * mon image, un appui long la filme ; la scène ne porte aucun geste.
+ * L'écran la compose dans [CallModeLayer] (#17819) : elle fond à l'entrée et à la sortie. Tant qu'elle fond en sortant, elle
+ * n'est plus [active] : le retour système ne lui revient plus, et y rentrer pendant ce temps rouvre la session.
  */
 @Composable
 internal fun CallEffectsMode(
@@ -93,6 +100,7 @@ internal fun CallEffectsMode(
     onOpenFrames: () -> Unit = {},
     peerUserId: String? = null,
     peerAvatarUrl: String? = null,
+    active: Boolean = true,
 ) {
     val effects = hiltViewModel<CallEffectsViewModel>().effects
     val captureViewModel: CallCaptureViewModel = hiltViewModel()
@@ -101,18 +109,10 @@ internal fun CallEffectsMode(
     val mode by session.state.collectAsStateWithLifecycle()
     val setMode: (CallEffectsModeState) -> Unit = { next -> session.change { next } }
     val finish: () -> Unit = { if (session.finish()) onClose() }
-    val companions = remember(peerUserId, peerAvatarUrl, state.peerName, state.isCameraOn, state.isPeerCameraOff, state.isPeerMuted, state.isMuted) {
-        CallEffectsCompanionRule.duoCompanions(
-            peerUserId = peerUserId,
-            peerName = state.peerName,
-            peerAvatarUrl = peerAvatarUrl,
-            isCameraOn = state.isCameraOn,
-            isMuted = state.isMuted,
-            isPeerCameraOff = state.isPeerCameraOff,
-            isPeerMuted = state.isPeerMuted,
-        )
-    }
-    BackHandler { finish() }
+    val goBack: () -> Unit = { session.state.value.back()?.let(setMode) ?: finish() }
+    val companions = rememberDuoCompanions(state, peerUserId, peerAvatarUrl)
+    BackHandler(enabled = active) { goBack() }
+    LaunchedEffect(session, active) { if (active) session.reopen() }
     // Le mode peut disparaître autrement que par ‹ (l'appel se termine, la couche change) : le look se garde, la
     // session ne se termine qu'une fois.
     DisposableEffect(session) { onDispose { session.finish() } }
@@ -164,6 +164,21 @@ internal fun CallEffectsMode(
     }
 }
 
+/** Les autres, en vignettes au-dessus de mon image : l'interlocuteur du duo, tel que l'appel le montre. */
+@Composable
+private fun rememberDuoCompanions(state: CallUiState, peerUserId: String?, peerAvatarUrl: String?) =
+    remember(peerUserId, peerAvatarUrl, state.peerName, state.isCameraOn, state.isPeerCameraOff, state.isPeerMuted, state.isMuted) {
+        CallEffectsCompanionRule.duoCompanions(
+            peerUserId = peerUserId,
+            peerName = state.peerName,
+            peerAvatarUrl = peerAvatarUrl,
+            isCameraOn = state.isCameraOn,
+            isMuted = state.isMuted,
+            isPeerCameraOff = state.isPeerCameraOff,
+            isPeerMuted = state.isPeerMuted,
+        )
+    }
+
 /**
  * Annuler un effet de la liste (appui long sur (+)) défait son réglage ; la couche « cadre » (posée au Montage) se retire
  * par le chemin du Montage ([CallFrameLayer.remove]), avant que la session ne la sorte de sa pile.
@@ -212,16 +227,20 @@ private fun EffectsControls(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        CallModeCaptions(state)
-        EffectsLooksOrPanel(mode, reduceMotion, shots, hint, onChange, onRemove)
+        EffectsAbove {
+            CallModeCaptions(state)
+            EffectsLooksOrPanel(mode, reduceMotion, shots, hint, onChange, onRemove)
+        }
         EffectsModeBar(mode, row, reduceMotion, onChange, onFinish, onOpenFrames)
     }
 }
 
 /**
  * La barre d'Effets sous la rangée de genres de la famille (#16979, comme iOS `CallEffectsModeControls`) : Visage et
- * Couleur se montrent ici, « Cadres » ouvre le Montage ; (+) ouvre un genre absent de la pile, d'abord en Effets, puis au
- * Montage ([CallEffectsGenreRule.adding]) ; la barre revient au menu de base après chaque choix.
+ * Couleur ouvrent leur carrousel ici, « Cadres » ouvre le Montage ; (+) ouvre un genre absent de la pile, d'abord en
+ * Effets, puis au Montage ([CallEffectsGenreRule.adding]) ; la barre revient au menu de base après chaque choix, et la
+ * puce d'un genre n'est pressée que tant que son carrousel est ouvert, et la retoucher le referme. ‹ referme le panneau des
+ * réglages, sinon quitte le mode.
  */
 @Composable
 internal fun EffectsModeBar(
@@ -239,13 +258,13 @@ internal fun EffectsModeBar(
     }
     EffectsBar(
         chips = row,
-        selected = mode.category.kind,
+        selected = CallEffectsBarRule.pressed(mode.category.kind, mode.bar),
         bar = mode.bar,
         layers = mode.layers,
         reduceMotion = reduceMotion,
         onBack = {
             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            onFinish()
+            mode.back()?.let(onChange) ?: onFinish()
         },
         onSettings = {
             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -261,7 +280,10 @@ internal fun EffectsModeBar(
     )
 }
 
-/** P8b.6 — le panneau (réglages OU liste des effets appliqués) remplace la bande de looks, par le fondu de [EffectsBand]. */
+/**
+ * P8b.6 — au-dessus de la barre : rien sur le menu de base, le carrousel du genre ouvert, OU un panneau (réglages, liste
+ * des effets appliqués), l'un remplaçant l'autre par le fondu de [EffectsBand].
+ */
 @Composable
 private fun EffectsLooksOrPanel(
     mode: CallEffectsModeState,
@@ -273,7 +295,8 @@ private fun EffectsLooksOrPanel(
 ) {
     EffectsBand(mode.bar, reduceMotion) { bar ->
         when (bar) {
-            CallEffectsBarMode.Base -> EffectsCarousel(mode, reduceMotion, shots, hint, onChange = onChange)
+            CallEffectsBarMode.Base -> Unit
+            CallEffectsBarMode.Looks -> EffectsCarousel(mode, reduceMotion, shots, hint, onChange = onChange)
             CallEffectsBarMode.Settings -> EffectsSettingsPanel(mode, onChange = onChange)
             CallEffectsBarMode.Applied -> EffectsAppliedPanel(mode.layers, onRemove)
         }
@@ -300,6 +323,7 @@ internal fun EffectsCarousel(
             onSelect = { onChange(mode.selecting(it)) },
             hint = hint,
             shots = shots,
+            onConfirm = { onChange(mode.confirming()) },
         )
         CallEffectsCategory.Color -> CallModeCarousel(
             items = CallEffectsModeRule.colors,
@@ -311,17 +335,28 @@ internal fun EffectsCarousel(
             onSelect = { onChange(mode.selecting(it)) },
             hint = hint,
             shots = shots,
+            onConfirm = { onChange(mode.confirming()) },
         )
     }
 }
 
 /**
- * Le panneau Réglages (iOS `settingsPanel`) : un verre SÉPARÉ posé au-dessus de la barre — la force du lissage quand il
+ * Le panneau Réglages (iOS `settingsPanel`), UN groupe que TalkBack nomme « Réglages de mon image » (P8b.1) : un verre SÉPARÉ posé au-dessus de la barre — la force du lissage quand il
  * est choisi, Luminosité (un titre et son curseur), puis Flou du fond (une ligne titrée à interrupteur).
  */
 @Composable
 internal fun EffectsSettingsPanel(mode: CallEffectsModeState, onChange: (CallEffectsModeState) -> Unit) {
-    CallControlsGlass(Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg)) {
+    val name = stringResource(R.string.call_effects_settings_panel)
+    CallControlsGlass(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg)
+            .semantics {
+                paneTitle = name
+                contentDescription = name
+                isTraversalGroup = true
+            },
+    ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.mdPlus),

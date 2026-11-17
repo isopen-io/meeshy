@@ -51,10 +51,18 @@ public struct PlayerBannerView: View {
         public let gloryMissing: String?
         /// La phrase de lecteur d'écran de CHAQUE pièce quand elles sont des boutons (`onSelect`).
         public let pieceLabels: [GamePlayerBanner.Piece: String]
+        /// « +40 » : le gain d'une Offrande que l'hôte vient d'ouvrir sur place (#18199), dit quelques secondes à la
+        /// place de la pièce ; `nil` le reste du temps.
+        public let offeringReward: String?
+        /// « Offrande ouverte : +40 étincelles », ce que lit VoiceOver de ce gain.
+        public let offeringRewardLabel: String?
 
         public init(points: String, missing: String? = nil, meeshes: String? = nil, place: String? = nil, flameDays: String? = nil,
                     trophies: String? = nil, mission: String? = nil, season: String? = nil, rank: String? = nil,
-                    gloryMissing: String? = nil, pieceLabels: [GamePlayerBanner.Piece: String] = [:]) {
+                    gloryMissing: String? = nil, pieceLabels: [GamePlayerBanner.Piece: String] = [:],
+                    offeringReward: String? = nil, offeringRewardLabel: String? = nil) {
+            self.offeringReward = offeringReward
+            self.offeringRewardLabel = offeringRewardLabel
             self.rank = rank
             self.gloryMissing = gloryMissing
             self.points = points
@@ -106,10 +114,10 @@ public struct PlayerBannerView: View {
     /// Le MILIEU du bandeau (#11125) : la Flamme et les Meeshes en haut, la mission, le contenant de l'Héritage
     /// (#17437) et la ligue dessous, entre les étincelles (à gauche) et la Gloire (à droite). Deux lignes de 24 pt — compromis
     /// demandé par le porteur pour que le bandeau tienne en 48 pt, ces pièces sortent de la cible de 44.
-    public static let middlePieces: [GamePlayerBanner.Piece] = [.flame, .meesh, .mission, .treasury, .league]
+    public static let middlePieces: [GamePlayerBanner.Piece] = [.flame, .meesh, .mission, .offering, .treasury, .league]
     public static let cornerTarget: CGFloat = 24
     /// Ce que la rangée compacte montre ; trophées et saison n'y tiennent pas et restent à la disposition empilée.
-    public static let compactPieces: [GamePlayerBanner.Piece] = [.level, .sparks, .flame, .meesh, .mission, .treasury, .league, .rank]
+    public static let compactPieces: [GamePlayerBanner.Piece] = [.level, .sparks, .flame, .meesh, .mission, .offering, .treasury, .league, .rank]
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -210,13 +218,15 @@ public struct PlayerBannerView: View {
     @ViewBuilder
     private var middle: some View {
         let shown = model.pieces.filter(Self.middlePieces.contains)
-        if !shown.isEmpty {
+        if !shown.isEmpty || texts.offeringReward != nil {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 4) {
                     ForEach(shown.filter { $0 == .flame || $0 == .meesh }, id: \.self) { middlePiece($0) }
                 }
                 HStack(spacing: 4) {
-                    ForEach(shown.filter { $0 == .mission || $0 == .treasury || $0 == .league }, id: \.self) { middlePiece($0) }
+                    ForEach(shown.filter { $0 == .mission || $0 == .offering }, id: \.self) { middlePiece($0) }
+                    offeringRewardPiece
+                    ForEach(shown.filter { $0 == .treasury || $0 == .league }, id: \.self) { middlePiece($0) }
                 }
             }
             .fixedSize()
@@ -232,7 +242,9 @@ public struct PlayerBannerView: View {
             case .meesh:
                 piece(text: texts.meeshes) { MeeshCoinView(face: .obverse, edition: .silver, figures: nil).frame(width: 18, height: 18) }
             case .mission:
-                piece(text: texts.mission) { symbol("target", side: 16) }
+                if let mission = model.dailyMission { ActDots(done: mission.done, total: mission.total, ink: palette.ink, side: 7) }
+            case .offering:
+                ChestView(isOpen: false).frame(width: 22, height: 18)
             case .treasury:
                 if let tier = model.treasury { TreasuryTierEmblem(tier: tier, side: 18, color: palette.ink) }
             case .league:
@@ -285,11 +297,12 @@ public struct PlayerBannerView: View {
                 }
             }
             let rest = model.pieces.filter { $0 != .level && $0 != .sparks }
-            if !rest.isEmpty {
+            if !rest.isEmpty || texts.offeringReward != nil {
                 FlowLayout(itemSpacing: 0, lineSpacing: 8) {
                     ForEach(rest, id: \.self) { kind in
                         select(kind) { pieceContent(kind) }
                     }
+                    offeringRewardPiece
                 }
             }
         }
@@ -332,13 +345,28 @@ public struct PlayerBannerView: View {
         case .trophies:
             piece(text: texts.trophies) { symbol("trophy.fill") }
         case .mission:
-            piece(text: texts.mission) { symbol("target") }
+            if let mission = model.dailyMission { ActDots(done: mission.done, total: mission.total, ink: palette.ink, side: 9) }
+        case .offering:
+            ChestView(isOpen: false).frame(width: 28, height: 22)
         case .treasury:
             if let tier = model.treasury { TreasuryTierEmblem(tier: tier, side: 22, color: palette.ink) }
         case .season:
             piece(text: texts.season) { symbol("calendar") }
         case .level, .sparks:
             EmptyView()
+        }
+    }
+
+    /// Le gain d'une Offrande ouverte sur place (#18199) : le coffre ouvert et « +40 », dits en UNE phrase.
+    @ViewBuilder
+    private var offeringRewardPiece: some View {
+        if let reward = texts.offeringReward {
+            piece(text: reward) { ChestView(isOpen: true).frame(width: 22, height: 18) }
+                .frame(minHeight: Self.cornerTarget)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(texts.offeringRewardLabel ?? reward)
+                .accessibilityAddTraits(.updatesFrequently)
+                .accessibilityIdentifier("game.player_banner.offering_reward")
         }
     }
 
@@ -493,6 +521,31 @@ public struct PlayerBannerView: View {
                     .minimumScaleFactor(0.7)
             }
         }
+    }
+}
+
+// MARK: - Le Rêve en points
+
+/// Le Rêve du jour en points (#18199, miroir d'`ActDots` du web) : un plein par acte réalisé, un creux par acte à
+/// faire. Décoratif : le bouton qui le porte dit « Rêve : 1 sur 3 ».
+private struct ActDots: View {
+    let done: Int
+    let total: Int
+    let ink: Color
+    let side: CGFloat
+
+    var body: some View {
+        HStack(spacing: side * 0.6) {
+            ForEach(0..<max(total, 0), id: \.self) { index in
+                if index < done {
+                    Circle().fill(ink).frame(width: side, height: side)
+                } else {
+                    Circle().strokeBorder(ink.opacity(0.45), lineWidth: 1.5).frame(width: side, height: side)
+                }
+            }
+        }
+        .padding(.horizontal, 2)
+        .accessibilityHidden(true)
     }
 }
 

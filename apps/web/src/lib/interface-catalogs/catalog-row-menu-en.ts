@@ -40,6 +40,7 @@ const en = {
   'listFilter.channels': 'Channels',
   'listFilter.pinned': 'Pinned',
   'listFilter.archived': 'Archived',
+  'listFilter.more': 'More',
   'listRow.muted': 'Muted',
   'listRow.endToEnd': 'End-to-end encrypted',
   'listRow.announce.pin.on': 'Conversation pinned',

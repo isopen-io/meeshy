@@ -3,15 +3,12 @@
     <string name="about_app_name">Meeshy</string>
     <string name="about_copy">Copiar</string>
     <string name="about_copyright">2024-2026 Meeshy. Todos os direitos reservados.</string>
-    <string name="about_feature_cloud_sync">Sincronização na nuvem</string>
     <string name="about_feature_encryption">Criptografia de ponta a ponta</string>
-    <string name="about_feature_themes">Temas personalizáveis</string>
     <string name="about_feature_translation">Tradução em tempo real</string>
     <string name="about_feature_voice_cloning">Clonagem de voz</string>
     <string name="about_info_media_tier">Perfil de mídia</string>
     <string name="about_info_platform">Plataforma</string>
     <string name="about_info_sdk_version">Versão do SDK</string>
-    <string name="about_link_about">Sobre o Meeshy</string>
     <string name="about_link_contact">Contato</string>
     <string name="about_link_github">GitHub</string>
     <string name="about_link_partners">Parceiros</string>
@@ -22,7 +19,6 @@
     <string name="about_media_tier_mid">Intermediário</string>
     <string name="about_media_tier_pro">Pro</string>
     <string name="about_section_features">Recursos</string>
-    <string name="about_section_informations">Informações</string>
     <string name="about_section_links">Links</string>
     <string name="about_title">Sobre</string>
     <string name="account_contact_cancel">Cancelar</string>
@@ -103,7 +99,6 @@
     <string name="licenses_libsignal_body">A libsignal e as bibliotecas que ela inclui, com o texto de suas licenças.</string>
     <string name="licenses_libsignal_title">Avisos da libsignal</string>
     <string name="licenses_meeshy_body">O código-fonte do Meeshy é publicado sob a licença MIT. Este aplicativo inclui a libsignal (Signal Messenger), publicada sob a licença GNU AGPL-3.0: o aplicativo distribuído é, portanto, uma obra sob a licença AGPL-3.0 somente.</string>
-    <string name="licenses_meeshy_body_mit">O código-fonte do Meeshy é publicado sob a licença MIT.</string>
     <string name="licenses_meeshy_title">Licença do Meeshy</string>
     <string name="licenses_section_open_source">Código aberto</string>
     <string name="licenses_source_body">O código-fonte desta versão, scripts de compilação incluídos, está disponível gratuitamente.</string>
@@ -143,7 +138,7 @@
     <string name="pack_shop_domain_wallpaper">Planos de fundo</string>
     <string name="pack_shop_empty">Ainda não há nada para descobrir aqui.</string>
     <string name="pack_shop_error_insufficient">Faltam Meeshes para este pack.</string>
-    <string name="pack_shop_error_load">Não foi possível carregar a loja. Tente novamente.</string>
+    <string name="pack_shop_error_load">Não foi possível carregar a loja.</string>
     <string name="pack_shop_failed">Não foi possível atualizar o pacote. Tente de novo.</string>
     <string name="pack_shop_install">Instalar</string>
     <string name="pack_shop_locked">A desbloquear</string>
@@ -155,10 +150,7 @@
     <string name="privacy_last_seen">Último acesso</string>
     <string name="privacy_online_status">Status online</string>
     <string name="privacy_read_receipts">Confirmações de leitura</string>
-    <string name="privacy_save_media">Salvar mídia</string>
-    <string name="privacy_section_contacts">Contatos e grupos</string>
     <string name="privacy_section_encryption">Criptografia</string>
-    <string name="privacy_section_media">Mídia e dados</string>
     <string name="privacy_section_visibility">Visibilidade</string>
     <string name="privacy_typing_indicator">Indicador de digitação</string>
     <string name="purge_action_empty">Selecione o que limpar</string>
@@ -205,7 +197,6 @@
     <string name="sessions_empty">Nenhuma sessão ativa</string>
     <string name="sessions_error_banner">Não foi possível atualizar — puxe para tentar novamente.</string>
     <string name="sessions_error_ok">OK</string>
-    <string name="sessions_error_title">Erro</string>
     <string name="sessions_loading">Carregando as sessões</string>
     <string name="sessions_login_anonymous">Sessão de convidado</string>
     <string name="sessions_login_email_verification">Entrada pela verificação do e-mail</string>
@@ -225,11 +216,9 @@
     <string name="sessions_revoke_a11y">Desconectar %1$s</string>
     <string name="sessions_revoke_all_action">Desconectar os outros aparelhos</string>
     <string name="sessions_revoke_all_confirm_message">Só este aparelho continuará conectado. Os outros precisarão entrar novamente.</string>
-    <string name="sessions_revoke_all_error">Não foi possível revogar as sessões</string>
     <string name="sessions_revoke_confirm_action">Desconectar</string>
     <string name="sessions_revoke_confirm_message">%1$s precisará entrar novamente para acessar sua conta.</string>
     <string name="sessions_revoke_confirm_title">Desconectar este aparelho?</string>
-    <string name="sessions_revoke_error">Não foi possível revogar a sessão</string>
     <string name="sessions_section_others">Outros aparelhos</string>
     <string name="sessions_timezone">Fuso horário: %1$s</string>
     <string name="sessions_unknown_device">Aparelho desconhecido</string>
@@ -262,7 +251,6 @@
     <string name="settings_media_capture_original_title">Salvar o original</string>
     <string name="settings_media_download">Download automático</string>
     <string name="settings_media_outgoing_header">Ao enviar</string>
-    <string name="settings_media_outgoing_location_subtitle">Por padrão, a posição GPS é removida de cada foto antes do envio.</string>
     <string name="settings_media_outgoing_location_title">Manter a localização das fotos</string>
     <string name="settings_new_message_notifications">Novas mensagens</string>
     <string name="settings_notif_cat_calls">Chamadas</string>
@@ -290,7 +278,6 @@
     <string name="settings_notifications_title">Notificações</string>
     <string name="settings_open_source_licenses">Licenças de código aberto</string>
     <string name="settings_packs_domain">Tipo de pacote</string>
-    <string name="settings_privacy_encryption_coming_soon_a11y">Criptografia — em breve, atualmente desativada</string>
     <string name="settings_privacy_policy">Política de privacidade</string>
     <string name="settings_privacy_title">Privacidade</string>
     <string name="settings_push_notifications">Notificações push</string>
@@ -319,8 +306,6 @@
     <string name="settings_tools_progression">Minha Lenda</string>
     <string name="settings_tools_stats">Estatísticas</string>
     <string name="settings_transcription_auto">Automática</string>
-    <string name="settings_transcription_engine">Motor de transcrição</string>
-    <string name="settings_transcription_engine_a11y">Motor de transcrição</string>
     <string name="settings_version_label">Versão</string>
     <string name="settings_voice_create">Criar</string>
     <string name="support_a11y_opens">Abre %1$s</string>

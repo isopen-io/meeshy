@@ -128,14 +128,14 @@ export function ProfileBodySkeleton({ language }: { readonly language: Interface
  * moitié que le premier jet n'avait pas : « Aucune publication · Rien de public
  * à lire » servi à qui vient de toucher « Réels » est FAUX — la tuile voisine
  * annonce le contraire au même instant. Le texte dit donc ce qui manque
- * VRAIMENT, et il rend son geste : re-toucher la tuile.
+ * VRAIMENT, et il rend son geste : le bouton « Tout afficher ».
  */
 const FILTERED_EMPTY = {
   posts: 'userProfile.posts.emptyPosts',
   reels: 'userProfile.posts.emptyReels',
 } as const satisfies Readonly<Record<ProfilePostsFilterTap, InterfaceCatalogKey>>;
 
-export function ProfilePostsEmpty({ language, filter }: { readonly language: InterfaceLanguage; readonly filter: ProfilePostsFilter }) {
+export function ProfilePostsEmpty({ language, filter, onClear }: { readonly language: InterfaceLanguage; readonly filter: ProfilePostsFilter; readonly onClear: () => void }) {
   const filtered = filter !== 'all';
   return (
     <div
@@ -149,9 +149,17 @@ export function ProfilePostsEmpty({ language, filter }: { readonly language: Int
       <p className="text-body font-semibold" style={{ color: INK }}>
         {translate(language, filter === 'all' ? 'userProfile.posts.empty' : FILTERED_EMPTY[filter])}
       </p>
-      <p className="text-caption" style={{ color: INK_2 }}>
-        {translate(language, filtered ? 'userProfile.posts.emptyFilter' : 'userProfile.posts.emptyBody')}
-      </p>
+      {filtered ? (
+        <button
+          type="button"
+          data-profile-posts-clear
+          onClick={onClear}
+          className={`grid place-items-center rounded-chip px-5 text-body font-semibold ${FOCUS} ${BRAND_INK}`}
+          style={{ minHeight: 44, outlineColor: BRAND }}
+        >
+          {translate(language, 'userProfile.stat.filterClear')}
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -57,7 +57,7 @@ internal fun storyRailContourColor(contour: StoryRailContour, authorAccent: Colo
 @Composable
 internal fun StoryRailButton(
     icon: ImageVector,
-    caption: String,
+    caption: String?,
     accessibilityLabel: String,
     modifier: Modifier = Modifier,
     value: String? = null,
@@ -125,11 +125,13 @@ internal fun StoryRailButton(
             MeeshyGlassSurface(modifier = Modifier.size(RailButtonSize), shape = CircleShape) {}
             Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
         }
-        Text(
-            text = caption,
-            style = MaterialTheme.typography.labelSmall,
-            color = MeeshyPalette.White,
-            maxLines = 1,
-        )
+        if (!caption.isNullOrEmpty()) {
+            Text(
+                text = caption,
+                style = MaterialTheme.typography.labelSmall,
+                color = MeeshyPalette.White,
+                maxLines = 1,
+            )
+        }
     }
 }

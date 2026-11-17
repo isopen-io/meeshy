@@ -23,7 +23,12 @@ import me.meeshy.sdk.friend.FriendshipPages
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.game.ChestStatus
+import me.meeshy.sdk.model.game.FlameStatus
 import me.meeshy.sdk.model.game.GameActsRing
+import me.meeshy.sdk.model.game.GameAttention
+import me.meeshy.sdk.model.game.GameChest
+import me.meeshy.sdk.model.game.GameFlame
 import me.meeshy.sdk.model.game.GameMission
 import me.meeshy.sdk.model.game.GameMissions
 import me.meeshy.sdk.model.game.MissionDifficulty
@@ -197,7 +202,13 @@ class ChromeViewModelTest {
         verify(exactly = 2) { notificationRepository.notificationsStream(any(), any()) }
     }
 
-    private fun progressWithActs(vararg done: Boolean): ApiEngagementProgress {
+    private fun progressWithActs(vararg done: Boolean): ApiEngagementProgress = progressWith(done = done.toList())
+
+    private fun progressWith(
+        done: List<Boolean> = listOf(false, false, false),
+        chest: ChestStatus = ChestStatus.Locked,
+        flame: FlameStatus = FlameStatus.Lit,
+    ): ApiEngagementProgress {
         val items = done.mapIndexed { index, isDone ->
             GameMission(
                 id = "m$index", templateKey = "send-messages", difficulty = MissionDifficulty.Easy, signal = "axis:content.post",
@@ -206,7 +217,18 @@ class ChromeViewModelTest {
             )
         }
         val missions = GameMissions(dayKey = "2026-11-14", prismDay = false, unlocked = true, items = items, rerollAvailable = false)
-        return mockk { every { game } returns mockk { every { this@mockk.missions } returns missions } }
+        val chestBlock: GameChest = mockk { every { status } returns chest }
+        val flameBlock: GameFlame = mockk {
+            every { status } returns flame
+            every { days } returns 4
+        }
+        return mockk {
+            every { game } returns mockk {
+                every { this@mockk.missions } returns missions
+                every { this@mockk.chest } returns chestBlock
+                every { this@mockk.flame } returns flameBlock
+            }
+        }
     }
 
     @Test
@@ -266,5 +288,46 @@ class ChromeViewModelTest {
 
         assertThat(vm.actsRing.value).isEqualTo(GameActsRing(done = 1, total = 3))
         verify(exactly = 1) { engagement.progress(any()) }
+    }
+
+    // Le point du barreau « Ma Légende » (#18165) : la même lecture du cache que l'anneau.
+
+    @Test
+    fun `l'Offrande prete leve le signal du barreau Ma Legende, lue dans le cache`() = runTest {
+        every { engagement.progress(any()) } returns MutableStateFlow(CacheResult.Stale(progressWith(chest = ChestStatus.Ready), 0L))
+        val vm = viewModel()
+
+        assertThat(vm.gameAttention.value).isEqualTo(GameAttention.None)
+        vm.warmUpIfAuthenticated(true)
+
+        assertThat(vm.gameAttention.value).isEqualTo(GameAttention(chestReady = true, flameAtRisk = false))
+    }
+
+    @Test
+    fun `la Flamme en danger leve le signal, et l'Offrande ouverte l'abaisse sans requete de plus`() = runTest {
+        val cached = MutableStateFlow<CacheResult<ApiEngagementProgress>>(
+            CacheResult.Fresh(progressWith(chest = ChestStatus.Ready, flame = FlameStatus.AtRisk), 0L),
+        )
+        every { engagement.progress(any()) } returns cached
+        val vm = viewModel()
+        vm.warmUpIfAuthenticated(true)
+        assertThat(vm.gameAttention.value).isEqualTo(GameAttention(chestReady = true, flameAtRisk = true))
+
+        cached.value = CacheResult.Fresh(progressWith(chest = ChestStatus.Claimed), 0L)
+
+        assertThat(vm.gameAttention.value).isEqualTo(GameAttention.None)
+        verify(exactly = 1) { engagement.progress(any()) }
+    }
+
+    @Test
+    fun `Jeu masque abaisse le signal du barreau`() = runTest {
+        every { engagement.progress(any()) } returns MutableStateFlow(CacheResult.Fresh(progressWith(chest = ChestStatus.Ready), 0L))
+        val vm = viewModel()
+        vm.warmUpIfAuthenticated(true)
+        assertThat(vm.gameAttention.value.isRaised).isTrue()
+
+        gamePrefs.set(hidden = true)
+
+        assertThat(vm.gameAttention.value).isEqualTo(GameAttention.None)
     }
 }

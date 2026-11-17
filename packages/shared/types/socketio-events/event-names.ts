@@ -25,6 +25,8 @@ import { RELATION_SERVER_EVENTS } from './relation-event-names.js';
 import { SESSION_SERVER_EVENTS } from './session-event-names.js';
 import { TALKIE_CLIENT_EVENTS, TALKIE_SERVER_EVENTS } from './talkie-event-names.js';
 import { NOW_PLAYING_CLIENT_EVENTS, NOW_PLAYING_SERVER_EVENTS } from './now-playing-event-names.js';
+import { BATTERY_CLIENT_EVENTS, BATTERY_SERVER_EVENTS } from './battery-event-names.js';
+import { PHONE_REACHABILITY_SERVER_EVENTS } from './phone-reachability-event-names.js';
 import { SHARED_LOCATION_CLIENT_EVENTS, SHARED_LOCATION_SERVER_EVENTS } from './shared-location-event-names.js';
 import { TOGETHER_CLIENT_EVENTS, TOGETHER_SERVER_EVENTS } from './together-event-names.js';
 import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from './viewing-event-names.js';
@@ -190,6 +192,8 @@ export const SERVER_EVENTS = {
   ...RELATION_SERVER_EVENTS,
   ...TALKIE_SERVER_EVENTS,
   ...NOW_PLAYING_SERVER_EVENTS,
+  ...BATTERY_SERVER_EVENTS,
+  ...PHONE_REACHABILITY_SERVER_EVENTS,
   ...SHARED_LOCATION_SERVER_EVENTS,
   ...TOGETHER_SERVER_EVENTS,
   ...E2EE_SERVER_EVENTS,
@@ -618,6 +622,13 @@ export const SERVER_EVENTS = {
   USER_PREFERENCES_REORDERED: 'user:preferences-reordered',
   USER_PREFERENCES_COMMUNITY_REORDERED: 'user:preferences-community-reordered',
 
+  // --- Communautés (#16857) : l'identité d'une communauté, à jour chez ses membres ---
+  COMMUNITY_UPDATED: 'community:updated',
+  // L'effectif d'une communauté (#18766) : qui entre, qui sort, qui change de rôle
+  COMMUNITY_MEMBER_JOINED: 'community:member-joined',
+  COMMUNITY_MEMBER_LEFT: 'community:member-left',
+  COMMUNITY_MEMBER_ROLE_UPDATED: 'community:member-role-updated',
+
   // --- Packs (#10148) : l'installation d'un pack, synchronisée entre les appareils du compte ---
   PACK_INSTALLATION_UPDATED: 'pack:installation-updated',
 
@@ -715,6 +726,7 @@ export const CLIENT_EVENTS = {
   ...E2EE_CLIENT_EVENTS,
   ...TALKIE_CLIENT_EVENTS,
   ...NOW_PLAYING_CLIENT_EVENTS,
+  ...BATTERY_CLIENT_EVENTS,
   ...SHARED_LOCATION_CLIENT_EVENTS,
   ...TOGETHER_CLIENT_EVENTS,
   // `USER_STATUS: 'user:status'` a été retiré d'ici (cycle 60) : c'est un

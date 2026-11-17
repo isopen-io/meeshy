@@ -34,6 +34,9 @@ import me.meeshy.app.navigation.chatDestination
 import me.meeshy.app.navigation.Routes
 import me.meeshy.app.navigation.navigateClosingSheet
 import me.meeshy.app.navigation.navigateKeepingSheet
+import me.meeshy.app.navigation.popFrom
+import me.meeshy.app.navigation.pushFrom
+import me.meeshy.app.navigation.rememberConversationOpener
 import me.meeshy.app.navigation.SheetStyle
 import me.meeshy.app.navigation.rememberProfileOpenerOverSheet
 import me.meeshy.app.navigation.sheetComposable
@@ -56,7 +59,8 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         deepLinks = listOf(
             navDeepLink { uriPattern = Routes.CONVERSATIONS_DEEP_LINK },
         ),
-    ) {
+    ) { entry ->
+        val openConversation = rememberConversationOpener(navController, entry)
         // Une seule instance pour la barre et le geste « tirer » : tirer la liste recharge
         // aussi les stories (iOS `ConversationListView` : pullToRefresh + loadStories).
         val storiesViewModel: StoriesViewModel = hiltViewModel()
@@ -75,7 +79,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         // Le toucher de l'avatar d'une ligne (#15989) : la fiche Conversation s'ouvre sur la liste, hors du fil.
         var infoTarget by remember { mutableStateOf<Pair<ApiConversation, String?>?>(null) }
         infoTarget?.let { (conversation, readerId) ->
-            ConversationInfoFromList(conversation, readerId, navController) { infoTarget = null }
+            ConversationInfoFromList(conversation, readerId, navController, entry) { infoTarget = null }
         }
         // La bulle d'humeur du badge d'avatar : les humeurs se lisent au toucher (`state.value`), jamais ici,
         // pour qu'une humeur qui change ne recompose pas les lignes ; la bulle se dessine à la racine.
@@ -83,13 +87,11 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         val moodsNow = { MoodLookup.from(statusesViewModel.state.value) }
         val openProfile = rememberProfileOpenerOverSheet(navController)
         ConversationListScreen(
-            onConversationClick = { conversationId ->
-                navController.navigate(Routes.chat(conversationId))
-            },
-            onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
-            onOpenShareLinkPicker = { navController.navigate(Routes.SHARE_LINK_PICKER) },
-            onDashboard = { navController.navigate(Routes.DASHBOARD) },
-            onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
+            onConversationClick = { conversationId -> openConversation(conversationId, null) },
+            onNewConversation = { navController.pushFrom(entry, Routes.NEW_CONVERSATION) },
+            onOpenShareLinkPicker = { navController.pushFrom(entry, Routes.SHARE_LINK_PICKER) },
+            onDashboard = { navController.pushFrom(entry, Routes.DASHBOARD) },
+            onGlobalSearch = { navController.pushFrom(entry, Routes.GLOBAL_SEARCH) },
             onLogout = { authViewModel.logout() },
             header = {
                 MeeshyStoryRail(navController = navController, storiesViewModel = storiesViewModel, statusesViewModel = statusesViewModel)
@@ -102,44 +104,43 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             rowNavigation = ConversationRowNavigation(
                 onManageMembers = { conversationId, accent -> membersTarget = conversationId to accent },
                 onViewProfile = openProfile,
-                onCreateShareLink = { id -> navController.navigate(Routes.createShareLink(id)) },
+                onCreateShareLink = { id -> navController.pushFrom(entry, Routes.createShareLink(id)) },
                 // #14897 : « Détails » ouvre la conversation (sa feuille d'infos est à un geste de l'en-tête) ;
                 // « Appeler » compose l'appel audio du pair sans passer par le chat.
-                onViewInfo = { id -> navController.navigate(Routes.chat(id)) },
-                onCall = { id, peerName -> navController.navigate(Routes.call(id, peerName, false)) },
+                onViewInfo = { id -> openConversation(id, null) },
+                onCall = { id, peerName -> navController.pushFrom(entry, Routes.call(id, peerName, false)) },
                 onViewConversationInfo = { conversation, readerId -> infoTarget = conversation to readerId },
-                onViewStory = { userId -> navController.navigate(Routes.story(userId)) },
+                onViewStory = { userId -> navController.pushFrom(entry, Routes.story(userId)) },
                 onMoodBadgeTap = { userId ->
                     moodsNow().entryOf(userId)?.let(moodBubble::show)
                 },
                 onMoodShown = { userId -> moodsNow().statusIdOf(userId)?.let(statusesViewModel::trackAvatarImpression) },
             ),
-            onOpenSettings = { navController.navigate(Routes.settingsFocus(SettingsInvite.MASTER_PIN)) },
-            onOpenMessage = { conversationId, messageId ->
-                navController.navigate(Routes.chat(conversationId, highlightMessageId = messageId))
-            },
+            onOpenSettings = { navController.pushFrom(entry, Routes.settingsFocus(SettingsInvite.MASTER_PIN)) },
+            onOpenMessage = openConversation,
         )
     }
-    sheetComposable(Routes.SHARE_LINK_PICKER, navController) { _, dismiss ->
+    sheetComposable(Routes.SHARE_LINK_PICKER, navController) { entry, dismiss ->
         CreateShareLinkScreen(
             onBack = dismiss,
             onCreated = dismiss,
-            onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
+            onNewConversation = { navController.pushFrom(entry, Routes.NEW_CONVERSATION) },
         )
     }
-    sheetComposable(Routes.GLOBAL_SEARCH, navController, style = SheetStyle.COVER) { _, dismiss ->
+    sheetComposable(Routes.GLOBAL_SEARCH, navController, style = SheetStyle.COVER) { entry, dismiss ->
         // #14671 — un post, un réel ou une story ouverts depuis les résultats y reviennent (même requête, même
         // onglet) ; une conversation ouverte ferme la recherche, comme iOS.
         GlobalSearchScreen(
             onBack = dismiss,
             onOpenConversation = { conversationId ->
-                navController.navigateClosingSheet(Routes.chat(conversationId))
+                navController.navigateClosingSheet(entry, Routes.chat(conversationId))
             },
             onOpenMessage = { conversationId, messageId ->
-                navController.navigateClosingSheet(Routes.chat(conversationId, highlightMessageId = messageId))
+                navController.navigateClosingSheet(entry, Routes.chat(conversationId, highlightMessageId = messageId))
             },
             onOpenPost = { destination ->
                 navController.navigateKeepingSheet(
+                    entry,
                     when (destination) {
                         is PostSearchDestination.Post -> Routes.postDetail(destination.postId)
                         is PostSearchDestination.Reel -> Routes.reels(seed = destination.postId)
@@ -150,16 +151,16 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             onOpenUser = rememberProfileOpenerOverSheet(navController),
         )
     }
-    sheetComposable(Routes.DASHBOARD, navController) { _, dismiss ->
+    sheetComposable(Routes.DASHBOARD, navController) { entry, dismiss ->
         DashboardScreen(
             onBack = dismiss,
             onOpenConversation = { conversationId ->
-                navController.navigateKeepingSheet(Routes.chat(conversationId))
+                navController.navigateKeepingSheet(entry, Routes.chat(conversationId))
             },
-            onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
-            onGlobalSearch = { navController.navigate(Routes.GLOBAL_SEARCH) },
-            onShareLinks = { navController.navigateKeepingSheet(Routes.MY_SHARE_LINKS) },
-            onContacts = { navController.navigateKeepingSheet(Routes.CONTACTS) },
+            onNewConversation = { navController.pushFrom(entry, Routes.NEW_CONVERSATION) },
+            onGlobalSearch = { navController.pushFrom(entry, Routes.GLOBAL_SEARCH) },
+            onShareLinks = { navController.navigateKeepingSheet(entry, Routes.MY_SHARE_LINKS) },
+            onContacts = { navController.navigateKeepingSheet(entry, Routes.CONTACTS) },
         )
     }
     sheetComposable(
@@ -175,11 +176,11 @@ internal fun NavGraphBuilder.conversationsNavGraph(
             createOnOpen = true,
         )
     }
-    composable(Routes.MY_SHARE_LINKS) {
+    composable(Routes.MY_SHARE_LINKS) { entry ->
         MyShareLinksScreen(
-            onBack = { navController.popBackStack() },
+            onBack = { navController.popFrom(entry) },
             onOpenLink = { link ->
-                navController.navigate(Routes.shareLinkDetail(link.linkId))
+                navController.pushFrom(entry, Routes.shareLinkDetail(link.linkId))
             },
         )
     }
@@ -188,11 +189,11 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         arguments = listOf(
             navArgument(ShareLinkDetailViewModel.LINK_ID_ARG) { type = NavType.StringType },
         ),
-    ) {
+    ) { entry ->
         ShareLinkDetailScreen(
-            onBack = { navController.popBackStack() },
-            onDeleted = { navController.popBackStack() },
-            onSeeAllArrivals = { linkId -> navController.navigate(Routes.shareLinkArrivals(linkId)) },
+            onBack = { navController.popFrom(entry) },
+            onDeleted = { navController.popFrom(entry) },
+            onSeeAllArrivals = { linkId -> navController.pushFrom(entry, Routes.shareLinkArrivals(linkId)) },
         )
     }
     composable(
@@ -200,26 +201,24 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         arguments = listOf(
             navArgument(ShareLinkDetailViewModel.LINK_ID_ARG) { type = NavType.StringType },
         ),
-    ) {
-        ShareLinkArrivalsScreen(onBack = { navController.popBackStack() })
+    ) { entry ->
+        ShareLinkArrivalsScreen(onBack = { navController.popFrom(entry) })
     }
-    sheetComposable(Routes.NEW_CONVERSATION, navController) { _, dismiss ->
+    sheetComposable(Routes.NEW_CONVERSATION, navController) { entry, dismiss ->
         NewConversationScreen(
             onBack = dismiss,
             onConversationCreated = { conversationId ->
-                navController.navigate(Routes.chat(conversationId)) {
+                navController.pushFrom(entry, Routes.chat(conversationId)) {
                     popUpTo(Routes.CONVERSATIONS)
                 }
             },
         )
     }
     chatDestination(navController, callStatus)
-    composable(Routes.STARRED) {
+    composable(Routes.STARRED) { entry ->
         StarredMessagesScreen(
-            onBack = { navController.popBackStack() },
-            onOpenMessage = { conversationId, messageId ->
-                navController.navigate(Routes.chat(conversationId, highlightMessageId = messageId))
-            },
+            onBack = { navController.popFrom(entry) },
+            onOpenMessage = rememberConversationOpener(navController, entry),
         )
     }
 }

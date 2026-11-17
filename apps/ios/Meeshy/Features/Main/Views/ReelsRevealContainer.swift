@@ -166,3 +166,25 @@ struct CoveredFreeze<Content: View>: View, Equatable {
 
     var body: some View { content }
 }
+
+/// La vague des réels, à l'ouverture et à la fermeture : sous « Réduire les
+/// animations », le fondu enchaîné de 180 ms que le conteneur rend à la place
+/// du disque. Le fondu traverse la racine du mouvement, qui le couperait
+/// sinon (#18354).
+enum ReelsRevealMotion {
+    static func duration(opening: Bool, reduceMotion: Bool) -> Double {
+        if reduceMotion { return 0.18 }
+        return opening ? 0.35 : 0.3
+    }
+
+    static func animate(opening: Bool, reduceMotion: Bool, _ body: () -> Void) {
+        meeshyWithAnimation(curve(opening: opening, reduceMotion: false),
+                            reduced: curve(opening: opening, reduceMotion: true),
+                            reduceMotion: reduceMotion, body)
+    }
+
+    private static func curve(opening: Bool, reduceMotion: Bool) -> Animation {
+        let seconds = duration(opening: opening, reduceMotion: reduceMotion)
+        return opening ? .easeOut(duration: seconds) : .easeIn(duration: seconds)
+    }
+}

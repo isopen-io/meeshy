@@ -139,11 +139,9 @@ const ptShellLabels = {
   'list.empty': 'Ainda não há conversas.',
   'list.empty.filter': 'Nenhuma conversa corresponde a “{query}”.',
   'list.showAll': 'Mostrar tudo',
-  'list.quick.start': 'Comece aqui',
-  'list.quick.next': 'E agora?',
-  'list.quick.subtitle': 'Meeshy se escreve a muitas mãos — convide alguém para participar.',
   'list.quick.invite': 'Convidar amigos',
   'list.quick.invite.hint': 'Compartilhe seu link Meeshy: é assim que nasce uma primeira conversa.',
+  'list.quick.invite.question': 'Para que serve este link?',
   'list.quick.story': 'Criar um story',
   'list.quick.story.hint': 'Uma imagem, um som, algumas palavras — visíveis por vinte horas.',
   'list.quick.mood': 'Compartilhar um humor',
@@ -190,6 +188,7 @@ const ptShellLabels = {
   'newConversation.group.chosen.one': '{count} pessoa',
   'newConversation.group.chosen.other': '{count} pessoas',
   'newConversation.group.chosen.hint': 'Você pode criá-lo sozinho, para uma auditoria ou para reunir opiniões, e convidar depois.',
+  'newConversation.group.chosen.question': 'Dá para criar um grupo sozinho?',
   'newConversation.group.remove': 'Remover {name}',
 
   'summary.title': 'Resumo vivo',
@@ -224,7 +223,6 @@ const ptShellLabels = {
   'hashtag.loading': 'Carregando publicações',
   'hashtag.error': 'Não foi possível carregar esta hashtag',
   'hashtag.empty.title': 'Nada em #{tag}',
-  'hashtag.empty.body': 'Nenhuma publicação visível tem esta hashtag.',
   'hashtag.loadMore': 'Carregar mais',
   'hashtag.loadingMore': 'Carregando…',
 } satisfies ShellLabelsCatalogSlice;

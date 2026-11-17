@@ -10,5 +10,4 @@
     <string name="contacts_filter_affiliates">المنتسبون</string>
     <string name="contacts_filter_a11y">عامل التصفية: %1$s</string>
     <string name="contacts_search_clear">مسح البحث</string>
-    <string name="contacts_list_mood_a11y">فتح حالة %1$s</string>
 </resources>

@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -78,9 +80,79 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
   ...overrides,
 });
 
+const SRC = resolve(import.meta.dirname, '..');
+
+const stripComments = (source: string): string => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+const resolveImport = (from: string, specifier: string): string | null => {
+  const base = specifier.startsWith('@/') ? join(SRC, specifier.slice(2)) : specifier.startsWith('.') ? resolve(dirname(from), specifier) : null;
+  if (base === null) return null;
+  return [`${base}.ts`, `${base}.tsx`, join(base, 'index.ts'), join(base, 'index.tsx')].find((candidate) => existsSync(candidate)) ?? null;
+};
+
+/** Ce que l'écran d'appel atteint par ses imports STATIQUES, de proche en proche : ce que `call_overlay` emporte. Un `import()` n'est pas suivi, un `import type` non plus. */
+function reachable(entry: string): readonly string[] {
+  const seen = new Set<string>();
+  const queue = [entry];
+  while (queue.length > 0) {
+    const file = queue.pop();
+    if (file === undefined || seen.has(file)) continue;
+    seen.add(file);
+    for (const match of stripComments(readFileSync(file, 'utf8')).matchAll(/(?:^|\n)\s*(?:import|export)\s[^;]*?from\s+'([^']+)'/g)) {
+      if (/^\s*(?:import|export)\s+type\s/.test(match[0].trim())) continue;
+      const target = resolveImport(file, match[1] ?? '');
+      if (target !== null) queue.push(target);
+    }
+  }
+  return [...seen].map((file) => relative(SRC, file));
+}
+
+/**
+ * CE QUI NE VIT QU'APRÈS UN GESTE OU DANS UN ÉTAT RARE, HORS DE `call_overlay` (#17930) — la grille d'un groupe et
+ * l'écran partagé à sa une, la sonnerie et la fin, la vignette du coin et ses gestes (pincer, glisser, les flèches, la
+ * loi du glissé), l'écran qu'un pair partage en duo et son zoom, les bandeaux du haut : chacun dans son chunk, que
+ * l'écran précharge.
+ */
+const COLD_VIEWS = [
+  'components/call-grid.tsx',
+  'components/call-grid-screen.tsx',
+  'components/call-ring-and-end.ts',
+  'components/call-duo-corner.tsx',
+  'components/use-tile-pinch.ts',
+  'components/use-tile-drag.ts',
+  'lib/calls/call-self-tile-gestures.ts',
+  'components/call-screen-zoom-surface.tsx',
+  'components/use-screen-zoom.ts',
+  'components/call-share-banner.tsx',
+] as const;
+
+const camera = { kind: 'video', readyState: 'live', getCapabilities: () => ({}), getSettings: () => ({}), applyConstraints: async () => undefined };
+const liveVideo = (): MediaStream => Object.assign(Object.create(MediaStream.prototype) as MediaStream, { getVideoTracks: () => [camera], getAudioTracks: () => [], getTracks: () => [camera] });
+
 const group = { isGroup: true, members: { 'u-a': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } } as const;
 
 describe('le code froid de l’écran d’appel', () => {
+  test('l’écran d’appel n’atteint aucune vue froide par un import statique : elles ne pèsent pas sur call_overlay', () => {
+    const reached = new Set(reachable(join(SRC, 'components/call-overlay.tsx')));
+    expect(COLD_VIEWS.filter((view) => reached.has(view))).toEqual([]);
+  });
+
+  test('un duo qui sonne encore précharge l’écran qu’un pair partagera : connecté, il est là au premier rendu, plein écran compris', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<CallScreen call={call({ media: 'video', phase: { kind: 'outgoing' } })} />));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    const sharing = renderToStaticMarkup(<CallScreen call={call({ media: 'video', members: { 'u-a': member({ screenSharing: true }) }, remoteStreams: { 'u-a': liveVideo() } })} />);
+    expect(sharing).toContain('data-call-shared-screen=""');
+    expect(sharing).toContain('data-call-screen-surface=""');
+    expect(sharing).toContain('data-call-fullscreen=""');
+    act(() => root.unmount());
+    host.remove();
+  });
+
   test('un appel de groupe qui sonne encore précharge sa grille : connecté, elle est là au premier rendu', async () => {
     const host = document.createElement('div');
     document.body.appendChild(host);

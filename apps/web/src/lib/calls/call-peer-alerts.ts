@@ -1,4 +1,4 @@
-import { screenCaptureKindOf, type CallScreenCaptureKind } from '@meeshy/shared/types/call-capture';
+import { CALL_SCREENSHOT_ALERT_TTL_MS, screenCaptureKindOf, type CallScreenCaptureKind } from '@meeshy/shared/types/call-capture';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import type { CallMember } from './call-store';
@@ -21,7 +21,8 @@ import type { CallMember } from './call-store';
 
 export const QUALITY_ALERT_TTL_MS = 15_000;
 
-export const SCREENSHOT_ALERT_TTL_MS = 5_000;
+/** La puce d'une capture ponctuelle dure ce que dit le kit partagé (R1.4, #17963), la même sur les trois plateformes. */
+export const SCREENSHOT_ALERT_TTL_MS = CALL_SCREENSHOT_ALERT_TTL_MS;
 
 type AlertPatch = Partial<Pick<CallMember, 'weakNetwork' | 'capturing'>>;
 

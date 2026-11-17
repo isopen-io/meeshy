@@ -212,3 +212,72 @@ final class TalkieAdtsStreamDecoderTests: XCTestCase {
         func append(_ batch: [TalkieAacFrame]) { frames += batch }
     }
 }
+
+/// Ce qu'on écoutait se met en pause pendant la voix d'un talkie, puis reprend (#18820) : les lecteurs Meeshy d'abord,
+/// la session ensuite ; à la fin, la session se rend (les autres apps reprennent) avant que les lecteurs ne repartent.
+@MainActor
+final class TalkieListeningHoldTests: XCTestCase {
+
+    final class Journal {
+        var steps: [String] = []
+    }
+
+    final class FakeVoiceSession: TalkieVoiceSessionProviding {
+        let journal: Journal
+        init(_ journal: Journal) { self.journal = journal }
+        nonisolated deinit {}
+        func activateVoice() { journal.steps.append("session.activate") }
+        func releaseVoice() { journal.steps.append("session.release") }
+    }
+
+    final class FakeListening: MeeshyListeningProviding {
+        let journal: Journal
+        init(_ journal: Journal) { self.journal = journal }
+        nonisolated deinit {}
+        func pauseListening() { journal.steps.append("players.pause") }
+        func resumeListening() { journal.steps.append("players.resume") }
+    }
+
+    private func makeSUT() -> (TalkieListeningHold, Journal) {
+        let journal = Journal()
+        return (TalkieListeningHold(session: FakeVoiceSession(journal), listening: FakeListening(journal)), journal)
+    }
+
+    func test_theVoiceBegins_pausesMeeshyPlayers_thenTakesTheSession() {
+        let (sut, journal) = makeSUT()
+
+        sut.begin(systemSession: false)
+
+        XCTAssertEqual(journal.steps, ["players.pause", "session.activate"])
+    }
+
+    func test_theVoiceEnds_releasesTheSession_thenResumesMeeshyPlayers() {
+        let (sut, journal) = makeSUT()
+        sut.begin(systemSession: false)
+
+        sut.end(systemSession: false)
+
+        XCTAssertEqual(journal.steps, ["players.pause", "session.activate", "session.release", "players.resume"])
+    }
+
+    func test_aSecondBegin_pausesOnlyOnce_andAnEndWithoutBegin_resumesNothing() {
+        let (sut, journal) = makeSUT()
+
+        sut.end(systemSession: false)
+        sut.begin(systemSession: false)
+        sut.begin(systemSession: false)
+        sut.end(systemSession: false)
+        sut.end(systemSession: false)
+
+        XCTAssertEqual(journal.steps, ["players.pause", "session.activate", "session.release", "players.resume"])
+    }
+
+    func test_aSessionActivatedByPushToTalk_isLeftToTheSystem_butPlayersStillPauseAndResume() {
+        let (sut, journal) = makeSUT()
+
+        sut.begin(systemSession: true)
+        sut.end(systemSession: true)
+
+        XCTAssertEqual(journal.steps, ["players.pause", "players.resume"])
+    }
+}

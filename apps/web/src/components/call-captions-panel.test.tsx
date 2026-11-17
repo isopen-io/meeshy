@@ -1,7 +1,7 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { CallCaption } from '@/lib/calls/call-captions';
@@ -72,6 +72,20 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
 });
 
 const panel = (overrides: Partial<ActiveCall> = {}, surface: 'glass' | 'inset' = 'glass') => renderToStaticMarkup(<CallCaptionsPanel call={call(overrides)} language="fr" colorOf={colorOf} surface={surface} />);
+
+/**
+ * Chaque témoin part d'un magasin des phrases révélées VIDE. Ce magasin vit au
+ * niveau du module, donc pour tout le processus `bun test` : un autre fichier
+ * qui touche une phrase de `call-1` (`call-screen-pill-text.test.tsx`, loi
+ * 17.11) la laissait révélée, et les témoins ci-dessous rougissaient selon
+ * l'ordre des fichiers. La fin d'un appel est le geste qui le vide
+ * (`revealsAfter`) : on la joue, puis on rend au magasin d'appel son état.
+ */
+beforeEach(() => {
+  const kept = callStore.getState();
+  callStore.setState({ call: null });
+  callStore.setState(kept, true);
+});
 
 describe('le bandeau', () => {
   test('un verre d’appel sombre — sauf posé DANS le cadre de verre d’un groupe (pas de verre sur verre)', () => {
@@ -194,14 +208,14 @@ describe('les gestes', () => {
 
   const settle = (ms: number) => act(async () => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
-  test('rien n’apparaît ni ne disparaît d’un coup : l’original déplié repart sous la phrase le temps d’un fondu, inerte, puis ne laisse rien', async () => {
+  test('rien n’apparaît ni ne disparaît d’un coup : l’original déplié repart sous la phrase le temps d’un fondu, cachée au lecteur d’écran mais jamais inerte (loi 17.11), puis ne laisse rien', async () => {
     const view = mount();
     view.press('[data-call-caption-line="w-1"]');
     expect(view.host.querySelector('[data-call-caption-original]')?.hasAttribute('data-leaving')).toBe(false);
     view.press('[data-call-caption-line="w-1"]');
     const leaving = view.host.querySelector('[data-call-caption-original]');
     expect(leaving?.hasAttribute('data-leaving')).toBe(true);
-    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(false);
     expect(leaving?.getAttribute('aria-hidden')).toBe('true');
     await settle(260);
     expect(view.host.querySelector('[data-call-caption-original]')).toBeNull();

@@ -215,11 +215,20 @@ describe('ExpiredMessagesCleanupService', () => {
       data: {
         content: '',
         encryptedContent: null,
+        encryptionMetadata: null,
         translations: null,
         metadata: null,
         deletedAt: NOW,
       },
     });
+  });
+
+  it('efface `encryptionMetadata` — l’enveloppe d’un chiffré ne survit pas à sa destruction (#18556)', async () => {
+    const { service, prisma } = buildService([messageRow()]);
+
+    await service.cleanup();
+
+    expect(updateCalls(prisma)[0][0].data).toHaveProperty('encryptionMetadata', null);
   });
 
   it('efface `metadata` — les coordonnées d’un lieu partagé y sont EN CLAIR', async () => {

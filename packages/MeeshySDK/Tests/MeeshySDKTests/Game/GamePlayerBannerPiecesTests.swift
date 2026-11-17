@@ -12,12 +12,12 @@ struct GamePlayerBannerPiecesTests {
     func eachPieceOpensItsConcept() {
         let expected: [GamePlayerBanner.Piece: ProgressionConcept] = [
             .sparks: .points, .rank: .glory, .level: .level, .meesh: .meesh, .flame: .flame,
-            .league: .league, .trophies: .showcase, .mission: .missions, .season: .season, .treasury: .meesh,
+            .league: .league, .trophies: .showcase, .mission: .missions, .offering: .missions, .season: .season, .treasury: .meesh,
         ]
         for piece in GamePlayerBanner.Piece.allCases {
             #expect(piece.concept == expected[piece], "\(piece)")
         }
-        #expect(GamePlayerBanner.Piece.allCases.count == 10)
+        #expect(GamePlayerBanner.Piece.allCases.count == 11)
     }
 
     @Test("seulement les pièces qui existent, dans l'ordre du bandeau")
@@ -27,6 +27,12 @@ struct GamePlayerBannerPiecesTests {
                                     flame: .init(form: .braise, days: 5), trophies: 2,
                                     dailyMission: .init(done: 1, total: 3), season: .init(number: 1), treasury: .coffre)
         #expect(full.pieces == [.level, .sparks, .meesh, .rank, .league, .flame, .trophies, .mission, .treasury, .season])
+
+        let ready = GamePlayerBanner(level: 12, tier: .lueur, progress: 0.4, score: 900, nextLevel: 13, pointsToNext: 200,
+                                     dailyMission: .init(done: 3, total: 3), treasury: .coffre,
+                                     attention: GameAttention(chestReady: true, flameAtRisk: false))
+        #expect(ready.pieces == [.level, .sparks, .mission, .offering, .treasury],
+                "l'Offrande prête se pose juste après le Rêve qui l'a fait naître (#18199)")
 
         let bare = GamePlayerBanner(level: 1, tier: .etincelle, progress: 0, score: 40, nextLevel: 2, pointsToNext: 60)
         #expect(bare.pieces == [.sparks], "niveau 1 : ni anneau ni jauge ; des étincelles : leur total")

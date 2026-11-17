@@ -5,6 +5,9 @@
     <string name="a11y_floating_menu_acts">فصول اليوم: %1$d من %2$d</string>
     <string name="a11y_floating_menu_hint">يفتح قائمة التنقّل</string>
     <string name="a11y_floating_menu_notifications_value">%1$d إشعارات معلّقة</string>
+    <string name="a11y_floating_rung_game_both">أسطورتي، العطيّة جاهزة، اللهب في خطر</string>
+    <string name="a11y_floating_rung_game_chest_ready">أسطورتي، العطيّة جاهزة</string>
+    <string name="a11y_floating_rung_game_flame_at_risk">أسطورتي، اللهب في خطر</string>
     <string name="a11y_menu_item_hint">فتح هذا القسم</string>
     <string name="a11y_state_open">فتح</string>
     <string name="app_name">Meeshy</string>
@@ -50,7 +53,7 @@
     <string name="connection_syncing">المزامنة</string>
     <string name="conversations_logout">تسجيل الخروج</string>
     <string name="conversations_retry">إعادة المحاولة</string>
-    <string name="feed_empty">لا توجد منشورات</string>
+    <string name="feed_empty">لا توجد منشورات من جهات اتصالك</string>
     <string name="feed_like">إعجاب</string>
     <string name="feed_title">التدفق</string>
     <string name="login_button">تسجيل الدخول</string>
@@ -68,7 +71,6 @@
     <string name="notifications_title">الإشعارات</string>
     <string name="profile_back">رجوع</string>
     <string name="profile_bio_label">نبذة</string>
-    <string name="profile_cancel">إلغاء</string>
     <string name="profile_display_name_label">الاسم المعروض</string>
     <string name="profile_edit">تعديل</string>
     <string name="profile_edit_title">تعديل الملف الشخصي</string>

@@ -139,6 +139,17 @@ struct RelationAccessCasesTests {
         }
     }
 
+    @Test func theEmitterConsentDefaultIsTheOneOfTheTypeScriptTable() throws {
+        let table = try block(after: "export const RELATION_EMITTER_CONSENT_DEFAULT_LEVEL", until: "};", in: try levelsSource())
+        let rows = try matches("(?:'([\\w.]+)'|(\\w+)):\\s*'([A-Z]+)'", in: table)
+        let declared = Dictionary(uniqueKeysWithValues: rows.map { row in (row.first ?? "", row.last ?? "") })
+        let mirrored = Dictionary(uniqueKeysWithValues: RelationFeature.allCases.compactMap { feature in
+            feature.emitterConsentDefaultLevel.map { (feature.rawValue, $0.rawValue) }
+        })
+        #expect(!declared.isEmpty)
+        #expect(declared == mirrored)
+    }
+
     @Test func theMinorShieldIsTheOneOfTheTypeScriptTable() throws {
         let table = try block(after: "export const RELATION_MINOR_TARGET_MIN_LEVEL", until: "};", in: try levelsSource())
         let rows = try matches("(?:'([\\w.]+)'|(\\w+)):\\s*'([A-Z]+)'", in: table)

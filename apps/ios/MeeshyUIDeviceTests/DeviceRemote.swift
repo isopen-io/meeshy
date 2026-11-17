@@ -83,6 +83,13 @@ nonisolated enum DeviceRemoteCommand {
             point(app, number(1), number(2)).press(forDuration: 0.05, thenDragTo: point(app, number(3), number(4)),
                                                    withVelocity: .fast, thenHoldForDuration: 0)
             return "ok"
+        case "pull":
+            // pull x y x2 y2 vitesse(pt/s) maintien(s) : une traction à vitesse
+            // réglée, tenue au bout — pour juger un tiroir, un élastique, un seuil.
+            point(app, number(1), number(2)).press(forDuration: 0.05, thenDragTo: point(app, number(3), number(4)),
+                                                   withVelocity: XCUIGestureVelocity(rawValue: number(5)),
+                                                   thenHoldForDuration: number(6))
+            return "ok"
         case "type":
             app.typeText(rest)
             return "ok"

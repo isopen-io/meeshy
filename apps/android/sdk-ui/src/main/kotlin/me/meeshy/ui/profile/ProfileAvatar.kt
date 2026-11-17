@@ -1,6 +1,5 @@
 package me.meeshy.ui.profile
 
-import android.provider.Settings
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -28,11 +26,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.appearance.AvatarRingDesign
 import me.meeshy.ui.appearance.AvatarRingLayer
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.accessibility.decorative
 import me.meeshy.ui.accessibility.meeshyTapTarget
 import me.meeshy.ui.component.MeeshyAvatar
@@ -71,7 +71,7 @@ public fun ProfileAvatar(
     val context = LocalContext.current
     val signs = ProfileAvatarSigns.of(storyRing, moodEmoji, presence, isBlockedByMe, isBlockedByTarget, accent)
     val photoTarget = ProfileFullscreenImage.opening(avatarUrl, name)
-    val reduceMotion = remember { isReduceMotionEnabled(context) }
+    val reduceMotion = LocalReduceMotion.current
     val entrance = remember { Animatable(if (reduceMotion) 1f else 0.85f) }
     LaunchedEffect(Unit) { if (!reduceMotion) entrance.animateTo(1f, MeeshyMotion.springBouncy()) }
 
@@ -85,7 +85,13 @@ public fun ProfileAvatar(
     }
     val outer = size + RingExtra
 
-    Box(modifier.size(outer).scale(entrance.value), contentAlignment = Alignment.Center) {
+    Box(
+        modifier.size(outer).graphicsLayer {
+            scaleX = entrance.value
+            scaleY = entrance.value
+        },
+        contentAlignment = Alignment.Center,
+    ) {
         if (signs.isRingTappable) {
             val ringColor = if (signs.storyRing == StoryRingState.Unread) MeeshyPalette.Indigo500 else signs.accent.copy(alpha = MeeshyOpacity.medium)
             Box(
@@ -117,11 +123,6 @@ public fun ProfileAvatar(
         }
     }
 }
-
-private fun isReduceMotionEnabled(context: android.content.Context): Boolean =
-    runCatching {
-        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f
-    }.getOrDefault(false)
 
 /** Désature tout ce que le cercle dessine (photo OU initiales) : un profil bloqué n'a plus de couleur. */
 private fun Modifier.grayscale(enabled: Boolean): Modifier {

@@ -46,6 +46,7 @@ class SharedLocationSharingCenterTest {
         var updateGate: CompletableDeferred<SharedLocationStartVerdict>? = null
         val connected = MutableStateFlow(false)
         val starts = mutableListOf<SharedLocationStartRequest>()
+        val queuedStartVerdicts = ArrayDeque<SharedLocationStartVerdict>()
         val updates = mutableListOf<SharedLocationFix>()
         var stops = 0
         val stream = MutableSharedFlow<LiveLocationFix>(extraBufferCapacity = 8)
@@ -56,7 +57,7 @@ class SharedLocationSharingCenterTest {
             emitter = object : SharedLocationEmitting {
                 override suspend fun start(request: SharedLocationStartRequest): SharedLocationStartVerdict {
                     starts += request
-                    return startGate?.await() ?: startVerdict
+                    return startGate?.await() ?: queuedStartVerdicts.removeFirstOrNull() ?: startVerdict
                 }
                 override suspend fun update(fix: SharedLocationFix): SharedLocationStartVerdict {
                     updates += fix
@@ -78,6 +79,8 @@ class SharedLocationSharingCenterTest {
             store = object : SharedLocationRosterStoring {
                 override fun load(accountId: String): String? = saved[accountId]
                 override fun save(accountId: String, stored: String?) { saved[accountId] = stored }
+                override fun loadReceived(accountId: String): Boolean = false
+                override fun saveReceived(accountId: String, received: Boolean) = Unit
             },
             accountId = { account },
             connected = connected,
@@ -143,16 +146,97 @@ class SharedLocationSharingCenterTest {
     }
 
     @Test
-    fun `un arret qui n'est pas confirme garde la liste pour que Arreter reste a un geste`() = runTest {
+    fun `un arret hors ligne garde l'intention et part a la socket suivante sans qu'on retouche`() = runTest {
         val rig = Rig(this)
         rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
         rig.stopConfirmed = false
 
         val problem = rig.center.stopSharing(alice)
+        runCurrent()
 
-        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.OFFLINE))
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(rig.center.roster.value.entry(alice)).isNull()
+        assertThat(SharedLocationRoster.fromStored(rig.saved["me"]).isWithdrawalPending(alice)).isTrue()
+
+        rig.stopConfirmed = true
+        rig.connected.value = true
+        runCurrent()
+
+        assertThat(rig.stops).isEqualTo(2)
+        assertThat(rig.saved["me"]).isNull()
+        assertThat(rig.center.roster.value.isEmpty).isTrue()
+    }
+
+    @Test
+    fun `un arret d'une personne hors ligne est rejoue a 30 s et aucune mise a jour ne part entre deux`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+        runCurrent()
+        rig.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.OFFLINE)
+
+        val problem = rig.center.stopSharing(bob)
+        advanceTimeBy(6_000L)
+        rig.stream.emit(LiveLocationFix(48.8566 + 0.01, 2.3522))
+        runCurrent()
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(rig.updates).isEmpty()
         assertThat(rig.center.roster.value.entry(alice)).isNotNull()
+
+        rig.startVerdict = SharedLocationStartVerdict.Started(0L)
+        advanceTimeBy(31_000L)
+        runCurrent()
+
+        assertThat(rig.starts.last().recipients.map { it.userId }).containsExactly(alice)
+        assertThat(rig.center.roster.value.hasPendingWithdrawals).isFalse()
         rig.center.clear()
+    }
+
+    @Test
+    fun `un accuse perdu en arretant une personne garde l'intention et la rejoue`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR)
+        rig.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED)
+
+        val problem = rig.center.stopSharing(bob)
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(rig.center.roster.value.entry(alice)).isNotNull()
+        assertThat(rig.center.roster.value.isWithdrawalPending(bob)).isTrue()
+
+        rig.startVerdict = SharedLocationStartVerdict.Started(0L)
+        advanceTimeBy(31_000L)
+        runCurrent()
+
+        assertThat(rig.starts.last().recipients.map { it.userId }).containsExactly(alice)
+        assertThat(rig.center.roster.value.hasPendingWithdrawals).isFalse()
+        rig.center.clear()
+    }
+
+    @Test
+    fun `un retrait en attente garde d'un lancement precedent part sans fiche et jamais pour un autre compte`() = runTest {
+        val pending = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS, nowMillis = 0L)
+            .withdrawing(alice, nowMillis = 0L)
+            .stored()
+        val other = Rig(this, account = "other")
+        other.saved["me"] = pending
+        other.connected.value = true
+        runCurrent()
+        assertThat(other.stops).isEqualTo(0)
+        assertThat(other.saved["me"]).isEqualTo(pending)
+
+        val rig = Rig(this)
+        rig.saved["me"] = pending
+        rig.connected.value = true
+        runCurrent()
+
+        assertThat(rig.following).isEqualTo(0)
+        assertThat(rig.stops).isEqualTo(1)
+        assertThat(rig.saved["me"]).isNull()
     }
 
     @Test
@@ -336,5 +420,92 @@ class SharedLocationSharingCenterTest {
 
         assertThat(rig.stops).isEqualTo(1)
         assertThat(rig.saved["me"]).isNull()
+    }
+
+    @Test
+    fun `un retrait refuse pour une autre raison que le reseau arrete tout le partage`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.RATE_LIMITED)
+
+        val problem = rig.center.stopSharing(bob)
+
+        assertThat(problem).isNull()
+        assertThat(rig.stops).isEqualTo(1)
+        assertThat(rig.center.roster.value.isEmpty).isTrue()
+        assertThat(rig.saved["me"]).isNull()
+    }
+
+    @Test
+    fun `une derniere position trop ancienne n'est jamais republiee comme fraiche`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.deviceFix = LiveLocationFix(49.1, 2.5, accuracy = 10.0)
+
+        advanceTimeBy(121_000L)
+        rig.center.stopSharing(bob)
+
+        assertThat(rig.starts.last().fix.latitude).isEqualTo(49.1)
+        assertThat(rig.starts.last().recipients.map { it.userId }).containsExactly(alice)
+        rig.center.clear()
+    }
+
+    @Test
+    fun `un retrait passe sa borne est oublie sans rien emettre`() = runTest {
+        val rig = Rig(this)
+        rig.saved["me"] = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS, nowMillis = -9 * hour)
+            .withdrawing(alice, nowMillis = -9 * hour)
+            .stored()
+
+        rig.center.reconcile()
+
+        assertThat(rig.stops).isEqualTo(0)
+        assertThat(rig.starts).isEmpty()
+        assertThat(rig.saved["me"]).isNull()
+    }
+
+    @Test
+    fun `l'echeance de chaque personne part a la passerelle et une passerelle d'avant recoit la meme liste sans`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+        advanceTimeBy(1_500L)
+        val before = rig.starts.size
+        rig.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID)
+
+        val problem = rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+
+        assertThat(problem).isNull()
+        val tried = rig.starts.drop(before)
+        assertThat(tried).hasSize(2)
+        assertThat(tried.first().recipients.map { it.userId to it.expiresInSeconds })
+            .containsExactly(alice to 3_600, bob to 28_799).inOrder()
+        assertThat(tried.last().carriesDeadlines).isFalse()
+        assertThat(tried.last().recipients.map { it.userId }).containsExactly(alice, bob).inOrder()
+        assertThat(rig.center.roster.value.entry(alice)).isNotNull()
+    }
+
+    @Test
+    fun `un refus d'une liste sans echeance ne se rejoue pas`() = runTest {
+        val rig = Rig(this, startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID))
+
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+
+        assertThat(rig.starts).hasSize(1)
+    }
+
+    @Test
+    fun `un refus autre que la liste invalide ne renvoie pas la liste sans echeance`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+        val before = rig.starts.size
+        rig.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.RATE_LIMITED)
+
+        val problem = rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.RATE_LIMITED))
+        assertThat(rig.starts.drop(before)).hasSize(1)
     }
 }

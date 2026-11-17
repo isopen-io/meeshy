@@ -12,6 +12,7 @@ const frCallsErase = {
   'calls.clearAll.cancel': 'Annuler',
   'calls.erase.failed': 'L’effacement n’a pas abouti. Réessayez.',
   'calls.search': 'Rechercher un nom',
+  'calls.search.placeholder': 'Rechercher',
   'calls.search.clear': 'Effacer la recherche',
   'calls.search.empty': 'Aucun appel ne correspond à « {query} »',
   'calls.participants.more': '{names} +{count}',

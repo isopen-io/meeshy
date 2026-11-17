@@ -27,6 +27,8 @@ import {
   type NowPlayingReaderAccess,
   type NowPlayingRelayDeps,
 } from '../nowPlaying/nowPlayingRelay';
+import { reconcileBatteryOfAccount, type BatteryRelayDeps } from '../battery/batteryRelay';
+import { reconcilePhoneReachabilityOfAccount, type PhoneReachabilityRelayDeps } from '../phoneReachability/phoneReachabilityRelay';
 import { RITUAL_SHARE_FEATURE } from './relationConsent';
 import { ACCOUNT_STATE_SELECT, isUsableTeamAccount } from './usableAccount';
 
@@ -70,22 +72,33 @@ export async function teamMayGrantShares(
  * rituel au Sang, la catégorie d'écoute dès Proche. Un compte qui reste de l'équipe ne perd rien.
  * Avec `nowPlaying`, l'écoute qu'un lecteur voyait par cet accord s'efface chez lui tout de suite
  * (`now-playing:cleared`), au lieu d'y rester jusqu'à son expiration (15 min) — revue du 2026-11-13.
+ * Avec `battery`, la batterie qu'un ex-collègue voyait — ou que ce compte voyait d'un ex-collègue
+ * — s'efface de même (`battery:cleared`), et ses notifications de batterie se retirent (#14147).
+ * Avec `phoneReachability`, l'injoignabilité du téléphone suit le même chemin (`phone:reachable`, #18737) ;
+ * les deux réconciliations sont isolées : l'échec de l'une ne prive pas l'autre, et l'appel lève ensuite.
  * Une lecture qui échoue LÈVE : l'appelant journalise, et la loi continue de refuser.
  */
 export type TeamShareRevocationDb = SharesBeyondLinkDb & Pick<PrismaClient, 'user'>;
 
 export async function revokeTeamSharesOf(
   prisma: TeamShareRevocationDb,
-  params: { readonly userId: string; readonly now: Date; readonly nowPlaying?: NowPlayingRelayDeps },
+  params: { readonly userId: string; readonly now: Date; readonly nowPlaying?: NowPlayingRelayDeps; readonly battery?: BatteryRelayDeps; readonly phoneReachability?: PhoneReachabilityRelayDeps },
 ): Promise<void> {
   const account = await prisma.user.findUnique({ where: { id: params.userId }, select: { role: true, ...ACCOUNT_STATE_SELECT } });
   if (isUsableTeamAccount(account)) return;
   const cuts = await withdrawSharesTheLinkDoesNotOpen(prisma, { userId: params.userId, at: params.now });
+  const reconciled = await Promise.allSettled([
+    params.battery ? reconcileBatteryOfAccount(params.battery, params.userId) : Promise.resolve(),
+    params.phoneReachability ? reconcilePhoneReachabilityOfAccount(params.phoneReachability, params.userId) : Promise.resolve(),
+  ]);
+  const failure = reconciled.find((r): r is PromiseRejectedResult => r.status === 'rejected');
   const nowPlaying = params.nowPlaying;
-  if (!nowPlaying) return;
-  const before = new Map<string, NowPlayingReaderAccess>(cuts.map((cut) => [nowPlayingDirectionKey(cut.emitterId, cut.readerId), cut.listening]));
-  const pairs = [...new Map(cuts.map((cut) => [[cut.emitterId, cut.readerId].sort().join(':'), cut])).values()];
-  for (const cut of pairs) {
-    await refreshNowPlayingBetween(nowPlaying, { userA: cut.emitterId, userB: cut.readerId, before });
+  if (nowPlaying) {
+    const before = new Map<string, NowPlayingReaderAccess>(cuts.map((cut) => [nowPlayingDirectionKey(cut.emitterId, cut.readerId), cut.listening]));
+    const pairs = [...new Map(cuts.map((cut) => [[cut.emitterId, cut.readerId].sort().join(':'), cut])).values()];
+    for (const cut of pairs) {
+      await refreshNowPlayingBetween(nowPlaying, { userA: cut.emitterId, userB: cut.readerId, before });
+    }
   }
+  if (failure) throw failure.reason;
 }

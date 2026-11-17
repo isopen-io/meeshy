@@ -48,4 +48,32 @@ class CommunityDecodingTest {
         assertThat(c.language).isEqualTo("french")
         assertThat(c.bannerThumbHash).isNull()
     }
+
+    @Test
+    fun `le nombre de membres en ligne servi par le detail se lit et s'affiche`() {
+        val c = decode("""{"id":"c","onlineMemberCount":12}""")
+        assertThat(c.onlineMemberCount).isEqualTo(12)
+        assertThat(c.onlineLine).isEqualTo(12)
+    }
+
+    @Test
+    fun `une communaute trop petite ou un ancien serveur n'ecrivent aucune ligne en ligne`() {
+        assertThat(decode("""{"id":"c","onlineMemberCount":null}""").onlineLine).isNull()
+        assertThat(decode("""{"id":"c"}""").onlineMemberCount).isNull()
+        assertThat(decode("""{"id":"c"}""").onlineLine).isNull()
+    }
+
+    @Test
+    fun `zero membre en ligne n'ecrit rien`() {
+        val c = decode("""{"id":"c","onlineMemberCount":0}""")
+        assertThat(c.onlineMemberCount).isEqualTo(0)
+        assertThat(c.onlineLine).isNull()
+        assertThat(decode("""{"id":"c","onlineMemberCount":-3}""").onlineLine).isNull()
+    }
+
+    @Test
+    fun `un resultat de recherche ne porte aucun compte en ligne`() {
+        val r = json.decodeFromString(ApiCommunitySearchResult.serializer(), """{"id":"c","onlineMemberCount":40}""").toCommunity()
+        assertThat(r.onlineLine).isNull()
+    }
 }

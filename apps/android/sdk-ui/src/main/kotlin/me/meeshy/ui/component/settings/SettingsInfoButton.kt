@@ -10,12 +10,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
-import me.meeshy.ui.R
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 
 /**
@@ -30,7 +28,7 @@ public fun SettingsInfoButton(
     modifier: Modifier = Modifier,
 ) {
     val haptics = rememberMeeshyHaptics()
-    val label = info.question ?: stringResource(R.string.settings_info_button_label, info.title)
+    val label = info.question
     Box(
         modifier = modifier
             .size(SettingsRowMetrics.minimumHeight)
@@ -38,7 +36,7 @@ public fun SettingsInfoButton(
                 haptics.light()
                 onClick(info)
             }
-            .semantics { if (info.question != null) stateDescription = info.message },
+            .semantics { stateDescription = info.message },
         contentAlignment = Alignment.Center,
     ) {
         Icon(

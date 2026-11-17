@@ -12,6 +12,7 @@ import { getConversationMessagesWithDetails, countConversationMessages } from '.
 import { formatLinkMessageWithDetails } from './utils/message-formatters';
 import { revealAtRestRows } from '../../services/messaging/serverAtRest';
 import { withNoticeUsernames } from '../../services/messaging/noticeUsernames';
+import { withCallSummaryParticipantNames } from '../../services/calls/callSummaryParticipantNames';
 import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 import { loadQuotedEphemeralReaders } from '../conversations/ephemeralReaderDeadlines';
 import { mapMessageProtectionFields } from '../conversations/messageProtectionProjection';
@@ -226,7 +227,7 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
       ));
 
       // #16421 — le pseudo d'un avis d'arrivée écrit avant qu'il y voyage.
-      const servedMessages = await withNoticeUsernames(fastify.prisma, formattedMessages);
+      const servedMessages = await withCallSummaryParticipantNames(fastify.prisma, await withNoticeUsernames(fastify.prisma, formattedMessages), { conversationId: shareLink.conversationId });
 
       return sendSuccess(reply, {
           messages: servedMessages.reverse(),

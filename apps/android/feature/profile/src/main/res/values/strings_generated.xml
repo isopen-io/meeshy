@@ -12,7 +12,6 @@
     <string name="profile_action_report">Report</string>
     <string name="profile_action_resend_request">Resend request</string>
     <string name="profile_action_send_message">Send a message</string>
-    <string name="profile_action_unblock_user">Unblock user</string>
     <string name="profile_activity_title">Activity</string>
     <string name="profile_avatar_edit">Edit profile photo</string>
     <string name="profile_back">Back</string>
@@ -22,8 +21,7 @@
     <string name="profile_blocked_unblock">Unblock</string>
     <string name="profile_call_not_placed">No connection: the call didn\'t go through</string>
     <string name="profile_close_hint">Closes the profile</string>
-    <string name="profile_connection_context_received">%1$s wants to connect with you. Accept to exchange messages.</string>
-    <string name="profile_connection_context_sent">You sent a connection request to %1$s. Waiting for their reply.</string>
+    <string name="profile_connection_context_received">%1$s wants to connect with you.</string>
     <string name="profile_conversations_interactionsDisabled">Interactions disabled</string>
     <string name="profile_conversations_noShared">No shared conversations</string>
     <string name="profile_decor_banner_section">Banner</string>
@@ -52,7 +50,6 @@
     <string name="profile_language_custom">Custom language</string>
     <string name="profile_language_none">None</string>
     <string name="profile_language_primary">Primary language</string>
-    <string name="profile_language_primary_subtitle">Content will be translated into this language</string>
     <string name="profile_language_regional">Regional language</string>
     <string name="profile_language_unset">Not set</string>
     <string name="profile_last_name_label">Last name</string>
@@ -61,10 +58,7 @@
     <string name="profile_not_verified">Not verified</string>
     <string name="profile_open_conversation_error">Unable to open the conversation</string>
     <string name="profile_phone">Phone</string>
-    <string name="profile_presence_away">Away</string>
-    <string name="profile_presence_online">Online</string>
-    <string name="profile_progression_hint">Opens your progress</string>
-    <string name="profile_progression_subtitle">Badges, level and streak</string>
+    <string name="profile_progression_subtitle">Medals, level and Flame</string>
     <string name="profile_progression_title">My Legend</string>
     <string name="profile_report_quick_reason_fake_profile">Fake profile</string>
     <string name="profile_report_quick_reason_harassment">Harassment</string>
@@ -100,7 +94,6 @@
     <string name="profile_stats_messagesShort">Messages</string>
     <string name="profile_stats_title">Statistics</string>
     <string name="profile_status_connected">Connected</string>
-    <string name="profile_system_language_label">Primary language</string>
     <string name="profile_tab_conversations">Conversations</string>
     <string name="profile_tab_details">Details</string>
     <string name="profile_tab_posts">Posts</string>
@@ -148,6 +141,7 @@
     <string name="shared_location_share_sheet_title">My location for %1$s</string>
     <string name="shared_location_share_stop">Stop</string>
     <string name="shared_location_share_stop_a11y">Stop sharing my location with %1$s</string>
+    <string name="shared_location_share_stop_pending">Sharing will stop as soon as you\'re back online</string>
     <string name="shared_location_share_unavailable">Location unavailable right now, try again</string>
     <string name="user_stats_activity">ACTIVITY</string>
     <string name="user_stats_badges">BADGES</string>

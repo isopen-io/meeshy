@@ -48,10 +48,42 @@ export function isMessageEditedEvent(payload: unknown): payload is SocketIOMessa
   return typeof p.id === 'string' && typeof p.conversationId === 'string' && typeof p.content === 'string';
 }
 
-export function isMessageDeletedEvent(payload: unknown): payload is MessageDeletedEventData {
+/**
+ * Ce qu'un retrait REÇU prouve, qui n'est pas ce que le contrat DÉCLARE.
+ *
+ * `MessageDeletedEventData.deletedAt` est requis — un émetteur doit le servir
+ * (#18159). Il est ici OPTIONNEL, pour trois raisons qui ne se recouvrent pas :
+ * un serveur d'avant #18159 ne l'envoie pas, une entrée de la file hors ligne
+ * écrite avant est rejouée telle qu'elle a été stockée, et **deux appelants
+ * LOCAUX dérivent ce retrait sans aucune horloge serveur** — la suppression
+ * optimiste (`performDeleteForEveryone`) et la dernière pièce jointe retirée
+ * d'un message (`applyAttachmentDeleted`). Exiger le champ les forcerait à en
+ * fabriquer un, c'est-à-dire à faire passer une horloge locale pour celle du
+ * serveur : exactement ce que ce lot corrige.
+ */
+export type MessageDeletedDelivery = Omit<MessageDeletedEventData, 'deletedAt'> &
+  Partial<Pick<MessageDeletedEventData, 'deletedAt'>>;
+
+/** La garde ne prouve que `messageId` et `conversationId` — voir [[MessageDeletedDelivery]]. */
+export function isMessageDeletedEvent(payload: unknown): payload is MessageDeletedDelivery {
   if (typeof payload !== 'object' || payload === null) return false;
   const p = payload as Record<string, unknown>;
   return typeof p.messageId === 'string' && typeof p.conversationId === 'string';
+}
+
+/**
+ * L'heure SERVEUR du retrait quand le fil la porte (#18159), sinon `undefined`.
+ *
+ * Deux absences, un seul repli : le champ peut MANQUER (les trois cas
+ * ci-dessus) et il peut être ILLISIBLE (une valeur qui ne se parse pas).
+ * L'appelant retombe alors sur son horloge locale, ce que les trois clients
+ * faisaient déjà — dater la pierre tombale avec `NaN` serait strictement pire
+ * que l'horloge du device, qui est au moins plausible.
+ */
+export function serverDeletedAt(data: MessageDeletedDelivery): string | undefined {
+  const raw: unknown = data.deletedAt;
+  if (typeof raw !== 'string') return undefined;
+  return Number.isNaN(new Date(raw).getTime()) ? undefined : raw;
 }
 
 /** Tolérance de la garde d'ordre — celle d'iOS (`editOrderingTolerance`), les horloges comparées étant celles du SERVEUR. */
@@ -153,10 +185,11 @@ export function applyMessageEdited(queryClient: QueryClient, data: MessageEditPa
   });
 }
 
-export function applyMessageDeleted(queryClient: QueryClient, data: MessageDeletedEventData, now: Date = new Date()): void {
+export function applyMessageDeleted(queryClient: QueryClient, data: MessageDeletedDelivery, now: Date = new Date()): void {
   const known = findCachedThreadMessage(queryClient, data.conversationId, data.messageId);
   if (known !== undefined && !belongsTo(known, data.conversationId)) return;
-  const deletedAt = now.toISOString();
+  /* L'horloge du SERVEUR quand elle voyage, celle du navigateur sinon (#18159). */
+  const deletedAt = serverDeletedAt(data) ?? now.toISOString();
   const touches = (m: Message): boolean => m.id === data.messageId || (quotes(m, data.messageId) && belongsTo(m, data.conversationId));
 
   patchThreadMessages(queryClient, data.conversationId, (messages) => {
@@ -170,5 +203,5 @@ export function applyMessageDeleted(queryClient: QueryClient, data: MessageDelet
     });
   });
 
-  deleteLastMessage(queryClient, data.conversationId, data.messageId, now, latestSurvivingThreadMessage(queryClient, data.conversationId, data.messageId));
+  deleteLastMessage(queryClient, data.conversationId, data.messageId, new Date(deletedAt), latestSurvivingThreadMessage(queryClient, data.conversationId, data.messageId));
 }

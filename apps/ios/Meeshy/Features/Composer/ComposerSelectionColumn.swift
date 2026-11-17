@@ -6,8 +6,9 @@ import MeeshyUI
 /// R6, décisions du porteur).
 ///
 /// La colonne des six outils cède sa place, au même endroit, au niveau du HAUT
-/// de la pile d'édition (`ComposerEditRailStack`) : d'abord Modifier ·
-/// Dupliquer · Temps, puis Retirer en rouge, à l'écart ; puis, posés
+/// de la pile d'édition (`ComposerEditRailStack`) : les outils de l'objet à
+/// plat (#14048, #18651), Dupliquer · Temps, puis Retirer en rouge, à
+/// l'écart, les glyphes sur l'axe de ↶ ↷ ; puis, posés
 /// par-dessus, les sous-outils de l'option touchée, ‹ Retour en tête. Chaque
 /// entrée a son glyphe ET son mot. Il n'y a aucune barre en plus : la barre
 /// posée au-dessus de Public et Publier (L5) est partie avec eux. Aucune action
@@ -29,7 +30,13 @@ struct ComposerSelectionColumn: View {
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    static let itemWidth: CGFloat = 72
+    /// Deux fois l'écart entre le centre de ↶ ↷ et le bord de l'écran : une
+    /// entrée centrée sur leur axe tient alors dans l'écran (#14500, #18651).
+    static let itemWidth: CGFloat = 2 * (MeeshySpacing.smPlus + ComposerRestChrome.toolColumnInnerMargin) + ComposerSceneRoundGlyph.size
+    /// Ce que l'entrée déborde son glyphe de chaque côté : la colonne s'en
+    /// décale vers le bord pour que ses glyphes tombent sur l'axe de ↶ ↷
+    /// (#18651).
+    static let glyphInset: CGFloat = (itemWidth - ComposerSceneRoundGlyph.size) / 2
 
     var body: some View {
         ViewThatFits(in: .vertical) {

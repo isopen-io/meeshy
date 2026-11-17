@@ -48,7 +48,7 @@ class EpureReglagesReperesStringsTest {
     @Test
     fun `the autosave info keeps only the secondary detail`() {
         assertThat(fr("settings_media_autosave_note"))
-            .isEqualTo("Une seule fois, images et vidéos. Jamais un média éphémère, flouté ou à vue unique.")
+            .isEqualTo("Les images et vidéos reçues rejoignent l'album Meeshy, une seule fois. Jamais un média éphémère, flouté ou à vue unique.")
     }
 
     @Test

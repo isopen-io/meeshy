@@ -12,6 +12,12 @@ import uuid
 from pathlib import Path
 from typing import Dict, Optional
 from services.task_privacy import shown, under_declared_regime
+from utils.audio_path_guard import (
+    AUDIO_PATH_REJECTED,
+    AUDIO_PATH_REJECTED_MESSAGE,
+    AudioPathRejected,
+    guard_requested_audio_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +56,9 @@ class TranscriptionHandler:
 
         Format attendu (trois modes):
 
-        Mode 1 - Via chemin fichier (attachments):
+        Mode 1 - Via chemin fichier (attachments). Le chemin vient d'un socket
+        non authentifié : il n'est lu que sous une racine autorisée
+        (`utils.audio_path_guard`, #18628), sinon `AUDIO_PATH_REJECTED`.
         {
             "type": "transcription_only",
             "taskId": str,
@@ -87,7 +95,7 @@ class TranscriptionHandler:
         logger.info(f"   - taskId: {request_data.get('taskId')}")
         logger.info(f"   - messageId: {request_data.get('messageId')}")
         logger.info(f"   - attachmentId: {request_data.get('attachmentId')}")
-        logger.info(f"   - audioPath: {request_data.get('audioPath', 'N/A')}")
+        logger.info(f"   - audioPath: {'fourni' if request_data.get('audioPath') else 'N/A'}")
         logger.info(f"   - audioData: {('YES, ' + str(len(request_data.get('audioData', ''))) + ' chars') if request_data.get('audioData') else 'N/A'}")
         logger.info(f"   - _audioBinary: {('YES, ' + str(len(request_data.get('_audioBinary', b''))) + ' bytes') if request_data.get('_audioBinary') else 'N/A'}")
         logger.info(f"   - audioFormat: {request_data.get('audioFormat', 'N/A')}")
@@ -129,7 +137,7 @@ class TranscriptionHandler:
             logger.info(f"🔍 [TRANSLATOR-TRACE] Sources disponibles:")
             logger.info(f"   - audio_binary: {len(audio_binary) if audio_binary else 0} bytes")
             logger.info(f"   - audio_data: {len(audio_data) if audio_data else 0} chars")
-            logger.info(f"   - audio_path: {audio_path or 'N/A'}")
+            logger.info(f"   - audio_path: {'fourni' if audio_path else 'N/A'}")
 
             if not audio_path and not audio_data and not audio_binary:
                 logger.error(f"🔍 [TRANSLATOR-TRACE] ❌ Aucune source audio fournie")
@@ -139,7 +147,6 @@ class TranscriptionHandler:
             if audio_binary:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] Mode: BINAIRE ZMQ multipart")
                 import tempfile
-                from pathlib import Path
 
                 # Créer un fichier temporaire directement depuis le binaire
                 temp_dir = Path(tempfile.gettempdir()) / "transcription_temp"
@@ -158,15 +165,14 @@ class TranscriptionHandler:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] Mode: BASE64")
                 import base64
                 import tempfile
-                from pathlib import Path
 
                 try:
                     logger.info(f"🔍 [TRANSLATOR-TRACE] Décodage base64...")
                     audio_bytes = base64.b64decode(audio_data)
                     logger.info(f"🔍 [TRANSLATOR-TRACE] ✅ Décodé: {len(audio_bytes)} bytes")
                 except Exception as e:
-                    logger.error(f"🔍 [TRANSLATOR-TRACE] ❌ Erreur décodage base64: {e}")
-                    raise ValueError(f"Données audio base64 invalides: {e}")
+                    logger.error(f"🔍 [TRANSLATOR-TRACE] ❌ Erreur décodage base64: {type(e).__name__}")
+                    raise ValueError("Données audio base64 invalides") from e
 
                 # Créer un fichier temporaire
                 temp_dir = Path(tempfile.gettempdir()) / "transcription_temp"
@@ -181,6 +187,7 @@ class TranscriptionHandler:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] ✅ Audio base64 décodé: {len(audio_bytes)} bytes → {temp_file_path}")
             else:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] Mode: FICHIER direct")
+                audio_path = guard_requested_audio_path(audio_path)
 
             logger.info(f"🔍 [TRANSLATOR-TRACE] Étape 4: Obtention service transcription...")
             # Obtenir le service de transcription
@@ -207,7 +214,7 @@ class TranscriptionHandler:
                 logger.info(f"🔍 [TRANSLATOR-TRACE] Pas de transcription mobile")
 
             logger.info(f"🔍 [TRANSLATOR-TRACE] Étape 6: Lancement transcription Whisper...")
-            logger.info(f"🔍 [TRANSLATOR-TRACE] Audio path: {audio_path}")
+            logger.info(f"🔍 [TRANSLATOR-TRACE] Audio path: {'fourni' if audio_path else 'N/A'}")
             logger.info(f"🔍 [TRANSLATOR-TRACE] Audio exists: {Path(audio_path).exists() if audio_path else False}")
             if audio_path and Path(audio_path).exists():
                 file_size = Path(audio_path).stat().st_size
@@ -256,19 +263,16 @@ class TranscriptionHandler:
         except Exception as e:
             logger.error(f"🔍 [TRANSLATOR-TRACE] ❌ ERREUR TRANSCRIPTION:")
             logger.error(f"🔍 [TRANSLATOR-TRACE] Type: {type(e).__name__}")
-            logger.error(f"🔍 [TRANSLATOR-TRACE] Message: {str(e)}")
-            logger.error(f"❌ [TRANSLATOR] Erreur transcription only: {e}")
-            import traceback
-            logger.error(f"🔍 [TRANSLATOR-TRACE] Stack trace:")
-            traceback.print_exc()
+            logger.error(f"❌ [TRANSLATOR] Erreur transcription only: {type(e).__name__}")
 
             logger.info(f"🔍 [TRANSLATOR-TRACE] Publication erreur...")
+            rejected = isinstance(e, AudioPathRejected)
             await self._publish_transcription_error(
                 task_id=task_id,
                 message_id=request_data.get('messageId', ''),
                 attachment_id=request_data.get('attachmentId', ''),
-                error=str(e),
-                error_code="transcription_failed"
+                error=AUDIO_PATH_REJECTED_MESSAGE if rejected else "Transcription failed",
+                error_code=AUDIO_PATH_REJECTED if rejected else "transcription_failed"
             )
             logger.info(f"🔍 [TRANSLATOR-TRACE] ======== FIN TRANSCRIPTION (erreur) ========")
 
@@ -276,13 +280,12 @@ class TranscriptionHandler:
             # Nettoyer le fichier temporaire si créé
             if temp_file_path is not None:
                 try:
-                    from pathlib import Path
                     temp_path = Path(temp_file_path) if not isinstance(temp_file_path, Path) else temp_file_path
                     if temp_path.exists():
                         temp_path.unlink()
                         logger.debug(f"   🧹 Fichier temporaire supprimé: {temp_file_path}")
                 except Exception as cleanup_error:
-                    logger.warning(f"   ⚠️ Impossible de supprimer le fichier temp: {cleanup_error}")
+                    logger.warning(f"   ⚠️ Impossible de supprimer le fichier temp: {type(cleanup_error).__name__}")
 
     async def _publish_transcription_result(
         self,
@@ -351,7 +354,7 @@ class TranscriptionHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour transcription result")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription result: {e}")
+            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription result: {type(e).__name__}")
 
     async def _publish_transcription_error(
         self,
@@ -380,5 +383,5 @@ class TranscriptionHandler:
                 logger.error("❌ [TRANSLATOR] Socket PUB non disponible pour transcription error")
 
         except Exception as e:
-            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription error: {e}")
+            logger.error(f"❌ [TRANSLATOR] Erreur publication transcription error: {type(e).__name__}")
 

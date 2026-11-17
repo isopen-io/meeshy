@@ -100,6 +100,12 @@ class PushTapDestinationTest {
     }
 
     @Test
+    fun `le telephone injoignable d un proche ouvre le profil de l emetteur`() {
+        assertThat(resolve(PushPayload(type = "device_unreachable", senderId = "u4")))
+            .isEqualTo(PushTapDestination.Profile("u4"))
+    }
+
+    @Test
     fun `une demande d ami sans expediteur ouvre les notifications`() {
         assertThat(resolve(PushPayload(type = "friend_request"))).isEqualTo(PushTapDestination.Notifications)
     }
@@ -152,5 +158,33 @@ class PushTapDestinationTest {
     @Test
     fun `une charge vide n ouvre rien`() {
         assertThat(resolve(PushPayload())).isEqualTo(PushTapDestination.None)
+    }
+
+    @Test
+    fun `l ajout a une communaute ouvre la communaute qu il nomme`() {
+        assertThat(resolve(PushPayload(type = "community_invite", communityId = "k1")))
+            .isEqualTo(PushTapDestination.Community("k1"))
+    }
+
+    @Test
+    fun `la communaute nommee passe avant la conversation pour la famille des membres`() {
+        listOf("community_invite", "community_joined", "community_left", "member_joined", "member_role_changed", "added_to_conversation")
+            .forEach { type ->
+                assertThat(resolve(PushPayload(type = type, communityId = "k1", conversationId = "c1")))
+                    .isEqualTo(PushTapDestination.Community("k1"))
+            }
+    }
+
+    @Test
+    fun `sans communaute nommee l ajout garde son chemin d avant`() {
+        assertThat(resolve(PushPayload(type = "community_invite", conversationId = "c1")))
+            .isEqualTo(PushTapDestination.Conversation("c1", null))
+        assertThat(resolve(PushPayload(type = "community_invite"))).isEqualTo(PushTapDestination.None)
+    }
+
+    @Test
+    fun `une communaute portee par un message n en detourne pas le toucher`() {
+        assertThat(resolve(PushPayload(type = "new_message", communityId = "k1", conversationId = "c1", messageId = "m1")))
+            .isEqualTo(PushTapDestination.Conversation("c1", "m1"))
     }
 }

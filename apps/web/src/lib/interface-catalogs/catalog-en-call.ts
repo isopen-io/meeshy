@@ -61,6 +61,7 @@ const enCall = {
   'call.a11y.screen': 'Call with {name}',
   'call.bubble.callBack': 'Call back',
   'call.bubble.join': 'Join',
+  'call.card.participants.you': 'you',
   'call.callBack.named': 'Call {name} back',
   'call.you': 'You',
   'call.ended.removed': 'You were removed from the call',

@@ -120,46 +120,59 @@ private struct ProfilePostsStatsBand: View {
             chip(icon: "circle.dashed", value: counts.stories,
                  label: String(localized: "profile.posts.stat.stories", defaultValue: "Stories", bundle: .main),
                  isSelected: false,
-                 action: { onStoriesTap?() })
+                 action: onStoriesTap)
         }
     }
 
-    private func chip(icon: String, value: Int, label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    /// Une tuile qui agit est un bouton ; une tuile sans action (« Stories » sur le profil d'un autre, dont les
+    /// stories passées ne me sont pas ouvertes) n'est qu'une valeur : ni trait bouton, ni haptique, ni toucher inerte.
+    @ViewBuilder
+    private func chip(icon: String, value: Int, label: String, isSelected: Bool, action: (() -> Void)?) -> some View {
         let display = ProfilePostsCounts.displayValue(value, isApproximate: counts.isApproximate)
-        return Button {
-            action()
-            HapticFeedback.light()
-        } label: {
-            VStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: icon)
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.indigo500)
-                Text(display)
-                    .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                Text(label)
-                    .font(.caption2)
-                    .foregroundStyle(theme.textMuted)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+        if let action {
+            Button {
+                action()
+                HapticFeedback.light()
+            } label: {
+                chipFace(icon: icon, display: display, label: label, isSelected: isSelected)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, MeeshySpacing.md)
-            .background(theme.surfaceGradient(tint: accentHex))
-            .glassCard(cornerRadius: MeeshyRadius.md)
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .stroke(MeeshyColors.indigo500.opacity(isSelected ? 0.9 : 0), lineWidth: MeeshyBorder.emphasis)
-            )
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Text("\(display) \(label)"))
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        } else {
+            chipFace(icon: icon, display: display, label: label, isSelected: isSelected)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(Text("\(display) \(label)"))
         }
-        .buttonStyle(.plain)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("\(display) \(label)"))
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func chipFace(icon: String, display: String, label: String, isSelected: Bool) -> some View {
+        VStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: icon)
+                .font(MeeshyFont.relative(15, weight: .semibold))
+                .foregroundStyle(MeeshyColors.indigo500)
+            Text(display)
+                .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(theme.textMuted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, MeeshySpacing.md)
+        .background(theme.surfaceGradient(tint: accentHex))
+        .glassCard(cornerRadius: MeeshyRadius.md)
+        .overlay(
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .stroke(MeeshyColors.indigo500.opacity(isSelected ? 0.9 : 0), lineWidth: MeeshyBorder.emphasis)
+        )
     }
 }
 
@@ -170,8 +183,15 @@ struct ProfileUserPostsList: View {
     /// Opens a reel in the immersive viewer. Param = tapped reel + the user's
     /// reels (seed). When `nil`, reels fall back to `onOpenPost` (detail).
     var onOpenReel: ((_ reel: FeedPost, _ reels: [FeedPost]) -> Void)? = nil
+    /// La sortie de la feuille qui porte la liste ; `nil` ⇒ son `dismiss`.
+    var leavingHost: (() -> Void)? = nil
 
     @StateObject private var viewModel: ProfileUserPostsViewModel
+    /// Ce qui s'ouvre une fois la feuille de profil partie (#18590).
+    @State private var departure = ProfileSheetDeparture()
+    @Environment(\.routerCommands) private var router
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
     @State private var shareableLink: ShareableLink?
     /// Poste (ou réel) en édition via le menu « … » — parité avec `FeedView`.
     @State private var editingPost: FeedPost?
@@ -192,11 +212,13 @@ struct ProfileUserPostsList: View {
     init(
         userId: String,
         onOpenPost: ((FeedPost) -> Void)? = nil,
-        onOpenReel: ((_ reel: FeedPost, _ reels: [FeedPost]) -> Void)? = nil
+        onOpenReel: ((_ reel: FeedPost, _ reels: [FeedPost]) -> Void)? = nil,
+        leavingHost: (() -> Void)? = nil
     ) {
         self.userId = userId
         self.onOpenPost = onOpenPost
         self.onOpenReel = onOpenReel
+        self.leavingHost = leavingHost
         _viewModel = StateObject(wrappedValue: ProfileUserPostsViewModel(userId: userId))
     }
 
@@ -221,9 +243,7 @@ struct ProfileUserPostsList: View {
                     counts: viewModel.postsCounts,
                     selectedFilter: viewModel.filter,
                     onSelectFilter: selectFilter,
-                    onStoriesTap: {
-                        openStories()
-                    }
+                    onStoriesTap: opensMyStories ? { openStories() } : nil
                 )
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.bottom, MeeshySpacing.xs)
@@ -273,7 +293,7 @@ struct ProfileUserPostsList: View {
         // annulait le minuteur de groupement et postait un lot d'un seul id —
         // une requête réseau par carte défilée, soit exactement l'inverse du
         // batching que `ImpressionBatcher` existe pour faire.
-        .onDisappear { Task { await viewModel.flushImpressions() } }
+        .onDisappear(perform: listDidLeave)
         .sheet(item: $shareableLink) { link in
             ShareSheet(activityItems: link.activityItems)
                 .presentationDetents([.medium, .large])
@@ -330,9 +350,9 @@ struct ProfileUserPostsList: View {
             onQuote: quote(post),
             onBookmark: { id in Task { await viewModel.toggleBookmark(id) } },
             onShare: { id in Task { await share(id) } },
-            // We are already inside this user's profile sheet — tapping the
-            // (reposted) author is a no-op here to avoid stacking sheets.
-            onTapAuthor: { _ in },
+            // L'auteur d'un réel republié ouvre SA fiche à la place de celle-ci ;
+            // l'auteur de la liste n'ouvre rien, sa fiche est déjà là.
+            onTapAuthor: { authorId in openAuthor(authorId, of: post) },
             onEdit: isOwnPost ? { post in editingPost = post } : nil,
             onDelete: isOwnPost ? { id in Task { await viewModel.deletePost(id) } } : nil,
             onRemove: ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.withdrawPost($0, $1) },
@@ -386,8 +406,12 @@ struct ProfileUserPostsList: View {
         return { [viewModel] id in Task { await viewModel.toggleComments(id) } }
     }
 
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
     private func selectFilter(_ tapped: ProfilePostsFilter) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        meeshyWithAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
             viewModel.filter = viewModel.filter.toggled(with: tapped)
         }
     }
@@ -406,8 +430,29 @@ struct ProfileUserPostsList: View {
     /// (`ReelsViewModel.recordView`) envoient chacun la vue de leur ouverture.
     /// La liste du profil n'en envoie aucune — elle doublait la vue de la
     /// destination, et sa fenêtre d'une heure taisait les réouvertures.
+    ///
+    /// Sans porte d'hôte, la liste ouvre elle-même, une fois sa feuille partie :
+    /// le post par le Router, le réel dans le lecteur immersif.
     private var opening: ProfilePostOpening {
-        ProfilePostOpening(onOpenPost: onOpenPost, onOpenReel: onOpenReel)
+        ProfilePostOpening(onOpenPost: onOpenPost ?? openPostAfterLeaving, onOpenReel: onOpenReel ?? openReelAfterLeaving)
+    }
+
+    private func openPostAfterLeaving(_ post: FeedPost) {
+        let router = router
+        departure.leave(dismissing: dismissHost) { router.push(.postDetail(post.id, post)) }
+    }
+
+    private func openReelAfterLeaving(_ reel: FeedPost, in reels: [FeedPost]) {
+        departure.leave(dismissing: dismissHost) {
+            HapticFeedback.medium()
+            ReelsPresenter.shared.present(posts: reels, startId: reel.id)
+        }
+    }
+
+    private func openAuthor(_ authorId: String, of post: FeedPost) {
+        guard let author = ProfileAuthorTap.profile(of: authorId, in: post, listedUserId: userId) else { return }
+        let router = router
+        departure.leave(dismissing: dismissHost) { router.openProfileSheet(author) }
     }
 
     private func openPost(_ post: FeedPost) {
@@ -418,24 +463,35 @@ struct ProfileUserPostsList: View {
         opening.openReel(post, in: viewModel.reels)
     }
 
+    /// La tuile « Stories » n'ouvre que MES stories : sur le profil d'un autre, elle n'est qu'une valeur.
+    private var opensMyStories: Bool {
+        userId == AuthManager.shared.currentUser?.id
+    }
+
     /// Tap sur la tuile « Stories » : sur SON PROPRE profil, ouvre la page des
     /// stories en cours et passées (`MyStoriesView`, hébergée par la RACINE —
     /// RootView / iPadRootView écoutent `openMyStories`, donc la tuile marche
     /// quel que soit l'écran qui a présenté la feuille de profil). La feuille
-    /// de profil est fermée d'abord — le même motif différé que
-    /// `ProfilePostsOpener` (une sheet présentée par-dessus une sheet en cours
-    /// de dismiss est avalée). Sur le profil d'un AUTRE utilisateur, la tuile
-    /// reste informative (ses stories passées ne nous sont pas accessibles).
+    /// de profil part d'abord, et la page s'ouvre à son départ
+    /// (`ProfileSheetDeparture` : une sheet présentée par-dessus une sheet en
+    /// cours de dismiss est avalée). Sur le profil d'un AUTRE utilisateur, la
+    /// tuile reste informative (ses stories passées ne nous sont pas accessibles).
     private func openStories() {
-        guard userId == AuthManager.shared.currentUser?.id else { return }
-        dismissHost()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        guard opensMyStories else { return }
+        departure.leave(dismissing: dismissHost) {
             NotificationCenter.default.post(name: .openMyStories, object: nil)
         }
     }
 
+    /// La feuille partie : ce qui attendait s'ouvre, et les impressions partent en un lot.
+    private func listDidLeave() {
+        departure.sheetDidLeave()
+        Task { await viewModel.flushImpressions() }
+    }
+
     private func dismissHost() {
-        dismiss()
+        guard let leavingHost else { return dismiss() }
+        leavingHost()
     }
 
     // MARK: - Share
@@ -489,7 +545,6 @@ struct ProfileUserPostsList: View {
         EmptyStateView(
             icon: "square.text.square",
             title: String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .main),
-            subtitle: String(localized: "profile.posts.empty.subtitle", defaultValue: "Les publications apparaîtront ici", bundle: .main),
             compact: true
         )
         .padding(.top, 40)
@@ -508,9 +563,10 @@ struct ProfileUserPostsList: View {
                 icon: viewModel.filter == .reels ? "play.rectangle" : "square.text.square",
                 title: viewModel.filter == .reels
                     ? String(localized: "profile.posts.empty.reels", defaultValue: "Aucun réel", bundle: .main)
-                    : String(localized: "profile.posts.empty.posts", defaultValue: "Aucun poste", bundle: .main),
-                subtitle: String(localized: "profile.posts.empty.filter.subtitle", defaultValue: "Touchez à nouveau la tuile pour tout revoir", bundle: .main),
-                compact: true
+                    : String(localized: "profile.posts.empty.posts", defaultValue: "Aucune publication", bundle: .main),
+                actionLabel: String(localized: "profile.posts.empty.filter.action", defaultValue: "Tout voir", bundle: .main),
+                compact: true,
+                onAction: { viewModel.filter = .all }
             )
             .padding(.vertical, MeeshySpacing.xxl)
         }

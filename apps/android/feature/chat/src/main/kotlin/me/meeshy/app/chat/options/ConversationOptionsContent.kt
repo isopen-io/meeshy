@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -54,13 +53,11 @@ internal class ConversationOptionsSlots(
     val body: @Composable () -> Unit,
 )
 
-private enum class OptionsDialog { FAVORITE, ARCHIVE, LEAVE_GROUP, DELETE, OBSOLETE, LEAVE, BLOCK }
-
 /**
- * Les Options de la fiche Conversation (#13777) : « Bloquer cet utilisateur », « Partager » et
- * « Quitter » sous l'en-tête (iOS `blockUserButton`, `actionButtons`), puis Mon affichage,
- * Organisation, Notifications et Actions (iOS `ConversationPreferencesTab`), avec les mêmes
- * confirmations. [onExit] est appelé une fois la conversation quittée, supprimée ou le pair bloqué.
+ * Les Options de la fiche Conversation (#13777) : « Partager » sous l'en-tête (iOS `actionButtons`), puis Mon
+ * affichage, Organisation, Notifications et Actions, qui porte Archiver au repos et range Quitter, Bloquer,
+ * Supprimer pour moi et Rendre obsolète derrière « Plus » (iOS `ConversationPreferencesTab`, #17697), avec les
+ * mêmes confirmations. [onExit] est appelé une fois la conversation quittée, supprimée ou le pair bloqué.
  */
 @Composable
 internal fun rememberConversationOptionsSlots(
@@ -87,7 +84,7 @@ internal fun rememberConversationOptionsSlots(
     }
     OptionsDialogHost(dialog, ui, title, accentColor, viewModel) { dialog = null }
     return ConversationOptionsSlots(
-        header = { OptionsHeaderActions(ui, onShare = onShare, onAsk = { dialog = it }) },
+        header = { OptionsHeaderActions(ui, onShare = onShare) },
         body = {
             OptionsSections(
                 ui = ui,
@@ -101,41 +98,16 @@ internal fun rememberConversationOptionsSlots(
 }
 
 @Composable
-private fun OptionsHeaderActions(ui: ConversationOptionsUiState, onShare: () -> Unit, onAsk: (OptionsDialog) -> Unit) {
+private fun OptionsHeaderActions(ui: ConversationOptionsUiState, onShare: () -> Unit) {
     val plan = ui.plan ?: return
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-        if (plan.blockUserId != null) {
-            OptionsPillButton(
-                icon = MeeshyIcons.GppMaybe,
-                label = stringResource(R.string.conversation_options_block_title),
-                color = MeeshyPalette.Error,
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { onAsk(OptionsDialog.BLOCK) },
-            )
-        }
-        if (plan.share || plan.leave) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-                if (plan.share) {
-                    OptionsPillButton(
-                        icon = MeeshyIcons.AddLink,
-                        label = stringResource(R.string.conversation_options_share),
-                        color = MeeshyPalette.Info,
-                        modifier = Modifier.weight(1f),
-                        onClick = onShare,
-                    )
-                }
-                if (plan.leave) {
-                    OptionsPillButton(
-                        icon = MeeshyIcons.SignOut,
-                        label = stringResource(R.string.conversation_options_leave),
-                        color = MeeshyPalette.Error,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onAsk(OptionsDialog.LEAVE) },
-                    )
-                }
-            }
-        }
-    }
+    if (!plan.share) return
+    OptionsPillButton(
+        icon = MeeshyIcons.AddLink,
+        label = stringResource(R.string.conversation_options_share),
+        color = MeeshyPalette.Info,
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onShare,
+    )
 }
 
 @Composable
@@ -232,55 +204,9 @@ private fun OptionsSections(
 @Composable
 private fun OptionsActionsSection(ui: ConversationOptionsUiState, onAsk: (OptionsDialog) -> Unit) {
     val plan = ui.plan ?: return
-    if (!plan.toggleArchive && !plan.leaveGroup && !plan.deleteForMe && !plan.obsolete) return
-    val rows = buildList<@Composable () -> Unit> {
-        if (plan.toggleArchive) {
-            add {
-                val archived = ui.values.archiveGesture == ArchiveGesture.UNARCHIVE
-                SettingsRow(
-                    icon = MeeshyIcons.Inbox,
-                    title = stringResource(if (archived) R.string.conversation_options_unarchive else R.string.conversation_options_archive),
-                    color = MeeshyPalette.Amber500,
-                    modifier = Modifier.clickable(role = Role.Button) { onAsk(OptionsDialog.ARCHIVE) },
-                )
-            }
-        }
-        if (plan.leaveGroup) {
-            add {
-                SettingsRow(
-                    icon = MeeshyIcons.SignOut,
-                    title = stringResource(R.string.conversation_options_leave_group),
-                    color = MeeshyPalette.Orange500,
-                    modifier = Modifier.clickable(role = Role.Button) { onAsk(OptionsDialog.LEAVE_GROUP) },
-                )
-            }
-        }
-        if (plan.deleteForMe) {
-            add {
-                SettingsRow(
-                    icon = MeeshyIcons.DeleteFilled,
-                    title = stringResource(R.string.conversation_options_delete_for_me),
-                    color = MeeshyPalette.Error,
-                    modifier = Modifier.clickable(role = Role.Button) { onAsk(OptionsDialog.DELETE) },
-                )
-            }
-        }
-        if (plan.obsolete) {
-            add {
-                SettingsRow(
-                    icon = MeeshyIcons.DeleteFilled,
-                    title = stringResource(R.string.conversation_options_obsolete),
-                    color = MeeshyPalette.Error,
-                    modifier = Modifier.clickable(role = Role.Button) { onAsk(OptionsDialog.OBSOLETE) },
-                )
-            }
-        }
-    }
+    if (!plan.toggleArchive && !plan.hasRareActions()) return
     OptionsSection(R.string.conversation_options_section_actions, MeeshyIcons.MoreHorizontal, MeeshyPalette.Neutral500) {
-        rows.forEachIndexed { index, row ->
-            if (index > 0) SettingsSeparator(MeeshyPalette.Neutral500)
-            row()
-        }
+        OptionsActionRows(plan, ui.values.archiveGesture, onAsk)
     }
 }
 
@@ -339,13 +265,6 @@ private fun OptionsDialogHost(
                 onDismiss = onDismiss,
             )
         }
-        OptionsDialog.LEAVE_GROUP -> ConfirmDialog(
-            title = stringResource(R.string.conversation_options_leave_group_title),
-            message = stringResource(R.string.conversation_options_leave_group_message),
-            confirm = stringResource(R.string.conversation_options_leave_group_confirm),
-            onConfirm = viewModel::leave,
-            onDismiss = onDismiss,
-        )
         OptionsDialog.LEAVE -> ConfirmDialog(
             title = stringResource(R.string.conversation_options_leave_title),
             message = stringResource(R.string.conversation_options_leave_message),

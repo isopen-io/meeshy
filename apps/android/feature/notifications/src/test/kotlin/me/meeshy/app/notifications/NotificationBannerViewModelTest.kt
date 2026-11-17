@@ -305,6 +305,41 @@ class NotificationBannerViewModelTest {
     }
 
     @Test
+    fun theBannerOfAnAdditionToACommunityCarriesTheCommunityForNavigation() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(
+            ApiNotification(
+                id = "n1",
+                type = "community_invite",
+                context = NotificationContext(communityId = "k1"),
+            ),
+        )
+        runCurrent()
+
+        assertThat(vm.banner.value?.communityId).isEqualTo("k1")
+    }
+
+    @Test
+    fun aMessageBannerThatMerelyMentionsACommunityStillOpensItsConversation() = runTest(dispatcher.scheduler) {
+        val vm = viewModel()
+        runCurrent()
+
+        received.emit(
+            ApiNotification(
+                id = "n1",
+                type = "new_message",
+                context = NotificationContext(conversationId = "c1", communityId = "k1"),
+            ),
+        )
+        runCurrent()
+
+        assertThat(vm.banner.value?.communityId).isNull()
+        assertThat(vm.banner.value?.conversationId).isEqualTo("c1")
+    }
+
+    @Test
     fun aShownBannerAutoDismissesAfterFourSeconds() = runTest(dispatcher.scheduler) {
         val vm = viewModel()
         runCurrent()

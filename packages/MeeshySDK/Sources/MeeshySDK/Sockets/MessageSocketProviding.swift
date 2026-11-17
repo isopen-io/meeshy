@@ -91,6 +91,8 @@ public protocol MessageSocketProviding: Sendable {
     var participantUnbanned: PassthroughSubject<ParticipantUnbannedEvent, Never> { get }
     var conversationClosed: PassthroughSubject<ConversationClosedEvent, Never> { get }
     var conversationObsoleted: PassthroughSubject<ConversationObsoletedEvent, Never> { get }
+    /// `community:updated` (#18439) — l'identité d'une communauté, à jour chez ses membres.
+    var communityUpdated: PassthroughSubject<CommunityUpdatedEvent, Never> { get }
     /// `conversation:deleted` — the conversation is gone server-side. Exposed on
     /// the protocol (not just the concrete manager) so the disk-cache writer can
     /// subscribe: routed only to the in-memory `ConversationStore`, a deletion
@@ -361,5 +363,10 @@ extension MessageSocketProviding {
     /// de test le redéclare pour le piloter.
     public var conversationObsoleted: PassthroughSubject<ConversationObsoletedEvent, Never> {
         ConversationObsolescenceChannel.shared.obsoleted
+    }
+
+    /// `community:updated` (#18439) vit dans son canal pour la même raison.
+    public var communityUpdated: PassthroughSubject<CommunityUpdatedEvent, Never> {
+        CommunityUpdateChannel.shared.updated
     }
 }

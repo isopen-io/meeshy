@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La batterie des Proches (#14147) : android-only tant que les clés battery.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="battery_someone">Una persona vicina</string>
+    <string name="battery_pill_low">%1$s · batteria scarica (%2$d %%)</string>
+    <string name="battery_pill_threshold">%1$s · batteria al %2$d %%</string>
+    <string name="battery_pill_critical">%1$s · batteria critica (%2$d %%)</string>
+    <string name="battery_pill_critical_drop">%1$s · la batteria scende in fretta (%2$d %%)</string>
+    <string name="battery_pill_probably_off">%1$s · telefono probabilmente spento</string>
+    <string name="battery_pill_charging">%1$s · in carica</string>
+    <string name="battery_pill_back_on">%1$s · telefono di nuovo acceso</string>
+    <string name="battery_pill_recharged">%1$s · batteria ricaricata</string>
+    <string name="battery_pill_ended">%1$s · batteria tornata normale</string>
+    <string name="battery_pill_generic">%1$s · novità sulla batteria</string>
+    <string name="battery_card_title">Batteria</string>
+    <string name="battery_level">%1$d %%</string>
+    <string name="battery_charging">In carica</string>
+    <string name="battery_low_power">Modalità risparmio energetico</string>
+    <string name="battery_autonomy">Ancora circa %1$d h %2$d min</string>
+    <string name="battery_measured_ago">%1$d min fa</string>
+    <string name="battery_measured_now">Adesso</string>
+    <string name="battery_off">Telefono probabilmente spento</string>
+    <string name="battery_pull">Chiedi una lettura</string>
+    <string name="battery_pull_sent">Lettura richiesta</string>
+    <string name="battery_pull_episode_only">Richiesta. Il livello appare solo quando diventa basso.</string>
+    <string name="battery_pull_too_soon">Già richiesta. Riprova tra qualche minuto.</string>
+    <string name="battery_pull_forbidden">Solo un Sangue può chiedere una lettura.</string>
+    <string name="battery_pull_unavailable">Richiesta non disponibile al momento.</string>
+    <string name="battery_a11y">Batteria di %1$s: %2$d %%</string>
+    <string name="battery_a11y_charging">Batteria di %1$s: %2$d %%, in carica</string>
+    <string name="battery_share_global_title">Condividi la mia batteria</string>
+    <string name="battery_share_global_scope">Le persone vicine e il Sangue vedono il tuo livello solo quando è basso.</string>
+    <string name="battery_share_person">Condividi la mia batteria con %1$s</string>
+    <string name="battery_share_person_scope">%1$s vede il tuo livello solo quando diventa basso.</string>
+    <string name="battery_consent_title">Condividere la tua batteria con %1$s?</string>
+    <string name="battery_consent_body">Se la batteria diventa bassa, %1$s lo saprà. Puoi cambiarlo dalla sua scheda.</string>
+    <string name="battery_consent_checkbox">Condividi la mia batteria con %1$s</string>
+    <string name="battery_consent_confirm">Conferma</string>
+    <string name="battery_consent_later">Non ora</string>
+    <string name="battery_receive_title">La sua batteria</string>
+    <string name="battery_receive_all">Tutto come notifica</string>
+    <string name="battery_receive_critical">Solo il critico</string>
+    <string name="battery_receive_pill">Solo nell\'app</string>
+    <string name="battery_receive_none">Niente</string>
+    <string name="battery_unavailable">Impostazioni batteria non disponibili.</string>
+</resources>

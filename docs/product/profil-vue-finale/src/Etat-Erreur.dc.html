@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Erreurs et refus — tous les états · iOS</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.step{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:color-mix(in oklab,var(--brand-soft) 22%,transparent);color:var(--ink);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:12px}
+.badge{position:relative;display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:50%;flex:none}
+.badge.w{background:color-mix(in oklab,var(--warn) 16%,var(--ground));color:var(--warn);box-shadow:0 0 0 8px color-mix(in oklab,var(--warn) 7%,transparent)}
+.badge.e{background:color-mix(in oklab,var(--err) 16%,var(--ground));color:var(--err);box-shadow:0 0 0 8px color-mix(in oklab,var(--err) 7%,transparent)}
+.badge.n{background:var(--field);color:var(--ink3)}
+.badge.n::before{content:"";position:absolute;inset:-8px;border-radius:50%;border:2px dashed var(--line);animation:mxSpin 40s linear infinite}
+.slash::after{content:"";position:absolute;left:50%;top:50%;width:46px;height:3px;border-radius:2px;background:currentColor;transform:translate(-50%,-50%) rotate(-45deg);box-shadow:0 0 0 3px var(--cutbg,var(--field))}
+.ghost{background:var(--field);border-radius:10px;opacity:.55}
+.struck{text-decoration:line-through;text-decoration-color:color-mix(in oklab,var(--err) 80%,transparent);text-decoration-thickness:1.5px}
+.stamp{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:9px;border:2px solid var(--err);color:var(--err);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:13px;letter-spacing:.1em;text-transform:uppercase;transform:rotate(-7deg);background:color-mix(in oklab,var(--err) 10%,var(--raised))}
+.back{animation:erBack 4.6s cubic-bezier(.3,1.4,.5,1) infinite}
+.toast{animation:erToast 4.6s cubic-bezier(.2,.9,.25,1) infinite}
+.qr{position:relative;display:grid;grid-template-columns:repeat(21,6px);grid-auto-rows:6px;padding:10px;border-radius:20px;background:#EEF2FF;flex:none;box-shadow:0 14px 30px rgba(0,0,0,.4)}
+.qr>i{background:#1E1B4B;border-radius:2px}
+.qr>i.o{background:none}
+.qr>em{position:absolute;width:42px;height:42px;border:6px solid #1E1B4B;border-radius:12px}
+.qr>em::after{content:"";position:absolute;inset:6px;border-radius:4px;background:#7E22CE}
+.qr>b{position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#A855F7;color:#0B0B12;font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;font-size:11.5px;box-shadow:0 0 0 4px #EEF2FF}
+@keyframes erBack{0%,58%,100%{transform:translateX(0)}64%{transform:translateX(-7px)}70%{transform:translateX(6px)}76%{transform:translateX(-4px)}82%{transform:translateX(2px)}}
+@keyframes erToast{0%{opacity:0;transform:translateY(22px) scale(.96)}10%,100%{opacity:1;transform:none}}
+</style>
+</helmet>
+<div class="mx" style="width: 390px; min-height: 844px; display: flex; flex-direction: column">
+
+<div style="height: 54px"></div>
+
+<div class="sep" style="margin: 0 20px"></div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 18px 20px 14px"><span class="step">1</span><h2 class="tag">La fiche n'a pas pu se charger</h2></div>
+<section class="rise" style="position: relative; display: flex; flex-direction: column; --accent:#4ECDC4;--accent-ink:#7FE3DC">
+<div style="position: relative; height: 148px; overflow: hidden; background: linear-gradient(165deg, color-mix(in oklab, #4ECDC4 26%, #13111C) 0%, #13111C 60%, #09090B 100%)">
+<div class="orb" style="width: 180px; height: 180px; left: -50px; top: -30px; background: #4ECDC4; opacity: .16"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 80px; background: linear-gradient(180deg, rgba(9,9,11,0), #09090B)"></div>
+<div style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 0">
+<button class="ib g" aria-label="Retour">[[ic:caret-left]]</button>
+<span class="chip glass" style="color: var(--ink)">[[ic:cloud-slash s]]<span>Serveur injoignable</span></span>
+</div>
+</div>
+<div aria-hidden="true" style="position: relative; margin-top: -52px; padding: 0 20px; display: flex; align-items: flex-end; gap: 14px">
+<span style="display: inline-flex; width: 96px; height: 96px; border-radius: 50%; background: var(--field); border: 5px solid var(--ground); opacity: .8"></span>
+<div style="display: flex; flex-direction: column; gap: 9px; padding-bottom: 8px">
+<span class="ghost" style="width: 168px; height: 24px"></span>
+<span class="ghost" style="width: 84px; height: 13px"></span>
+</div>
+</div>
+<div aria-hidden="true" style="display: flex; gap: 8px; padding: 16px 20px 0">
+<span class="ghost" style="width: 82px; height: 30px; border-radius: 999px"></span>
+<span class="ghost" style="width: 96px; height: 30px; border-radius: 999px"></span>
+<span class="ghost" style="width: 68px; height: 30px; border-radius: 999px"></span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 34px 20px 0; text-align: center">
+<span class="badge w">[[ic:warning xl]]</span>
+<h3 class="d" style="font-size: 25px; max-width: 320px; margin-top: 8px; text-wrap: balance">Impossible d'ouvrir cette fiche pour l'instant</h3>
+<p style="font-size: 15px; line-height: 1.45; color: var(--ink2); max-width: 300px; text-wrap: balance">Ta connexion va bien. Le souci est de notre côté, et ça ne dure jamais longtemps.</p>
+<button class="btn q" style="align-self: stretch; margin-top: 8px">[[ic:arrows-clockwise]]<span>Réessayer</span></button>
+<a href="#" style="display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; font-weight: 700; color: var(--accent-ink)">[[ic:clock-counter-clockwise s]]<span>Voir la dernière version connue</span></a>
+<span style="font-size: 12.5px; color: var(--ink3); margin-top: -10px">Fiche de Léo gardée hier à 21:40</span>
+</div>
+</section>
+
+<div style="height: 36px"></div>
+<div class="sep" style="margin: 0 20px"></div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 18px 20px 14px"><span class="step">2</span><h2 class="tag">Une action a échoué</h2></div>
+<section class="rise" style="position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 16px; padding: 4px 20px 0; --accent:#2ECC71;--accent-ink:#86EFAC">
+<div class="orb" style="width: 220px; height: 220px; right: -70px; bottom: -40px; background: #2ECC71; opacity: .28; filter: blur(46px)"></div>
+<div style="position: relative; display: flex; align-items: center; gap: 14px">
+<span class="av" style="width: 64px; height: 64px; font-size: 23px">SB</span>
+<div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0">
+<span class="d" style="font-size: 24px">Sofia Benali</span>
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<span class="mono" style="font-size: 13.5px; color: var(--accent-ink)">@sofia.b</span>
+<span class="chip" style="min-height: 28px; padding: 0 10px; font-size: 12px; color: var(--ink)">[[ic:hand-waving s]]<span>Connaissance</span></span>
+</div>
+</div>
+</div>
+<div class="card" style="position: relative; display: flex; flex-direction: column; gap: 14px; padding: 18px">
+<div style="display: flex; flex-direction: column; gap: 3px">
+<span class="d" style="font-size: 20px">Devenez amies</span>
+<p style="font-size: 13.5px; color: var(--ink2)">Vous verrez quand l'autre est en ligne.</p>
+</div>
+<button class="btn a back">[[ic:user-plus]]<span>Demander à être amis</span></button>
+<div style="display: flex; align-items: center; gap: 8px; color: var(--ink3); font-size: 12.5px; font-weight: 600">
+[[ic:arrow-u-up-left s]]<span>Rien n'a été envoyé. Le bouton est revenu comme avant.</span>
+</div>
+</div>
+<div style="height: 96px"></div>
+<div class="glass toast" role="status" style="position: absolute; left: 14px; right: 14px; bottom: 12px; display: flex; align-items: center; gap: 10px; padding: 7px 7px 7px 16px; border-radius: 999px">
+<span style="display: inline-flex; color: var(--warn)">[[ic:warning-fill]]</span>
+<span style="flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: var(--ink)">Ta demande n'est pas partie</span>
+<button class="btn sm" style="min-height: 44px; padding: 0 16px; background: var(--ink); color: var(--ground)">Réessayer</button>
+</div>
+</section>
+
+<div style="height: 36px"></div>
+<div class="sep" style="margin: 0 20px"></div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 18px 20px 14px"><span class="step">3</span><h2 class="tag">Lien expiré · vu par le visiteur</h2></div>
+<section class="rise" style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 0 20px; text-align: center">
+<div class="orb" style="width: 240px; height: 240px; left: 75px; top: 20px; background: #F87171; opacity: .13; filter: blur(56px)"></div>
+<div style="position: relative; align-self: stretch; display: flex; justify-content: flex-start">
+<button class="ib g" aria-label="Fermer">[[ic:x]]</button>
+</div>
+<div style="position: relative; align-self: stretch; margin: 6px 14px 30px; transform: rotate(-2.5deg)">
+<div class="ticket" style="--cut: 48px; text-align: left; opacity: .9">
+<div style="display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 18px; color: var(--ink3)">
+[[ic:chats-circle s]]
+<span class="tag">Invitation</span>
+</div>
+<div class="cut"></div>
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 16px 18px 46px">
+<span class="d" style="font-size: 19px; color: var(--ink2)">Studio — invités</span>
+<span class="mono struck" style="font-size: 13.5px; color: var(--ink3)">meeshy.me/chat/studio-invites</span>
+</div>
+</div>
+<span class="stamp" style="position: absolute; right: 16px; top: 9px">Expiré</span>
+<span class="badge e" style="position: absolute; left: 50%; bottom: -34px; margin-left: -36px; transform: rotate(2.5deg); --cutbg: transparent">[[ic:link-break xl]]</span>
+</div>
+<h3 class="d" style="position: relative; font-size: 28px; margin-top: 14px">Ce lien n'est plus valable</h3>
+<p style="position: relative; font-size: 16px; line-height: 1.45; color: var(--ink2); max-width: 290px; text-wrap: balance">Demande un nouveau lien à Aïssa.</p>
+<div class="card" style="position: relative; align-self: stretch; display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-top: 8px; text-align: left">
+<span class="av">AN</span>
+<div style="display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0">
+<span style="font-weight: 700; font-size: 15.5px">Aïssa Ndiaye</span>
+<span class="mono" style="color: var(--accent-ink)">@aissa</span>
+</div>
+<span style="font-size: 12.5px; color: var(--ink3)">a créé ce lien</span>
+</div>
+<button class="btn p" style="position: relative; align-self: stretch">[[ic:user-focus]]<span>Voir sa vitrine</span></button>
+</section>
+
+<div style="height: 40px"></div>
+<div class="sep" style="margin: 0 20px"></div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 18px 20px 14px"><span class="step">4</span><h2 class="tag">Lien complet · lien désactivé</h2></div>
+<section class="rise" style="display: flex; flex-direction: column; gap: 14px; padding: 0 20px">
+<div style="display: flex; align-items: baseline; justify-content: space-between; padding: 0 2px 2px">
+<h3 class="d" style="font-size: 24px">À l'arrêt</h3>
+<span style="font-size: 13px; color: var(--ink3)">2 liens</span>
+</div>
+
+<div class="ticket" style="--cut: 54px">
+<div style="display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 16px 0 18px">
+<span style="display: inline-flex; color: var(--l-share)">[[ic:chats-circle]]</span>
+<span style="flex: 1; min-width: 0; font-weight: 700; font-size: 15.5px">Studio — invités</span>
+<span class="chip" style="min-height: 28px; padding: 0 10px; font-size: 12px; color: var(--warn); border-color: color-mix(in oklab, var(--warn) 40%, transparent); background: color-mix(in oklab, var(--warn) 12%, transparent)">[[ic:users s]]<span>Complet</span></span>
+</div>
+<div class="cut"></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 16px 18px 18px">
+<span class="mono" style="color: var(--ink2)">meeshy.me/chat/studio-invites</span>
+<div style="display: flex; align-items: baseline; gap: 8px">
+<span class="d" style="font-size: 38px; color: var(--warn)">50</span>
+<span style="font-size: 14px; font-weight: 600; color: var(--ink2)">/ 50 arrivées</span>
+</div>
+<span class="bar" role="img" aria-label="50 arrivées sur 50"><i style="width: 100%; background: var(--warn)"></i></span>
+<p style="font-size: 13.5px; color: var(--ink2)">Plus personne ne peut entrer par ce lien.</p>
+<button class="btn q sm" style="align-self: flex-start">[[ic:plus s]]<span>Augmenter la limite</span></button>
+</div>
+</div>
+
+<div class="ticket" style="--cut: 54px">
+<div style="display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 16px 0 18px">
+<span style="display: inline-flex; color: var(--ink3)">[[ic:cursor-click]]</span>
+<span style="flex: 1; min-width: 0; font-weight: 700; font-size: 15.5px; color: var(--ink2)">Mon profil</span>
+<span class="chip" style="min-height: 28px; padding: 0 10px; font-size: 12px; color: var(--ink3)">[[ic:pause s]]<span>Désactivé</span></span>
+</div>
+<div class="cut"></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 16px 18px 18px">
+<span class="mono struck" style="color: var(--ink3); text-decoration-color: var(--ink3)">meeshy.me/l/aissa</span>
+<div style="display: flex; align-items: center; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0">
+<span id="er-sw" style="font-weight: 700; font-size: 15px">Lien actif</span>
+<span style="font-size: 13px; color: var(--ink2)">Il ne mène plus nulle part.</span>
+</div>
+<button class="sw" role="switch" aria-checked="false" aria-labelledby="er-sw" style="min-height: 32px"></button>
+</div>
+<p style="font-size: 12.5px; color: var(--ink3)">Ses 412 clics sont gardés. Rallume-le quand tu veux.</p>
+</div>
+</div>
+</section>
+
+<div style="height: 40px"></div>
+<div class="sep" style="margin: 0 20px"></div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 18px 20px 14px"><span class="step">5</span><h2 class="tag">Localisation refusée</h2></div>
+<section class="rise" style="position: relative; display: flex; flex-direction: column">
+<div style="position: relative; height: 170px; overflow: hidden">
+[[map]]
+<div style="position: absolute; inset: 0; background: linear-gradient(180deg, rgba(9,9,11,.2), rgba(9,9,11,.4) 50%, #09090B)"></div>
+<div style="position: absolute; left: 16px; right: 16px; top: 14px; display: flex; align-items: center; justify-content: space-between">
+<button class="ib g" aria-label="Fermer">[[ic:x]]</button>
+<span class="chip glass" style="color: var(--ink)">[[ic:map-pin s]]<span>Ma position — non partagée</span></span>
+</div>
+</div>
+<div style="position: relative; margin-top: -40px; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 0 20px; text-align: center">
+<span class="badge e slash" style="--cutbg: color-mix(in oklab, var(--err) 16%, var(--ground))">[[ic:map-pin xl]]</span>
+<h3 class="d" style="font-size: 26px; max-width: 310px; margin-top: 10px; text-wrap: balance">Meeshy n'a pas accès à ta position</h3>
+<p style="font-size: 15px; line-height: 1.45; color: var(--ink2); max-width: 320px; text-wrap: balance">Tu peux l'autoriser dans les réglages de ton téléphone, ou choisir un lieu à la main.</p>
+<div style="align-self: stretch; display: flex; flex-direction: column; gap: 10px; margin-top: 10px">
+<button class="btn p">[[ic:gear-six]]<span>Ouvrir les réglages</span></button>
+<button class="btn q">[[ic:map-trifold]]<span>Choisir sur la carte</span></button>
+</div>
+</div>
+</section>
+
+<div style="height: 40px"></div>
+<div class="sep" style="margin: 0 20px"></div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 18px 20px 14px"><span class="step">6</span><h2 class="tag">Sans contact indisponible</h2><span class="new" style="margin-left: 4px">Nouveau</span></div>
+<section class="rise" style="position: relative; padding: 0 10px">
+<div class="card" style="position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 10px 18px 22px; border-radius: 34px; text-align: center; background: radial-gradient(120% 70% at 50% 100%, color-mix(in oklab, var(--accent) 20%, var(--raised)), var(--raised) 72%)">
+<span aria-hidden="true" style="width: 38px; height: 5px; border-radius: 999px; background: var(--line)"></span>
+<div style="display: flex; align-items: center; gap: 14px; align-self: stretch; margin-top: 14px; text-align: left">
+<span class="badge n slash" style="width: 60px; height: 60px; margin: 8px">[[ic:contactless-payment l]]</span>
+<div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0">
+<h3 class="d" style="font-size: 21px; text-wrap: balance">Ce téléphone ne sait pas faire ça</h3>
+<p style="font-size: 13.5px; color: var(--ink2)">Ton QR fait la même chose.</p>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 10px; align-self: stretch; margin-top: 6px; color: var(--ink3)">
+<span style="flex: 1; height: 0; border-top: 1.5px dashed var(--line)"></span>
+<span class="tag" style="display: inline-flex; align-items: center; gap: 6px">[[ic:arrow-down s]]À la place</span>
+<span style="flex: 1; height: 0; border-top: 1.5px dashed var(--line)"></span>
+</div>
+<div style="margin-top: 8px"><span class="qr" aria-hidden="true"><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><i></i><i></i><i></i><i></i><i class="o"></i><i class="o"></i><i></i><i></i><i class="o"></i><em style="left: 10px; top: 10px"></em><em style="right: 10px; top: 10px"></em><em style="left: 10px; bottom: 10px"></em><b>AN</b></span></div>
+<span class="mono" style="font-size: 14.5px; color: var(--accent-ink); margin-top: 6px">meeshy.me/@aissa</span>
+<p style="font-size: 13px; color: var(--ink2); margin-top: -6px">À scanner avec n'importe quel appareil photo.</p>
+<button class="btn p" style="align-self: stretch; margin-top: 8px">[[ic:qr-code]]<span>Montrer mon QR</span></button>
+</div>
+</section>
+
+<div style="height: 24px"></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":3591}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

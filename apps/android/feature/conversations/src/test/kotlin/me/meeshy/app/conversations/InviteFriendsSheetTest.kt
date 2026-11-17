@@ -85,7 +85,7 @@ class InviteFriendsSheetTest {
     @Test
     fun `la phase deux montre identite, limites, permissions et acces`() {
         render(ready(showOptions = true))
-        listOf("IDENTITY", "LIMITS", "PERMISSIONS", "ACCESS").forEach { title ->
+        listOf("IDENTITY", "LIMITS", "ALLOW", "ASK GUESTS").forEach { title ->
             compose.onNodeWithText(title).performScrollTo().assertIsDisplayed()
         }
     }

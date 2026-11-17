@@ -16,7 +16,6 @@ const es = {
   'viewerEngagement.openProfile': 'Ver perfil',
   'viewerEngagement.back': 'Volver a las vistas',
   'viewerEngagement.openDetail': 'Ver lo que hizo {name}',
-  'viewerEngagement.empty.subtitle': 'Las personas que vean esta publicación aparecerán aquí.',
   'viewerEngagement.forbidden': 'No tienes acceso a la lista de quién vio esta publicación.',
   'viewerEngagement.unavailable': 'El detalle de la actividad no está disponible por el momento.',
   'viewerEngagement.visitors.one': 'y {count} visitante sin cuenta',

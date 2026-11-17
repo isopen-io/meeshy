@@ -1,8 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="profile_regional_language_label">اللغة الثانوية</string>
-    <string name="profile_custom_language_label">لغة الترجمة المخصصة</string>
-    <string name="profile_avatar">الصورة الرمزية</string>
     <string name="profile_change_avatar">تغيير الصورة</string>
     <string name="profile_change_banner">تغيير صورة الغلاف</string>
     <string name="profile_image_error_empty">هذا الملف فارغ. اختر صورة أخرى.</string>
@@ -19,7 +16,6 @@
     <string name="profile_achievements_unlocked">تم فتح %1$d من %2$d</string>
     <string name="profile_activity_average">%1$d / يوم</string>
     <string name="profile_activity_empty">لا يوجد نشاط في آخر 30 يومًا</string>
-    <string name="profile_report">الإبلاغ عن المستخدم</string>
     <string name="report_title">الإبلاغ عن @%1$s</string>
     <string name="report_details_placeholder">أضف أي سياق…</string>
     <string name="profile_share_action">مشاركة الملف الشخصي</string>

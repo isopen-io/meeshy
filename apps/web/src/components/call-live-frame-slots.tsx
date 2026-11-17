@@ -6,6 +6,7 @@ import { callLiveFrame } from '@/lib/calls/call-live-frame-live';
 import { callLiveFrameStore, type CallLiveFrameState } from '@/lib/calls/call-live-frame-store';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { useFollowInline } from '@/lib/calls/use-pill-motion';
 
 import type { LiveFrameHold } from './call-montage-mode';
 import type { ShownFrame } from './call-live-frame-layer';
@@ -39,7 +40,7 @@ const Status = lazy(() =>
   })),
 );
 
-type SurfaceProps = { readonly language: InterfaceLanguage; readonly call: ActiveCall; readonly shown: ShownFrame | null; readonly stage: () => Element | null; readonly load: FrameStudioLoader };
+type SurfaceProps = { readonly language: InterfaceLanguage; readonly call: ActiveCall; readonly shown: ShownFrame | null; readonly stage: () => Element | null; readonly load: FrameStudioLoader; readonly bleed: number };
 
 const Surface = lazy(() =>
   loadLayer().then((module) => ({
@@ -74,16 +75,24 @@ export function CallLiveFrameStatusSlot({ language, state, load }: { readonly la
 /** Le cadre gardé se montre-t-il ? À deux, en vidéo, hors des modes. */
 export const liveFrameShown = (call: ActiveCall, state: CallLiveFrameState, available: boolean): boolean => available && state.frameId !== null && liveFrameDuo(call);
 
-/** Le cadre gardé, autour des deux vidéos — monté au premier cadre, puis gardé le temps de s'effacer en fondu. */
-export function CallLiveFrameSurfaceSlot({ shown, state, ...props }: Omit<SurfaceProps, 'shown'> & { readonly shown: boolean; readonly state: CallLiveFrameState }) {
+/**
+ * Le cadre gardé, autour des deux vidéos — monté au premier cadre, puis gardé le temps de s'effacer en fondu.
+ * Sa case suit la scène (W1, #17929) : quand la colonne du journal retire `bleed` px au bord de fin, elle s'y
+ * borne — la toile se repeint à cette place — et rejoint son nouveau centre par la transformation seule (W1.20).
+ */
+export function CallLiveFrameSurfaceSlot({ shown, state, bleed, ...props }: Omit<SurfaceProps, 'shown'> & { readonly shown: boolean; readonly state: CallLiveFrameState }) {
   const engaged = useRef(false);
+  const bounds = useRef<HTMLDivElement>(null);
+  useFollowInline(bounds, bleed);
   const frame: ShownFrame | null = shown && state.frameId !== null ? { frameId: state.frameId, remoteSharedName: state.remoteSharedName } : null;
   if (frame !== null) engaged.current = true;
   if (!engaged.current) return null;
   return (
-    <Suspense fallback={null}>
-      <Surface {...props} shown={frame} />
-    </Suspense>
+    <div ref={bounds} className="pointer-events-none absolute inset-0 z-[5]" style={bleed === 0 ? undefined : { insetInlineEnd: bleed }} data-call-live-frame-bounds="">
+      <Suspense fallback={null}>
+        <Surface {...props} shown={frame} bleed={bleed} />
+      </Suspense>
+    </div>
   );
 }
 

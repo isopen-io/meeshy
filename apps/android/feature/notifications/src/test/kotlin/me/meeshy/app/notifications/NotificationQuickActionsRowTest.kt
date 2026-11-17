@@ -57,4 +57,16 @@ class NotificationQuickActionsRowTest {
         compose.onNodeWithTag("notification.quick.connect.n1").performClick()
         assertThat(taps).isEmpty()
     }
+
+    @Test
+    fun `a write still resolving its conversation is inert until the answer`() {
+        val taps = mutableListOf<NotificationQuickAction>()
+        compose.setContent {
+            QuickActionsRow(notification, listOf(write), isConnectRequested = false, onQuickAction = { _, action -> taps += action }, isWriteInFlight = true)
+        }
+
+        compose.onNodeWithTag("notification.quick.write.n1").assertIsNotEnabled()
+        compose.onNodeWithTag("notification.quick.write.n1").performClick()
+        assertThat(taps).isEmpty()
+    }
 }

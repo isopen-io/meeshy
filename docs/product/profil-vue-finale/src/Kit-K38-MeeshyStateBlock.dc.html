@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Kit — K38 MeeshyStateBlock</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+[[kit]]
+.sec{display:flex;flex-direction:column;gap:22px}
+.sec>header{display:flex;flex-direction:column;gap:6px}
+.sec>header>h2{font-size:30px}
+.sec>header>p{font-size:15px;line-height:1.5;color:var(--ink2);max-width:820px}
+.li{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.45;color:var(--ink)}
+.li>span:first-child{display:inline-flex;margin-top:1px}
+.li b{font-weight:700}
+.kc{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:20px;background:var(--ground)}
+.cp{display:flex;flex-direction:column;gap:4px;margin-top:auto}
+.cp>b{font-size:14.5px;font-weight:700;color:var(--ink)}
+.stage{display:flex;align-items:center;justify-content:center;flex:1;min-height:150px}
+.gh{border:1.5px dashed rgba(165,180,252,.34);background:rgba(165,180,252,.035);animation:sbBreath 4.6s ease-in-out infinite}
+.mx[data-theme=light] .gh{border-color:rgba(67,56,202,.36);background:rgba(67,56,202,.03)}
+.gl{display:block;height:10px;border-radius:999px;background:rgba(165,180,252,.13)}
+.mx[data-theme=light] .gl{background:rgba(67,56,202,.12)}
+.gt{position:relative;border-radius:22px}
+.gt::before,.gt::after{content:"";position:absolute;top:var(--cut,96px);width:20px;height:20px;margin-top:-10px;border-radius:50%;background:var(--ground);border:1.5px dashed rgba(165,180,252,.34)}
+.gt::before{left:-11px;clip-path:inset(-2px -2px -2px 50%)}
+.gt::after{right:-11px;clip-path:inset(-2px 50% -2px -2px)}
+.gcut{height:0;border-top:1.5px dashed rgba(165,180,252,.34);margin:0 18px}
+.halo{position:absolute;border-radius:50%;filter:blur(34px);opacity:.3;animation:mxFloat 10s ease-in-out infinite;pointer-events:none}
+.bob{animation:sbBob 5s ease-in-out infinite}
+.gy{display:inline-flex;align-items:center;justify-content:center;width:60px;height:60px;border-radius:50%;border:1.5px dashed currentColor;flex:none}
+.gp{display:flex;align-items:center;gap:12px;height:56px;padding:0 18px 0 8px;border-radius:999px}
+.gp>i{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:rgba(165,180,252,.1);color:var(--ink2);flex:none}
+.gw>i{animation:none;background:rgba(165,180,252,.3)}
+.sb{display:flex;flex-direction:column;align-items:center;gap:16px;width:100%;text-align:center}
+.sb>h3{font-size:22px;text-wrap:balance}
+.sb>p{font-size:14.5px;line-height:1.45;color:var(--ink2);max-width:310px;text-wrap:balance}
+.sb>.btn{align-self:stretch}
+.sb-art{position:relative;align-self:stretch;display:flex;flex-direction:column;align-items:center;gap:10px;padding:4px 4px 2px}
+.sb-x{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin-top:-8px;font-size:14.5px;font-weight:700;color:var(--accent-ink)}
+.mx a.sb-x:hover{color:var(--ink)}
+.sbc{display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:8px 10px 8px 14px;border-radius:20px;border:1.5px dashed rgba(165,180,252,.34);text-align:left}
+.sbc>b{flex:1;min-width:0;font-size:14.5px;font-weight:600;line-height:1.3}
+.sbc>b>small{display:block;margin-top:2px;font-size:12.5px;font-weight:500;color:var(--ink2)}
+.sk.r{border-radius:50%}
+.sk.p{border-radius:999px}
+.sk.d2{animation-delay:-.2s}.sk.d3{animation-delay:-.4s}
+.tw{display:flex;flex-direction:column;gap:8px;width:100%}
+.tw>small{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.bad{position:absolute;right:16px;top:16px;display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:8px;background:rgba(248,113,113,.14);color:var(--err);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.plat{display:flex;flex-direction:column;gap:14px;padding:26px;border-radius:26px;background:var(--raised);border:1px solid var(--line)}
+.plat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.plat li{font-size:14px;line-height:1.45;color:var(--ink)}
+.fb{font-size:13px;line-height:1.45;color:var(--ink2);padding-top:12px;border-top:1.5px dashed var(--line)}
+.twin{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1.15fr);gap:16px;align-items:baseline;padding:14px 20px;border-bottom:1px solid var(--line)}
+.twin:last-child{border-bottom:0}
+.twin .mono{color:var(--ink);overflow-wrap:anywhere}
+.twin p{font-size:13.5px;line-height:1.45;color:var(--ink2)}
+.be{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--ok);color:#0B0B12;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.no{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:7px;background:var(--field);border:1px solid var(--line);color:var(--ink2);font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.pf{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.wit{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;border-radius:20px;background:var(--raised);border:1px solid var(--line);font-size:14px;line-height:1.45}
+.wit>.ic{color:var(--ok);margin-top:1px}
+.lgd{display:grid;grid-template-columns:22px minmax(0,1fr);gap:4px 12px;align-items:start}
+.lgd>.kan{position:static;margin-top:1px}
+.lgd>div{display:flex;flex-direction:column;gap:2px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+.lgd>div>b{font-size:14.5px;font-weight:700}
+.lgd>div>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--field);border:1px solid var(--line);font-size:12px;font-weight:800;color:var(--ink2);flex:none}
+.par{display:flex;flex-direction:column;gap:3px;padding:14px 16px;border-radius:16px;background:var(--raised);border:1px solid var(--line)}
+.par>code{font-size:13px}
+.par>span{font-size:13px;line-height:1.45;color:var(--ink2)}
+.law{display:flex;flex-direction:column;gap:10px;padding:24px 26px;border-radius:26px;border:1.5px dashed color-mix(in oklab,var(--accent) 55%,transparent);background:color-mix(in oklab,var(--accent) 7%,transparent)}
+.law>b{font-size:20px;text-wrap:balance}
+.law>span:last-child{font-size:14.5px;line-height:1.5;color:var(--ink2)}
+.big{position:relative;display:flex;flex-direction:column;align-items:center;gap:30px;width:620px;text-align:center}
+.big .ic.xl{width:54px;height:54px}
+.big .ic.l{width:44px;height:44px}
+.big .gh,.big .gcut,.big .gy{border-width:3px}
+.big .gt::before,.big .gt::after{width:38px;height:38px;margin-top:-19px;border-width:3px}
+.big .gt::before{left:-21px}.big .gt::after{right:-21px}
+.mv{position:relative;width:350px;height:330px;flex:none}
+.mv>div{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px}
+.mv>.a{animation:sbA 9s infinite}
+.mv>.b{opacity:0;justify-content:center;animation:sbB 9s infinite}
+.mv>.c{opacity:0;animation:sbC 9s infinite}
+.mv .rt{animation:sbPress 9s infinite}
+.hap{width:12px;height:12px;border-radius:50%;background:var(--warn);opacity:.22;animation:sbHap 9s infinite}
+.tl{position:relative;height:6px;border-radius:999px;background:var(--field);overflow:hidden}
+.tl>i{position:absolute;left:0;top:0;bottom:0;width:100%;border-radius:999px;background:var(--accent);transform-origin:left;animation:sbRun 9s linear infinite}
+.tk{display:grid;grid-template-columns:20fr 23fr 23fr 34fr;gap:6px;font-size:11.5px;font-weight:700;color:var(--ink3)}
+.tk>span{padding-top:6px;border-top:1.5px solid var(--line)}
+.rl{display:flex;align-items:center;gap:12px;height:56px;padding:0 16px 0 8px;border-radius:999px;background:var(--raised);border:1px solid var(--line)}
+.rl>i{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:var(--field);color:var(--ink2);flex:none}
+.rl>b{flex:1;min-width:0;font-size:14px;font-weight:600}
+@keyframes sbBreath{0%,100%{opacity:.72;transform:scale(1)}50%{opacity:1;transform:scale(1.012)}}
+@keyframes sbBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes sbA{0%,18%{opacity:1}22%,48%{opacity:0}52%,64%{opacity:1}70%,94%{opacity:0}100%{opacity:1}}
+@keyframes sbB{0%,18%{opacity:0;transform:translateY(10px)}22%{opacity:1;transform:none}24%{opacity:1;transform:translateX(-7px)}26%{opacity:1;transform:translateX(6px)}28%,47%{opacity:1;transform:none}51%,100%{opacity:0;transform:none}}
+@keyframes sbC{0%,64%{opacity:0;transform:translateY(16px) scale(.98)}71%,94%{opacity:1;transform:none}100%{opacity:0;transform:none}}
+@keyframes sbPress{0%,40%{transform:none;filter:none}43%{transform:scale(.94);filter:brightness(1.25)}46%,100%{transform:none;filter:none}}
+@keyframes sbHap{0%,21%{opacity:.22;transform:scale(1)}23%{opacity:1;transform:scale(1.9)}29%,41%{opacity:.22;transform:scale(1)}43%{opacity:.8;transform:scale(1.5)}48%,100%{opacity:.22;transform:scale(1)}}
+@keyframes sbRun{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+</style>
+</helmet>
+<div class="mx" style="width: 1440px; padding: 72px; display: flex; flex-direction: column; gap: 56px">
+
+<header class="rise" style="position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 40px">
+<div class="orb" style="width: 300px; height: 300px; right: 170px; top: -130px; background: #A855F7; opacity: .22"></div>
+<div class="orb" style="width: 220px; height: 220px; right: -30px; top: -30px; background: #6366F1; opacity: .18; animation-delay: -4s"></div>
+<div style="position: relative; display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+<div style="display: flex; align-items: center; gap: 14px">
+<span class="knum">K38 · proposé</span>
+<span class="mono" style="font-size: 20px; color: var(--accent-ink)">MeeshyStateBlock</span>
+</div>
+<h1 class="d" style="font-size: 56px; text-wrap: balance">Vide, erreur, refus et chargement ont une seule forme : une image fantôme, une phrase, une sortie</h1>
+<p style="font-size: 18px; line-height: 1.5; color: var(--ink2); max-width: 820px">Quand un écran n'a rien à montrer, il montre la silhouette de ce qui manque, dit pourquoi en une phrase, et tend un geste pour en sortir. Quand il attend, il prend la forme exacte de ce qui arrive : c'est l'atome <code style="font-size: 15px">MeeshySkeleton</code>, que tout le kit lui emprunte.</p>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 10px">
+<span class="chip">[[ic:apple-logo s]]<span>iOS</span></span>
+<span class="chip">[[ic:android-logo s]]<span>Android</span></span>
+<span class="chip">[[ic:browser s]]<span>Web</span></span>
+</div>
+</header>
+
+<section class="sec rise" style="animation-delay: .05s">
+<header><span class="tag">02 · Rôle</span><h2 class="d">Il dessine l'absence, il ne la décide pas</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--ok)">Il fait</span>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Donne <b>une forme</b> à quatre absences : <code>empty</code>, <code>error</code>, <code>denied</code>, <code>offline</code>. Même ordre partout : image, titre, phrase, sortie.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Dessine l'image <b>en fantôme</b> : la silhouette pointillée du composant qui manque (billet, rangée, rond, carte), qui respire.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Porte <b>une sortie</b>, deux au plus : un bouton plein, un lien dessous. Il annonce l'erreur au lecteur d'écran.</span></div>
+<div class="li"><span style="color: var(--ok)">[[ic:check-circle]]</span><span>Tient la place pendant l'attente : <code>MeeshySkeleton</code>, <b>de la forme exacte</b> de ce qu'il remplace, avec un reflet qui passe.</span></div>
+</div>
+<div class="card" style="padding: 28px; display: flex; flex-direction: column; gap: 14px">
+<span class="tag" style="color: var(--err)">Il ne fait pas</span>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Savoir si le cache est vide, si le réseau est tombé, si l'accès est refusé : <b>l'app</b> lit son état et choisit le genre.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>La pilule « Hors ligne » posée sur un écran qui a du contenu, un échec d'envoi, une activité en direct : <b>K14</b> <code>MeeshyStatusCapsule</code>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Ce qui existe mais reste fermé à mon niveau : <b>K37</b> <code>MeeshyLockedRow</code>. Un chargement de progression connue : <b>K09</b>.</span></div>
+<div class="li"><span style="color: var(--err)">[[ic:x-circle]]</span><span>Relancer la requête, ouvrir les Réglages, écrire les mots : l'app passe le texte et l'action. Le bouton lui-même : <b>K40</b> <code>MeeshyButton</code>.</span></div>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="law">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:database l]]</span>
+<b class="d">Squelette seulement si le cache est vide</b>
+<span>Un cache, même périmé, se peint tout de suite et se rafraîchit en silence. Le squelette n'existe qu'au tout premier chargement. Jamais par-dessus un contenu.</span>
+</div>
+<div class="law">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:arrow-clockwise l]]</span>
+<b class="d">Une erreur a toujours « Réessayer »</b>
+<span>Le genre <code>error</code> ne se construit pas sans action principale. Le bouton passe en attente au toucher, puis le squelette reprend la place.</span>
+</div>
+<div class="law">
+<span style="display: inline-flex; color: var(--accent-ink)">[[ic:signpost l]]</span>
+<b class="d">Un vide n'est jamais un cul-de-sac</b>
+<span>Un bloc plein écran porte au moins une sortie : créer, chercher ailleurs, inviter. Seule la forme <code>compact</code>, posée dans un écran qui continue, peut s'en passer.</span>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">03 · Anatomie</span><h2 class="d">Sept parties, et deux pour le squelette</h2><p>Le bloc et le squelette à deux fois leur taille. Les mesures sont celles de la taille réelle, dans une colonne de téléphone de 350.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 24px">
+<div class="kcell" style="flex-direction: column; gap: 56px; padding: 60px 40px; background: var(--ground)">
+<div class="big">
+<div class="halo" style="width: 340px; height: 240px; left: 140px; top: 10px; background: var(--brand)"></div>
+<div class="gt gh" style="--cut: 176px; align-self: stretch; display: flex; flex-direction: column; border-radius: 40px">
+<div style="display: flex; align-items: center; gap: 26px; height: 176px; padding: 0 36px">
+<span class="gy bob" style="width: 108px; height: 108px; color: var(--brand-soft)">[[ic:link xl]]</span>
+<span style="display: flex; flex-direction: column; gap: 18px; flex: 1; min-width: 0">
+<span class="gl" style="width: 62%; height: 24px"></span>
+<span class="gl" style="width: 38%; height: 18px"></span>
+</span>
+<span style="display: inline-flex; color: var(--ink3)">[[ic:qr-code xl]]</span>
+</div>
+<div class="gcut" style="margin: 0 32px"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 28px 36px">
+<span class="gl" style="width: 44%; height: 20px"></span>
+<span style="display: inline-flex; color: var(--ink3)">[[ic:copy l]]</span>
+</div>
+</div>
+<h3 class="d" style="font-size: 42px">Ton premier lien t'attend</h3>
+<p style="font-size: 26px; line-height: 1.4; color: var(--ink2); max-width: 540px; margin-top: -10px">Une adresse à toi, à poser partout.</p>
+<span style="display: inline-flex; align-items: center; justify-content: center; gap: 14px; align-self: stretch; height: 96px; border-radius: 999px; background: var(--brand-fill); color: #fff; font-weight: 700; font-size: 28px; box-shadow: 0 14px 36px rgba(79,70,229,.45)">[[ic:link l]]<span>Créer mon lien de profil</span></span>
+<span style="display: inline-flex; align-items: center; gap: 12px; font-size: 26px; font-weight: 700; color: var(--accent-ink); margin-top: -6px">[[ic:scan l]]<span>Scanner un code</span></span>
+<i class="kan" style="left: 440px; top: 70px">1</i>
+<i class="kan" style="left: 250px; top: -11px">2</i>
+<i class="kan" style="left: 26px; top: 26px">3</i>
+<i class="kan" style="left: 34px; top: 328px">4</i>
+<i class="kan" style="left: 60px; top: 392px">5</i>
+<i class="kan" style="left: -11px; top: 446px">6</i>
+<i class="kan" style="left: 140px; top: 583px">7</i>
+</div>
+<div style="position: relative; display: flex; align-items: center; gap: 26px; width: 620px; padding: 28px 30px; border-radius: 40px; border: 2px solid var(--line)">
+<span class="sk r" style="width: 96px; height: 96px; flex: none"></span>
+<span style="display: flex; flex-direction: column; gap: 18px; flex: 1">
+<span class="sk p d2" style="width: 64%; height: 26px"></span>
+<span class="sk p d3" style="width: 40%; height: 20px"></span>
+</span>
+<span class="sk d2" style="width: 60px; height: 60px; border-radius: 16px; flex: none"></span>
+<i class="kan" style="left: 250px; top: 20px">8</i>
+<i class="kan" style="left: 330px; top: 80px">9</i>
+</div>
+</div>
+<div class="lgd" style="align-content: start">
+<i class="kan">1</i><div><b>Halo</b><span>Une lueur floue derrière l'image, teinte du genre à 30 %. Facultative ; absente en <code>compact</code>, en thème clair et sous « réduire la transparence ».</span></div>
+<i class="kan">2</i><div><b>Image fantôme</b><span><code>art</code> · la silhouette du composant qui manque. Bord pointillé 1,5 px, fond à 3,5 %, lignes à 13 %. Largeur de l'hôte, 160 px de haut au plus.</span></div>
+<i class="kan">3</i><div><b>Glyphe du genre</b><span>Rond pointillé de 60 px, icône de 28. C'est lui qui prend la teinte : accent pour le vide, <code>--err</code>, <code>--warn</code>, <code>--ink2</code>. Il flotte de 5 px.</span></div>
+<i class="kan">4</i><div><b>Titre</b><span><code>title</code> · Nunito 22 / 800, <code>--ink</code>, centré, deux lignes au plus. Ce qui se passe, dit simplement. À 16 px de l'image.</span></div>
+<i class="kan">5</i><div><b>Phrase</b><span><code>message</code> · Inter 14,5, <code>--ink2</code>, 310 px de large au plus. Facultative : seulement si elle dit ce que le titre ne dit pas.</span></div>
+<i class="kan">6</i><div><b>Sortie principale</b><span><code>primary</code> · bouton plein de 50 px, toute la largeur, glyphe en tête. Indigo de marque, ou la teinte de l'hôte.</span></div>
+<i class="kan">7</i><div><b>Sortie seconde</b><span><code>secondary</code> · lien de 44 px de haut, <code>--accent-ink</code>. Jamais seul sous une erreur : il accompagne « Réessayer ».</span></div>
+<i class="kan">8</i><div><b>Corps du squelette</b><span><code>shape</code> · aplat <code>--field</code>, aux mesures et au rayon du composant attendu. Aucun texte, aucune icône.</span></div>
+<i class="kan">9</i><div style="border-bottom: 0"><b>Reflet</b><span>Bande <code>--deep</code> large de 40 %, inclinée à 100°, qui traverse en 1,6 s. Une seule horloge pour tout l'écran : les reflets passent ensemble.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">04 · Variantes et états</span><h2 class="d">Cinq genres, quatre squelettes, sept tenues</h2><p>Tout est à taille réelle. Le fantôme reste indigo et neutre ; seul le glyphe du genre change de teinte. Chaque squelette est montré sous le composant qu'il remplace.</p></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage">
+<div class="sb">
+<div class="sb-art">
+<div class="gt gh" style="--cut: 84px; align-self: stretch; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 12px; height: 84px; padding: 0 16px">
+<span class="gy bob" style="width: 52px; height: 52px; color: var(--brand-soft)">[[ic:link]]</span>
+<span style="display: flex; flex-direction: column; gap: 9px; flex: 1; min-width: 0"><span class="gl" style="width: 70%; height: 12px"></span><span class="gl" style="width: 42%"></span></span>
+<span style="display: inline-flex; color: var(--ink3)">[[ic:qr-code]]</span>
+</div>
+<div class="gcut" style="margin: 0 14px"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px"><span class="gl" style="width: 48%"></span><span style="display: inline-flex; color: var(--ink3)">[[ic:copy s]]</span></div>
+</div>
+</div>
+<h3 class="d">Ton premier lien t'attend</h3>
+<button class="btn p">[[ic:link]]<span>Créer mon lien</span></button>
+</div>
+</div>
+<div class="cp"><b><code>empty</code> · vide</b><span class="kcap">Rien encore. Le fantôme est le billet à venir ; la sortie le crée. Teinte : l'accent de l'hôte.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage">
+<div class="sb" role="alert">
+<div class="sb-art">
+<div class="gt gh" style="--cut: 84px; align-self: stretch; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 12px; height: 84px; padding: 0 16px">
+<span class="gy bob" style="width: 52px; height: 52px; color: var(--err)">[[ic:warning-circle]]</span>
+<span style="display: flex; flex-direction: column; gap: 9px; flex: 1; min-width: 0"><span class="gl" style="width: 70%; height: 12px"></span><span class="gl" style="width: 42%"></span></span>
+</div>
+<div class="gcut" style="margin: 0 14px"></div>
+<div style="display: flex; align-items: center; padding: 14px 16px"><span class="gl" style="width: 48%"></span></div>
+</div>
+</div>
+<h3 class="d">Tes liens n'ont pas pu se charger</h3>
+<button class="btn p">[[ic:arrow-clockwise]]<span>Réessayer</span></button>
+</div>
+</div>
+<div class="cp"><b><code>error</code> · erreur</b><span class="kcap">Même silhouette, glyphe d'alerte en <code>--err</code>. « Réessayer » est obligatoire. Jamais de code d'erreur à l'écran.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage">
+<div class="sb">
+<div class="sb-art">
+<div class="gh gp" style="align-self: stretch; height: 68px; padding: 0 18px 0 8px">
+<span class="gy bob" style="width: 52px; height: 52px; color: var(--warn)">[[ic:microphone-slash]]</span>
+<span class="wave gw" style="flex: 1; justify-content: space-between" aria-hidden="true"><i style="height: 30%"></i><i style="height: 60%"></i><i style="height: 90%"></i><i style="height: 45%"></i><i style="height: 70%"></i><i style="height: 100%"></i><i style="height: 55%"></i><i style="height: 35%"></i><i style="height: 80%"></i><i style="height: 50%"></i><i style="height: 25%"></i><i style="height: 65%"></i><i style="height: 40%"></i><i style="height: 20%"></i></span>
+</div>
+</div>
+<h3 class="d">Le micro est coupé pour Meeshy</h3>
+<p>Autorise-le pour envoyer un vocal.</p>
+<button class="btn p">[[ic:gear-six]]<span>Ouvrir les réglages</span></button>
+<a href="#" class="sb-x">Plus tard</a>
+</div>
+</div>
+<div class="cp"><b><code>denied</code> · refus</b><span class="kcap">Permission du système ou accès refusé. Glyphe en <code>--warn</code>. La sortie mène là où le refus se lève.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage">
+<div class="sb">
+<div class="sb-art">
+<div class="gh gp" style="width: 100%"><span class="gy bob" style="width: 40px; height: 40px; color: var(--ink2)">[[ic:wifi-slash]]</span><span class="gl" style="flex: 1"></span></div>
+<div class="gh gp" style="width: 84%; animation-delay: -1.5s"><i></i><span class="gl" style="flex: 1"></span></div>
+<div class="gh gp" style="width: 66%; animation-delay: -3s"><i></i><span class="gl" style="flex: 1"></span></div>
+</div>
+<h3 class="d">Tu es hors ligne</h3>
+<p>Rien en mémoire pour cet écran.</p>
+<button class="btn p">[[ic:arrow-clockwise]]<span>Réessayer</span></button>
+</div>
+</div>
+<div class="cp"><b><code>offline</code> · hors ligne</b><span class="kcap">Seulement si le cache est vide. Sinon le cache répond et K14 pose sa pilule. Repart seul au retour du réseau.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage" style="flex-direction: column; gap: 18px">
+<div class="tw"><small>Le vrai</small>
+<div style="display: flex; align-items: center; gap: 12px; --accent: #4ECDC4"><span class="av">LM</span><span style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0"><b style="font-size: 14.5px">Léo Marchetti</b><span style="font-size: 13px; color: var(--ink2)">En vadrouille</span></span></div>
+</div>
+<div class="tw"><small>Son squelette</small>
+<div style="display: flex; align-items: center; gap: 12px"><span class="sk r" style="width: 44px; height: 44px; flex: none"></span><span style="display: flex; flex-direction: column; gap: 9px; flex: 1"><span class="sk p d2" style="width: 104px; height: 13px"></span><span class="sk p d3" style="width: 86px; height: 11px"></span></span></div>
+</div>
+</div>
+<div class="cp"><b><code>.line</code> · ligne</b><span class="kcap">Une ligne de texte : hauteur du corps (13, 11), largeur de 40 à 70 % tirée d'une suite fixe. Rayon plein.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage" style="flex-direction: column; gap: 18px">
+<div class="tw"><small>Le vrai</small>
+<div class="ticket" style="--cut: 54px">
+<div style="display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 14px"><span style="display: inline-flex; color: var(--l-track)">[[ic:cursor-click]]</span><b style="flex: 1; font-size: 14px">Mon profil</b><b class="d" style="font-size: 17px">412</b></div>
+<div class="cut"></div>
+<div class="mono" style="padding: 11px 14px; color: var(--ink2)">meeshy.me/l/aissa</div>
+</div>
+</div>
+<div class="tw"><small>Son squelette</small>
+<div class="ticket" style="--cut: 54px">
+<div style="display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 14px"><span class="sk r" style="width: 22px; height: 22px"></span><span style="flex: 1; display: flex"><span class="sk p d2" style="width: 84px; height: 13px"></span></span><span class="sk p d3" style="width: 34px; height: 16px"></span></div>
+<div class="cut"></div>
+<div style="padding: 14px 14px 15px"><span class="sk p d2" style="display: block; width: 132px; height: 11px"></span></div>
+</div>
+</div>
+</div>
+<div class="cp"><b><code>.ticket</code> · billet</b><span class="kcap">Le contour, les encoches et le pointillé de K30 restent : seul l'intérieur attend. Même hauteur au pixel.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage" style="flex-direction: column; gap: 18px">
+<div class="tw"><small>Le vrai</small>
+<div style="display: flex; justify-content: space-around"><span style="display: flex; flex-direction: column; align-items: center; gap: 7px; font-size: 12px; font-weight: 600"><span class="ib g lg">[[ic:chat-circle]]</span>Écrire</span><span style="display: flex; flex-direction: column; align-items: center; gap: 7px; font-size: 12px; font-weight: 600"><span class="ib g lg">[[ic:phone]]</span>Appeler</span><span style="display: flex; flex-direction: column; align-items: center; gap: 7px; font-size: 12px; font-weight: 600"><span class="ib g lg">[[ic:radio]]</span>Talkie</span></div>
+</div>
+<div class="tw"><small>Son squelette</small>
+<div style="display: flex; justify-content: space-around"><span style="display: flex; flex-direction: column; align-items: center; gap: 10px"><span class="sk r" style="width: 60px; height: 60px"></span><span class="sk p" style="width: 38px; height: 10px"></span></span><span style="display: flex; flex-direction: column; align-items: center; gap: 10px"><span class="sk r d2" style="width: 60px; height: 60px"></span><span class="sk p d2" style="width: 46px; height: 10px"></span></span><span style="display: flex; flex-direction: column; align-items: center; gap: 10px"><span class="sk r d3" style="width: 60px; height: 60px"></span><span class="sk p d3" style="width: 36px; height: 10px"></span></span></div>
+</div>
+</div>
+<div class="cp"><b><code>.circle</code> · rond</b><span class="kcap">Avatar ou bouton rond : le diamètre du vrai (44, 60, 84). Jamais d'anneau, jamais de point de présence.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage" style="flex-direction: column; gap: 18px">
+<div class="tw"><small>Le vrai</small>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px"><div class="ph" style="height: 96px; border-radius: 16px">réel 0:24</div><div class="ph" style="height: 96px; border-radius: 16px">photo</div><div class="ph" style="height: 96px; border-radius: 16px">story</div></div>
+</div>
+<div class="tw"><small>Son squelette</small>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px"><div class="sk" style="height: 96px; border-radius: 16px"></div><div class="sk d2" style="height: 96px; border-radius: 16px"></div><div class="sk d3" style="height: 96px; border-radius: 16px"></div></div>
+</div>
+</div>
+<div class="cp"><b><code>.card</code> · carte</b><span class="kcap">Un bloc au rapport et au rayon de la carte : vignette, tuile, image. La grille ne bouge pas à l'arrivée.</span></div>
+</div>
+
+</div>
+<div style="display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.05fr); gap: 20px; margin-top: -2px">
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage" style="flex-direction: column; gap: 12px; --accent: #4ECDC4; --accent-ink: #7FE3DC">
+<div class="sbc"><span class="av" style="width: 36px; height: 36px; font-size: 13px">LM</span><b>Léo n'a encore rien publié</b></div>
+<div class="sbc"><span style="display: inline-flex; color: var(--err)">[[ic:warning-circle]]</span><b>Médias indisponibles<small>Le reste est à jour</small></b><button class="btn sm q" style="color: var(--ink); padding: 0 14px">Réessayer</button></div>
+</div>
+<div class="cp"><b>Compact</b><span class="kcap"><code>size: .compact</code> : une rangée pointillée dans un écran qui continue. Pas d'image, pas de halo. Une erreur garde son « Réessayer ».</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage" style="flex-direction: column; gap: 22px">
+<div class="sb">
+<h3 class="d" style="font-size: 19px">Tes liens n'ont pas pu se charger</h3>
+<button class="btn p" aria-label="Nouvel essai en cours" style="opacity: .78"><span style="display: inline-flex; animation: mxSpin 1.1s linear infinite">[[ic:circle-notch]]</span><span>Réessayer</span></button>
+</div>
+<div class="sb">
+<button class="btn p" style="outline: 2px solid var(--ink); outline-offset: 3px">[[ic:arrow-clockwise]]<span>Réessayer</span></button>
+</div>
+</div>
+<div class="cp"><b>Sortie · en attente, focus</b><span class="kcap"><code>primary.isPending</code> : le glyphe tourne dès le toucher, le bouton ne se rejoue pas. Focus clavier : anneau de 2 px décalé de 3.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage">
+<div class="mx" data-theme="light" style="width: 100%; padding: 18px 16px; border-radius: 22px">
+<div class="sb">
+<div class="sb-art">
+<div class="gh gp" style="width: 100%"><span class="gy" style="width: 40px; height: 40px; color: var(--accent-ink)">[[ic:magnifying-glass]]</span><span class="gl" style="flex: 1"></span></div>
+<div class="gh gp" style="width: 78%; animation-delay: -1.5s"><i></i><span class="gl" style="flex: 1"></span></div>
+</div>
+<h3 class="d" style="font-size: 20px">Rien pour « kora »</h3>
+<button class="btn p">[[ic:x]]<span>Effacer la recherche</span></button>
+</div>
+</div>
+</div>
+<div class="cp"><b>Thème clair</b><span class="kcap">Mêmes jetons. Le pointillé passe à l'indigo 36 %, le titre tient 15:1, le halo disparaît.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 20px; border-color: color-mix(in oklab, var(--err) 45%, transparent)">
+<span class="bad">[[ic:prohibit s]]<span>Interdit</span></span>
+<div class="stage" style="flex-direction: column; gap: 14px; padding-top: 30px">
+<div style="position: relative; width: 100%">
+<div class="rl" style="opacity: .3"><i>[[ic:globe-hemisphere-west]]</i><b>aissandiaye.studio</b></div>
+<span class="sk p" style="position: absolute; inset: 0"></span>
+</div>
+<div class="sb" style="gap: 6px; opacity: .8">
+<span style="display: inline-flex; color: var(--ink3)">[[ic:smiley-sad l]]</span>
+<span style="font-size: 14px; font-weight: 600; color: var(--ink2)">Aucun résultat.</span>
+</div>
+</div>
+<div class="cp"><b>Jamais : squelette sur un cache plein, vide sans issue</b><span class="kcap">Le premier cache ce qu'on sait déjà. Le second laisse la personne plantée là. Aucun des deux n'est K38.</span></div>
+</div>
+
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage">
+<div class="sb" role="status">
+<span class="gy" style="border-style: solid; border-color: transparent; background: color-mix(in oklab, var(--ok) 18%, transparent); color: var(--ok)">[[ic:check l]]</span>
+<h3 class="d" style="font-size: 20px">Signalement envoyé</h3>
+<div style="display: flex; flex-direction: column; gap: 8px; align-self: stretch; text-align: left; font-size: 14px; color: var(--ink2)">
+<span style="display: flex; align-items: center; gap: 10px"><span style="display: inline-flex; color: var(--ok)">[[ic:check-circle s]]</span>Rui ne peut plus t'écrire</span>
+<span style="display: flex; align-items: center; gap: 10px"><span style="display: inline-flex; color: var(--ok)">[[ic:check-circle s]]</span>Notre équipe regarde sous 24 h</span>
+</div>
+<button class="btn p"><span>Terminé</span></button>
+</div>
+</div>
+<div class="cp"><b><code>success</code> · c'est fait</b><span class="kcap">Un médaillon <b>K45</b> en <code>ok</code>, le titre, les lignes de conséquence cochées (<code>consequences</code>), une sortie. Dit une fois, en <code>role="status"</code> (Signaler).</span></div>
+</div>
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage" style="position: relative">
+<div style="display: flex; flex-direction: column; gap: 8px; width: 100%; opacity: .13; filter: blur(1.5px)" aria-hidden="true">
+<div class="rl"><i>[[ic:globe-hemisphere-west]]</i><b>aissandiaye.studio</b></div>
+<div class="rl"><i>[[ic:vinyl-record]]</i><b>soundcloud.com/aissa</b></div>
+<div class="rl"><i>[[ic:globe-hemisphere-west]]</i><b>instagram.com/aissa.snd</b></div>
+</div>
+<div class="sb" role="alert" style="position: absolute; inset: 0; justify-content: center; gap: 12px">
+<span style="display: inline-flex; color: var(--err)">[[ic:warning-circle l]]</span>
+<h3 class="d" style="font-size: 18px">Impossible de mettre à jour</h3>
+<button class="btn sm q" style="align-self: center; color: var(--ink)">[[ic:arrow-clockwise s]]<span>Réessayer</span></button>
+</div>
+</div>
+<div class="cp"><b>Erreur sur contenu estompé</b><span class="kcap"><code>isOverContent</code> : le cache reste dessous, estompé par l'hôte ; le bloc n'a ni fantôme ni halo et garde « Réessayer » (Etat-Erreur, Web-Etats).</span></div>
+</div>
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage" style="gap: 26px">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px"><span class="gy" style="border-style: solid; border-color: transparent; background: color-mix(in oklab, var(--accent) 20%, transparent); color: var(--accent-ink); box-shadow: 0 0 34px color-mix(in oklab, var(--accent) 40%, transparent)">[[ic:link l]]</span><span class="kcap">accent · <code>halo</code></span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px"><span class="gy" style="color: var(--warn)">[[ic:map-pin-line l]]</span><span class="kcap">warn · <code>dashed</code></span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px"><span class="gy" style="border-style: solid; border-color: transparent; background: color-mix(in oklab, var(--err) 18%, transparent); color: var(--err)">[[ic:warning-circle l]]</span><span class="kcap">err</span></div>
+</div>
+<div class="cp"><b>L'image est un K45</b><span class="kcap">Quand ce n'est pas un fantôme, l'emplacement <code>glyph</code> reçoit un <code>MeeshyMedallion</code> : ses tons, ses décors, sa taille de 60. Le bloc ne redessine aucun disque.</span></div>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">05 · Mouvement</span><h2 class="d">Le squelette cède sa place, sans que rien ne saute</h2><p>Le bloc d'état, le squelette et le contenu occupent le même cadre. Ici : cache vide, la requête tombe, « Réessayer », la réponse arrive. En boucle.</p></header>
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px">
+
+<div class="kcell kc" style="gap: 26px; padding: 36px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<span class="tag">Mes liens · 350 × 330</span>
+<span style="display: inline-flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 600; color: var(--ink3)"><i class="hap"></i><span>haptique</span></span>
+</div>
+<div style="display: flex; align-items: center; justify-content: center; flex: 1">
+<div class="mv">
+<div class="a" aria-hidden="true">
+<div class="ticket" style="--cut: 96px">
+<div style="display: flex; align-items: center; gap: 14px; height: 96px; padding: 0 18px"><span class="sk r" style="width: 56px; height: 56px; flex: none"></span><span style="display: flex; flex-direction: column; gap: 10px; flex: 1"><span class="sk p d2" style="width: 60%; height: 15px"></span><span class="sk p d3" style="width: 38%; height: 11px"></span></span><span class="sk d2" style="width: 30px; height: 30px; border-radius: 8px"></span></div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 18px"><span class="sk p d2" style="width: 150px; height: 12px"></span><span class="sk r d3" style="width: 18px; height: 18px"></span></div>
+</div>
+<span class="sk p" style="height: 56px"></span>
+<span class="sk p d2" style="height: 56px"></span>
+<span class="sk p d3" style="height: 56px; width: 74%"></span>
+</div>
+<div class="b">
+<div class="sb" role="alert">
+<div class="sb-art">
+<div class="gt gh" style="--cut: 76px; align-self: stretch; display: flex; flex-direction: column">
+<div style="display: flex; align-items: center; gap: 12px; height: 76px; padding: 0 16px"><span class="gy bob" style="width: 48px; height: 48px; color: var(--err)">[[ic:warning-circle]]</span><span style="display: flex; flex-direction: column; gap: 9px; flex: 1"><span class="gl" style="width: 64%; height: 12px"></span><span class="gl" style="width: 40%"></span></span></div>
+<div class="gcut"></div>
+<div style="padding: 14px 16px; display: flex"><span class="gl" style="width: 46%"></span></div>
+</div>
+</div>
+<h3 class="d">Tes liens n'ont pas pu se charger</h3>
+<button class="btn p rt" tabindex="-1">[[ic:arrow-clockwise]]<span>Réessayer</span></button>
+</div>
+</div>
+<div class="c" aria-hidden="true">
+<div class="ticket" style="--cut: 96px">
+<div style="display: flex; align-items: center; gap: 14px; height: 96px; padding: 0 18px"><span class="av" style="width: 56px; height: 56px; font-size: 20px">AN</span><span style="display: flex; flex-direction: column; gap: 3px; flex: 1"><b class="d" style="font-size: 18px">Mon profil</b><span style="font-size: 12.5px; color: var(--ink2)">1 719 visites ce mois</span></span><span style="display: inline-flex; color: var(--ink2)">[[ic:qr-code l]]</span></div>
+<div class="cut"></div>
+<div style="display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 0 18px"><span class="mono" style="font-size: 14px">meeshy.me/@aissa</span><span style="display: inline-flex; color: var(--ink2)">[[ic:copy s]]</span></div>
+</div>
+<div class="rl"><i>[[ic:globe-hemisphere-west]]</i><b>aissandiaye.studio</b><span class="tag">Site</span></div>
+<div class="rl"><i>[[ic:vinyl-record]]</i><b>soundcloud.com/aissa</b><span class="tag">Musique</span></div>
+<div class="rl" style="width: 74%"><i>[[ic:camera]]</i><b>Photos</b></div>
+</div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 0">
+<div class="tl"><i></i></div>
+<div class="tk"><span>Cache vide : squelette</span><span>Échec : le bloc entre</span><span>Réessayer : squelette</span><span>Réponse : le contenu prend la place</span></div>
+</div>
+<div class="cp"><b>En vrai, en boucle de 9 s</b><span class="kcap">Le squelette a déjà la forme du billet et des trois adresses. L'échec le remplace par le bloc, qui tressaille une fois. Le toucher rend le squelette. La réponse monte de 16 px, à encombrement égal.</span></div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="kcell" style="min-height: 0; padding: 20px 24px; justify-content: flex-start; align-items: flex-start; gap: 18px; background: var(--ground)">
+<span class="step">1</span>
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1">
+<div style="display: flex; align-items: center; gap: 12px; height: 58px; padding: 0 14px; border-radius: 20px; border: 1px solid var(--line)"><span class="sk r" style="width: 34px; height: 34px; flex: none"></span><span style="display: flex; flex-direction: column; gap: 8px; flex: 1"><span class="sk p d2" style="width: 56%; height: 11px"></span><span class="sk p d3" style="width: 34%; height: 9px"></span></span></div>
+<span class="kcap"><b style="color: var(--ink)">Attente.</b> Le reflet passe en 1,6 s, tous les squelettes à la même phase. Il n'apparaît qu'après 150 ms : une réponse rapide ne clignote pas.</span>
+</div>
+</div>
+<div class="kcell" style="min-height: 0; padding: 20px 24px; justify-content: flex-start; align-items: flex-start; gap: 18px; background: var(--ground)">
+<span class="step">2</span>
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1">
+<div class="gh" style="display: flex; align-items: center; gap: 12px; height: 58px; padding: 0 14px; border-radius: 20px; animation: none; transform: translateX(-6px)"><span class="gy" style="width: 34px; height: 34px; color: var(--err)">[[ic:warning-circle s]]</span><span class="gl" style="flex: 1"></span><span style="font-size: 13px; font-weight: 700; color: var(--ink)">Réessayer</span></div>
+<span class="kcap"><b style="color: var(--ink)">Bloc.</b> Fondu de 220 ms. Une erreur tressaille de 7 px, une fois, avec un tic. Puis le fantôme respire : 4,6 s, échelle 1,012.</span>
+</div>
+</div>
+<div class="kcell" style="min-height: 0; padding: 20px 24px; justify-content: flex-start; align-items: flex-start; gap: 18px; background: var(--ground)">
+<span class="step">3</span>
+<div style="display: flex; flex-direction: column; gap: 10px; flex: 1">
+<div style="display: flex; align-items: center; gap: 12px; height: 58px; padding: 0 14px; border-radius: 20px; border: 1px solid var(--line); background: var(--raised)"><span class="av" style="width: 34px; height: 34px; font-size: 12px">AN</span><span style="display: flex; flex-direction: column; gap: 1px; flex: 1"><b style="font-size: 13.5px">Mon profil</b><span class="mono" style="font-size: 11.5px; color: var(--ink2)">meeshy.me/@aissa</span></span></div>
+<span class="kcap"><b style="color: var(--ink)">Contenu.</b> Il entre à la place exacte du squelette, en cascade de 40 ms par rangée. Rien ne pousse le reste de l'écran.</span>
+</div>
+</div>
+</div>
+
+</div>
+<div class="spec"><b style="color: var(--ink)">motion.pulse</b> (reflet) · 1,6 s · linéaire, en boucle · déclencheur : <span style="color: var(--accent-ink)">MeeshySkeleton</span> présent depuis 150 ms · haptique : aucun · mouvement réduit : aplat fixe, sans reflet</div>
+<div class="spec"><b style="color: var(--ink)">motion.rise</b> (relève) · 280 ms · ressort sans rebond, cascade de 40 ms · déclencheur : l'hôte remplace le squelette ou le bloc par son contenu · haptique : aucun · mouvement réduit : fondu enchaîné de 160 ms, sans déplacement</div>
+<div class="spec"><b style="color: var(--ink)">motion.float</b> (respiration du fantôme) · 4,6 s · aller-retour doux · opacité 0,72 à 1, échelle 1 à 1,012 ; le glyphe monte de 5 px en 5 s · entrée d'une <span style="color: var(--accent-ink)">error</span> : tressaillement de 7 px en 180 ms et un tic d'erreur, une seule fois · mouvement réduit : fantôme immobile, aucun tressaillement, le tic reste</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">06 · API</span><h2 class="d">Les mêmes noms sur les trois plateformes</h2><p>Un genre, des textes, deux actions, une forme. Aucune signature ne nomme un lien, une fiche, une conversation ni une permission : l'hôte traduit son état en genre et en mots avant d'appeler.</p></header>
+<div class="kapi" style="grid-template-columns: 1.1fr 1.3fr 1.3fr 1.3fr">
+<span class="h">Élément</span><span class="h">iOS · MeeshyUI/Kit/MeeshyStateBlock.swift</span><span class="h">Android · me.meeshy.ui.component.kit</span><span class="h">Web · components/kit/meeshy-state-block.tsx</span>
+<span><b>Composant</b></span><span><code>MeeshyStateBlock(kind:title:message:primary:secondary:art:…)</code></span><span><code>MeeshyStateBlock(kind, title, modifier, message, primary, secondary, art, …)</code></span><span><code>&lt;MeeshyStateBlock kind title message primary secondary art … /&gt;</code></span>
+<span><b>Genres</b></span><span><code>MeeshyStateBlockKind { empty, error, denied, offline, success }</code></span><span><code>enum class</code> identique</span><span><code>'empty' | 'error' | 'denied' | 'offline' | 'success'</code></span>
+<span><b>Sortie</b></span><span><code>MeeshyStateBlockAction(title:systemImage:isPending:perform:)</code></span><span><code>data class MeeshyStateBlockAction(title, icon, isPending, perform)</code></span><span><code>type MeeshyStateBlockAction = { title; glyph?; isPending?; perform }</code></span>
+<span><b>État de la sortie</b></span><span><code>isPending: Bool = false</code></span><span>même nom, <code>Boolean</code></span><span>même nom, <code>boolean</code></span>
+<span><b>Tailles</b></span><span><code>MeeshyStateBlockSize { regular, compact }</code></span><span><code>enum class</code> identique</span><span><code>'regular' | 'compact'</code></span>
+<span><b>Squelette</b></span><span><code>MeeshySkeleton(shape:)</code> dans <code>MeeshySkeleton.swift</code></span><span><code>MeeshySkeleton(shape, modifier)</code></span><span><code>&lt;MeeshySkeleton shape /&gt;</code> dans <code>meeshy-skeleton.tsx</code></span>
+<span><b>Formes</b></span><span><code>MeeshySkeletonShape { line(widthRatio:), pill(width:), ticket(cut:), circle(diameter:), card(aspect:radius:) }</code></span><span><code>sealed interface</code> identique</span><span><code>{ line } | { pill } | { ticket } | { circle } | { card }</code></span>
+<span><b>Image fantôme</b></span><span><code>MeeshyStateArt { ghost(template, count:), glyph, none }</code> · gabarits <code>ticket</code>, <code>row</code>, <code>tile</code>, <code>pin</code></span><span><code>sealed interface</code> identique</span><span><code>{ ghost, count? } | 'glyph' | 'none'</code></span>
+<span><b>Emplacements</b></span><span><code>art</code>, <code>glyph</code> : <code>@ViewBuilder</code></span><span>mêmes noms, <code>@Composable () -&gt; Unit</code></span><span>mêmes noms, <code>ComponentChildren</code></span>
+<span><b>Loi du squelette</b></span><span><code>MeeshySkeletonLaw.shows(isLoading:hasCachedData:)</code></span><span><code>MeeshySkeletonLaw.shows(…)</code>, JVM pure</span><span><code>meeshySkeletonShows(…)</code></span>
+<span style="border-bottom: 0"><b>Recette en valeurs</b></span><span style="border-bottom: 0"><code>MeeshyStateBlockRecipe.resolve(kind:size:hasMessage:hasSecondary:isPending:isOverContent:tint:reduceMotion:)</code></span><span style="border-bottom: 0"><code>MeeshyStateBlockRecipe.resolve(…)</code>, JVM pure</span><span style="border-bottom: 0"><code>meeshyStateBlockRecipe(…)</code> : classes et propriétés</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div class="par"><code>kind: Kind</code><span>Obligatoire. Fixe le glyphe, sa teinte, le rôle annoncé et ce que la recette exige.</span></div>
+<div class="par"><code>title: String</code><span>Obligatoire, non vide, déjà traduit. Ce qui se passe, en une ligne.</span></div>
+<div class="par"><code>message: String? = nil</code><span>Une phrase de plus, seulement si elle apprend quelque chose. Absente en <code>compact</code> sur une ligne.</span></div>
+<div class="par"><code>primary: Action? = nil</code><span>Obligatoire pour <code>error</code>, et pour <code>empty</code> en <code>regular</code> : la recette refuse de se résoudre sans lui.</span></div>
+<div class="par"><code>secondary: Action? = nil</code><span>Un lien sous le bouton. Ignoré s'il n'y a pas de <code>primary</code> : il prend alors sa place.</span></div>
+<div class="par"><code>art = .ghost(.line, count: 3)</code><span>La silhouette. Les formes sont celles du squelette : un fantôme et un squelette se superposent.</span></div>
+<div class="par"><code>glyph</code> (emplacement)<span>L'image quand elle n'est pas un fantôme : un médaillon de <b>K45</b>, avec ses tons et ses décors (<code>halo</code>, <code>dashed</code>). Le bloc ne dessine aucun disque à lui.</span></div>
+<div class="par"><code>consequences: [String] = []</code><span><code>success</code> seulement : deux à quatre lignes cochées, ce qui vient de changer. Vides ailleurs.</span></div>
+<div class="par"><code>isOverContent: Bool = false</code><span>Une <code>error</code> posée sur un contenu que l'hôte estompe dessous. Le bloc perd son fantôme et garde sa sortie.</span></div>
+<div class="par"><code>size = .regular</code><span><code>compact</code> : une rangée de 60 px, sans image ni halo, dans un écran qui continue.</span></div>
+<div class="par"><code>tint: Color? = nil</code><span>Teinte du glyphe en <code>empty</code> et du bouton. Les trois autres genres gardent la leur.</span></div>
+<div class="par"><code>announces: Bool = true</code><span><code>error</code> et <code>offline</code> sont dits à l'apparition. Faux pour un bloc déjà annoncé par l'hôte.</span></div>
+<div class="par"><code>label: String? = nil</code><span>Nom dit. Par défaut : <code>title</code>, puis <code>message</code>, en un seul élément.</span></div>
+<div class="par"><code>haptic = .onError</code><span>Un tic à l'entrée d'une <code>error</code>. <code>none</code> laisse l'hôte jouer le sien.</span></div>
+<div class="par"><code>shape: Shape</code><span><code>MeeshySkeleton</code> seulement. Mesures passées en valeurs, jamais déduites d'un type de l'app.</span></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">07 · Par plateforme</span><h2 class="d">Un reflet, trois façons de le faire passer</h2></header>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px">
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:apple-logo]]<b class="d" style="font-size: 20px">iOS · SwiftUI</b></div>
+<ul>
+<li>Reflet : un seul <code>TimelineView(.animation)</code> par écran fournit la phase ; chaque squelette la lit dans l'environnement. Un calque <code>CAGradientLayer</code> la peint, hors du rendu SwiftUI.</li>
+<li>Fantôme : <code>strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [5, 4.4]))</code>, respiration par <code>phaseAnimator</code>.</li>
+<li>Relève : <code>matchedGeometryEffect</code> entre le squelette et le contenu de l'hôte ; <code>redacted(reason: .placeholder)</code> n'est pas employé, sa forme suit le texte et non le composant.</li>
+<li>Annonce : <code>AccessibilityNotification.Announcement</code> à l'entrée d'une erreur ; tic par <code>sensoryFeedback(.error, trigger:)</code>.</li>
+<li>Réglages : l'hôte passe <code>UIApplication.openSettingsURLString</code> dans <code>primary.perform</code>. Le composant ne l'importe pas.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> iOS 16 : pas de <code>phaseAnimator</code>, une animation <code>repeatForever</code> sur l'opacité. « Réduire les animations » : aplat fixe, fantôme immobile.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:android-logo]]<b class="d" style="font-size: 20px">Android · Compose</b></div>
+<ul>
+<li>Reflet : <code>rememberInfiniteTransition</code> hissé une fois par écran, lu en <code>drawWithCache</code> avec un <code>Brush.linearGradient</code>. Aucune recomposition par image.</li>
+<li>Fantôme : <code>drawBehind</code> et <code>PathEffect.dashPathEffect</code> ; respiration lue en <code>graphicsLayer</code>.</li>
+<li>Relève : <code>SharedTransitionLayout</code> et <code>sharedBounds</code> ; à défaut, <code>Crossfade</code> à encombrement égal.</li>
+<li>Annonce : <code>liveRegion = LiveRegionMode.Polite</code> sur le bloc ; tic par <code>HapticFeedbackType.Reject</code>, via <code>MeeshyHaptics</code>.</li>
+<li>Surface : aucune. Pas de carte tonale sous un fantôme, le sol se voit à travers.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Échelle d'animation à zéro : aplat fixe et état final posé sans fondu. Sans <code>Reject</code> (API &lt; 30) : <code>LongPress</code>.</p>
+</div>
+<div class="plat">
+<div style="display: flex; align-items: center; gap: 10px">[[ic:browser]]<b class="d" style="font-size: 20px">Web · Preact</b></div>
+<ul>
+<li>Reflet : <code>background-position</code> animé en CSS sur un dégradé à <code>background-attachment: fixed</code> : tous les squelettes partagent la même bande, sans script.</li>
+<li>Fantôme : <code>border: 1.5px dashed</code>, respiration en <code>@keyframes</code> sur <code>opacity</code> et <code>transform</code>.</li>
+<li>Relève : <code>document.startViewTransition</code> avec un <code>view-transition-name</code> par emplacement.</li>
+<li>Annonce : <code>role="alert"</code> pour <code>error</code>, <code>role="status"</code> pour les autres ; squelette en <code>aria-hidden</code> sous un parent <code>aria-busy</code>.</li>
+<li>Retour du réseau : l'hôte écoute <code>online</code> et rejoue <code>primary.perform</code>. Le composant ne lit pas <code>navigator.onLine</code>.</li>
+</ul>
+<p class="fb"><b style="color: var(--ink)">Repli.</b> Sans View Transitions : fondu enchaîné dans une grille à une case. <code>prefers-reduced-motion</code> : aucune animation, aplat fixe.</p>
+</div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">08 · Jumeaux à extraire</span><h2 class="d">Un bloc par plateforme existe déjà, entouré de dizaines de copies</h2><p>Relevé du 16 novembre 2026. iOS et Android ont chacun un état vide commun et une forme de squelette ; le web en écrit un par écran (34 fichiers exportent un <code>…Empty</code>, <code>…Skeleton</code> ou <code>…Offline…</code>). Aucun ne porte les quatre genres sous un seul nom, aucun ne dessine de fantôme.</p></header>
+<div class="card" style="padding: 6px 0">
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Primitives/EmptyStateView.swift</span><p><span class="be">Devient le composant</span> <code>EmptyStateView(icon:title:subtitle:actionLabel:accentColor:compact:onAction:)</code>, 25 fichiers appelants. Il a déjà le titre, la phrase facultative, l'action, <code>compact</code> et l'entrée en montée. Il perd <code>ThemeManager.shared</code> et gagne <code>kind</code>, <code>secondary</code> et <code>art</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Primitives/SkeletonView.swift</span><p><span class="be">Devient le squelette</span> <code>SkeletonShape(width:height:cornerRadius:)</code> et <code>ShimmerModifier</code>. <code>SkeletonConversationRow</code> et <code>SkeletonMessageBubble</code>, du même fichier, retournent à l'app : ce sont des compositions.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">packages/MeeshySDK/Sources/MeeshyUI/Primitives/LoadingSheen.swift</span><p><code>LoadingSheenStyle</code> et sa phase d'environnement : le reflet à horloge unique existe. <code>MeeshySkeleton</code> le réutilise tel quel au lieu de <code>ShimmerModifier</code>.</p></div>
+<div class="twin"><span class="pf">iOS</span><span class="mono">apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonVisibilityResolver.swift</span><p>La loi « squelette seulement si le cache est vide », déjà pure et testée. Elle monte dans le kit sous <code>MeeshySkeletonLaw</code>. Ses voisins <span class="mono">SkeletonLinkRow.swift</span>, <span class="mono">SkeletonProfileHeader.swift</span>, <span class="mono">SkeletonFeedPost.swift</span>, <span class="mono">SkeletonStoryThumb.swift</span> se recomposent en <code>.line</code>, <code>.circle</code>, <code>.card</code>.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/MeeshyEmptyState.kt</span><p><span class="be">Devient le composant</span> <code>MeeshyEmptyState(icon, title, subtitle, actionLabel, onAction, accent, compact, secondaryLabel, onSecondary)</code>, 15 fichiers appelants. Le plus proche de la cible : il a déjà la sortie seconde, et sa note dit « vide, filtre, erreur, hors ligne ». <code>MeeshyShimmerPlaceholder</code>, du même fichier, part au squelette.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/skeleton/SkeletonShape.kt</span><p><span class="be">Devient le squelette</span> <code>SkeletonShape</code> et <code>SkeletonBlock</code>, avec le reflet de <span class="mono">skeleton/LoadingSheen.kt</span>. <code>MeeshySkeletonBox</code> (<span class="mono">component/MeeshySkeleton.kt</span>) disparaît dedans. La loi <span class="mono">core/model/…/loading/SkeletonVisibility.kt</span> prend le nom commun.</p></div>
+<div class="twin"><span class="pf">Android</span><span class="mono">apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/permission/PermissionDeniedCard.kt</span><p>« Accès au micro refusé » et « Ouvrir les Réglages » dans une carte. Devient un appel <code>kind = denied</code> ; <code>PermissionNature</code> et ses textes restent chez l'appelant.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/admin/states.tsx</span><p><span class="be">Devient le composant</span> Le seul fichier du web à tenir la famille entière : <code>AdminSkeleton</code>, <code>AdminEmptyState</code>, <code>AdminErrorState</code> (avec <code>onRetry</code> obligatoire), <code>AdminDeniedInline</code>, <code>AdminOfflineNotice</code>. Il perd <code>AdminLanguage</code> et <code>translateAdmin</code>, et monte dans <code>components/kit</code>.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/components/thread-states.tsx</span><p><code>ThreadRefused</code>, <code>ThreadError({ onRetry })</code>, <code>ThreadSkeleton</code> : les trois genres du fil, à rebrancher. Avec <span class="mono">components/lens-skeleton.tsx</span> pour la liste.</p></div>
+<div class="twin"><span class="pf">Web</span><span class="mono">apps/web/src/routes/calls-parts.tsx</span><p><code>CallsEmpty</code>, <code>CallsSearchEmpty</code>, <code>CallsOfflineNotice</code>, <code>CallsSkeleton</code> ; même quatuor dans <span class="mono">routes/communities-parts.tsx</span>. Deux écrans, huit copies : le motif que K38 retire.</p></div>
+<div class="twin"><span class="pf">Fantôme</span><span class="mono">aucun jumeau</span><p><span class="no">À créer</span> L'image faite de la silhouette du composant n'existe nulle part : les trois plateformes posent une icône à 40 % d'opacité. <code>MeeshyStateArt.ghost</code> est l'apport du profil.</p></div>
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">09 · Il sert aussi ailleurs</span><h2 class="d">Quatre écrans qui ne sont pas le profil</h2></header>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px">
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage">
+<div class="sb">
+<div class="sb-art">
+<div class="gh gp" style="width: 100%; border-radius: 22px; height: 64px"><span class="gy bob" style="width: 44px; height: 44px; color: var(--accent-ink)">[[ic:chat-circle]]</span><span style="display: flex; flex-direction: column; gap: 8px; flex: 1"><span class="gl" style="width: 52%"></span><span class="gl" style="width: 80%; height: 8px"></span></span></div>
+<div class="gh gp" style="width: 100%; border-radius: 22px; height: 64px; animation-delay: -1.5s; opacity: .7"><i style="width: 44px; height: 44px"></i><span style="display: flex; flex-direction: column; gap: 8px; flex: 1"><span class="gl" style="width: 40%"></span><span class="gl" style="width: 66%; height: 8px"></span></span></div>
+</div>
+<h3 class="d">Aucune conversation</h3>
+<button class="btn a">[[ic:plus]]<span>Écrire à quelqu'un</span></button>
+<a href="#" class="sb-x">[[ic:qr-code s]]<span>Montrer mon QR</span></a>
+</div>
+</div>
+<div class="cp"><b>Conversations · liste vide</b><span class="kcap"><code>empty</code>, fantôme de deux rangées. Deux sorties : écrire, ou se faire trouver.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage">
+<div class="sb">
+<div class="sb-art">
+<div class="gh gp" style="width: 100%"><span class="gy bob" style="width: 40px; height: 40px; color: var(--accent-ink)">[[ic:magnifying-glass]]</span><span class="gl" style="flex: 1"></span></div>
+<div class="gh gp" style="width: 72%; animation-delay: -1.5s"><i></i><span class="gl" style="flex: 1"></span></div>
+</div>
+<h3 class="d">Rien pour « kora »</h3>
+<p>Ni dans tes messages, ni chez tes contacts.</p>
+<button class="btn p">[[ic:users-three]]<span>Voir les communautés</span></button>
+<a href="#" class="sb-x">Effacer la recherche</a>
+</div>
+</div>
+<div class="cp"><b>Recherche · sans résultat</b><span class="kcap"><code>empty</code>. Le titre reprend le mot cherché ; la sortie élargit, le lien revient en arrière.</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage">
+<div class="sb">
+<div class="sb-art">
+<div class="gh" style="align-self: stretch; display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 22px">
+<div style="display: flex; align-items: center; gap: 10px"><span class="gy bob" style="width: 40px; height: 40px; color: var(--ink2)">[[ic:wifi-slash]]</span><span class="gl" style="width: 44%"></span></div>
+<span class="gl" style="height: 64px; border-radius: 14px"></span>
+</div>
+</div>
+<h3 class="d">Le fil t'attend au retour du réseau</h3>
+<button class="btn p">[[ic:arrow-clockwise]]<span>Réessayer</span></button>
+</div>
+</div>
+<div class="cp"><b>Fil · hors ligne, cache vide</b><span class="kcap"><code>offline</code>, fantôme d'une publication. Avec un cache : le fil s'affiche et K14 dit « Hors ligne ».</span></div>
+</div>
+
+<div class="kcell kc" style="padding: 24px 20px">
+<div class="stage">
+<div class="sb">
+<div class="sb-art" style="flex-direction: row; justify-content: center; gap: 14px">
+<span class="gh gy" style="width: 56px; height: 56px; color: var(--ink3); border-color: rgba(165,180,252,.34); animation-delay: -3s">[[ic:camera]]</span>
+<span class="gy bob" style="width: 72px; height: 72px; color: var(--warn)">[[ic:map-pin l]]</span>
+<span class="gh gy" style="width: 56px; height: 56px; color: var(--ink3); border-color: rgba(165,180,252,.34); animation-delay: -1.5s">[[ic:microphone]]</span>
+</div>
+<h3 class="d">Localisation refusée</h3>
+<p>Meeshy ne peut pas te placer sur la carte.</p>
+<button class="btn p">[[ic:gear-six]]<span>Ouvrir les réglages</span></button>
+<a href="#" class="sb-x">[[ic:map-trifold s]]<span>Choisir sur la carte</span></a>
+</div>
+</div>
+<div class="cp"><b>Permission · position, caméra, micro</b><span class="kcap"><code>denied</code>. Même bloc pour les trois ; seuls le glyphe et les mots changent. Une sortie sans la permission quand elle existe.</span></div>
+</div>
+
+</div>
+</section>
+
+<section class="sec">
+<header><span class="tag">10 · Témoins</span><h2 class="d">Ce que les tests doivent prouver</h2></header>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<div class="wit">[[ic:seal-check]]<span><b>Cache d'abord.</b> <code>MeeshySkeletonLaw.shows</code> sur toute la matrice chargement × cache : vrai dans une seule case, cache vide et requête en vol. Un cache périmé compte comme une donnée. Aucun squelette avant 150 ms.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Jamais sans issue.</b> La recette refuse <code>error</code> sans <code>primary</code>, et <code>empty</code> en <code>regular</code> sans aucune sortie. Garde de source : aucun appel du dépôt ne construit ces deux cas.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Nom, rôle, valeur.</b> Le bloc est un seul élément : titre puis phrase. L'image et le halo sont masqués. Chaque sortie est un bouton nommé par son titre ; <code>isPending</code> est dit « en cours ». Une erreur est annoncée une fois, à l'apparition.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Même encombrement.</b> Pour chaque forme, le squelette et le composant qu'il remplace ont la même boîte au pixel. Passer du squelette au contenu, ou au bloc, ne déplace aucun voisin.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Recette.</b> Chaque genre × taille rend le glyphe, la teinte, les mesures et le rôle du tableau. Vecteurs <code>K38-MeeshyStateBlock.vectors.json</code>, lus par les trois suites.</span></div>
+<div class="wit">[[ic:seal-check]]<span><b>Cible, contraste, mouvement réduit.</b> Sorties de 44 pt, 48 dp, 44 px. Titre et phrase à 4,5:1 au moins, en clair et en sombre. Sous « réduire les animations » : ni reflet, ni respiration, ni tressaillement.</span></div>
+<div class="wit" style="grid-column: span 2">[[ic:seal-check]]<span><b>RTL, grande police, pureté.</b> En arabe, les rangées fantômes et le sens du reflet se retournent. Très grande police : le titre passe sur trois lignes, les sorties s'empilent, rien n'est tronqué. Garde de source : aucun type du domaine, aucun singleton, aucun appel réseau ni lecture de connectivité dans les fichiers de K38 ; non-régression : le lot ne rebranche aucun jumeau.</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding-top: 8px">
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:person-arms-spread]]</span><span><b style="color: var(--ink)">Accessibilité.</b> Le genre est écrit dans le titre, jamais porté par la seule couleur du glyphe. Un écran en squelette est dit « chargement » une fois par son hôte ; les squelettes eux-mêmes se taisent.</span></p>
+<p style="display: flex; align-items: flex-start; gap: 12px; font-size: 14.5px; line-height: 1.5; color: var(--ink2)"><span style="color: var(--ink); display: inline-flex">[[ic:speedometer]]</span><span><b style="color: var(--ink)">Performance.</b> Une horloge de reflet par écran, quel que soit le nombre de squelettes. Seules l'opacité, la transformation et la position du dégradé s'animent ; ni flou ni ombre. Tout s'arrête dès que le bloc quitte l'écran.</span></p>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":9209}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

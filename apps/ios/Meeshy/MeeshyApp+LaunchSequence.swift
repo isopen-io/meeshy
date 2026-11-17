@@ -16,6 +16,7 @@ extension MeeshyApp {
         sweepOrphanPendingCopies(session: bootSession)
         drainOutboxAtBoot(session: bootSession)
         bootEngagementAndLiveActivities()
+        SharedLocationSharingHolder.followAccounts()
         await resolveStoredSession()
         if AuthManager.shared.isAuthenticated {
             await bootAuthenticatedSession()
