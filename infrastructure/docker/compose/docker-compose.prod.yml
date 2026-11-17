@@ -528,6 +528,19 @@ services:
       - "traefik.http.routers.frontend-affiliate-unfurl.service=gateway"
       - "traefik.http.middlewares.affiliate-unfurl-path.replacepathregex.regex=^/signup/affiliate/([A-Za-z0-9_-]{2,100})/?$$"
       - "traefik.http.middlewares.affiliate-unfurl-path.replacepathregex.replacement=/api/v1/affiliate/$$1/og"
+      # #18865 — les mêmes robots qui déplient le lien d'une FICHE, /u/<pseudo> ou l'adresse
+      # courte /@<pseudo>, reçoivent la carte de profil au niveau Public
+      # (GET /api/v1/people/<pseudo>/og) : nom, pseudo, bannière sinon avatar, bio, ville d'un
+      # cercle public ; un pseudo inconnu, désactivé ou caché rend l'aperçu générique. Le motif
+      # n'admet ni point ni second segment : les médias hérités servis sous /u/ (nginx) restent hors d'atteinte.
+      - "traefik.http.routers.frontend-person-unfurl.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && PathRegexp(`^/(u/|@)[A-Za-z0-9_-]{1,64}/?$$`) && !Query(`open`, `1`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot|mattermost|synapse)`)"
+      - "traefik.http.routers.frontend-person-unfurl.priority=100"
+      - "traefik.http.routers.frontend-person-unfurl.entrypoints=websecure"
+      - "traefik.http.routers.frontend-person-unfurl.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-person-unfurl.middlewares=person-unfurl-path,rate-limit@file,compress@file"
+      - "traefik.http.routers.frontend-person-unfurl.service=gateway"
+      - "traefik.http.middlewares.person-unfurl-path.replacepathregex.regex=^/(?:u/|@)([A-Za-z0-9_-]{1,64})/?$$"
+      - "traefik.http.middlewares.person-unfurl-path.replacepathregex.replacement=/api/v1/people/$$1/og"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
 
   # Static Files Service - Nginx pour servir les fichiers uploadés sur static.${DOMAIN}
