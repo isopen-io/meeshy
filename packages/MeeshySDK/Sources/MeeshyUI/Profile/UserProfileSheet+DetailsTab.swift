@@ -24,13 +24,19 @@ extension UserProfileSheet {
 
     // MARK: - En commun (l'ancien onglet Conversations)
 
+    /// Nos conversations, puis nos communautés, amis, médias et notre histoire (#19377, planche `Autre-Commun`).
+    /// Bloqué dans un sens ou l'autre, ou sa propre fiche : seulement les conversations, comme avant.
     private var commonSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            MeeshySectionHeader(
-                title: String(localized: "profile.relation.section.common", defaultValue: "En commun", bundle: .module),
-                count: effectiveConversations.isEmpty ? nil : effectiveConversations.count
-            )
-            .padding(.horizontal, MeeshySpacing.xl)
+        ProfileInCommonSection(
+            userId: isCurrentUser || isInteractionDisabled ? nil : resolvedUserId,
+            source: dependencies.inCommon,
+            conversationCount: effectiveConversations.count,
+            isLoadingConversations: effectiveIsLoadingConversations,
+            tint: accentTint,
+            accentHex: resolvedAccent,
+            onFirstMessage: isCurrentUser || isInteractionDisabled ? nil : { openConversation() },
+            onOpenImage: { url in openFullscreenImage(url: url, fallback: "") }
+        ) {
             conversationsTab
         }
     }

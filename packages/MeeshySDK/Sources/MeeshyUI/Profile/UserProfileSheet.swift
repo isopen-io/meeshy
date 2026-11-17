@@ -164,6 +164,10 @@ public struct UserProfileSheet: View {
         internalConversations
     }
 
+    var effectiveIsLoadingConversations: Bool {
+        internalIsLoadingConversations
+    }
+
     public var body: some View {
         ZStack {
             switch phase {

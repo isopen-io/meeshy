@@ -569,8 +569,6 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
-  // « En commun » (#19200) : le serveur sert les communautés, amis et médias en commun avant le tour client (#19234).
-  'UsersEndpoint.byIdInCommon': { issue: 19234, reason: 'GET /users/:id/in-common — la vue « En commun » de la fiche d’un autre (iOS)' },
   // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
   'ConversationsEndpoint.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (iOS)' },
   // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la
@@ -597,9 +595,6 @@ const PENDING_CLIENT_ENTRIES = {
   // le SDK et l'app iOS (§ 10, lots 3 et 4), portés par #18906.
   'E2EeEndpoint.devicesSelfVerifications': { issue: 18906, reason: 'POST|GET /e2ee/devices/self/verifications — déposer et relire les messages de comparaison, appelés par le SDK iOS de la confirmation par code' },
   'E2EeEndpoint.devicesSelfVerificationsAck': { issue: 18906, reason: 'POST /e2ee/devices/self/verifications/ack — accuser les messages de comparaison lus, même lot iOS' },
-  // « En commun » (serveur #19200) : la passerelle sert nos amis, communautés et médias en commun avant les clients,
-  // que #19234 branchera sur la fiche d'un autre.
-  'UsersEndpoint.byIdInCommon': { issue: 19234, reason: 'GET /users/:id/in-common — « En commun » de la fiche d’un autre, iOS' },
 };
 
 const BASELINE_DEAD_ENTRIES = 328;

@@ -41,6 +41,9 @@ public actor CacheCoordinator {
     public let communityLinks: GRDBCacheStore<String, CommunityLink>
     /// Mes adresses (#18871) : la face Liens se peint depuis elles avant le réseau. Chiffré : elles disent où me trouver.
     public let profileAddresses: GRDBCacheStore<String, ProfileAddress>
+    /// « En commun » (#19377) : ce que je partage avec une personne, clé = son userId. La fiche d'un autre se peint
+    /// depuis lui avant le réseau. Chiffré : il dit qui sont nos amis communs et quels médias nous avons échangés.
+    public let profileInCommon: GRDBCacheStore<String, UserInCommon>
     /// User communities list (the ones the current user is a member of).
     /// Single key "list" stores the full ordered set; the conversation list
     /// pulls from here cache-first so the Communities section renders
@@ -171,6 +174,7 @@ public actor CacheCoordinator {
         self.trackingLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "tlinks")
         self.communityLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "clinks")
         self.profileAddresses = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "paddr", encrypted: true)
+        self.profileInCommon = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "pcommon", encrypted: true)
         self.communities = GRDBCacheStore(policy: .communities, db: db, namespace: "communities")
         self.drafts = GRDBCacheStore(policy: .drafts, db: db, namespace: "drafts")
         self.callTranscripts = GRDBCacheStore(policy: .callTranscripts, db: db, namespace: "calltx", encrypted: true)
