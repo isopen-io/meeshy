@@ -28,22 +28,22 @@ class PushSummaryNotifierTest {
     }
 
     @Test
-    fun `le recapitulatif porte le groupe, le drapeau de resume et le badge`() {
-        PushSummaryNotifier(context).post("conversation:c1", NotificationChannelIds.CHANNEL_MESSAGES, badge = 3)
+    fun `le recapitulatif porte le groupe, le drapeau de resume et aucun nombre`() {
+        PushSummaryNotifier(context).post("conversation:c1", NotificationChannelIds.CHANNEL_MESSAGES)
 
         val posted = manager.activeNotifications.single()
         assertThat(posted.id).isEqualTo(PushGrouping.summaryNotificationId("conversation:c1"))
         assertThat(posted.notification.group).isEqualTo("conversation:c1")
         assertThat(posted.notification.flags and Notification.FLAG_GROUP_SUMMARY).isNotEqualTo(0)
-        assertThat(posted.notification.number).isEqualTo(3)
+        assertThat(posted.notification.number).isEqualTo(0)
     }
 
     @Test
     fun `un recapitulatif repete remplace le precedent`() {
         val notifier = PushSummaryNotifier(context)
 
-        notifier.post("post:p1", NotificationChannelIds.CHANNEL_SOCIAL, badge = null)
-        notifier.post("post:p1", NotificationChannelIds.CHANNEL_SOCIAL, badge = null)
+        notifier.post("post:p1", NotificationChannelIds.CHANNEL_SOCIAL)
+        notifier.post("post:p1", NotificationChannelIds.CHANNEL_SOCIAL)
 
         assertThat(manager.activeNotifications).hasLength(1)
     }
