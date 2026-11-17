@@ -214,15 +214,6 @@ export function conversationsQuery(deps: ConversationsDeps) {
 }
 
 /**
- * `conversationQuery` — pose `initialData` depuis la liste EN CACHE
- * (`findCachedConversation`) et `initialDataUpdatedAt` depuis l'état de cette
- * même requête : la case du fil se peint depuis la liste, sans requête si la
- * liste est FRAÎCHE (TanStack respecte `staleTime` sur `initialDataUpdatedAt`).
- * `queryClient` est OPTIONNEL : la fabrique reste appelable sans lui (témoin,
- * ou un appelant qui n'a pas encore de liste en cache), simplement sans ce
- * raccourci.
- */
-/**
  * `findCachedConversation` — parcourt les PAGES du cache de liste ; `undefined`
  * si absente, si le cache est vide, ou si le cache porte encore l'ANCIENNE
  * forme (`readonly Conversation[]`, avant #6195) — jamais une exception : un
@@ -420,16 +411,29 @@ export function createGroupConversation(
   });
 }
 
+/**
+ * `conversationQuery` — la case d'un fil. Elle se PEINT depuis la ligne de la
+ * liste en cache (`findCachedConversation`, posée en `initialData`) : aucun
+ * squelette à l'ouverture. Mais la ligne n'est qu'un SOUS-ENSEMBLE de la fiche
+ * (la passerelle y sert cinq participants, cent dans la fiche) : elle ne
+ * certifie jamais sa fraîcheur (#18914, WEB-08 et M2). L'amorce est donc datée
+ * de ZÉRO — périmée dès sa naissance — et l'ouverture relit la fiche en fond.
+ * Sans date, TanStack la daterait de MAINTENANT (`initialDataUpdatedAt ??
+ * Date.now()`) : fraîche, jamais relue. Datée de la LISTE, comme avant ce lot,
+ * une liste lue il y a moins de 30 s — ou rajeunie par le temps réel —
+ * dispensait la fiche d'être lue, et le fil tournait sur les participants de
+ * la ligne. Une fiche déjà en cache garde SA date : seule l'amorce est datée
+ * de zéro. `queryClient` est OPTIONNEL : la fabrique reste appelable sans lui
+ * (témoin, ou un appelant qui n'a pas encore de liste en cache), sans amorce.
+ */
 export function conversationQuery(deps: ConversationsDeps, id: string, init?: { readonly queryClient?: QueryClient }) {
   const found = init?.queryClient === undefined ? undefined : findCachedConversation(init.queryClient, id);
-  const dataUpdatedAt = init?.queryClient?.getQueryState(CONVERSATIONS_QUERY_KEY)?.dataUpdatedAt;
 
   return {
     queryKey: conversationQueryKey(id),
     queryFn: async ({ signal }: { readonly signal?: AbortSignal }) =>
       unwrap(await loadConversation({ ...deps, id, ...(signal !== undefined ? { signal } : {}) })),
     select: decodeConversation,
-    ...(found !== undefined ? { initialData: found } : {}),
-    ...(dataUpdatedAt !== undefined ? { initialDataUpdatedAt: dataUpdatedAt } : {}),
+    ...(found === undefined ? {} : { initialData: found, initialDataUpdatedAt: 0 }),
   };
 }
