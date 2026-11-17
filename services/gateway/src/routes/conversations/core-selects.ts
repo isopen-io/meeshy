@@ -83,6 +83,12 @@ export const conversationUserPreferencesSelect = {
   // `orderInCategory` faisaient retomber un store vierge sur « mentions
   // seulement » coupé et un ordre manuel perdu. DÉCLARÉS dans le schema wire
   // (`userPreferences`, api-schemas/conversation.ts).
+  //
+  // `version` n'arbitre pas TOUTE la ligne : `orderInCategory` (un
+  // réordonnancement ne la fait pas monter, `reorderConversationPreferences`) et
+  // `isArchived` de Global servie à un mineur (recouvert à la lecture,
+  // `servedListRowRestriction`) lui échappent — pour eux, la relecture REST
+  // fait foi, quelle que soit la version.
   version: true,
   mentionsOnly: true,
   orderInCategory: true,
