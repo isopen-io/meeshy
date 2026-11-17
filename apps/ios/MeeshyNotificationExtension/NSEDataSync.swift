@@ -250,26 +250,6 @@ enum NSEDataSync {
         }
     }
 
-    /// Called by the main app (post-detail open + foreground resume) to consume
-    /// posts prefetched by the NSE. Returns the raw `APIPost` JSON blobs; the
-    /// caller decodes with the SDK and merges into the feed cache.
-    static func consumePendingPosts() -> [Data] {
-        guard let dir = pendingPostsDirectory() else { return [] }
-
-        let fm = FileManager.default
-        guard let files = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else {
-            return []
-        }
-
-        var results: [Data] = []
-        for file in files where file.pathExtension == "json" {
-            guard let data = try? Data(contentsOf: file) else { continue }
-            results.append(data)
-            nseRemoveFile(file, context: "consumed staged post")
-        }
-        return results
-    }
-
     // MARK: - Trusted base URL resolution
     //
     // The NSE never trusts a URL coming from the push payload (see security

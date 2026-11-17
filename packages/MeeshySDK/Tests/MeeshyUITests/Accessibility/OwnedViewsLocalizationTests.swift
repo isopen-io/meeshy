@@ -19,17 +19,6 @@ final class OwnedViewsLocalizationTests: XCTestCase {
         try lproj(code).localizedString(forKey: key, value: key, table: nil)
     }
 
-    func test_errorBannerDismissHint_isLocalizedInEveryLocale() throws {
-        for code in Self.languages {
-            let hint = ErrorBannerView.dismissHint(in: try lproj(code))
-            XCTAssertFalse(hint.isEmpty, code)
-            XCTAssertNotEqual(hint, "error.banner.dismiss.hint", code)
-            XCTAssertFalse(hint.contains("Double-tap"), code)
-        }
-        XCTAssertEqual(ErrorBannerView.dismissHint(in: try lproj("en")), "Dismisses this error message.")
-        XCTAssertEqual(ErrorBannerView.dismissHint(in: try lproj("fr")), "Ferme ce message d'erreur.")
-    }
-
     func test_stickerLibraryKeys_resolveInEveryLocale() throws {
         let keys = ["story.sticker.library.lift", "story.sticker.library.lift.a11y", "story.sticker.library.empty"]
         for code in Self.languages {

@@ -21,7 +21,7 @@ import javax.inject.Singleton
 interface ConversationEncryptionProviding {
     suspend fun status(conversationId: String): NetworkResult<ConversationEncryptionStatus>
 
-    /** Active un mode AU REPOS ; le bout en bout n'est pas activable depuis ce téléphone (#13015). */
+    /** Active un mode (au repos, ou de bout en bout : l'Android est un appareil chiffré depuis #14591). */
     suspend fun enable(conversationId: String, mode: ConversationEncryptionModeChoice): NetworkResult<ConversationEncryptionStatus>
 
     /** Désactive le chiffrement AU REPOS. Le bout en bout ne se désactive jamais (#12949). */
@@ -89,7 +89,7 @@ class ConversationEncryptionRepository @Inject constructor(
         /** 400 de la passerelle : le mode visé est déjà celui de la conversation. */
         const val ALREADY_ENABLED: String = "ENCRYPTION_ALREADY_ENABLED"
 
-        /** Refus local : ce téléphone n'est pas encore un appareil chiffré (#13015). */
+        /** Refus local d'un mode que ce téléphone n'offre pas ; plus atteint depuis que le bout en bout est offert (#14591). */
         const val NOT_AVAILABLE_ON_THIS_PHONE: String = "E2EE_NOT_AVAILABLE_ON_THIS_PHONE"
 
         private val MALFORMED = ApiError(message = "Réponse du régime de chiffrement invalide", code = "MALFORMED_RESPONSE")

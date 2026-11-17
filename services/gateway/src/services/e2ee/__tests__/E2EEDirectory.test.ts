@@ -96,7 +96,7 @@ describe("l'annuaire E2EE par appareil", () => {
       const first = await enroll(directory, ALICE, SESSION_1);
       const again = await directory.enrollDevice({ userId: ALICE, sessionId: SESSION_2, request: enrollmentOf(first.keys, ALICE, NOW.getTime() + 1) });
 
-      expect(again).toEqual({ deviceId: first.deviceId, created: false });
+      expect(again).toEqual({ deviceId: first.deviceId, created: false, returning: false });
       expect(store.collections.E2EEDevice.rows).toHaveLength(1);
       expect(store.collections.E2EEDevice.rows[0].sessionId).toBe(SESSION_2);
     });

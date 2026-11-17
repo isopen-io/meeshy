@@ -97,6 +97,22 @@ extension StoryCommentThread {
         guard !isExpanded else {
             return String(localized: "common.dismiss", defaultValue: "Masquer", bundle: bundle, locale: locale)
         }
-        return LoadMoreRepliesCell.labelText(remaining: remaining, bundle: bundle, locale: locale)
+        return loadMoreRepliesLabel(remaining: remaining, bundle: bundle, locale: locale)
+    }
+
+    /// Pluriel résolu explicitement : le markup AGA inline (`^[…](inflect: true)`)
+    /// dans un `defaultValue` sans entrée String Catalog fuit en brut sur iOS 18.x.
+    /// `bundle` et `locale` vont par PAIRE, comme `PostStatAccessibility` : la
+    /// table de traduction et la règle de pluriel — sans eux, un témoin juge la
+    /// langue du SIMULATEUR plutôt que la loi.
+    static func loadMoreRepliesLabel(remaining: Int,
+                                     bundle: Bundle = .main,
+                                     locale: Locale = .current) -> String {
+        String(
+            localized: "comments.load-more-replies",
+            defaultValue: "Voir \(remaining) réponses de plus",
+            bundle: bundle,
+            locale: locale
+        )
     }
 }

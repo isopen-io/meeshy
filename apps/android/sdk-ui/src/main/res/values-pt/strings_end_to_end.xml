@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="bubble_message_end_to_end">Criptografia de ponta a ponta — leia no app Meeshy no iPhone</string>
+    <string name="bubble_message_end_to_end">Mensagem encriptada de ponta a ponta, ainda não está neste dispositivo</string>
+    <string name="bubble_message_end_to_end_unreadable">Esta mensagem encriptada não pôde ser aberta neste dispositivo</string>
+    <string name="bubble_message_end_to_end_update">Atualize o Meeshy para ler esta mensagem encriptada</string>
+    <string name="bubble_message_end_to_end_other_device">Escrita noutro dos seus dispositivos, ainda não aprovado aqui</string>
+    <string name="bubble_failed_e2ee_device_limit">16 dispositivos encriptados atingidos: remova um em Os meus dispositivos encriptados</string>
 </resources>

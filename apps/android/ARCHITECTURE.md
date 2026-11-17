@@ -41,11 +41,11 @@ not a module-level monolith.
                           │  :app   │  Application, MainActivity, NavHost,
                           └────┬────┘  Hilt assembly, adaptive Scaffold,
                                │        FCM service, widgets, share-target
-        ┌──────────────────────┼──────────────────────┐
-   ┌────▼─────┐  …14×    ┌──────▼─────┐         ┌──────▼──────┐
-   │:feature: │          │ :feature:  │         │:core:       │
-   │  auth    │          │   chat     │         │ navigation  │ route contracts
-   └────┬─────┘          └──────┬─────┘         └─────────────┘
+        ┌──────────────────────┤
+   ┌────▼─────┐  …14×    ┌──────▼─────┐
+   │:feature: │          │ :feature:  │
+   │  auth    │          │   chat     │
+   └────┬─────┘          └──────┬─────┘
         └───────────┬───────────┘
               ┌─────▼──────┐      ┌────────────┐
               │  :sdk-ui   │─────▶│  :sdk-core │  repositories, domain/use-cases,
@@ -89,8 +89,9 @@ not a module-level monolith.
   `explicitApi()`, publishable, no Compose.
 - **`:sdk-ui`** — the Compose **design system** + reusable UI (charte graphique,
   primitives, the Message Bubble family). `explicitApi()`.
-- **`:core:navigation`** — type-safe route contracts shared across features
-  (avoids an `:app`-recompile bottleneck — review §6.2).
+- Navigation has no module of its own: the routes and the graphs live in `:app`
+  (`navigation/Routes.kt`, `NavBackChrome`, `navigation/graph/`); the planned
+  `:core:navigation` was never populated and was removed (#18901).
 - **`:feature:*`** — one module per domain: `auth`, `conversations`, `chat`,
   `feed`, `stories`, `calls`, `communities`, `contacts`, `profile`, `settings`,
   `notifications`, `search`, `links`, `media`.
@@ -100,7 +101,7 @@ not a module-level monolith.
   generation (run in CI — §17).
 
 **Dependency rules** (enforced by a `build-logic/` convention plugin):
-1. `:feature:*` → `:sdk-core`, `:sdk-ui`, `:core:navigation`, `:core:common`.
+1. `:feature:*` → `:sdk-core`, `:sdk-ui`, `:core:common`.
    **Never feature → feature.**
 2. `:sdk-core` → `:core:{network,database,datastore,crypto,common}`.
    `:sdk-ui` → `:sdk-core`. `:core:crypto` → `:core:{database,common}` only.
@@ -345,8 +346,9 @@ on media-URL resolution retained.
 ## 9. Navigation & adaptive layout
 
 - **Single Activity**, Navigation-Compose, **type-safe `@Serializable` routes**;
-  each `:feature:*` contributes a nav sub-graph; cross-feature contracts in
-  `:core:navigation`.
+  each `:feature:*` contributes a nav sub-graph, registered by `:app`
+  (`navigation/graph/`); cross-feature contracts are `:sdk-core` interfaces
+  bound by Hilt (`CallLauncher`) or `CompositionLocal`s provided by `:app`.
 - **Overlays** (feed, radial menu, call pill, toasts, banners) in a Compose
   overlay layer (`Box` + `zIndex`) above the `NavHost`.
 - **Adaptive (G5), first-class from day one.** `:app` hosts a

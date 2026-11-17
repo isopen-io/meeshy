@@ -502,7 +502,7 @@ Transposition Android : struct immuable + replacing -> data class + copy ; Equat
 Six pages poussées dans la pile (jamais en feuille) depuis Progression, le profil ou un guide : Ligue, Saison, Vitrine, Atlas, Prestige, Réglages (enum GamePage, noms d'analytics `Game.League`…). GamePageShell = en-tête dynamique commun (grand titre -> barre compacte au défilement). GameWave2Host lit la progression cache-first (cache d'abord, réseau en silence), affiche un bandeau « hors ligne » si besoin, un bandeau d'erreur avec relance, un squelette SEULEMENT sur cache vide, et « cette partie du jeu n'est pas disponible » devant un serveur qui ne sert pas le bloc `game`. Briques communes : choix « qui voit » (GameVisibilityPickerView : trois pastilles Tout le monde / Amis / Moi seul, suspendu pendant l'enregistrement mais pas désactivé pour garder le focus lecteur d'écran, empilées au-delà du texte XL), GameProgressBar (le texte voisin dit l'info), GameOfflineNote, GameQuietButton (44 pt, destructif en rouge), GameSwitchRow, aiguilleur GamePageView.
 
 Écarts :
-- Routes de navigation game/{page}?focus=… dans :core:navigation (six destinations) et points d'entrée depuis Progression, profil et cartes du guide
+- Routes de navigation game/{page}?focus=… dans :app (`navigation/graph/GameDestinations.kt`, six destinations) et points d'entrée depuis Progression, profil et cartes du guide
 - Scaffold de page avec en-tête collapsible (réutiliser CollapsibleHeader de sdk-ui/chrome) et titre grand -> compact
 - Hôte cache-first : lecture progression (ViewModel partagé), ProgressionNotice offline/erreur avec relance, squelette (MeeshySkeletonBox) sur cache vide, état « non disponible »
 - Composables GameVisibilityPicker (pills 44 dp, sélection via semantics selected, bascule colonne si fontScale > XL), GameProgressBar, GameOfflineNote, GameQuietButton, GameSwitchRow (>= 44 dp)
@@ -511,7 +511,7 @@ Six pages poussées dans la pile (jamais en feuille) depuis Progression, le prof
 
 Rendu : Cartes (GameCard) avec spacing xl entre blocs, titre bodySize bold en heading, notes footnote en couleur atténuée ; cibles >= 44 dp (>= 48 dp côté toucher Android) ; pills pleines teintées brandPrimary 12-16 % + liseré quand sélectionnées.
 
-Transposition Android : NavigationStack + Route.gamePage -> NavHost destinations dans :core:navigation ; GamePageScaffold -> CollapsibleHeader/MeeshyTopBar ; Toggle -> Switch Material ; accessibilityIdentifier -> Modifier.testTag.
+Transposition Android : NavigationStack + Route.gamePage -> NavHost destinations dans :app (`navigation/graph/GameDestinations.kt`) ; GamePageScaffold -> CollapsibleHeader/MeeshyTopBar ; Toggle -> Switch Material ; accessibilityIdentifier -> Modifier.testTag.
 
 <details><summary>Sources iOS (2)</summary>
 
@@ -1688,7 +1688,7 @@ Lecture d'archives par lien (#9947, #10018) : GET /me/game/seasons/:number et GE
 - Modèles GameSeasonArchive / GameSeasonProgressArchive / GameLeagueWeekArchive / GameLeagueWeekResult / GameArchiveStatus / GameArchiveRetention (clés optionnelles encodées null)
 - GameArchiveModel (ViewModel) : cache disque par saison et par semaine, état shown (current, upcoming, opened, past, skeleton, failed), onReconnect qui relit le bloc game
 - Écrans GameSeasonFocusScreen, GameSeasonArchiveView, GameSeasonRecord, GameLeagueFocusScreen, GameLeagueWeekArchiveCard
-- Deep link `meeshy://game/season/<n>` et `.../league/week/<weekKey>` dans :core:navigation (GamePageFocus)
+- Deep link `meeshy://game/season/<n>` et `.../league/week/<weekKey>` dans :core:model (`GamePageFocus`, `game/GameNavigationMap.kt`) et :app (`navigation/graph/GameDestinations.kt`)
 - Observation du retour du réseau (ConnectivityManager callback) pour relire
 
 Rendu : Carte palmarès : titre « Saison n (terminée) », thème brandPrimary semibold, notes de dates, barre étapes/40, coupe en vert si gagnée.

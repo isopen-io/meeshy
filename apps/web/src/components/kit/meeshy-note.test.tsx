@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { kitMount } from '@/test-support/kit-mount';
+import { kitMount, spokenText } from '@/test-support/kit-mount';
 
 import { MeeshyNote, MeeshyNoteList, meeshyNoteRecipe } from './meeshy-note';
 
@@ -95,22 +95,58 @@ describe('MeeshyNote — le composant', () => {
     expect(() => mount(<MeeshyNote text="" />)).toThrow();
   });
 
+  const announced = (container: HTMLElement): string | null => container.querySelector('[data-kit-note-announce]')?.textContent ?? null;
+
   test('un warn est dit une fois, poliment, sans voler le focus ; les autres jamais', () => {
     const warn = mount(<MeeshyNote text="Réseau instable" kind="warn" />);
-    const node = warn.querySelector('[data-kit-note]');
-    expect(node?.getAttribute('role')).toBe('status');
-    expect(node?.getAttribute('aria-live')).toBe('polite');
-    expect(node?.getAttribute('tabindex')).toBeNull();
+    const region = warn.querySelector('[data-kit-note-announce]');
+    expect(region?.getAttribute('role')).toBe('status');
+    expect(region?.getAttribute('aria-live')).toBe('polite');
+    expect(announced(warn)).toBe('Réseau instable');
+    expect(warn.querySelector('[data-kit-note]')?.getAttribute('role')).toBeNull();
+    expect(warn.querySelector('[tabindex]')).toBeNull();
     const info = mount(<MeeshyNote text="Suivi" kind="info" />);
-    expect(info.querySelector('[data-kit-note]')?.getAttribute('role')).toBeNull();
-    expect(info.querySelector('[data-kit-note]')?.getAttribute('aria-live')).toBeNull();
+    expect(announced(info)).toBe('');
   });
 
-  test('une phrase qui change sans changer de sens ne se redit pas : la région reste la même', () => {
+  test('une phrase qui change sans changer de sens ne se redit pas', () => {
     const container = mount(<MeeshyNote text="Réseau instable" kind="warn" />);
-    const before = container.querySelector('[data-kit-note]');
     render(<MeeshyNote text="Réseau très instable" kind="warn" />);
-    expect(container.querySelector('[data-kit-note]')).toBe(before);
+    expect(announced(container)).toBe('Réseau instable');
+    expect(container.querySelector('.kit-note__phrase')?.textContent).toBe('Réseau très instable');
+  });
+
+  test('seul le passage à warn est dit ; le retour au calme se tait', () => {
+    const container = mount(<MeeshyNote text="Tout va bien" kind="info" />);
+    expect(announced(container)).toBe('');
+    render(<MeeshyNote text="Réseau instable" kind="warn" />);
+    expect(announced(container)).toBe('Réseau instable');
+    render(<MeeshyNote text="Réseau rétabli" kind="ok" />);
+    expect(announced(container)).toBe('');
+  });
+
+  test('la région d’annonce existe vide avant l’annonce : un lecteur ne dit pas une région née pleine', () => {
+    const observer = new MutationObserver(() => {});
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    const container = mount(<MeeshyNote text="Réseau instable" kind="warn" />);
+    const records = observer.takeRecords();
+    observer.disconnect();
+    const region = container.querySelector('[data-kit-note-announce]');
+    expect(region).not.toBeNull();
+    const filledLater = records.some((record) => (record.target === region && record.addedNodes.length > 0) || (record.type === 'characterData' && region?.contains(record.target) === true));
+    expect(filledLater).toBe(true);
+  });
+
+  test('label : la voix lit le label à la place de la phrase visible, sans aria-label sur un div', () => {
+    const container = mount(<MeeshyNote text="600 m" label="Léo te verra dans un rayon d’environ 600 mètres" />);
+    const node = container.querySelector('[data-kit-note]');
+    expect(node?.getAttribute('aria-label')).toBeNull();
+    expect(node === null ? '' : spokenText(node)).toBe('Léo te verra dans un rayon d’environ 600 mètres');
+  });
+
+  test('un warn porteur d’un label dit le label', () => {
+    const container = mount(<MeeshyNote text="Hors ligne" kind="warn" label="Hors ligne : tes changements partiront au retour du réseau" />);
+    expect(announced(container)).toBe('Hors ligne : tes changements partiront au retour du réseau');
   });
 
   test('l’action de fin reste un bouton à part, nommé', () => {

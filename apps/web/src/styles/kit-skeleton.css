@@ -1,0 +1,78 @@
+/* LE SQUELETTE (K38, #18875) — un aplat aux mesures du composant attendu, un reflet qui
+   traverse. Ni texte, ni icône, ni flou, ni ombre. Les mesures sont posées en propriétés
+   `--kit-skeleton-*` par `meeshy-skeleton-recipe.ts`. Seule `transform` s'anime : le reflet
+   est une bande de 40 % qui traverse en 1,6 s, calée sur une horloge commune. */
+@layer components {
+  .kit-skeleton {
+    position: relative;
+    display: block;
+    box-sizing: border-box;
+    inline-size: var(--kit-skeleton-w);
+    max-inline-size: 100%;
+    block-size: var(--kit-skeleton-h);
+    aspect-ratio: var(--kit-skeleton-aspect);
+    border-radius: var(--kit-skeleton-radius);
+    background-color: var(--color-ios-fill);
+    overflow: hidden;
+    isolation: isolate;
+    animation: kit-skeleton-appear 120ms ease-out var(--kit-skeleton-appear, 150ms) both;
+  }
+
+  .kit-skeleton[data-shape='ticket'] {
+    border: 1.5px dashed var(--color-ios-hairline);
+    background-color: transparent;
+  }
+
+  .kit-skeleton::after {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: 40%;
+    background-image: linear-gradient(100deg, transparent, color-mix(in srgb, var(--color-ios-ink-3) 22%, transparent), transparent);
+    transform: translateX(-100%);
+    animation: kit-skeleton-glint 1600ms linear infinite;
+    animation-delay: var(--kit-skeleton-delay, 0ms);
+  }
+
+  .kit-skeleton:dir(rtl)::after {
+    animation-name: kit-skeleton-glint-rtl;
+  }
+}
+
+@keyframes kit-skeleton-glint {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@keyframes kit-skeleton-glint-rtl {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(-250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-skeleton::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+@keyframes kit-skeleton-appear {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}

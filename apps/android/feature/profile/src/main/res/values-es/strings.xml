@@ -1,16 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="profile_change_avatar">Cambiar foto</string>
     <string name="profile_change_banner">Cambiar foto de portada</string>
     <string name="profile_image_error_empty">Ese archivo está vacío. Elige otra foto.</string>
     <string name="profile_image_error_type">Aquí solo se pueden usar imágenes.</string>
     <string name="profile_image_error_too_large">Esa imagen es demasiado grande. Elige una más pequeña.</string>
     <string name="profile_image_error_upload">Error al subir. Comprueba tu conexión e inténtalo de nuevo.</string>
-    <string name="profile_member_since">Miembro desde %1$s</string>
-    <string name="profile_last_seen">Visto %1$s</string>
     <string name="profile_completion">Perfil %1$d%% completo</string>
-    <string name="profile_detail_regional_language">Idioma secundario</string>
-    <string name="profile_detail_timezone">Zona horaria</string>
     <string name="profile_stat_member_days">Días como miembro</string>
     <string name="profile_achievements_title">Logros</string>
     <string name="profile_achievements_unlocked">%1$d de %2$d desbloqueados</string>

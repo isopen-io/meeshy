@@ -2,6 +2,7 @@ package me.meeshy.sdk.e2ee.libsignal
 
 import javax.inject.Inject
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import me.meeshy.core.e2ee.device.E2eeDirectoryClient
@@ -46,8 +47,9 @@ internal class RetrofitE2eeDirectoryClient @Inject constructor(api: MeeshyApi) :
 
     override suspend fun devices(userId: String): E2eeUserDevices = data(routes.devices(userId), E2eeUserDevices.serializer())
 
+    /** Une page du rattrapage, décodée enveloppe par enveloppe : une enveloppe mal formée ne bloque pas les autres (#18971). */
     override suspend fun envelopes(after: String?, limit: Int?): E2eeEnvelopePage =
-        data(routes.envelopes(after, limit), E2eeEnvelopePage.serializer())
+        E2eeEnvelopePage.decodeServed(dataElement(routes.envelopes(after, limit)))
 
     override suspend fun acknowledge(envelopeIds: List<String>): E2eeAckResult =
         data(routes.acknowledge(body(E2eeAckRequest.serializer(), E2eeAckRequest(envelopeIds))), E2eeAckResult.serializer())
@@ -63,11 +65,13 @@ internal class RetrofitE2eeDirectoryClient @Inject constructor(api: MeeshyApi) :
     private fun <T> body(serializer: KSerializer<T>, value: T): RequestBody =
         E2eeJson.encodeToString(serializer, value).toRequestBody(JSON)
 
-    private fun <T> data(response: Response<ResponseBody>, serializer: KSerializer<T>): T {
+    private fun <T> data(response: Response<ResponseBody>, serializer: KSerializer<T>): T =
+        E2eeJson.decodeFromJsonElement(serializer, dataElement(response))
+
+    private fun dataElement(response: Response<ResponseBody>): JsonElement {
         val raw = successBody(response)
         val envelope = E2eeJson.parseToJsonElement(raw) as? JsonObject ?: throw E2eeRemoteException("MALFORMED_RESPONSE", response.code())
-        val data = envelope["data"] ?: throw E2eeRemoteException("MISSING_DATA", response.code())
-        return E2eeJson.decodeFromJsonElement(serializer, data)
+        return envelope["data"] ?: throw E2eeRemoteException("MISSING_DATA", response.code())
     }
 
     private fun successBody(response: Response<ResponseBody>): String {

@@ -320,7 +320,6 @@ extension MeeshyComposerHost {
             if id == nil { settleTextSceneAfterEditing() }
         }
     }
-    static let descriptionLayerHeaderClearance: CGFloat = 76
 
     /// **La zone de saisie de la description — en BAS, la scène au-dessus**
     /// (#4361, directive porteur 2026-08-30).

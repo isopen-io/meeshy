@@ -131,6 +131,8 @@ model User {
   city                      String?
   /// Cercle (RelationLevel) à partir duquel la ville se lit ; null = la personne seule.
   cityCircle                String?
+  /// Adresses personnelles publiées sur la fiche (#18863).
+  profileAddresses          ProfileAddress[]
   email                     String   @unique
   phoneNumber               String?
   /// Code de parrainage INTRINSÈQUE au compte — distinct d'un AffiliateToken
@@ -2653,6 +2655,9 @@ model TrackingLink {
   originalUrl    String // URL originale complète
   shortUrl       String // URL courte générée (meeshy.me/l/<token>)
   createdBy      String?   @db.ObjectId // Utilisateur qui a créé le lien (null si anonyme)
+  /// Lien DÉDIÉ à une adresse de fiche (`ProfileAddress.id`, #18863) : jamais réutilisé par un autre
+  /// contenu, résolu à la seule audience de l'adresse. Absent ou null = lien ordinaire.
+  addressId      String?   @db.ObjectId
   conversationId String?   @db.ObjectId // Conversation où le lien a été partagé
   messageId      String?   @db.ObjectId // Message contenant le lien
   totalClicks    Int       @default(0) // Nombre total de clics
@@ -2665,6 +2670,29 @@ model TrackingLink {
 
   clicks  TrackingLinkClick[]
   creator User?               @relation("TrackingLinkCreator", fields: [createdBy], references: [id])
+}
+
+/// Adresse personnelle publiée sur la fiche (#18863) : une déclaration de son propriétaire,
+/// servie au seul cercle (`RelationLevel`) qu'il a choisi. Le compteur de clics n'est pas une
+/// colonne : il se lit sur le `TrackingLink` désigné par `trackingToken`.
+model ProfileAddress {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  title         String
+  url           String
+  glyph         String   @default("site")
+  /// Cercle à partir duquel l'adresse se lit ; une valeur illisible ferme.
+  circle        String
+  position      Int      @default(0)
+  isShown       Boolean  @default(true)
+  /// Jeton du lien de suivi (`/l/<token>`) ; null = clics non comptés.
+  trackingToken String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, position])
 }
 
 /// Clic sur un lien de tracking
@@ -3680,6 +3708,12 @@ model E2EEDevice {
   platform String
   label    String?
 
+  /// Ce que l'appareil sait faire, tel qu'il l'a déclaré à l'enrôlement ou à la mise à jour
+  /// de ses clés (#19155, spec 2026-11-17 § 5.1) : `device-trust-v1` = il sait confirmer un
+  /// appareil par code. Au plus 8 chaînes de 32 caractères. Un document écrit avant ce champ
+  /// ne le porte pas : il se LIT comme `[]` (`E2EEDirectory.ownDevices`, lecture défensive).
+  capabilities String[] @default([])
+
   createdAt             DateTime  @default(now())
   lastSeenAt            DateTime  @default(now())
   signedPreKeyRotatedAt DateTime  @default(now())
@@ -3755,6 +3789,39 @@ model E2EEOneTimePreKey {
 
   @@unique([userId, deviceId, registrationId, kind, keyId])
   @@index([userId, deviceId, registrationId, kind, usedAt])
+}
+
+/// Un message de COMPARAISON (confirmation d'un appareil par code court, #19156, spec
+/// 2026-11-17 § 5.2), relayé EN CLAIR entre deux générations d'appareil du MÊME compte.
+/// Il ne porte que des données publiques (descripteur, engagement, aléas révélés, motif) :
+/// aucune clé privée, aucun contenu de conversation. Il vit dix minutes (`expiresAt`).
+/// L'accusé le retire de ce qui est servi (`ackedAt`) ; la ligne reste jusqu'à son échéance
+/// pour que le relais sache à qui une demande a été adressée quand elle est prise
+/// (`cancel(accepted-elsewhere)` substitué, `answeredBy*`).
+model E2EEDeviceVerificationMessage {
+  id                       String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId                   String    @db.ObjectId
+  /// La transaction : 16 octets, base64 canonique.
+  tx                       String
+  /// request | accept | reveal | method | cancel
+  kind                     String
+  /// `relayedFrom` : la génération liée à la session émettrice, vérifiée par le relais.
+  senderDeviceId           Int
+  senderRegistrationId     Int
+  recipientDeviceId        Int
+  recipientRegistrationId  Int
+  /// Seulement sur un `cancel(accepted-elsewhere)` substitué par le relais : la génération qui a répondu.
+  answeredByDeviceId       Int?
+  answeredByRegistrationId Int?
+  /// Le message validé, sérialisé tel que reçu (≤ 2 Kio).
+  body                     String
+  createdAt                DateTime  @default(now())
+  expiresAt                DateTime
+  ackedAt                  DateTime?
+
+  @@index([userId, recipientDeviceId, recipientRegistrationId, createdAt])
+  @@index([userId, tx])
+  @@index([expiresAt])
 }
 
 /// Une enveloppe libsignal opaque adressée à UN appareil destinataire. Effacée à

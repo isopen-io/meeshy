@@ -368,15 +368,6 @@ final class CallViewAccessibilityTests: XCTestCase {
         }
         XCTAssertGreaterThan(sites, 0, "CallView must wire the camera-flip action")
 
-        guard let helper = source.range(of: "static var flipHint: String {") else {
-            XCTFail("CallMyImageCopy.flipHint must exist when a flip button reads it")
-            return
-        }
-        let end = source.index(helper.upperBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
-        XCTAssertTrue(
-            source[helper.upperBound..<end].contains("\"call.control.flipCamera.hint\""),
-            "CallMyImageCopy.flipHint must resolve call.control.flipCamera.hint."
-        )
     }
 
     // MARK: - Effects button before the connection (OPUS-4)

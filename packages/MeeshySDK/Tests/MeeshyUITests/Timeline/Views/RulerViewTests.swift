@@ -31,7 +31,7 @@ final class RulerViewTests: XCTestCase {
     /// devenait illisible en bas de course. Ce test balaie la plage réelle :
     /// une future extension des bornes ne peut plus passer inaperçue.
     func test_labelsNeverOverlap_acrossTheWholeZoomRange() {
-        let range = TimelineScrubArea<EmptyView>.zoomRange
+        let range: ClosedRange<CGFloat> = 0.05...8.0
         var zoom = range.lowerBound
         while zoom <= range.upperBound {
             let interval = RulerView.tickInterval(for: zoom)
@@ -48,7 +48,7 @@ final class RulerViewTests: XCTestCase {
     /// pour des libellés larges de ~24 pt : la règle affichait
     /// « 6s10452025308540455055… ».
     func test_tickInterval_atMinimumZoom_widensEnoughToStayReadable() {
-        let interval = RulerView.tickInterval(for: TimelineScrubArea<EmptyView>.zoomRange.lowerBound)
+        let interval = RulerView.tickInterval(for: 0.05)
         XCTAssertGreaterThanOrEqual(interval, 15.0)
     }
 

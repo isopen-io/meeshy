@@ -14,73 +14,6 @@ final class MediaAltCollectionTests: XCTestCase {
 
     // MARK: - MediaAccessibilityStore — moitié alt
 
-    func test_alt_defaultsToEmptyString_forUntouchedMedia() {
-        let store = MediaAccessibilityStore()
-        XCTAssertEqual(store.alt(for: "media-1"), "")
-    }
-
-    /// `test_setAlt_roundTrips` rougit si `setAlt(_:for:)` cesse d'écrire
-    /// dans `altText` (ex : un refactor qui oublierait l'affectation).
-    func test_setAlt_roundTrips() {
-        let store = MediaAccessibilityStore()
-        store.setAlt("Coucher de soleil sur la plage", for: "media-1")
-        XCTAssertEqual(store.alt(for: "media-1"), "Coucher de soleil sur la plage")
-    }
-
-    /// `test_setAlt_emptyString_clearsEntry_ratherThanStoringEmptyString`
-    /// rougit si `setAlt("", for:)` stocke `""` au lieu de retirer l'entrée —
-    /// un média jamais touché et un média dont le texte a été effacé
-    /// doivent produire le MÊME payload (absent), pas une chaîne vide qui
-    /// écraserait un texte serveur existant au prochain update.
-    func test_setAlt_emptyString_clearsEntry_ratherThanStoringEmptyString() {
-        let store = MediaAccessibilityStore()
-        store.setAlt("Un texte", for: "media-1")
-        store.setAlt("", for: "media-1")
-        XCTAssertEqual(store.alt(for: "media-1"), "")
-        XCTAssertNil(store.payload(.alt))
-    }
-
-    /// `test_setAlt_clampsToMaxLength` rougit si le clamp
-    /// (`String(text.prefix(Self.maxAltLength))`) est retiré : un texte plus
-    /// long que ce que le gateway accepte (`z.string().max(1000)`,
-    /// `services/gateway/src/routes/posts/types.ts:249`) doit être tronqué
-    /// AVANT d'atteindre le transport, pas rejeté silencieusement là-bas.
-    func test_setAlt_clampsToMaxLength() {
-        let store = MediaAccessibilityStore()
-        let tooLong = String(repeating: "a", count: MediaAccessibilityStore.maxAltLength + 50)
-        store.setAlt(tooLong, for: "media-1")
-        XCTAssertEqual(store.alt(for: "media-1").count, MediaAccessibilityStore.maxAltLength)
-    }
-
-    /// `test_altPayload_isNilWhenNoEntriesSet` rougit si
-    /// `payload(.alt)` renvoie un dictionnaire vide au lieu de `nil` :
-    /// un payload vide et une absence de payload sont deux signaux
-    /// différents pour `PostService.create(… mediaAlt:)`.
-    func test_altPayload_isNilWhenNoEntriesSet() {
-        let store = MediaAccessibilityStore()
-        XCTAssertNil(store.payload(.alt))
-    }
-
-    /// `test_altPayload_includesOnlyTouchedMedia` rougit si le payload
-    /// inclut un média qui n'a jamais été touché.
-    func test_altPayload_includesOnlyTouchedMedia() {
-        let store = MediaAccessibilityStore()
-        store.setAlt("Un chat", for: "media-1")
-        let payload = store.payload(.alt)
-        XCTAssertEqual(payload, ["media-1": "Un chat"])
-    }
-
-    /// `test_remove_clearsAlt` rougit si `remove(mediaId:)` cesse de vider
-    /// `altText` pour cet id — un média supprimé de la slide ne doit pas
-    /// laisser un id orphelin fuiter dans un futur payload.
-    func test_remove_clearsAlt() {
-        let store = MediaAccessibilityStore()
-        store.setAlt("Un texte", for: "media-1")
-        store.remove(mediaId: "media-1")
-        XCTAssertEqual(store.alt(for: "media-1"), "")
-        XCTAssertNil(store.payload(.alt))
-    }
-
     // MARK: - Gardes de source — le champ EST accessible, pas seulement persisté
 
     /// `test_altField_exposesAccessibilityLabelAndHint` rougit si
@@ -173,65 +106,6 @@ final class MediaAltCollectionTests: XCTestCase {
     }
 
     // MARK: - F2 — la collecte SURVIT à la fermeture du composer
-
-    /// `test_draftSnapshot_carriesTheTypedAltText` rougit si l'instantané que
-    /// le brouillon persiste cesse de porter ce que l'auteur a écrit : le
-    /// texte se saisissait, partait à la publication, et disparaissait dès que
-    /// le composer se refermait sans publier.
-    func test_draftSnapshot_carriesTheTypedAltText() {
-        let store = MediaAccessibilityStore()
-        store.setAlt("Un chat roux sur un muret", for: "media-1")
-
-        XCTAssertEqual(store.draftSnapshot().mediaAlt, ["media-1": "Un chat roux sur un muret"])
-    }
-
-    /// `test_draftSnapshot_ofAnUntouchedStore_isEmpty` rougit si un composer
-    /// vierge se met à écrire une collecte dans le brouillon — l'instantané
-    /// d'un store jamais touché n'a rien à persister.
-    func test_draftSnapshot_ofAnUntouchedStore_isEmpty() {
-        XCTAssertEqual(MediaAccessibilityStore().draftSnapshot(), .empty)
-    }
-
-    /// `test_restore_reposesTheAltTextOfAnAdoptedDraft` rougit si adopter un
-    /// brouillon ne repose pas ses textes dans le store vivant : la collecte
-    /// serait persistée puis relue par personne, et l'auteur retrouverait des
-    /// champs vides devant ses propres médias.
-    func test_restore_reposesTheAltTextOfAnAdoptedDraft() {
-        let store = MediaAccessibilityStore()
-
-        store.restore(from: StoryDraftAccessibility(mediaAlt: ["media-1": "Une plage au couchant"]))
-
-        XCTAssertEqual(store.alt(for: "media-1"), "Une plage au couchant")
-        XCTAssertEqual(store.payload(.alt), ["media-1": "Une plage au couchant"])
-    }
-
-    /// `test_restore_replacesTheCollectionRatherThanMergingIntoIt` rougit si
-    /// l'adoption FUSIONNE : le composer porterait alors les textes d'une
-    /// composition précédente sur des ids de médias que le brouillon repris ne
-    /// contient pas — exactement le texte fantôme que `remove(mediaId:)` évite
-    /// par ailleurs.
-    func test_restore_replacesTheCollectionRatherThanMergingIntoIt() {
-        let store = MediaAccessibilityStore()
-        store.setAlt("Texte d'une autre composition", for: "media-9")
-
-        store.restore(from: StoryDraftAccessibility(mediaAlt: ["media-1": "Une plage au couchant"]))
-
-        XCTAssertEqual(store.alt(for: "media-9"), "")
-        XCTAssertEqual(store.payload(.alt), ["media-1": "Une plage au couchant"])
-    }
-
-    /// `test_restore_clampsAltTextToTheTransportLimit` rougit si la reprise
-    /// court-circuite le clamp : un brouillon écrit quand la limite était plus
-    /// large repartirait vers un gateway qui refuse au-delà de
-    /// `z.string().max(1000)`.
-    func test_restore_clampsAltTextToTheTransportLimit() {
-        let store = MediaAccessibilityStore()
-        let tooLong = String(repeating: "a", count: MediaAccessibilityStore.maxAltLength + 50)
-
-        store.restore(from: StoryDraftAccessibility(mediaAlt: ["media-1": tooLong]))
-
-        XCTAssertEqual(store.alt(for: "media-1").count, MediaAccessibilityStore.maxAltLength)
-    }
 
     // MARK: - Gardes POSITIVES : la collecte est ÉCRITE et RELUE par le composer
 

@@ -43,11 +43,15 @@ public class E2eeSessionCipher(
     // L'ordre des adresses DIFFÈRE entre les deux constructeurs Java de libsignal (lu au bytecode en 0.105, inchangé en 0.106.2) :
     // `SessionBuilder(store, distante, locale)` mais `SessionCipher(store, locale, distante)`.
 
-    /** PQXDH (spec § 4.1) : libsignal vérifie les signatures XEdDSA de la pré-clé signée et de la Kyber avant d'ouvrir. */
+    /**
+     * PQXDH (spec § 4.1) : libsignal vérifie les signatures XEdDSA de la pré-clé signée et de la Kyber avant d'ouvrir. La
+     * session courante, s'il y en a une, est ARCHIVÉE par libsignal, jamais effacée (#18979) : un message encore en vol sous
+     * elle s'ouvre sur cet état archivé.
+     */
     public fun startSession(bundle: E2eeDeviceBundle, userId: String) {
         val preKeyBundle = preKeyBundle(bundle)
         val remote = E2eeDeviceAddress(userId, bundle.deviceId).protocolAddress()
-        vault.write { transaction -> SessionBuilder(store(transaction), remote, ours).process(preKeyBundle) }
+        vault.write { transaction -> unwrapped { SessionBuilder(store(transaction), remote, ours).process(preKeyBundle) } }
     }
 
     /** La `registrationId` avec laquelle la session courante a été ouverte ; `null` sans session (Sesame § 3). */
@@ -65,8 +69,21 @@ public class E2eeSessionCipher(
         vault.write { transaction -> store(transaction).deleteSession(address.protocolAddress()) }
     }
 
+    /**
+     * N'envoie plus sur la session courante de l'appareil, sans rien perdre de ce qu'elle sait lire (#18979) : l'état
+     * courant rejoint les états archivés (libsignal en garde trois), où un message encore en vol s'ouvre toujours.
+     */
+    public fun archiveSession(address: E2eeDeviceAddress) {
+        vault.write { transaction ->
+            val signalStore = store(transaction)
+            val record = signalStore.loadSession(address.protocolAddress()) ?: return@write
+            record.archiveCurrentState()
+            signalStore.storeSession(address.protocolAddress(), record)
+        }
+    }
+
     public fun encrypt(plaintext: ByteArray, address: E2eeDeviceAddress): E2eeCiphertext = vault.write { transaction ->
-        val message = SessionCipher(store(transaction), ours, address.protocolAddress()).encrypt(plaintext)
+        val message = unwrapped { SessionCipher(store(transaction), ours, address.protocolAddress()).encrypt(plaintext) }
         E2eeCiphertext(message.type, message.serialize())
     }
 
@@ -74,10 +91,12 @@ public class E2eeSessionCipher(
     public fun <T> decrypt(ciphertext: E2eeCiphertext, from: E2eeDeviceAddress, persist: (ByteArray, RecordTransaction) -> T): T =
         vault.write { transaction ->
             val cipher = SessionCipher(store(transaction), ours, from.protocolAddress())
-            val plaintext = when (ciphertext.type) {
-                E2eeWire.PRE_KEY_TYPE -> cipher.decrypt(PreKeySignalMessage(ciphertext.body))
-                E2eeWire.WHISPER_TYPE -> cipher.decrypt(SignalMessage(ciphertext.body))
-                else -> throw E2eeCipherFormatException("unknown message type ${ciphertext.type}")
+            val plaintext = unwrapped {
+                when (ciphertext.type) {
+                    E2eeWire.PRE_KEY_TYPE -> cipher.decrypt(PreKeySignalMessage(ciphertext.body))
+                    E2eeWire.WHISPER_TYPE -> cipher.decrypt(SignalMessage(ciphertext.body))
+                    else -> throw E2eeCipherFormatException("unknown message type ${ciphertext.type}")
+                }
             }
             persist(plaintext, transaction)
         }
@@ -105,3 +124,14 @@ public class E2eeSessionCipher(
 }
 
 internal fun E2eeDeviceAddress.protocolAddress(): SignalProtocolAddress = SignalProtocolAddress(userId, deviceId)
+
+/**
+ * libsignal Java réemballe en `AssertionError` toute exception VÉRIFIÉE qu'un rappel de store lève sans que l'opération la
+ * déclare (`FilterExceptions.reportUnexpectedException`, 0.106.2) : elle redevient ici sa cause, un refus du COFFRE que
+ * l'appelant juge comme tel (#18970), jamais une `Error` qui tuerait la file de réception.
+ */
+private inline fun <T> unwrapped(block: () -> T): T = try {
+    block()
+} catch (wrapped: AssertionError) {
+    throw (wrapped.cause as? Exception) ?: wrapped
+}

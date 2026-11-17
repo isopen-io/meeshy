@@ -62,7 +62,11 @@ class LaunchWithCameraAccessTest {
             .map { feature(it.relativeTo(root).invariantSeparatorsPath) }
             .toSet()
 
-        assertThat(captureSites).isNotEmpty()
+        // Since the intent camera path left (#13449, #18901) no production site starts the system camera: the rule
+        // still binds any site that comes back, so the guard proves its detector and its walk without needing one.
+        assertThat(captureContract.containsMatchIn("registerForActivityResult(ActivityResultContracts.TakePicture())")).isTrue()
+        assertThat(captureContract.containsMatchIn("Intent(MediaStore.ACTION_VIDEO_CAPTURE)")).isTrue()
+        assertThat(gatedFeatures).contains("sdk-ui")
         assertThat(captureSites.map(feature).filterNot { it in gatedFeatures || it == "sdk-ui" }).isEmpty()
     }
 }

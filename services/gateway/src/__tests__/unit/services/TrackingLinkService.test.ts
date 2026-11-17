@@ -355,7 +355,7 @@ describe('TrackingLinkService.findExistingTrackingLink', () => {
     await sut.findExistingTrackingLink('https://example.com', { kind: 'owner', createdBy: 'user-1' });
 
     expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith({
-      where: { originalUrl: 'https://example.com', isActive: true, createdBy: 'user-1' },
+      where: expect.objectContaining({ originalUrl: 'https://example.com', isActive: true, createdBy: 'user-1' }),
     });
   });
 
@@ -366,7 +366,7 @@ describe('TrackingLinkService.findExistingTrackingLink', () => {
     await sut.findExistingTrackingLink('https://example.com', { kind: 'owner', createdBy: 'user-1', conversationId: 'conv-42' });
 
     expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith({
-      where: { originalUrl: 'https://example.com', isActive: true, createdBy: 'user-1', conversationId: 'conv-42' },
+      where: expect.objectContaining({ originalUrl: 'https://example.com', isActive: true, createdBy: 'user-1', conversationId: 'conv-42' }),
     });
   });
 
@@ -377,8 +377,35 @@ describe('TrackingLinkService.findExistingTrackingLink', () => {
     await sut.findExistingTrackingLink('https://example.com', { kind: 'conversation', conversationId: 'conv-42' });
 
     expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith({
-      where: { originalUrl: 'https://example.com', isActive: true, conversationId: 'conv-42' },
+      where: expect.objectContaining({ originalUrl: 'https://example.com', isActive: true, conversationId: 'conv-42' }),
     });
+  });
+});
+
+describe('TrackingLinkService.findExistingTrackingLink — le lien d’une adresse de fiche ne se partage jamais (#18863)', () => {
+  const evaluate = (row: Record<string, unknown>, where: Record<string, unknown>): boolean =>
+    Object.entries(where).every(([field, expected]) => {
+      if (field === 'OR') return (expected as Array<Record<string, unknown>>).some((branch) => evaluate(row, branch));
+      if (expected !== null && typeof expected === 'object' && 'isSet' in (expected as object)) {
+        return (row[field] !== undefined) === (expected as { isSet: boolean }).isSet;
+      }
+      return expected === null ? row[field] === null : row[field] === expected;
+    });
+
+  it.each([
+    ['owner', { kind: 'owner' as const, createdBy: 'user-1' }],
+    ['conversation', { kind: 'conversation' as const, conversationId: 'conv-42' }],
+  ])('portée %s : un lien d’adresse de même auteur et même URL n’est pas rendu', async (_nom, scope) => {
+    const rows = [{ token: 'adr', originalUrl: 'https://example.com', isActive: true, createdBy: 'user-1', conversationId: 'conv-42', addressId: '65a0000000000000000000a1' }];
+    const prisma = makePrisma();
+    prisma.trackingLink.findFirst.mockImplementation((async (args: { where: Record<string, unknown> }) =>
+      rows.find((row) => evaluate(row, args.where)) ?? null) as never);
+    const sut = new TrackingLinkService(prisma as any);
+
+    expect(await sut.findExistingTrackingLink('https://example.com', scope)).toBeNull();
+
+    rows.push({ token: 'post', originalUrl: 'https://example.com', isActive: true, createdBy: 'user-1', conversationId: 'conv-42', addressId: null as never });
+    expect(await sut.findExistingTrackingLink('https://example.com', scope)).toMatchObject({ token: 'post' });
   });
 });
 
