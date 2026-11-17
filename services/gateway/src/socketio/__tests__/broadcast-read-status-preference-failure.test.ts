@@ -28,6 +28,23 @@
  * cache à cru, la diffusion disparaîtra comme elle disparaissait sur les pièces
  * jointes, et c'est ici que ça se verra.
  *
+ * ## Une TROISIÈME posture, depuis #19385 — et elle ne « unifie » rien
+ *
+ * Le § ci-dessous annonçait qu'« unifier les deux postures » ferait tomber ce
+ * témoin. #19385 n'unifie pas : il ajoute une garde d'une AUTRE NATURE à côté
+ * de la préférence, et les deux replis restent opposés PAR DÉCISION.
+ *
+ * | garde | ce qu'elle décide | repli |
+ * |---|---|---|
+ * | `showReadReceipts` (préférence) | est-ce que J'ÉMETS des accusés ? | **OUVERT** — défaut `true` |
+ * | `dm.readReceipts` (loi de cercle) | à QUI cet accusé a-t-il le droit d'arriver ? | **FERMÉ** |
+ *
+ * L'écart n'est pas une incohérence. Une préférence ABSENTE a un défaut écrit,
+ * et le lire en échec revient à servir ce défaut. Un NIVEAU DE CERCLE illisible
+ * n'a pas de défaut : servir y serait deviner un droit, et une porte de
+ * confidentialité échoue en montrant MOINS. C'est la posture du canal jumeau —
+ * `dm.typing` ferme aussi quand sa loi lève.
+ *
  * ## Ce qu'il fige AUSSI : le repli est OUVERT ici
  *
  * Défauts ⇒ `showReadReceipts: true` ⇒ l'accusé part à toute la conversation.
@@ -46,6 +63,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { broadcastReadStatus } from '../broadcastReadStatus';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { clearPrivacyPreferencesCache } from '../../services/preferences/privacy-cache';
+import { readReceiptCircleAllowing } from '../../__tests__/helpers/read-receipt-circle-world';
 
 const USER_ID = '507f1f77bcf86cd799439101';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439102';
@@ -104,6 +122,12 @@ function makePrisma(readPreferences: () => Promise<ReadonlyArray<unknown>>) {
     },
     userPreferences: { findMany: jest.fn(readPreferences) },
     userPreference: { findMany: jest.fn<() => Promise<never[]>>().mockResolvedValue([]) },
+    // #19385 — la loi de CERCLE, sur ses propres tables. La panne que ces
+    // témoins provoquent est celle de `userPreferences` ; la loi, elle, doit
+    // RÉPONDRE, sans quoi c'est son fail-closed qu'on mesurerait et non le
+    // repli de la préférence. Les deux postures sont disjointes, et le § du
+    // doc-comment ci-dessus le dit.
+    ...readReceiptCircleAllowing(USER_ID, [PAIR_USER_ID]),
   };
 }
 

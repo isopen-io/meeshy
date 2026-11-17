@@ -21,6 +21,7 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { broadcastReadStatus } from '../broadcastReadStatus';
+import { readReceiptCircleAllowing } from '../../__tests__/helpers/read-receipt-circle-world';
 import { makeChainableIO } from '../../__tests__/helpers/chainable-io';
 
 const CONVERSATION_ID = '507f1f77bcf86cd799439012';
@@ -66,6 +67,10 @@ function makeHarness(overrides: {
     prisma: {
       conversationReadCursor: { findUnique },
       participant: { findMany },
+      // #19385 — la loi de cercle que la diffusion consulte désormais. Ces
+      // témoins gardent la forme des RÉSUMÉS, pas la loi : le monde les
+      // déclare AMIS, ce que la suite supposait déjà sans le dire.
+      ...readReceiptCircleAllowing(ACTOR_USER_ID, [PEER_USER_ID]),
     } as any,
     readStatusService: {
       getLatestMessageSummary: jest.fn<any>().mockResolvedValue({

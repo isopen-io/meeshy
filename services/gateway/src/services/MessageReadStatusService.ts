@@ -41,6 +41,7 @@ import {
   freezeMessageStatus,
   type FreezeMessageStatusParams,
 } from './messaging/freezeMessageStatus';
+import { readReceiptHiddenFromViewer } from '../socketio/readReceiptCircleGate';
 import {
   parsePlaybackTrace,
   traceCoverage,
@@ -1201,10 +1202,65 @@ export class MessageReadStatusService {
    * § 2026-08-13).
    */
   async filterReadReceiptVisible<T extends { id: string; userId?: string | null }>(
-    participants: ReadonlyArray<T>
+    participants: ReadonlyArray<T>,
+    viewerUserId: string | null
   ): Promise<T[]> {
-    const optedOut = await this._loadReadReceiptOptOuts(participants);
-    return participants.filter((p) => !optedOut.has(p.id));
+    const hidden = await this._receiptsHiddenFrom(viewerUserId, participants);
+    return participants.filter((p) => !hidden.has(p.id));
+  }
+
+  /**
+   * Les participants dont l'accusé NOMINATIF ne peut pas être montré à
+   * `viewerUserId` — les DEUX gardes composées, et c'est le site unique qui les
+   * tient ensemble (#19385).
+   *
+   * | garde | ce qu'elle décide | repli |
+   * |---|---|---|
+   * | `showReadReceipts` du SUJET | est-ce que ce participant émet des accusés ? | **OUVERT** (défaut `true`, décision #4530) |
+   * | `dm.readReceipts` (cercle) | ce demandeur a-t-il le droit de voir CE sujet ? | **FERMÉ** |
+   *
+   * Les deux replis sont opposés par décision : une préférence absente a un
+   * défaut écrit, un niveau de cercle illisible n'en a pas — servir y serait
+   * deviner un droit. La loi RESTREINT, elle n'ouvre jamais un accusé que la
+   * préférence avait tu.
+   *
+   * ─── LE VIEWER EST REQUIS, ET `null` VEUT DIRE « SANS CERCLE » ─────────────
+   *
+   * Requis parce qu'un paramètre dont l'absence désactive une garde est un
+   * demi-correctif : les trois portes nominatives ne compilent plus sans lui.
+   *
+   * Et `null` est PERMISSIF ici, à l'inverse de la loi de présence où il
+   * MASQUE — l'écart est délibéré et vaut d'être dit. `null` désigne un invité
+   * de lien, qui participe LÉGITIMEMENT à la conversation et n'a pas de cercle :
+   * la loi ne s'applique pas à lui, elle ne le refuse pas. Le masquer
+   * retirerait les accusés de tous les fils à lien partagé, que rien dans
+   * MSG-04 ne demande. Même arbitrage que `dm.typing`, dont le doc-comment
+   * écrit qu'« un viewer anonyme n'est jamais dans cette liste ». Le réglage
+   * `showReadReceipts` du sujet, lui, continue de s'appliquer à ce viewer.
+   *
+   * **LÈVE** si la loi de cercle est illisible : l'appelant ferme. Le repli
+   * OUVERT de la préférence ne couvre pas la loi.
+   */
+  private async _receiptsHiddenFrom(
+    viewerUserId: string | null,
+    participants: ReadonlyArray<{ id: string; userId?: string | null }>
+  ): Promise<ReadonlySet<string>> {
+    const subjectUserIds = participants
+      .map((p) => p.userId)
+      .filter((id): id is string => !!id && id !== viewerUserId);
+
+    const [optedOut, circleHidden] = await Promise.all([
+      this._loadReadReceiptOptOuts(participants),
+      subjectUserIds.length > 0
+        ? readReceiptHiddenFromViewer(this.prisma, viewerUserId, subjectUserIds)
+        : Promise.resolve(new Set<string>() as ReadonlySet<string>),
+    ]);
+
+    const hidden = new Set<string>(optedOut);
+    for (const p of participants) {
+      if (p.userId && circleHidden.has(p.userId)) hidden.add(p.id);
+    }
+    return hidden;
   }
 
   private async _loadReadReceiptOptOuts(
@@ -1417,7 +1473,13 @@ export class MessageReadStatusService {
    */
   async getMessageReadStatus(
     messageId: string,
-    conversationId: string
+    conversationId: string,
+    /**
+     * #19385 — le lecteur à qui `receivedBy` / `readBy` / `notSeenBy` sont
+     * servis. REQUIS : ces trois listes sont NOMINATIVES, donc la loi de
+     * cercle s'y applique. `null` = invité de lien (aucun cercle).
+     */
+    viewerUserId: string | null
   ): Promise<{
     messageId: string;
     totalMembers: number;
@@ -1476,8 +1538,9 @@ export class MessageReadStatusService {
 
       // Filtré EN AMONT : les opt-out disparaissent ainsi du dénominateur
       // (`totalMembers`) comme du numérateur, sans traitement séparé.
-      const optedOut = await this._loadReadReceiptOptOuts(allParticipants);
-      const participants = allParticipants.filter((p) => !optedOut.has(p.id));
+      // #19385 — les DEUX gardes composées, pour trois listes NOMINATIVES.
+      const hidden = await this._receiptsHiddenFrom(viewerUserId, allParticipants);
+      const participants = allParticipants.filter((p) => !hidden.has(p.id));
 
       // Denominator = active recipients EXCLUDING the sender, by IDENTITY. A
       // blind `participants.length - 1` drops an active recipient when the
@@ -1986,7 +2049,13 @@ export class MessageReadStatusService {
       limit?: number;
       filter?: "all" | "delivered" | "read" | "unread";
       historyFloor?: Date | null;
-    } = {}
+      /**
+       * #19385 — le lecteur à qui ces accusés NOMINATIFS sont servis. REQUIS,
+       * et l'objet d'options a perdu son `= {}` pour que tout appelant doive le
+       * nommer. `null` = invité de lien (aucun cercle).
+       */
+      viewerUserId: string | null;
+    }
   ): Promise<{
     statuses: Array<{
       participantId: string;
@@ -2004,7 +2073,7 @@ export class MessageReadStatusService {
       hasMore: boolean;
     };
   }> {
-    const { offset = 0, limit = 20, filter = "all", historyFloor = null } = options;
+    const { offset = 0, limit = 20, filter = "all", historyFloor = null, viewerUserId } = options;
 
     try {
       const message = await this.prisma.message.findUnique({
@@ -2088,8 +2157,11 @@ export class MessageReadStatusService {
       // Absents de `participantById`, les opt-out sont ignorés par la boucle
       // (`continue` sur participant introuvable) et disparaissent donc aussi
       // bien de la liste que de son total.
-      const optedOut = await this._loadReadReceiptOptOuts(allParticipants);
-      const participants = allParticipants.filter(p => !optedOut.has(p.id));
+      // #19385 — les DEUX gardes composées : la préférence du sujet ET la loi
+      // de cercle envers CE lecteur. Ces lignes servent des accusés
+      // NOMINATIFS (identité + horodatage), donc la loi s'y applique.
+      const hidden = await this._receiptsHiddenFrom(viewerUserId, allParticipants);
+      const participants = allParticipants.filter((p) => !hidden.has(p.id));
 
       const participantById = new Map(
         participants.map(p => [p.id, p])

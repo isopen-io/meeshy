@@ -8,6 +8,7 @@ import {
   type ConversationRoomEmitter,
 } from './emitToConversationParticipants.js';
 import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
+import { readReceiptDeniedAmong } from './readReceiptCircleGate.js';
 
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { getSharedNotificationService } from '../services/notifications/notification-service-registry.js';
@@ -425,6 +426,48 @@ export async function broadcastReadStatus(
     }),
   ]);
 
+  // #19385 (MSG-04 de #14107) — la loi de CERCLE, résolue UNE fois pour tous
+  // les résumés : le verdict porte sur la PAIRE (acteur, lecteur), jamais sur
+  // le message, donc le recalculer par résumé coûterait N fois la même lecture
+  // pour le même résultat.
+  //
+  // Trois états, pas deux, et c'est ce qui rend le fail-closed exprimable :
+  //
+  // | état | ce qu'il veut dire | verdict |
+  // |---|---|---|
+  // | `Set` (même vide) | la loi a répondu | on excepte ce qu'elle refuse |
+  // | `null` | AUCUN cercle à interroger (acteur sans compte) | régime d'avant |
+  // | levée | la loi n'a RIEN prouvé | l'éventail des pairs se TAIT |
+  //
+  // `null` et la levée se ressemblent et s'arbitrent à l'OPPOSÉ (règle du
+  // cycle 127, trois états d'un verdict de garde) : un acteur SANS COMPTE n'a
+  // pas de cercle — la loi ne le refuse pas, elle ne s'applique pas — alors
+  // qu'une lecture qui lève est une IGNORANCE, et une porte de confidentialité
+  // échoue en montrant MOINS. L'accusé est un horodatage d'activité ; le taire
+  // coûte une coche, le servir à tort perce un cercle.
+  //
+  // Les invités de lien ne sont jamais dans `peerUserIds` : sans `userId` ils
+  // n'ont pas de cercle, et ils gardent le régime d'avant ce lot — même
+  // arbitrage que `dm.typing`.
+  const peerUserIds = activeParticipants
+    .map((participant) => participant.userId)
+    .filter((id): id is string => !!id && id !== actorUserId);
+
+  let circleDenied: ReadonlySet<string> | null = null;
+  let circleUnreadable = false;
+  if (actorUserId && peerUserIds.length > 0) {
+    try {
+      circleDenied = await readReceiptDeniedAmong(prisma, actorUserId, peerUserIds);
+    } catch (error) {
+      circleUnreadable = true;
+      logger.warn('read receipt circle law unreadable — peer fan-out withheld (fail-closed)', {
+        conversationId: args.conversationId,
+        actorUserId,
+        error,
+      });
+    }
+  }
+
   // Un `read-status:updated` PAR résumé — un seul tour de boucle sur le repli
   // legacy (`summaries.length === 1`), autant que de messages figés en mode
   // exact. Les DEUX audiences (éventail, room personnelle de l'acteur) sont
@@ -448,14 +491,29 @@ export async function broadcastReadStatus(
     // personnelle de la chaîne ne suffirait pas — la room de conversation le
     // tient dès qu'il a le fil ouvert, et il recevrait alors les DEUX copies
     // du seul événement où elles diffèrent.
-    emitToConversationParticipants({
-      io,
-      conversationId: args.conversationId,
-      participants: activeParticipants,
-      event: SERVER_EVENTS.READ_STATUS_UPDATED,
-      payload: peerPayload,
-      exceptRooms: actorReadSync ? [ROOMS.user(personalRoomKey)] : null,
-    });
+    // L'acteur garde sa variante (son arriéré personnel) ; les lecteurs que la
+    // loi refuse sortent de la chaîne ENTIÈRE. `.except()` et non le simple
+    // retrait de leur room personnelle : la room de CONVERSATION les tient dès
+    // qu'ils ont le fil à l'écran, et ne retirer que la room personnelle
+    // laisserait fuir l'accusé vers précisément les lecteurs qui regardent.
+    const exceptRooms = [
+      ...(actorReadSync ? [ROOMS.user(personalRoomKey)] : []),
+      ...[...(circleDenied ?? [])].map((userId) => ROOMS.user(userId)),
+    ];
+
+    // Fail-closed : la loi n'a rien prouvé, l'éventail des pairs se tait. La
+    // variante de l'acteur et son badge partent quand même — ni l'une ni
+    // l'autre ne décrit l'activité de quelqu'un d'AUTRE.
+    if (!circleUnreadable) {
+      emitToConversationParticipants({
+        io,
+        conversationId: args.conversationId,
+        participants: activeParticipants,
+        event: SERVER_EVENTS.READ_STATUS_UPDATED,
+        payload: peerPayload,
+        exceptRooms: exceptRooms.length > 0 ? exceptRooms : null,
+      });
+    }
 
     // La version de l'acteur, dans sa seule room personnelle — celle que
     // toutes ses sessions ont rejointe à l'authentification, compte ou pas.

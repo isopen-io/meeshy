@@ -11,6 +11,7 @@ import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { receiptViewerOf } from '../../socketio/readReceiptCircleGate';
 import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import {
   applyHistoryFloor,
@@ -333,7 +334,10 @@ export function registerMessagesAdvancedReadRoutes(
       // qu'au résumé ; il y manquait entièrement.
       const visibleParticipantIds = new Set(
         (await readStatusService.filterReadReceiptVisible(
-          messages.flatMap(message => message.statusEntries.map(entry => entry.participant))
+          messages.flatMap(message => message.statusEntries.map(entry => entry.participant)),
+          // #19385 — le cercle décide aussi de QUI ce lecteur voit les accusés,
+          // et pas seulement si le sujet en émet.
+          receiptViewerOf(authRequest.authContext)
         )).map(participant => participant.id)
       );
 
