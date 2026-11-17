@@ -3,6 +3,7 @@ package me.meeshy.app.chat
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
+import me.meeshy.sdk.e2ee.libsignal.EndToEndDeviceLimit
 import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.media.MediaLoss
 import me.meeshy.sdk.model.ApiMessage
@@ -184,6 +185,19 @@ class BubbleMemoCacheTest {
         assertThat(buildArgs(memo, refused, currentUser = me).isLocationRefused).isFalse()
         assertThat(buildArgs(memo, sending, currentUser = me).isAttachmentRightRefused).isFalse()
         assertThat(buildArgs(memo, plain, currentUser = me).isAttachmentRightRefused).isFalse()
+    }
+
+    @Test
+    fun `#18976 a send refused at the encrypted device limit says where to remove one, on its failed bubble only`() {
+        val me = MeeshyUser(id = "me", username = "me")
+        val limited = message("d", senderId = "me").copy(sendState = LocalSendState.FAILED, lastError = EndToEndDeviceLimit.REASON)
+        val sending = message("s", senderId = "me").copy(sendState = LocalSendState.SENDING, lastError = EndToEndDeviceLimit.REASON)
+        val plain = message("p", senderId = "me").copy(sendState = LocalSendState.FAILED, lastError = "Transient delivery failure")
+        val memo = BubbleMemoCache()
+
+        assertThat(buildArgs(memo, limited, currentUser = me).isEndToEndDeviceLimit).isTrue()
+        assertThat(buildArgs(memo, sending, currentUser = me).isEndToEndDeviceLimit).isFalse()
+        assertThat(buildArgs(memo, plain, currentUser = me).isEndToEndDeviceLimit).isFalse()
     }
 }
 

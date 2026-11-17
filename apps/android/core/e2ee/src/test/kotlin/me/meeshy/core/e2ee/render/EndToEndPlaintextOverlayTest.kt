@@ -2,9 +2,11 @@ package me.meeshy.core.e2ee.render
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.core.e2ee.content.E2eeContent
+import me.meeshy.core.e2ee.content.E2eeEnvelopeOrigin
 import me.meeshy.core.e2ee.store.E2eePlaintextEntry
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageSender
+import me.meeshy.sdk.model.EndToEndSeal
 import org.junit.Test
 
 class EndToEndPlaintextOverlayTest {
@@ -109,6 +111,26 @@ class EndToEndPlaintextOverlayTest {
     @Test
     fun aSystemMessage_neverAdoptsAPlaintext() {
         assertThat(shown(served(messageSource = "system"), mapOf("m1" to readable("Bonjour"))).isEndToEndSealed).isTrue()
+    }
+
+    /** #18983, #18980 — un message scellé dit POURQUOI, jamais « à lire sur iPhone ». */
+    @Test
+    fun aSealedMessage_saysWhy() {
+        val future = E2eePlaintextEntry.FutureVersion(2, "{}", E2eeEnvelopeOrigin("c1", "alice", 1))
+
+        assertThat(shown(served(), mapOf("m1" to E2eePlaintextEntry.Undecryptable)).endToEndSeal).isEqualTo(EndToEndSeal.UNREADABLE)
+        assertThat(shown(served(), mapOf("m1" to future)).endToEndSeal).isEqualTo(EndToEndSeal.UPDATE_REQUIRED)
+        assertThat(shown(served(), emptyMap()).endToEndSeal).isEqualTo(EndToEndSeal.PENDING)
+        assertThat(shown(served(author = "me"), emptyMap(), reader = "me").endToEndSeal).isEqualTo(EndToEndSeal.OTHER_DEVICE)
+    }
+
+    /** #18981 — supprimé pour tous par son auteur authentifié, à SA place : la bulle le dit supprimé ; ailleurs, rien ne change. */
+    @Test
+    fun aMessageDeletedForEveryone_atItsPlace_rendersDeleted() {
+        val deleted = mapOf("m1" to E2eePlaintextEntry.DeletedForEveryone("c1"))
+
+        assertThat(shown(served(), deleted).deletedAt).isNotNull()
+        assertThat(shown(served(conversationId = "c2"), deleted, thread = "c2").deletedAt).isNull()
     }
 
     @Test

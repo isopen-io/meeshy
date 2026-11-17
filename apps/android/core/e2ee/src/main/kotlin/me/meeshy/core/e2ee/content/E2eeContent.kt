@@ -2,7 +2,6 @@ package me.meeshy.core.e2ee.content
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
 /**
@@ -67,17 +66,14 @@ public data class E2eeContent(
             version = CURRENT_VERSION,
         )
 
-        /** Refuse une version que cet appareil ne sait pas lire : un message d'une version future ne s'affiche jamais à moitié. */
-        public fun decoded(bytes: ByteArray): E2eeContent {
-            val content = try {
-                lenientJson.decodeFromString(serializer(), bytes.toString(Charsets.UTF_8))
-            } catch (error: SerializationException) {
-                throw E2eeContentException.Malformed(error)
-            } catch (error: IllegalArgumentException) {
-                throw E2eeContentException.Malformed(error)
-            }
-            if (content.version != CURRENT_VERSION) throw E2eeContentException.UnsupportedVersion(content.version)
-            return content
+        /**
+         * Lit un contenu par la lecture STRICTE du contrat commun ([E2eePlaintextReader], #18944) et refuse une version que
+         * cet appareil ne sait pas lire : un message d'une version future ne s'affiche jamais à moitié.
+         */
+        public fun decoded(bytes: ByteArray): E2eeContent = when (val reading = E2eePlaintextReader.read(bytes)) {
+            is E2eeOpening.Message -> reading.content
+            is E2eeOpening.FutureVersion -> throw E2eeContentException.UnsupportedVersion(reading.version.toInt())
+            else -> throw E2eeContentException.Malformed(IllegalArgumentException("e2ee content unreadable"))
         }
     }
 }
@@ -98,10 +94,4 @@ public sealed class E2eeContentException(message: String, cause: Throwable? = nu
 internal val canonicalJson: Json = Json {
     explicitNulls = false
     encodeDefaults = true
-}
-
-/** Le décodeur tolérant : un champ d'un lot ultérieur (mentions, pièces, lieu) est ignoré, pas refusé. */
-internal val lenientJson: Json = Json {
-    ignoreUnknownKeys = true
-    explicitNulls = false
 }

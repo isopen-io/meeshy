@@ -23,9 +23,9 @@ import javax.inject.Inject
 
 /**
  * **LA GARDE UNIQUE DU CLAIR DANS L'OUTBOX** (#12956) — lue par le drainer AVANT tout envoi et
- * avant tout téléversement. L'Android natif ne sait pas chiffrer de bout en bout (#13015) : un
- * message mis en file avant l'activation, un vocal, une photo ou une modification ne repartent
- * jamais en clair vers une conversation que cet appareil sait chiffrée de bout en bout.
+ * avant tout téléversement. L'Android natif ne chiffre de bout en bout que le TEXTE d'un tête-à-tête, par sa propre
+ * ligne (`SEND_E2EE_MESSAGE`, #14591) : un message mis en file avant l'activation, un vocal, une photo ou une modification
+ * ne repartent jamais en clair vers une conversation que cet appareil sait chiffrée de bout en bout.
  */
 public interface OutboxPlaintextAdmission {
     /** Ce que la ligne a le droit de faire maintenant : partir, être épuisée (bulle en échec), ou attendre qu'on sache. */

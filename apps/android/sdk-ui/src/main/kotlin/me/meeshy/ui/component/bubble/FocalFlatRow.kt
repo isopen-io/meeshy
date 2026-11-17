@@ -397,7 +397,7 @@ private fun FlatQuote(content: BubbleContent, accentColor: Color, callbacks: Bub
 private fun FlatText(content: BubbleContent, accentColor: Color, ink: Color, decor: BubbleTextDecor) {
     if (content.isEndToEndSealed) {
         Text(
-            text = stringResource(R.string.bubble_message_end_to_end),
+            text = stringResource(BubbleEndToEndSeal.label(content.endToEndSeal)),
             style = FlatTextStyle,
             fontStyle = FontStyle.Italic,
             color = MeeshyTheme.tokens.textMuted,

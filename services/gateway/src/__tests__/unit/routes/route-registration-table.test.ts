@@ -280,7 +280,10 @@ describe('ROUTE_TABLE (#4278)', () => {
     // 100 : #17142 ajoute `talkie` — la voix gardée d'un talkie réveillé (`GET /api/v1/talkie/:talkieId/audio`)
     // et le jeton PushToTalk (`POST`/`DELETE /api/v1/users/me/push-to-talk-token`). Aucun alias, aucune
     // route retirée ni renommée ; le manifeste gagne exactement ses trois routes.
-    expect(ROUTE_TABLE.length).toBe(100);
+    // 101 : #19156 ajoute `e2ee-device-trust` — le relais de la confirmation d'un appareil par code
+    // (`POST`/`GET /api/v1/e2ee/devices/self/verifications`, `POST …/verifications/ack`). Aucun alias,
+    // aucune route retirée ni renommée ; le manifeste gagne exactement ses trois routes.
+    expect(ROUTE_TABLE.length).toBe(101);
   });
 });
 

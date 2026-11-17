@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="bubble_message_end_to_end">End-to-end encrypted — read it in the Meeshy app on iPhone</string>
+    <string name="bubble_message_end_to_end">End-to-end encrypted message, not on this device yet</string>
+    <string name="bubble_message_end_to_end_unreadable">This encrypted message couldn’t be opened on this device</string>
+    <string name="bubble_message_end_to_end_update">Update Meeshy to read this encrypted message</string>
+    <string name="bubble_message_end_to_end_other_device">Written on another of your devices, not approved here yet</string>
+    <string name="bubble_failed_e2ee_device_limit">16 encrypted devices reached: remove one in My encrypted devices</string>
 </resources>
