@@ -9,7 +9,10 @@
  *    lien (`mayMintShareLink`) — consulte le prédicat UNIQUE
  *    `conversationAdmitsNewMembers`. Le discriminant est l'appel à la loi
  *    d'entrée : une cinquième porte qui l'appelle entre dans ce balayage sans
- *    que personne y pense.
+ *    que personne y pense. Une porte qui ne l'appelle PAS lui échappe donc —
+ *    c'est ainsi que « restaurer pour moi » est passée (audit de #19080, E1) :
+ *    le recensement par EFFET (`services/conversations/__tests__/member-activation-doors-sweep.test.ts`)
+ *    couvre toute écriture qui rend un membre actif, qu'elle appelle une loi ou non.
  * 2. **Le numéro ne survit pas au fil.** Tout site qui FERME une conversation
  *    appelle déjà le site unique `deactivateShareLinksOnClose` (#3740) ; il
  *    appelle aussi `eraseExternalPeerOnClose`.

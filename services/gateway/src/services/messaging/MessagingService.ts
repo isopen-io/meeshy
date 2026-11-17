@@ -5,9 +5,11 @@
 
 import { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import type { ParticipantPermissions, AnonymousRightsOverride } from '@meeshy/shared/prisma/client';
-import type {
-  MessageRequest,
-  MessageResponse
+import {
+  ErrorCode,
+  ErrorMessages,
+  type MessageRequest,
+  type MessageResponse
 } from '@meeshy/shared/types';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { MessageReadStatusService } from '../MessageReadStatusService';
@@ -57,6 +59,8 @@ import { isE2eeRelayRefusal } from '../e2ee/e2ee-relay-errors';
 import { persistableEncryption } from './e2eeRelayPayload';
 import { sealMessageIfConversationObsoleted } from '../conversations/obsoleteMessageSeal';
 import { mayReturnToSalon } from '../conversations/communityMembershipSync';
+import { newMemberRefusal } from '../conversations/newMemberAdmission';
+import { isUncommittedMessageWrite, MESSAGE_SEND_RETRY_AFTER_SECONDS } from './retryableWrite';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -509,7 +513,7 @@ export class MessagingService {
           // GW-12 (#18906) — la métadonnée gardée est une liste blanche ; le reste
           // est retenu, et le journal n'en nomme que les clés.
           ...persistableEncryption(request.encryptedPayload, {
-            onWithheld: (keys) => logger.warn('e2ee metadata keys withheld from the message row', { ...corr, conversationId, keys })
+            onWithheld: ({ count, named }) => logger.warn('e2ee metadata keys withheld from the message row', { ...corr, conversationId, withheldCount: count, withheldNamed: named })
           }),
           deviceLayerRelay: request.deviceLayer,
           clientMessageId: request.clientMessageId
@@ -595,6 +599,13 @@ export class MessagingService {
       if (isServerAtRestCiphertextRefusal(error)) {
         logger.warn('client at-rest ciphertext refused', { ...corr });
         return this.createErrorResponse(error.message, error.code);
+      }
+      // Audit de #19080, E3 — une transaction non validée (P2034, P2028) n'est pas un refus : rejouable.
+      if (isUncommittedMessageWrite(error)) {
+        logger.warn('message write not committed, retryable', { ...corr, prismaCode: (error as { code: string }).code });
+        return this.createErrorResponse(
+          ErrorMessages[ErrorCode.MESSAGE_SEND_RETRYABLE].fr, ErrorCode.MESSAGE_SEND_RETRYABLE, MESSAGE_SEND_RETRY_AFTER_SECONDS
+        );
       }
       // #3706 — un envoi libsignal refusé (Sesame, appareil, ancien client) : son code et son écart voyagent.
       if (isE2eeRelayRefusal(error)) {
@@ -886,12 +897,16 @@ export class MessagingService {
 
       // #16724 — recréer une participation, c'est ENTRER dans le salon : un
       // salon d'une communauté privée (ou désactivée) n'accueille que son
-      // créateur et ses membres actifs (#16695, #16704).
+      // créateur et ses membres actifs (#16695, #16704). Et c'est faire
+      // entrer un NOUVEAU membre (#16188) : la loi d'entrée refuse un second
+      // membre dans une conversation externe et un troisième dans un
+      // tête-à-tête chiffré de bout en bout, dont Sesame ne connaît que la paire.
       const conversation = await this.prisma.conversation.findUnique({
         where: { id: conversationId },
-        select: { communityId: true }
+        select: { communityId: true, type: true, encryptionMode: true }
       });
       if (!conversation) return null;
+      if (newMemberRefusal(conversation)) return null;
       if (!(await mayReturnToSalon(this.prisma, { communityId: conversation.communityId, userId }))) return null;
 
       // Check legacy ConversationMember collection via raw query

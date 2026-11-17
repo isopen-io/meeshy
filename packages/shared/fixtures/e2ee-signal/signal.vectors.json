@@ -714,6 +714,56 @@
         "authorUserId": "64f0c0ffee0000000000aaaa",
         "authorDeviceId": 3
       }
+    },
+    {
+      "name": "depth-at-the-limit-reads",
+      "description": "Un signal de profondeur 64 (l’objet, puis 63 tableaux sous une clé inconnue) se lit : la borne vaut pour les signaux comme pour les messages (#19112).",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJ0eXBpbmciLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsIngiOltbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW11dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXX0gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA==",
+      "plaintextJson": "{\"active\":true,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":1,\"sentAt\":1790000000000,\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "signal",
+      "verdict": "admitted",
+      "expected": {
+        "s": 1,
+        "kind": "typing",
+        "active": true,
+        "conversationId": "64f0c0ffee00000000000c01",
+        "sentAt": 1790000000000,
+        "authorUserId": "64f0c0ffee0000000000aaaa",
+        "authorDeviceId": 3
+      }
+    },
+    {
+      "name": "depth-beyond-the-limit-is-an-unreadable-message",
+      "description": "Un niveau de plus : illisible avant toute analyse, et, comme tout JSON illisible, la sonde le range parmi les messages (#19112).",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJ0eXBpbmciLCJzIjoxLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsIngiOltbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tdXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dfSAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIA==",
+      "plaintextJson": "{\"active\":true,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":1,\"sentAt\":1790000000000,\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable",
+      "reason": "not-json"
+    },
+    {
+      "name": "future-version-beyond-the-limit-is-an-unreadable-message",
+      "description": "Une version future de signal au-delà de la borne n’est pas gardée : illisible, rangée parmi les messages (#19112).",
+      "plaintextBase64": "eyJhY3RpdmUiOnRydWUsImF1dGhvckRldmljZUlkIjozLCJhdXRob3JVc2VySWQiOiI2NGYwYzBmZmVlMDAwMDAwMDAwMGFhYWEiLCJjb252ZXJzYXRpb25JZCI6IjY0ZjBjMGZmZWUwMDAwMDAwMDAwMGMwMSIsImtpbmQiOiJ0eXBpbmciLCJzIjoyLCJzZW50QXQiOjE3OTAwMDAwMDAwMDAsIngiOltbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tdXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dfQ==",
+      "plaintextJson": "{\"active\":true,\"authorDeviceId\":3,\"authorUserId\":\"64f0c0ffee0000000000aaaa\",\"conversationId\":\"64f0c0ffee00000000000c01\",\"kind\":\"typing\",\"s\":2,\"sentAt\":1790000000000,\"x\":[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]}",
+      "envelope": {
+        "conversationId": "64f0c0ffee00000000000c01",
+        "senderUserId": "64f0c0ffee0000000000aaaa",
+        "senderDeviceId": 3
+      },
+      "payload": "message",
+      "verdict": "unreadable",
+      "reason": "not-json"
     }
   ]
 }
