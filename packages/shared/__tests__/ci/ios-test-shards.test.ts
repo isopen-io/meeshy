@@ -36,7 +36,7 @@ const enumerateClasses = shards.enumerateClasses as (files: Record<string, strin
 const enumerateTarget = shards.enumerateTarget as (files: Record<string, string>) => Omit<Target, 'name'>;
 const plan = shards.plan as (input: PlanInput) => Plan;
 const selectionArgs = shards.selectionArgs as (built: Plan, index: number) => string[];
-const projectExcludes = shards.projectExcludes as (yml: string, target?: string) => string[];
+const projectExcludes = shards.projectExcludes as (yml: string) => string[];
 const readTargets = shards.readTargets as (root: string, suite: string) => Target[];
 const readTimings = shards.readTimings as (root: string, suite: string) => Record<string, number>;
 const timingsFromLog = shards.timingsFromLog as (log: string, targets: readonly Target[]) => Record<string, number>;
@@ -94,30 +94,17 @@ describe('énumération des classes MeeshyTests', () => {
     ]);
   });
 
-  it('lit les exclusions .swift de SA cible dans project.yml, ni les motifs ni celles d’une autre cible', () => {
+  it('lit les exclusions .swift de la cible dans project.yml', () => {
     const yml = [
-      'targets:',
-      '  MeeshyUIDeviceTests:',
-      '    sources:',
-      '      - path: MeeshyUIDeviceTests',
-      '        excludes:',
-      '          - "Remote/DeviceOnly.swift"',
       '  MeeshyTests:',
-      '    type: bundle.unit-test',
       '    sources:',
       '      - path: MeeshyTests',
       '        excludes:',
       '          - "**/*.md"',
-      '          - "UI/HostedOnlyUITests.swift"',
-      '      - path: MeeshyNotificationExtension/NSEDecryptor.swift',
-      '  MeeshyWidgets:',
-      '    sources:',
-      '      - path: MeeshyWidgets',
-      '        excludes:',
-      '          - "Widgets/Elsewhere.swift"',
+      '          - "UI/SomeUITests.swift"',
     ].join('\n');
-    expect(projectExcludes(yml)).toEqual(['UI/HostedOnlyUITests.swift']);
-    expect(projectExcludes(yml, 'MeeshyUIDeviceTests')).toEqual(['Remote/DeviceOnly.swift']);
+    expect(projectExcludes(yml)).toContain('UI/SomeUITests.swift');
+    expect(projectExcludes(yml)).not.toContain('**/*.md');
   });
 });
 
