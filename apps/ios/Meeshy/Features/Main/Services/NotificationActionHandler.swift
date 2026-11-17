@@ -137,11 +137,9 @@ final class NotificationActionHandler: NotificationActionHandling {
         openNotification: @escaping @MainActor ([AnyHashable: Any]) -> Void = {
             // iPad, fenêtre détachée devant : la cible s'ouvre dans la fenêtre principale — qui revient d'abord.
             MainWindowRegistry.shared.bringPrimaryForwardIfHidden()
-            let userInfo = $0
-            PushNotificationManager.shared.handleNotification(
-                userInfo: userInfo,
-                addressedTo: PushTapAddressee.resolve(userInfo: userInfo, currentUserId: PushTapAddressee.currentUserId())
-            )
+            PushTapAddressee.publishTap($0, currentUserId: PushTapAddressee.currentUserId()) { userInfo, addressee in
+                PushNotificationManager.shared.handleNotification(userInfo: userInfo, addressedTo: addressee)
+            }
         },
         dialCallBack: @escaping @MainActor (CallBackRequest) -> Void = { request in
             CallBackDialer.shared.dial(request)

@@ -4287,6 +4287,7 @@
 		E6AB6145AB3FE29BAC4CD311 /* SplashScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FA13AE6A893D93AEDB5DC5F /* SplashScreen.swift */; };
 		E6AD0C76DD45155A66494345 /* ConversationListEndToEndTexts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8734FAD53E283558859E6A19 /* ConversationListEndToEndTexts.swift */; };
 		E6B90708E2146A618798E830 /* NotificationActionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 747D30C3641FE7B1DFBE9EE7 /* NotificationActionHandler.swift */; };
+		47EF9C3E43374167509A4263 /* PushTapAddressee.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED2ECB1849C5FE94CA0685BD /* PushTapAddressee.swift */; };
 		E6E330C4737BA6016AA378A0 /* AttachmentReactionOffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525678F4E62572652C1F5B31 /* AttachmentReactionOffer.swift */; };
 		E6F9F6785A58E1EB7D37EA08 /* StickerSheetVitrineLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C9F045BFBF5E427C4E8873C /* StickerSheetVitrineLinkTests.swift */; };
 		E6FE2C3D727974248A5E37C7 /* CameraModelSwitchDuringRecordingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F52653091B1EC66D1FF596 /* CameraModelSwitchDuringRecordingTests.swift */; };
@@ -7014,6 +7015,7 @@
 		746BBF397E591B4A9D97820A /* OutboxLiveActivityCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxLiveActivityCoordinator.swift; sourceTree = "<group>"; };
 		747315FF8F9A9334B79C711E /* PeopleTabCirclesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PeopleTabCirclesTests.swift; sourceTree = "<group>"; };
 		747D30C3641FE7B1DFBE9EE7 /* NotificationActionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationActionHandler.swift; sourceTree = "<group>"; };
+		ED2ECB1849C5FE94CA0685BD /* PushTapAddressee.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushTapAddressee.swift; sourceTree = "<group>"; };
 		747F1AB911398D5AB32AD697 /* ComposerSeedIngestionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSeedIngestionTests.swift; sourceTree = "<group>"; };
 		748086EFE619C0EE4967235B /* ComposerSceneFraming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneFraming.swift; sourceTree = "<group>"; };
 		748FFB1283552A932E1CB828 /* VoiceProfileManageViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileManageViewModelTests.swift; sourceTree = "<group>"; };
@@ -14241,6 +14243,7 @@
 				312E52C770058E1521A437F3 /* MessageRecord+OptimisticText.swift */,
 				05CFD90DB0BEF97F4EE511F7 /* MultiAttachmentSendPlanner.swift */,
 				747D30C3641FE7B1DFBE9EE7 /* NotificationActionHandler.swift */,
+				ED2ECB1849C5FE94CA0685BD /* PushTapAddressee.swift */,
 				ACA6409A54467A5A334EA288 /* NotificationActionHandler+BannerRevocation.swift */,
 				3BCBE8417EDB194C4FA3C730 /* NotificationActionHandler+Hygiene.swift */,
 				00751D6F18A0DD8604AB8FC5 /* NotificationActionHandler+Reply.swift */,
@@ -17934,6 +17937,7 @@
 				58C306E957A826A1A652AC4E /* NotificationActionHandler+Reply.swift in Sources */,
 				1AD5A23BCFE4C14EA557639E /* NotificationActionHandler+SocialActions.swift in Sources */,
 				E6B90708E2146A618798E830 /* NotificationActionHandler.swift in Sources */,
+				47EF9C3E43374167509A4263 /* PushTapAddressee.swift in Sources */,
 				194EAC67256155FC056D9D25 /* NotificationActionSeams.swift in Sources */,
 				3A2678AEE3EBE7B9B8B50A02 /* NotificationContactPresenter.swift in Sources */,
 				B03575012E52F088919C1DBB /* NotificationContentRouter.swift in Sources */,

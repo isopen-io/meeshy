@@ -20,4 +20,31 @@ enum PushTapAddressee {
               NotificationReplyFailure.isAddressed(to: userId, userInfo: userInfo) else { return nil }
         return userId
     }
+
+    /// Le défaut d'ouverture d'un toucher : la charge publiée porte le compte
+    /// désigné AU toucher. Une charge non marquée serait effacée par la porte.
+    static func publishTap(
+        _ userInfo: [AnyHashable: Any],
+        currentUserId: String?,
+        publish: (_ userInfo: [AnyHashable: Any], _ addressedTo: String?) -> Void
+    ) {
+        publish(userInfo, resolve(userInfo: userInfo, currentUserId: currentUserId))
+    }
+
+    /// La porte de consommation, montée par la racine : sans session, la charge
+    /// attend (le démarrage à froid publie avant la restauration) ; sous une
+    /// session, elle navigue si elle vise ce compte, et s'efface dans tous les cas.
+    static func consume(
+        _ payload: NotificationPayload?,
+        isAuthenticated: Bool,
+        currentUserId: String?,
+        navigate: (NotificationPayload) -> Void,
+        clear: () -> Void
+    ) {
+        guard let payload, isAuthenticated else { return }
+        if PushTapConsumption.decide(payload: payload, currentUserId: currentUserId) == .navigate {
+            navigate(payload)
+        }
+        clear()
+    }
 }
