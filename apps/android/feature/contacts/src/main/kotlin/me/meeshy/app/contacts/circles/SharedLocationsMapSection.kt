@@ -38,6 +38,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import me.meeshy.sdk.model.relation.CircleLevelIcons
+import me.meeshy.ui.component.circles.tint
+import me.meeshy.ui.component.circles.titleRes
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -154,7 +157,8 @@ private fun PinGroup(pins: List<SharedLocationPin>, zoom: Int) {
 
 @Composable
 private fun Pin(pin: SharedLocationPin, zoom: Int, modifier: Modifier = Modifier) {
-    val tint = meeshyPresenceDotColor(rememberPresence(pin.userId)) ?: MeeshyPalette.Indigo500
+    val level = pin.circle?.level
+    val tint = level?.tint() ?: meeshyPresenceDotColor(rememberPresence(pin.userId)) ?: MeeshyPalette.Indigo500
     val radiusDp = SharedLocationsMap.radiusPixels(pin.radiusMeters, pin.point.latitude, zoom, SlippyMap.TILE_SIZE)
         .toFloat()
         .coerceAtMost(MAX_BLUR_RADIUS_DP)
@@ -179,12 +183,20 @@ private fun Pin(pin: SharedLocationPin, zoom: Int, modifier: Modifier = Modifier
             contentAlignment = Alignment.Center,
             modifier = Modifier.size(PIN_SIZE).clip(CircleShape).background(tint),
         ) {
-            Text(pin.initials, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text(
+                level?.let(CircleLevelIcons::of) ?: pin.initials,
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+            )
         }
     }
 }
 
-/** « nom, précision · jusqu'à HH:MM » — ce que TalkBack lit d'une épingle, iso `SharedLocationPin.accessibilityLabel`. */
+/**
+ * « nom, cercle, précision · jusqu'à HH:MM » — ce que TalkBack lit d'une épingle, iso `SharedLocationPin.accessibilityLabel`.
+ * Le cercle (#17013) n'est dit que s'il est servi : sans lui, l'épingle reste neutre.
+ */
 @Composable
 private fun pinLabel(pin: SharedLocationPin): String {
     val context = LocalContext.current
@@ -200,6 +212,7 @@ private fun pinLabel(pin: SharedLocationPin): String {
         R.string.circles_locations_pin_until,
         DateUtils.formatDateTime(context, pin.deadlineMillis, DateUtils.FORMAT_SHOW_TIME),
     )
-    return "$name, $precision · $until"
+    val circle = pin.circle?.let { stringResource(it.level.titleRes()) }
+    return listOfNotNull(name, circle, "$precision · $until").joinToString(", ")
 }
 
