@@ -78,6 +78,63 @@ class NotificationRepositoryFlightTest {
         assertThat(repo.unreadCountStream.value).isEqualTo(0)
     }
 
+    /** A deletion the socket brought while the re-read waited came back with the page built before it. */
+    @Test
+    fun `a notification deleted from the socket while the re-read waits for its page stays deleted`() = runTest {
+        val page = HeldPage()
+        val repo = NotificationRepository(api(page, unread = 2))
+        repo.replaceAll(items = listOf(row("n1"), row("n2")))
+        repo.setUnreadCount(2)
+
+        val resync = async { repo.resync() }
+        page.asked.await()
+        repo.applyDeleted("n2")
+        page.release.complete(listOf(row("n1"), row("n2")))
+        resync.await()
+
+        assertThat(repo.cachedItems(NotificationScope.All).orEmpty().map { it.id }).containsExactly("n1")
+        assertThat(repo.unreadCountStream.value).isEqualTo(1)
+    }
+
+    @Test
+    fun `a notification I delete while the re-read waits for its page stays deleted`() = runTest {
+        val page = HeldPage()
+        val api = api(page, unread = 2)
+        coEvery { api.delete("n2") } returns ApiResponse(success = true, data = Unit)
+        val repo = NotificationRepository(api)
+        repo.replaceAll(items = listOf(row("n1"), row("n2")))
+        repo.setUnreadCount(2)
+
+        val resync = async { repo.resync() }
+        page.asked.await()
+        repo.delete("n2")
+        page.release.complete(listOf(row("n1"), row("n2")))
+        resync.await()
+
+        assertThat(repo.cachedItems(NotificationScope.All).orEmpty().map { it.id }).containsExactly("n1")
+        assertThat(repo.unreadCountStream.value).isEqualTo(1)
+    }
+
+    /** The boundary of the two above: a deletion refused and rolled back during the flight keeps the row it served. */
+    @Test
+    fun `a deletion refused while the re-read waits for its page keeps the row`() = runTest {
+        val page = HeldPage()
+        val api = api(page, unread = 2)
+        coEvery { api.delete("n2") } throws IOException("offline")
+        val repo = NotificationRepository(api)
+        repo.replaceAll(items = listOf(row("n1"), row("n2")))
+        repo.setUnreadCount(2)
+
+        val resync = async { repo.resync() }
+        page.asked.await()
+        repo.delete("n2")
+        page.release.complete(listOf(row("n1"), row("n2")))
+        resync.await()
+
+        assertThat(repo.cachedItems(NotificationScope.All).orEmpty().map { it.id }).containsExactly("n1", "n2").inOrder()
+        assertThat(repo.unreadCountStream.value).isEqualTo(2)
+    }
+
     // — the account that left (#18915, F6): the repository is a singleton that outlives it —
 
     /**

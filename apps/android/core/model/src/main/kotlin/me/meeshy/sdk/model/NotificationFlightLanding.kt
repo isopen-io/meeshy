@@ -2,18 +2,23 @@ package me.meeshy.sdk.model
 
 /**
  * #18915 (AND-05) — what changed in the « all » notification list WHILE a re-read waited for its page: the live
- * arrivals (`notification:new`, most recent first) and the ids whose read state changed on this device (a gesture,
- * its echo, another device's read). The page was built before them; it replaces everything else, never them.
+ * arrivals (`notification:new`, most recent first), the ids whose read state changed on this device (a gesture,
+ * its echo, another device's read), and the ids removed from it (a deletion from the socket, a deletion gesture, a
+ * purge). The page was built before them; it replaces everything else, never them.
  */
 data class NotificationFlightChanges(
     val arrivals: List<ApiNotification> = emptyList(),
     val readChanged: Set<String> = emptySet(),
+    val removed: Set<String> = emptySet(),
 ) {
     fun arrived(notification: ApiNotification): NotificationFlightChanges =
         if (arrivals.any { it.id == notification.id }) this else copy(arrivals = listOf(notification) + arrivals)
 
     fun readChanged(ids: Set<String>): NotificationFlightChanges =
         if (ids.isEmpty()) this else copy(readChanged = readChanged + ids)
+
+    fun removed(ids: Set<String>): NotificationFlightChanges =
+        if (ids.isEmpty()) this else copy(removed = removed + ids)
 
     companion object {
         val NONE: NotificationFlightChanges = NotificationFlightChanges()
@@ -23,6 +28,12 @@ data class NotificationFlightChanges(
             val readBefore = before.associate { it.id to it.state.isRead }
             return after.filter { item -> readBefore[item.id]?.let { it != item.state.isRead } == true }
                 .mapTo(HashSet()) { it.id }
+        }
+
+        /** The ids a write took out of the list — a deletion, or a purge. */
+        fun removals(before: List<ApiNotification>, after: List<ApiNotification>): Set<String> {
+            val kept = after.mapTo(HashSet()) { it.id }
+            return before.mapNotNullTo(HashSet()) { item -> item.id.takeUnless { it in kept } }
         }
     }
 }
@@ -44,9 +55,12 @@ object NotificationFlightLanding {
      * The [page] replaces the list, except what the flight changed:
      *  - an arrival the page does not serve stays at the head, as the [live] list holds it now — as it arrived when no
      *    list was loaded; an arrival removed from the live list during the flight does not come back;
-     *  - a served notification whose read state changed on this device keeps its live state.
+     *  - a served notification whose read state changed on this device keeps its live state;
+     *  - a served notification removed during the flight does not come back — unless the live list holds it again (a
+     *    deletion refused, rolled back).
      * The served count ([servedUnread]) is corrected by what the server could not count yet: an unread arrival it does
-     * not serve counts one more; a read posed on a row it served unread, one less (a rolled-back read, one more).
+     * not serve counts one more; a read posed on a row it served unread, one less (a rolled-back read, one more); a
+     * removed row it served unread, one less.
      */
     fun land(
         page: List<ApiNotification>,
@@ -59,8 +73,11 @@ object NotificationFlightLanding {
         val kept = changes.arrivals
             .filterNot { it.id in servedIds }
             .mapNotNull { arrival -> if (liveById == null) arrival else liveById[arrival.id] }
-        val relabeled = page.map { served -> withLiveRead(served, liveById, changes.readChanged) }
-        val delta = kept.sumOf { unread(it) } + page.zip(relabeled).sumOf { (served, landed) -> unread(landed) - unread(served) }
+        val (gone, staying) = page.partition { served -> served.id in changes.removed && liveById?.containsKey(served.id) != true }
+        val relabeled = staying.map { served -> withLiveRead(served, liveById, changes.readChanged) }
+        val delta = kept.sumOf { unread(it) } +
+            staying.zip(relabeled).sumOf { (served, landed) -> unread(landed) - unread(served) } -
+            gone.sumOf { unread(it) }
         return NotificationLanding(
             items = kept + relabeled,
             unreadCount = servedUnread?.let { (it + delta).coerceAtLeast(0) },

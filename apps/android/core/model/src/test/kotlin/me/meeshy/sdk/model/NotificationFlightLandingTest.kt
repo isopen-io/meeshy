@@ -148,6 +148,41 @@ class NotificationFlightLandingTest {
     }
 
     @Test
+    fun `a notification removed during the flight does not come back with the page built before, nor in its count`() {
+        val landing = NotificationFlightLanding.land(
+            page = listOf(notification("n1"), notification("n2")),
+            servedUnread = 2,
+            live = listOf(notification("n1")),
+            changes = NotificationFlightChanges.NONE.removed(setOf("n2")),
+        )
+
+        assertThat(landing.items.ids()).containsExactly("n1")
+        assertThat(landing.unreadCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a removal undone during the flight keeps the row the page serves`() {
+        val landing = NotificationFlightLanding.land(
+            page = listOf(notification("n1"), notification("n2")),
+            servedUnread = 2,
+            live = listOf(notification("n1"), notification("n2")),
+            changes = NotificationFlightChanges.NONE.removed(setOf("n2")),
+        )
+
+        assertThat(landing.items.ids()).containsExactly("n1", "n2").inOrder()
+        assertThat(landing.unreadCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `a write that removes rows is journaled by their ids, any other write is not`() {
+        val before = listOf(notification("a"), notification("b", isRead = true), notification("c"))
+        val after = listOf(notification("c", isRead = true), notification("d"))
+
+        assertThat(NotificationFlightChanges.removals(before, after)).containsExactly("a", "b")
+        assertThat(NotificationFlightChanges.removals(before, before)).isEmpty()
+    }
+
+    @Test
     fun `an arrival journaled twice is kept once`() {
         val changes = NotificationFlightChanges.NONE.arrived(notification("n2")).arrived(notification("n2"))
 

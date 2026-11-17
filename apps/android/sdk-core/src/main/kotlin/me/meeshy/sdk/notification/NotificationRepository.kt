@@ -93,8 +93,9 @@ class NotificationRepository @Inject constructor(
 
     /**
      * #18915 (AND-05) — les relectures en vol, chacune avec son journal ([NotificationFlightChanges]) ouvert au départ
-     * de sa requête : chaque arrivée en direct et chaque lecture posée sur la liste « all » pendant qu'elle attend s'y
-     * inscrit, et la page construite avant elles atterrit par-dessus ([NotificationFlightLanding]). Tout passe sous
+     * de sa requête : chaque arrivée en direct, chaque lecture posée et chaque retrait (suppression reçue ou demandée,
+     * purge) sur la liste « all » pendant qu'elle attend s'y inscrit, et la page construite avant eux atterrit par-dessus
+     * ([NotificationFlightLanding]) sans les défaire. Tout passe sous
      * [flightLock] : une arrivée ne se glisse jamais entre la lecture du journal et l'écriture de la page.
      *
      * Une relecture appartient au compte sous lequel elle est partie ([Flight.epoch]) : [clear] ferme tous les vols, et
@@ -301,7 +302,7 @@ class NotificationRepository @Inject constructor(
         synchronized(flightLock) {
             val current = _notificationsCache.value ?: return
             val existing = current.firstOrNull { it.id == notificationId } ?: return
-            _notificationsCache.value = current.filterNot { it.id == notificationId }
+            rewriteAll { list -> list.filterNot { it.id == notificationId } }
             if (!existing.state.isRead) _unreadCount.update { (it - 1).coerceAtLeast(0) }
         }
     }
@@ -317,7 +318,7 @@ class NotificationRepository @Inject constructor(
             val current = _notificationsCache.value ?: return
             val touched = current.any { notificationMatchesDeletedBulkScope(scope, it) }
             if (!touched) return
-            _notificationsCache.value = current.filterNot { notificationMatchesDeletedBulkScope(scope, it) }
+            rewriteAll { list -> list.filterNot { notificationMatchesDeletedBulkScope(scope, it) } }
         }
     }
 
@@ -513,7 +514,7 @@ class NotificationRepository @Inject constructor(
         val removal = synchronized(flightLock) {
             val previous = _notificationsCache.value
             val index = previous?.indexOfFirst { it.id == notificationId } ?: -1
-            _notificationsCache.value = previous?.filterNot { it.id == notificationId }
+            rewriteAll { list -> list.filterNot { it.id == notificationId } }
             previous?.getOrNull(index)?.let { Removal(epoch, index, it) }
         }
         if (removal?.row?.state?.isRead == false) _unreadCount.update { (it - 1).coerceAtLeast(0) }
@@ -736,9 +737,9 @@ class NotificationRepository @Inject constructor(
     }
 
     /**
-     * The one write of the « all » list that may change a read state: during a re-read's flight,
-     * the ids whose read state it flips are journaled, so the page built before cannot undo them.
-     * A list not loaded yet is left as it is.
+     * The one write of the « all » list that may change a read state or take a row out: during a
+     * re-read's flight, the ids whose read state it flips and those it removes are journaled, so the
+     * page built before cannot undo them. A list not loaded yet is left as it is.
      */
     private fun rewriteAll(transform: (List<ApiNotification>) -> List<ApiNotification>) {
         synchronized(flightLock) {
@@ -747,7 +748,9 @@ class NotificationRepository @Inject constructor(
             _notificationsCache.value = after
             if (flights.isEmpty()) return
             val flips = NotificationFlightChanges.readFlips(before, after)
-            if (flips.isNotEmpty()) flights = flights.mapValues { (_, changes) -> changes.readChanged(flips) }
+            val removals = NotificationFlightChanges.removals(before, after)
+            if (flips.isEmpty() && removals.isEmpty()) return
+            flights = flights.mapValues { (_, changes) -> changes.readChanged(flips).removed(removals) }
         }
     }
 
