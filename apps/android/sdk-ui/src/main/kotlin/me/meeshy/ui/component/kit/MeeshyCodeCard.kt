@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,6 +31,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,8 +45,9 @@ private const val ONE_SKELETON_ALPHA = 0.12f
  * **La carte de code** (K31) : un QR sur une plaque toujours claire, dans une carte de verre qui suit l'inclinaison du
  * téléphone. Tu donnes une chaîne, une teinte et une légende ; elle ne sait pas ce que le code ouvre.
  *
- * Le [payload] n'est jamais lu, journalisé ni mis dans un nom accessible : l'image est nommée par [label], sa valeur est
- * [caption], et l'hôte offre toujours la même adresse en texte. L'inclinaison ([yaw], [pitch], lus par l'hôte au capteur ou au
+ * Le [payload] n'est jamais lu, journalisé ni mis dans un nom accessible : la carte est UN élément nommé par [label], dont la
+ * valeur est [caption], et l'hôte offre toujours la même adresse en texte. En `Mini`, aucune marge de carte : le code et sa plaque
+ * remplissent la place ; en `Plain`, la carte est la plaque claire elle-même, lisible sur un fond sombre. L'inclinaison ([yaw], [pitch], lus par l'hôte au capteur ou au
  * pointeur) n'est jamais le seul moyen de rien voir : sous « réduire les animations », en `Mini` et en `Plain`, la carte reste
  * droite. Sans [payload], un squelette tient la place finale. Avec [onPress], c'est un bouton. UN seul générateur : `MeeshyQrModules`.
  * Jumeau iOS : `MeeshyCodeCard`.
@@ -74,9 +79,10 @@ public fun MeeshyCodeCard(
     val plate = MeeshyCodeCardRecipe.plateColor(style)
     val ink = tint?.let { MeeshyCodeCardRecipe.servedTint(it, style) } ?: MeeshyCodeCardRecipe.inkColor(style)
     val press = if (onPress != null) Modifier.clickable(role = Role.Button, onClick = onPress) else Modifier
-    val cardShape = RoundedCornerShape(if (values.isGlass) MeeshyCodeCardRecipe.CARD_RADIUS.dp else values.plateRadius.dp)
+    val cardShape = RoundedCornerShape(MeeshyCodeCardRecipe.CARD_RADIUS.dp)
+    val bodyPadding = if (size == MeeshyCodeCardSize.Mini) PaddingValues(0.dp) else PaddingValues(start = 24.dp, top = 22.dp, end = 24.dp, bottom = 20.dp)
     val body: @Composable () -> Unit = {
-        Column(Modifier.padding(horizontal = 24.dp, vertical = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.fillMaxWidth().padding(bodyPadding), horizontalAlignment = Alignment.CenterHorizontally) {
             if (header != null && values.hasCaption) header()
             Box(
                 Modifier
@@ -84,8 +90,7 @@ public fun MeeshyCodeCard(
                     .graphicsLayer { translationX = motion.plateShift.toFloat() * density }
                     .clip(RoundedCornerShape(values.plateRadius.dp))
                     .background(plate)
-                    .padding(values.plateMargin.dp)
-                    .semantics { contentDescription = label },
+                    .padding(values.plateMargin.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 if (matrix == null) {
@@ -96,8 +101,9 @@ public fun MeeshyCodeCard(
                         Box(
                             Modifier
                                 .size(MeeshyCodeCardRecipe.centerSide(values.side).dp)
-                                .graphicsLayer { translationX = motion.centerShift.toFloat() * density }
-                                .background(plate, RoundedCornerShape(8.dp)),
+                                .graphicsLayer { translationX = (motion.centerShift - motion.plateShift).toFloat() * density }
+                                .clip(CircleShape)
+                                .background(plate, CircleShape),
                             contentAlignment = Alignment.Center,
                             content = center,
                         )
@@ -106,7 +112,15 @@ public fun MeeshyCodeCard(
             }
             if (caption != null && values.hasCaption) {
                 Spacer(Modifier.height(12.dp))
-                Text(caption, color = if (values.isGlass) tokens.textPrimary else Color.Black, fontSize = 13.sp, textAlign = TextAlign.Center)
+                Text(
+                    caption,
+                    color = if (style == MeeshyCodeCardStyle.Plain) MeeshyCodeCardRecipe.inkColor(style) else tokens.textPrimary,
+                    fontSize = 14.sp,
+                    fontFamily = FontFamily.Monospace,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    modifier = Modifier.clearAndSetSemantics { },
+                )
             }
         }
     }
@@ -118,12 +132,16 @@ public fun MeeshyCodeCard(
                 cameraDistance = 16f * density
             }
             .then(press)
+            .semantics(mergeDescendants = true) {
+                contentDescription = label
+                if (caption != null) stateDescription = caption
+            }
             .width(values.cardWidth.dp),
     ) {
-        if (values.isGlass) {
-            MeeshyGlass(Modifier.fillMaxWidth(), shape = cardShape) { body() }
-        } else {
-            Box(Modifier.fillMaxWidth()) { body() }
+        when {
+            values.isGlass -> MeeshyGlass(Modifier.fillMaxWidth(), shape = cardShape) { body() }
+            style == MeeshyCodeCardStyle.Plain -> Box(Modifier.fillMaxWidth().clip(cardShape).background(plate)) { body() }
+            else -> Box(Modifier.fillMaxWidth()) { body() }
         }
     }
 }

@@ -23,6 +23,17 @@ public data class MeeshyCollapsingHeroValues(
     val alignment: MeeshyCollapsingHeroAlignment,
 )
 
+/** La place de l'identité, en dp depuis le haut-début du héros. */
+@Immutable
+public data class MeeshyCollapsingHeroIdentity(
+    val avatarX: Double,
+    val avatarY: Double,
+    val titleX: Double,
+    val titleY: Double,
+    val titleWidth: Double,
+    val isTitleCentered: Boolean,
+)
+
 /**
  * **La recette de K28 en valeurs** : un seul nombre, `progress`, de 0 à 1, mène la hauteur, l'avatar, le titre, la bannière et le
  * verre. Hauteur = déplié − (déplié − replié) × progress ; l'avatar et le titre finissent à 55 % ; la bannière s'efface de 0 à
@@ -46,6 +57,12 @@ public object MeeshyCollapsingHeroRecipe {
     public const val CONTROL_INSET_COLLAPSED: Double = 12.0
     public const val BAR_CORNER_RADIUS: Double = 28.0
     public const val CONTROL_TARGET: Double = 44.0
+    public const val AVATAR_BITE: Double = 86.0
+    public const val IDENTITY_INSET: Double = 20.0
+    public const val TITLE_GAP: Double = 10.0
+    public const val TITLE_SIDE_INSET: Double = 16.0
+    public const val TITLE_COLLAPSED_TOP: Double = 6.0
+    public const val COLLAPSED_IDENTITY_X: Double = CONTROL_INSET_COLLAPSED + CONTROL_TARGET + 12.0
 
     @Suppress("LongParameterList")
     public fun resolve(
@@ -68,7 +85,7 @@ public object MeeshyCollapsingHeroRecipe {
             avatarSize = if (hasAvatar) lerp(AVATAR_EXPANDED, AVATAR_COLLAPSED, travel) else 0.0,
             titleSize = lerp(TITLE_EXPANDED, TITLE_COLLAPSED, travel),
             subtitleSize = if (hasSubtitle) lerp(SUBTITLE_EXPANDED, SUBTITLE_COLLAPSED, travel) else 0.0,
-            bannerOpacity = clamp01((1 - share) / HANDOVER_SHARE),
+            bannerOpacity = clamp01(1 - share / HANDOVER_SHARE),
             glassOpacity = clamp01((share - HANDOVER_SHARE) / (1 - HANDOVER_SHARE)),
             controlsDiscOpacity = clamp01(1 - share / DISC_FADE_SHARE),
             titleRise = clamp01((share - HANDOVER_SHARE) / (TITLE_RISE_END - HANDOVER_SHARE)),
@@ -89,6 +106,32 @@ public object MeeshyCollapsingHeroRecipe {
         if (!offset.isFinite()) return 0.0
         val distance = scrollDistance(expandedHeight, collapsedHeight)
         return if (distance > 0) offset / distance else 0.0
+    }
+
+    /**
+     * Où se posent l'avatar et le titre, en dp depuis le haut-début du héros : UNE identité qui glisse du héros à la barre (fini à
+     * 55 %), jamais deux arbres qui se relaient. Déplié, l'avatar mord de 86 sur le bas de la bannière et le titre le suit
+     * dessous (d'où [IDENTITY_OVERFLOW]) ; replié, ils se rangent après la commande de début, à [top] sous le bord. Centré, l'avatar
+     * et le titre se posent sur l'axe tant que le titre n'a pas fait la moitié de sa course. Jumeau de la géométrie de la vue iOS.
+     */
+    public fun identity(
+        progress: Double,
+        width: Double,
+        top: Double,
+        expandedHeight: Double = EXPANDED_HEIGHT,
+        alignment: MeeshyCollapsingHeroAlignment = MeeshyCollapsingHeroAlignment.Leading,
+    ): MeeshyCollapsingHeroIdentity {
+        val travel = minOf(clamp01(progress) / FINISH_SHARE, 1.0)
+        val safeWidth = if (width.isFinite()) maxOf(width, 0.0) else 0.0
+        val safeTop = if (top.isFinite()) maxOf(top, 0.0) else 0.0
+        val centered = alignment == MeeshyCollapsingHeroAlignment.Center
+        val avatarX = lerp(if (centered) (safeWidth - AVATAR_EXPANDED) / 2 else IDENTITY_INSET, COLLAPSED_IDENTITY_X, travel)
+        val avatarY = lerp(expandedHeight - AVATAR_BITE, safeTop + CONTROL_TARGET / 2 - AVATAR_COLLAPSED / 2, travel)
+        val textX = lerp(if (centered) TITLE_SIDE_INSET else IDENTITY_INSET, COLLAPSED_IDENTITY_X + AVATAR_COLLAPSED + TITLE_GAP, travel)
+        val textY = lerp(expandedHeight - AVATAR_BITE + AVATAR_EXPANDED + TITLE_GAP, safeTop + TITLE_COLLAPSED_TOP, travel)
+        val textCentered = centered && travel < HANDOVER_SHARE
+        val textWidth = maxOf(safeWidth - textX - (if (textCentered) textX else TITLE_SIDE_INSET), 0.0)
+        return MeeshyCollapsingHeroIdentity(avatarX, avatarY, textX, textY, textWidth, textCentered)
     }
 
     /** `progress` borné de 0 à 1 ; un non-nombre vaut 0. */

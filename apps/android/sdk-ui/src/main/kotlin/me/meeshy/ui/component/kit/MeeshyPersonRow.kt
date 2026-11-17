@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -42,13 +43,16 @@ import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
+private const val GHOST_GLYPH_SHARE = 0.4
+
 /**
  * **La rangée de personne** (K39) : avatar, nom, une ligne dessous, une pastille de niveau, une méta et un accessoire de fin.
  * Partout où l'on liste des gens, c'est elle ; seuls changent les mots et ce qu'on pose à la fin.
  *
  * Agnostique : des mots, une icône et deux emplacements (`avatar`, `trailing`). Elle ne dessine ni présence ni anneau — l'hôte
  * les met dans `avatar`, selon sa propre loi — et ne connaît ni cercle, ni rôle, ni distance. La partie gauche est UN élément
- * (une phrase) ; l'accessoire de fin garde sa cible et son nom. Sans [onPress] ni sélection, la rangée est un texte.
+ * (une phrase : nom, niveau, ligne, méta d'un trait, sélection) ; l'accessoire de fin garde sa cible (44 au moins) et son nom.
+ * Sans [onPress], la rangée est un texte : une sélection sans geste de l'hôte se DIT (« sélectionné »), elle ne se touche pas.
  * Jumeau iOS : `MeeshyPersonRow`.
  */
 @Composable
@@ -77,9 +81,11 @@ public fun MeeshyPersonRow(
     val textScale = LocalDensity.current.fontScale.toDouble()
     val values = MeeshyPersonRowRecipe.resolve(size, outfit, selection, hasPress = onPress != null, isPressed = isPressed, textScale = textScale)
     val ink = if (values.isMutedText) tokens.textMuted else tokens.textPrimary
-    val said = label ?: MeeshyPersonRowRecipe.spokenLabel(listOf(title, subtitle, levelLabel, meta, metaDetail, if (values.isSelected) selectedLabel else null))
-    val press = if (values.isPressable) {
-        Modifier.clickable(interactionSource = source, indication = null, role = Role.Button, onClick = { onPress?.invoke() })
+    val ghostInk = tokens.textMuted
+    val metaSaid = listOfNotNull(meta, metaDetail).joinToString(" ").ifEmpty { null }
+    val said = label ?: MeeshyPersonRowRecipe.spokenLabel(listOf(title, levelLabel, subtitle, metaSaid, if (values.isSelected) selectedLabel else null))
+    val press = if (values.isPressable && onPress != null) {
+        Modifier.clickable(interactionSource = source, indication = null, role = Role.Button, onClick = onPress)
     } else {
         Modifier
     }
@@ -104,9 +110,12 @@ public fun MeeshyPersonRow(
                     if (values.isAvatarGhost) {
                         Box(
                             Modifier.size(values.avatarSize.dp).drawBehind {
-                                drawCircle(Color.Gray, style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))))
+                                drawCircle(ghostInk, style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))))
                             },
-                        )
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(MeeshyIcons.Person, contentDescription = null, tint = ghostInk, modifier = Modifier.size((values.avatarSize * GHOST_GLYPH_SHARE).dp))
+                        }
                     } else {
                         avatar?.invoke()
                     }
@@ -121,23 +130,34 @@ public fun MeeshyPersonRow(
                     if (subtitle != null) {
                         Text(subtitle, color = tokens.textSecondary, fontSize = values.subtitleFontSize.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    if (values.metaBelowSubtitle && meta != null) Text(meta, color = tokens.textSecondary, fontSize = values.metaDetailFontSize.sp)
+                    if (values.metaBelowSubtitle) MetaBlock(meta, metaDetail, values, Alignment.Start)
                 }
-                if (!values.metaBelowSubtitle && meta != null) {
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(meta, color = ink, fontSize = values.metaFontSize.sp)
-                        if (metaDetail != null) Text(metaDetail, color = tokens.textSecondary, fontSize = values.metaDetailFontSize.sp)
-                    }
-                }
+                if (!values.metaBelowSubtitle) MetaBlock(meta, metaDetail, values, Alignment.End)
                 if (values.showsSelectionMark) SelectionMark(values.selectionShape, values.isSelected)
             }
             if (trailing != null) {
-                Box(Modifier.padding(start = values.avatarGap.dp).alpha(values.trailingOpacity.toFloat())) { trailing() }
+                Box(
+                    Modifier
+                        .padding(start = values.avatarGap.dp)
+                        .sizeIn(minWidth = MeeshyPersonRowRecipe.MINIMUM_TARGET.dp, minHeight = MeeshyPersonRowRecipe.MINIMUM_TARGET.dp)
+                        .alpha(values.trailingOpacity.toFloat()),
+                    contentAlignment = Alignment.Center,
+                ) { trailing() }
             }
         }
         if (showsDivider && values.showsDivider) {
             Box(Modifier.padding(start = values.dividerInset.dp).fillMaxWidth().height(1.dp).background(tokens.hairline))
         }
+    }
+}
+
+@Composable
+private fun MetaBlock(meta: String?, metaDetail: String?, values: MeeshyPersonRowValues, alignment: Alignment.Horizontal) {
+    if (meta == null && metaDetail == null) return
+    val tokens = MeeshyTheme.tokens
+    Column(horizontalAlignment = alignment) {
+        if (meta != null) Text(meta, color = tokens.textPrimary, fontSize = values.metaFontSize.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        if (metaDetail != null) Text(metaDetail, color = tokens.textSecondary, fontSize = values.metaDetailFontSize.sp, maxLines = 1)
     }
 }
 

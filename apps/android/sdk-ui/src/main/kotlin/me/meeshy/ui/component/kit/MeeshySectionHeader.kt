@@ -47,9 +47,10 @@ private const val CHEVRON_MILLIS = 200
  * séparateur (un libellé entre deux filets), étape numérotée, bandeau de colonne.
  *
  * Agnostique : des mots déjà écrits et des emplacements. Un compteur absent ou nul ne rend ni nombre ni écart. [isCollapsible]
- * pose un chevron et rend TOUTE la ligne tactile, annoncée « repliée » ou « dépliée » par [expandedLabel] et [collapsedLabel]. Le
- * témoin « en direct » est un point, jamais seul : l'hôte donne son mot par [liveLabel]. Aux grandes tailles de texte, l'accessoire
- * passe sous le titre. Jumeau iOS : `MeeshySectionHeader`.
+ * avec [onToggle] pose un chevron et rend TOUTE la ligne tactile, annoncée « repliée » ou « dépliée » par [expandedLabel] et
+ * [collapsedLabel] ; [onToggle] reçoit l'état DEMANDÉ. Sans [onToggle], rien ne se dit repliable : ni chevron, ni état, ni geste.
+ * Le témoin « en direct » est un point vert après le titre, jamais seul : l'hôte donne son mot par [liveLabel]. Aux grandes tailles
+ * de texte, l'accessoire passe sous le titre. Jumeau iOS : `MeeshySectionHeader`.
  */
 @Composable
 @Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
@@ -63,7 +64,7 @@ public fun MeeshySectionHeader(
     stepState: MeeshySectionHeaderStepState = MeeshySectionHeaderStepState.Todo,
     isCollapsible: Boolean = false,
     isExpanded: Boolean = true,
-    onToggle: (() -> Unit)? = null,
+    onToggle: ((Boolean) -> Unit)? = null,
     expandedLabel: String? = null,
     collapsedLabel: String? = null,
     isLive: Boolean = false,
@@ -77,28 +78,26 @@ public fun MeeshySectionHeader(
     val source = remember { MutableInteractionSource() }
     val isPressed by source.collectIsPressedAsState()
     val textScale = LocalDensity.current.fontScale.toDouble()
-    val values = MeeshySectionHeaderRecipe.resolve(form, size, count, isCollapsible, isExpanded, isPressed, isLive, textScale)
+    val collapsible = isCollapsible && onToggle != null
+    val values = MeeshySectionHeaderRecipe.resolve(form, size, count, collapsible, isExpanded, isPressed, isLive, textScale)
     val chevron by animateFloatAsState(values.chevronDegrees.toFloat(), snapAnimation(reduceMotion), label = "section-chevron")
     val press = if (values.isWholeRowTappable && onToggle != null) {
-        Modifier.clickable(interactionSource = source, indication = null, role = Role.Button, onClick = onToggle)
+        Modifier.clickable(interactionSource = source, indication = null, role = Role.Button, onClick = { onToggle(!isExpanded) })
     } else {
         Modifier
     }
-    val titleColor = if (form == MeeshySectionHeaderForm.Overline || form == MeeshySectionHeaderForm.Divider) tokens.textSecondary else tokens.textPrimary
-    val titleText = if (values.isUppercase) title.uppercase() else title
+    val isLabelForm = values.isUppercase || values.showsRules
+    val titleColor = if (isLabelForm) tokens.textMuted else tokens.textPrimary
+    val titleText = if (isLabelForm) title.uppercase() else title
     val said = listOfNotNull(title, count?.takeIf { it > 0 }?.toString(), liveLabel?.takeIf { isLive }).joinToString(", ")
-    val stateWord = if (isCollapsible) (if (isExpanded) expandedLabel else collapsedLabel) else null
+    val stateWord = if (collapsible) (if (isExpanded) expandedLabel else collapsedLabel) else null
     val titleRow: @Composable () -> Unit = {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (values.liveDotSize > 0.0) {
-                Box(Modifier.size(values.liveDotSize.dp).background(tokens.error, CircleShape))
-                Box(Modifier.width(values.liveDotGap.dp))
-            }
             Text(
                 text = titleText,
                 color = titleColor,
                 fontSize = values.titleFontSize.sp,
-                fontWeight = if (form == MeeshySectionHeaderForm.Overline || form == MeeshySectionHeaderForm.Divider) FontWeight.SemiBold else FontWeight.Bold,
+                fontWeight = if (isLabelForm) FontWeight.SemiBold else FontWeight.Bold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
@@ -106,6 +105,10 @@ public fun MeeshySectionHeader(
             if (values.showsCount) {
                 Box(Modifier.width(values.countGap.dp))
                 Text("$count", color = tokens.textMuted, fontSize = values.countFontSize.sp)
+            }
+            if (values.liveDotSize > 0.0) {
+                Box(Modifier.width(values.liveDotGap.dp))
+                Box(Modifier.size(values.liveDotSize.dp).background(tokens.success, CircleShape))
             }
         }
     }
@@ -128,7 +131,7 @@ public fun MeeshySectionHeader(
         horizontalArrangement = Arrangement.spacedBy(MeeshySectionHeaderRecipe.LEAD_GAP.dp),
     ) {
         if (form == MeeshySectionHeaderForm.Step) {
-            StepMark(stepNumber, stepState, tint, values.leadingSize)
+            StepMark(stepNumber, stepState, tint, values.leadingSize, tokens.success, tokens.textMuted, tokens.textSecondary)
         } else if (leading != null) {
             Box(Modifier.size(values.leadingSize.dp), contentAlignment = Alignment.Center) { leading() }
         }
@@ -146,7 +149,7 @@ public fun MeeshySectionHeader(
             if (accessory != null) accessory()
         }
         if (values.showsChevron) {
-            Icon(MeeshyIcons.ChevronDown, contentDescription = null, tint = tokens.textSecondary, modifier = Modifier.graphicsLayer { rotationZ = chevron })
+            Icon(MeeshyIcons.ChevronUp, contentDescription = null, tint = tokens.textSecondary, modifier = Modifier.graphicsLayer { rotationZ = chevron })
         }
     }
 }
@@ -155,19 +158,23 @@ private fun snapAnimation(reduceMotion: Boolean) =
     androidx.compose.animation.core.tween<Float>(if (reduceMotion) 0 else CHEVRON_MILLIS)
 
 @Composable
-private fun StepMark(number: Int?, state: MeeshySectionHeaderStepState, tint: Color, sizeDp: Double) {
+@Suppress("LongParameterList")
+private fun StepMark(number: Int?, state: MeeshySectionHeaderStepState, tint: Color, sizeDp: Double, done: Color, outline: Color, quietInk: Color) {
     val appearance = MeeshySectionHeaderRecipe.stepAppearance(state)
     val base = Modifier.size(sizeDp.dp)
-    val filled = appearance != MeeshySectionHeaderStepAppearance.Outlined
-    val body = if (filled) base.background(tint, CircleShape) else base.border(1.5.dp, tint, CircleShape)
+    val body = when (appearance) {
+        MeeshySectionHeaderStepAppearance.Check -> base.background(done, CircleShape)
+        MeeshySectionHeaderStepAppearance.Filled -> base.background(tint, CircleShape)
+        MeeshySectionHeaderStepAppearance.Outlined -> base.border(1.5.dp, outline, CircleShape)
+    }
     Box(body, contentAlignment = Alignment.Center) {
         when (appearance) {
             MeeshySectionHeaderStepAppearance.Check ->
-                Icon(MeeshyIcons.Check, contentDescription = null, tint = MeeshyKitColor.inkOn(tint, MeeshyTicketRecipe.DARK_INK), modifier = Modifier.size(14.dp))
+                Icon(MeeshyIcons.Check, contentDescription = null, tint = MeeshyKitColor.inkOn(done, MeeshyTicketRecipe.DARK_INK), modifier = Modifier.size(14.dp))
             MeeshySectionHeaderStepAppearance.Filled ->
                 Text("${number ?: ""}", color = MeeshyKitColor.inkOn(tint, MeeshyTicketRecipe.DARK_INK), fontSize = 13.sp, fontWeight = FontWeight.Bold)
             MeeshySectionHeaderStepAppearance.Outlined ->
-                Text("${number ?: ""}", color = tint, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text("${number ?: ""}", color = quietInk, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

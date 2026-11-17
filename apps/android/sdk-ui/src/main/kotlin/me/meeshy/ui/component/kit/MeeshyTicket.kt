@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.kit
 
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -58,7 +59,8 @@ private const val CAMERA_DISTANCE = 12f
  * Agnostique : des chaînes déjà écrites, une teinte, un glyphe et cinq emplacements (`stub`, `leading`, `trailing`, `status`,
  * `back`). Il ne copie rien, n'ouvre rien, ne compte rien : [onPress] appartient à l'hôte, et les boutons du talon gardent leur
  * propre cible (la presse du billet est posée DERRIÈRE le contenu). [isFlipped] est la seule cause du retournement ; le côté caché
- * n'est ni touchable ni lu. Jumeau iOS : `MeeshyTicket`.
+ * n'est ni touchable ni lu. Sous « réduire les animations », le billet ne tourne pas : ses faces se fondent l'une dans l'autre
+ * (160 ms), et le verso s'affiche quand même. Jumeau iOS : `MeeshyTicket`.
  */
 @Composable
 @Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
@@ -98,7 +100,7 @@ public fun MeeshyTicket(
     }
     val accent = tint ?: MeeshyPalette.Indigo500
     val rotation by animateFloatAsState(values.flipRotation.toFloat(), tween(MeeshyTicketRecipe.FLIP_CROSSFADE_MILLIS * 2), label = "ticket-flip")
-    val front = rotation <= 90f
+    val showsBack = if (values.flipCrossfades) values.showsBack else rotation > 90f
     val ruleColor = tokens.hairline
     val borderColor = if (isSelected) accent else tokens.hairline
     val fill = when (values.fill) {
@@ -140,59 +142,65 @@ public fun MeeshyTicket(
                 if (said.isNotEmpty()) contentDescription = said
             },
     ) {
-        if (front) {
-            Column(Modifier.alpha(if (values.showsContent) 1f else 0f)) {
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = values.cut.dp).padding(CONTENT_PADDING_DP.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(GAP_DP.dp),
-                ) {
-                    if (values.pastilleSize > 0.0) {
-                        Box(Modifier.size(values.pastilleSize.dp).clip(CircleShape).background(accent), contentAlignment = Alignment.Center) {
-                            Text(title.take(1).uppercase(), color = MeeshyTicketRecipe.ink(accent), fontWeight = FontWeight.Bold)
+        Crossfade(
+            targetState = showsBack,
+            animationSpec = tween(if (values.flipCrossfades) MeeshyTicketRecipe.FLIP_CROSSFADE_MILLIS else 0),
+            label = "ticket-face",
+        ) { side ->
+            if (!side) {
+                Column(Modifier.alpha(if (values.showsContent) 1f else 0f)) {
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = values.cut.dp).padding(CONTENT_PADDING_DP.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(GAP_DP.dp),
+                    ) {
+                        if (values.pastilleSize > 0.0) {
+                            Box(Modifier.size(values.pastilleSize.dp).clip(CircleShape).background(accent), contentAlignment = Alignment.Center) {
+                                Text(title.take(1).uppercase(), color = MeeshyTicketRecipe.ink(accent), fontWeight = FontWeight.Bold)
+                            }
                         }
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = title,
-                            color = tokens.textPrimary,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textDecoration = if (values.isStruck) TextDecoration.LineThrough else null,
-                        )
-                        Text(
-                            text = code,
-                            color = tokens.textSecondary,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = values.codeFontSize.coerceAtLeast(11.0).sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textDecoration = if (values.isStruck) TextDecoration.LineThrough else null,
-                        )
-                        if (figure != null) Text(figure, color = tokens.textPrimary, fontWeight = FontWeight.Bold)
-                        if (figureCaption != null) Text(figureCaption, color = tokens.textMuted, fontSize = 12.sp)
-                    }
-                    if (status != null) status()
-                    if (leading != null) leading()
-                    if (trailing != null) trailing()
-                }
-                if (stub != null && values.cut > 0.0) {
-                    Box(
-                        Modifier.fillMaxWidth().drawBehind {
-                            drawLine(
-                                color = ruleColor,
-                                start = Offset(values.cutMargin.dp.toPx(), 0f),
-                                end = Offset(this.size.width - values.cutMargin.dp.toPx(), 0f),
-                                strokeWidth = values.dashLineWidth.dp.toPx(),
-                                pathEffect = PathEffect.dashPathEffect(values.dashPattern.map { it.dp.toPx() }.toFloatArray()),
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = title,
+                                color = tokens.textPrimary,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textDecoration = if (values.isStruck) TextDecoration.LineThrough else null,
                             )
-                        }.padding(CONTENT_PADDING_DP.dp),
-                    ) { stub() }
+                            Text(
+                                text = code,
+                                color = tokens.textSecondary,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = values.codeFontSize.coerceAtLeast(11.0).sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textDecoration = if (values.isStruck) TextDecoration.LineThrough else null,
+                            )
+                            if (figure != null) Text(figure, color = tokens.textPrimary, fontWeight = FontWeight.Bold)
+                            if (figureCaption != null) Text(figureCaption, color = tokens.textMuted, fontSize = 12.sp)
+                        }
+                        if (status != null) status()
+                        if (leading != null) leading()
+                        if (trailing != null) trailing()
+                    }
+                    if (stub != null && values.cut > 0.0) {
+                        Box(
+                            Modifier.fillMaxWidth().drawBehind {
+                                drawLine(
+                                    color = ruleColor,
+                                    start = Offset(values.cutMargin.dp.toPx(), 0f),
+                                    end = Offset(this.size.width - values.cutMargin.dp.toPx(), 0f),
+                                    strokeWidth = values.dashLineWidth.dp.toPx(),
+                                    pathEffect = PathEffect.dashPathEffect(values.dashPattern.map { it.dp.toPx() }.toFloatArray()),
+                                )
+                            }.padding(CONTENT_PADDING_DP.dp),
+                        ) { stub() }
+                    }
                 }
+            } else if (back != null) {
+                Box(Modifier.graphicsLayer { rotationY = if (values.flipCrossfades) 0f else 180f }.padding(CONTENT_PADDING_DP.dp)) { back() }
             }
-        } else if (back != null) {
-            Box(Modifier.graphicsLayer { rotationY = 180f }.padding(CONTENT_PADDING_DP.dp)) { back() }
         }
     }
 }
