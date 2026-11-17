@@ -121,6 +121,17 @@ class ExhaustionHandlersTest {
         coVerify(exactly = 0) { messageRepository.confirmDeletion(any()) }
     }
 
+    /** #19047 — the refusal a 404 or a 410 left on the row tells the repository the target is gone. */
+    @Test
+    fun `an exhausted delete the gateway refused as gone says so to the repository`() = runTest {
+        val refused = outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1", lane = OutboxLanes.forMessage("c1"))
+            .copy(lastError = "Refused: HTTP 410 MESSAGE_ALREADY_DELETED")
+
+        DeleteMessageHandler(mockk<MessageApi>(), messageRepository).onExhausted(refused)
+
+        coVerify(exactly = 1) { messageRepository.settleRefusedDeletion("c1", "m1", refusedAsGone = true) }
+    }
+
     @Test
     fun `an exhausted like or unlike rolls the optimistic flip back to its previous state`() = runTest {
         LikePostHandler(mockk<PostApi>(), postRepository).onExhausted(outboxRow(OutboxKind.LIKE_POST, targetId = "p1"))

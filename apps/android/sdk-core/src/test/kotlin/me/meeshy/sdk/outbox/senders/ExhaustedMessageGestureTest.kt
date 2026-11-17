@@ -63,9 +63,9 @@ class ExhaustedMessageGestureTest {
     )
 
     /** The gesture's single outbox row, exhausted as the drainer leaves it before calling `onExhausted`. */
-    private suspend fun MessageCollaboratorHarness.exhausted(lane: String): OutboxEntity {
+    private suspend fun MessageCollaboratorHarness.exhausted(lane: String, reason: String = "refused for good"): OutboxEntity {
         val row = outbox.deliverable(lane).single()
-        outbox.markExhausted(row.cmid, "refused for good")
+        outbox.markExhausted(row.cmid, reason)
         return checkNotNull(outbox.row(row.cmid))
     }
 
@@ -224,7 +224,8 @@ class ExhaustedMessageGestureTest {
             api.readTheMessageAlone("m1")
         }
 
-    // — #19047: a deletion refused for good (404, 410) of a message the server no longer serves —
+    // — #19047: a deletion refused for good (404, 410) of a message the server no longer serves; the tombstone stays until the
+    //   server proves the message alive —
 
     private fun sealed(id: String, at: String) =
         message(id, at, content = "[Encrypted]").copy(isEncrypted = true, encryptionMode = "e2ee")
@@ -279,6 +280,47 @@ class ExhaustedMessageGestureTest {
         assertThat(harness.cachedMessage("m1").deletedAt).isNull()
         assertThat(erasures.keys()).isEmpty()
     }
+
+    /**
+     * The read back asks the server with the tombstone still in place: the plaintext of a message deleted on the device
+     * never shows again, not even for the time of the read — it comes back only once the server serves the message.
+     */
+    @Test
+    fun `the tombstone holds while the server is asked, and a deleted message never shows during the read back`() =
+        runHarnessTest { harness ->
+            harness.seedSynced(sealed("m1", T1))
+            harness.seedSynced(sealed("m9", T9))
+            var deletedWhileAsked: Boolean? = null
+            val api = mockk<MessageApi> {
+                coEvery { listAround(CONVERSATION, "m1", any()) } coAnswers {
+                    deletedWhileAsked = harness.cachedMessage("m1").deletedAt != null
+                    ApiResponse(success = true, data = listOf(sealed("m9", T9)))
+                }
+            }
+            val repo = harness.repository(api, harness.erasures())
+            repo.deleteOptimistic("m1")
+
+            DeleteMessageHandler(mockk(relaxed = true), repo).onExhausted(harness.exhausted(OutboxLanes.forMessage(CONVERSATION)))
+
+            assertThat(deletedWhileAsked).isTrue()
+        }
+
+    /** A 404 or a 410 already said the target is gone: a read back that proves nothing does not bring it back. */
+    @Test
+    fun `a deletion refused in 404 whose read back fails stays deleted, its plaintext kept until a read proves it gone`() =
+        runHarnessTest { harness ->
+            harness.seedSynced(sealed("m1", T1))
+            val erasures = harness.erasures()
+            val api = mockk<MessageApi> { coEvery { listAround(CONVERSATION, "m1", any()) } throws IOException("offline") }
+            val repo = harness.repository(api, erasures)
+            repo.deleteOptimistic("m1")
+
+            DeleteMessageHandler(mockk(relaxed = true), repo)
+                .onExhausted(harness.exhausted(OutboxLanes.forMessage(CONVERSATION), reason = "Refused: HTTP 404 MESSAGE_NOT_FOUND"))
+
+            assertThat(harness.cachedMessage("m1").deletedAt).isNotNull()
+            assertThat(erasures.keys()).isEmpty()
+        }
 
     @Test
     fun `a deletion refused whose read back fails proves nothing, and erases nothing`() = runHarnessTest { harness ->

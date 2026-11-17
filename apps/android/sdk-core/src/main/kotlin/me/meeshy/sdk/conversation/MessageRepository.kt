@@ -351,18 +351,22 @@ class MessageRepository internal constructor(
     }
 
     /**
-     * #19047 — a deletion refused for good lifts its optimistic tombstone, then reads the message back by its id. When
-     * that read serves it, the server's message takes its place (#18915). When it answers WITHOUT it — a 404 or a 410 says
-     * the server no longer knows it — the message is gone for this reader: the tombstone is laid again and its
-     * end-to-end plaintext erased, instead of a row revived out of the window for good, its plaintext kept in the vault. A
-     * read that proves nothing (offline, refused) leaves the row as the rollback left it.
+     * #19047 — a deletion refused for good keeps its optimistic tombstone until the server proves the message alive. The
+     * message is read back by its id with the tombstone in place — a served row cannot lift it, and the plaintext of a
+     * message deleted on the device never shows again, not even for the time of the read:
+     * - served alive ⇒ the tombstone falls and the server's message takes its place (#18915); served deleted ⇒ the
+     *   read's own ingestion applied the deletion, and erased a sealed message's plaintext;
+     * - answered WITHOUT it ⇒ the server no longer knows it: the deletion is confirmed, its end-to-end plaintext erased —
+     *   never a row revived out of the window for good, its plaintext kept in the vault;
+     * - a read that proves nothing (offline, refused) ⇒ a refusal that already said the target is gone ([refusedAsGone]:
+     *   404, 410) keeps it deleted, its plaintext kept until a read proves its absence; any other refusal gives it back.
      */
-    suspend fun settleRefusedDeletion(conversationId: String?, messageId: String) {
-        markUndeleted(messageId)
-        conversationId ?: return
-        if (history.readBack(conversationId, messageId) != MessageReadBack.ABSENT) return
-        mutations.markGone(messageId)
-        confirmDeletion(messageId)
+    suspend fun settleRefusedDeletion(conversationId: String?, messageId: String, refusedAsGone: Boolean = false) {
+        when (val read = conversationId?.let { history.readBack(it, messageId) } ?: MessageReadBack.Unknown) {
+            is MessageReadBack.Served -> if (read.message.deletedAt == null) markUndeleted(messageId, snapshot = read.message)
+            MessageReadBack.Absent -> confirmDeletion(messageId)
+            MessageReadBack.Unknown -> if (!refusedAsGone) markUndeleted(messageId)
+        }
     }
 
     /** Removes the named rows (either of their two ids) and their edit history. */
