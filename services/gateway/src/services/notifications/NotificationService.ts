@@ -146,7 +146,7 @@ import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 import { guardedInterval } from '../../utils/guarded-timer';
 import { ACTOR_CONTENT_TYPES, refusesActorContent } from './blocked-actor-content';
 import { isSecurityEmailType } from './security-types';
-import { senderIdentityPushFields } from './senderIdentityPushFields';
+import { bodyWithoutActorName, senderIdentityPushFields } from './senderIdentityPushFields';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -1083,13 +1083,13 @@ export class NotificationService {
           // remplace le corps par un libellé générique localisé (et supprime le
           // subtitle, porteur d'aperçus) ; showSenderName:false remplace le
           // titre (nom de l'acteur) par un titre neutre.
-          const showPreview = notifPrefs?.showPreview ?? true;
-          const showSenderName = notifPrefs?.showSenderName ?? true;
+          const showPreview = notifPrefs ? notifPrefs.showPreview ?? true : false;
+          const showSenderName = notifPrefs ? notifPrefs.showSenderName ?? true : false;
           // Corps générique localisé dans la langue du DESTINATAIRE — résolue
           // paresseusement quand l'appelant ne l'a pas fournie (réponses,
           // réactions, mentions…), jamais un 'fr' codé en dur.
           const pushBody = showPreview
-            ? truncateByCodePoints(params.content, 200)
+            ? truncateByCodePoints(await bodyWithoutActorName({ body: params.content, actor: params.actor, showSenderName, someone: async () => notificationString(await recipientLang(), 'someone') }), 200)
             : notificationString(await recipientLang(), 'push.private');
 
           // F1/D-L1 (#7218) — badge d'icône = CONVERSATIONS non lues (hors
@@ -3489,8 +3489,8 @@ export class NotificationService {
     // `showSenderName:false` neutralise le titre. Une bannière de remplacement
     // qui les ignorerait rendrait en clair ce que la première avait masqué.
     const prefs = await this.loadNotificationPrefs(userId);
-    const showPreview = prefs?.showPreview ?? true;
-    const showSenderName = prefs?.showSenderName ?? true;
+    const showPreview = prefs ? prefs.showPreview ?? true : false;
+    const showSenderName = prefs ? prefs.showSenderName ?? true : false;
     const body = showPreview
       ? truncateByCodePoints((row.content as string | null) ?? '', 200)
       : notificationString(await this.resolveRecipientLang(userId), 'push.private');

@@ -148,6 +148,37 @@ describe('identité de l\'expéditeur sur le fil (#18910)', () => {
     expect(data.senderId).toBe(SENDER_ID);
   });
 
+  it('test_showSenderNameFalse_directInvitationBody_doesNotNameTheInviter', async () => {
+    (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+      notification: { showSenderName: false },
+    });
+
+    await service.createConversationInviteNotification({
+      invitedUserId: RECIPIENT_ID,
+      inviterId: SENDER_ID,
+      conversationId: CONVERSATION_ID,
+      conversationType: 'direct',
+    });
+    await new Promise(r => setImmediate(r));
+
+    const banner = lastPushPayload();
+    expect(banner.title).toBe('Meeshy');
+    expect(banner.body).not.toContain('Alice Martin');
+    expect(banner.body).not.toContain('alice');
+    expect(banner.body.length).toBeGreaterThan(0);
+  });
+
+  it('test_preferencesUnreadable_failsClosed_noNameNoPreviewOnTheLockScreen', async () => {
+    (prisma.userPreferences.findUnique as jest.Mock).mockRejectedValue(new Error('mongo down'));
+
+    await createAndFlush();
+
+    const banner = lastPushPayload();
+    expect(banner.title).toBe('Meeshy');
+    expect(banner.body).not.toContain('Salut, comment ça va ?');
+    IDENTITY_KEYS.forEach((key) => expect(banner.data![key]).toBe(''));
+  });
+
   it('test_showSenderNameUnset_keepsTheIdentity_legacyDefault', async () => {
     (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue(null);
 
@@ -156,4 +187,29 @@ describe('identité de l\'expéditeur sur le fil (#18910)', () => {
     expect(lastPushPayload().data!.senderDisplayName).toBe('Alice Martin');
   });
 });
+});
+
+describe('bodyWithoutActorName — le corps ne nomme plus l’acteur masqué (#18910)', () => {
+  const { bodyWithoutActorName } = jest.requireActual<typeof import('../../../services/notifications/senderIdentityPushFields')>(
+    '../../../services/notifications/senderIdentityPushFields');
+  const someone = async () => 'Quelqu’un';
+
+  it('remplace le nom affiché et le pseudo, en mot entier, caractères spéciaux compris', async () => {
+    const body = await bodyWithoutActorName({
+      body: 'J.-P. (le vrai) a réagi ❤️ — jp_92 aussi, mais pas jp_921', actor: { displayName: 'J.-P. (le vrai)', username: 'jp_92' }, showSenderName: false, someone,
+    });
+    expect(body).toBe('Quelqu’un a réagi ❤️ — Quelqu’un aussi, mais pas jp_921');
+  });
+
+  it('un nom d’une lettre ne se cherche pas : le texte reste intact', async () => {
+    const body = await bodyWithoutActorName({ body: 'a b c', actor: { displayName: 'a', username: 'b' }, showSenderName: false, someone });
+    expect(body).toBe('a b c');
+  });
+
+  it('nom montré : rien ne change, et la langue du destinataire n’est pas résolue', async () => {
+    const lazy = jest.fn(someone);
+    const body = await bodyWithoutActorName({ body: 'Nouvelle conversation avec Alice', actor: { displayName: 'Alice' }, showSenderName: true, someone: lazy });
+    expect(body).toBe('Nouvelle conversation avec Alice');
+    expect(lazy).not.toHaveBeenCalled();
+  });
 });

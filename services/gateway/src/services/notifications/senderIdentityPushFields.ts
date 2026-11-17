@@ -36,3 +36,28 @@ export function senderIdentityPushFields(params: {
     imageURL: actor?.avatar || '',
   };
 }
+
+const escapeForPattern = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Le CORPS de la bannière sous `showSenderName:false`. Plusieurs corps nomment l'acteur (« Nouvelle conversation
+ * avec {actor} », réactions, demandes d'ami) et s'affichent sur l'écran verrouillé sous le titre neutre : son nom
+ * affiché et son pseudo y deviennent « Quelqu'un » dans la langue du destinataire (`someone`, résolu seulement
+ * quand il sert), en mot entier — un nom d'une lettre ne se cherche pas, il mutilerait le texte.
+ */
+export async function bodyWithoutActorName(params: {
+  readonly body: string;
+  readonly actor: PushActorIdentity | undefined;
+  readonly showSenderName: boolean;
+  readonly someone: () => Promise<string>;
+}): Promise<string> {
+  const names = [params.actor?.displayName, params.actor?.username]
+    .map((name) => name?.trim() ?? '')
+    .filter((name) => [...name].length >= 2)
+    .sort((a, b) => b.length - a.length);
+  if (params.showSenderName || names.length === 0) return params.body;
+  const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])(?:${names.map(escapeForPattern).join('|')})(?![\\p{L}\\p{N}_])`, 'gu');
+  if (!pattern.test(params.body)) return params.body;
+  const someone = await params.someone();
+  return params.body.replace(pattern, someone);
+}
