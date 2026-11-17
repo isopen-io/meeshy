@@ -25,7 +25,7 @@ final class ConversationStoreDurableMarkReadTests: XCTestCase {
         return (store, lifecycle, outbox)
     }
 
-    private func makeConv(id: String = "conv-1", unreadCount: Int = 3) -> MeeshyConversation {
+    private func makeConv(id: String = "conv-1", unreadCount: Int = 3, version: Int = 5) -> MeeshyConversation {
         MeeshyConversation(
             id: id,
             identifier: id,
@@ -33,7 +33,7 @@ final class ConversationStoreDurableMarkReadTests: XCTestCase {
             lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
             createdAt: Date(timeIntervalSince1970: 1_700_000_000),
             updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
-            userState: ConversationUserState(unreadCount: unreadCount, version: 5)
+            userState: ConversationUserState(unreadCount: unreadCount, version: version)
         )
     }
 
@@ -93,6 +93,27 @@ final class ConversationStoreDurableMarkReadTests: XCTestCase {
         XCTAssertTrue(taken, "lancement à froid en arrière-plan : le store n'est pas hydraté, le cache le sert")
         let pending = await outbox.allPending()
         XCTAssertEqual(pending.map(\.mutation), [.markAsRead])
+    }
+
+    /// Une conversation inconnue du store (créée pendant que l'app dormait) se relit du cache, MAIS
+    /// elle seule : relire tout le cache en bloc remplaçait l'état des conversations déjà connues par
+    /// celui du disque — une lecture locale encore en vol y rallumait sa pastille, un épinglage
+    /// optimiste s'y défaisait. La liste n'hydrate jamais le store autrement que par
+    /// `hydrateMetadata`, le chemin gardé par version.
+    func test_markReadDurably_conversationUnknownToTheStore_seedsOnlyItsRowAndLeavesTheKnownOnesAlone() async {
+        let cache = MockCacheReading()
+        cache.stubbed = .stale([makeConv(id: "conv-connue", unreadCount: 7, version: 2), makeConv()], age: 600)
+        let (store, _, outbox) = makeStore(cache: cache)
+        await store.hydrate(makeConv(id: "conv-connue", unreadCount: 0, version: 9))
+
+        let taken = await store.markReadDurably("conv-1")
+
+        XCTAssertTrue(taken)
+        let known = await store.conversation(id: "conv-connue")?.userState
+        XCTAssertEqual(known?.unreadCount, 0, "le disque en retard ne rallume pas la pastille d'une conversation déjà lue")
+        XCTAssertEqual(known?.version, 9, "l'état local d'une conversation connue n'est pas remplacé par le cache")
+        let pending = await outbox.allPending()
+        XCTAssertTrue(pending.isEmpty, "en ligne : le geste est parti et acquitté")
     }
 
     func test_markReadDurably_conversationAbsentFromStoreAndCache_declinesSoTheCallerCanPostDirectly() async {
