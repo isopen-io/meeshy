@@ -42,6 +42,10 @@ import {
   type FreezeMessageStatusParams,
 } from './messaging/freezeMessageStatus';
 import {
+  DELIVERY_FLOOR_SELECT,
+  deliveryFloorOf,
+} from './messaging/deliveryFloor';
+import {
   parsePlaybackTrace,
   traceCoverage,
 } from '../utils/playback-trace';
@@ -589,15 +593,18 @@ export class MessageReadStatusService {
 
       // Best-effort: only bounds the freeze window, never fails the cursor
       // advance below (which is now the sole source of truth for staleness).
-      let prevDeliveredAt: Date | null = null;
-      // #18731 — la POSITION du curseur, distincte de son horloge MURALE.
-      // `lastDeliveredAt` est posé à `now` par `_advanceCursor` : c'est l'heure
-      // à laquelle un accusé a été TRAITÉ. Ancrer la fenêtre de contiguïté
-      // dessus EXCLURAIT le trou qu'on cherche — M1 (10:00) est sous un
-      // `lastDeliveredAt` de 11:00, et c'est exactement le défaut que ce lot
-      // ferme. Repli sur l'horloge quand la colonne manque (lignes écrites
-      // avant son introduction) : la fenêtre démarre alors trop TARD, donc on
-      // ne re-litige pas un passé dont le repli curseur rend déjà compte.
+      // #18731 puis #19261 — la POSITION du curseur, distincte de son horloge
+      // MURALE. `lastDeliveredAt` est posé à `now` par `_advanceCursor` : c'est
+      // l'heure à laquelle un accusé a été TRAITÉ. Ancrer dessus EXCLUT par
+      // construction tout trou situé SOUS elle — M1 (10:00) est sous un
+      // `lastDeliveredAt` de 11:00. #18731 l'a retirée du BALAYAGE de
+      // contiguïté ; #19261 la retire de la fenêtre du GEL, où elle sautait un
+      // préfixe PARTIEL (cible 10:00, horloge 11:00, trou à 10:05).
+      //
+      // Les deux usages partagent désormais la MÊME loi (`deliveryFloor.ts`),
+      // qui tient ensemble la forme du `select` et la descente : ce qui rendait
+      // le troisième site inatteignable n'était pas un appel manquant mais une
+      // projection trop étroite.
       let prevDeliveredPosition: Date | null = null;
       let cursorExists = false;
       try {
@@ -605,14 +612,11 @@ export class MessageReadStatusService {
           where: {
             conversation_participant_cursor: { participantId, conversationId },
           },
-          select: { lastDeliveredAt: true, lastDeliveredMessageCreatedAt: true },
+          select: DELIVERY_FLOOR_SELECT,
         });
-        prevDeliveredAt = prevCursor?.lastDeliveredAt ?? null;
-        prevDeliveredPosition =
-          prevCursor?.lastDeliveredMessageCreatedAt ?? prevCursor?.lastDeliveredAt ?? null;
+        prevDeliveredPosition = deliveryFloorOf(prevCursor);
         cursorExists = prevCursor != null;
       } catch {
-        prevDeliveredAt = null;
         prevDeliveredPosition = null;
       }
 
@@ -642,7 +646,13 @@ export class MessageReadStatusService {
         const frozenCount = await this.freezeMessageStatus({
           participantId,
           conversationId,
-          since: prevDeliveredAt,
+          // INERTE sur ce chemin — `freezeMessageStatus` ignore `since` dès
+          // qu'une liste d'ids est nommée, la liste ÉTANT la borne. On y passe
+          // quand même la position, et non l'horloge : une valeur fausse mais
+          // inexploitée est un piège armé, pas une économie. Le jour où ce
+          // paramètre compterait en mode exact, l'horloge serait de retour sans
+          // qu'un témoin tombe.
+          since: prevDeliveredPosition,
           at: now,
           field: "deliveredAt",
           messageIds: options.messageIds,
@@ -723,7 +733,7 @@ export class MessageReadStatusService {
       const frozenCount = await this.freezeMessageStatus({
         participantId,
         conversationId,
-        since: prevDeliveredAt,
+        since: prevDeliveredPosition,
         at: now,
         field: "deliveredAt",
       });
@@ -838,21 +848,26 @@ export class MessageReadStatusService {
       // fenêtre du gel. Une erreur ici ne doit pas faire échouer le marquage
       // (on retombe sur `null` = gel depuis l'origine, lui-même résilient).
       let prevReadAt: Date | null = null;
-      let prevDeliveredAt: Date | null = null;
+      // #19261 — la cascade « lu ⇒ remis » de cette méthode pose la MÊME borne
+      // de gel que `markMessagesAsReceived`, et c'est le seul des trois sites
+      // dont le `select` ne demandait pas la colonne de POSITION du tout.
+      // Changer la variable passée y aurait été un no-op muet : la descente
+      // était impossible faute de projection, pas faute d'appel (leçon 276).
+      let prevDeliveredPosition: Date | null = null;
       let cursorExists = false;
       try {
         const prevCursor = await this.prisma.conversationReadCursor.findUnique({
           where: {
             conversation_participant_cursor: { participantId, conversationId },
           },
-          select: { lastReadAt: true, lastDeliveredAt: true },
+          select: { lastReadAt: true, ...DELIVERY_FLOOR_SELECT },
         });
         prevReadAt = prevCursor?.lastReadAt ?? null;
-        prevDeliveredAt = prevCursor?.lastDeliveredAt ?? null;
+        prevDeliveredPosition = deliveryFloorOf(prevCursor);
         cursorExists = prevCursor != null;
       } catch {
         prevReadAt = null;
-        prevDeliveredAt = null;
+        prevDeliveredPosition = null;
       }
 
       // Out-of-order read receipt (e.g. a second, staler device catching up
@@ -1053,7 +1068,7 @@ export class MessageReadStatusService {
         await this.freezeMessageStatus({
           participantId,
           conversationId,
-          since: prevDeliveredAt,
+          since: prevDeliveredPosition,
           at: now,
           field: "deliveredAt",
         });
