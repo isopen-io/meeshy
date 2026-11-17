@@ -17,13 +17,12 @@ import { MOOD_BADGE_PLACEHOLDER, selfBadgeDiameter } from './story-rail-self-til
  * droite pour créer un mood ou afficher le smiley animé du mood en cours comme
  * sous iOS ».
  *
- * Référence de géographie : `LentilleRailSelfEntryView`
- * (`apps/ios/.../Lens/Chrome/StoriesVivantsRail.swift`) —
- * `ZStack(alignment: .bottomTrailing)` pour l'humeur,
- * `.overlay(alignment: .topLeading)` pour le (+), deux `Button(.plain)`
- * DISTINCTS. Son commentaire tranche l'ambiguïté que ces témoins gardent :
- * « le badge bas-droit reste le MOOD (💭 / emoji), jamais un second plus
- * ambigu ».
+ * Référence de géographie : `MyStoryButton`
+ * (`apps/ios/Meeshy/Features/Stories/Views/StoryTrayView.swift`) —
+ * `.overlay(alignment: .bottomTrailing)` pour l'humeur,
+ * `.overlay(alignment: .topLeading)` pour le (+), deux boutons
+ * DISTINCTS de l'avatar. Ces témoins gardent l'ambiguïté tranchée : le
+ * badge bas-droit reste le MOOD (💭 / emoji), jamais un second plus.
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
@@ -111,8 +110,8 @@ describe('la cellule « soi » porte DEUX pastilles, et deux seulement', () => {
 
   /**
    * LA RÈGLE DU RAIL EST INCHANGÉE : rien à montrer ⇒ rien. Mais « rien »
-   * veut dire NI moi NI personne — miroir
-   * `LentilleRailPolicy.shouldRender(selfEntry:entries:)`. Sans ce témoin, un
+   * veut dire NI moi NI personne — iOS monte `MyStoryButton` en tête de
+   * `StoryTrayView` quels que soient les autres auteurs. Sans ce témoin, un
    * lecteur qui n'a pas d'amis publiant n'aurait AUCUNE porte.
    */
   test('un rail SANS aucun autre auteur existe quand même, pour mes deux portes', () => {
