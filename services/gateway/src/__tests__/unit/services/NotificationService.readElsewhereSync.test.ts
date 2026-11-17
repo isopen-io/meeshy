@@ -2,15 +2,16 @@
  * #18910 (serveur-transport-6) — une conversation lue ailleurs remet l'icône à son vrai chiffre.
  *
  * Bob lit sur le web trois conversations dont les messages avaient posé « 3 » sur son iPhone. Aucun push ne partait
- * vers l'iPhone : l'icône restait à « 3 » pendant des heures. Désormais, marquer les notifications d'une conversation
- * comme lues :
+ * vers l'iPhone : l'icône restait à « 3 » pendant des heures. Désormais :
  *
- *  - iOS  : envoie UN push « badge seul » (`badge_sync`, plateforme iOS) portant le total recalculé ;
+ *  - iOS  : chaque lecture ÉCRITE (`noteReadCursorMoved`, annoncée par `broadcastReadStatus` après l'écriture du
+ *    curseur) envoie UN push « badge seul » (`badge_sync`, plateforme iOS) portant le total recalculé — que des
+ *    notifications aient été marquées ou non : le total se compte sur le curseur ;
  *  - Android : n'a pas de pastille sans bannière — les bannières lues dont le push est parti sont révoquées
- *    (`notification_revoked`, déjà déployé).
+ *    (`notification_revoked`, déjà déployé) quand le marquage des notifications en lit.
  *
- * Rien ne part quand la lecture n'a rien marqué, ni chez un compte sans appareil iOS, ni quand le total est
- * indisponible (servir « 0 » EFFACERAIT l'icône). Une rafale de lectures est coalescée en UNE synchronisation.
+ * Rien ne part chez un compte sans appareil iOS, ni quand le total est indisponible (servir « 0 » EFFACERAIT
+ * l'icône). Une rafale de lectures est coalescée en UNE synchronisation.
  *
  * @jest-environment node
  */
@@ -94,7 +95,7 @@ describe('NotificationService — une lecture faite ailleurs remet l’icône à
   });
 
   it('la dernière conversation non lue lue ailleurs : UN push « badge seul » vers l’iPhone, à 0', async () => {
-    await service.markConversationNotificationsAsRead(USER, CONV_A);
+    service.noteReadCursorMoved(USER);
     await settle();
 
     expect(badgeSyncs()).toHaveLength(1);
@@ -108,26 +109,35 @@ describe('NotificationService — une lecture faite ailleurs remet l’icône à
   it('le total est celui du reste : deux conversations non lues, une lue ⇒ la pastille dit 1', async () => {
     mockComputeBadge.mockResolvedValue(1);
 
-    await service.markConversationNotificationsAsRead(USER, CONV_A);
+    service.noteReadCursorMoved(USER);
     await settle();
 
     expect(badgeSyncs()[0].payload.badge).toBe(1);
   });
 
-  it('une lecture qui n’a rien marqué n’appelle rien : le total n’a pas pu bouger', async () => {
+  it('une lecture écrite sans aucune notification marquée remet quand même l’icône à son chiffre (lecture progressive, Ne pas déranger)', async () => {
     marked = 0;
+    mockComputeBadge.mockResolvedValue(0);
 
+    service.noteReadCursorMoved(USER);
+    await settle();
+
+    expect(badgeSyncs()).toHaveLength(1);
+    expect(badgeSyncs()[0].payload.badge).toBe(0);
+  });
+
+  it('marquer les notifications d’une conversation ne pousse pas la pastille : seule la lecture écrite la fixe', async () => {
     await service.markConversationNotificationsAsRead(USER, CONV_A);
     await settle();
 
-    expect(sendToUser).not.toHaveBeenCalled();
+    expect(badgeSyncs()).toEqual([]);
     expect(mockComputeBadge).not.toHaveBeenCalled();
   });
 
   it('un compte sans appareil iOS ne paie ni le calcul du total ni le push', async () => {
     prisma.pushToken.findFirst.mockResolvedValue(null);
 
-    await service.markConversationNotificationsAsRead(USER, CONV_A);
+    service.noteReadCursorMoved(USER);
     await settle();
 
     expect(mockComputeBadge).not.toHaveBeenCalled();
@@ -137,29 +147,25 @@ describe('NotificationService — une lecture faite ailleurs remet l’icône à
   it('un total indisponible n’envoie rien : « 0 » effacerait l’icône d’un destinataire qui a des non-lus', async () => {
     mockComputeBadge.mockRejectedValue(new Error('conversation unread counts unavailable'));
 
-    await service.markConversationNotificationsAsRead(USER, CONV_A);
+    service.noteReadCursorMoved(USER);
     await settle();
 
     expect(badgeSyncs()).toEqual([]);
   });
 
   it('une rafale de lectures (trois conversations) se coalesce en UNE synchronisation', async () => {
-    await Promise.all([
-      service.markConversationNotificationsAsRead(USER, CONV_A),
-      service.markConversationNotificationsAsRead(USER, CONV_B),
-      service.markConversationNotificationsAsRead(USER, '64b00000000000000000000c'),
-    ]);
+    service.noteReadCursorMoved(USER);
+    service.noteReadCursorMoved(USER);
+    service.noteReadCursorMoved(USER);
     await settle();
 
     expect(badgeSyncs()).toHaveLength(1);
   });
 
   /**
-   * Revue (#18910) — l'anti-rebond est un DÉLAI, pas une simple coalescence de file. La cascade « messages lus →
-   * notifications lues » part AVANT l'écriture du curseur de lecture (`MessageReadStatusService.markMessagesAsRead`),
-   * et le total se compte sur ce curseur : calculé aussitôt, il compte encore la conversation qu'on vient de lire,
-   * et ce chiffre périmé reste sur l'icône. Il se lit donc une fois la fenêtre écoulée, que la dernière lecture
-   * d'une rafale étale sur plusieurs secondes prolonge.
+   * Revue (#18910) — l'anti-rebond est un DÉLAI, pas une simple coalescence de file : une lecture progressive écrit
+   * son curseur à chaque salve, et le total se lit une fois la fenêtre écoulée depuis la DERNIÈRE, au chiffre d'après
+   * elle — en un seul push.
    */
   describe('l’anti-rebond attend que la lecture soit écrite', () => {
     const drainMicrotasks = async () => {
@@ -178,7 +184,7 @@ describe('NotificationService — une lecture faite ailleurs remet l’icône à
       let cursorWritten = false;
       mockComputeBadge.mockImplementation(async () => (cursorWritten ? 0 : 1));
 
-      await service.markConversationNotificationsAsRead(USER, CONV_A);
+      service.noteReadCursorMoved(USER);
       await drainMicrotasks();
       cursorWritten = true;
 
@@ -194,8 +200,8 @@ describe('NotificationService — une lecture faite ailleurs remet l’icône à
       let readConversations = 0;
       mockComputeBadge.mockImplementation(async () => 3 - readConversations);
 
-      for (const conversationId of [CONV_A, CONV_B, '64b00000000000000000000c']) {
-        await service.markConversationNotificationsAsRead(USER, conversationId);
+      for (let read = 0; read < 3; read += 1) {
+        service.noteReadCursorMoved(USER);
         readConversations += 1;
         await drainMicrotasks();
         jest.advanceTimersByTime(1_000);

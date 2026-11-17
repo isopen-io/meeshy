@@ -3035,7 +3035,9 @@ export class NotificationService {
         this.announceReadBulk(userId, { kind: 'context', contextKey, contextValue });
         // Rafraîchir les compteurs côté client (cloche + badge) en temps réel.
         this.emitCountsUpdate(userId).catch(() => {});
-        if (contextKey === 'conversationId') await this.settleDevicesAfterRead(userId, contextValue, readAt);
+        if (contextKey === 'conversationId') {
+          this.revokeDeliveredPushes(await pushedBannersReadSince(this.prisma, { userId, conversationId: contextValue, since: readAt }));
+        }
       }
 
       return count;
@@ -3054,13 +3056,12 @@ export class NotificationService {
     this.queueDeviceWork(() => sendBadgeSyncToIos({ prisma: this.prisma, pushService: this.pushService, userId })));
 
   /**
-   * #18910 — une conversation lue défait aussi ce que le TÉLÉPHONE affiche : les bannières lues dont un push est
-   * parti sont révoquées (Android n'a pas de pastille sans bannière), et l'iPhone reçoit un push « badge seul »
-   * avec le total recalculé une fois la lecture écrite (`BadgeSyncDebouncer`).
+   * #18910 — une lecture ÉCRITE (`broadcastReadStatus`, après le curseur, que des notifications soient marquées ou
+   * non) remet la pastille de l'iPhone à son total, une fois par rafale. Les bannières lues d'Android, elles, sont
+   * révoquées par le marquage des notifications de la conversation.
    */
-  private async settleDevicesAfterRead(userId: string, conversationId: string, since: string): Promise<void> {
-    this.revokeDeliveredPushes(await pushedBannersReadSince(this.prisma, { userId, conversationId, since }));
-    this.badgeSync.schedule(userId);
+  noteReadCursorMoved(userId: string): void {
+    if (/^[0-9a-f]{24}$/i.test(userId)) this.badgeSync.schedule(userId);
   }
 
   /**

@@ -11,7 +11,8 @@ import type { SendPushOptions } from '../PushNotificationService';
  * serveur-transport-6). Le socket ne parle qu'à un appareil déjà connecté ; un
  * iPhone dont l'app est fermée garde sa pastille et ses bannières.
  *
- *  - iOS : un push « badge seul » (`badgeSyncPush`) avec le total recalculé ;
+ *  - iOS : un push « badge seul » (`badgeSyncPush`) avec le total recalculé,
+ *    déclenché par l'écriture du curseur de lecture (`broadcastReadStatus`) ;
  *  - Android : pas de pastille sans bannière — les bannières LUES dont un push
  *    est parti partent par la révocation déjà déployée (`notification_revoked`).
  */
@@ -63,11 +64,9 @@ export async function pushedBannersReadSince(
 }
 
 /**
- * Fenêtre de l'anti-rebond, en millisecondes. La cascade « messages lus →
- * notifications lues » part AVANT l'écriture du curseur de lecture
- * (`MessageReadStatusService.markMessagesAsRead`), et le total se compte sur ce
- * curseur : lu aussitôt, il compterait encore la conversation qu'on vient de
- * lire, et ce chiffre périmé resterait sur l'icône jusqu'au prochain push.
+ * Fenêtre de l'anti-rebond, en millisecondes. Une lecture progressive écrit son
+ * curseur à chaque salve (~1/s sur le web) : la synchronisation part une fois
+ * la lecture posée, au total compté sur le dernier curseur, en UN push.
  */
 export const BADGE_SYNC_DEBOUNCE_MS = 2_000;
 
