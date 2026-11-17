@@ -5,11 +5,18 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import java.io.IOException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonNull
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.conversation.ChatMutationAdmission
 import me.meeshy.sdk.conversation.EndToEndRegimeKeeper
 import me.meeshy.sdk.conversation.MessageCollaboratorHarness
+import me.meeshy.sdk.conversation.MessageIngestPipeline
 import me.meeshy.sdk.conversation.MessageMutationsRepository
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.conversation.runHarnessTest
@@ -321,6 +328,35 @@ class ExhaustedMessageGestureTest {
             assertThat(harness.cachedMessage("m1").deletedAt).isNotNull()
             assertThat(erasures.keys()).isEmpty()
         }
+
+    /**
+     * Audit A1 — the settlement starts once the row is EXHAUSTED, and nothing replayed it: interrupted (the worker stopped)
+     * while the server was asked, it left a LIVE message « deleted » for good, since no served copy lifts a local tombstone
+     * once its deletion left the queue. It now runs out of reach of cancellation, its read bounded in time.
+     */
+    @Test
+    fun `a refused deletion interrupted while the server is asked still gives the live message back`() = runHarnessTest { harness ->
+        harness.seedSynced(sealed("m1", T1))
+        val asked = CompletableDeferred<Unit>()
+        val api = mockk<MessageApi> {
+            coEvery { listAround(CONVERSATION, "m1", any()) } coAnswers {
+                asked.complete(Unit)
+                awaitCancellation()
+            }
+        }
+        val repo = harness.repository(api, harness.erasures())
+        repo.deleteOptimistic("m1")
+        harness.exhausted(OutboxLanes.forMessage(CONVERSATION))
+
+        coroutineScope {
+            val settling = launch(Dispatchers.Default) { repo.settleRefusedDeletion(CONVERSATION, "m1", readBackBudgetMillis = 100) }
+            asked.await()
+            settling.cancelAndJoin()
+        }
+        MessageIngestPipeline(harness.database).ingest(listOf(sealed("m1", T1)), harness.clock.now)
+
+        assertThat(harness.cachedMessage("m1").deletedAt).isNull()
+    }
 
     @Test
     fun `a deletion refused whose read back fails proves nothing, and erases nothing`() = runHarnessTest { harness ->
