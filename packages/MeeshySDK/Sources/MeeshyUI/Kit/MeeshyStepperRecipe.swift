@@ -202,7 +202,7 @@ public nonisolated struct MeeshyStepperRecipe: Sendable, Equatable {
 }
 
 /// Les mots dits : la voix annonce la valeur, pas le geste.
-public nonisolated enum MeeshyStepperWords {
+public enum MeeshyStepperWords {
 
     /// Le texte de l'hôte (« 50 entrées »), sinon le titre de l'arrêt, sinon le nombre.
     public static func spokenValue(spoken: String?, value: Int, stopTitle: String?, locale: Locale = .current) -> String {

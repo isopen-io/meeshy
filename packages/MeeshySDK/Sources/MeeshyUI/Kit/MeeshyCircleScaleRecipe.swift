@@ -133,7 +133,7 @@ public nonisolated struct MeeshyCircleScaleRecipe: Sendable, Equatable {
 }
 
 /// Les mots dits : le niveau est toujours écrit ou dit, jamais seulement teinté.
-public nonisolated enum MeeshyCircleScaleWords {
+public enum MeeshyCircleScaleWords {
 
     /// « Proche, 5 sur 6 » : le nom, puis le rang compté depuis le plus bas.
     public static func spokenValue(title: String, level: Int, of count: Int,

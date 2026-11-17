@@ -79,7 +79,7 @@ public nonisolated struct MeeshyTranslationMarkRecipe: Sendable, Equatable {
 
 /// Les mots dits : le nom de langue est donné, déjà accordé, par l'hôte ; la marque ne
 /// le recompose jamais.
-public nonisolated enum MeeshyTranslationMarkWords {
+public enum MeeshyTranslationMarkWords {
 
     /// « Traduit de l'italien » / « Original en italien » ; sans langue : « Traduit » / « Original ».
     public static func mention(mode: MeeshyTranslationMarkMode, languageName: String?,

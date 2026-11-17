@@ -103,7 +103,7 @@ public nonisolated struct MeeshyLockedRowRecipe: Sendable, Equatable {
 }
 
 /// Les mots dits : l'état fermé est écrit et dit, jamais seulement atténué.
-public nonisolated enum MeeshyLockedRowWords {
+public enum MeeshyLockedRowWords {
 
     /// « Présence, verrouillé, dès Ami » ; ouvert : « Présence, déverrouillé ».
     public static func spokenLabel(title: String, requirement: String, isOpen: Bool,

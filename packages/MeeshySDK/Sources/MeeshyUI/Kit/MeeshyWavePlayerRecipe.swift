@@ -226,7 +226,7 @@ public nonisolated struct MeeshyWavePlayerRecipe: Sendable, Equatable {
 }
 
 /// Les mots dits : le disque est un bouton nommé, l'onde une valeur « 0:05 sur 0:09 ».
-public nonisolated enum MeeshyWavePlayerWords {
+public enum MeeshyWavePlayerWords {
 
     public static func toggleLabel(label: String, isPlaying: Bool,
                                    bundle: Bundle? = nil, locale: Locale = .current) -> String {
