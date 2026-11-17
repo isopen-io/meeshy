@@ -7,7 +7,7 @@
  *
  * @jest-environment node
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
 import { BLOOD_MAP_CONSULTATION_WINDOW_MINUTES } from '@meeshy/shared/types/blood-location';
 import { bloodLocationMapFor } from '../../../../services/bloodLocation/bloodLocationMap';
 import { readBloodLocationHistory, recordBloodLocation, updateBloodLocationSettings } from '../../../../services/bloodLocation/bloodLocationService';
@@ -146,6 +146,20 @@ describe('le journal — une ligne par Sang et par quart d\'heure, pas une par r
     }
 
     expect(w.consultations.rows.map((row) => row.observedId).sort()).toEqual([SANG, AUTRE_SANG].sort());
+  });
+
+  it('un rafraîchissement dans la fenêtre lit le journal en UNE requête, quel que soit le nombre de Sangs', async () => {
+    const w = bloodWorldAvecConsentements();
+    await recordBloodLocation(w.deps, SANG, PARIS);
+    await recordBloodLocation(w.deps, AUTRE_SANG, PARIS);
+    await bloodLocationMapFor(w.deps, MOI);
+    w.avancer(MINUTE);
+    const counts = jest.spyOn(w.consultations, 'count');
+    const lists = jest.spyOn(w.consultations, 'findMany');
+
+    await bloodLocationMapFor(w.deps, MOI);
+
+    expect(counts.mock.calls.length + lists.mock.calls.length).toBe(1);
   });
 
   it('passé la fenêtre, la lecture suivante ajoute une ligne', async () => {
