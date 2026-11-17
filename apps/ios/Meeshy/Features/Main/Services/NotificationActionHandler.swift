@@ -125,9 +125,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         backgroundTasks: BackgroundTaskScheduling = UIApplicationBackgroundTaskScheduler(),
         authTokenProvider: @escaping @MainActor () -> String? = { AuthManager.shared.authToken },
         applyAuthToken: @escaping @MainActor (String?) -> Void = { APIClient.shared.authToken = $0 },
-        currentUserId: @escaping @MainActor () -> String? = {
-            AuthManager.shared.currentUser?.id ?? AuthManager.shared.persistedActiveUserId
-        },
+        currentUserId: @escaping @MainActor () -> String? = { PushTapAddressee.currentUserId() },
         preferredLanguage: @escaping @MainActor () -> String? = {
             // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
             AuthManager.shared.currentUser?.preferredContentLanguages.first
@@ -139,7 +137,11 @@ final class NotificationActionHandler: NotificationActionHandling {
         openNotification: @escaping @MainActor ([AnyHashable: Any]) -> Void = {
             // iPad, fenêtre détachée devant : la cible s'ouvre dans la fenêtre principale — qui revient d'abord.
             MainWindowRegistry.shared.bringPrimaryForwardIfHidden()
-            PushNotificationManager.shared.handleNotification(userInfo: $0)
+            let userInfo = $0
+            PushNotificationManager.shared.handleNotification(
+                userInfo: userInfo,
+                addressedTo: PushTapAddressee.resolve(userInfo: userInfo, currentUserId: PushTapAddressee.currentUserId())
+            )
         },
         dialCallBack: @escaping @MainActor (CallBackRequest) -> Void = { request in
             CallBackDialer.shared.dial(request)

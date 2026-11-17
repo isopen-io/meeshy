@@ -265,8 +265,8 @@ public final class PushNotificationManager: NSObject, ObservableObject {
 
     /// Parse and handle an incoming notification payload (from tap or silent push).
     /// Sets `pendingNotificationPayload` which the app layer observes for navigation.
-    public func handleNotification(userInfo: [AnyHashable: Any]) {
-        let payload = NotificationPayload(userInfo: userInfo)
+    public func handleNotification(userInfo: [AnyHashable: Any], addressedTo: String? = nil) {
+        let payload = NotificationPayload(userInfo: userInfo, addressedTo: addressedTo)
         logger.info("Notification received: type=\(payload.type ?? "unknown"), conversationId=\(payload.conversationId ?? "none")")
         pendingNotificationPayload = payload
     }
@@ -444,8 +444,14 @@ public struct NotificationPayload {
     /// JSON-encoded ICE servers, same shape `VoIPPushManager.parseIceServers`
     /// already decodes for the PushKit path — decode with that same helper.
     public let iceServersJSON: String?
+    /// Le compte que l'appareil désignait AU MOMENT du toucher (#18911,
+    /// ios-systeme-6) — APNs ne porte pas le destinataire, donc c'est la charge
+    /// qu'on marque. `nil` : aucun compte (déconnecté), ou une charge qui en
+    /// nomme un autre. `PushTapConsumption` ne navigue que sous ce compte.
+    public let addressedTo: String?
 
-    public init(userInfo: [AnyHashable: Any]) {
+    public init(userInfo: [AnyHashable: Any], addressedTo: String? = nil) {
+        self.addressedTo = addressedTo
         let rawNotificationId = userInfo["notificationId"] as? String ?? ""
         self.notificationId = rawNotificationId.isEmpty ? nil : rawNotificationId
         self.type = userInfo["type"] as? String
