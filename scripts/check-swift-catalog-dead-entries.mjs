@@ -602,6 +602,9 @@ const PENDING_CLIENT_ENTRIES = {
   // le SDK et l'app iOS (§ 10, lots 3 et 4), portés par #18906.
   'E2EeEndpoint.devicesSelfVerifications': { issue: 18906, reason: 'POST|GET /e2ee/devices/self/verifications — déposer et relire les messages de comparaison, appelés par le SDK iOS de la confirmation par code' },
   'E2EeEndpoint.devicesSelfVerificationsAck': { issue: 18906, reason: 'POST /e2ee/devices/self/verifications/ack — accuser les messages de comparaison lus, même lot iOS' },
+  // « En commun » (serveur #19200) : la passerelle sert nos amis, communautés et médias en commun avant les clients,
+  // que #19234 branchera sur la fiche d'un autre.
+  'UsersEndpoint.byIdInCommon': { issue: 19234, reason: 'GET /users/:id/in-common — « En commun » de la fiche d’un autre, iOS' },
 };
 
 const BASELINE_DEAD_ENTRIES = 328;
