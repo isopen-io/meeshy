@@ -29,6 +29,7 @@ import {
   type BloodLocationSettingsPayload,
 } from '@meeshy/shared/types/blood-location';
 import { pairAccessAmong } from '../relations/pairAccess';
+import { writeLocationGhost } from '../sharedLocation/locationGhost';
 import { relationConsentGrantedAmong } from '../relations/relationConsent';
 import { alertBloodProximity, isPlausibleMove } from './bloodProximity';
 import { openPoint, sealPoint } from './bloodLocationSeal';
@@ -209,7 +210,7 @@ export async function updateBloodLocationSettings(deps: BloodLocationDeps, owner
   const at = new Date(deps.now());
   if (settings.userId === undefined) {
     if (settings.ghost === undefined) return { ok: false };
-    await deps.prisma.user.update({ where: { id: ownerId }, data: { locationGhostAt: settings.ghost ? at : null } });
+    await writeLocationGhost(deps.prisma, ownerId, settings.ghost, at);
     return { ok: true };
   }
   if (settings.userId === ownerId || !(await locationMayOpenWith(deps, ownerId, settings.userId))) return { ok: false };

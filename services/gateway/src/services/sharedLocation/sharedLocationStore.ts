@@ -40,6 +40,11 @@ export type SharedLocationState = {
   readonly position: SharedLocationPosition;
   readonly updatedAt: string;
   readonly expiresAt: string;
+  /**
+   * La sortie du fantôme global (#19203) : une position antérieure ne se sert plus, seule la
+   * suivante repart. Absente (tout partage rangé avant), tout se sert.
+   */
+  readonly servableFrom?: string;
 };
 
 export type SharedLocationCache = SharedLocationKv;
@@ -101,7 +106,8 @@ function parseState(raw: string): SharedLocationState | null {
   if (typeof row.updatedAt !== 'string' || typeof row.expiresAt !== 'string') return null;
   const recipients = row.recipients.map(parseRecipient);
   if (recipients.some((recipient) => recipient === null)) return null;
-  return { sessionId: row.sessionId, recipients: recipients as SharedLocationRecipient[], position, updatedAt: row.updatedAt, expiresAt: row.expiresAt };
+  const servableFrom = typeof row.servableFrom === 'string' && !Number.isNaN(Date.parse(row.servableFrom)) ? { servableFrom: row.servableFrom } : {};
+  return { sessionId: row.sessionId, recipients: recipients as SharedLocationRecipient[], position, updatedAt: row.updatedAt, expiresAt: row.expiresAt, ...servableFrom };
 }
 
 const ttlOf = (state: Pick<SharedLocationState, 'expiresAt'>, now: number): number =>

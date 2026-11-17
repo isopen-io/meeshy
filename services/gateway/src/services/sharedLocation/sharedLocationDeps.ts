@@ -7,11 +7,14 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../CacheStore';
+import type { LocationGhostState } from '@meeshy/shared/types/shared-location';
+import { writeLocationGhost } from './locationGhost';
 import { exportSharedLocationEnds, type SharedLocationEnd } from './sharedLocationEnds';
 import { redisSharedLocationKv, UNAVAILABLE_SHARED_LOCATION_KV, type SharedLocationKv } from './sharedLocationKv';
 import {
   captureSharedLocationAccess,
   endSharedLocationOfAccount,
+  reflectSharedLocationGhost,
   refreshSharedLocationBetween,
   type SharedLocationIo,
   type SharedLocationPairAccess,
@@ -101,4 +104,19 @@ export async function exportSharedLocationEndsOf(userId: string, report: (error:
     report(error);
     return [];
   }
+}
+
+/**
+ * Règle le fantôme global (#19203) et y fait suivre le partage temporaire en cours. L'écriture
+ * du compte fait foi et lève si elle échoue ; le reflet ne lève jamais : raté, il est journalisé,
+ * et la position suivante relit le fantôme et coupe d'elle-même.
+ */
+export async function setLocationGhostAfter(params: RefreshParams, userId: string, ghost: boolean): Promise<LocationGhostState> {
+  const written = await writeLocationGhost(params.prisma, userId, ghost, new Date());
+  try {
+    await reflectSharedLocationGhost(sharedLocationRelayDepsOf(params), userId, written.change);
+  } catch (error) {
+    params.report(error);
+  }
+  return written.state;
 }

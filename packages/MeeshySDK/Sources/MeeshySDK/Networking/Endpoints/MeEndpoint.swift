@@ -57,6 +57,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case locationBlood
     case locationBloodSettings
     case locationConsultations
+    case locationGhost
     case locationHistory
     case meeshMint
     case onboarding
@@ -130,6 +131,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .locationBlood: return "/api/v1/me/location/blood"
         case .locationBloodSettings: return "/api/v1/me/location/blood-settings"
         case .locationConsultations: return "/api/v1/me/location/consultations"
+        case .locationGhost: return "/api/v1/me/location/ghost"
         case .locationHistory: return "/api/v1/me/location/history"
         case .meeshMint: return "/api/v1/me/meesh/mint"
         case .onboarding: return "/api/v1/me/onboarding"

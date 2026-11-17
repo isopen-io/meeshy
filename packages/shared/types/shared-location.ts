@@ -162,3 +162,13 @@ export type SharedLocationOwnSnapshot = {
   readonly recipients: readonly SharedLocationOwnRecipient[];
   readonly expiresAt: string | null;
 };
+
+/**
+ * Le fantôme global de position (#19203) — `PUT /api/v1/me/location/ghost`, hors drapeau Sang :
+ * plus personne ne voit ma position, ni par un partage temporaire, ni par la position du Sang.
+ */
+export const locationGhostPayloadSchema = z.object({ ghost: z.boolean() }).strict();
+export type LocationGhostPayload = z.infer<typeof locationGhostPayloadSchema>;
+
+/** L'état réglé : `ghostAt` est la date d'entrée, nulle hors fantôme. */
+export type LocationGhostState = { readonly ghost: boolean; readonly ghostAt: string | null };

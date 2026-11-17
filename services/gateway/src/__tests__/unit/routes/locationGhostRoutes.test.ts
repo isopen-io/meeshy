@@ -25,8 +25,10 @@ async function app(world: ReturnType<typeof bloodLocationWorld>, as: string): Pr
   return fastify;
 }
 
-const ghostOf = (world: ReturnType<typeof bloodLocationWorld>, userId: string) =>
-  world.userRows.find((row) => row.id === userId)?.locationGhostAt ?? null;
+const ghostOf = async (world: ReturnType<typeof bloodLocationWorld>, userId: string): Promise<unknown> => {
+  const row = (await world.prisma.user.findUnique({ where: { id: userId }, select: { locationGhostAt: true } })) as { locationGhostAt?: unknown } | null;
+  return row?.locationGhostAt ?? null;
+};
 
 let fastify: FastifyInstance | undefined;
 const saved = { ...process.env };
@@ -53,7 +55,7 @@ describe('PUT /me/location/ghost — le fantôme pour tous, drapeau Sang éteint
     expect(body.data.ghost).toBe(true);
     expect(typeof body.data.ghostAt).toBe('string');
     expect(Object.keys(body.data).sort()).toEqual(['ghost', 'ghostAt']);
-    expect(ghostOf(world, MOI)).toBeInstanceOf(Date);
+    expect(await ghostOf(world, MOI)).toBeInstanceOf(Date);
   });
 
   it('le désactive : l\'état revient à « visible » et le champ est effacé', async () => {
@@ -64,7 +66,7 @@ describe('PUT /me/location/ghost — le fantôme pour tous, drapeau Sang éteint
     const response = await fastify.inject({ method: 'PUT', url: '/me/location/ghost', payload: { ghost: false } });
 
     expect(response.json().data).toEqual({ ghost: false, ghostAt: null });
-    expect(ghostOf(world, MOI)).toBeNull();
+    expect(await ghostOf(world, MOI)).toBeNull();
   });
 
   it('un fantôme réactivé garde sa date d\'entrée', async () => {
@@ -84,7 +86,7 @@ describe('PUT /me/location/ghost — le fantôme pour tous, drapeau Sang éteint
     const response = await fastify.inject({ method: 'PUT', url: '/me/location/ghost', payload: { ghost: 'oui' } });
 
     expect(response.statusCode).toBe(400);
-    expect(ghostOf(world, MOI)).toBeNull();
+    expect(await ghostOf(world, MOI)).toBeNull();
   });
 
   it('blood-settings reste derrière le drapeau : 404 drapeau éteint, rétrocompatible', async () => {

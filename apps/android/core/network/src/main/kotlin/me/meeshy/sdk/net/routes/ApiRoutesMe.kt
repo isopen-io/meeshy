@@ -57,6 +57,7 @@ public object ApiRoutesMe {
     public const val LOCATION_BLOOD: String = "me/location/blood"
     public const val LOCATION_BLOOD_SETTINGS: String = "me/location/blood-settings"
     public const val LOCATION_CONSULTATIONS: String = "me/location/consultations"
+    public const val LOCATION_GHOST: String = "me/location/ghost"
     public const val LOCATION_HISTORY: String = "me/location/history"
     public const val MEESH_MINT: String = "me/meesh/mint"
     public const val ONBOARDING: String = "me/onboarding"

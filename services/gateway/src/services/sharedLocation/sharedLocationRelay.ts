@@ -156,6 +156,10 @@ const deadlineOf = (state: Pick<SharedLocationState, 'recipients' | 'expiresAt'>
 const liveRecipients = (state: SharedLocationState, now: number): SharedLocationState['recipients'] =>
   state.recipients.filter((recipient) => Date.parse(deadlineOf(state, recipient.userId)) > now);
 
+/** Une position antérieure à la sortie du fantôme (#19203) ne se republie pas : seule la suivante repart. */
+const heldSinceGhost = (state: Pick<SharedLocationState, 'updatedAt' | 'servableFrom'>): boolean =>
+  state.servableFrom !== undefined && Date.parse(state.updatedAt) < Date.parse(state.servableFrom);
+
 /**
  * La projection d'UN destinataire : la position à sa précision, le rayon de son flou, son
  * cercle, rien d'autre. Un lecteur flouté reçoit la maille que `state` retient pour lui (`readerId`) et
@@ -163,11 +167,11 @@ const liveRecipients = (state: SharedLocationState, now: number): SharedLocation
  */
 export function projectSharedLocation(
   userId: string,
-  state: Pick<SharedLocationState, 'position' | 'updatedAt' | 'expiresAt' | 'recipients'>,
+  state: Pick<SharedLocationState, 'position' | 'updatedAt' | 'expiresAt' | 'recipients' | 'servableFrom'>,
   access: SharedLocationReaderAccess,
   readerId?: string,
 ): SharedLocationChangedEventData | null {
-  if (access === 'none') return null;
+  if (access === 'none' || heldSinceGhost(state)) return null;
   const circle = access.circle ? { circle: access.circle } : {};
   if (access.precision === 'exact') {
     const radiusMeters = Math.max(SHARED_LOCATION_EXACT_MIN_RADIUS_METERS, Math.round(state.position.accuracy ?? 0));
@@ -187,14 +191,26 @@ export function projectSharedLocation(
   };
 }
 
-/** Le compte peut-il encore émettre ou recevoir ? Un compte désactivé ou supprimé, non. */
-async function usableAccounts(prisma: SharedLocationDb, ids: readonly string[]): Promise<ReadonlySet<string>> {
+type AccountStates = {
+  /** Le compte peut-il encore émettre ou recevoir ? Un compte désactivé ou supprimé, non. */
+  readonly usable: ReadonlySet<string>;
+  /** Le compte est-il en fantôme global (#19203) ? Il ne sert alors sa position à personne, et lit toujours. */
+  readonly ghost: ReadonlySet<string>;
+};
+
+async function accountStates(prisma: SharedLocationDb, ids: readonly string[]): Promise<AccountStates> {
   const rows = await prisma.user.findMany({
     where: { id: { in: [...new Set(ids)] } },
-    select: { id: true, isActive: true, deactivatedAt: true, deletedAt: true },
+    select: { id: true, isActive: true, deactivatedAt: true, deletedAt: true, locationGhostAt: true },
   });
-  return new Set(rows.filter((row) => row.isActive !== false && !row.deactivatedAt && !row.deletedAt).map((row) => row.id));
+  return {
+    usable: new Set(rows.filter((row) => row.isActive !== false && !row.deactivatedAt && !row.deletedAt).map((row) => row.id)),
+    ghost: new Set(rows.filter((row) => row.locationGhostAt != null).map((row) => row.id)),
+  };
 }
+
+/** L'émetteur sert-il sa position ? Utilisable et hors fantôme. */
+const emitting = (accounts: AccountStates, emitterId: string): boolean => accounts.usable.has(emitterId) && !accounts.ghost.has(emitterId);
 
 /** L'accès de chaque destinataire `readerIds` au partage de `emitterId`, relu maintenant. */
 async function accessOf(
@@ -206,7 +222,7 @@ async function accessOf(
   const chosen = new Map(liveRecipients(state, deps.now()).map((recipient) => [recipient.userId.toLowerCase(), recipient.precision]));
   const candidates = readerIds.filter((id) => chosen.has(id.toLowerCase()));
   if (candidates.length === 0) return new Map(readerIds.map((id) => [id, 'none']));
-  const [law, usable] = await Promise.all([
+  const [law, accounts] = await Promise.all([
     pairAccessAmong(deps.prisma, {
       feature: 'location.temporary',
       subjectId: emitterId,
@@ -215,13 +231,13 @@ async function accessOf(
       now: new Date(deps.now()),
       consentOf: (otherId) => (chosen.has(otherId.toLowerCase()) ? 'granted' : 'refused'),
     }),
-    usableAccounts(deps.prisma, [emitterId, ...candidates]),
+    accountStates(deps.prisma, [emitterId, ...candidates]),
   ]);
   return new Map(
     readerIds.map((id): [string, SharedLocationReaderAccess] => {
       const verdict = law.get(id);
       const precision = chosen.get(id.toLowerCase());
-      const opened = usable.has(emitterId) && usable.has(id) && verdict?.allowed === true && precision !== undefined;
+      const opened = emitting(accounts, emitterId) && accounts.usable.has(id) && verdict?.allowed === true && precision !== undefined;
       return [id, opened ? { precision, circle: circleOf(verdict.effectiveLevel) } : 'none'];
     }),
   );
@@ -383,7 +399,7 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
 
   try {
     const generation = await sharedLocationGeneration(deps.cache, emitterId);
-    if (!(await usableAccounts(deps.prisma, [emitterId])).has(emitterId)) return STOPPED;
+    if (!(await accountStates(deps.prisma, [emitterId])).usable.has(emitterId)) return STOPPED;
     await storeSharedLocation(deps.cache, emitterId, state, now);
     const claim = await claimSharedLocation(deps.cache, emitterId, generation, state, now);
     if (!claim.claimed) {
@@ -527,6 +543,28 @@ export async function refreshSharedLocationBetween(
   }
 }
 
+/** Ce que le réglage du fantôme global vient de faire (#19203) : `writeLocationGhost` le rend. */
+export type LocationGhostChange = 'entered' | 'left' | 'unchanged';
+
+/**
+ * Le partage en cours suit le fantôme global (#19203), comme un partage en pause. À l'ENTRÉE,
+ * ceux que la session servait reçoivent la fin, eux seuls (l'accès relu est fermé pour tous) ;
+ * le partage reste rangé et les positions suivantes s'y écrivent sans partir. À la SORTIE, rien
+ * ne part : la session est marquée, et seule une position postérieure se sert de nouveau — au
+ * direct comme au rattrapage. Même sans cet appel, la position suivante relit le fantôme.
+ */
+export async function reflectSharedLocationGhost(deps: SharedLocationRelayDeps, emitterId: string, change: LocationGhostChange): Promise<void> {
+  if (change === 'unchanged') return;
+  const now = deps.now();
+  const state = await readSharedLocation(deps.cache, emitterId, now);
+  if (!state) return;
+  if (change === 'entered') {
+    await closeStaleReaders(deps, emitterId, state, await accessOf(deps, emitterId, state, recipientIdsOf(state)));
+    return;
+  }
+  await storeSharedLocationIfCurrent(deps.cache, emitterId, { ...state, servableFrom: new Date(now).toISOString() }, now);
+}
+
 /** Le point servi est-il dans l'emprise ? Absente : toute la carte. */
 export const withinBbox = (item: { readonly latitude: number; readonly longitude: number }, bbox: SharedLocationBbox | undefined): boolean =>
   !bbox ||
@@ -651,13 +689,13 @@ async function snapshotAllowed(
   emitterIds: readonly string[],
   now: number,
 ): Promise<ReadonlyMap<string, SharedLocationCircle | null>> {
-  const [law, usable] = await Promise.all([
+  const [law, accounts] = await Promise.all([
     pairAccessAmong(deps.prisma, { feature: 'location.temporary', subjectId: readerId, otherIds: emitterIds, subjectIs: 'viewer', now: new Date(now), consentOf: () => 'granted' }),
-    usableAccounts(deps.prisma, [readerId, ...emitterIds]),
+    accountStates(deps.prisma, [readerId, ...emitterIds]),
   ]);
   return new Map(
     emitterIds
-      .filter((emitterId) => usable.has(readerId) && usable.has(emitterId) && law.get(emitterId)?.allowed === true)
+      .filter((emitterId) => accounts.usable.has(readerId) && emitting(accounts, emitterId) && law.get(emitterId)?.allowed === true)
       .map((emitterId) => [emitterId, circleOf(law.get(emitterId)?.effectiveLevel)] as const),
   );
 }
