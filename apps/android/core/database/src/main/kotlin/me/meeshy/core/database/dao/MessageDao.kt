@@ -144,39 +144,30 @@ public interface MessageDao {
     public suspend fun countUnbackfilled(): Int
 
     /**
-     * Prunes server rows absent from the latest sync. Optimistic local rows
-     * (`sendState` non-null) are never pruned — the server does not know them yet.
+     * #18915 — prunes the server rows a recent-window page no longer serves, inside the span the caller HELD
+     * before its request only: [fromMillis] (the page's oldest row, [Long.MIN_VALUE] under an empty page) through
+     * [throughMillis] (the newest server row held before the request), both included. Older paginated history
+     * lies outside the page; a row newer than what was held arrived while the page was in flight (socket, send
+     * acknowledgement) — neither can be declared deleted by its absence. Optimistic local rows (`sendState`
+     * non-null) are never pruned: the server does not know them yet.
      */
     @Query(
-        "DELETE FROM messages WHERE conversationId = :conversationId " +
-            "AND sendState IS NULL AND id NOT IN (:ids)",
+        "DELETE FROM messages WHERE conversationId = :conversationId AND sendState IS NULL " +
+            "AND createdAt >= :fromMillis AND createdAt <= :throughMillis AND id NOT IN (:ids)",
     )
-    public suspend fun deleteMissing(conversationId: String, ids: List<String>)
+    public suspend fun deleteMissingBetween(conversationId: String, fromMillis: Long, throughMillis: Long, ids: List<String>)
 
-    /**
-     * Windowed prune for the newest-page sync: only server rows inside the
-     * fetched window (`createdAt >= :minCreatedAt`) can be declared deleted by
-     * their absence — older paginated history is outside the page and survives.
-     */
+    /** The rows [deleteMissingBetween] would prune, read in the same transaction before it (#14655). */
     @Query(
-        "DELETE FROM messages WHERE conversationId = :conversationId " +
-            "AND sendState IS NULL AND createdAt >= :minCreatedAt AND id NOT IN (:ids)",
+        "SELECT * FROM messages WHERE conversationId = :conversationId AND sendState IS NULL " +
+            "AND createdAt >= :fromMillis AND createdAt <= :throughMillis AND id NOT IN (:ids)",
     )
-    public suspend fun deleteMissingSince(conversationId: String, minCreatedAt: Long, ids: List<String>)
-
-    /** The rows [deleteMissing] would prune, read in the same transaction before it (#14655). */
-    @Query(
-        "SELECT * FROM messages WHERE conversationId = :conversationId " +
-            "AND sendState IS NULL AND id NOT IN (:ids)",
-    )
-    public suspend fun missing(conversationId: String, ids: List<String>): List<MessageEntity>
-
-    /** The rows [deleteMissingSince] would prune, read in the same transaction before it (#14655). */
-    @Query(
-        "SELECT * FROM messages WHERE conversationId = :conversationId " +
-            "AND sendState IS NULL AND createdAt >= :minCreatedAt AND id NOT IN (:ids)",
-    )
-    public suspend fun missingSince(conversationId: String, minCreatedAt: Long, ids: List<String>): List<MessageEntity>
+    public suspend fun missingBetween(
+        conversationId: String,
+        fromMillis: Long,
+        throughMillis: Long,
+        ids: List<String>,
+    ): List<MessageEntity>
 
     /**
      * The rows of a window anchored on an old message (#14670), newest first: [fromMillis] to
@@ -242,9 +233,11 @@ public interface MessageDao {
      * `createdAt` among rows with no pending `sendState` (#5206). An optimistic,
      * not-yet-acked row's `createdAt` is CLIENT-assigned, never a value the
      * forward-watermark gap backfill (`GET .../messages?after=`) may safely
-     * resume from — same exclusion [deleteMissingSince] already applies.
-     * `null` when the conversation has no synced messages yet, in which case
-     * the caller falls back to the full recent-window sync.
+     * resume from — same exclusion [deleteMissingBetween] already applies.
+     * Read BEFORE a recent-window request, it is also the newest row that page
+     * may prune (#18915): a row written after it arrived while the page was in
+     * flight. `null` when the conversation has no synced messages yet — nothing
+     * held, so nothing to prune and no gap to fill.
      */
     @Query(
         "SELECT MAX(createdAt) FROM messages WHERE conversationId = :conversationId " +

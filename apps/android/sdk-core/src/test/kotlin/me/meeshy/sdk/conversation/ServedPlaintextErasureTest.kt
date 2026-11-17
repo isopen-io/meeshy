@@ -71,26 +71,62 @@ class ServedPlaintextErasureTest {
         assertThat(erasures.keys()).containsExactly("m2", "m3", "cid_3")
     }
 
+    /**
+     * #18915 — the page was built before these two arrived through the socket: their absence proves nothing, so they are
+     * neither pruned nor recorded. The plaintext of my own message stays readable — the vault is its only copy.
+     */
     @Test
-    fun `a sealed message newer than the page, arrived while it was in flight, is never recorded as erased`() = runHarnessTest { harness ->
+    fun `a sealed message that arrived while the page was in flight is neither pruned nor recorded as erased`() = runHarnessTest { harness ->
         harness.seedSynced(sealed("m1", "alice", at = "2026-11-01T09:00:00Z"))
-        harness.seedSynced(sealed("m2", "alice", at = "2026-11-01T09:10:00Z"))
-        harness.seedSynced(sealed("m3", "me", cid = "cid_3", at = "2026-11-01T09:11:00Z"))
         val erasures = ledger(harness)
+        val api = mockk<MessageApi>().also { api ->
+            coEvery { api.listAfter(any(), any(), any()) } throws IOException("offline")
+            coEvery { api.listConditional("c1", any()) } coAnswers {
+                MessageIngestPipeline(harness.database).ingest(
+                    listOf(sealed("m2", "alice", at = "2026-11-01T09:10:00Z"), sealed("m3", "me", cid = "cid_3", at = "2026-11-01T09:11:00Z")),
+                    harness.clock.now,
+                )
+                Response.success(ApiResponse(success = true, data = listOf(sealed("m1", "alice", at = "2026-11-01T09:00:00Z"))))
+            }
+        }
 
-        source(harness, pageServing(sealed("m1", "alice", at = "2026-11-01T09:00:00Z")), erasures).revalidate()
+        source(harness, api, erasures).revalidate()
 
+        assertThat(harness.database.messageDao().find("m2")).isNotNull()
+        assertThat(harness.database.messageDao().find("m3")).isNotNull()
         assertThat(erasures.keys()).isEmpty()
     }
 
+    /**
+     * #18915 (M4) — an empty page says the conversation no longer serves any of the rows held before it: they are pruned,
+     * and the plaintext of each sealed one leaves the vault with its row instead of surviving it.
+     */
     @Test
-    fun `an empty page records nothing, the sealed rows it prunes may have arrived after it was built`() = runHarnessTest { harness ->
+    fun `an empty page records the erasure of the sealed rows held before it`() = runHarnessTest { harness ->
         harness.seedSynced(sealed("m1", "alice", at = "2026-11-01T09:00:00Z"))
+        harness.seedSynced(sealed("m2", "me", cid = "cid_2", at = "2026-11-01T09:05:00Z"))
         val erasures = ledger(harness)
 
         source(harness, pageServing(), erasures).revalidate()
 
-        assertThat(erasures.keys()).isEmpty()
+        assertThat(harness.database.messageDao().find("m2")).isNull()
+        assertThat(erasures.keys()).containsExactly("m1", "m2", "cid_2")
+    }
+
+    /**
+     * #18915 (M4) — the deleted message was the NEWEST one held (its `message:deleted` was missed): newer than everything
+     * the page serves, it used to lose its row and keep its plaintext in the vault.
+     */
+    @Test
+    fun `the newest sealed message the page no longer serves leaves the vault with its row`() = runHarnessTest { harness ->
+        harness.seedSynced(sealed("m1", "alice", at = "2026-11-01T09:00:00Z"))
+        harness.seedSynced(sealed("m2", "me", cid = "cid_2", at = "2026-11-01T09:10:00Z"))
+        val erasures = ledger(harness)
+
+        source(harness, pageServing(sealed("m1", "alice", at = "2026-11-01T09:00:00Z")), erasures).revalidate()
+
+        assertThat(harness.database.messageDao().find("m2")).isNull()
+        assertThat(erasures.keys()).containsExactly("m2", "cid_2")
     }
 
     @Test
