@@ -10,6 +10,7 @@ public protocol ProfileSocialActionsProviding: AnyObject {
     func respondToFriendRequest(_ requestId: String, accepted: Bool) async throws
     func blockUser(_ userId: String) async throws
     func unblockUser(_ userId: String) async throws
-    func reportUser(_ userId: String, reportType: String) async throws
+    /// `reason` : le mot facultatif du signalement (500 signes au plus), `nil` sans mot.
+    func reportUser(_ userId: String, reportType: String, reason: String?) async throws
     func userPosts(of userId: String) async throws -> [APIPost]
 }

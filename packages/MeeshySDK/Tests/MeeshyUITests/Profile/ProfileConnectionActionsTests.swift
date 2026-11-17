@@ -95,10 +95,21 @@ final class ProfileConnectionActionsTests: XCTestCase {
     func test_report_transmetLeTypeSansRaison() async {
         let fixture = Fixture()
 
-        let reported = await fixture.sut.report(userId: "u-bob", reportType: "spam")
+        let reported = await fixture.sut.report(userId: "u-bob", reportType: "spam", reason: nil)
 
         XCTAssertTrue(reported)
         XCTAssertEqual(fixture.social.reportCalls.map(\.reportType), ["spam"])
         XCTAssertEqual(fixture.social.reportCalls.map(\.userId), ["u-bob"])
+        XCTAssertEqual(fixture.social.reportCalls.map(\.reason), [nil])
+    }
+
+    /// #18873 — le mot facultatif de la feuille « Signaler » part avec le motif.
+    func test_report_transmetLeMotDuSignalement() async {
+        let fixture = Fixture()
+
+        let reported = await fixture.sut.report(userId: "u-bob", reportType: "harassment", reason: "Il m'écrit tous les jours")
+
+        XCTAssertTrue(reported)
+        XCTAssertEqual(fixture.social.reportCalls.map(\.reason), ["Il m'écrit tous les jours"])
     }
 }

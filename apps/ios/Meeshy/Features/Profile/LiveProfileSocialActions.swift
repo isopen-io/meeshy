@@ -32,8 +32,8 @@ final class LiveProfileSocialActions: ProfileSocialActionsProviding {
         try await BlockService.shared.unblockUser(userId: userId)
     }
 
-    func reportUser(_ userId: String, reportType: String) async throws {
-        try await ReportService.shared.reportUser(userId: userId, reportType: reportType, reason: nil)
+    func reportUser(_ userId: String, reportType: String, reason: String?) async throws {
+        try await ReportService.shared.reportUser(userId: userId, reportType: reportType, reason: reason)
     }
 
     func userPosts(of userId: String) async throws -> [APIPost] {

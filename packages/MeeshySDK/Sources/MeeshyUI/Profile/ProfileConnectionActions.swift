@@ -66,8 +66,9 @@ struct ProfileConnectionActions {
         (try? await social.unblockUser(userId)) != nil
     }
 
-    func report(userId: String, reportType: String) async -> Bool {
-        (try? await social.reportUser(userId, reportType: reportType)) != nil
+    /// `reason` : le mot facultatif du signalement, `nil` sans mot.
+    func report(userId: String, reportType: String, reason: String?) async -> Bool {
+        (try? await social.reportUser(userId, reportType: reportType, reason: reason)) != nil
     }
 }
 

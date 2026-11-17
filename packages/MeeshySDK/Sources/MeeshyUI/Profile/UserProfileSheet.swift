@@ -173,17 +173,9 @@ public struct UserProfileSheet: View {
                 collapsibleLayout
             }
         }
-        .confirmationDialog(
-            String(localized: "profile.action.report", defaultValue: "Signaler", bundle: .module),
-            isPresented: $showReportSheet,
-            titleVisibility: .visible
-        ) {
-            ForEach(ProfileReportReason.allCases, id: \.self) { reason in
-                Button(reason.label, role: .destructive) {
-                    submitReport(reportType: reason.rawValue)
-                }
-            }
-            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
+        .sheet(isPresented: $showReportSheet) {
+            ProfileReportSheet(name: displayUser.resolvedDisplayName, isAlreadyBlocked: isBlocked,
+                               onSend: { draft in await sendReport(draft) })
         }
         .fullScreenCover(item: $fullscreenImage) { image in
             FullscreenImageView(imageURL: image.url, fallbackText: image.fallbackText, accentColor: resolvedAccent)

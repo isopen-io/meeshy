@@ -154,43 +154,16 @@ extension UserProfileSheet {
                              onBlock: { Task { await blockUser() } }, onReport: { showReportSheet = true })
     }
 
-    func submitReport(reportType: String) {
-        guard let userId = resolvedUserId, !userId.isEmpty else { return }
-        HapticFeedback.medium()
-        Task {
-            let sent = await connectionActions.report(userId: userId, reportType: reportType)
-            postToast(
-                sent
-                    ? String(localized: "profile.toast.reportSent", defaultValue: "Signalement envoyé", bundle: .module)
-                    : String(localized: "profile.toast.reportFailed", defaultValue: "Impossible d'envoyer le signalement", bundle: .module),
-                isSuccess: sent
-            )
+    /// Le signalement part avec son motif et son mot ; « Bloquer aussi » ne bloque qu'une fois le signalement parti,
+    /// et la fiche passe aussitôt à son état bloqué.
+    func sendReport(_ draft: ProfileReportDraft) async -> ProfileReportOutcome {
+        guard let userId = resolvedUserId, !userId.isEmpty, let reason = draft.reason else { return .notSent }
+        guard await connectionActions.report(userId: userId, reportType: reason.rawValue, reason: draft.sentDetails) else {
+            return .notSent
         }
-    }
-}
-
-/// Les huit motifs d'un signalement, à la valeur de l'énumération de la passerelle.
-nonisolated enum ProfileReportReason: String, CaseIterable, Sendable {
-    case spam
-    case inappropriate
-    case harassment
-    case violence
-    case hateSpeech = "hate_speech"
-    case fakeProfile = "fake_profile"
-    case impersonation
-    case other
-
-    /// `@MainActor` malgré le type `nonisolated` : `Bundle.module`.
-    @MainActor var label: String {
-        switch self {
-        case .spam: return String(localized: "report.reason.spam", defaultValue: "Spam", bundle: .module)
-        case .inappropriate: return String(localized: "report.reason.inappropriate", defaultValue: "Contenu inapproprié", bundle: .module)
-        case .harassment: return String(localized: "report.reason.harassment", defaultValue: "Harcèlement", bundle: .module)
-        case .violence: return String(localized: "report.reason.violence", defaultValue: "Violence", bundle: .module)
-        case .hateSpeech: return String(localized: "report.reason.hate_speech", defaultValue: "Discours haineux", bundle: .module)
-        case .fakeProfile: return String(localized: "report.reason.fake_profile", defaultValue: "Faux profil", bundle: .module)
-        case .impersonation: return String(localized: "report.reason.impersonation", defaultValue: "Usurpation d'identité", bundle: .module)
-        case .other: return String(localized: "report.reason.other", defaultValue: "Autre", bundle: .module)
-        }
+        guard draft.alsoBlocks, !isBlocked else { return ProfileReportOutcome(isSent: true, isBlocked: isBlocked) }
+        let blocked = await connectionActions.block(userId: userId)
+        if blocked { isBlocked = true }
+        return ProfileReportOutcome(isSent: true, isBlocked: blocked)
     }
 }
