@@ -4,6 +4,9 @@
  * (iOS). Il ne nomme ni le signal, ni la conversation, ni l'expéditeur : l'appareil
  * réveillé relit ses enveloppes (`GET /e2ee/envelopes`). Un réveil perdu ne perd
  * rien, l'enveloppe attend sur le serveur.
+ *
+ * Il ne part que vers le jeton APNs : le jeton VoIP (PushKit) oblige l'iPhone à déclarer un appel, donc à
+ * laisser un « appel manqué » sans nom dans l'historique à chaque signal (#18910).
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getPushNotificationService } from '../PushNotificationService';
@@ -17,7 +20,7 @@ export const wakeE2EEDevices = (prisma: PrismaClient) => async (userIds: readonl
   await Promise.all(
     userIds.map((userId) =>
       push
-        .sendToUser({ userId, platforms: ['ios'], payload: { title: '', body: '', silent: true, data: { type: E2EE_WAKE_PUSH_TYPE } } })
+        .sendToUser({ userId, platforms: ['ios'], types: ['apns'], payload: { title: '', body: '', silent: true, data: { type: E2EE_WAKE_PUSH_TYPE } } })
         .catch((error: unknown) => logger.warn('e2ee wake push failed', { error })),
     ),
   );
