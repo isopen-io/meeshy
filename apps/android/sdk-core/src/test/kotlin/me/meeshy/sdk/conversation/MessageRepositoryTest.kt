@@ -361,15 +361,15 @@ class MessageRepositoryTest {
     @Test
     fun `refresh prunes messages absent from the latest sync`() = runTest {
         val api = FakeMessageApi(
-            ApiResponse(success = true, data = listOf(apiMessage("m1"), apiMessage("m2"))),
+            ApiResponse(success = true, data = listOf(apiMessage("m2", createdAt = T2), apiMessage("m1", createdAt = T1))),
         )
         val repo = repository(api)
         repo.refresh("c1")
 
-        api.response = ApiResponse(success = true, data = listOf(apiMessage("m2")))
+        api.response = ApiResponse(success = true, data = listOf(apiMessage("m1", createdAt = T1)))
         repo.refresh("c1")
 
-        assertThat(streamedMessages(repo).map { it.id }).containsExactly("m2")
+        assertThat(streamedMessages(repo).map { it.id }).containsExactly("m1")
     }
 
     @Test

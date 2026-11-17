@@ -141,6 +141,28 @@ class ServedPlaintextErasureTest {
         assertThat(erasures.keys()).containsExactly("m2", "cid_2")
     }
 
+    /**
+     * #18915 (R4) — a served date that cannot be read proves nothing about what the page covers: it used to count as 0,
+     * so the prune span took in everything held, and every sealed row the page did not serve lost its row and recorded
+     * its plaintext as erased. Such a page prunes nothing and records nothing (fail-closed).
+     */
+    @Test
+    fun `a page with an unreadable date prunes nothing and records no erasure`() = runHarnessTest { harness ->
+        harness.seedSynced(sealed("m1", "alice", at = "2026-11-01T09:00:00Z"))
+        harness.seedSynced(sealed("m2", "me", cid = "cid_2", at = "2026-11-01T09:05:00Z"))
+        val erasures = ledger(harness)
+
+        source(
+            harness,
+            pageServing(sealed("m3", "alice", at = "not-a-date"), sealed("m4", "alice", at = "2026-11-01T09:20:00Z")),
+            erasures,
+        ).revalidate()
+
+        assertThat(harness.database.messageDao().find("m1")).isNotNull()
+        assertThat(harness.database.messageDao().find("m2")).isNotNull()
+        assertThat(erasures.keys()).isEmpty()
+    }
+
     @Test
     fun `a bubble replaced by its server twin is not an erasure`() = runHarnessTest { harness ->
         harness.database.messageDao().upsertAll(

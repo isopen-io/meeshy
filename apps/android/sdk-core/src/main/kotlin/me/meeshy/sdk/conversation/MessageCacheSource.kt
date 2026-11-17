@@ -272,9 +272,8 @@ internal class MessageCacheSource(
      */
     private suspend fun persist(window: ServedWindow, gap: List<ApiMessage>, heldUpTo: Long?, heldBefore: HeldRowVersions) {
         val now = clock.nowMillis()
-        val rows = window.messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
-        val servedIds = rows.map { it.id }
-        val span = prunableSpan(rows, heldUpTo)
+        val servedIds = window.messages.map { it.id }
+        val span = prunableSpan(window.messages, heldUpTo)
         val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
         database.withTransaction {
             val merged = ingestion.mergeInTransaction(window.messages + gap, now, conversationId, settlements, heldBefore)
@@ -293,10 +292,15 @@ internal class MessageCacheSource(
      * tout ce qui est détenu sous une page vide. Une ligne arrivée pendant le vol (socket, accusé de mon envoi, rejeu de
      * la file) porte une horloge serveur postérieure à [heldUpTo] : elle n'est ni élaguée ni inscrite au coffre. Les
      * deux bornes sont des horloges serveur : aucune dérive d'horloge locale. À froid, rien n'est détenu : `null`.
+     *
+     * Une date servie illisible (absente, mal formée) ne prouve rien de ce que la page couvre : elle vaudrait 0, et
+     * l'empan engloberait tout l'historique détenu, effacement du coffre compris. La page n'élague alors rien et
+     * n'inscrit rien (fail-closed) : `null`.
      */
-    private fun prunableSpan(rows: List<MessageEntity>, heldUpTo: Long?): LongRange? {
+    private fun prunableSpan(window: List<ApiMessage>, heldUpTo: Long?): LongRange? {
         val through = heldUpTo ?: return null
-        val from = rows.minOfOrNull { it.createdAt } ?: Long.MIN_VALUE
+        val served = window.map { isoToEpochMillisOrNull(it.createdAt) ?: return null }
+        val from = served.minOrNull() ?: Long.MIN_VALUE
         return (from..through).takeUnless { it.isEmpty() }
     }
 
