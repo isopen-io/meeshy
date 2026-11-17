@@ -9,7 +9,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * La source UNIQUE des contacts acceptés (iOS `AcceptedContactsSource`) : l'annuaire et l'écran
+ * La source UNIQUE des contacts acceptés : l'annuaire et l'écran
  * « Nouvelle conversation » la lisent, et elle seule écrit le cache d'amis — jamais deux écrivains
  * qui divergent.
  *

@@ -54,8 +54,7 @@ final class ComposerToolRowSetsTests: XCTestCase {
 
     /// L'ordre canonique est la RÉFÉRENCE : la rangée, la grille d'état vide et
     /// les chips de switch le suivent. Trois écritures manuelles avaient laissé
-    /// trois ordres diverger — le commentaire de `ComposerToolRow` le rappelle,
-    /// et ce témoin l'empêche de redevenir faux.
+    /// trois ordres diverger — ce témoin l'empêche de redevenir faux.
     func test_lOrdreCanonique_commenceParLeMedia_etFinitParLaTimeline() {
         XCTAssertEqual(StoryToolMode.composerOrder.first, .media)
         XCTAssertEqual(StoryToolMode.composerOrder.last, .timeline)

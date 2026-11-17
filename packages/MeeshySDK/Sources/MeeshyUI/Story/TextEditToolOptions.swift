@@ -152,8 +152,8 @@ public struct TextEditToolOptions: View {
 
     public var body: some View {
         // Rangée nue : pas de conteneur de panneau propre (fond arrondi,
-        // contour). C'est `StoryTextEditToolbar` qui pose l'îlot de verre
-        // autour de cette rangée — évite le panneau-dans-panneau et la
+        // contour). C'est l'hôte qui pose son conteneur autour de cette
+        // rangée — évite le panneau-dans-panneau et la
         // troncature verticale des pastilles.
         VStack(spacing: 10) {
             ForEach(Self.parts(for: tool, omitting: omitting), id: \.self) { partie in
@@ -690,8 +690,8 @@ public struct TextEditToolOptions: View {
     // MARK: - Border
 
     /// Initialise les défauts de bordure si l'utilisateur n'en a jamais défini.
-    /// Posé à l'ouverture du tool border par le parent (`StoryTextEditToolbar`)
-    /// pour offrir un retour visuel immédiat : trait blanc 4pt sur le texte.
+    /// Appliqué par la vue elle-même à l'ouverture de l'outil bordure, pour
+    /// offrir un retour visuel immédiat : trait blanc 4pt sur le texte.
     static func initializeBorderDefaultsIfNeutral(on obj: inout StoryTextObject) {
         if obj.borderColor == nil && obj.borderWidth == nil {
             obj.borderColor = "FFFFFF"

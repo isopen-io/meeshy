@@ -385,7 +385,7 @@ class PostDetailViewModel: ObservableObject {
     /// (the optimistic state is already final).
     /// ⚠️ Le corps du Task ne capture PAS `self` : hors-ligne le stream peut ne
     /// jamais émettre, et un `guard let self` fort aurait retenu le VM d'un
-    /// écran fermé indéfiniment. Même forme que `UserProfileViewModel`.
+    /// écran fermé indéfiniment. Même forme que `FeedViewModel.observeOutcome`.
     func observeOutcome(
         cmid: String,
         rollback: @escaping @MainActor () -> Void,

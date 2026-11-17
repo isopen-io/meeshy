@@ -53,8 +53,8 @@ public struct Plan2DView: View, Equatable {
     public let onSelectTrack: (String) -> Void
     /// Un tap qui TOMBE sur un losange AFFICHÉ (`Plan2DKeyframe`, dans le
     /// rayon `keyframeHitRadius`) route ICI plutôt que vers `onSelectTrack` —
-    /// S4 : l'édition reste à l'Inspecteur existant (`KeyframeInspector`),
-    /// mais encore faut-il pouvoir DÉSIGNER un keyframe précis.
+    /// S4 : l'édition n'a pas lieu dans le plan, mais encore faut-il pouvoir
+    /// DÉSIGNER un keyframe précis ; l'appelant décide de ce qu'il en fait.
     public let onSelectKeyframe: (String) -> Void
     /// La piste `id` a été déposée à l'index `Int` — un entier dans l'espace
     /// de `tracks` (toutes plans confondus), pas un z relatif à un plan :
@@ -275,13 +275,12 @@ public struct Plan2DView: View, Equatable {
     /// Marge haut/bas d'une barre `.timed` dans sa lane (`laneHeight`) — UNE
     /// seule source pour le dessin de la barre elle-même (ci-dessus) et pour
     /// `loopEchoVerticalFrame`. Sans elle, les deux dérivaient chacune de son
-    /// côté : les tuiles de `LoopRepeatOverlay` (marge 0/hauteur `laneHeight
-    /// - 4`, alignées TOP) ne tombaient plus sur la fenêtre `[rowY + 8,
-    /// rowY + 44]` de la barre qu'elles prolongent (mineur 17, revue Opus).
+    /// côté : les tuiles d'écho de boucle (marge 0/hauteur `laneHeight - 4`,
+    /// alignées TOP) ne tombaient plus sur la fenêtre `[rowY + 8, rowY + 44]`
+    /// de la barre qu'elles prolongent (mineur 17, revue Opus).
     static let barVerticalInset: CGFloat = 8
 
-    /// Fenêtre verticale qu'un écho de boucle (`LoopRepeatOverlay`, posé par
-    /// `StoryTimelineHost.loopEchoOverlay`) doit occuper pour tomber
+    /// Fenêtre verticale qu'un écho de boucle doit occuper pour tomber
     /// EXACTEMENT sur la barre `.timed` qu'il prolonge visuellement.
     static func loopEchoVerticalFrame(laneHeight: CGFloat) -> (topInset: CGFloat, height: CGFloat) {
         (barVerticalInset, laneHeight - barVerticalInset * 2)
@@ -309,8 +308,8 @@ public struct Plan2DView: View, Equatable {
 
     /// `TimelineGeometry` ÉQUIVALENTE à la densité de pixels actuelle du plan
     /// — même conversion que `tickInterval` ci-dessus, exposée pour que
-    /// l'appelant (D3) puisse RÉUTILISER `RulerView`/`PlayheadView` (mapping
-    /// temps→x continu, geste de scrub déjà construit et testé) comme règle
+    /// l'appelant (D3) puisse RÉUTILISER `RulerView` (mapping temps→x
+    /// continu, geste de scrub déjà construit et testé) comme règle
     /// et tête de lecture du plan, sans jamais désynchroniser leur repère de
     /// celui que `Plan2DLayout.x` fait autorité sur les barres/losanges.
     static func equivalentGeometry(laneWidth: CGFloat, zoom: Plan2DZoom, slideDuration: Double) -> TimelineGeometry {
@@ -563,9 +562,9 @@ public struct Plan2DView: View, Equatable {
     ///      condamnerait tout réordonnancement ;
     ///   2. sous le slop, on attend — c'est encore un tap qui tremble ;
     ///   3. au-delà, la dominante tranche : un glissement HORIZONTAL franc sur
-    ///      une piste appartient à la piste (le piège nommé
-    ///      `VideoClipBar:178-183` — un appui long sur doigt immobile ne
-    ///      s'engage jamais sur un glissement lent) ; un glissement VERTICAL
+    ///      une piste appartient à la piste (le piège déjà rencontré sur les
+    ///      barres de clip de l'ancienne frise — un appui long sur doigt
+    ///      immobile ne s'engage jamais sur un glissement lent) ; un glissement VERTICAL
     ///      appartient au scroller, sans quoi la liste des pistes ne défilerait
     ///      plus nulle part.
     static func armDecision(translation: CGSize, elapsed: TimeInterval) -> ArmDecision {
@@ -592,19 +591,9 @@ public struct Plan2DView: View, Equatable {
     /// n'atteignait plus jamais `.track`, donc plus aucune sélection ne
     /// pouvait naître d'un tap sur la barre.
     ///
-    /// Reconciliation avec l'inspectabilité d'un keyframe AUDIO (arbitrage 3,
-    /// D6c) : CLOSE, sans changement de règle ici. `TimelineInspectorHost.
-    /// inspectIfResolvable` route désormais tout losange audio
-    /// vers l'inspecteur de SON CLIP — la même fiche que `.track` ouvrirait
-    /// pour cette piste. Les deux issues de `tapTarget` sur un chevauchement
-    /// audio (`.track` ou `.keyframe`) atterrissent donc sur LA MÊME sheet
-    /// (`Plan2DAudioKeyframeEdgeReconciliationTests`, prouvé bout en bout) :
-    /// la préséance du bord ne prive plus jamais l'utilisateur d'un
-    /// inspecteur pour cette famille, elle ne fait plus que choisir PAR OÙ il
-    /// y arrive. Pour texte/média, le losange reste distinct du clip
-    /// (KeyframeInspector ≠ ClipInspector) — la préséance du bord y protège
-    /// toujours la ré-atteignabilité de la fiche CLIP sur une barre courte,
-    /// exactement le rôle que mineur 19 lui donnait.
+    /// Pour texte/média, le losange reste une cible distincte du clip — la
+    /// préséance du bord y protège la ré-atteignabilité de la fiche CLIP sur
+    /// une barre courte, exactement le rôle que mineur 19 lui donnait.
     nonisolated enum TapTarget: Equatable {
         case keyframe(String)
         case track

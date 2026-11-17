@@ -240,8 +240,9 @@ public actor CacheCoordinator {
     /// flag so subsequent cold starts skip the work — the per-save hooks
     /// keep the index live afterwards. Users are NOT backfilled here because
     /// the `.profiles` store is keyed per-user (no canonical "list" key);
-    /// they get indexed naturally as the user navigates and `UserProfileViewModel`
-    /// calls `SearchIndex.shared.indexUsers` after each fetch.
+    /// they get indexed naturally as the user navigates and
+    /// `LiveProfileLoading.storeProfile` calls `SearchIndex.shared.indexUsers`
+    /// after each fetch.
     private func backfillSearchIndexIfNeeded() async {
         let key = "meeshy.searchindex.backfillDone.v1"
         guard !UserDefaults.standard.bool(forKey: key) else { return }

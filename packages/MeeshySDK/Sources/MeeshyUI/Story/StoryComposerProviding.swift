@@ -6,8 +6,8 @@ import PencilKit
 
 // MARK: - StoryComposerProviding (Testability Seam — Sprint 6 #61)
 //
-// Protocol surface that mirrors the public + internal API the composer host
-// view (`StoryComposerView`, toolbar, timeline panel, canvas) consumes from
+// Protocol surface that mirrors the public + internal API the composer
+// surfaces (canvas, tool panels, timeline) consume from
 // `StoryComposerViewModel`. The concrete view model conforms trivially —
 // every member below matches an existing property or method on the class
 // verbatim, so the conformance is a single `: StoryComposerProviding` on the
@@ -78,8 +78,8 @@ protocol StoryComposerProviding: AnyObject {
     /// présent dans `loadedImages`. Lu par le `StoryComposerCanvasView` pour
     /// déclencher un rebuild canvas. Cf. impl pour le rationale détaillé.
     var loadedImagesVersion: UInt64 { get set }
-    /// Captions de transcription (vidéo) produites par `MeeshyVideoEditorView`
-    /// au confirm. Keyed par `StoryMediaObject.id`. Metadata render-time —
+    /// Captions de transcription (vidéo), sans producteur depuis le retrait de
+    /// l'ancien éditeur vidéo (#9124). Keyed par `StoryMediaObject.id`. Metadata render-time —
     /// pas persistée dans le slide model (cf. doc dans l'impl).
     var loadedVideoCaptions: [String: StoryVideoCaptionMetadata] { get set }
     var mediaAspectRatios: [String: CGFloat] { get set }

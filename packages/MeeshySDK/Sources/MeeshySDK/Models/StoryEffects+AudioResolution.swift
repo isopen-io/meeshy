@@ -26,8 +26,7 @@ public extension StoryEffects {
     /// plan balaie le TEXTE des sources et ne distingue pas une citation d'un
     /// import —, le transport de
     /// `CanvasV3Migration` en `BackgroundSoundV3.Bounds` (la fenêtre de rognage
-    /// du fil v3), et la lecture de `StoryComposerView+SyncRestore` en
-    /// `audioTrimStart`. Seul CE site disait l'inverse, et c'est celui qui
+    /// du fil v3), et la lecture de l'ancien atelier en `audioTrimStart`. Seul CE site disait l'inverse, et c'est celui qui
     /// décide de ce qu'on ENTEND : posées en `startTime`, ces bornes faisaient
     /// jouer `start` secondes de SILENCE puis le fichier DEPUIS ZÉRO.
     ///

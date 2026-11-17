@@ -301,7 +301,7 @@ extension StoryCanvasUIView {
     ///
     /// Le vide se DIT plutôt qu'il ne se tait : « Texte » seul laisserait
     /// l'auditeur se demander si la lecture a échoué. La chaîne est celle que
-    /// `ComposerToolPanelHost` sert déjà à l'œil pour le même état — un mot,
+    /// le panneau d'outils servait déjà à l'œil pour le même état — un mot,
     /// une clé, une traduction.
     ///
     /// Le blanc compte comme du vide, comme partout ailleurs dans le composer

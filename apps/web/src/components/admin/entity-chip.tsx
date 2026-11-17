@@ -205,25 +205,6 @@ export function AdminLink({ target, children, className, style, anchor, ariaLabe
   );
 }
 
-export function AdminEntityLink({
-  entity,
-  children,
-  className,
-}: {
-  readonly entity: AdminEntityRef;
-  readonly children?: ReactNode;
-  readonly className?: string;
-}) {
-  return (
-    <AdminLink
-      target={{ kind: 'entity', entity: entity.kind, id: entity.id }}
-      {...(className === undefined ? {} : { className })}
-    >
-      {children ?? entity.label}
-    </AdminLink>
-  );
-}
-
 const ENTITY_GLYPH: Readonly<Record<AdminEntityKind, AdminGlyphName>> = {
   user: 'user',
   anonymous: 'detective',

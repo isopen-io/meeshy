@@ -2,11 +2,10 @@ import Foundation
 
 /// SSOT Swift du prédicat « cette chaîne est-elle un ObjectId MongoDB ? ».
 ///
-/// Miroir des SSOT sœurs, une par package — `packages/shared/utils/object-id.ts`,
-/// `apps/web/utils/object-id.ts`, `services/gateway/src/utils/object-id.ts`.
-/// Les trois portent DÉLIBÉRÉMENT le même nom de constante et de fonction
-/// « pour rester repérables d'un package à l'autre » ; ce type est le
-/// quatrième, et il garde ce nom pour la même raison.
+/// Miroir des SSOT sœurs, une par package — `packages/shared/utils/object-id.ts`
+/// et `services/gateway/src/utils/object-id.ts`. Elles portent DÉLIBÉRÉMENT le
+/// même nom de constante et de fonction « pour rester repérables d'un package à
+/// l'autre » ; ce type garde ce nom pour la même raison.
 ///
 /// ## Pourquoi le client en a besoin, et pas seulement le serveur
 ///

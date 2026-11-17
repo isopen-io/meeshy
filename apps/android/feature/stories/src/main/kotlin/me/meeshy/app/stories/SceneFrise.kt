@@ -772,7 +772,7 @@ private fun keyframeChip(
     return if (held) KeyframeChip.REMOVE else KeyframeChip.ADD
 }
 
-/** Les losanges des images clés sur la piste (#14271, iOS `LaneKeyframeOverlays`) : lus, jamais une cible de toucher. */
+/** Les losanges des images clés sur la piste (#14271, comme iOS) : lus, jamais une cible de toucher. */
 @Composable
 private fun BoxScope.KeyframeMarkers(times: List<Double>, view: FriseViewport) {
     Canvas(Modifier.matchParentSize()) {

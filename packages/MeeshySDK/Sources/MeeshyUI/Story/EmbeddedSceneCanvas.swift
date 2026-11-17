@@ -5,8 +5,7 @@ import MeeshySDK
 ///
 /// Rend le canvas de story ÉDITABLE (`StoryCanvasUIView`, via
 /// `StoryComposerCanvasView`) à l'intérieur d'un **cadre BORNÉ arrondi**
-/// fourni par le parent — SANS le shell plein écran de `StoryComposerView`
-/// (pas de `.ignoresSafeArea()`, pas de `.statusBarHidden()`, pas de
+/// fourni par le parent — SANS shell plein écran (pas de `.ignoresSafeArea()`, pas de `.statusBarHidden()`, pas de
 /// revendication de la safe-area). C'est le building block qui permettra à la
 /// scène 9:16 de vivre EN HAUT de l'écran document, à taille variable, au lieu
 /// d'un atelier plein écran distinct.

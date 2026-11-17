@@ -32,7 +32,7 @@ public enum DrawingEditTool: String, CaseIterable, Sendable, Equatable {
 
 // MARK: - DrawingEditingMode
 
-/// État du mode d'édition de dessin flottant. Orthogonal à `BandStateMachine`.
+/// État du mode d'édition de dessin flottant.
 /// `strokeId` = trait sélectionné pour l'édition par-trait (`nil` = aucun, on édite
 /// alors le pinceau actif). `expandedTool` = panneau d'options déplié.
 public enum DrawingEditingMode: Equatable, Sendable {
@@ -77,8 +77,8 @@ extension StoryComposerViewModel {
 
     /// Entre en mode édition de dessin — MODE LISTE par défaut (user
     /// 2026-07-11 v2) : « par défaut rien n'est activé, c'est la liste des
-    /// éléments de traits ». Aucun panneau déplié, pas de plein écran ; le
-    /// band montre `DrawingStrokeList`. Le plein écran de tracé s'active à
+    /// éléments de traits ». Aucun panneau déplié, pas de plein écran. Le
+    /// plein écran de tracé s'active à
     /// la sélection d'un pinceau (`enterImmersiveDrawing`). Idempotent si
     /// déjà actif (préserve la sélection/le panneau).
     /// `public` : la porte « Dessiner » du composer unifié entre et sort du
@@ -231,7 +231,7 @@ extension StoryComposerViewModel {
     }
     /// **Effacer par le geste — une mutation de MODÈLE, pas de vue.**
     ///
-    /// Elle vivait sur `StoryComposerView` (`+Canvas.swift`), où elle filtrait
+    /// Elle vivait sur la vue de l'ancien atelier du SDK, où elle filtrait
     /// `viewModel.drawingStrokes` depuis l'extérieur. Rien ne l'y obligeait :
     /// elle ne lit aucune géométrie de vue, seulement des points DESIGN déjà
     /// projetés par la couche de capture. Sa place sur la vue était le seul

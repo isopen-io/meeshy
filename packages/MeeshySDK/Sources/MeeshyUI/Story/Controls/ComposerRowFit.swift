@@ -10,7 +10,7 @@ import CoreGraphics
 /// offre 402. La septième — la timeline — ne rendait **aucun pixel**, pas même
 /// un liseré, à taille de texte NOMINALE sur un écran COURANT.
 ///
-/// Elle n'était pourtant pas injoignable : `ComposerToolRow` est un
+/// Elle n'était pourtant pas injoignable : la rangée de l'atelier était un
 /// `ScrollView`, et un balayage l'amenait sous le doigt. La loi 4 était tenue —
 /// **ce qui manquait était le SIGNAL**. Et c'est ce qui a laissé le défaut
 /// vivre : un défilement n'a pas d'état d'échec. Rien ne pouvait rougir.

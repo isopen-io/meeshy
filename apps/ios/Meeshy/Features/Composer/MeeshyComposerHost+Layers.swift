@@ -5,7 +5,7 @@ import MeeshyUI
 //
 // Toucher « Créer une story » fermait l'app : signal 11 sur la pile de 8 Mo du
 // fil principal, une trace qui bouclait sur la copie de valeur
-// (`ExclusiveGesture`, sous `StoryComposerView`) depuis
+// (`ExclusiveGesture`, sous l'ancien atelier du SDK) depuis
 // `MeeshyComposerHost.body`, dont le cadre faisait à lui seul ~100 Ko.
 //
 // La cause est la forme du type, pas un geste : le `body` empilait en UNE
@@ -64,8 +64,8 @@ struct ComposerHostStack: View {
     var body: some View { host.composerStack }
 }
 
-/// L'aiguillage des quatre surfaces (`surface`). Nominal, il sort l'atelier
-/// — `StoryComposerView` et ses gestes — du type de la pile.
+/// L'aiguillage des surfaces (`surface`). Nominal, il sort la surface montée
+/// et ses gestes du type de la pile.
 struct ComposerHostSurface: View {
     let host: MeeshyComposerHost
     var observation: ComposerHostObservation

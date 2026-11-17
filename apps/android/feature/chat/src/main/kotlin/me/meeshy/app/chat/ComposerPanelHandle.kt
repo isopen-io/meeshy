@@ -28,7 +28,7 @@ import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
- * La poignée de 4 dp du panneau de pièces (iOS `ComposerPanelHandle`) : glisser vers le haut d'au
+ * La poignée de 4 dp du panneau de pièces (iOS `ComposerPanelHandleLaw`) : glisser vers le haut d'au
  * moins 44 dp (ou à vitesse équivalente) ouvre toute la photothèque, vers le bas ferme le panneau,
  * sinon rien. La cible tactile fait 48 dp ; TalkBack reçoit l'action « Ouvrir toute la photothèque ».
  */

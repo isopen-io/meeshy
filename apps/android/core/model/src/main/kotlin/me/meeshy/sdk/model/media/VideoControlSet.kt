@@ -2,7 +2,7 @@ package me.meeshy.sdk.model.media
 
 /**
  * **Les contrôles d'un lecteur vidéo**, en drapeaux (iOS `MeeshyVideoPlayer.ControlSet`). Les jeux nommés sont ceux
- * d'iOS : `InlineDefault` pour le fil, `InlineMinimal` pour la bulle ; aucun jeu en ligne n'ouvre le PiP.
+ * d'iOS : `ControlSet.inlineDefault` pour le fil, `.inlineMinimal` pour la bulle ; aucun jeu en ligne n'ouvre le PiP.
  */
 @JvmInline
 public value class VideoControlSet(public val bits: Int) {

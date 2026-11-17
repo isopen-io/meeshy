@@ -29,7 +29,7 @@ public nonisolated enum StoryExportMode: Sendable {
 }
 
 /// **La longueur qu'« Imager » rend** (#13871, décision porteur ;
-/// miroir d'`ImagerLength.kt` et de `scene-export-length.ts`) : au-delà d'une
+/// miroir d'`ImagerLength.kt` ; aucun miroir TS n'existe dans le dépôt) : au-delà d'une
 /// minute, 1/4 · 2/4 · 3/4 · 4/4 de la composition, TOUJOURS depuis son début ;
 /// sous la minute, aucun choix.
 ///

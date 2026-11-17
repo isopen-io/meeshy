@@ -5,8 +5,8 @@ import Foundation
 /// ignoré.
 ///
 /// Extrait de `StoryPhotoSaveService.resolveIntro` (son usage d'origine, app
-/// target) pour que `TimelineExportController` (SDK, Task 9 — revue round 2)
-/// applique la MÊME borne à la résolution de l'interlude de marque, au lieu
+/// target) pour que tous les chemins d'export, dont celui du composer
+/// (`ComposerSceneExportController`, app), appliquent la MÊME borne à la résolution de l'interlude de marque, au lieu
 /// d'attendre sans limite un avatar/fond non caché (`URLSession`, jusqu'à
 /// ~60 s de timeout par défaut) — ce qui laisserait sinon la barre de
 /// progression figée à 0 % pendant potentiellement une minute au premier
@@ -27,8 +27,8 @@ import Foundation
 public enum BoundedAsyncResolution {
 
     /// Borne partagée par TOUS les chemins d'export de story qui résolvent
-    /// l'identité de marque (`StoryPhotoSaveService`,
-    /// `StoryExportShareViewModel`, `TimelineExportController`).
+    /// l'identité de marque (`StoryExportDressingResolver`,
+    /// `StoryExportShareViewModel`, `ComposerSceneExportController`).
     ///
     /// Elle vit ici, à côté de `resolve`, plutôt que dupliquée en littéral
     /// `.seconds(4)` sur chaque appelant : la revue finale a trouvé deux
@@ -56,9 +56,9 @@ public enum BoundedAsyncResolution {
     public static let storyThumbHashTimeout: Duration = .seconds(5)
 
     /// - Parameters:
-    ///   - operation: résolution asynchrone à borner. `@MainActor` : les deux
-    ///     appelants actuels (`StoryPhotoSaveService.intro`,
-    ///     `TimelineExportController.introProvider`) sont des closures
+    ///   - operation: résolution asynchrone à borner. `@MainActor` : les
+    ///     appelants (`StoryExportDressingResolver`,
+    ///     `ComposerSceneExportController.brandIntro`) passent des closures
     ///     main-actor-isolées qui capturent potentiellement `self`/`@Published`.
     ///   - timeout: délai maximal avant repli sur `nil`.
     /// - Returns: le résultat de `operation()` s'il arrive avant `timeout`,

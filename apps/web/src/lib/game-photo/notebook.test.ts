@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { notebookSizeLabel, accountBackend, createNotebook, developNotebookSource, NOTEBOOK_SOURCE_EDGE, lazyBackend, notebookBytes, notebookDbName, openIndexedDbBackend, pendingOf, retakeChoices, retakeSessionOf, type NotebookBackend, type NotebookEntry } from './notebook';
+import { notebookSizeLabel, accountBackend, createNotebook, developNotebookSource, NOTEBOOK_SOURCE_EDGE, notebookBytes, notebookDbName, openIndexedDbBackend, pendingOf, retakeChoices, retakeSessionOf, type NotebookBackend, type NotebookEntry } from './notebook';
 import { achievementMoment, flameMoment, rankMoment, startMoment } from './moments';
 
 /**
@@ -442,27 +442,6 @@ describe('le stockage IndexedDB', () => {
   });
 });
 
-describe('le carnet à ouverture paresseuse', () => {
-  test('la base ne s’ouvre pas tant que personne ne s’en sert, et une seule fois ensuite', async () => {
-    let opened = 0;
-    const lazy = lazyBackend(async () => {
-      opened += 1;
-      return memoryBackend();
-    });
-    expect(opened).toBe(0);
-    const notebook = createNotebook({ backend: lazy, now: () => new Date(T0) });
-    await notebook.defer(achievementMoment('achievement.first_voice'));
-    await notebook.list();
-    expect(opened).toBe(1);
-  });
-
-  test('une base qui ne s’ouvre pas : « non gardé » et « carnet vide », sans exception', async () => {
-    const notebook = createNotebook({ backend: lazyBackend(async () => null), now: () => new Date(T0) });
-    expect(await notebook.defer(achievementMoment('achievement.first_voice'))).toBe(false);
-    expect(await notebook.list()).toEqual([]);
-  });
-});
-
 describe('un carnet PAR COMPTE (D-154)', () => {
   const bases = () => {
     const opened = new Map<string, ReturnType<typeof memoryBackend>>();
@@ -505,5 +484,20 @@ describe('un carnet PAR COMPTE (D-154)', () => {
     await notebook.list();
     await notebook.keep(startMoment(), { story: image('s'), mode: 'card' });
     expect(count).toBe(1);
+  });
+
+  test('la base ne s’ouvre pas tant que personne ne s’en sert', async () => {
+    let count = 0;
+    const backend = accountBackend({ reader: () => 'alice', open: async () => ((count += 1), memoryBackend()) });
+    const notebook = createNotebook({ backend, now: () => new Date(T0) });
+    expect(count).toBe(0);
+    await notebook.defer(achievementMoment('achievement.first_voice'));
+    expect(count).toBe(1);
+  });
+
+  test('une base qui ne s’ouvre pas : « non gardé » et « carnet vide », sans exception', async () => {
+    const notebook = createNotebook({ backend: accountBackend({ reader: () => 'alice', open: async () => null }), now: () => new Date(T0) });
+    expect(await notebook.defer(achievementMoment('achievement.first_voice'))).toBe(false);
+    expect(await notebook.list()).toEqual([]);
   });
 });

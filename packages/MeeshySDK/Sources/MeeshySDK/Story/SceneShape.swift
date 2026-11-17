@@ -286,7 +286,7 @@ public enum SceneShape {
     /// partout »).
     ///
     /// Il valait 20 ici et 22 chez le lecteur de stories comme chez le composer
-    /// (`StoryComposerView+Canvas`), donc la même carte se reconnaissait à ses
+    /// de l'ancien atelier, donc la même carte se reconnaissait à ses
     /// coins selon la surface qui l'ouvrait. Unifier VERS la loi aurait
     /// rectifié la story ; c'est l'inverse qui est demandé — la story est ce
     /// qu'on reproduit, pas ce qu'on corrige.

@@ -133,12 +133,6 @@
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "attachment.file",
-          "androidName": "bubble_attachment_file_fallback",
-          "status": "adopted"
-        },
-        {
           "androidName": "bubble_audio_play",
           "status": "android-only"
         },

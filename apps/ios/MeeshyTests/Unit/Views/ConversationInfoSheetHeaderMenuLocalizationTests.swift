@@ -16,7 +16,7 @@ import XCTest
 /// n'ajoute AUCUNE clé. Inventer des clés identifiantes (`avatar.menu.*`) aurait
 /// créé trois doublons et trois nouvelles dettes.
 ///
-/// Le pendant SDK (`MeeshyAvatar`, `UserIdentityBar`) sort du périmètre de ce
+/// Le pendant SDK (`MeeshyAvatar`) sort du périmètre de ce
 /// lot : son catalogue `.module` n'a rien, il demande deux clés NEUVES en sept
 /// langues et l'ajout à `sweptKeys` — un lot à lui seul.
 final class ConversationInfoSheetHeaderMenuLocalizationTests: XCTestCase {

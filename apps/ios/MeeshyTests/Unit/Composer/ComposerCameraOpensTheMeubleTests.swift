@@ -8,7 +8,7 @@ import XCTest
 /// ## La chaîne qui montait l'ancien écran
 ///
 /// Trois règles, chacune juste isolément, dont la composition faisait ouvrir
-/// `StoryComposerView` à qui tape « Créer une story » depuis le Feed :
+/// l'atelier du SDK à qui tape « Créer une story » depuis le Feed :
 ///
 /// | règle | ce qu'elle disait |
 /// |---|---|

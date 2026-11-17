@@ -24,8 +24,6 @@ import SwiftUI
 @MainActor
 final class DynamicTypeTests: XCTestCase {
 
-    // MARK: - PlayheadView
-
     // MARK: - RulerView
 
     func test_rulerView_atLargeText_doesNotTruncate() throws {
@@ -59,12 +57,6 @@ final class DynamicTypeTests: XCTestCase {
         let host = mount(view, size: CGSize(width: 390, height: 60))
         assertRendersVisibleContent(host, viewName: "RulerView")
     }
-
-    // MARK: - TransportBar
-
-    // MARK: - ClipInspector
-
-    // MARK: - TransitionBadge
 
     // MARK: - Structural contracts (kept from the previous suite)
 

@@ -8,7 +8,6 @@
         { "catalog": "app", "iosKey": "feed.post.stat.likes", "androidName": "feed_post_stat_likes", "kind": "plurals", "fillMissingQuantities": true, "status": "adopted" },
         { "catalog": "app", "iosKey": "feed.post.stat.comments", "androidName": "feed_post_stat_comments", "kind": "plurals", "fillMissingQuantities": true, "status": "adopted" },
         { "androidName": "feed_post_stat_reposts", "status": "android-only" },
-        { "catalog": "app", "iosKey": "feed.post.stat.replies", "androidName": "feed_post_stat_replies", "kind": "plurals", "fillMissingQuantities": true, "status": "adopted" },
         { "catalog": "app", "iosKey": "a11y.feed.post.save.value", "androidName": "feed_post_stat_saves", "status": "adopted" },
         { "catalog": "app", "iosKey": "a11y.feed.post.share.value", "androidName": "feed_post_stat_shares", "status": "adopted" },
         { "catalog": "app", "iosKey": "common.cancel", "androidName": "feed_action_cancel", "status": "adopted" }

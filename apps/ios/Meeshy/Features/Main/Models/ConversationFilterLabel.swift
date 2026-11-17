@@ -3,7 +3,7 @@ import MeeshySDK
 
 // MARK: - Le libellé d'un filtre n'est pas son identité (#4550)
 //
-// `MeeshyConversationFilter` (SDK, `CoreModels.swift`) déclare ses neuf cas
+// `MeeshyConversationFilter` (SDK, `MeeshyConversationFilter.swift`) déclare ses neuf cas
 // avec un `rawValue` FRANÇAIS, et les deux sites de rendu le passaient
 // directement comme titre de puce. Un `rawValue` est une IDENTITÉ : il sert de
 // `id` (`Identifiable`), il se compare, il se journalise. Servi comme libellé,

@@ -101,7 +101,6 @@
     <string name="bubble_a11y_location">Ubicación compartida</string>
     <string name="bubble_a11y_reactions">Reacciones: %1$s</string>
     <string name="bubble_a11y_reply_to">Responder a %1$s</string>
-    <string name="bubble_attachment_file_fallback">Archivo</string>
     <string name="bubble_audio_stack_position">Mensaje de voz %1$d de %2$d</string>
     <string name="bubble_blur_view_once">Ver una vez</string>
     <string name="bubble_contact_card_a11y_on_meeshy">En Meeshy: %1$s</string>
@@ -357,7 +356,6 @@
     <string name="media_summary_voice">🎙️ Mensaje de voz</string>
     <string name="media_trim_loading">Cargando la vista previa</string>
     <string name="media_trim_of_total">de %1$s</string>
-    <string name="media_trim_window">Fragmento conservado</string>
     <string name="media_video_pip_enter">Imagen en imagen</string>
     <string name="media_video_unavailable_retry">Video no disponible. Reintentar.</string>
     <string name="media_voice_message">Mensaje de voz</string>
@@ -434,7 +432,6 @@
     <string name="retouch_filter_golden">Dorado</string>
     <string name="retouch_filter_monochrome">Blanco y negro</string>
     <string name="retouch_filter_muted">Suave</string>
-    <string name="retouch_filter_natural">Natural</string>
     <string name="retouch_filter_sky">Cielo</string>
     <string name="retouch_filter_softNight">Noche suave</string>
     <string name="retouch_filter_velvet">Terciopelo</string>
@@ -541,7 +538,6 @@
     <string name="talkie_header_badge_live">En directo</string>
     <string name="talkie_header_badge_recorded">Grabado</string>
     <string name="talkie_header_badge_relayed">Sin conexión</string>
-    <string name="talkie_header_live">Talkie en curso</string>
     <string name="talkie_send_connecting">Conectando…</string>
     <string name="talkie_send_failed">El walkie-talkie no se pudo enviar.</string>
     <string name="talkie_send_hold">Mantén para hablar</string>
