@@ -19,6 +19,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SwrCacheSource
 import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.isoToEpochMillis
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.net.ConditionalResult
 import me.meeshy.sdk.net.NetworkResult
@@ -107,30 +108,35 @@ internal class MessageCacheSource(
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(resourceKey)
 
     /**
-     * #18915 — every revalidation reads the RECENT WINDOW first ([revalidateFullWindow], conditional: a 304
-     * without a body when nothing changed). It is the only read that sees what happened to messages ALREADY
-     * held — an edit, a deletion, a reaction, a pin, a read receipt missed while the socket was away — since
-     * `after=` only ever serves messages CREATED after the high-water mark: the forward-only revalidation of
-     * #5206 left them stale for good, reopening and pulling included.
+     * #18915 — every revalidation reads the RECENT WINDOW ([readWindow], conditional: a 304 without a body when
+     * nothing changed). It is the only read that sees what happened to messages ALREADY held — an edit, a
+     * deletion, a reaction, a pin, a read receipt missed while the socket was away — since `after=` only ever
+     * serves messages CREATED after the high-water mark: the forward-only revalidation of #5206 left them stale
+     * for good, reopening and pulling included.
      *
-     * The forward sweep (#5206, [tryAfterSweep]) follows only when the page does not reach back to what was
-     * held — its oldest message is newer than the high-water mark — and fills the gap between the two, APPEND,
-     * upsert-only ([persistAfterBackfill] never prunes: its span is not the page's). A message a push
-     * prefetched ahead of unpushed ones raises the high-water mark too: the window brings back what came
-     * before it (a hole wider than the window still waits for a contiguity watermark, never moved by a push).
+     * The forward sweep (#5206, [readGap]) follows only when the page does not reach back to what was held — its
+     * oldest message is newer than the high-water mark — and reads the gap between the two. A message a push
+     * prefetched ahead of unpushed ones raises the high-water mark too: the window brings back what came before
+     * it (a hole wider than the window still waits for a contiguity watermark, never moved by a push).
+     *
+     * EVERY read comes first, then ONE write ([persist]: window, gap, prune, `sync_meta`). The thread revalidates
+     * inside the stream's `transformLatest`, and any Room write of this revalidation makes the stream emit — which
+     * cancels it. Written before the sweep, the window cancelled the very sweep it needed and made the thread
+     * fresh with its high-water mark above the gap, which then no revalidation nor backwards page ever filled.
+     * A failed read writes NOTHING and throws: the thread stays stale with its gap still ahead, and since nothing
+     * moved in Room the stream does not emit again — no reread loop.
      *
      * The high-water mark is read BEFORE any request: the page prunes only what was held before it left
      * ([prunableSpan]). Every success writes `sync_meta` — a 304 as much as a page — so a revalidation that
      * found nothing new still leaves the cache fresh, and the next Room write (a receipt, a translation)
-     * starts no new request. A failed sweep leaves the window already persisted and throws nothing.
+     * starts no new request.
      */
     override suspend fun revalidate() {
         val ticket = fence?.currentTicket()
         val heldUpTo = messageDao.newestSyncedCreatedAt(conversationId)
-        val oldestServed = revalidateFullWindow(ticket, heldUpTo) ?: return
-        val gapFrom = heldUpTo?.takeIf { it < oldestServed } ?: return
-        val gap = tryAfterSweep(Instant.ofEpochMilli(gapFrom).toString()) ?: return
-        if (gap.isNotEmpty()) fence.commitOrWrite(ticket) { persistAfterBackfill(gap) }
+        val window = readWindow(ticket) ?: return
+        val gap = readGap(window.messages, heldUpTo)
+        fence.commitOrWrite(ticket) { persist(window, gap, heldUpTo) }
     }
 
     /**
@@ -141,7 +147,24 @@ internal class MessageCacheSource(
      */
     suspend fun revalidatePresent() {
         val ticket = fence?.currentTicket()
-        revalidateFullWindow(ticket, messageDao.newestSyncedCreatedAt(conversationId))
+        val heldUpTo = messageDao.newestSyncedCreatedAt(conversationId)
+        val window = readWindow(ticket) ?: return
+        fence.commitOrWrite(ticket) { persist(window, gap = emptyList(), heldUpTo = heldUpTo) }
+    }
+
+    /** The recent window as the server served it, and the validator to keep with it. */
+    private class ServedWindow(val messages: List<ApiMessage>, val etag: String?)
+
+    /**
+     * The messages between [heldUpTo] and the window's oldest, read BEFORE anything is written (see [revalidate]).
+     * Empty when the window reaches back to what was held; throws when the sweep fails, so nothing is written and
+     * the gap stays ahead of the next revalidation.
+     */
+    private suspend fun readGap(window: List<ApiMessage>, heldUpTo: Long?): List<ApiMessage> {
+        val oldestServed = window.minOfOrNull { isoToEpochMillis(it.createdAt) } ?: return emptyList()
+        val gapFrom = heldUpTo?.takeIf { it < oldestServed } ?: return emptyList()
+        return tryAfterSweep(Instant.ofEpochMilli(gapFrom).toString())
+            ?: throw MessageSyncException("The gap before the recent window of messages:$conversationId could not be read")
     }
 
     /**
@@ -149,9 +172,9 @@ internal class MessageCacheSource(
      * iterations, advancing [after] to the max `createdAt` seen on each page
      * (ascending order + `skip` pinned to 0 server-side means the `after`
      * value itself is the cursor — [MessageApi.listAfter]'s doc-comment).
-     * A sweep that hits its ceiling hands back what it read (#14670): the
-     * window is already cached, and what lies beyond the ceiling is paged by
-     * scrolling up. Returns `null` — never a partial, silently-trusted list —
+     * A sweep that hits its ceiling hands back what it read (#14670): it lands
+     * with the window, and what lies beyond the ceiling is paged by scrolling
+     * up. Returns `null` — never a partial, silently-trusted list —
      * on ANY transport failure, a refused envelope (`success = false`), or a
      * response whose `cursorPagination` (or its `hasMore`) is missing: none
      * of those prove anything about what is actually missing.
@@ -189,14 +212,12 @@ internal class MessageCacheSource(
      * refreshed as any successful revalidation. A 304 arriving when no `ETag`
      * was held is a server anomaly (RFC 7232 defines 304 only as an answer to
      * a conditional request) and throws, rather than being silently read as
-     * "unchanged" or as an empty success. [heldUpTo] is the newest server row
-     * held before the request: the page prunes nothing newer (#18915).
+     * "unchanged" or as an empty success.
      *
-     * Returns the oldest `createdAt` the page served and persisted — where a
-     * gap after [heldUpTo] would start; `null` when there is nothing more to
-     * read: a 304, an empty page, or an account closed before the page landed.
+     * Returns the page to write; `null` after a 304, whose only write —
+     * `sync_meta`, the confirmation — is the last step of the revalidation.
      */
-    private suspend fun revalidateFullWindow(ticket: AccountTicket?, heldUpTo: Long?): Long? {
+    private suspend fun readWindow(ticket: AccountTicket?): ServedWindow? {
         val currentEtag = syncMetaDao.etag(resourceKey)
         return when (
             val result = messageApi.listConditionalResult(
@@ -215,28 +236,31 @@ internal class MessageCacheSource(
                 }
                 null
             }
-            is ConditionalResult.Fresh -> fence.commitOrWrite(ticket) { persist(result.data, result.etag, heldUpTo) }
+            is ConditionalResult.Fresh -> ServedWindow(result.data, result.etag)
             is ConditionalResult.Failure -> throw MessageSyncException(result.error.message)
         }
     }
 
-    /** Writes the page under the field-level merge, prunes the held span, and returns its oldest `createdAt`. */
-    private suspend fun persist(messages: List<ApiMessage>, newEtag: String?, heldUpTo: Long?): Long? {
+    /**
+     * The ONE write of a revalidation: the window and its gap under the field-level merge (a message served by both
+     * keeps the gap's copy, read last), the prune of the held span the window covers, and `sync_meta` with the
+     * window's validator — the gap's rows are all newer than [heldUpTo], so they never widen the prune.
+     */
+    private suspend fun persist(window: ServedWindow, gap: List<ApiMessage>, heldUpTo: Long?) {
         val now = clock.nowMillis()
-        val rows = messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
+        val rows = window.messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
         val servedIds = rows.map { it.id }
         val span = prunableSpan(rows, heldUpTo)
         val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
         database.withTransaction {
-            ingestion.mergeInTransaction(messages, now, conversationId, settlements)
+            ingestion.mergeInTransaction(window.messages + gap, now, conversationId, settlements)
             span?.let {
-                erasures?.recordRemovedRows(pruned(messages, it, servedIds))
+                erasures?.recordRemovedRows(pruned(window.messages, it, servedIds))
                 messageDao.deleteMissingBetween(conversationId, it.first, it.last, servedIds)
             }
-            syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, newEtag, null))
+            syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, window.etag, null))
         }
         settlements?.forEach { media?.settle(it.previous, it.written) }
-        return rows.minOfOrNull { it.createdAt }
     }
 
     /**
@@ -262,24 +286,6 @@ internal class MessageCacheSource(
         val served = messages.flatMap { listOfNotNull(it.id, it.clientMessageId) }.toSet()
         return messageDao.missingBetween(conversationId, span.first, span.last, servedIds)
             .filter { row -> row.id !in served && row.serverId !in served }
-    }
-
-    /**
-     * #5206 — persists a gap sweep. APPEND, upsert-only: a forward read proves
-     * nothing about what was deleted (its span is not the page's), so
-     * [MessageDao.deleteMissingBetween] never runs here. Preserves the CURRENT
-     * `etag` untouched — a gap sweep proves nothing about the recent
-     * window's own validator, a DIFFERENT request shape entirely.
-     */
-    private suspend fun persistAfterBackfill(messages: List<ApiMessage>) {
-        val now = clock.nowMillis()
-        val currentEtag = syncMetaDao.etag(resourceKey)
-        val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
-        database.withTransaction {
-            ingestion.mergeInTransaction(messages, now, conversationId, settlements)
-            syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, currentEtag, null))
-        }
-        settlements?.forEach { media?.settle(it.previous, it.written) }
     }
 
     private companion object {

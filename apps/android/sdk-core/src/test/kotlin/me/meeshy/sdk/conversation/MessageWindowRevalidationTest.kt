@@ -5,6 +5,12 @@ import io.mockk.coEvery
 import io.mockk.mockk
 import java.io.IOException
 import java.time.Instant
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import me.meeshy.core.database.entity.SyncMetaEntity
+import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
@@ -117,6 +123,14 @@ class MessageWindowRevalidationTest {
 
     private suspend fun MessageCollaboratorHarness.ids(): List<String> =
         database.messageDao().listForConversation(CONVERSATION).sortedBy { it.createdAt }.map { it.id }
+
+    /** What a stream emission paints, oldest first. */
+    private fun CacheResult<List<LocalMessage>>.shownIds(): List<String> = when (this) {
+        is CacheResult.Fresh -> value
+        is CacheResult.Stale -> value
+        is CacheResult.Syncing -> value.orEmpty()
+        CacheResult.Empty -> emptyList()
+    }.map { it.message.id }
 
     // — what the page may prune —
 
@@ -278,21 +292,97 @@ class MessageWindowRevalidationTest {
     }
 
     /**
-     * A sweep whose `hasMore` cannot be proven either way reads as a failure: nothing of it is trusted, the window
-     * already read stays, and the refresh does not throw.
+     * A sweep whose `hasMore` cannot be proven either way reads as a failure: nothing of it is trusted, and the window
+     * is not written without it — written alone, it would raise the high-water mark over the gap for good. The refresh
+     * fails, the thread stays as it was.
      */
     @Test
-    fun `a malformed after response leaves the recent window already read`() = runHarnessTest { harness ->
-        harness.held(message("m1", T1))
-        val gateway = object : MessageApi by GatewayMessageHistory(served = listOf(message("m1", T1), message("m2", T2)), window = 1) {
-            override suspend fun listAfter(conversationId: String, after: String, limit: Int?) =
-                MessagesApiResponse(success = true, data = emptyList(), cursorPagination = null)
+    fun `a malformed after response writes nothing, the gap stays visible to the next revalidation`() =
+        runHarnessTest { harness ->
+            harness.held(message("m1", T1))
+            val gateway = object : MessageApi by GatewayMessageHistory(served = listOf(message("m1", T1), message("m2", T2)), window = 1) {
+                override suspend fun listAfter(conversationId: String, after: String, limit: Int?) =
+                    MessagesApiResponse(success = true, data = emptyList(), cursorPagination = null)
+            }
+
+            val refreshed = runCatching { harness.repository(gateway).refresh(CONVERSATION) }
+
+            assertThat(refreshed.exceptionOrNull()).isInstanceOf(MessageSyncException::class.java)
+            assertThat(harness.ids()).containsExactly("m1")
+            assertThat(harness.database.syncMetaDao().lastSyncedAt(KEY)).isNull()
         }
 
-        harness.repository(gateway).refresh(CONVERSATION)
+    // — the thread as it opens: `cacheFirstFlow` revalidates inside `transformLatest` (#18915, F1) —
 
-        assertThat(harness.ids()).containsExactly("m1", "m2").inOrder()
-    }
+    /**
+     * Opening a thread revalidates INSIDE the stream's `transformLatest`: any Room write of that revalidation makes the
+     * stream emit, which cancels the revalidation still running. Written before the sweep, the window cancelled the very
+     * sweep it needed, and made the thread fresh with its high-water mark above the gap — 25 messages missed with no push,
+     * five of them never shown. The window and the gap are read first, then land in ONE write.
+     */
+    @Test
+    fun `opening a thread after more missed messages than the window shows every one of them`() =
+        runHarnessTest(startMillis = System.currentTimeMillis()) { harness ->
+            val served = (1..27).map { message(id = "m%02d".format(it), at = minute(it)) }
+            harness.held(served[0], served[1])
+            val history = GatewayMessageHistory(served = served, window = 20)
+            var windowVisibleWhenSweepAsked: Boolean? = null
+            var syncedWhenSweepAsked: Long? = -1L
+            val gateway = object : MessageApi by history {
+                override suspend fun listAfter(conversationId: String, after: String, limit: Int?): MessagesApiResponse {
+                    windowVisibleWhenSweepAsked = harness.database.messageDao().find("m27") != null
+                    syncedWhenSweepAsked = harness.database.syncMetaDao().lastSyncedAt(KEY)
+                    return history.listAfter(conversationId, after, limit)
+                }
+            }
+
+            val opened = harness.repository(gateway).messagesStream(CONVERSATION)
+                .first { it is CacheResult.Fresh && it.value.any { local -> local.message.id == "m27" } }
+
+            assertThat(windowVisibleWhenSweepAsked).isFalse()
+            assertThat(syncedWhenSweepAsked).isNull()
+            assertThat(history.listAfterCalls.first()).isEqualTo(minute(2))
+            assertThat(opened.shownIds()).containsExactlyElementsIn(served.map { it.id }).inOrder()
+            assertThat(harness.database.syncMetaDao().lastSyncedAt(KEY)).isEqualTo(harness.clock.now)
+        }
+
+    /**
+     * The sweep fails: nothing is written — no window, no `sync_meta` — so the thread stays stale with its gap still
+     * ahead of the next revalidation, and since nothing was written the stream does not emit again: no reread loop.
+     */
+    @Test
+    fun `a thread whose gap cannot be read stays stale, unwritten, and asks no more`() =
+        runHarnessTest(startMillis = System.currentTimeMillis()) { harness ->
+            val served = (1..27).map { message(id = "m%02d".format(it), at = minute(it)) }
+            harness.held(served[0], served[1])
+            val syncedBefore = harness.clock.now - THREE_MINUTES
+            harness.database.syncMetaDao().upsert(SyncMetaEntity(KEY, syncedBefore))
+            val history = GatewayMessageHistory(served = served, window = 20)
+            val gateway = object : MessageApi by history {
+                override suspend fun listAfter(conversationId: String, after: String, limit: Int?): MessagesApiResponse =
+                    throw IOException("offline")
+            }
+            val seen = mutableListOf<CacheResult<List<LocalMessage>>>()
+
+            val settled = coroutineScope {
+                val outcome = CompletableDeferred<String>()
+                val opening = launch {
+                    harness.repository(gateway)
+                        .messagesStream(CONVERSATION, onSyncError = { outcome.complete("failed: ${it::class.simpleName}") })
+                        .collect { result ->
+                            seen += result
+                            if (result is CacheResult.Fresh) outcome.complete("fresh")
+                        }
+                }
+                outcome.await().also { opening.cancel() }
+            }
+
+            assertThat(settled).isEqualTo("failed: MessageSyncException")
+            assertThat(seen.map { it::class }).containsExactly(CacheResult.Stale::class)
+            assertThat(harness.database.messageDao().find("m27")).isNull()
+            assertThat(harness.database.syncMetaDao().lastSyncedAt(KEY)).isEqualTo(syncedBefore)
+            assertThat(history.validators).hasSize(1)
+        }
 
     // — the validator of the recent window (#5188) —
 
@@ -322,9 +412,14 @@ class MessageWindowRevalidationTest {
         assertThat(harness.ids()).containsExactly("m1", "m2").inOrder()
     }
 
+    /** A strictly increasing server instant, one minute per message. */
+    private fun minute(index: Int): String = Instant.ofEpochSecond(BASE_SECOND + index * 60L).toString()
+
     private companion object {
         const val CONVERSATION = "c1"
         const val KEY = "messages:$CONVERSATION"
+        const val BASE_SECOND = 1_780_000_000L
+        const val THREE_MINUTES = 180_000L
         const val T1 = "2026-06-01T10:00:00Z"
         const val T2 = "2026-06-01T11:00:00Z"
         const val T3 = "2026-06-01T12:00:00Z"

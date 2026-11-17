@@ -76,10 +76,11 @@ private class FakeMessageApi(
         retrofit2.Response.success(list(conversationId, null, null, null))
 
     // #18915 — [MessageCacheSource.revalidate] reads the recent window
-    // ([listConditional]) first; the forward sweep ([listAfter], refused
-    // below) only runs when the page does not reach back to what Room held,
-    // and its refusal leaves the window already persisted. The window tests
-    // and the gap tests live in MessageWindowRevalidationTest.
+    // ([listConditional]) and, only when the page does not reach back to
+    // what Room held, the gap after it ([listAfter], refused below), before
+    // writing anything: a refused sweep fails the revalidation and writes
+    // nothing. No test here leaves such a gap; the window tests and the gap
+    // tests live in MessageWindowRevalidationTest.
     override suspend fun listMedia(
         conversationId: String,
         view: String,

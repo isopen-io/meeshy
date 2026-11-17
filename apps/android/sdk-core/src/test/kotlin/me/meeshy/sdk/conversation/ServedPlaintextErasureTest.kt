@@ -12,6 +12,9 @@ import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.CursorPagination
+import me.meeshy.sdk.model.MessagesApiResponse
+import me.meeshy.sdk.model.isoToEpochMillis
 import me.meeshy.sdk.net.api.MessageApi
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -35,9 +38,17 @@ class ServedPlaintextErasureTest {
         content = "[Encrypted]", isEncrypted = true, encryptionMode = "e2ee", clientMessageId = cid, createdAt = at,
     )
 
+    /** A server holding exactly [messages]: the recent window serves them all, the forward sweep those after its cursor. */
     private fun pageServing(vararg messages: ApiMessage): MessageApi = mockk<MessageApi>().also { api ->
-        coEvery { api.listAfter(any(), any(), any()) } throws IOException("offline")
         coEvery { api.listConditional("c1", any()) } returns Response.success(ApiResponse(success = true, data = messages.toList()))
+        coEvery { api.listAfter("c1", any(), any()) } answers {
+            val after = isoToEpochMillis(secondArg<String>())
+            MessagesApiResponse(
+                success = true,
+                data = messages.filter { isoToEpochMillis(it.createdAt) > after },
+                cursorPagination = CursorPagination(hasMore = false),
+            )
+        }
     }
 
     private fun source(harness: MessageCollaboratorHarness, api: MessageApi, erasures: PlaintextErasureLedger) = MessageCacheSource(
