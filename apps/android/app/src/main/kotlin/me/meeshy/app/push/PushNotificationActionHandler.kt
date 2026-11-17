@@ -39,8 +39,8 @@ import javax.inject.Singleton
  * ([PostRepository.queueComment], `CREATE_COMMENT` : rejeu sans doublon sous le même `X-Client-Mutation-Id`), puis la
  * cloche est marquée lue.
  *
- * Fail-closed en conversation chiffrée de bout en bout : ce natif ne sait pas chiffrer, donc
- * rien ne part en clair ([Outcome.END_TO_END]) — la même loi que le drainer de la file
+ * Fail-closed en conversation chiffrée de bout en bout : la réponse depuis la bannière ne passe pas (encore) par le
+ * scellement libsignal, donc rien ne part en clair ([Outcome.END_TO_END]) — la même loi que le drainer de la file
  * ([EndToEndOutboxAdmission.outOfThreadVerdictFor]), lue AVANT de créer une bulle condamnée. Hors d'un registre scellé, le
  * mode est TOUJOURS relu au serveur (borné, #13792) : réveillée à froid par FCM, l'application n'a appris aucun régime — la
  * donnée du push ne porte ni `encryptionMode` ni `isEncrypted` — et son mode en cache peut être périmé. Relecture en
