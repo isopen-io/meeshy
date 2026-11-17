@@ -48,6 +48,9 @@ extension MessagePersistenceActor {
                                        marksEdited: marksEdited, noticeJson: noticeJson, authorship: authorship)
                 if let kept = events.edit, kept.editedAt > edit.editedAt { return }
                 events.edit = edit
+                // Les traductions tamponnées avec elle traduisaient l'ancien texte :
+                // rejouées sous le nouveau, elles le doubleraient d'un faux.
+                events.translations = []
             }
             return
         }
