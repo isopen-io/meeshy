@@ -785,6 +785,7 @@ export * from './conversation-bridge.js';
 export * from './contact-card.js';
 export * from './relation.js';
 export * from './relation-level-response.js';
+export * from './relation-circles-summary.js';
 export * from './bring.js';
 export * from './talkie.js';
 // Les schémas zod de l'écoute et de la position partagée ne passent pas par le

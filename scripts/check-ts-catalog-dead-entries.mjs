@@ -534,6 +534,9 @@ export const callersIn = (contents, nsNames) => {
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // « Mes cercles » compté par la passerelle, Communauté comprise (#19375, chantier #18857) : iOS le lira
+  // d'abord (rangée « Mes cercles » de la fiche) ; le web et Android le liront avec leur profil.
+  'relations.summary': { issue: 19375, reason: 'GET /relations/summary — le compte de chaque cercle et des demandes en attente, rangée « Mes cercles »' },
   // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
   'conversations.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (web)' },
   // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la
