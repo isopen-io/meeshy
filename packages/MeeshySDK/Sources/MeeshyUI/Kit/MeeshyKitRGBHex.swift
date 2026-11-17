@@ -2,7 +2,7 @@ import Foundation
 
 extension MeeshyKitRGB {
     /// Lit un code hexadécimal de six chiffres (avec ou sans « # ») ; tout autre texte rend `nil`.
-    public init?(hex: String) {
+    public nonisolated init?(hex: String) {
         let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
         guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
         self.init(
