@@ -2,7 +2,9 @@ import { useStore } from 'zustand/react';
 
 import { MeeshyGlass } from '@/components/kit/meeshy-glass-tone';
 import { callActions } from '@/lib/calls/call-actions';
+import { identifyCallBack } from '@/lib/calls/call-back-intent';
 import { callBackPromptStore } from '@/lib/calls/call-back-prompt';
+import { callIdentityOf } from '@/lib/calls/call-notice';
 import type { StartCallRequest } from '@/lib/calls/engine';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -13,6 +15,8 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
  * le son d'un onglet que personne n'a touché : l'appel partirait muet. Le
  * toucher « Appeler » compose DANS le geste, ce qui débloque la sonnerie et la
  * voix ; « Annuler » oublie le rappel. Sur le verre du kit (loi 18.1, #18223), comme l'appel réduit.
+ * L'identité se relit AU TOUCHER : une adresse ne porte plus ni nom ni groupe
+ * (#18907), et à froid le fil a pu se charger après que l'invite s'est posée.
  */
 
 const ANSWER = 'var(--ios-success)';
@@ -66,7 +70,7 @@ export default function CallBackPromptLayer() {
       language={currentInterfaceLanguage()}
       onCall={() => {
         forget();
-        callActions.start(request);
+        callActions.start(identifyCallBack(request, callIdentityOf(request.conversationId)));
       }}
       onCancel={forget}
     />

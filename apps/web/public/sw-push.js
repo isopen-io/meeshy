@@ -913,15 +913,16 @@ async function refuserAppel(callId) {
 }
 
 /**
- * LA CONFIRMATION D'UN ONGLET NEUF (#18907) — JUMEAU de
- * `src/lib/calls/call-answer-confirmation.ts` (base, magasin, version) et de
- * `ANSWER_INTENT_TTL_MS`. Une adresse `?repondre=` se compose à la main : seul
- * ce worker a reçu le toucher, donc seul il pose `{ callId, until }` que la page consomme.
+ * LA CONFIRMATION D'UN ONGLET NEUF (#18907) — JUMEAU de `src/lib/calls/call-answer-confirmation.ts`
+ * (base, magasin, version) et de `ANSWER_INTENT_TTL_MS`. Une adresse `?repondre=` se compose à la main :
+ * seul ce worker a reçu le toucher, donc seul il pose `{ callId, until }` que la page consomme. Son écriture
+ * n'attend que CALL_INTENT_WAIT_MS avant `openWindow`, que Firefox ne permet qu'environ une seconde après le clic.
  */
 const CALL_INTENT_DB_NAME = 'meeshy-call-intent';
 const CALL_INTENT_DB_VERSION = 1;
 const CALL_INTENT_STORE_NAME = 'intents';
 const CALL_INTENT_TTL_MS = 70000;
+const CALL_INTENT_WAIT_MS = 250;
 
 /** Best-effort : sans IndexedDB l'appel sonne et attend un toucher — jamais un décrochage sans consentement. */
 function poserConfirmationAppel(callId) {
@@ -943,11 +944,8 @@ function poserConfirmationAppel(callId) {
   );
 }
 
-/**
- * Répondre ouvre le fil et le fait DÉCROCHER : un onglet ouvert reçoit
- * l'identifiant dans le MESSAGE (voie de confiance), un onglet neuf le lit dans
- * `?repondre=<id>` après la confirmation du worker. Le corps ouvre seulement le fil.
- */
+/** Répondre ouvre le fil et le fait DÉCROCHER : un onglet ouvert reçoit l'identifiant dans le MESSAGE (voie de confiance),
+ * un onglet neuf le lit dans `?repondre=<id>` après la confirmation du worker. Le corps ouvre seulement le fil. */
 async function ouvrirAppel(data, action) {
   const callId = texte(data.callId);
   if (action === CALL_DECLINE_ACTION) {
@@ -959,9 +957,10 @@ async function ouvrirAppel(data, action) {
   const ouvertes = await fenetres();
   const client = ouvertes[0];
   if (client === undefined) {
-    if (repondre) await poserConfirmationAppel(callId);
+    const confirmation = repondre ? poserConfirmationAppel(callId) : Promise.resolve();
+    await Promise.race([confirmation, new Promise((fin) => setTimeout(fin, CALL_INTENT_WAIT_MS))]);
     await self.clients.openWindow(repondre ? fil + '?' + CALL_ANSWER_PARAM + '=' + encodeURIComponent(callId) : fil);
-    return;
+    return confirmation;
   }
   try {
     await client.focus();
