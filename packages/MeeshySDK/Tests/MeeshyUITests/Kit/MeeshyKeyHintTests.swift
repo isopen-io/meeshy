@@ -61,12 +61,12 @@ struct MeeshyKeyHintTests {
         for (name, size) in [("regular", MeeshyKeyHintSize.regular), ("compact", .compact)] {
             let expected = try #require(measures[name])
             let recipe = Self.recipe(size: size)
-            #expect(recipe.side == expected["cote"], name)
-            #expect(recipe.cornerRadius == expected["rayon"], name)
-            #expect(recipe.lipWidth == expected["levre"], name)
-            #expect(recipe.characterSize == expected["caractere"], name)
-            #expect(recipe.combinationGap == expected["ecart"], name)
-            #expect(recipe.minimumWidth == recipe.side, name)
+            #expect(recipe.side == expected["cote"], "\(name)")
+            #expect(recipe.cornerRadius == expected["rayon"], "\(name)")
+            #expect(recipe.lipWidth == expected["levre"], "\(name)")
+            #expect(recipe.characterSize == expected["caractere"], "\(name)")
+            #expect(recipe.combinationGap == expected["ecart"], "\(name)")
+            #expect(recipe.minimumWidth == recipe.side, "\(name)")
         }
     }
 
