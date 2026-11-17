@@ -236,7 +236,7 @@ public struct MeeshySpark: View {
     }
 }
 
-private struct MeeshySparkLine: Shape {
+nonisolated private struct MeeshySparkLine: Shape {
     let points: [MeeshySparkPoint]
 
     func path(in rect: CGRect) -> Path {
@@ -248,7 +248,7 @@ private struct MeeshySparkLine: Shape {
     }
 }
 
-private struct MeeshySparkArea: Shape {
+nonisolated private struct MeeshySparkArea: Shape {
     let points: [MeeshySparkPoint]
     let height: Double
 
