@@ -5,6 +5,8 @@ import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.IntoMap
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.conversation.MessageMediaWriteBack
@@ -194,6 +196,8 @@ public class DeleteMessageHandler @Inject constructor(
     private val messageApi: MessageApi,
     private val messageRepository: MessageRepository,
     private val ledger: EndToEndRegimeLedger = EndToEndRegimeLedger.None,
+    /** Audit A1 — a settlement that finished is marked: [RefusedDeletionReplay] settles again only the others. */
+    private val settledMarks: RefusedDeletionMarks = RefusedDeletionMarks.None,
 ) : OutboxKindHandler {
 
     override suspend fun send(row: OutboxEntity): SendResult {
@@ -202,12 +206,13 @@ public class DeleteMessageHandler @Inject constructor(
         return result
     }
 
-    override suspend fun onExhausted(row: OutboxEntity) {
+    override suspend fun onExhausted(row: OutboxEntity): Unit = withContext(NonCancellable) {
         messageRepository.settleRefusedDeletion(
             PlaintextRefusal.laneConversation(row.lane),
             row.targetId,
             refusedAsGone = SendFailureClassifier.refusedAsGone(row.lastError),
         )
+        settledMarks.markSettled(row.cmid)
     }
 }
 

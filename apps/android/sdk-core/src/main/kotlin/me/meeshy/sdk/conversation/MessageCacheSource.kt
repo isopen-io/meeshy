@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
+import me.meeshy.core.database.dao.MessageKeys
 import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.core.database.entity.SyncMetaEntity
@@ -203,7 +204,9 @@ internal class MessageCacheSource(
      *   undo (#18915);
      * - [upTo] and [contiguity]: where the sweep starts, and whether a validator may be sent (#19046 F12);
      * - [receiptsEpoch] and [receiptsLive]: the socket connection the read starts under, and whether the receipts held
-     *   are live enough for a 304 to keep them (#19049).
+     *   are live enough for a 304 to keep them (#19049);
+     * - [threadKnown]: whether the thread existed on the device (its sync key or its conversation row) — what tells,
+     *   at write time, a thread purged during the flight from one never cached (audit A2).
      */
     private class HeldBefore(
         val upTo: Long?,
@@ -213,6 +216,7 @@ internal class MessageCacheSource(
         val versions: HeldRowVersions,
         val receiptsEpoch: Long,
         val receiptsLive: Boolean,
+        val threadKnown: Boolean,
     )
 
     private suspend fun heldBefore(): HeldBefore {
@@ -225,8 +229,18 @@ internal class MessageCacheSource(
             versions = HeldRowVersions.of(messageDao.recentVersions(conversationId, HELD_VERSIONS), HELD_VERSIONS),
             receiptsEpoch = receiptsEpoch,
             receiptsLive = receipts?.mayRevalidateConditionally(conversationId) ?: true,
+            threadKnown = syncMetaDao.lastSyncedAt(resourceKey) != null || database.conversationDao().find(conversationId) != null,
         )
     }
+
+    /**
+     * Audit A2 — the revalidation runs in a job of its own ([ThreadRevalidations]), out of reach of the screen that asked
+     * for it: a thread purged during its flight (« Supprimer pour moi », « Quitter », a conversation deleted) must not come
+     * back from its page — up to the whole sweep, and its keys. Known before the request and known by neither its sync
+     * key nor its conversation row at write time, it was purged: nothing lands. Read inside the write's transaction.
+     */
+    private suspend fun purgedDuringFlight(held: HeldBefore): Boolean =
+        held.threadKnown && syncMetaDao.lastSyncedAt(resourceKey) == null && database.conversationDao().find(conversationId) == null
 
     /** The recent window as the server served it, and the validator to keep with it. */
     private class ServedWindow(val messages: List<ApiMessage>, val etag: String?)
@@ -319,7 +333,10 @@ internal class MessageCacheSource(
                     )
                 }
                 fence.commitOrWrite(ticket) {
-                    syncMetaDao.upsert(SyncMetaEntity(resourceKey, clock.nowMillis(), held.contiguity.watermark, validator, null))
+                    database.withTransaction {
+                        if (purgedDuringFlight(held)) return@withTransaction
+                        syncMetaDao.upsert(SyncMetaEntity(resourceKey, clock.nowMillis(), held.contiguity.watermark, validator, null))
+                    }
                 }
                 null
             }
@@ -343,6 +360,7 @@ internal class MessageCacheSource(
         val contiguity = provedBy(window.messages, gap, held)
         val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
         database.withTransaction {
+            if (purgedDuringFlight(held)) return@withTransaction
             val merged = ingestion.mergeInTransaction(window.messages + gap.messages, now, conversationId, settlements, held.versions)
             prune(window.messages, held.ids)
             syncMetaDao.upsert(
@@ -379,7 +397,9 @@ internal class MessageCacheSource(
             page = served,
         ).toHashSet()
         if (gone.isEmpty()) return
-        erasures?.recordRemovedRows(candidates.filter { it.id in gone })
+        val removed = candidates.filter { it.id in gone }
+        erasures?.recordRemovedRows(removed)
+        MessageChildRows.delete(database, removed.map { MessageKeys(it.id, it.serverId, it.conversationId) })
         gone.chunked(DELETE_CHUNK).forEach { messageDao.deleteByIds(it) }
     }
 
