@@ -1,4 +1,3 @@
-@preconcurrency import AVFoundation
 import Foundation
 import ImageIO
 import CoreGraphics
