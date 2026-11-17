@@ -161,15 +161,16 @@ const liveRecipients = (state: SharedLocationState, now: number): SharedLocation
  */
 export function projectSharedLocation(
   userId: string,
-  state: Pick<SharedLocationState, 'position' | 'updatedAt' | 'expiresAt' | 'recipients'>,
+  state: Pick<SharedLocationState, 'position' | 'updatedAt' | 'expiresAt' | 'recipients' | 'startedAt'>,
   access: SharedLocationReaderAccess,
   readerId?: string,
 ): SharedLocationChangedEventData | null {
   if (access === 'none') return null;
   const circle = access.circle ? { circle: access.circle } : {};
+  const startedAt = state.startedAt === undefined ? {} : { startedAt: state.startedAt };
   if (access.precision === 'exact') {
     const radiusMeters = Math.max(SHARED_LOCATION_EXACT_MIN_RADIUS_METERS, Math.round(state.position.accuracy ?? 0));
-    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, ...circle, updatedAt: state.updatedAt, expiresAt: deadlineOf(state, readerId) };
+    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, ...circle, updatedAt: state.updatedAt, expiresAt: deadlineOf(state, readerId), ...startedAt };
   }
   const held = readerId === undefined ? undefined : recipientOf(state, readerId)?.cell;
   const cell = held ?? cellOf(state.position, SHARED_LOCATION_GRID_DEGREES[access.precision]);
@@ -182,6 +183,7 @@ export function projectSharedLocation(
     ...circle,
     updatedAt: roundedClock(state.updatedAt),
     expiresAt: deadlineOf(state, readerId),
+    ...startedAt,
   };
 }
 
@@ -377,6 +379,7 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     position: parsed.data.position,
     updatedAt: new Date(now).toISOString(),
     expiresAt: new Date(term).toISOString(),
+    startedAt: new Date(now).toISOString(),
   };
 
   try {

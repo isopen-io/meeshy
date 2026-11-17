@@ -108,6 +108,12 @@ export type SharedLocationChangedEventData = {
   readonly circle?: SharedLocationCircle;
   readonly updatedAt: string;
   readonly expiresAt: string;
+  /**
+   * Le début du partage en cours (#19458), redit à chaque remplacement ou prolongation :
+   * « Partage pour 1 h » se lit `expiresAt - startedAt`, la fenêtre de CE lecteur. ADDITIF :
+   * absent d'un serveur antérieur ou d'un partage rangé avant lui, le libellé se masque.
+   */
+  readonly startedAt?: string;
 };
 
 export type SharedLocationEndedEventData = { readonly userId: string };

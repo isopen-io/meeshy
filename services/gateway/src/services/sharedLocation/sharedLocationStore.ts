@@ -40,6 +40,8 @@ export type SharedLocationState = {
   readonly position: SharedLocationPosition;
   readonly updatedAt: string;
   readonly expiresAt: string;
+  /** Le début du partage (#19458) ; absent d'un état rangé avant lui. */
+  readonly startedAt?: string;
 };
 
 export type SharedLocationCache = SharedLocationKv;
@@ -101,7 +103,8 @@ function parseState(raw: string): SharedLocationState | null {
   if (typeof row.updatedAt !== 'string' || typeof row.expiresAt !== 'string') return null;
   const recipients = row.recipients.map(parseRecipient);
   if (recipients.some((recipient) => recipient === null)) return null;
-  return { sessionId: row.sessionId, recipients: recipients as SharedLocationRecipient[], position, updatedAt: row.updatedAt, expiresAt: row.expiresAt };
+  const startedAt = typeof row.startedAt === 'string' && !Number.isNaN(Date.parse(row.startedAt)) ? { startedAt: row.startedAt } : {};
+  return { sessionId: row.sessionId, recipients: recipients as SharedLocationRecipient[], position, updatedAt: row.updatedAt, expiresAt: row.expiresAt, ...startedAt };
 }
 
 const ttlOf = (state: Pick<SharedLocationState, 'expiresAt'>, now: number): number =>

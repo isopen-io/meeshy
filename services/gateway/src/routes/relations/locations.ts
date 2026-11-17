@@ -9,7 +9,8 @@ import { errorResponses, relationLimiter } from './shared';
 /**
  * Une position servie, déclarée CHAMP PAR CHAMP : le sérialiseur retire tout champ non
  * déclaré, et rien de plus riche que la précision du lecteur ne peut partir à côté.
- * `circle` est le cercle d'où vient l'émetteur pour CE lecteur (#17966).
+ * `circle` est le cercle d'où vient l'émetteur pour CE lecteur (#17966) ; `startedAt`, le
+ * début du partage en cours (#19458).
  */
 export const sharedLocationItemSchema = {
   type: 'object',
@@ -22,6 +23,7 @@ export const sharedLocationItemSchema = {
     circle: { type: 'string', enum: [...SHARED_LOCATION_CIRCLES] },
     updatedAt: { type: 'string' },
     expiresAt: { type: 'string' },
+    startedAt: { type: 'string' },
   },
 } as const;
 
