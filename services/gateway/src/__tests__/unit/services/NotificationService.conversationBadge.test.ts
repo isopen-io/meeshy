@@ -454,7 +454,10 @@ describe('NotificationService — badge du push (F1 ; D-L1, #7218 : conversation
       await new Promise((resolve) => setImmediate(resolve));
       await new Promise((resolve) => setImmediate(resolve));
 
-      const data = lastPushPayload().data;
+      const replacement = (sendToUser.mock.calls as Array<[{ payload: PushPayload }]>)
+        .map(([call]) => call.payload)
+        .find((payload) => payload.data?.type === 'new_message');
+      const data = replacement?.data;
       expect(data?.conversationUnread).toBe('3');
       expect(data?.unreadCount).toBe('2');
     });

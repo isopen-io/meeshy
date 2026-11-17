@@ -54,7 +54,7 @@ import { sanitizeNotificationInputs, persistedNotificationTitle } from './saniti
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { truncateByCodePoints } from '../../utils/truncate-text';
 import { filterMutedRecipients } from './mutedRecipients';
-import { computeConversationUnreadBadge } from './conversationUnreadBadge';
+import { conversationUnreadOf } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
 import { retractNotificationRows } from './retractNotificationRows';
 import { BadgeSyncCoalescer, pushedBannersReadSince, sendBadgeSyncToIos } from './readElsewhereSync';
@@ -1097,13 +1097,7 @@ export class NotificationService {
           // La cloche (`notification:counts`) reste sur les notifications.
           // `data.unreadCount` alimente le miroir App Group de la NSE.
           // Best-effort : échec ⇒ push sans badge (comportement historique).
-          let unreadBadge: number | undefined;
-          try {
-            const count = await computeConversationUnreadBadge(this.prisma, params.userId);
-            if (typeof count === 'number') unreadBadge = count;
-          } catch {
-            unreadBadge = undefined;
-          }
+          const { badge: unreadBadge, conversationUnread } = await conversationUnreadOf(this.prisma, params.userId, params.context.conversationId);
 
           notificationLogger.debug('push (APNs/FCM) sending', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
           // GW4 — native grouping + actionable banner set by the producer:
@@ -1146,6 +1140,8 @@ export class NotificationService {
                 // friend_request) restaient non lus à vie après un tap push.
                 notificationId: formatted.id,
                 ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
+                // #18910 — le non-lu de CETTE conversation, que le registre Android indexe par conversation.
+                ...(conversationUnread !== undefined ? { conversationUnread: String(conversationUnread) } : {}),
                 type: params.type,
                 conversationId: params.context.conversationId || '',
                 conversationTitle: params.context.conversationTitle || '',
@@ -3503,15 +3499,11 @@ export class NotificationService {
 
     // D-L1 (#7218) — même projection que le push de création (conversations
     // non lues, hors muettes) ; voir `computeConversationUnreadBadge`.
-    let unreadBadge: number | undefined;
-    try {
-      const count = await computeConversationUnreadBadge(this.prisma, userId);
-      if (typeof count === 'number') unreadBadge = count;
-    } catch {
-      unreadBadge = undefined;
-    }
+    const rowConversationId = (row.context as { conversationId?: unknown } | null)?.conversationId;
+    const { badge: unreadBadge, conversationUnread } = await conversationUnreadOf(
+      this.prisma, userId, typeof rowConversationId === 'string' ? rowConversationId : undefined);
 
-    const data = reproducedPushData(row, unreadBadge);
+    const data = reproducedPushData(row, unreadBadge, conversationUnread);
     const { conversationId, messageId } = data;
     const link = conversationId
       ? (messageId ? `/conversations/${conversationId}?messageId=${messageId}` : `/conversations/${conversationId}`)
