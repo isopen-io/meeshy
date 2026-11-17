@@ -91,7 +91,10 @@ public enum E2EEReceiptKind: String, Codable, Sendable {
 }
 
 public enum E2EESignalError: Error, Equatable {
+    /// Une version FUTURE : un appareil à jour la lira.
     case unsupportedVersion(Int)
+    /// Une version qui n'a jamais existé (zéro, négative) : illisible.
+    case invalidVersion(Int)
 }
 
 extension E2EESignal: Codable {
@@ -195,11 +198,21 @@ extension E2EESignal: Codable {
         return try encoder.encode(self)
     }
 
-    /// Refuse un format que cet appareil ne sait pas lire.
+    /// Refuse un format que cet appareil ne sait pas lire. Comme pour un
+    /// contenu, la version se lit AVANT toute autre clé (contrat #18940) : un
+    /// signal d'une version future, quelle que soit sa forme, se garde — pourvu
+    /// que ce soit un JSON bien formé (`E2EEPlaintextForm`).
     public static func decoded(from data: Data) throws -> E2EESignal {
-        let signal = try JSONDecoder().decode(E2EESignal.self, from: data)
-        guard signal.version == currentVersion else { throw E2EESignalError.unsupportedVersion(signal.version) }
-        return signal
+        try E2EEPlaintextForm.validate(data)
+        let version = try JSONDecoder().decode(VersionProbe.self, from: data).s
+        guard version == currentVersion else {
+            throw version > currentVersion ? E2EESignalError.unsupportedVersion(version) : E2EESignalError.invalidVersion(version)
+        }
+        return try JSONDecoder().decode(E2EESignal.self, from: data)
+    }
+
+    private struct VersionProbe: Decodable {
+        let s: Int
     }
 }
 
@@ -212,8 +225,12 @@ public enum E2EEPayloadKind: Equatable, Sendable {
         let s: Int?
     }
 
+    /// Un signal si et seulement si `s` est un entier d'un JSON bien formé :
+    /// tout le reste est un message, que le lecteur de contenu jugera (contrat
+    /// #18940) — un signal mal formé est donc un message illisible.
     public static func of(_ plaintext: Data) -> E2EEPayloadKind {
-        (try? JSONDecoder().decode(Probe.self, from: plaintext))?.s == nil ? .message : .signal
+        guard E2EEPlaintextForm.isWellFormed(plaintext) else { return .message }
+        return (try? JSONDecoder().decode(Probe.self, from: plaintext))?.s == nil ? .message : .signal
     }
 }
 
@@ -263,5 +280,16 @@ public enum E2EEPadding {
         let target = paddedLength(for: plaintext.count, recipients: recipients)
         guard target > plaintext.count else { return plaintext }
         return plaintext + Data(repeating: 0x20, count: target - plaintext.count)
+    }
+
+    /// Les blancs JSON qu'un clair peut porter après son objet : le remplissage
+    /// (espaces), et tout blanc qui le suivrait.
+    private static let trailingBlanks: Set<UInt8> = [0x20, 0x0A, 0x0D, 0x09]
+
+    /// Le clair privé de TOUS ses blancs de fin, en un parcours linéaire depuis
+    /// la fin (contrat #18940 : ce qu'un appareil GARDE d'une version future).
+    public static func unpadded(_ plaintext: Data) -> Data {
+        guard let last = plaintext.lastIndex(where: { !trailingBlanks.contains($0) }) else { return Data() }
+        return Data(plaintext[plaintext.startIndex...last])
     }
 }

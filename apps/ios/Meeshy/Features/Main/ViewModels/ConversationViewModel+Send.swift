@@ -207,12 +207,12 @@ extension ConversationViewModel {
     /// DISTINCTS partent en parallèle, aucun contenu n'est dédoublonné (#7985)
     /// — la seule clé de déduplication est le `clientMessageId`.
     func send(_ outgoing: OutgoingMessage) async -> Result<SentMessageReceipt, SendFailure> {
-        Logger.messages.info("SendFlow enter convId=\(self.conversationId, privacy: .public) textLen=\(outgoing.text.count, privacy: .public) attachmentIds=\((outgoing.attachments.ids ?? []).count, privacy: .public) existingTempId=\(outgoing.reusedClientMessageId?.rawValue ?? "nil", privacy: .public) isSending=\(self.isSending, privacy: .public)")
+        Logger.messages.info("SendFlow enter convId=\(self.conversationId, privacy: .public) textLen=\(outgoing.text.count, privacy: .private) attachmentIds=\((outgoing.attachments.ids ?? []).count, privacy: .public) existingTempId=\(outgoing.reusedClientMessageId?.rawValue ?? "nil", privacy: .public) isSending=\(self.isSending, privacy: .public)")
         if let failure = validate(outgoing) { return .failure(failure) }
         noteUserActed((outgoing.attachments.ids ?? []).isEmpty ? .sendMessage : .sendAttachment)
 
         sendActivity = sendActivity.began()
-        Logger.messages.info("SendFlow LOCK inFlight=\(self.sendActivity.inFlight, privacy: .public) convId=\(self.conversationId, privacy: .public) textLen=\(outgoing.text.count, privacy: .public)")
+        Logger.messages.info("SendFlow LOCK inFlight=\(self.sendActivity.inFlight, privacy: .public) convId=\(self.conversationId, privacy: .public) textLen=\(outgoing.text.count, privacy: .private)")
         defer {
             sendActivity = sendActivity.ended()
             Logger.messages.info("SendFlow UNLOCK inFlight=\(self.sendActivity.inFlight, privacy: .public) convId=\(self.conversationId, privacy: .public)")
