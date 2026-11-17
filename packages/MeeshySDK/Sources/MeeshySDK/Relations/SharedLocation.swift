@@ -34,9 +34,12 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
     public let radiusMeters: Double
     public let updatedAt: Date
     public let expiresAt: Date
+    /// `circle` (#17966), ADDITIF : le cercle d'où vient l'émetteur POUR MOI (Ami, Proche, Sang). Un serveur antérieur
+    /// ne le sert pas, une valeur hors des trois cercles se lit comme absente : la carte dessine alors un marqueur neutre.
+    public let circle: RelationLevel?
 
     public init(userId: String, latitude: Double, longitude: Double, precision: SharedLocationPrecision,
-                radiusMeters: Double, updatedAt: Date, expiresAt: Date) {
+                radiusMeters: Double, updatedAt: Date, expiresAt: Date, circle: RelationLevel? = nil) {
         self.userId = userId
         self.latitude = latitude
         self.longitude = longitude
@@ -44,6 +47,7 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
         self.radiusMeters = min(SharedLocationContract.maxRadiusMeters, max(SharedLocationContract.exactMinRadiusMeters, radiusMeters))
         self.updatedAt = updatedAt
         self.expiresAt = expiresAt
+        self.circle = circle.flatMap { SharedLocationCircle.served.contains($0) ? $0 : nil }
     }
 
     /// La durée de vie servie, bornée par le contrat : une échéance absurde ne garde jamais une position affichée.
@@ -51,7 +55,7 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
         min(SharedLocationContract.maxLifetime, max(0, expiresAt.timeIntervalSince(updatedAt)))
     }
 
-    private enum CodingKeys: String, CodingKey { case userId, latitude, longitude, precision, radiusMeters, updatedAt, expiresAt }
+    private enum CodingKeys: String, CodingKey { case userId, latitude, longitude, precision, radiusMeters, updatedAt, expiresAt, circle }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -75,9 +79,15 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
               let expiresAt = WireDate.date(from: try c.decode(String.self, forKey: .expiresAt)) else {
             throw DecodingError.dataCorruptedError(forKey: .updatedAt, in: c, debugDescription: "instant illisible")
         }
+        let circle = ((try? c.decodeIfPresent(String.self, forKey: .circle)) ?? nil).flatMap(RelationLevel.init(rawValue:))
         self.init(userId: userId, latitude: latitude, longitude: longitude, precision: precision,
-                  radiusMeters: radius, updatedAt: updatedAt, expiresAt: expiresAt)
+                  radiusMeters: radius, updatedAt: updatedAt, expiresAt: expiresAt, circle: circle)
     }
+}
+
+/// `SHARED_LOCATION_CIRCLES` : les seuls cercles d'où une position peut venir.
+public enum SharedLocationCircle {
+    public static let served: Set<RelationLevel> = [.friend, .close, .blood]
 }
 
 /// `location:share-ended` — le partage de cette personne s'arrête chez moi (arrêt, baisse sous Ami, blocage, retrait).

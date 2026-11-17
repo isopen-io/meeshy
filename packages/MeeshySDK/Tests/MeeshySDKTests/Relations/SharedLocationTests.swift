@@ -39,7 +39,7 @@ struct SharedLocationTests {
         payload["exactLatitude"] = 48.853_41
         let decoded = try #require(decode(SharedLocationChanged.self, payload))
         let mirror = Mirror(reflecting: decoded).children.compactMap(\.label)
-        #expect(Set(mirror) == ["userId", "latitude", "longitude", "precision", "radiusMeters", "updatedAt", "expiresAt"])
+        #expect(Set(mirror) == ["userId", "latitude", "longitude", "precision", "radiusMeters", "updatedAt", "expiresAt", "circle"])
         #expect(decoded.radiusMeters == 25)
     }
 

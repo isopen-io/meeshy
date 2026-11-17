@@ -9,6 +9,19 @@ public struct SharedLocationEntry: Equatable, Sendable {
     public let radiusMeters: Double
     public let updatedAt: Date
     public let deadline: Date
+    /// Le cercle servi avec la position (`nil` : non servi).
+    public let circle: RelationLevel?
+
+    public init(latitude: Double, longitude: Double, precision: SharedLocationPrecision, radiusMeters: Double,
+                updatedAt: Date, deadline: Date, circle: RelationLevel? = nil) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.precision = precision
+        self.radiusMeters = radiusMeters
+        self.updatedAt = updatedAt
+        self.deadline = deadline
+        self.circle = circle
+    }
 }
 
 /// LES POSITIONS QU'ON ME PARTAGE, SUR iOS (#16983, réception de #14109 ; iso du web `shared-locations-live.ts`, #16984).
@@ -89,7 +102,8 @@ public final class SharedLocationsLive: ObservableObject {
             precision: changed.precision,
             radiusMeters: changed.radiusMeters,
             updatedAt: changed.updatedAt,
-            deadline: deadline
+            deadline: deadline,
+            circle: changed.circle
         )
         scheduleExpiry()
     }
