@@ -47,8 +47,6 @@ export function isReferralActive(input: { readonly lastActiveAt: Date | null; re
   return input.now.getTime() - input.lastActiveAt.getTime() <= REFERRAL_ACTIVE_WINDOW_DAYS * DAY_MS;
 }
 
-export const referralActiveSince = (now: Date): Date => new Date(now.getTime() - REFERRAL_ACTIVE_WINDOW_DAYS * DAY_MS);
-
 export const utcMonthStart = (now: Date): Date => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
 export function invitationState(input: { readonly joined: boolean; readonly opened: boolean }): InvitationState {

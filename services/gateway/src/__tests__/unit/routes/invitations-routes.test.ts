@@ -47,6 +47,8 @@ function makePrisma(overrides: PrismaOverrides = {}) {
     emailInvitation: {
       create: jest.fn().mockResolvedValue({ id: 'email-invitation-id' }),
     },
+    // #19207 — aucune adresse désinscrite.
+    emailInvitationOptOut: { findUnique: jest.fn().mockResolvedValue(null) },
   };
 }
 

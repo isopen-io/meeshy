@@ -26,6 +26,7 @@ import { exportReadingActivity } from './export-reading';
 import { relationsExportSchema } from './export-relations';
 import { exportRelations } from '../../services/relations/relationExport';
 import { exportProfileLinkVisitsOf } from '../../services/profile-link-visits/profileLinkVisits';
+import { exportSentInvitationsOf } from '../../services/referrals/emailInvitations';
 import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
 import { PROFILE_ADDRESS_EXPORT_SELECT, withExportedAddresses } from './export-addresses';
 
@@ -655,8 +656,13 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
 
           // Les adresses de plus de 12 mois ne se servent plus, purge armée ou non.
           // #19206 : l'agrégat des visites de son lien de profil, jour par jour.
+          // #19207 : ses invitations par e-mail, l'adresse de chaque tiers masquée.
           exportData.profile = user
-            ? { ...(await withExportedAddresses(fastify.prisma, userId, withoutExpiredConnectionTraces(user, new Date()))), profileLinkVisits: await exportProfileLinkVisitsOf(fastify.prisma, userId) }
+            ? {
+                ...(await withExportedAddresses(fastify.prisma, userId, withoutExpiredConnectionTraces(user, new Date()))),
+                profileLinkVisits: await exportProfileLinkVisitsOf(fastify.prisma, userId),
+                emailInvitations: await exportSentInvitationsOf(fastify.prisma, userId),
+              }
             : user;
         }
 
