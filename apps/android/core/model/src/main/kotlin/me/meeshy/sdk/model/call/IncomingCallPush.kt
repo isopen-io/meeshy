@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.call
 
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.model.call.group.GroupCallEvidence
 
 /**
  * A decoded incoming-call data push — the Android FCM `data` map equivalent of
@@ -32,7 +33,21 @@ data class IncomingCallPush(
      */
     val title: String? = null,
     val body: String? = null,
+    /** `Conversation.type` de l'appel (`direct` / `group`) — absent d'une passerelle antérieure à #19238. */
+    val conversationType: String? = null,
+    /** La passerelle dit l'appel de groupe : une invitation fait d'un duo un groupe (#19238). */
+    val isGroup: Boolean = false,
+    /** L'utilisateur qui m'invite dans un appel déjà en cours. */
+    val invitedBy: String? = null,
 ) {
+    /** Un appel qui réunit plus de deux personnes — iOS `CallOfferData.isGroupCall`. */
+    val isGroupCall: Boolean
+        get() = isGroup || GroupCallEvidence.fromConversationType(conversationType)
+
+    /** Le pair qui m'offrira, donc mon principal : l'invitant, sinon l'appelant — iOS `CallOfferData.principalUserId`. */
+    val principalUserId: String?
+        get() = invitedBy ?: callerUserId
+
     /**
      * The caller label to show on the ring, blank-skipping like the iOS
      * `localizedCallerName` fallback: the pushed [callerName] when non-blank,
@@ -79,6 +94,9 @@ object IncomingCallPushParser {
             iceServers = parseIceServers(data["iceServers"]),
             title = data["title"]?.takeIf { it.isNotBlank() },
             body = data["body"]?.takeIf { it.isNotBlank() },
+            conversationType = data["conversationType"]?.takeIf { it.isNotBlank() },
+            isGroup = data["isGroup"].equals("true", ignoreCase = true),
+            invitedBy = data["invitedBy"]?.takeIf { it.isNotBlank() },
         )
     }
 
