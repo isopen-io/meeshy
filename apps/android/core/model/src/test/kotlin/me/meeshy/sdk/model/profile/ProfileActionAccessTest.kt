@@ -55,4 +55,24 @@ class ProfileActionAccessTest {
             .containsExactly("opensAt")
         assertThat(locked.opensAt).isEqualTo(RelationLevel.CLOSE)
     }
+
+    @Test
+    fun `the level served for the circle tools wins over the link, so a teammate's tools are not shown locked`() {
+        assertThat(ProfileActionAccess.levelFor(linkLevel = RelationLevel.ACQUAINTANCE, toolLevel = RelationLevel.BLOOD, awaitingLink = false))
+            .isEqualTo(RelationLevel.BLOOD)
+        assertThat(ProfileActionAccess.levelFor(linkLevel = null, toolLevel = RelationLevel.BLOOD, awaitingLink = true))
+            .isEqualTo(RelationLevel.BLOOD)
+    }
+
+    @Test
+    fun `without a served tool level the link decides`() {
+        assertThat(ProfileActionAccess.levelFor(linkLevel = RelationLevel.FRIEND, toolLevel = null, awaitingLink = false))
+            .isEqualTo(RelationLevel.FRIEND)
+    }
+
+    @Test
+    fun `with neither, a stranger reads Public and a connected person whose link is not there yet reads unknown`() {
+        assertThat(ProfileActionAccess.levelFor(linkLevel = null, toolLevel = null, awaitingLink = false)).isEqualTo(RelationLevel.PUBLIC)
+        assertThat(ProfileActionAccess.levelFor(linkLevel = null, toolLevel = null, awaitingLink = true)).isNull()
+    }
 }
