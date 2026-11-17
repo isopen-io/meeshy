@@ -9,6 +9,7 @@ message d'erreur brut, ni langues cibles ne partent dans la charge.
 """
 
 import json
+import re
 
 import pytest
 
@@ -112,3 +113,43 @@ async def test_the_job_keeps_its_full_view_for_the_authenticated_status_route(pi
     assert view["result"]["translations"][0]["translatedText"] == TRANSLATED
     assert view["user_id"] == USER
     assert view["error"] == ERROR
+
+
+OBJECT_ID_USER = "6553a1b2c3d4e5f60718293a"
+
+
+async def _submit(pipeline, user_id=OBJECT_ID_USER):
+    await pipeline.initialize()
+    try:
+        return await pipeline.submit_job(
+            user_id=user_id,
+            audio_path="/nonexistent/a.wav",
+            target_languages=["fr"],
+        )
+    finally:
+        await pipeline.close()
+
+
+async def test_the_job_id_carries_no_fragment_of_its_user(pipeline):
+    job = await _submit(pipeline)
+
+    assert OBJECT_ID_USER[:8] not in job.id
+    assert OBJECT_ID_USER not in job.id
+    assert job.user_id == OBJECT_ID_USER
+
+
+async def test_the_webhook_payload_of_a_submitted_job_names_no_user(pipeline):
+    job = await _submit(pipeline)
+    job.status = JobStatus.COMPLETED
+
+    serialised = json.dumps(translation_pipeline_service.webhook_payload(job))
+
+    assert OBJECT_ID_USER[:8] not in serialised
+    assert OBJECT_ID_USER not in serialised
+
+
+async def test_the_job_id_is_opaque_prefixed_and_unique(pipeline):
+    ids = [pipeline._generate_job_id(OBJECT_ID_USER) for _ in range(200)]
+
+    assert len(set(ids)) == len(ids)
+    assert all(re.fullmatch(r"mshy_[0-9a-f]{32,}", job_id) for job_id in ids)
