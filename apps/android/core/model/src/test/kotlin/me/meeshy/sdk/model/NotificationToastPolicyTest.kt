@@ -98,4 +98,33 @@ class NotificationToastPolicyTest {
         assertThat(decide(openConversationIds = setOf("c1"), isDuplicateDelivery = true, preferences = prefs))
             .isEqualTo(NotificationToastDecision.SuppressedActiveScreen)
     }
+
+    @Test
+    fun `la batterie d'un proche ne se dit jamais en bannière, la SyncPill l'annonce`() {
+        val target = notification(type = "device_battery", conversationId = null)
+        assertThat(decide(notification = target, preferences = UserNotificationPreferences(deviceBatteryEnabled = true)))
+            .isEqualTo(NotificationToastDecision.AnnouncedBySyncPill)
+    }
+
+    @Test
+    fun `le telephone injoignable d'un proche ne se dit jamais en bannière, la SyncPill l'annonce`() {
+        val target = notification(type = "device_unreachable", conversationId = null)
+        assertThat(
+            decide(notification = target, preferences = UserNotificationPreferences(deviceUnreachableEnabled = true)),
+        ).isEqualTo(NotificationToastDecision.AnnouncedBySyncPill)
+    }
+
+    @Test
+    fun `une annonce de la SyncPill reste muette meme si son interrupteur est coupe`() {
+        val target = notification(type = "device_battery", conversationId = null)
+        assertThat(decide(notification = target, preferences = UserNotificationPreferences(deviceBatteryEnabled = false)))
+            .isEqualTo(NotificationToastDecision.AnnouncedBySyncPill)
+    }
+
+    @Test
+    fun `un message dans les memes conditions s'affiche encore`() {
+        val target = notification(type = "message", conversationId = null)
+        assertThat(decide(notification = target, preferences = UserNotificationPreferences(deviceBatteryEnabled = true)))
+            .isEqualTo(NotificationToastDecision.Show(target))
+    }
 }

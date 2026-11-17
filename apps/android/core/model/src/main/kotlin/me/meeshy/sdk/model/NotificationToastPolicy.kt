@@ -1,5 +1,8 @@
 package me.meeshy.sdk.model
 
+import me.meeshy.sdk.model.battery.BatteryContract
+import me.meeshy.sdk.model.phonereachability.PhoneReachabilityContract
+
 /** What a real-time `notification:new` event should do to the in-app toast (feature-parity §M). */
 public sealed interface NotificationToastDecision {
     /** Surface [notification] as a toast. */
@@ -13,6 +16,12 @@ public sealed interface NotificationToastDecision {
 
     /** This type's per-type toggle is off. */
     public data object BlockedByPreferences : NotificationToastDecision
+
+    /**
+     * App ouverte, la SyncPill dit déjà ce type (`battery:changed`, `phone:unreachable`) : une
+     * bannière en plus l'annoncerait deux fois. Le compteur et la cloche ne changent pas.
+     */
+    public data object AnnouncedBySyncPill : NotificationToastDecision
 }
 
 /**
@@ -28,12 +37,18 @@ public sealed interface NotificationToastDecision {
  */
 public object NotificationToastPolicy {
 
+    private val SYNC_PILL_TYPES: Set<String> = setOf(
+        BatteryContract.NOTIFICATION_TYPE,
+        PhoneReachabilityContract.NOTIFICATION_TYPE,
+    )
+
     public fun decide(
         notification: ApiNotification,
         openConversationIds: Set<String>,
         isDuplicateDelivery: Boolean,
         preferences: UserNotificationPreferences,
     ): NotificationToastDecision {
+        if (notification.type in SYNC_PILL_TYPES) return NotificationToastDecision.AnnouncedBySyncPill
         if (ActiveContextMatch.matchesOpenConversation(notification.context?.conversationId, openConversationIds)) {
             return NotificationToastDecision.SuppressedActiveScreen
         }
