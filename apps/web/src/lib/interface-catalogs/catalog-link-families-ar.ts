@@ -170,14 +170,15 @@ const ar = {
   'links.face.profile.send': 'إرسال',
   'links.face.profile.codeLabel': 'رمز QR لملفي الشخصي',
   'links.face.profile.codeOpen': 'تكبير رمز QR لملفي الشخصي',
-  'links.face.profile.copied': 'تم نسخ الرابط',
-  'links.face.profile.copyFailed': 'تعذّر النسخ',
   'links.face.profile.close': 'إغلاق',
   'links.face.addresses.title': 'عناويني',
   'links.face.addresses.hidden': 'مخفي في ملفي الشخصي',
-  'links.face.figure.joined': 'انضمام',
-  'links.face.figure.clicks': 'نقرات',
-  'links.face.figure.communities': 'مجتمعات',
+  'links.face.figure.joined.one': 'انضمام',
+  'links.face.figure.joined.other': 'انضمام',
+  'links.face.figure.clicks.one': 'نقرة',
+  'links.face.figure.clicks.other': 'نقرات',
+  'links.face.figure.communities.one': 'مجتمع',
+  'links.face.figure.communities.other': 'مجتمعات',
 } satisfies LinkFamiliesCatalog;
 
 export default ar;

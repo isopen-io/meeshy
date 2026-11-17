@@ -990,6 +990,13 @@ const LINKS = [
   'arrow-square-out',
   'share-network',
   'info',
+  // « Mes adresses » (#18880) : le glyphe que le propriétaire choisit, miroir de `Mes-Adresses.dc.html`.
+  'globe-hemisphere-west',
+  'vinyl-record',
+  'camera',
+  'film-reel',
+  'storefront',
+  'heart',
 ];
 
 emit({

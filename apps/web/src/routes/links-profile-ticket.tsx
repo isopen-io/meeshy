@@ -1,5 +1,4 @@
 import { GlyphSvg } from '@/components/glyph';
-import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { LINKS_GLYPHS } from '@/components/glyphs-links';
 import { MeeshyCodePlate } from '@/components/kit/meeshy-code-card';
 import { MeeshyLabeledAction } from '@/components/kit/meeshy-labeled-action';
@@ -57,7 +56,7 @@ export function LinksProfileTicket({
           <div style={{ display: 'flex', gap: 4, justifyContent: 'space-around' }}>
             {action('copy', <MeeshyLabeledAction title={t('links.face.profile.copy')} glyph={<GlyphSvg glyph={LINKS_GLYPHS.copy} size={20} />} onPress={onCopy} />)}
             {action('code', <MeeshyLabeledAction title={t('links.face.profile.code')} label={t('links.face.profile.codeOpen')} glyph={QR_GLYPH} onPress={onOpenCode} />)}
-            {onSend === undefined ? null : action('send', <MeeshyLabeledAction title={t('links.face.profile.send')} glyph={<GlyphSvg glyph={FEED_GLYPHS.shareNetwork} size={20} />} onPress={onSend} />)}
+            {onSend === undefined ? null : action('send', <MeeshyLabeledAction title={t('links.face.profile.send')} glyph={<GlyphSvg glyph={LINKS_GLYPHS.shareNetwork} size={20} />} onPress={onSend} />)}
           </div>
         }
       />

@@ -178,14 +178,15 @@ const fr = {
   'links.face.profile.send': 'Envoyer',
   'links.face.profile.codeLabel': 'Mon QR de profil',
   'links.face.profile.codeOpen': 'Agrandir mon QR de profil',
-  'links.face.profile.copied': 'Lien copié',
-  'links.face.profile.copyFailed': 'Copie impossible',
   'links.face.profile.close': 'Fermer',
   'links.face.addresses.title': 'Mes adresses',
   'links.face.addresses.hidden': 'Masquée sur ma fiche',
-  'links.face.figure.joined': 'arrivées',
-  'links.face.figure.clicks': 'clics',
-  'links.face.figure.communities': 'communautés',
+  'links.face.figure.joined.one': 'arrivée',
+  'links.face.figure.joined.other': 'arrivées',
+  'links.face.figure.clicks.one': 'clic',
+  'links.face.figure.clicks.other': 'clics',
+  'links.face.figure.communities.one': 'communauté',
+  'links.face.figure.communities.other': 'communautés',
 } as const;
 
 export default fr;

@@ -11,17 +11,18 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { profileShareUrl } from '@/lib/feed/share-url';
 import { translate } from '@/lib/i18n-catalog';
-import { translateLinkFamilies } from '@/lib/i18n-link-families-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { hubFigure } from '@/lib/links/hub-face';
+import { hubFigure, hubFigureCaption, type CountedFamily } from '@/lib/links/hub-face';
+import { useUrlSharing } from '@/lib/links/use-url-sharing';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
-import { copyPlainText } from '@/lib/view/copy-text';
 import { profileSendRequest } from '@/lib/view/profile-share';
 import { HUB_FAMILIES, LinkFamilyCard, type LinkFamily } from '@/routes/link-families-parts';
 import { LinksAddresses } from '@/routes/links-addresses';
 import { LinksCodeSheet } from '@/routes/links-code-sheet';
 import { LINKS_HUB_TOP_RESERVE, LinksAnnouncement, LinksHeader } from '@/routes/links-parts';
 import { LinksProfileTicket } from '@/routes/links-profile-ticket';
+
+const isCounted = (family: LinkFamily): family is CountedFamily => family !== 'affiliate';
 
 /**
  * **MES LIENS — LA FACE LIENS** (#6361, #6408–#6410, #18880) — premier barreau de l'échelle,
@@ -49,19 +50,21 @@ export default function LinksScreen() {
   const tracking = useQuery({ ...trackingLinksSummaryQueryOptions(apiDeps), enabled }, appQueryClient);
   const communities = useQuery({ ...communityLinksQueryOptions(apiDeps), enabled }, appQueryClient);
   const addresses = useQuery({ ...myAddressesQueryOptions(apiDeps), enabled }, appQueryClient);
-  const [announcement, setAnnouncement] = useState('');
+  const sharing = useUrlSharing(language);
   const [codeOpen, setCodeOpen] = useState(false);
   const closeCode = useCallback(() => setCodeOpen(false), []);
 
-  const figures: Readonly<Record<LinkFamily, { readonly value: number | null; readonly caption: string }>> = {
-    share: { value: share.data?.pages[0]?.summary?.totalUses ?? null, caption: translateLinkFamilies(language, 'links.face.figure.joined') },
-    tracking: { value: tracking.data?.totalClicks ?? null, caption: translateLinkFamilies(language, 'links.face.figure.clicks') },
-    community: { value: communities.data === undefined ? null : summarizeCommunityLinks(communities.data).communities, caption: translateLinkFamilies(language, 'links.face.figure.communities') },
-    affiliate: { value: null, caption: '' },
+  const counts: Readonly<Record<CountedFamily, number | null>> = {
+    share: share.data?.pages[0]?.summary?.totalUses ?? null,
+    tracking: tracking.data?.totalClicks ?? null,
+    community: communities.data === undefined ? null : summarizeCommunityLinks(communities.data).communities,
   };
-
-  const copy = (url: string) =>
-    void copyPlainText(url).then((outcome) => setAnnouncement(translateLinkFamilies(language, outcome === 'copied' ? 'links.face.profile.copied' : 'links.face.profile.copyFailed')));
+  const figureOf = (family: LinkFamily) => {
+    if (!isCounted(family)) return undefined;
+    const count = counts[family];
+    const value = hubFigure(language, count);
+    return value === null || count === null ? undefined : { value, caption: hubFigureCaption(language, family, count) };
+  };
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
@@ -72,20 +75,19 @@ export default function LinksScreen() {
             <LinksProfileTicket
               language={language}
               username={user.username}
-              onCopy={() => copy(profileShareUrl(user.username))}
+              onCopy={() => sharing.copy('profile', profileShareUrl(user.username))}
               onOpenCode={() => setCodeOpen(true)}
               onSend={() => openSendSheet(profileSendRequest({ id: user.id, username: user.username, name: user.displayName ?? user.username, avatar: user.avatar ?? null }))}
             />
           )}
           <LinksAddresses language={language} addresses={addresses.data ?? null} />
-          {HUB_FAMILIES.map((family) => {
-            const figure = hubFigure(language, figures[family].value);
-            return <LinkFamilyCard key={family} language={language} family={family} figure={figure === null ? undefined : { value: figure, caption: figures[family].caption }} />;
-          })}
+          {HUB_FAMILIES.map((family) => (
+            <LinkFamilyCard key={family} language={language} family={family} figure={figureOf(family)} />
+          ))}
         </div>
       </main>
       {user !== null && codeOpen ? <LinksCodeSheet language={language} url={profileShareUrl(user.username)} onClose={closeCode} /> : null}
-      <LinksAnnouncement text={announcement} />
+      <LinksAnnouncement text={sharing.announcer.text} />
     </div>
   );
 }

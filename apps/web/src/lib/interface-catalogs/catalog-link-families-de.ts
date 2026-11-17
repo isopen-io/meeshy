@@ -170,14 +170,15 @@ const de = {
   'links.face.profile.send': 'Senden',
   'links.face.profile.codeLabel': 'Mein Profil-QR-Code',
   'links.face.profile.codeOpen': 'Mein Profil-QR-Code vergrößern',
-  'links.face.profile.copied': 'Link kopiert',
-  'links.face.profile.copyFailed': 'Kopieren nicht möglich',
   'links.face.profile.close': 'Schließen',
   'links.face.addresses.title': 'Meine Adressen',
   'links.face.addresses.hidden': 'Auf meinem Profil verborgen',
-  'links.face.figure.joined': 'Beitritte',
-  'links.face.figure.clicks': 'Klicks',
-  'links.face.figure.communities': 'Communitys',
+  'links.face.figure.joined.one': 'Beitritt',
+  'links.face.figure.joined.other': 'Beitritte',
+  'links.face.figure.clicks.one': 'Klick',
+  'links.face.figure.clicks.other': 'Klicks',
+  'links.face.figure.communities.one': 'Community',
+  'links.face.figure.communities.other': 'Communitys',
 } satisfies LinkFamiliesCatalog;
 
 export default de;

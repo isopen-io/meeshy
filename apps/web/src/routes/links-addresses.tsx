@@ -1,5 +1,7 @@
+import type { AddressGlyph } from '@meeshy/shared/utils/profile-addresses';
+
 import { GlyphSvg } from '@/components/glyph';
-import { LINKS_GLYPHS } from '@/components/glyphs-links';
+import { LINKS_GLYPHS, type LinksGlyphName } from '@/components/glyphs-links';
 import { SECTION_INK_2 } from '@/components/grouped-section';
 import { MeeshyTicket } from '@/components/kit/meeshy-ticket';
 import type { MyAddress } from '@/lib/api/my-addresses';
@@ -7,6 +9,18 @@ import { translateLinkFamilies } from '@/lib/i18n-link-families-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { addressHost } from '@/lib/links/hub-face';
 import { SECTION_TITLE_CLASS } from '@/routes/links-parts';
+
+/** Le glyphe choisi par le propriétaire, miroir des huit choix de `Mes-Adresses.dc.html`. */
+const ADDRESS_GLYPH: Readonly<Record<AddressGlyph, LinksGlyphName>> = {
+  site: 'globeHemisphereWest',
+  music: 'vinylRecord',
+  photos: 'camera',
+  videos: 'filmReel',
+  shop: 'storefront',
+  contact: 'envelopeSimple',
+  agenda: 'calendarBlank',
+  favorite: 'heart',
+};
 
 /**
  * **MES ADRESSES** (#18880) — la rangée de billets compacts : chacun ouvre son site hors de
@@ -25,7 +39,7 @@ export function LinksAddresses({ language, addresses }: { readonly language: Int
         {addresses.map((address) => (
           <li key={address.id} data-links-address={address.id} className="w-44 shrink-0 snap-start">
             <a href={address.url} target="_blank" rel="noopener noreferrer" aria-label={`${address.title}, ${addressHost(address.url)}${address.isShown ? '' : `, ${hidden}`}`} className="block">
-              <MeeshyTicket size="compact" title={address.title} code={addressHost(address.url)} glyph={<GlyphSvg glyph={LINKS_GLYPHS.link} size={16} />} tint="var(--ios-indigo-500)" {...(address.isShown ? {} : { statusLabel: hidden })} />
+              <MeeshyTicket size="compact" title={address.title} code={addressHost(address.url)} glyph={<GlyphSvg glyph={LINKS_GLYPHS[ADDRESS_GLYPH[address.glyph]]} size={16} />} tint="var(--ios-indigo-500)" {...(address.isShown ? {} : { statusLabel: hidden })} />
             </a>
           </li>
         ))}

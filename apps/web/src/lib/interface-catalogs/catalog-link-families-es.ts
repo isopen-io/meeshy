@@ -170,14 +170,15 @@ const es = {
   'links.face.profile.send': 'Enviar',
   'links.face.profile.codeLabel': 'Mi QR de perfil',
   'links.face.profile.codeOpen': 'Ampliar mi QR de perfil',
-  'links.face.profile.copied': 'Enlace copiado',
-  'links.face.profile.copyFailed': 'No se pudo copiar',
   'links.face.profile.close': 'Cerrar',
   'links.face.addresses.title': 'Mis direcciones',
   'links.face.addresses.hidden': 'Oculta en mi perfil',
-  'links.face.figure.joined': 'llegadas',
-  'links.face.figure.clicks': 'clics',
-  'links.face.figure.communities': 'comunidades',
+  'links.face.figure.joined.one': 'llegada',
+  'links.face.figure.joined.other': 'llegadas',
+  'links.face.figure.clicks.one': 'clic',
+  'links.face.figure.clicks.other': 'clics',
+  'links.face.figure.communities.one': 'comunidad',
+  'links.face.figure.communities.other': 'comunidades',
 } satisfies LinkFamiliesCatalog;
 
 export default es;

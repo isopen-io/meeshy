@@ -1,5 +1,5 @@
 import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
-import { DEFAULT_ADDRESS_GLYPH, isAddressGlyph, type AddressGlyph } from '@meeshy/shared/utils/profile-addresses';
+import { DEFAULT_ADDRESS_GLYPH, isAddressGlyph, normalizeAddressUrl, type AddressGlyph } from '@meeshy/shared/utils/profile-addresses';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
@@ -10,6 +10,10 @@ import type { ApiResult, HttpTransport } from './http';
  * déclare sur sa fiche : un titre, un site, un glyphe. Un serveur qui ne les sert pas encore (404)
  * rend une liste VIDE, jamais une erreur : la face Liens n'affiche alors aucune section, et le
  * reste part (champ absent ⇒ ancien comportement).
+ *
+ * L'URL servie repasse par la règle d'écriture (`normalizeAddressUrl`) avant de devenir un
+ * `href` : seul un site `http(s)` public se dessine en lien — jamais `javascript:`, `data:`,
+ * un nom interne, ni une adresse sans schéma que le navigateur lirait comme un chemin de l'app.
  */
 export type MyAddress = {
   readonly id: string;
@@ -34,8 +38,8 @@ export function decodeMyAddress(raw: unknown): MyAddress | null {
   const row = raw as Record<string, unknown>;
   const id = text(row.id);
   const title = text(row.title);
-  const url = text(row.url);
-  if (id === '' || title === '' || url === '') return null;
+  const url = normalizeAddressUrl(text(row.url));
+  if (id === '' || title === '' || url === null) return null;
   return { id, title, url, glyph: isAddressGlyph(row.glyph) ? row.glyph : DEFAULT_ADDRESS_GLYPH, position: count(row.position), isShown: row.isShown !== false, clicks: count(row.clicks) };
 }
 
