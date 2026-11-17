@@ -352,6 +352,16 @@
     color: var(--kit-chart-tint, var(--color-ios-brand));
   }
 
+  .kit-chart__stage-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kit-chart__stage-value {
+    font-variant-numeric: tabular-nums;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .kit-chart[data-enters] .kit-chart__bar-fill {
       animation: none;

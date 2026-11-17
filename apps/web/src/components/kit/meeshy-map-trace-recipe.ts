@@ -52,10 +52,13 @@ type Segment = { readonly start: MeeshyMapTracePoint; readonly c1: MeeshyMapTrac
 
 const bezier = (segment: Segment, t: number): MeeshyMapTracePoint => {
   const u = 1 - t;
-  const w = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
+  const a = u * u * u;
+  const b = 3 * u * u * t;
+  const c = 3 * u * t * t;
+  const d = t * t * t;
   return {
-    x: w[0] * segment.start.x + w[1] * segment.c1.x + w[2] * segment.c2.x + w[3] * segment.end.x,
-    y: w[0] * segment.start.y + w[1] * segment.c1.y + w[2] * segment.c2.y + w[3] * segment.end.y,
+    x: a * segment.start.x + b * segment.c1.x + c * segment.c2.x + d * segment.end.x,
+    y: a * segment.start.y + b * segment.c1.y + c * segment.c2.y + d * segment.end.y,
   };
 };
 

@@ -195,6 +195,10 @@
     flex: none;
   }
 
+  .kit-avatar-group--skeleton {
+    pointer-events: none;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .kit-avatar-group[data-breathes] .kit-avatar-group__face,
     .kit-avatar-group__check {

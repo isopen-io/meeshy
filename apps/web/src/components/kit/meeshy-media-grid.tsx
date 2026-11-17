@@ -1,6 +1,6 @@
 import '@/styles/kit-media-grid.css';
 import '@/styles/kit-motion.css';
-import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
+import { memo, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { impact } from '@/lib/view/haptics';
 
@@ -70,7 +70,7 @@ const TileBody = ({ item, size, slots }: { readonly item: MeeshyMediaGridItem; r
 export const MeeshyMediaTile = memo(function MeeshyMediaTile({ item, shape, layout, size = { width: 0, height: 0 }, onOpen, haptic = 'light', tint, content, captionLeading, hoverActions }: MeeshyMediaTileProps) {
   const [state, setState] = useState({ pressed: false, hovered: false, focused: false });
   const recipe: MeeshyMediaGridRecipe = meeshyMediaGridRecipe({ layout, shape, kind: item.kind, isPressed: state.pressed, isHovered: state.hovered, isFocused: state.focused, reduceMotion: prefersReducedMotion() });
-  const style = { '--kit-media-scale': recipe.scale, '--kit-media-veil': recipe.veil, '--kit-media-elevation': `${recipe.elevation / 16}rem`, ...(item.aspect === undefined || recipe.aspect !== null ? {} : { aspectRatio: String(item.aspect) }), ...(item.tint ?? tint ? { '--kit-media-tint': item.tint ?? tint } : {}) } as never;
+  const style = { '--kit-media-scale': recipe.scale, '--kit-media-veil': recipe.veil, '--kit-media-elevation': `${recipe.elevation / 16}rem`, ...(item.aspect === undefined || recipe.aspect !== null ? {} : { aspectRatio: String(item.aspect) }), ...(item.tint === undefined && tint === undefined ? {} : { '--kit-media-tint': item.tint ?? tint }) } as CSSProperties;
   const slots = { content, captionLeading, hoverActions };
   const decorations = (
     <>

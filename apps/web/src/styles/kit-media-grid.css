@@ -166,6 +166,12 @@
     grid-column: 1 / -1;
   }
 
+  .kit-media-grid__lanes {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .kit-media {
       transition: none;

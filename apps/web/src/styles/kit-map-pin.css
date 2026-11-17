@@ -47,7 +47,6 @@
     block-size: var(--kit-pin-size);
     border-radius: 999px;
     box-shadow: 0 0 0 var(--kit-pin-liner) var(--color-ios-bg), 0 0.625rem 1.5rem rgb(0 0 0 / 0.55);
-    transition: inline-size var(--motion-morph-duration, 420ms) var(--motion-morph, ease-out), block-size var(--motion-morph-duration, 420ms) var(--motion-morph, ease-out);
   }
 
   .kit-pin__stage[data-kind='own'] .kit-pin__body {
@@ -298,6 +297,13 @@
     button.kit-pin:hover .kit-pin__stage {
       transform: scale(1.04);
     }
+  }
+
+  .kit-pin__ghost-mark {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    border-radius: 999px;
+    border: 1.5px dashed var(--color-ios-ink-3);
   }
 
   @media (prefers-reduced-motion: reduce) {

@@ -23,7 +23,6 @@ export const MEESHY_AVATAR_MORPH_MEASURE = {
   badgeMin: 14,
   badgeLeadMs: 80,
   badgeReturnMs: 120,
-  flightShadow: '0 0.75rem 1.5rem rgb(0 0 0 / 0.4)',
 } as const;
 
 export type MeeshyAvatarMorphRecipeInput = {
@@ -47,7 +46,6 @@ export type MeeshyAvatarMorphRecipe = {
   readonly progress: number | null;
   readonly scaleFrom: number;
   readonly scaleTo: number;
-  readonly flightShadow: string;
   readonly ringInFlight: 0 | 1;
   readonly badgeInFlight: 0 | 1;
   readonly badgeLeadMs: number;
@@ -75,7 +73,6 @@ export const meeshyAvatarMorphRecipe = (input: MeeshyAvatarMorphRecipeInput): Me
     progress,
     scaleFrom: input.from / big,
     scaleTo: input.to / big,
-    flightShadow: MEESHY_AVATAR_MORPH_MEASURE.flightShadow,
     ringInFlight: input.ringTravels === true ? 1 : 0,
     badgeInFlight: input.badgeTravels === true ? 1 : 0,
     badgeLeadMs: MEESHY_AVATAR_MORPH_MEASURE.badgeLeadMs,

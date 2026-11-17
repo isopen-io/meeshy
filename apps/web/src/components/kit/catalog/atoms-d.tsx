@@ -46,7 +46,7 @@ const column = (children: ReactNode): ReactNode => <div style={{ display: 'flex'
 const row = (children: ReactNode): ReactNode => <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 16 }}>{children}</div>;
 const stage = (heightRem: number, children: ReactNode): ReactNode => <div style={{ position: 'relative', blockSize: `${heightRem}rem`, overflow: 'hidden', borderRadius: 16, background: 'color-mix(in srgb, var(--color-ios-ink) 8%, transparent)' }}>{children}</div>;
 const face = (initials: string, size: number, tint: string): ReactNode => (
-  <span style={{ display: 'grid', placeItems: 'center', inlineSize: size, blockSize: size, borderRadius: 999, background: tint, color: '#fff', fontWeight: 800, fontSize: size * 0.34 }}>{initials}</span>
+  <span style={{ display: 'grid', placeItems: 'center', inlineSize: size, blockSize: size, borderRadius: 999, background: tint, color: 'var(--color-ios-on-brand)', fontWeight: 800, fontSize: size * 0.34 }}>{initials}</span>
 );
 const FACES: readonly (readonly [string, string])[] = [['MO', TINTS.violet], ['TR', TINTS.teal], ['YT', TINTS.amber], ['KM', TINTS.indigo], ['LM', TINTS.violet], ['SB', TINTS.teal]];
 const faceAt = (index: number, size: number): ReactNode => face(FACES[index % FACES.length]?.[0] ?? '·', size, FACES[index % FACES.length]?.[1] ?? TINTS.violet);
