@@ -46,56 +46,16 @@ struct AffiliateView: View {
 
     // MARK: - Stats Overview
 
+    /// Les chiffres de mon parrainage : la bande du kit (K34), un seul élément pour VoiceOver (#18871).
     private var statsOverview: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            affiliateStatCard(
-                value: "\(viewModel.tokens.count)",
-                label: String(localized: "affiliate.stat.links", defaultValue: "Liens", bundle: .main),
-                color: accentColor,
-                icon: "link"
-            )
-            affiliateStatCard(
-                value: "\(viewModel.tokens.reduce(0) { $0 + $1.referralCount })",
-                label: String(localized: "affiliate.stat.signups", defaultValue: "Inscrits", bundle: .main),
-                color: accentColor,
-                icon: "person.fill.checkmark"
-            )
-            affiliateStatCard(
-                value: "\(viewModel.tokens.reduce(0) { $0 + $1.clickCount })",
-                label: String(localized: "affiliate.stat.clicks", defaultValue: "Clics", bundle: .main),
-                color: accentColor,
-                icon: "cursorarrow.click"
-            )
-        }
-    }
-
-    private func affiliateStatCard(value: String, label: String, color: String, icon: String) -> some View {
-        VStack(spacing: MeeshySpacing.xsPlus) {
-            Image(systemName: icon)
-                .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
-                .foregroundStyle(Color(hex: color))
-                .accessibilityHidden(true)
-
-            Text(value)
-                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
-                .foregroundStyle(Color(hex: color))
-
-            Text(label)
-                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundStyle(theme.textMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .padding(.vertical, MeeshySpacing.mdPlus)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(theme.surfaceGradient(tint: color))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(theme.border(tint: color), lineWidth: 1)
-                )
-        )
-        .accessibilityElement(children: .combine)
+        MeeshyFigureBand(items: [
+            MeeshyFigureItem(value: viewModel.tokens.count.formatted(),
+                             unit: String(localized: "affiliate.stat.links", defaultValue: "Liens", bundle: .main)),
+            MeeshyFigureItem(value: viewModel.tokens.reduce(0) { $0 + $1.referralCount }.formatted(),
+                             unit: String(localized: "affiliate.stat.signups", defaultValue: "Inscrits", bundle: .main)),
+            MeeshyFigureItem(value: viewModel.tokens.reduce(0) { $0 + $1.clickCount }.formatted(),
+                             unit: String(localized: "affiliate.stat.clicks", defaultValue: "Clics", bundle: .main)),
+        ], size: .compact, emptyLabel: ProfileActivityBand.emptyLabel)
     }
 
     // MARK: - Tokens Section
