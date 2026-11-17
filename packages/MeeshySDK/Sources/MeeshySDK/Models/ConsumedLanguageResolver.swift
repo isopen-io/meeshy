@@ -20,7 +20,7 @@ import Foundation
 /// Toute divergence entre cette résolution et celle du texte produirait une
 /// statistique fausse — d'où le miroir strict.
 ///
-/// Miroir TypeScript : `apps/web/utils/consumed-language.ts` — mêmes cas.
+/// Miroir TypeScript : le web legacy qui la portait a quitté le dépôt (#7668), et `apps/web` n'en a pas de miroir à ce jour.
 /// Voir `docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md`.
 public enum ConsumedLanguageResolver {
 
