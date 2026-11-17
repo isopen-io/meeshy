@@ -76,6 +76,9 @@ import { meAddressRoutes } from './me-addresses';
 // « En commun » : communautés, amis et médias partagés, gardés par le cercle (#19200)
 import { getUserInCommon } from './in-common';
 
+// Stories « à la une » : albums de l'auteur, chaque story sous sa propre audience (#19394)
+import { storyHighlightRoutes } from './story-highlights';
+
 /**
  * Main user routes registration
  * Aggregates all user-related routes from modular files
@@ -97,6 +100,7 @@ export async function userRoutes(fastify: FastifyInstance) {
   await getUserByEmail(fastify);
   await getUserByIdDedicated(fastify);
   await getUserInCommon(fastify);
+  await storyHighlightRoutes(fastify);
   await getUserByPhone(fastify);
 
   // Contact change routes — surface unifiée d'abord (#4341), anciennes

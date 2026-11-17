@@ -133,6 +133,7 @@ model User {
   cityCircle                String?
   /// Adresses personnelles publiées sur la fiche (#18863).
   profileAddresses          ProfileAddress[]
+  storyHighlights           StoryHighlight[]
   email                     String   @unique
   phoneNumber               String?
   /// Code de parrainage INTRINSÈQUE au compte — distinct d'un AffiliateToken
@@ -2700,6 +2701,27 @@ model ProfileAddress {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, position])
+}
+
+/// Album « à la une » d'une personne (#19394, décision #19393) : des stories de SON auteur,
+/// rangées sous un titre et un glyphe. Mettre une story à la une n'élargit jamais son
+/// audience : la lecture (`GET /users/:id/highlights`) ne sert à un lecteur que les stories
+/// que leur propre visibilité lui ouvre, y compris après leur échéance ; un album vide pour
+/// lui est omis. `storyIds` garde l'ordre de l'album ; une story supprimée s'y ignore.
+model StoryHighlight {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId   String   @db.ObjectId
+  title     String
+  /// Nom d'icône du jeu de la planche (`map-pin`, `moon`…).
+  glyph     String
+  storyIds  String[] @default([]) @db.ObjectId
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, order])
 }
 
 /// Clic sur un lien de tracking

@@ -534,6 +534,12 @@ export const callersIn = (contents, nsNames) => {
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // Stories « à la une » servies par la passerelle (#19394, chantier #18857) : les clients liront le rail
+  // « À la une » de la Vitrine (K20) et l'auteur composera ses albums.
+  'users.byIdHighlights': { issue: 19394, reason: 'GET /users/:id/highlights — le rail « À la une » de la fiche, chaque story sous sa propre audience' },
+  'users.meHighlights': { issue: 19394, reason: 'GET · POST /users/me/highlights — mes albums à la une (lecture, création)' },
+  'users.meHighlightsById': { issue: 19394, reason: 'PATCH · DELETE /users/me/highlights/:id — modifier ou supprimer un album à la une' },
+  'users.meHighlightsOrder': { issue: 19394, reason: 'PUT /users/me/highlights/order — réordonner mes albums à la une' },
   // « Mes cercles » compté par la passerelle, Communauté comprise (#19375, chantier #18857) : iOS le lira
   // d'abord (rangée « Mes cercles » de la fiche) ; le web et Android le liront avec leur profil.
   'relations.summary': { issue: 19375, reason: 'GET /relations/summary — le compte de chaque cercle et des demandes en attente, rangée « Mes cercles »' },
