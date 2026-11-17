@@ -48,7 +48,7 @@ describe('un point téléporté ne sert pas la proximité', () => {
     }
     await expect(recordBloodLocation(w.deps, MOI, A_300_M)).resolves.toEqual({ recorded: true });
 
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
   });
 
   it('un point téléporté près de l\'autre ne devient pas sa « dernière position » quand l\'autre enregistre', async () => {
@@ -61,7 +61,7 @@ describe('un point téléporté ne sert pas la proximité', () => {
     w.poser(SANG, PARIS, w.horloge() - MINUTE);
     await recordBloodLocation(w.deps, SANG, PARIS);
 
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
   });
 
   it('un déplacement vraisemblable déclenche toujours l\'alerte', async () => {
@@ -120,7 +120,7 @@ describe('un essai raté coûte : la paire n\'est évaluée qu\'une fois par qua
     w.avancer(2 * MINUTE);
 
     await recordBloodLocation(w.deps, MOI, A_300_M);
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
 
     w.avancer(14 * MINUTE);
     await recordBloodLocation(w.deps, MOI, A_300_M);
@@ -145,13 +145,13 @@ describe('un compte n\'évalue que soixante paires par heure', () => {
     w.avancer(MINUTE);
     lointains.forEach((id) => w.poser(id, A_5_KM));
     await recordBloodLocation(w.deps, MOI, PARIS);
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
 
     w.avancer(MINUTE);
     w.poser(proche, A_300_M);
     w.avancer(MINUTE);
     await recordBloodLocation(w.deps, MOI, PARIS);
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
 
     w.avancer(HEURE - 2 * MINUTE + 30 * SECONDE);
     await recordBloodLocation(w.deps, MOI, PARIS);
@@ -164,6 +164,6 @@ describe('un compte n\'évalue que soixante paires par heure', () => {
     w.poser(proche, A_300_M);
     w.poser(MOI, PARIS, w.horloge() - MINUTE);
     await expect(recordBloodLocation(w.deps, MOI, PARIS)).resolves.toEqual({ recorded: true });
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
   });
 });

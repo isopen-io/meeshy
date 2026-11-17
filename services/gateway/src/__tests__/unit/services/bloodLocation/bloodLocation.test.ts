@@ -309,7 +309,7 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
     await recordBloodLocation(w.deps, SANG, PARIS);
     w.poser(MOI, A_300_M, w.horloge() - MINUTE);
     await recordBloodLocation(w.deps, MOI, A_300_M);
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
   });
 
   it('rien si l\'un des deux est en fantôme, global ou ciblé', async () => {
@@ -318,14 +318,14 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
     await recordBloodLocation(global.deps, SANG, PARIS);
     global.poser(MOI, A_300_M, global.horloge() - MINUTE);
     await recordBloodLocation(global.deps, MOI, A_300_M);
-    expect(global.emissions).toEqual([]);
+    expect(global.proximites()).toEqual([]);
 
     const cible = proxi();
     await recordBloodLocation(cible.deps, SANG, PARIS);
     await updateBloodLocationSettings(cible.deps, SANG, { ghost: true, userId: MOI });
     cible.poser(MOI, A_300_M, cible.horloge() - MINUTE);
     await recordBloodLocation(cible.deps, MOI, A_300_M);
-    expect(cible.emissions).toEqual([]);
+    expect(cible.proximites()).toEqual([]);
   });
 
   it('rien au-delà du rayon réglé, et un rayon réglé plus large déclenche à l\'évaluation suivante de la paire', async () => {
@@ -333,7 +333,7 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
     await recordBloodLocation(w.deps, SANG, A_5_KM);
     w.poser(MOI, PARIS, w.horloge() - MINUTE);
     await recordBloodLocation(w.deps, MOI, PARIS);
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
 
     await updateBloodLocationSettings(w.deps, MOI, { userId: SANG, proximityRadiusMeters: 5000 });
     await updateBloodLocationSettings(w.deps, SANG, { userId: MOI, proximityRadiusMeters: 5000 });
@@ -348,7 +348,7 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
     w.avancer(90 * MINUTE);
     w.poser(MOI, A_300_M, w.horloge() - MINUTE);
     await recordBloodLocation(w.deps, MOI, A_300_M);
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
   });
 
   it('un magasin de cadence en panne : aucune alerte, et l\'enregistrement réussit quand même', async () => {
@@ -356,7 +356,7 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
     await recordBloodLocation(w.deps, SANG, PARIS);
     w.poser(MOI, A_300_M, w.horloge() - MINUTE);
     await expect(recordBloodLocation(w.deps, MOI, A_300_M)).resolves.toEqual({ recorded: true });
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
   });
 
   it('un retrait de la proximité coupe l\'alerte suivante : le consentement est relu en base à chaque émission', async () => {
@@ -381,7 +381,7 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
     await recordBloodLocation(w.deps, PROCHE, PARIS);
     w.poser(MOI, A_300_M, w.horloge() - MINUTE);
     await recordBloodLocation(w.deps, MOI, A_300_M);
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
   });
 });
 
@@ -393,7 +393,7 @@ describe('le drapeau vaut pour les DEUX comptes — hors liste blanche, rien ne 
     w.poser(MOI, A_300_M, w.horloge() - MINUTE);
     await recordBloodLocation(w.deps, MOI, A_300_M);
 
-    expect(w.emissions).toEqual([]);
+    expect(w.proximites()).toEqual([]);
   });
 
   it('l\'historique rangé avant la sortie de la liste blanche n\'est plus servi, et la lecture ne laisse aucune trace', async () => {

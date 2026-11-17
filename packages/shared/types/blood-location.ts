@@ -14,7 +14,10 @@
  * 5. `PUT /me/location/blood-settings` ({@link BloodLocationSettingsPayload}) : fantôme global
  *    ou ciblé, rayon de proximité par personne ;
  * 6. `location:blood-proximity` ({@link BloodProximityEventData}) part aux DEUX Sangs, sans
- *    coordonnée, au plus une fois par paire toutes les 2 h.
+ *    coordonnée, au plus une fois par paire toutes les 2 h ;
+ * 7. `location:blood-moved` ({@link BloodMovedEventData}) part, à chaque point, aux comptes qui
+ *    pourraient LIRE l'historique de l'émetteur, sans coordonnée, au plus une fois par paire et par
+ *    {@link BLOOD_MOVED_SIGNAL_SECONDS} : le client relit alors la carte (#19400).
  */
 import { z } from 'zod';
 
@@ -28,6 +31,8 @@ export const BLOOD_PROXIMITY_MAX_RADIUS_METERS = 5000;
 export const BLOOD_PROXIMITY_FRESH_MINUTES = 60;
 /** Au-delà, dans les 24 h, d'un même observateur : le journal le signale à l'observé. */
 export const BLOOD_CONSULTATION_EXCESS_PER_DAY = 20;
+/** Au plus un `location:blood-moved` par paire émetteur → lecteur dans cette fenêtre (#19400). */
+export const BLOOD_MOVED_SIGNAL_SECONDS = 60;
 
 export const bloodLocationPayloadSchema = z.object({
   latitude: z.number().finite().min(-90).max(90),
@@ -69,6 +74,17 @@ export type BloodLocationConsultations = {
 export type BloodProximityEventData = {
   readonly userId: string;
   readonly distanceMeters: 100 | 250 | 500 | 1000 | 2500 | 5000;
+};
+
+/**
+ * « La position continue de X a bougé » (#19400) : l'identité et l'heure du point, JAMAIS une
+ * coordonnée. Le lecteur relit la carte (`GET /relations/locations?include=blood`) ou l'historique ;
+ * la lecture reste la seule porte des coordonnées et du journal des consultations. Un ancien client
+ * l'ignore et garde sa relecture.
+ */
+export type BloodMovedEventData = {
+  readonly userId: string;
+  readonly at: string;
 };
 
 /**
