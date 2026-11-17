@@ -20,7 +20,7 @@ public object PushConversationLockSeal {
         "postId", "postType", "commentId", "parentCommentId", "route", "communityId", "contentId", "contentType",
         "senderId", "senderUsername", "senderDisplayName", "title",
         "unreadCount", "conversationUnread", "createdAt", "ephemeralDuration", "effectFlags",
-        "replacesNotificationId", "replacesActorSubject", "recipientUserId", "conversationEncryptionMode",
+        "replacesNotificationId", "replacesActorSubject", "reproduced", "recipientUserId", "conversationEncryptionMode",
     )
 
     public fun seal(data: Map<String, String>): Map<String, String> =

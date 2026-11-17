@@ -39,7 +39,9 @@ import javax.inject.Singleton
  * and legacy `notification + data` (foreground) alike — the Android counterpart of the iOS
  * Notification Service Extension :
  *  0. **seal** (conversation locked by PIN : label only, no text, no media, no avatar, no action) ;
- *  1. **dedup** on `notificationId` (a push delivered twice posts once) ;
+ *  1. **dedup** on `notificationId` (a push delivered twice posts once) — except a CORRECTION (message edited,
+ *     [me.meeshy.sdk.model.push.PushPayload.isCorrection]) : it is never a first delivery, it is rendered silently and only when
+ *     the banner it corrects is still shown (never a second alert for a message already seen) ;
  *  2. **gate** ([PushDeliveryGate]) with the HYDRATED preferences (a cold process reads the
  *     persisted ones, not the defaults), the system interruption filter read at reception ;
  *  3. **build** on the category channel (or the silent one for a passive delivery), under
@@ -79,7 +81,13 @@ class PushNotificationPipeline @Inject constructor(
         val incoming = sealedIfLocked(received)
         val payload = incoming.payload
         if (displayGates.any { gate -> !runCatching { gate.allows(incoming) }.getOrDefault(true) }) return false
-        if (!firstDelivery(payload.notificationId)) return false
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val ephemeral = (payload.ephemeralDuration ?: 0) > 0
+        val notificationId = MessageNotificationId.of(payload.type, payload.conversationId, payload.notificationId, ephemeral)
+        val correction = payload.isCorrection
+        if (correction) {
+            if (postedBanner(manager, notificationId) == null) return false
+        } else if (!firstDelivery(payload.notificationId)) return false
 
         val deadline = environment.nowMillis() + DEADLINE_MILLIS
         val preferences = hydratedPreferences()
@@ -109,11 +117,12 @@ class PushNotificationPipeline @Inject constructor(
         } else {
             NotificationChannelIds.forPayload(payload)
         }
-        val ephemeral = (payload.ephemeralDuration ?: 0) > 0
-        val notificationId = MessageNotificationId.of(payload.type, payload.conversationId, payload.notificationId, ephemeral)
         val groupKey = PushGrouping.groupKey(payload, preferences)
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val badge = PushBadgePolicy.bannerCount(preferences, previous = postedBanner(manager, notificationId)?.number)
+        val badge = PushBadgePolicy.bannerCount(
+            preferences,
+            previous = postedBanner(manager, notificationId)?.number,
+            addsMessage = !correction,
+        )
 
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_meeshy)
@@ -123,8 +132,9 @@ class PushNotificationPipeline @Inject constructor(
             .setContentIntent(tapIntents.contentIntent(push.data, notificationId))
             .setDeleteIntent(tapIntents.deleteIntent(payload.notificationId, notificationId))
             .setPriority(if (passive) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH)
-            // « Sons » coupé ou livraison passive ⇒ ni son ni vibration.
-            .setSilent(!playSound)
+            // « Sons » coupé, livraison passive ou correction d'un message déjà vu ⇒ ni son ni vibration.
+            .setSilent(!playSound || correction)
+            .setOnlyAlertOnce(correction)
 
         val request = EnrichmentRequest(push, preferences, channelId, groupKey, badge, passive, deadline, notificationId)
         enrich(builder, request)
