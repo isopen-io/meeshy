@@ -236,6 +236,21 @@ class NotificationRepositoryFlightTest {
         assertThat(repo.unreadCountStream.value).isEqualTo(0)
     }
 
+    /** #19141 (D1) — the re-read of the account that left fails after the switch: the next account hears nothing of it. */
+    @Test
+    fun `a re-read of the account that left reports no failure to the next account`() = runTest {
+        val page = HeldPage()
+        val repo = NotificationRepository(api(page, unread = 1))
+        repo.replaceAll(items = listOf(row("a1")))
+
+        val resyncOfA = async { repo.resync() }
+        page.asked.await()
+        repo.clear()
+        page.release.completeExceptionally(IOException("offline"))
+
+        assertThat(resyncOfA.await()).isNull()
+    }
+
     @Test
     fun `a failed re-read of the account that left leaves the next account's count alone`() = runTest {
         val page = HeldPage()

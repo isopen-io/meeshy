@@ -454,6 +454,11 @@ class NotificationRepository @Inject constructor(
      * [replaceAll] replaced meanwhile (another list version, #18908), or another end (another cursor — by rank, another
      * length: a page already appended) makes it continue a list that is gone, and laid at the tail of the new one it
      * would leave a hole. It lands nothing then: the next scroll asks from the new end.
+     *
+     * WITHOUT A CURSOR (a gateway predating #4901), decided (#19141 D3): a page asked by rank lands only while the live
+     * list kept the length it was asked from. A live arrival at the head shifts every rank by one — the page would repeat
+     * a row it already holds — so the page is dropped, and the next scroll asks from the new length: no hole, no
+     * duplicate, and no live event lost (the arrival is already in the list). The production gateway serves a cursor.
      */
     private fun appendPage(asked: NextPage, items: List<ApiNotification>, pagination: Pagination?) {
         synchronized(flightLock) {
@@ -707,6 +712,9 @@ class NotificationRepository @Inject constructor(
      * contient déjà, et la correction la comptait deux fois. Il n'est plus qu'un repli, pour une passerelle qui ne sert pas
      * le compte de sa page, et pour le compteur qu'une relecture dont la page échoue peut encore poser ([landCount]) ; il
      * est abandonné dès que la page porte le sien.
+     *
+     * L'échec d'une relecture du compte qui part ([clear] depuis son départ) ne remonte jamais à l'appelant : il n'est
+     * l'affaire d'aucun compte présent (#19141 D1).
      */
     private suspend fun revalidateNotifications(onError: (Throwable) -> Unit = {}) = coroutineScope {
         val flight = openFlight()
@@ -721,7 +729,7 @@ class NotificationRepository @Inject constructor(
                 }
                 is NetworkResult.Failure -> {
                     count.await().getOrNull()?.let { landCount(flight, it) }
-                    onError(Exception(page.error.message))
+                    if (synchronized(flightLock) { flight.epoch == epoch }) onError(Exception(page.error.message))
                 }
             }
         } finally {
