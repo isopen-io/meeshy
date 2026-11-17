@@ -27,6 +27,7 @@ const ALICE = 'a1'.repeat(12);
 const BOB = 'b2'.repeat(12);
 const S1 = 'c3'.repeat(12);
 const S2 = 'd4'.repeat(12);
+const S3 = 'e5'.repeat(12);
 const TOKEN_S1 = 'jeton-de-la-session-1';
 
 type Handler = (request: unknown, reply: unknown) => Promise<unknown>;
@@ -189,6 +190,58 @@ describe('la fin de session retire les jetons push de CETTE session', () => {
     expect(active()).toEqual([]);
 
     await register(S2, apns());
+
+    expect(active()).toEqual(['apns:apns-token-de-la-session-1']);
+  });
+});
+
+describe("une réinscription concurrente de la fin de session n'est pas éteinte par elle", () => {
+  type UpdateMany = (args: unknown) => Promise<{ count: number }>;
+
+  /** La fin de session a lu les jetons ; l'appareil se reconnecte et réinscrit le sien juste AVANT qu'elle ne les retire. */
+  function interleaved(store: ReturnType<typeof harness>['store'], reconnect: () => Promise<void>) {
+    const write = store.prisma.pushToken.updateMany as unknown as UpdateMany;
+    let fired = false;
+    const updateMany: UpdateMany = async (args) => {
+      if (!fired) {
+        fired = true;
+        await reconnect();
+      }
+      return write(args);
+    };
+    initSessionService({ ...store.prisma, pushToken: { ...store.prisma.pushToken, updateMany } } as never);
+  }
+
+  it('révocation unitaire : le jeton que la nouvelle session vient de reprendre reste actif', async () => {
+    const { store, register, active } = harness();
+    await register(S1, apns());
+    interleaved(store, () => register(S2, apns()));
+
+    await revokeSession(ALICE, S1);
+
+    expect(active()).toEqual(['apns:apns-token-de-la-session-1']);
+    expect(store.collections.PushToken.rows[0].sessionId).toBe(S2);
+  });
+
+  it('révoquer les autres sessions : le jeton repris par la session gardée reste actif', async () => {
+    const { store, register, active } = harness();
+    await register(S1, apns());
+    interleaved(store, () => register(S2, apns()));
+
+    await invalidateAllSessions(ALICE, { sessionId: S2, sessionToken: null });
+
+    expect(active()).toEqual(['apns:apns-token-de-la-session-1']);
+  });
+
+  it("une ligne héritée reprise par une session vivante n'est pas éteinte par la révocation totale qui l'avait lue", async () => {
+    const { store, register, active } = harness();
+    store.collections.PushToken.insert({ userId: ALICE, token: 'apns-token-de-la-session-1', type: 'apns', platform: 'ios', sessionId: null, isActive: true });
+    interleaved(store, async () => {
+      store.collections.UserSession.insert({ id: S3, userId: ALICE, isValid: true, sessionToken: 'condensat-s3', expiresAt: new Date(Date.now() + 86_400_000) });
+      await register(S3, apns());
+    });
+
+    await invalidateAllSessions(ALICE);
 
     expect(active()).toEqual(['apns:apns-token-de-la-session-1']);
   });
