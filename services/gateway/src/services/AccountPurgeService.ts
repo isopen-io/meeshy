@@ -22,6 +22,8 @@ const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
 
 export type AccountPurgeSummary = {
   readonly sessionsDeleted: number;
+  /** Ses jetons push (#18910) : sans eux, l'appareil resté installé recevrait encore les bannières des groupes dont il reste membre. */
+  readonly pushTokensDeleted: number;
   readonly voiceProfileDeleted: number;
   readonly shareLinksDeleted: number;
   readonly notificationsDeleted: number;
@@ -135,9 +137,10 @@ export async function purgeAccountIsolatedData(
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
   if (!isValidObjectId(userId)) throw new Error('INVALID_USER_ID');
-  const [sessions, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles] =
+  const [sessions, pushTokens, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
+      prisma.pushToken.deleteMany({ where: { userId } }),
       prisma.userVoiceModel.deleteMany({ where: { userId } }),
       prisma.userRelation.deleteMany({ where: { OR: [{ userLowId: userId }, { userHighId: userId }] } }),
       prisma.pairInteractionDay.deleteMany({ where: { OR: [{ userLowId: userId }, { userHighId: userId }] } }),
@@ -176,6 +179,7 @@ export async function purgeAccountIsolatedData(
 
   const summary: AccountPurgeSummary = {
     sessionsDeleted: sessions.count,
+    pushTokensDeleted: pushTokens.count,
     voiceProfileDeleted: voiceProfile.count,
     relationsDeleted: relations.count,
     pairInteractionDaysDeleted: pairInteractionDays.count,
@@ -196,7 +200,7 @@ export async function purgeAccountIsolatedData(
   };
 
   logger.info(
-    `[AccountPurge] user=${userId} sessions=${summary.sessionsDeleted} voiceProfile=${summary.voiceProfileDeleted} ` +
+    `[AccountPurge] user=${userId} sessions=${summary.sessionsDeleted} pushTokens=${summary.pushTokensDeleted} voiceProfile=${summary.voiceProfileDeleted} ` +
       `relations=${summary.relationsDeleted} pairInteractionDays=${summary.pairInteractionDaysDeleted} relationConsents=${summary.relationConsentsDeleted} friendRequests=${summary.friendRequestsDeleted} shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
       `addressBook=${summary.addressBookContactsDeleted} joinNotices=${summary.contactJoinNoticesDeleted} ` +
       `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} sharedTranslations=${summary.sharedTranslationsDeleted} ` +

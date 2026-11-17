@@ -259,6 +259,7 @@ describe('purgeAccountIsolatedData', () => {
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(summary).toMatchObject({
       sessionsDeleted: 0,
+      pushTokensDeleted: 0,
       voiceProfileDeleted: 0,
       shareLinksDeleted: 0,
       notificationsDeleted: 0,
