@@ -78,6 +78,15 @@ describe('la charge recomposée pour la passerelle', () => {
     expect(payload.relay).toBeUndefined();
   });
 
+  // #9998 — les champs VALIDÉS par le schéma sont posés APRÈS les métadonnées
+  // libres : un `mode` ou un `ciphertext` qu'elles glisseraient ne les remplace pas.
+  it('le chiffré et le mode validés l’emportent sur ceux que les métadonnées libres glisseraient', () => {
+    const payload = toEncryptedPayload({
+      encryptedContent: 'abc', encryptionMode: 'e2ee', encryptionMetadata: { mode: 'server', ciphertext: 'autre' },
+    }) as unknown as Record<string, unknown>;
+    expect(payload).toMatchObject({ ciphertext: 'abc', mode: 'e2ee' });
+  });
+
   it("ne laisse jamais les métadonnées libres du client poser un relais : ni session choisie, ni enveloppes hors schéma", () => {
     const forged = {
       protocol: 'libsignal-v1',

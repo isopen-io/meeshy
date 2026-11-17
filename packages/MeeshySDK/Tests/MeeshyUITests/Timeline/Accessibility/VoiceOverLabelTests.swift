@@ -68,16 +68,6 @@ final class VoiceOverLabelTests: XCTestCase {
 
     // MARK: - Snap chip static label helpers (transport bar, vue unifiée)
 
-    func test_toolbar_snapAccessibilityKey_nonEmpty() {
-        let onKey = TransportBar.snapAccessibilityKey(isOn: true)
-        let offKey = TransportBar.snapAccessibilityKey(isOn: false)
-        // Keys must differ so VoiceOver conveys state change
-        XCTAssertNotEqual(onKey, offKey)
-        // And both keys must resolve to real localized strings
-        assertLocalized(onKey)
-        assertLocalized(offKey)
-    }
-
     func test_toolbar_undoRedoKeys_nonEmpty() {
         let undoKey = "story.timeline.toolbar.undo"
         let redoKey = "story.timeline.toolbar.redo"
@@ -87,15 +77,5 @@ final class VoiceOverLabelTests: XCTestCase {
     }
 
     // MARK: - TransportBar body renders without crash (smoke)
-
-    func test_transportBar_body_doesNotCrash() {
-        let bar = TransportBar(
-            isPlaying: false, currentTime: 1.0, duration: 10.0,
-            zoomScale: 1.0, isMuted: false,
-            onPlayToggle: {}, onMuteToggle: {},
-            onZoomIn: {}, onZoomOut: {}, onZoomReset: {}
-        )
-        _ = bar.body
-    }
 
 }

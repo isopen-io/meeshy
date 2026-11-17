@@ -89,6 +89,10 @@ function base() {
     friendRequest: table([]),
     // Les adresses d'amis d'un réseau tiers (#17117) : aucune conversation externe ouverte.
     externalConversationPeer: table([]),
+    // Les adresses de fiche (#18863) : un compte qui n'en a publié aucune.
+    profileAddress: table([]),
+    trackingLink: table([]),
+    trackingLinkClick: table([]),
     conversationShareLink: table([]),
     userContact,
     contactJoinNotice,
@@ -106,6 +110,7 @@ function base() {
     messageEnvelope: table([]),
     e2EERevokedIdentity: table([]),
     e2EEBindingProof: table([]),
+    e2EEDeviceVerificationMessage: table([]),
     // Le jeu (#9384) : des collections vides.
     ...Object.fromEntries(
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, table([])]),

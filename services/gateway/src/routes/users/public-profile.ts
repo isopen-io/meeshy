@@ -5,6 +5,9 @@ import { selectForFields, type ColumnPlan, type FieldSet } from '../../utils/spa
 import { gateProfilePresence } from './presence-gate';
 import { servedProfileDecor, servedProfileDecorJsonSchema } from '../../services/appearance/profileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
+import { withServedCity } from './profile-city';
+import { withServedAddresses } from './profile-addresses';
+import { isFieldServed } from '../../utils/sparse-fieldset';
 import { targetHasBlockedViewer } from './profile-block-gate';
 import { isGuestViewer, sendAccountRequired, type GuestViewerContext } from '../../services/guests/guestMemberVisibility';
 
@@ -114,6 +117,26 @@ export const publicProfileSchema = {
     // (`withPresenceGatedFields`) — absents, jamais `null`, quand elle les ferme.
     registrationCountry: { type: 'string', nullable: true },
     timezone: { type: 'string', nullable: true },
+    // #18862 : la ville DÉCLARÉE, servie selon le cercle choisi par son propriétaire
+    // (`withServedCity`) ; `cityCircle` (le réglage) ne part qu'à lui-même.
+    city: { type: 'string' },
+    cityCircle: { type: 'string', nullable: true },
+    // #18863 : les adresses personnelles servies au cercle choisi par chacune (`withServedAddresses`) ;
+    // absent quand rien n'est servi. `circle` ne part qu'à leur propriétaire.
+    addresses: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          title: { type: 'string' },
+          url: { type: 'string' },
+          glyph: { type: 'string' },
+          trackedPath: { type: 'string' },
+          circle: { type: 'string' },
+        },
+      },
+    },
     // #10632 / #10932 : le contour d'avatar, la bannière de design et le cadre de bannière ÉQUIPÉS (additif).
     profileDecor: servedProfileDecorJsonSchema,
   },
@@ -163,6 +186,10 @@ export const publicUserSelect = {
   // cercle, préférences de la cible et désactivation compris.
   registrationCountry: true,
   timezone: true,
+  // #18862 : chargés, jamais servis tels quels — `withServedCity` décide de la ville
+  // selon le cercle choisi, et le réglage ne part qu'à son propriétaire.
+  city: true,
+  cityCircle: true,
   // #10632 : chargés, jamais servis tels quels — `buildPublicProfile` les
   // compose en `profileDecor` et RETIRE les colonnes brutes.
   equippedAvatarRing: true,
@@ -206,6 +233,9 @@ export const publicProfilePlan: ColumnPlan<typeof publicUserSelect> = {
     isMeeshyer: [],
     registrationCountry: ['registrationCountry'],
     timezone: ['timezone'],
+    city: ['city', 'cityCircle'],
+    cityCircle: ['cityCircle'],
+    addresses: [],
     profileDecor: ['equippedAvatarRing', 'equippedBanner', 'equippedBannerFrame'],
   },
 };
@@ -307,7 +337,23 @@ export async function servirProfilPublic(
     return null;
   }
 
-  // Garder D'ABORD, composer ensuite : la garde lit `isOnline`,
-  // `lastActiveAt` et `deactivatedAt` sur la ligne chargée.
-  return buildPublicProfile(await gateProfilePresence(fastify, request, user)) as unknown as Record<string, unknown>;
+  return (await composePublicProfile(fastify, request, user, fields)) as unknown as Record<string, unknown>;
+}
+
+/**
+ * La ligne chargée par `publicUserSelect` devient la fiche SERVIE à ce lecteur — le site UNIQUE
+ * des portes de profil (fiche, `/users/email/:email`, `/users/phone/:phone`).
+ *
+ * Garder D'ABORD, composer ensuite : la garde de présence lit `isOnline`, `lastActiveAt` et
+ * `deactivatedAt` sur la ligne chargée, puis la ville suit le cercle choisi par son propriétaire
+ * (#18862). Une porte qui composerait sans ce site servirait `city` et `cityCircle` bruts : le
+ * `select` les charge et `publicProfileSchema` les déclare.
+ */
+export async function composePublicProfile<
+  T extends Parameters<typeof gateProfilePresence>[2] & { id: string; city?: string | null; cityCircle?: string | null; voiceModel?: VoiceModelFields | null },
+>(fastify: FastifyInstance, request: FastifyRequest, user: T, fields: FieldSet = null) {
+  const gated = await gateProfilePresence(fastify, request, user);
+  const withCity = await withServedCity(fastify, request, gated);
+  const composed = isFieldServed(fields, 'addresses') ? await withServedAddresses(fastify, request, withCity) : withCity;
+  return buildPublicProfile(composed);
 }

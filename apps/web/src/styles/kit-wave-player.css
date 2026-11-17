@@ -1,0 +1,198 @@
+/* LE LECTEUR D'ONDE (K35, #18875) — un disque, une onde, une durée, sur une ligne. Le disque
+   est plein à la teinte, le glyphe sombre ; les barres jouées ont la teinte entière, les
+   à-venir 30 %. Aucun verre, ni flou ni ombre : le lecteur se pose sur la surface de
+   l'hôte. Chaque mesure vient de `meeshy-wave-player-recipe.ts`, posée en propriétés
+   `--kit-wave-*`. Seules `transform` et `opacity` s'animent ; les barres ne respirent que
+   pendant la lecture, et jamais sous « réduire les animations ». */
+@layer components {
+  .kit-wave {
+    --kit-wave-ink: var(--kit-wave-tint, var(--accent, var(--color-ios-brand)));
+    display: block;
+    box-sizing: border-box;
+    min-inline-size: 0;
+  }
+
+  .kit-wave__row {
+    display: flex;
+    align-items: center;
+    gap: var(--kit-wave-gap);
+    min-block-size: var(--kit-wave-height);
+  }
+
+  .kit-wave__disc {
+    position: relative;
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--kit-wave-disc);
+    block-size: var(--kit-wave-disc);
+    min-inline-size: var(--kit-wave-target);
+    min-block-size: var(--kit-wave-target);
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background-color: var(--kit-wave-ink);
+    color: var(--ios-indigo-950);
+    cursor: pointer;
+    opacity: var(--kit-wave-disc-opacity);
+    transition: transform 120ms var(--motion-pulse), opacity var(--motion-reduced-duration) var(--motion-reduced);
+  }
+
+  .kit-wave__disc svg {
+    inline-size: var(--kit-wave-glyph);
+    block-size: var(--kit-wave-glyph);
+  }
+
+  .kit-wave__disc:active:not([aria-disabled='true']) {
+    transform: scale(var(--kit-wave-pressed));
+  }
+
+  .kit-wave__disc[aria-disabled='true'] {
+    cursor: default;
+  }
+
+  .kit-wave__disc:focus-visible,
+  .kit-wave__zone:focus-visible {
+    outline: 2px solid var(--kit-wave-ink);
+    outline-offset: 3px;
+  }
+
+  .kit-wave__ring {
+    position: absolute;
+    inset: -4px;
+    border: 2px solid transparent;
+    border-block-start-color: var(--kit-wave-ink);
+    border-radius: 50%;
+    animation: kit-wave-spin 900ms linear infinite;
+  }
+
+  .kit-wave__lane {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 4px;
+    min-inline-size: 0;
+  }
+
+  .kit-wave__zone {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-block-size: var(--kit-wave-zone);
+    touch-action: pan-y;
+    cursor: default;
+  }
+
+  .kit-wave__zone[role='slider'] {
+    cursor: pointer;
+  }
+
+  .kit-wave__bars {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--kit-wave-bar-gap);
+    block-size: var(--kit-wave-wave);
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  .kit-wave__bar {
+    flex: none;
+    inline-size: var(--kit-wave-bar);
+    block-size: var(--kit-wave-bar-h);
+    border-radius: 2px;
+    background-color: color-mix(in srgb, var(--kit-wave-ink) 30%, transparent);
+  }
+
+  .kit-wave__bar[data-played] {
+    background-color: var(--kit-wave-ink);
+  }
+
+  .kit-wave__bars[data-live] .kit-wave__bar {
+    animation: kit-wave-breathe 1100ms ease-in-out infinite;
+    animation-delay: calc(var(--kit-wave-phase) * 0.4s);
+  }
+
+  .kit-wave__zone[data-scrubbing] .kit-wave__bars {
+    transform: scaleY(1.12);
+  }
+
+  .kit-wave__marker {
+    position: absolute;
+    inset-block: -6px;
+    inline-size: 3px;
+    border-radius: 2px;
+    background-color: var(--color-ios-ink);
+    pointer-events: none;
+  }
+
+  .kit-wave__time {
+    position: absolute;
+    inset-block-end: 100%;
+    inset-inline-start: 50%;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background-color: var(--color-ios-card);
+    color: var(--color-ios-ink);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    transform: translateX(-50%);
+  }
+
+  .kit-wave__caption {
+    font-size: 12px;
+    color: var(--color-ios-ink-2);
+  }
+
+  .kit-wave__clock {
+    flex: none;
+    min-inline-size: var(--kit-wave-clock);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    text-align: end;
+    color: var(--color-ios-ink);
+  }
+
+  .kit-wave__trailing {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+  }
+
+  .kit-wave[data-phase='unavailable'] .kit-wave__bar {
+    background-color: var(--color-ios-fill);
+  }
+}
+
+@keyframes kit-wave-breathe {
+  0%,
+  100% {
+    transform: scaleY(0.62);
+  }
+
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes kit-wave-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kit-wave__bars[data-live] .kit-wave__bar,
+  .kit-wave__ring {
+    animation: none;
+  }
+
+  .kit-wave__disc {
+    transition: none;
+  }
+}

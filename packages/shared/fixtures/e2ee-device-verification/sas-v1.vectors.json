@@ -1,0 +1,3278 @@
+{
+  "_doc": "Vérification d’un appareil par code court (spec 2026-11-17, v3, § 4 et § 8). Généré par packages/shared/scripts/generate-device-verification-vectors.mjs — oracle node:crypto, contre-vérifié par WebCrypto et par HKDF recomposé sur HMAC ; RFC 5869 A.1 et A.3 rejoués d’abord. Clés de TEST.",
+  "protocol": "meeshy-device-verification:v1",
+  "primitives": {
+    "commitment": "C = SHA-256( LP(utf8(\"meeshy-device-verification:v1|commitment\")) ‖ LP(tx) ‖ LP(enc(I)) ‖ LP(nonce_I) )",
+    "transcript": "T = LP(utf8(\"meeshy-device-verification:v1|transcript\")) ‖ LP(tx) ‖ LP(enc(I)) ‖ LP(enc(R)) ‖ LP(C)",
+    "hkdf": "OKM = HKDF-SHA-256(IKM = nonce_I ‖ nonce_R, salt = 32 octets nuls (≡ sel vide), info = utf8(\"meeshy-device-verification:v1|sas\") ‖ SHA-256(T), L = 8)",
+    "code": "les 6 premiers octets de OKM (inchangés depuis la v1 de la spec : L = 8 ne change pas le préfixe)",
+    "ack": "l’accusé : les octets 6 et 7 de OKM",
+    "descriptor": "enc(X) = LP(ascii(userId en minuscules, tel que reçu)) ‖ u32(deviceId) ‖ u32(registrationId) ‖ LP(identityKey 33 o) ‖ LP(utf8(platform)) ‖ LP(utf8(label, ou \"\" si le champ est omis))",
+    "lp": "LP(b) = u32 grand-boutien(longueur de b) ‖ b",
+    "emoji": "code : 42 premiers bits, 7 groupes de 6 bits poids fort d’abord → sas-emoji-v1.json ; accusé : (A0 >> 2), ((A0 & 3) << 4 | A1 >> 4)",
+    "decimal": "code : (B0<<5|B1>>3)+1000, ((B1&7)<<10|B2<<2|B3>>6)+1000, ((B3&63)<<7|B4>>1)+1000 ; accusé : (A0<<5|A1>>3)+1000",
+    "options": "carré (§ 4.9) : bit 1 = positions {0,1} (code) ou {0} (accusé), bit 2 = {3,5} ou {1}. Ordre de lecture du flux d’octets du générateur sûr : pour chaque position du bit 1, puis du bit 2, par ordre croissant, le premier octet b < 252 (un octet ≥ 252 est sauté, et le suivant lu), autre symbole a_p = (s_p + 1 + b mod 63) mod 64 ; puis le premier octet b < 240, perm = permutation n° (b mod 24) de [0,1,2,3] dans l’ordre lexicographique. options[0] = le vrai, options[1] = bit 1 changé, options[2] = bit 2 changé, options[3] = les deux ; écran[i] = options[perm[i]] ; le vrai est en position perm.indexOf(0)",
+    "sizes": {
+      "txBytes": 16,
+      "nonceBytes": 32,
+      "commitmentBytes": 32,
+      "codeBytes": 6,
+      "ackBytes": 2,
+      "okmBytes": 8
+    },
+    "base64": "RFC 4648 § 4, avec remplissage, canonique (décodé puis réencodé, identique ; sinon refus)",
+    "label": "scalaires Unicode bien formés, NFC, sans caractère de contrôle, 1 à 64 unités UTF-16 ; absent = champ omis ; \"\" refusé"
+  },
+  "rfc5869": [
+    {
+      "name": "rfc5869-A.1",
+      "ikm": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+      "salt": "000102030405060708090a0b0c",
+      "info": "f0f1f2f3f4f5f6f7f8f9",
+      "length": 42,
+      "okm": "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
+    },
+    {
+      "name": "rfc5869-A.3",
+      "ikm": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+      "salt": "",
+      "info": "",
+      "length": 42,
+      "okm": "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d9d201395faa4b61a96c8"
+    }
+  ],
+  "vectors": [
+    {
+      "name": "ios-nouveau-android-approuve",
+      "input": {
+        "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+          "deviceId": 2,
+          "registrationId": 9054,
+          "platform": "android",
+          "label": "Pixel 8"
+        },
+        "initiatorNonce": "13vRSr/ImbfoGL9yPZZNukWf0MEbsYAlyRDNxyUe3e0=",
+        "responderNonce": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvaw="
+      },
+      "expected": {
+        "initiatorDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000010000107300000021053ac699c7df984684a3db73930d0720993b2313f8b7d583643a6f48a46969c66b00000003696f730000000e6950686f6e65206465205a6fc3a9",
+        "responderDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000020000235e0000002105b102e6ce79f4cea8c80ac8dd74afe66208eb5de5f859930667e9cba4cac7ec7700000007616e64726f696400000007506978656c2038",
+        "commitment": "GkC3ozQLweKVHnDTvaLb2Hc47zIHyCzSsRhkL2KAIgs=",
+        "transcriptSha256Hex": "ab559894333f879418e2e11cd42d21deb072f6e96edf39b8865ece05677f26e1",
+        "hkdfOutputHex": "9780485edff4754c",
+        "sasBytesHex": "9780485edff4",
+        "emojiIndexes": [
+          37,
+          56,
+          1,
+          8,
+          23,
+          45,
+          63
+        ],
+        "emoji": [
+          "☂️",
+          "⚽",
+          "🐱",
+          "🐼",
+          "🍌",
+          "✂️",
+          "📌"
+        ],
+        "emojiNames": {
+          "fr": [
+            "Parapluie",
+            "Ballon",
+            "Chat",
+            "Panda",
+            "Banane",
+            "Ciseaux",
+            "Punaise"
+          ],
+          "en": [
+            "Umbrella",
+            "Ball",
+            "Cat",
+            "Panda",
+            "Banana",
+            "Scissors",
+            "Pin"
+          ],
+          "es": [
+            "Paraguas",
+            "Bola",
+            "Gato",
+            "Panda",
+            "Plátano",
+            "Tijeras",
+            "Alfiler"
+          ],
+          "de": [
+            "Regenschirm",
+            "Ball",
+            "Katze",
+            "Panda",
+            "Banane",
+            "Schere",
+            "Stecknadel"
+          ],
+          "it": [
+            "Ombrello",
+            "Palla",
+            "Gatto",
+            "Panda",
+            "Banana",
+            "Forbici",
+            "Puntina"
+          ],
+          "pt-BR": [
+            "Guarda-chuva",
+            "Bola",
+            "Gato",
+            "Panda",
+            "Banana",
+            "Tesoura",
+            "Alfinete"
+          ],
+          "ar": [
+            "مِظَلَّة",
+            "كُرَة",
+            "هِرَّة",
+            "باندَا",
+            "مَوزَة",
+            "مِقَصّ",
+            "دَبُّوس"
+          ]
+        },
+        "decimal": [
+          5848,
+          1289,
+          4951
+        ],
+        "ack": {
+          "bytesHex": "754c",
+          "emojiIndexes": [
+            29,
+            20
+          ],
+          "emoji": [
+            "❤️",
+            "🌙"
+          ],
+          "emojiNames": {
+            "fr": [
+              "Cœur",
+              "Lune"
+            ],
+            "en": [
+              "Heart",
+              "Moon"
+            ],
+            "es": [
+              "Corazón",
+              "Luna"
+            ],
+            "de": [
+              "Herz",
+              "Mond"
+            ],
+            "it": [
+              "Cuore",
+              "Luna"
+            ],
+            "pt-BR": [
+              "Coração",
+              "Lua"
+            ],
+            "ar": [
+              "قَلب",
+              "قَمَر"
+            ]
+          },
+          "decimal": 4753
+        }
+      },
+      "wire": {
+        "request": {
+          "v": 1,
+          "type": "request",
+          "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+          "from": {
+            "userId": "6745a1b2c3d4e5f601234567",
+            "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+            "deviceId": 1,
+            "registrationId": 4211,
+            "platform": "ios",
+            "label": "iPhone de Zoé"
+          },
+          "commitment": "GkC3ozQLweKVHnDTvaLb2Hc47zIHyCzSsRhkL2KAIgs=",
+          "methods": [
+            "emoji",
+            "decimal"
+          ]
+        },
+        "accept": {
+          "v": 1,
+          "type": "accept",
+          "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+          "from": {
+            "userId": "6745a1b2c3d4e5f601234567",
+            "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+            "deviceId": 2,
+            "registrationId": 9054,
+            "platform": "android",
+            "label": "Pixel 8"
+          },
+          "nonce": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvaw=",
+          "method": "emoji"
+        },
+        "reveal": {
+          "v": 1,
+          "type": "reveal",
+          "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+          "nonce": "13vRSr/ImbfoGL9yPZZNukWf0MEbsYAlyRDNxyUe3e0="
+        },
+        "relayed": {
+          "relayedFrom": {
+            "deviceId": 1,
+            "registrationId": 4211
+          },
+          "message": "<request ci-dessus>"
+        }
+      }
+    },
+    {
+      "name": "web-nouveau-ios-approuve",
+      "input": {
+        "tx": "3Eky5bDwnxg1SYs6VzPt/w==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR",
+          "deviceId": 3,
+          "registrationId": 15022,
+          "platform": "web",
+          "label": "Navigateur — Mac de Zoé"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        },
+        "initiatorNonce": "dTNf5ZEZk8IKdRxihvnGoTT/YO1cvQ/9x9z2suYxYYU=",
+        "responderNonce": "Te+pbIPcNrlmUi6htXiJibmk1nW3cyTcWPZ8J1C+wb4="
+      },
+      "expected": {
+        "initiatorDescriptorHex": "000000183637343561316232633364346535663630313233343536370000000300003aae0000002105bc61bb0751ea3b1c1619a345dfbd5393fa2a59b2e696387c0ce58f355f17c411000000037765620000001a4e61766967617465757220e28094204d6163206465205a6fc3a9",
+        "responderDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000010000107300000021053ac699c7df984684a3db73930d0720993b2313f8b7d583643a6f48a46969c66b00000003696f730000000e6950686f6e65206465205a6fc3a9",
+        "commitment": "9izLQlNWrMxrckk0MTnPmuiG9ZPUSQGn0/rrlB9D7Ss=",
+        "transcriptSha256Hex": "f560934215c3f0f3630de9811f4842f9df97094d71c0a4cea43600e014fed6d0",
+        "hkdfOutputHex": "9b244f18549fc32f",
+        "sasBytesHex": "9b244f18549f",
+        "emojiIndexes": [
+          38,
+          50,
+          17,
+          15,
+          6,
+          5,
+          18
+        ],
+        "emoji": [
+          "⌛",
+          "🏁",
+          "🌵",
+          "🌷",
+          "🐘",
+          "🐷",
+          "🍄"
+        ],
+        "emojiNames": {
+          "fr": [
+            "Sablier",
+            "Drapeau",
+            "Cactus",
+            "Fleur",
+            "Éléphant",
+            "Cochon",
+            "Champignon"
+          ],
+          "en": [
+            "Hourglass",
+            "Flag",
+            "Cactus",
+            "Flower",
+            "Elephant",
+            "Pig",
+            "Mushroom"
+          ],
+          "es": [
+            "Reloj de arena",
+            "Bandera",
+            "Cactus",
+            "Flor",
+            "Elefante",
+            "Cerdo",
+            "Seta"
+          ],
+          "de": [
+            "Sanduhr",
+            "Flagge",
+            "Kaktus",
+            "Blume",
+            "Elefant",
+            "Schwein",
+            "Pilz"
+          ],
+          "it": [
+            "Clessidra",
+            "Bandiera",
+            "Cactus",
+            "Fiore",
+            "Elefante",
+            "Maiale",
+            "Fungo"
+          ],
+          "pt-BR": [
+            "Ampulheta",
+            "Bandeira",
+            "Cacto",
+            "Flor",
+            "Elefante",
+            "Porco",
+            "Cogumelo"
+          ],
+          "ar": [
+            "سَاعَةٌ رَملِيَّة",
+            "عَلَم",
+            "صبار",
+            "زَهرَة",
+            "فِيل",
+            "خِنزِير",
+            "فُطر"
+          ]
+        },
+        "decimal": [
+          5964,
+          5412,
+          4114
+        ],
+        "ack": {
+          "bytesHex": "c32f",
+          "emojiIndexes": [
+            48,
+            50
+          ],
+          "emoji": [
+            "🔨",
+            "🏁"
+          ],
+          "emojiNames": {
+            "fr": [
+              "Marteau",
+              "Drapeau"
+            ],
+            "en": [
+              "Hammer",
+              "Flag"
+            ],
+            "es": [
+              "Martillo",
+              "Bandera"
+            ],
+            "de": [
+              "Hammer",
+              "Flagge"
+            ],
+            "it": [
+              "Martello",
+              "Bandiera"
+            ],
+            "pt-BR": [
+              "Martelo",
+              "Bandeira"
+            ],
+            "ar": [
+              "مِطرَقَة",
+              "عَلَم"
+            ]
+          },
+          "decimal": 7245
+        }
+      },
+      "wire": {
+        "request": {
+          "v": 1,
+          "type": "request",
+          "tx": "3Eky5bDwnxg1SYs6VzPt/w==",
+          "from": {
+            "userId": "6745a1b2c3d4e5f601234567",
+            "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR",
+            "deviceId": 3,
+            "registrationId": 15022,
+            "platform": "web",
+            "label": "Navigateur — Mac de Zoé"
+          },
+          "commitment": "9izLQlNWrMxrckk0MTnPmuiG9ZPUSQGn0/rrlB9D7Ss=",
+          "methods": [
+            "emoji",
+            "decimal"
+          ]
+        },
+        "accept": {
+          "v": 1,
+          "type": "accept",
+          "tx": "3Eky5bDwnxg1SYs6VzPt/w==",
+          "from": {
+            "userId": "6745a1b2c3d4e5f601234567",
+            "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+            "deviceId": 1,
+            "registrationId": 4211,
+            "platform": "ios",
+            "label": "iPhone de Zoé"
+          },
+          "nonce": "Te+pbIPcNrlmUi6htXiJibmk1nW3cyTcWPZ8J1C+wb4=",
+          "method": "emoji"
+        },
+        "reveal": {
+          "v": 1,
+          "type": "reveal",
+          "tx": "3Eky5bDwnxg1SYs6VzPt/w==",
+          "nonce": "dTNf5ZEZk8IKdRxihvnGoTT/YO1cvQ/9x9z2suYxYYU="
+        },
+        "relayed": {
+          "relayedFrom": {
+            "deviceId": 3,
+            "registrationId": 15022
+          },
+          "message": "<request ci-dessus>"
+        }
+      }
+    },
+    {
+      "name": "android-nouveau-web-approuve",
+      "input": {
+        "tx": "c9gYerBiySHjKXDypRmXFw==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+          "deviceId": 2,
+          "registrationId": 9054,
+          "platform": "android",
+          "label": "Pixel 8"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR",
+          "deviceId": 3,
+          "registrationId": 15022,
+          "platform": "web",
+          "label": "Navigateur — Mac de Zoé"
+        },
+        "initiatorNonce": "BB+kgQ4SXN2RpTRXYfzAQC8c5V/FFcCGjGABrPnNp+k=",
+        "responderNonce": "1wpLsqohh6pZz5flcmIVckRdIaxEpOmx3ZYk3sbYav0="
+      },
+      "expected": {
+        "initiatorDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000020000235e0000002105b102e6ce79f4cea8c80ac8dd74afe66208eb5de5f859930667e9cba4cac7ec7700000007616e64726f696400000007506978656c2038",
+        "responderDescriptorHex": "000000183637343561316232633364346535663630313233343536370000000300003aae0000002105bc61bb0751ea3b1c1619a345dfbd5393fa2a59b2e696387c0ce58f355f17c411000000037765620000001a4e61766967617465757220e28094204d6163206465205a6fc3a9",
+        "commitment": "rRkGSORRm09bMBKmYE7etOmud3D97cUQQ8BX/hceoXw=",
+        "transcriptSha256Hex": "64620a2b02bd526056e2ad23428cbe83d302f1f8652d6c010d7d0f2c1a6f8522",
+        "hkdfOutputHex": "9dc4da3f0181e2dc",
+        "sasBytesHex": "9dc4da3f0181",
+        "emojiIndexes": [
+          39,
+          28,
+          19,
+          26,
+          15,
+          48,
+          6
+        ],
+        "emoji": [
+          "⏰",
+          "🎂",
+          "🌏",
+          "🌽",
+          "🌷",
+          "🔨",
+          "🐘"
+        ],
+        "emojiNames": {
+          "fr": [
+            "Réveil",
+            "Gâteau",
+            "Globe",
+            "Maïs",
+            "Fleur",
+            "Marteau",
+            "Éléphant"
+          ],
+          "en": [
+            "Clock",
+            "Cake",
+            "Globe",
+            "Corn",
+            "Flower",
+            "Hammer",
+            "Elephant"
+          ],
+          "es": [
+            "Reloj",
+            "Tarta",
+            "Globo",
+            "Maíz",
+            "Flor",
+            "Martillo",
+            "Elefante"
+          ],
+          "de": [
+            "Uhr",
+            "Kuchen",
+            "Globus",
+            "Mais",
+            "Blume",
+            "Hammer",
+            "Elefant"
+          ],
+          "it": [
+            "Orologio",
+            "Torta",
+            "Globo",
+            "Mais",
+            "Fiore",
+            "Martello",
+            "Elefante"
+          ],
+          "pt-BR": [
+            "Relógio",
+            "Bolo",
+            "Globo",
+            "Milho",
+            "Flor",
+            "Martelo",
+            "Elefante"
+          ],
+          "ar": [
+            "سَاعَة",
+            "كَعكَة",
+            "كُرَةٌ أرضِيَّة",
+            "ذُرَة",
+            "زَهرَة",
+            "مِطرَقَة",
+            "فِيل"
+          ]
+        },
+        "decimal": [
+          6048,
+          5968,
+          9064
+        ],
+        "ack": {
+          "bytesHex": "e2dc",
+          "emojiIndexes": [
+            56,
+            45
+          ],
+          "emoji": [
+            "⚽",
+            "✂️"
+          ],
+          "emojiNames": {
+            "fr": [
+              "Ballon",
+              "Ciseaux"
+            ],
+            "en": [
+              "Ball",
+              "Scissors"
+            ],
+            "es": [
+              "Bola",
+              "Tijeras"
+            ],
+            "de": [
+              "Ball",
+              "Schere"
+            ],
+            "it": [
+              "Palla",
+              "Forbici"
+            ],
+            "pt-BR": [
+              "Bola",
+              "Tesoura"
+            ],
+            "ar": [
+              "كُرَة",
+              "مِقَصّ"
+            ]
+          },
+          "decimal": 8259
+        }
+      },
+      "wire": {
+        "request": {
+          "v": 1,
+          "type": "request",
+          "tx": "c9gYerBiySHjKXDypRmXFw==",
+          "from": {
+            "userId": "6745a1b2c3d4e5f601234567",
+            "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+            "deviceId": 2,
+            "registrationId": 9054,
+            "platform": "android",
+            "label": "Pixel 8"
+          },
+          "commitment": "rRkGSORRm09bMBKmYE7etOmud3D97cUQQ8BX/hceoXw=",
+          "methods": [
+            "emoji",
+            "decimal"
+          ]
+        },
+        "accept": {
+          "v": 1,
+          "type": "accept",
+          "tx": "c9gYerBiySHjKXDypRmXFw==",
+          "from": {
+            "userId": "6745a1b2c3d4e5f601234567",
+            "identityKey": "BbxhuwdR6jscFhmjRd+9U5P6Klmy5pY4fAzljzVfF8QR",
+            "deviceId": 3,
+            "registrationId": 15022,
+            "platform": "web",
+            "label": "Navigateur — Mac de Zoé"
+          },
+          "nonce": "1wpLsqohh6pZz5flcmIVckRdIaxEpOmx3ZYk3sbYav0=",
+          "method": "emoji"
+        },
+        "reveal": {
+          "v": 1,
+          "type": "reveal",
+          "tx": "c9gYerBiySHjKXDypRmXFw==",
+          "nonce": "BB+kgQ4SXN2RpTRXYfzAQC8c5V/FFcCGjGABrPnNp+k="
+        },
+        "relayed": {
+          "relayedFrom": {
+            "deviceId": 2,
+            "registrationId": 9054
+          },
+          "message": "<request ci-dessus>"
+        }
+      }
+    },
+    {
+      "name": "ipad-sans-libelle-ios-approuve",
+      "input": {
+        "tx": "gHi+GrG1EwkwCn9bb23DMQ==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo",
+          "deviceId": 4,
+          "registrationId": 1,
+          "platform": "ios"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        },
+        "initiatorNonce": "AdPqVPqatOi1tPpBXSsc5SD/QC+M0UVGV6kwdVPomxw=",
+        "responderNonce": "vsPdqfsulqrQ9fYLsVuu9jsUdwYuuVc969uixL1Z3LY="
+      },
+      "expected": {
+        "initiatorDescriptorHex": "000000183637343561316232633364346535663630313233343536370000000400000001000000210562024fc8f2a51ac98a165ba3d518821ee8059a9c4a85bce864af523934cc756800000003696f7300000000",
+        "responderDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000010000107300000021053ac699c7df984684a3db73930d0720993b2313f8b7d583643a6f48a46969c66b00000003696f730000000e6950686f6e65206465205a6fc3a9",
+        "commitment": "Kb1IR4t50mURFVY1+PlLlGeUrOPwyGyZC1b1o6GIrkc=",
+        "transcriptSha256Hex": "b961ad42ec5ba995bfa12226f996a7d3ac78dd12c187887b8612af8f6fe82a0e",
+        "hkdfOutputHex": "de830b801cdff19f",
+        "sasBytesHex": "de830b801cdf",
+        "emojiIndexes": [
+          55,
+          40,
+          12,
+          11,
+          32,
+          1,
+          51
+        ],
+        "emoji": [
+          "🏆",
+          "🎁",
+          "🐟",
+          "🐢",
+          "🎩",
+          "🐱",
+          "🚂"
+        ],
+        "emojiNames": {
+          "fr": [
+            "Trophée",
+            "Cadeau",
+            "Poisson",
+            "Tortue",
+            "Chapeau",
+            "Chat",
+            "Train"
+          ],
+          "en": [
+            "Trophy",
+            "Gift",
+            "Fish",
+            "Turtle",
+            "Hat",
+            "Cat",
+            "Train"
+          ],
+          "es": [
+            "Trofeo",
+            "Regalo",
+            "Pez",
+            "Tortuga",
+            "Sombrero",
+            "Gato",
+            "Tren"
+          ],
+          "de": [
+            "Pokal",
+            "Geschenk",
+            "Fisch",
+            "Schildkröte",
+            "Hut",
+            "Katze",
+            "Zug"
+          ],
+          "it": [
+            "Trofeo",
+            "Regalo",
+            "Pesce",
+            "Tartaruga",
+            "Cappello",
+            "Gatto",
+            "Treno"
+          ],
+          "pt-BR": [
+            "Troféu",
+            "Presente",
+            "Peixe",
+            "Tartaruga",
+            "Chapéu",
+            "Gato",
+            "Trem"
+          ],
+          "ar": [
+            "كَأسُ النَّصر",
+            "هَدِيَّة",
+            "سَمَكة",
+            "سُلحفاة",
+            "قُبَّعَة",
+            "هِرَّة",
+            "قِطَار"
+          ]
+        },
+        "decimal": [
+          8120,
+          4118,
+          1014
+        ],
+        "ack": {
+          "bytesHex": "f19f",
+          "emojiIndexes": [
+            60,
+            25
+          ],
+          "emoji": [
+            "⚓",
+            "🍓"
+          ],
+          "emojiNames": {
+            "fr": [
+              "Ancre",
+              "Fraise"
+            ],
+            "en": [
+              "Anchor",
+              "Strawberry"
+            ],
+            "es": [
+              "Ancla",
+              "Fresa"
+            ],
+            "de": [
+              "Anker",
+              "Erdbeere"
+            ],
+            "it": [
+              "Ancora",
+              "Fragola"
+            ],
+            "pt-BR": [
+              "Âncora",
+              "Morango"
+            ],
+            "ar": [
+              "مِرسَاة",
+              "فَراوِلَة"
+            ]
+          },
+          "decimal": 8731
+        }
+      },
+      "wire": {
+        "request": {
+          "v": 1,
+          "type": "request",
+          "tx": "gHi+GrG1EwkwCn9bb23DMQ==",
+          "from": {
+            "userId": "6745a1b2c3d4e5f601234567",
+            "identityKey": "BWICT8jypRrJihZbo9UYgh7oBZqcSoW86GSvUjk0zHVo",
+            "deviceId": 4,
+            "registrationId": 1,
+            "platform": "ios"
+          },
+          "commitment": "Kb1IR4t50mURFVY1+PlLlGeUrOPwyGyZC1b1o6GIrkc=",
+          "methods": [
+            "emoji",
+            "decimal"
+          ]
+        },
+        "accept": {
+          "v": 1,
+          "type": "accept",
+          "tx": "gHi+GrG1EwkwCn9bb23DMQ==",
+          "from": {
+            "userId": "6745a1b2c3d4e5f601234567",
+            "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+            "deviceId": 1,
+            "registrationId": 4211,
+            "platform": "ios",
+            "label": "iPhone de Zoé"
+          },
+          "nonce": "vsPdqfsulqrQ9fYLsVuu9jsUdwYuuVc969uixL1Z3LY=",
+          "method": "emoji"
+        },
+        "reveal": {
+          "v": 1,
+          "type": "reveal",
+          "tx": "gHi+GrG1EwkwCn9bb23DMQ==",
+          "nonce": "AdPqVPqatOi1tPpBXSsc5SD/QC+M0UVGV6kwdVPomxw="
+        },
+        "relayed": {
+          "relayedFrom": {
+            "deviceId": 4,
+            "registrationId": 1
+          },
+          "message": "<request ci-dessus>"
+        }
+      }
+    }
+  ],
+  "properties": [
+    {
+      "name": "libelle-entre-dans-le-code",
+      "input": {
+        "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "Support Meeshy"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+          "deviceId": 2,
+          "registrationId": 9054,
+          "platform": "android",
+          "label": "Pixel 8"
+        },
+        "initiatorNonce": "13vRSr/ImbfoGL9yPZZNukWf0MEbsYAlyRDNxyUe3e0=",
+        "responderNonce": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvaw="
+      },
+      "expected": {
+        "initiatorDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000010000107300000021053ac699c7df984684a3db73930d0720993b2313f8b7d583643a6f48a46969c66b00000003696f730000000e537570706f7274204d6565736879",
+        "responderDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000020000235e0000002105b102e6ce79f4cea8c80ac8dd74afe66208eb5de5f859930667e9cba4cac7ec7700000007616e64726f696400000007506978656c2038",
+        "commitment": "OvsVZPY5/zkR1vacQ4nBHzKXu/IfvWrD9YI0CUvmKY0=",
+        "transcriptSha256Hex": "ef638ed48dd9f2d73ae380dce65e136d2bec1d10eb6da545ab50e7aa380ec30d",
+        "hkdfOutputHex": "bef552b9449e7037",
+        "sasBytesHex": "bef552b9449e",
+        "emojiIndexes": [
+          47,
+          47,
+          21,
+          18,
+          46,
+          20,
+          18
+        ],
+        "emoji": [
+          "🔑",
+          "🔑",
+          "☁️",
+          "🍄",
+          "🔒",
+          "🌙",
+          "🍄"
+        ],
+        "emojiNames": {
+          "fr": [
+            "Clé",
+            "Clé",
+            "Nuage",
+            "Champignon",
+            "Cadenas",
+            "Lune",
+            "Champignon"
+          ],
+          "en": [
+            "Key",
+            "Key",
+            "Cloud",
+            "Mushroom",
+            "Lock",
+            "Moon",
+            "Mushroom"
+          ],
+          "es": [
+            "Llave",
+            "Llave",
+            "Nube",
+            "Seta",
+            "Candado",
+            "Luna",
+            "Seta"
+          ],
+          "de": [
+            "Schlüssel",
+            "Schlüssel",
+            "Wolke",
+            "Pilz",
+            "Schloss",
+            "Mond",
+            "Pilz"
+          ],
+          "it": [
+            "Chiave",
+            "Chiave",
+            "Nuvola",
+            "Fungo",
+            "Lucchetto",
+            "Luna",
+            "Fungo"
+          ],
+          "pt-BR": [
+            "Chave",
+            "Chave",
+            "Nuvem",
+            "Cogumelo",
+            "Cadeado",
+            "Lua",
+            "Cogumelo"
+          ],
+          "ar": [
+            "مِفتَاح",
+            "مِفتَاح",
+            "سَحابَة",
+            "فُطر",
+            "قُفل",
+            "قَمَر",
+            "فُطر"
+          ]
+        },
+        "decimal": [
+          7110,
+          6450,
+          8330
+        ],
+        "ack": {
+          "bytesHex": "7037",
+          "emojiIndexes": [
+            28,
+            3
+          ],
+          "emoji": [
+            "🎂",
+            "🐎"
+          ],
+          "emojiNames": {
+            "fr": [
+              "Gâteau",
+              "Cheval"
+            ],
+            "en": [
+              "Cake",
+              "Horse"
+            ],
+            "es": [
+              "Tarta",
+              "Caballo"
+            ],
+            "de": [
+              "Kuchen",
+              "Pferd"
+            ],
+            "it": [
+              "Torta",
+              "Cavallo"
+            ],
+            "pt-BR": [
+              "Bolo",
+              "Cavalo"
+            ],
+            "ar": [
+              "كَعكَة",
+              "حِصَان"
+            ]
+          },
+          "decimal": 4590
+        }
+      },
+      "mustDifferFrom": "ios-nouveau-android-approuve",
+      "outcome": "codes-differents"
+    },
+    {
+      "name": "inversion-des-roles",
+      "input": {
+        "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+          "deviceId": 2,
+          "registrationId": 9054,
+          "platform": "android",
+          "label": "Pixel 8"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        },
+        "initiatorNonce": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvaw=",
+        "responderNonce": "13vRSr/ImbfoGL9yPZZNukWf0MEbsYAlyRDNxyUe3e0="
+      },
+      "expected": {
+        "initiatorDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000020000235e0000002105b102e6ce79f4cea8c80ac8dd74afe66208eb5de5f859930667e9cba4cac7ec7700000007616e64726f696400000007506978656c2038",
+        "responderDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000010000107300000021053ac699c7df984684a3db73930d0720993b2313f8b7d583643a6f48a46969c66b00000003696f730000000e6950686f6e65206465205a6fc3a9",
+        "commitment": "CSwr80DSzgrXVllJEpsq+963uECPG1Laybz1rmuc0/M=",
+        "transcriptSha256Hex": "75bc8cf61d6ade7f2156d25965d000e235cf93f263d816b747375196b0d2039a",
+        "hkdfOutputHex": "02b3e9849433a5a5",
+        "sasBytesHex": "02b3e9849433",
+        "emojiIndexes": [
+          0,
+          43,
+          15,
+          41,
+          33,
+          9,
+          16
+        ],
+        "emoji": [
+          "🐶",
+          "✏️",
+          "🌷",
+          "💡",
+          "👓",
+          "🐓",
+          "🌳"
+        ],
+        "emojiNames": {
+          "fr": [
+            "Chien",
+            "Crayon",
+            "Fleur",
+            "Ampoule",
+            "Lunettes",
+            "Coq",
+            "Arbre"
+          ],
+          "en": [
+            "Dog",
+            "Pencil",
+            "Flower",
+            "Light Bulb",
+            "Glasses",
+            "Rooster",
+            "Tree"
+          ],
+          "es": [
+            "Perro",
+            "Lápiz",
+            "Flor",
+            "Bombilla",
+            "Gafas",
+            "Gallo",
+            "Árbol"
+          ],
+          "de": [
+            "Hund",
+            "Bleistift",
+            "Blume",
+            "Glühbirne",
+            "Brille",
+            "Hahn",
+            "Baum"
+          ],
+          "it": [
+            "Cane",
+            "Matita",
+            "Fiore",
+            "Lampadina",
+            "Occhiali",
+            "Gallo",
+            "Albero"
+          ],
+          "pt-BR": [
+            "Cachorro",
+            "Lápis",
+            "Flor",
+            "Lâmpada",
+            "Óculos",
+            "Galo",
+            "Árvore"
+          ],
+          "ar": [
+            "كلب",
+            "قَلَمُ رَصاص",
+            "زَهرَة",
+            "مِصبَاح",
+            "نَظَّارَة",
+            "دِيك",
+            "شَجَرَة"
+          ]
+        },
+        "decimal": [
+          1086,
+          5006,
+          1586
+        ],
+        "ack": {
+          "bytesHex": "a5a5",
+          "emojiIndexes": [
+            41,
+            26
+          ],
+          "emoji": [
+            "💡",
+            "🌽"
+          ],
+          "emojiNames": {
+            "fr": [
+              "Ampoule",
+              "Maïs"
+            ],
+            "en": [
+              "Light Bulb",
+              "Corn"
+            ],
+            "es": [
+              "Bombilla",
+              "Maíz"
+            ],
+            "de": [
+              "Glühbirne",
+              "Mais"
+            ],
+            "it": [
+              "Lampadina",
+              "Mais"
+            ],
+            "pt-BR": [
+              "Lâmpada",
+              "Milho"
+            ],
+            "ar": [
+              "مِصبَاح",
+              "ذُرَة"
+            ]
+          },
+          "decimal": 6300
+        }
+      },
+      "mustDifferFrom": "ios-nouveau-android-approuve",
+      "outcome": "codes-differents"
+    }
+  ],
+  "negatives": [
+    {
+      "name": "cle-du-repondeur-substituee",
+      "input": {
+        "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "Beu1ZTCAr7nsbL0StuIFX4uIqy/vhBzLmAbUFn03YA0a",
+          "deviceId": 2,
+          "registrationId": 9054,
+          "platform": "android",
+          "label": "Pixel 8"
+        },
+        "initiatorNonce": "13vRSr/ImbfoGL9yPZZNukWf0MEbsYAlyRDNxyUe3e0=",
+        "responderNonce": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvaw="
+      },
+      "expected": {
+        "initiatorDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000010000107300000021053ac699c7df984684a3db73930d0720993b2313f8b7d583643a6f48a46969c66b00000003696f730000000e6950686f6e65206465205a6fc3a9",
+        "responderDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000020000235e0000002105ebb5653080afb9ec6cbd12b6e2055f8b88ab2fef841ccb9806d4167d37600d1a00000007616e64726f696400000007506978656c2038",
+        "commitment": "GkC3ozQLweKVHnDTvaLb2Hc47zIHyCzSsRhkL2KAIgs=",
+        "transcriptSha256Hex": "8fc9ba4477fff722803d191ec4d2bf8fe65f593e74dfe9bce00b2710f91fc80f",
+        "hkdfOutputHex": "59262699baa30eb6",
+        "sasBytesHex": "59262699baa3",
+        "emojiIndexes": [
+          22,
+          18,
+          24,
+          38,
+          38,
+          27,
+          42
+        ],
+        "emoji": [
+          "🔥",
+          "🍄",
+          "🍎",
+          "⌛",
+          "⌛",
+          "🍕",
+          "📕"
+        ],
+        "emojiNames": {
+          "fr": [
+            "Feu",
+            "Champignon",
+            "Pomme",
+            "Sablier",
+            "Sablier",
+            "Pizza",
+            "Livre"
+          ],
+          "en": [
+            "Fire",
+            "Mushroom",
+            "Apple",
+            "Hourglass",
+            "Hourglass",
+            "Pizza",
+            "Book"
+          ],
+          "es": [
+            "Fuego",
+            "Seta",
+            "Manzana",
+            "Reloj de arena",
+            "Reloj de arena",
+            "Pizza",
+            "Libro"
+          ],
+          "de": [
+            "Feuer",
+            "Pilz",
+            "Apfel",
+            "Sanduhr",
+            "Sanduhr",
+            "Pizza",
+            "Buch"
+          ],
+          "it": [
+            "Fuoco",
+            "Fungo",
+            "Mela",
+            "Clessidra",
+            "Clessidra",
+            "Pizza",
+            "Libro"
+          ],
+          "pt-BR": [
+            "Fogo",
+            "Cogumelo",
+            "Maçã",
+            "Ampulheta",
+            "Ampulheta",
+            "Pizza",
+            "Livro"
+          ],
+          "ar": [
+            "نار",
+            "فُطر",
+            "تُفَّاحَة",
+            "سَاعَةٌ رَملِيَّة",
+            "سَاعَةٌ رَملِيَّة",
+            "بِيتزا",
+            "كِتَاب"
+          ]
+        },
+        "decimal": [
+          3852,
+          7298,
+          4293
+        ],
+        "ack": {
+          "bytesHex": "0eb6",
+          "emojiIndexes": [
+            3,
+            43
+          ],
+          "emoji": [
+            "🐎",
+            "✏️"
+          ],
+          "emojiNames": {
+            "fr": [
+              "Cheval",
+              "Crayon"
+            ],
+            "en": [
+              "Horse",
+              "Pencil"
+            ],
+            "es": [
+              "Caballo",
+              "Lápiz"
+            ],
+            "de": [
+              "Pferd",
+              "Bleistift"
+            ],
+            "it": [
+              "Cavallo",
+              "Matita"
+            ],
+            "pt-BR": [
+              "Cavalo",
+              "Lápis"
+            ],
+            "ar": [
+              "حِصَان",
+              "قَلَمُ رَصاص"
+            ]
+          },
+          "decimal": 1470
+        }
+      },
+      "mustDifferFrom": "ios-nouveau-android-approuve",
+      "outcome": "codes-differents"
+    },
+    {
+      "name": "userId-du-repondeur-substitue",
+      "input": {
+        "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234568",
+          "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+          "deviceId": 2,
+          "registrationId": 9054,
+          "platform": "android",
+          "label": "Pixel 8"
+        },
+        "initiatorNonce": "13vRSr/ImbfoGL9yPZZNukWf0MEbsYAlyRDNxyUe3e0=",
+        "responderNonce": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvaw="
+      },
+      "expected": {
+        "initiatorDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000010000107300000021053ac699c7df984684a3db73930d0720993b2313f8b7d583643a6f48a46969c66b00000003696f730000000e6950686f6e65206465205a6fc3a9",
+        "responderDescriptorHex": "00000018363734356131623263336434653566363031323334353638000000020000235e0000002105b102e6ce79f4cea8c80ac8dd74afe66208eb5de5f859930667e9cba4cac7ec7700000007616e64726f696400000007506978656c2038",
+        "commitment": "GkC3ozQLweKVHnDTvaLb2Hc47zIHyCzSsRhkL2KAIgs=",
+        "transcriptSha256Hex": "16e13975b60e7fbbb3ddbd3b672cd6dc9622db69ea0836aa907d3ead6ba3a829",
+        "hkdfOutputHex": "54b2a21a9b62679f",
+        "sasBytesHex": "54b2a21a9b62",
+        "emojiIndexes": [
+          21,
+          11,
+          10,
+          34,
+          6,
+          41,
+          45
+        ],
+        "emoji": [
+          "☁️",
+          "🐢",
+          "🐧",
+          "🔧",
+          "🐘",
+          "💡",
+          "✂️"
+        ],
+        "emojiNames": {
+          "fr": [
+            "Nuage",
+            "Tortue",
+            "Manchot",
+            "Clé à molette",
+            "Éléphant",
+            "Ampoule",
+            "Ciseaux"
+          ],
+          "en": [
+            "Cloud",
+            "Turtle",
+            "Penguin",
+            "Spanner",
+            "Elephant",
+            "Light Bulb",
+            "Scissors"
+          ],
+          "es": [
+            "Nube",
+            "Tortuga",
+            "Pingüino",
+            "Llave inglesa",
+            "Elefante",
+            "Bombilla",
+            "Tijeras"
+          ],
+          "de": [
+            "Wolke",
+            "Schildkröte",
+            "Pinguin",
+            "Schraubenschlüssel",
+            "Elefant",
+            "Glühbirne",
+            "Schere"
+          ],
+          "it": [
+            "Nuvola",
+            "Tartaruga",
+            "Pinguino",
+            "Chiave inglese",
+            "Elefante",
+            "Lampadina",
+            "Forbici"
+          ],
+          "pt-BR": [
+            "Nuvem",
+            "Tartaruga",
+            "Pinguim",
+            "Chave inglesa",
+            "Elefante",
+            "Lâmpada",
+            "Tesoura"
+          ],
+          "ar": [
+            "سَحابَة",
+            "سُلحفاة",
+            "بطريق",
+            "مِفتَاحُ رَبط",
+            "فِيل",
+            "مِصبَاح",
+            "مِقَصّ"
+          ]
+        },
+        "decimal": [
+          3710,
+          3696,
+          4405
+        ],
+        "ack": {
+          "bytesHex": "679f",
+          "emojiIndexes": [
+            25,
+            57
+          ],
+          "emoji": [
+            "🍓",
+            "🎸"
+          ],
+          "emojiNames": {
+            "fr": [
+              "Fraise",
+              "Guitare"
+            ],
+            "en": [
+              "Strawberry",
+              "Guitar"
+            ],
+            "es": [
+              "Fresa",
+              "Guitarra"
+            ],
+            "de": [
+              "Erdbeere",
+              "Gitarre"
+            ],
+            "it": [
+              "Fragola",
+              "Chitarra"
+            ],
+            "pt-BR": [
+              "Morango",
+              "Guitarra"
+            ],
+            "ar": [
+              "فَراوِلَة",
+              "غيتار"
+            ]
+          },
+          "decimal": 4315
+        }
+      },
+      "mustDifferFrom": "ios-nouveau-android-approuve",
+      "outcome": "codes-differents",
+      "note": "à la réception, un from.userId qui n’est pas mon compte est refusé AVANT tout code (refus:unexpected-message) ; le vecteur prouve en plus que le userId entre dans le code"
+    },
+    {
+      "name": "deviceId-du-repondeur-substitue",
+      "input": {
+        "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+          "deviceId": 6,
+          "registrationId": 9054,
+          "platform": "android",
+          "label": "Pixel 8"
+        },
+        "initiatorNonce": "13vRSr/ImbfoGL9yPZZNukWf0MEbsYAlyRDNxyUe3e0=",
+        "responderNonce": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvaw="
+      },
+      "expected": {
+        "initiatorDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000010000107300000021053ac699c7df984684a3db73930d0720993b2313f8b7d583643a6f48a46969c66b00000003696f730000000e6950686f6e65206465205a6fc3a9",
+        "responderDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000060000235e0000002105b102e6ce79f4cea8c80ac8dd74afe66208eb5de5f859930667e9cba4cac7ec7700000007616e64726f696400000007506978656c2038",
+        "commitment": "GkC3ozQLweKVHnDTvaLb2Hc47zIHyCzSsRhkL2KAIgs=",
+        "transcriptSha256Hex": "5e3513d258d69f2363568d343f367a04a45b9f869acaf60aa5e3272883e9d783",
+        "hkdfOutputHex": "d43f7b626a28f7f7",
+        "sasBytesHex": "d43f7b626a28",
+        "emojiIndexes": [
+          53,
+          3,
+          61,
+          59,
+          24,
+          38,
+          40
+        ],
+        "emoji": [
+          "✈️",
+          "🐎",
+          "🎧",
+          "🔔",
+          "🍎",
+          "⌛",
+          "🎁"
+        ],
+        "emojiNames": {
+          "fr": [
+            "Avion",
+            "Cheval",
+            "Casque audio",
+            "Cloche",
+            "Pomme",
+            "Sablier",
+            "Cadeau"
+          ],
+          "en": [
+            "Aeroplane",
+            "Horse",
+            "Headphones",
+            "Bell",
+            "Apple",
+            "Hourglass",
+            "Gift"
+          ],
+          "es": [
+            "Avión",
+            "Caballo",
+            "Cascos",
+            "Campana",
+            "Manzana",
+            "Reloj de arena",
+            "Regalo"
+          ],
+          "de": [
+            "Flugzeug",
+            "Pferd",
+            "Kopfhörer",
+            "Glocke",
+            "Apfel",
+            "Sanduhr",
+            "Geschenk"
+          ],
+          "it": [
+            "Aeroplano",
+            "Cavallo",
+            "Cuffie",
+            "Campana",
+            "Mela",
+            "Clessidra",
+            "Regalo"
+          ],
+          "pt-BR": [
+            "Avião",
+            "Cavalo",
+            "Fones de ouvido",
+            "Sino",
+            "Maçã",
+            "Ampulheta",
+            "Presente"
+          ],
+          "ar": [
+            "طَائِرة",
+            "حِصَان",
+            "سَمّاعَة رَأس",
+            "جَرَس",
+            "تُفَّاحَة",
+            "سَاعَةٌ رَملِيَّة",
+            "هَدِيَّة"
+          ]
+        },
+        "decimal": [
+          7791,
+          8661,
+          5405
+        ],
+        "ack": {
+          "bytesHex": "f7f7",
+          "emojiIndexes": [
+            61,
+            63
+          ],
+          "emoji": [
+            "🎧",
+            "📌"
+          ],
+          "emojiNames": {
+            "fr": [
+              "Casque audio",
+              "Punaise"
+            ],
+            "en": [
+              "Headphones",
+              "Pin"
+            ],
+            "es": [
+              "Cascos",
+              "Alfiler"
+            ],
+            "de": [
+              "Kopfhörer",
+              "Stecknadel"
+            ],
+            "it": [
+              "Cuffie",
+              "Puntina"
+            ],
+            "pt-BR": [
+              "Fones de ouvido",
+              "Alfinete"
+            ],
+            "ar": [
+              "سَمّاعَة رَأس",
+              "دَبُّوس"
+            ]
+          },
+          "decimal": 8934
+        }
+      },
+      "mustDifferFrom": "ios-nouveau-android-approuve",
+      "outcome": "codes-differents"
+    },
+    {
+      "name": "registrationId-du-repondeur-substitue",
+      "input": {
+        "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+          "deviceId": 2,
+          "registrationId": 9055,
+          "platform": "android",
+          "label": "Pixel 8"
+        },
+        "initiatorNonce": "13vRSr/ImbfoGL9yPZZNukWf0MEbsYAlyRDNxyUe3e0=",
+        "responderNonce": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvaw="
+      },
+      "expected": {
+        "initiatorDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000010000107300000021053ac699c7df984684a3db73930d0720993b2313f8b7d583643a6f48a46969c66b00000003696f730000000e6950686f6e65206465205a6fc3a9",
+        "responderDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000020000235f0000002105b102e6ce79f4cea8c80ac8dd74afe66208eb5de5f859930667e9cba4cac7ec7700000007616e64726f696400000007506978656c2038",
+        "commitment": "GkC3ozQLweKVHnDTvaLb2Hc47zIHyCzSsRhkL2KAIgs=",
+        "transcriptSha256Hex": "7df93b8acf351955334d0cb37b9545ef7817f66b04634b9364ed7b2891786d89",
+        "hkdfOutputHex": "0c6bdbc0b59d096e",
+        "sasBytesHex": "0c6bdbc0b59d",
+        "emojiIndexes": [
+          3,
+          6,
+          47,
+          27,
+          48,
+          11,
+          22
+        ],
+        "emoji": [
+          "🐎",
+          "🐘",
+          "🔑",
+          "🍕",
+          "🔨",
+          "🐢",
+          "🔥"
+        ],
+        "emojiNames": {
+          "fr": [
+            "Cheval",
+            "Éléphant",
+            "Clé",
+            "Pizza",
+            "Marteau",
+            "Tortue",
+            "Feu"
+          ],
+          "en": [
+            "Horse",
+            "Elephant",
+            "Key",
+            "Pizza",
+            "Hammer",
+            "Turtle",
+            "Fire"
+          ],
+          "es": [
+            "Caballo",
+            "Elefante",
+            "Llave",
+            "Pizza",
+            "Martillo",
+            "Tortuga",
+            "Fuego"
+          ],
+          "de": [
+            "Pferd",
+            "Elefant",
+            "Schlüssel",
+            "Pizza",
+            "Hammer",
+            "Schildkröte",
+            "Feuer"
+          ],
+          "it": [
+            "Cavallo",
+            "Elefante",
+            "Chiave",
+            "Pizza",
+            "Martello",
+            "Tartaruga",
+            "Fuoco"
+          ],
+          "pt-BR": [
+            "Cavalo",
+            "Elefante",
+            "Chave",
+            "Pizza",
+            "Martelo",
+            "Tartaruga",
+            "Fogo"
+          ],
+          "ar": [
+            "حِصَان",
+            "فِيل",
+            "مِفتَاح",
+            "بِيتزا",
+            "مِطرَقَة",
+            "سُلحفاة",
+            "نار"
+          ]
+        },
+        "decimal": [
+          1397,
+          4951,
+          1090
+        ],
+        "ack": {
+          "bytesHex": "096e",
+          "emojiIndexes": [
+            2,
+            22
+          ],
+          "emoji": [
+            "🦁",
+            "🔥"
+          ],
+          "emojiNames": {
+            "fr": [
+              "Lion",
+              "Feu"
+            ],
+            "en": [
+              "Lion",
+              "Fire"
+            ],
+            "es": [
+              "León",
+              "Fuego"
+            ],
+            "de": [
+              "Löwe",
+              "Feuer"
+            ],
+            "it": [
+              "Leone",
+              "Fuoco"
+            ],
+            "pt-BR": [
+              "Leão",
+              "Fogo"
+            ],
+            "ar": [
+              "أَسَد",
+              "نار"
+            ]
+          },
+          "decimal": 1301
+        }
+      },
+      "mustDifferFrom": "ios-nouveau-android-approuve",
+      "outcome": "codes-differents"
+    },
+    {
+      "name": "platform-du-repondeur-substituee",
+      "input": {
+        "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+          "deviceId": 2,
+          "registrationId": 9054,
+          "platform": "ios",
+          "label": "Pixel 8"
+        },
+        "initiatorNonce": "13vRSr/ImbfoGL9yPZZNukWf0MEbsYAlyRDNxyUe3e0=",
+        "responderNonce": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvaw="
+      },
+      "expected": {
+        "initiatorDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000010000107300000021053ac699c7df984684a3db73930d0720993b2313f8b7d583643a6f48a46969c66b00000003696f730000000e6950686f6e65206465205a6fc3a9",
+        "responderDescriptorHex": "00000018363734356131623263336434653566363031323334353637000000020000235e0000002105b102e6ce79f4cea8c80ac8dd74afe66208eb5de5f859930667e9cba4cac7ec7700000003696f7300000007506978656c2038",
+        "commitment": "GkC3ozQLweKVHnDTvaLb2Hc47zIHyCzSsRhkL2KAIgs=",
+        "transcriptSha256Hex": "7e4061616295a450d08ef638c4e0f8b7bf8758923d0f4e788e5e8e62d85682d5",
+        "hkdfOutputHex": "755cf8089a17ee6b",
+        "sasBytesHex": "755cf8089a17",
+        "emojiIndexes": [
+          29,
+          21,
+          51,
+          56,
+          2,
+          9,
+          40
+        ],
+        "emoji": [
+          "❤️",
+          "☁️",
+          "🚂",
+          "⚽",
+          "🦁",
+          "🐓",
+          "🎁"
+        ],
+        "emojiNames": {
+          "fr": [
+            "Cœur",
+            "Nuage",
+            "Train",
+            "Ballon",
+            "Lion",
+            "Coq",
+            "Cadeau"
+          ],
+          "en": [
+            "Heart",
+            "Cloud",
+            "Train",
+            "Ball",
+            "Lion",
+            "Rooster",
+            "Gift"
+          ],
+          "es": [
+            "Corazón",
+            "Nube",
+            "Tren",
+            "Bola",
+            "León",
+            "Gallo",
+            "Regalo"
+          ],
+          "de": [
+            "Herz",
+            "Wolke",
+            "Zug",
+            "Ball",
+            "Löwe",
+            "Hahn",
+            "Geschenk"
+          ],
+          "it": [
+            "Cuore",
+            "Nuvola",
+            "Treno",
+            "Palla",
+            "Leone",
+            "Gallo",
+            "Regalo"
+          ],
+          "pt-BR": [
+            "Coração",
+            "Nuvem",
+            "Trem",
+            "Bola",
+            "Leão",
+            "Galo",
+            "Presente"
+          ],
+          "ar": [
+            "قَلب",
+            "سَحابَة",
+            "قِطَار",
+            "كُرَة",
+            "أَسَد",
+            "دِيك",
+            "هَدِيَّة"
+          ]
+        },
+        "decimal": [
+          4755,
+          6088,
+          2101
+        ],
+        "ack": {
+          "bytesHex": "ee6b",
+          "emojiIndexes": [
+            59,
+            38
+          ],
+          "emoji": [
+            "🔔",
+            "⌛"
+          ],
+          "emojiNames": {
+            "fr": [
+              "Cloche",
+              "Sablier"
+            ],
+            "en": [
+              "Bell",
+              "Hourglass"
+            ],
+            "es": [
+              "Campana",
+              "Reloj de arena"
+            ],
+            "de": [
+              "Glocke",
+              "Sanduhr"
+            ],
+            "it": [
+              "Campana",
+              "Clessidra"
+            ],
+            "pt-BR": [
+              "Sino",
+              "Ampulheta"
+            ],
+            "ar": [
+              "جَرَس",
+              "سَاعَةٌ رَملِيَّة"
+            ]
+          },
+          "decimal": 8629
+        }
+      },
+      "mustDifferFrom": "ios-nouveau-android-approuve",
+      "outcome": "codes-differents"
+    },
+    {
+      "name": "libelle-altere-dans-request",
+      "input": {
+        "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+          "deviceId": 2,
+          "registrationId": 9054,
+          "platform": "android",
+          "label": "Pixel 8"
+        },
+        "initiatorNonce": "13vRSr/ImbfoGL9yPZZNukWf0MEbsYAlyRDNxyUe3e0=",
+        "responderNonce": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvaw=",
+        "receivedInitiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "Support Meeshy"
+        }
+      },
+      "expected": {
+        "commitment": "GkC3ozQLweKVHnDTvaLb2Hc47zIHyCzSsRhkL2KAIgs=",
+        "recomputedFromReceivedRequest": "OvsVZPY5/zkR1vacQ4nBHzKXu/IfvWrD9YI0CUvmKY0="
+      },
+      "outcome": "annuler:commitment-mismatch"
+    },
+    {
+      "name": "revelation-qui-n-ouvre-pas-l-engagement",
+      "input": {
+        "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+          "deviceId": 2,
+          "registrationId": 9054,
+          "platform": "android",
+          "label": "Pixel 8"
+        },
+        "initiatorNonce": "13vRSr/ImbfoGL9yPZZNukWf0MEbsYAlyRDNxyUe3e0=",
+        "responderNonce": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvaw=",
+        "revealedNonce": "p4R8sRrlK+VzcO9LG5bIo6CCngtmP3KEUoQAVUUS5vA="
+      },
+      "expected": {
+        "commitment": "GkC3ozQLweKVHnDTvaLb2Hc47zIHyCzSsRhkL2KAIgs=",
+        "recomputedFromReveal": "nylZF7Gtj7AdS998r7ZlPuRSmUcSunJwhdjCHlZlPSU="
+      },
+      "outcome": "annuler:commitment-mismatch"
+    },
+    {
+      "name": "engagement-rejoue-sous-un-autre-tx",
+      "input": {
+        "tx": "js9ZfbnKQkUsjRiSP4MDWw==",
+        "initiator": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        },
+        "responder": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BbEC5s559M6oyArI3XSv5mII613l+FmTBmfpy6TKx+x3",
+          "deviceId": 2,
+          "registrationId": 9054,
+          "platform": "android",
+          "label": "Pixel 8"
+        },
+        "initiatorNonce": "13vRSr/ImbfoGL9yPZZNukWf0MEbsYAlyRDNxyUe3e0=",
+        "responderNonce": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvaw=",
+        "replayedUnderTx": "sUlaclDyrisVtKtphr0r6A=="
+      },
+      "expected": {
+        "commitment": "GkC3ozQLweKVHnDTvaLb2Hc47zIHyCzSsRhkL2KAIgs=",
+        "recomputedUnderReplayedTx": "E7idmcl434uf+Ah5FYbs7j62ZGH6MBHWLITs5OIOmkc="
+      },
+      "outcome": "annuler:commitment-mismatch"
+    },
+    {
+      "name": "userId-majuscules-refuse",
+      "input": {
+        "from": {
+          "userId": "6745A1B2C3D4E5F601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        }
+      },
+      "expected": {
+        "refusedField": "userId"
+      },
+      "outcome": "refus:unexpected-message",
+      "note": "ex-vecteur 5 : le userId voyage en minuscules ; aucune normalisation"
+    },
+    {
+      "name": "cle-de-34-octets-refusee",
+      "input": {
+        "from": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZrAA==",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        }
+      },
+      "expected": {
+        "refusedField": "identityKey"
+      },
+      "outcome": "refus:unexpected-message"
+    },
+    {
+      "name": "cle-de-type-inconnu-refusee",
+      "input": {
+        "from": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BjrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        }
+      },
+      "expected": {
+        "refusedField": "identityKey"
+      },
+      "outcome": "refus:unexpected-message"
+    },
+    {
+      "name": "cle-en-base64-avec-blanc-refusee",
+      "input": {
+        "from": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJ\nk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        }
+      },
+      "expected": {
+        "refusedField": "identityKey"
+      },
+      "outcome": "refus:unexpected-message",
+      "note": "une clé de 33 octets n’a pas de bits de remplissage : ses formes non canoniques sont un blanc, un saut de ligne ou l’alphabet « url » ; certains décodeurs les acceptent, le protocole les refuse"
+    },
+    {
+      "name": "libelle-a-demi-paire-refuse",
+      "input": {
+        "from": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone \ud83d"
+        }
+      },
+      "expected": {
+        "refusedField": "label"
+      },
+      "outcome": "refus:unexpected-message",
+      "note": "un emoji coupé à 64 unités UTF-16 : TextEncoder écrirait EF BF BD, Java 3F, Swift refuse ; le client tronque sur une frontière de graphème"
+    },
+    {
+      "name": "libelle-vide-refuse",
+      "input": {
+        "from": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": ""
+        }
+      },
+      "expected": {
+        "refusedField": "label"
+      },
+      "outcome": "refus:unexpected-message",
+      "note": "un libellé vide s’écrit en OMETTANT le champ"
+    },
+    {
+      "name": "libelle-non-nfc-refuse",
+      "input": {
+        "from": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "ios",
+          "label": "iPhone de Zoé"
+        }
+      },
+      "expected": {
+        "refusedField": "label"
+      },
+      "outcome": "refus:unexpected-message"
+    },
+    {
+      "name": "plateforme-inconnue-refusee",
+      "input": {
+        "from": {
+          "userId": "6745a1b2c3d4e5f601234567",
+          "identityKey": "BTrGmcffmEaEo9tzkw0HIJk7IxP4t9WDZDpvSKRpacZr",
+          "deviceId": 1,
+          "registrationId": 4211,
+          "platform": "unknown",
+          "label": "iPhone de Zoé"
+        }
+      },
+      "expected": {
+        "refusedField": "platform"
+      },
+      "outcome": "refus:unexpected-message",
+      "note": "une génération de plateforme inconnue se réenrôle avant toute comparaison"
+    },
+    {
+      "name": "alea-de-31-octets-refuse",
+      "input": {
+        "nonce": "ZUit1bGJdtagLBgHtX5Exy6XpjwJc3lbcQo8h9WfMQ=="
+      },
+      "expected": {
+        "refusedField": "nonce"
+      },
+      "outcome": "refus:unexpected-message"
+    },
+    {
+      "name": "alea-en-base64-non-canonique-refuse",
+      "input": {
+        "nonce": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvax=",
+        "decodesTo": "9+Zq0O+DM/Zle4TuV4ZIXIv2rQu7YmVTvEvRN2psvaw="
+      },
+      "expected": {
+        "refusedField": "nonce"
+      },
+      "outcome": "refus:unexpected-message",
+      "note": "mêmes octets décodés, bits de remplissage non nuls : réencoder et comparer"
+    }
+  ],
+  "options": [
+    {
+      "name": "carre-du-code-vecteur-1",
+      "of": "ios-nouveau-android-approuve",
+      "role": "répondeur",
+      "bit1": [
+        0,
+        1
+      ],
+      "bit2": [
+        3,
+        5
+      ],
+      "streamHex": "3faaf9b7739b034b5a24ffcdb4ee63782c08e9443648ee93fb9cf22d92e9b4d0",
+      "expected": {
+        "alternatives": {
+          "0": 38,
+          "1": 37,
+          "3": 5,
+          "5": 39
+        },
+        "permutation": 19,
+        "order": [
+          3,
+          0,
+          2,
+          1
+        ],
+        "displayed": [
+          {
+            "indexes": [
+              38,
+              37,
+              1,
+              5,
+              23,
+              39,
+              63
+            ],
+            "emoji": [
+              "⌛",
+              "☂️",
+              "🐱",
+              "🐷",
+              "🍌",
+              "⏰",
+              "📌"
+            ],
+            "names": {
+              "fr": [
+                "Sablier",
+                "Parapluie",
+                "Chat",
+                "Cochon",
+                "Banane",
+                "Réveil",
+                "Punaise"
+              ],
+              "en": [
+                "Hourglass",
+                "Umbrella",
+                "Cat",
+                "Pig",
+                "Banana",
+                "Clock",
+                "Pin"
+              ],
+              "es": [
+                "Reloj de arena",
+                "Paraguas",
+                "Gato",
+                "Cerdo",
+                "Plátano",
+                "Reloj",
+                "Alfiler"
+              ],
+              "de": [
+                "Sanduhr",
+                "Regenschirm",
+                "Katze",
+                "Schwein",
+                "Banane",
+                "Uhr",
+                "Stecknadel"
+              ],
+              "it": [
+                "Clessidra",
+                "Ombrello",
+                "Gatto",
+                "Maiale",
+                "Banana",
+                "Orologio",
+                "Puntina"
+              ],
+              "pt-BR": [
+                "Ampulheta",
+                "Guarda-chuva",
+                "Gato",
+                "Porco",
+                "Banana",
+                "Relógio",
+                "Alfinete"
+              ],
+              "ar": [
+                "سَاعَةٌ رَملِيَّة",
+                "مِظَلَّة",
+                "هِرَّة",
+                "خِنزِير",
+                "مَوزَة",
+                "سَاعَة",
+                "دَبُّوس"
+              ]
+            },
+            "decimal": [
+              5938,
+              1277,
+              4903
+            ]
+          },
+          {
+            "indexes": [
+              37,
+              56,
+              1,
+              8,
+              23,
+              45,
+              63
+            ],
+            "emoji": [
+              "☂️",
+              "⚽",
+              "🐱",
+              "🐼",
+              "🍌",
+              "✂️",
+              "📌"
+            ],
+            "names": {
+              "fr": [
+                "Parapluie",
+                "Ballon",
+                "Chat",
+                "Panda",
+                "Banane",
+                "Ciseaux",
+                "Punaise"
+              ],
+              "en": [
+                "Umbrella",
+                "Ball",
+                "Cat",
+                "Panda",
+                "Banana",
+                "Scissors",
+                "Pin"
+              ],
+              "es": [
+                "Paraguas",
+                "Bola",
+                "Gato",
+                "Panda",
+                "Plátano",
+                "Tijeras",
+                "Alfiler"
+              ],
+              "de": [
+                "Regenschirm",
+                "Ball",
+                "Katze",
+                "Panda",
+                "Banane",
+                "Schere",
+                "Stecknadel"
+              ],
+              "it": [
+                "Ombrello",
+                "Palla",
+                "Gatto",
+                "Panda",
+                "Banana",
+                "Forbici",
+                "Puntina"
+              ],
+              "pt-BR": [
+                "Guarda-chuva",
+                "Bola",
+                "Gato",
+                "Panda",
+                "Banana",
+                "Tesoura",
+                "Alfinete"
+              ],
+              "ar": [
+                "مِظَلَّة",
+                "كُرَة",
+                "هِرَّة",
+                "باندَا",
+                "مَوزَة",
+                "مِقَصّ",
+                "دَبُّوس"
+              ]
+            },
+            "decimal": [
+              5848,
+              1289,
+              4951
+            ]
+          },
+          {
+            "indexes": [
+              37,
+              56,
+              1,
+              5,
+              23,
+              39,
+              63
+            ],
+            "emoji": [
+              "☂️",
+              "⚽",
+              "🐱",
+              "🐷",
+              "🍌",
+              "⏰",
+              "📌"
+            ],
+            "names": {
+              "fr": [
+                "Parapluie",
+                "Ballon",
+                "Chat",
+                "Cochon",
+                "Banane",
+                "Réveil",
+                "Punaise"
+              ],
+              "en": [
+                "Umbrella",
+                "Ball",
+                "Cat",
+                "Pig",
+                "Banana",
+                "Clock",
+                "Pin"
+              ],
+              "es": [
+                "Paraguas",
+                "Bola",
+                "Gato",
+                "Cerdo",
+                "Plátano",
+                "Reloj",
+                "Alfiler"
+              ],
+              "de": [
+                "Regenschirm",
+                "Ball",
+                "Katze",
+                "Schwein",
+                "Banane",
+                "Uhr",
+                "Stecknadel"
+              ],
+              "it": [
+                "Ombrello",
+                "Palla",
+                "Gatto",
+                "Maiale",
+                "Banana",
+                "Orologio",
+                "Puntina"
+              ],
+              "pt-BR": [
+                "Guarda-chuva",
+                "Bola",
+                "Gato",
+                "Porco",
+                "Banana",
+                "Relógio",
+                "Alfinete"
+              ],
+              "ar": [
+                "مِظَلَّة",
+                "كُرَة",
+                "هِرَّة",
+                "خِنزِير",
+                "مَوزَة",
+                "سَاعَة",
+                "دَبُّوس"
+              ]
+            },
+            "decimal": [
+              5848,
+              1277,
+              4903
+            ]
+          },
+          {
+            "indexes": [
+              38,
+              37,
+              1,
+              8,
+              23,
+              45,
+              63
+            ],
+            "emoji": [
+              "⌛",
+              "☂️",
+              "🐱",
+              "🐼",
+              "🍌",
+              "✂️",
+              "📌"
+            ],
+            "names": {
+              "fr": [
+                "Sablier",
+                "Parapluie",
+                "Chat",
+                "Panda",
+                "Banane",
+                "Ciseaux",
+                "Punaise"
+              ],
+              "en": [
+                "Hourglass",
+                "Umbrella",
+                "Cat",
+                "Panda",
+                "Banana",
+                "Scissors",
+                "Pin"
+              ],
+              "es": [
+                "Reloj de arena",
+                "Paraguas",
+                "Gato",
+                "Panda",
+                "Plátano",
+                "Tijeras",
+                "Alfiler"
+              ],
+              "de": [
+                "Sanduhr",
+                "Regenschirm",
+                "Katze",
+                "Panda",
+                "Banane",
+                "Schere",
+                "Stecknadel"
+              ],
+              "it": [
+                "Clessidra",
+                "Ombrello",
+                "Gatto",
+                "Panda",
+                "Banana",
+                "Forbici",
+                "Puntina"
+              ],
+              "pt-BR": [
+                "Ampulheta",
+                "Guarda-chuva",
+                "Gato",
+                "Panda",
+                "Banana",
+                "Tesoura",
+                "Alfinete"
+              ],
+              "ar": [
+                "سَاعَةٌ رَملِيَّة",
+                "مِظَلَّة",
+                "هِرَّة",
+                "باندَا",
+                "مَوزَة",
+                "مِقَصّ",
+                "دَبُّوس"
+              ]
+            },
+            "decimal": [
+              5938,
+              1289,
+              4951
+            ]
+          }
+        ],
+        "correctAt": 1,
+        "bytesUsed": 5
+      }
+    },
+    {
+      "name": "carre-de-l-accuse-vecteur-1",
+      "of": "ios-nouveau-android-approuve",
+      "role": "initiateur",
+      "bit1": [
+        0
+      ],
+      "bit2": [
+        1
+      ],
+      "streamHex": "b3eadfc36a75476a07460eba4aeec0f87f567d1b5819d9afca1d792fb63cd5a2",
+      "expected": {
+        "alternatives": {
+          "0": 19,
+          "1": 2
+        },
+        "permutation": 7,
+        "order": [
+          1,
+          0,
+          3,
+          2
+        ],
+        "displayed": [
+          {
+            "indexes": [
+              19,
+              20
+            ],
+            "emoji": [
+              "🌏",
+              "🌙"
+            ],
+            "names": {
+              "fr": [
+                "Globe",
+                "Lune"
+              ],
+              "en": [
+                "Globe",
+                "Moon"
+              ],
+              "es": [
+                "Globo",
+                "Luna"
+              ],
+              "de": [
+                "Globus",
+                "Mond"
+              ],
+              "it": [
+                "Globo",
+                "Luna"
+              ],
+              "pt-BR": [
+                "Globo",
+                "Lua"
+              ],
+              "ar": [
+                "كُرَةٌ أرضِيَّة",
+                "قَمَر"
+              ]
+            },
+            "decimal": 3473
+          },
+          {
+            "indexes": [
+              29,
+              20
+            ],
+            "emoji": [
+              "❤️",
+              "🌙"
+            ],
+            "names": {
+              "fr": [
+                "Cœur",
+                "Lune"
+              ],
+              "en": [
+                "Heart",
+                "Moon"
+              ],
+              "es": [
+                "Corazón",
+                "Luna"
+              ],
+              "de": [
+                "Herz",
+                "Mond"
+              ],
+              "it": [
+                "Cuore",
+                "Luna"
+              ],
+              "pt-BR": [
+                "Coração",
+                "Lua"
+              ],
+              "ar": [
+                "قَلب",
+                "قَمَر"
+              ]
+            },
+            "decimal": 4753
+          },
+          {
+            "indexes": [
+              19,
+              2
+            ],
+            "emoji": [
+              "🌏",
+              "🦁"
+            ],
+            "names": {
+              "fr": [
+                "Globe",
+                "Lion"
+              ],
+              "en": [
+                "Globe",
+                "Lion"
+              ],
+              "es": [
+                "Globo",
+                "León"
+              ],
+              "de": [
+                "Globus",
+                "Löwe"
+              ],
+              "it": [
+                "Globo",
+                "Leone"
+              ],
+              "pt-BR": [
+                "Globo",
+                "Leão"
+              ],
+              "ar": [
+                "كُرَةٌ أرضِيَّة",
+                "أَسَد"
+              ]
+            },
+            "decimal": 3437
+          },
+          {
+            "indexes": [
+              29,
+              2
+            ],
+            "emoji": [
+              "❤️",
+              "🦁"
+            ],
+            "names": {
+              "fr": [
+                "Cœur",
+                "Lion"
+              ],
+              "en": [
+                "Heart",
+                "Lion"
+              ],
+              "es": [
+                "Corazón",
+                "León"
+              ],
+              "de": [
+                "Herz",
+                "Löwe"
+              ],
+              "it": [
+                "Cuore",
+                "Leone"
+              ],
+              "pt-BR": [
+                "Coração",
+                "Leão"
+              ],
+              "ar": [
+                "قَلب",
+                "أَسَد"
+              ]
+            },
+            "decimal": 4717
+          }
+        ],
+        "correctAt": 1,
+        "bytesUsed": 3
+      }
+    },
+    {
+      "name": "carre-avec-rejet",
+      "of": "ios-nouveau-android-approuve",
+      "role": "répondeur",
+      "bit1": [
+        0,
+        1
+      ],
+      "bit2": [
+        3,
+        5
+      ],
+      "streamHex": "fcff07f3fd15fe2af0fb9b",
+      "expected": {
+        "alternatives": {
+          "0": 45,
+          "1": 47,
+          "3": 30,
+          "5": 24
+        },
+        "permutation": 11,
+        "order": [
+          1,
+          3,
+          2,
+          0
+        ],
+        "displayed": [
+          {
+            "indexes": [
+              45,
+              47,
+              1,
+              8,
+              23,
+              45,
+              63
+            ],
+            "emoji": [
+              "✂️",
+              "🔑",
+              "🐱",
+              "🐼",
+              "🍌",
+              "✂️",
+              "📌"
+            ],
+            "names": {
+              "fr": [
+                "Ciseaux",
+                "Clé",
+                "Chat",
+                "Panda",
+                "Banane",
+                "Ciseaux",
+                "Punaise"
+              ],
+              "en": [
+                "Scissors",
+                "Key",
+                "Cat",
+                "Panda",
+                "Banana",
+                "Scissors",
+                "Pin"
+              ],
+              "es": [
+                "Tijeras",
+                "Llave",
+                "Gato",
+                "Panda",
+                "Plátano",
+                "Tijeras",
+                "Alfiler"
+              ],
+              "de": [
+                "Schere",
+                "Schlüssel",
+                "Katze",
+                "Panda",
+                "Banane",
+                "Schere",
+                "Stecknadel"
+              ],
+              "it": [
+                "Forbici",
+                "Chiave",
+                "Gatto",
+                "Panda",
+                "Banana",
+                "Forbici",
+                "Puntina"
+              ],
+              "pt-BR": [
+                "Tesoura",
+                "Chave",
+                "Gato",
+                "Panda",
+                "Banana",
+                "Tesoura",
+                "Alfinete"
+              ],
+              "ar": [
+                "مِقَصّ",
+                "مِفتَاح",
+                "هِرَّة",
+                "باندَا",
+                "مَوزَة",
+                "مِقَصّ",
+                "دَبُّوس"
+              ]
+            },
+            "decimal": [
+              6854,
+              1289,
+              4951
+            ]
+          },
+          {
+            "indexes": [
+              45,
+              47,
+              1,
+              30,
+              23,
+              24,
+              63
+            ],
+            "emoji": [
+              "✂️",
+              "🔑",
+              "🐱",
+              "😀",
+              "🍌",
+              "🍎",
+              "📌"
+            ],
+            "names": {
+              "fr": [
+                "Ciseaux",
+                "Clé",
+                "Chat",
+                "Sourire",
+                "Banane",
+                "Pomme",
+                "Punaise"
+              ],
+              "en": [
+                "Scissors",
+                "Key",
+                "Cat",
+                "Smiley",
+                "Banana",
+                "Apple",
+                "Pin"
+              ],
+              "es": [
+                "Tijeras",
+                "Llave",
+                "Gato",
+                "Emoticono",
+                "Plátano",
+                "Manzana",
+                "Alfiler"
+              ],
+              "de": [
+                "Schere",
+                "Schlüssel",
+                "Katze",
+                "Lächeln",
+                "Banane",
+                "Apfel",
+                "Stecknadel"
+              ],
+              "it": [
+                "Forbici",
+                "Chiave",
+                "Gatto",
+                "Faccina sorridente",
+                "Banana",
+                "Mela",
+                "Puntina"
+              ],
+              "pt-BR": [
+                "Tesoura",
+                "Chave",
+                "Gato",
+                "Sorriso",
+                "Banana",
+                "Maçã",
+                "Alfinete"
+              ],
+              "ar": [
+                "مِقَصّ",
+                "مِفتَاح",
+                "هِرَّة",
+                "اِبتِسَامَة",
+                "مَوزَة",
+                "تُفَّاحَة",
+                "دَبُّوس"
+              ]
+            },
+            "decimal": [
+              6854,
+              1377,
+              4783
+            ]
+          },
+          {
+            "indexes": [
+              37,
+              56,
+              1,
+              30,
+              23,
+              24,
+              63
+            ],
+            "emoji": [
+              "☂️",
+              "⚽",
+              "🐱",
+              "😀",
+              "🍌",
+              "🍎",
+              "📌"
+            ],
+            "names": {
+              "fr": [
+                "Parapluie",
+                "Ballon",
+                "Chat",
+                "Sourire",
+                "Banane",
+                "Pomme",
+                "Punaise"
+              ],
+              "en": [
+                "Umbrella",
+                "Ball",
+                "Cat",
+                "Smiley",
+                "Banana",
+                "Apple",
+                "Pin"
+              ],
+              "es": [
+                "Paraguas",
+                "Bola",
+                "Gato",
+                "Emoticono",
+                "Plátano",
+                "Manzana",
+                "Alfiler"
+              ],
+              "de": [
+                "Regenschirm",
+                "Ball",
+                "Katze",
+                "Lächeln",
+                "Banane",
+                "Apfel",
+                "Stecknadel"
+              ],
+              "it": [
+                "Ombrello",
+                "Palla",
+                "Gatto",
+                "Faccina sorridente",
+                "Banana",
+                "Mela",
+                "Puntina"
+              ],
+              "pt-BR": [
+                "Guarda-chuva",
+                "Bola",
+                "Gato",
+                "Sorriso",
+                "Banana",
+                "Maçã",
+                "Alfinete"
+              ],
+              "ar": [
+                "مِظَلَّة",
+                "كُرَة",
+                "هِرَّة",
+                "اِبتِسَامَة",
+                "مَوزَة",
+                "تُفَّاحَة",
+                "دَبُّوس"
+              ]
+            },
+            "decimal": [
+              5848,
+              1377,
+              4783
+            ]
+          },
+          {
+            "indexes": [
+              37,
+              56,
+              1,
+              8,
+              23,
+              45,
+              63
+            ],
+            "emoji": [
+              "☂️",
+              "⚽",
+              "🐱",
+              "🐼",
+              "🍌",
+              "✂️",
+              "📌"
+            ],
+            "names": {
+              "fr": [
+                "Parapluie",
+                "Ballon",
+                "Chat",
+                "Panda",
+                "Banane",
+                "Ciseaux",
+                "Punaise"
+              ],
+              "en": [
+                "Umbrella",
+                "Ball",
+                "Cat",
+                "Panda",
+                "Banana",
+                "Scissors",
+                "Pin"
+              ],
+              "es": [
+                "Paraguas",
+                "Bola",
+                "Gato",
+                "Panda",
+                "Plátano",
+                "Tijeras",
+                "Alfiler"
+              ],
+              "de": [
+                "Regenschirm",
+                "Ball",
+                "Katze",
+                "Panda",
+                "Banane",
+                "Schere",
+                "Stecknadel"
+              ],
+              "it": [
+                "Ombrello",
+                "Palla",
+                "Gatto",
+                "Panda",
+                "Banana",
+                "Forbici",
+                "Puntina"
+              ],
+              "pt-BR": [
+                "Guarda-chuva",
+                "Bola",
+                "Gato",
+                "Panda",
+                "Banana",
+                "Tesoura",
+                "Alfinete"
+              ],
+              "ar": [
+                "مِظَلَّة",
+                "كُرَة",
+                "هِرَّة",
+                "باندَا",
+                "مَوزَة",
+                "مِقَصّ",
+                "دَبُّوس"
+              ]
+            },
+            "decimal": [
+              5848,
+              1289,
+              4951
+            ]
+          }
+        ],
+        "correctAt": 3,
+        "bytesUsed": 11
+      }
+    }
+  ]
+}

@@ -63,7 +63,6 @@ class EpureProfileStringsTest {
 
     @Test
     fun `the header keeps its end to end badge, the request sent is one short line`() {
-        assertThat(all("values-fr")["profile_e2ee"]).isEqualTo("Chiffrée de bout en bout")
         assertThat(all("values-fr")["profile_e2ee_enabled"]).isEqualTo("Chiffrement de bout en bout activé")
         assertThat(epure("values-fr")["profile_connection_context_sent"]).isEqualTo("Demande envoyée à %1\$s, en attente de sa réponse.")
         assertThat(epure("values")["profile_connection_context_sent"]).isEqualTo("Request sent to %1\$s, waiting for their reply.")

@@ -37,6 +37,7 @@ const EXEMPTIONS: readonly Exemption[] = [
   { fichier: 'routes/communities-parts.tsx', combien: 2, pourquoi: ENTITE },
   { fichier: 'routes/share-link-form.tsx', combien: 2, pourquoi: ENTITE },
   { fichier: 'routes/user-profile-conversations.tsx', combien: 1, pourquoi: ENTITE },
+  { fichier: 'components/vitrine-preview.tsx', combien: 1, pourquoi: 'l’aperçu « Voir comme » dit ce que les cercles OUVRENT (ses rangées) ; le contour équipé reste celui de la fiche sous la feuille, non rejoué ici — suivi #19169' },
   { fichier: 'routes/profile-sections.tsx', combien: 1, pourquoi: ANNEAU_HOTE },
   { fichier: 'routes/user-profile-header.tsx', combien: 1, pourquoi: ANNEAU_HOTE },
   { fichier: 'components/mood-page.tsx', combien: 1, pourquoi: ANNEAU_HOTE },

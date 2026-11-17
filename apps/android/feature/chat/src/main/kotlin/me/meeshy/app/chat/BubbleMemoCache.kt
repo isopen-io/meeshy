@@ -1,6 +1,7 @@
 package me.meeshy.app.chat
 
 import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.e2ee.libsignal.EndToEndDeviceLimit
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.media.MediaLocationRefusal
 import me.meeshy.sdk.model.send.AttachmentRightRefusal
@@ -104,6 +105,7 @@ internal class BubbleMemoCache {
             isLocationRefused = isFailed && MediaLocationRefusal.isReason(local.lastError),
             isMediaLost = isFailed && MediaLoss.isReason(local.lastError),
             isAttachmentRightRefused = isFailed && AttachmentRightRefusal.isReason(local.lastError),
+            isEndToEndDeviceLimit = isFailed && EndToEndDeviceLimit.isReason(local.lastError),
         )
         entries = entries + (messageId to (signature to built))
         return built

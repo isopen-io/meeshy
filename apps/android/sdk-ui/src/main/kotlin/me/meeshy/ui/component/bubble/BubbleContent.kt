@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.bubble
 
+import me.meeshy.sdk.model.EndToEndSeal
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.ForwardAttribution
 import me.meeshy.sdk.model.JoinNoticePresentation
@@ -167,9 +168,13 @@ public data class BubbleContent(
     val exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
     /**
      * End-to-end encrypted, and this device cannot open it (#13110): the bubble says
-     * where it reads — never the gateway's `[Encrypted]` literal, never a piece.
+     * why — never the gateway's `[Encrypted]` literal, never a piece.
      */
     val isEndToEndSealed: Boolean = false,
+    /** Why a sealed bubble is sealed on THIS device (#18983): pending, unreadable, update required, or another device of mine. */
+    val endToEndSeal: EndToEndSeal = EndToEndSeal.PENDING,
+    /** The send failed because the account already has its maximum of encrypted devices (#18976): the bubble says where to remove one. */
+    val isEndToEndDeviceLimit: Boolean = false,
     /**
      * End-to-end encrypted and opened on THIS device (#14591): its text shows, read from the device's vault, but it never
      * leaves as clear — no forward, as on iOS (the server has no plaintext of it).

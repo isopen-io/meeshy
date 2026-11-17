@@ -412,13 +412,6 @@ extension UniversalComposerBar {
             attachmentsPreview
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
-
-        // Clipboard content preview (for pasted text > 2000 chars)
-        if let clip = clipboardContent {
-            clipboardContentPreview(clip)
-                .padding(.top, MeeshySpacing.sm)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-        }
     }
 
     static let bannerShape = RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)

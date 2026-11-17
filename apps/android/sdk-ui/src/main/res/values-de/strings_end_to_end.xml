@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="bubble_message_end_to_end">Ende-zu-Ende-verschlüsselt – lies sie in der Meeshy-App auf dem iPhone</string>
+    <string name="bubble_message_end_to_end">Ende-zu-Ende-verschlüsselte Nachricht, noch nicht auf diesem Gerät</string>
+    <string name="bubble_message_end_to_end_unreadable">Diese verschlüsselte Nachricht ließ sich auf diesem Gerät nicht öffnen</string>
+    <string name="bubble_message_end_to_end_update">Aktualisiere Meeshy, um diese verschlüsselte Nachricht zu lesen</string>
+    <string name="bubble_message_end_to_end_other_device">Auf einem anderen deiner Geräte geschrieben, hier noch nicht bestätigt</string>
+    <string name="bubble_failed_e2ee_device_limit">16 verschlüsselte Geräte erreicht: entferne eines unter Meine verschlüsselten Geräte</string>
 </resources>

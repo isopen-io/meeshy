@@ -11,11 +11,62 @@ public enum E2EEPlaintextEntry: Equatable, Sendable {
     /// Le clair, et l'auteur que libsignal a AUTHENTIFIÉ (la session de son
     /// appareil) — pas celui que le serveur annonce à côté du message.
     case readable(E2EEContent, senderUserId: String)
+    /// Ouvert et authentifié, mais pas lisible par CETTE version (IOS-04,
+    /// #18947) : ses octets sont gardés, et une version qui sait les lire les
+    /// rend lisibles (`reread()`, à chaque lecture).
+    case awaitsUpgrade(E2EEKeptPlaintext)
     case undecryptable
 }
 
+/// Un clair que libsignal a AUTHENTIFIÉ mais que cette version ne sait pas lire
+/// (IOS-04, #18947) : une version future du contenu ou d'un signal (contrat
+/// #18940, verdict `future-version`), ou une forme que ce lecteur ne connaît
+/// pas. Ses octets — sans le remplissage — sont gardés, scellés, avec ce que
+/// l'enveloppe en disait, pour être relus par une version qui sait : jamais
+/// affichés à moitié, jamais perdus. Un ancien client relit cette ligne comme
+/// « illisible » (état inconnu), sans rien perdre de plus qu'avant.
+public struct E2EEKeptPlaintext: Codable, Equatable, Sendable {
+    public let bytes: Data
+    /// La version annoncée (`v` d'un contenu, `s` d'un signal) quand elle est
+    /// FUTURE ; absente pour une forme illisible de la version courante.
+    public let version: Int?
+    public let isSignal: Bool
+    /// La conversation et l'appareil que l'enveloppe annonçait, l'auteur étant
+    /// celui que libsignal a authentifié.
+    public let conversationId: String
+    public let senderUserId: String
+    public let senderDeviceId: UInt32
+
+    public init(bytes: Data, version: Int?, isSignal: Bool, conversationId: String, senderUserId: String, senderDeviceId: UInt32) {
+        self.bytes = bytes
+        self.version = version
+        self.isSignal = isSignal
+        self.conversationId = conversationId
+        self.senderUserId = senderUserId
+        self.senderDeviceId = senderDeviceId
+    }
+
+    /// Le clair que `decode` sait lire de ces octets, à SA place (même
+    /// conversation, même auteur authentifié) ; `nil` sinon — un signal se
+    /// relit par la boîte des signaux d'une version qui le connaît, jamais ici.
+    public func reread(decode: (Data) throws -> E2EEContent = E2EEContent.decoded(from:)) -> E2EEPlaintextEntry? {
+        guard !isSignal, let content = try? decode(bytes), content.belongs(to: conversationId),
+              content.isAuthored(by: senderUserId, deviceId: senderDeviceId) else { return nil }
+        return .readable(content, senderUserId: senderUserId)
+    }
+}
+
+extension E2EEPlaintextEntry {
+    /// Une entrée gardée pour une version future se RELIT à chaque lecture : la
+    /// version qui sait la lire la rend lisible, sans migration à jouer.
+    func rereadIfPossible() -> E2EEPlaintextEntry {
+        guard case .awaitsUpgrade(let kept) = self, let readable = kept.reread() else { return self }
+        return readable
+    }
+}
+
 extension E2EEPlaintextEntry: Codable {
-    private enum CodingKeys: String, CodingKey { case state, content, sender }
+    private enum CodingKeys: String, CodingKey { case state, content, sender, kept }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -25,6 +76,8 @@ extension E2EEPlaintextEntry: Codable {
                 try container.decode(E2EEContent.self, forKey: .content),
                 senderUserId: try container.decode(String.self, forKey: .sender)
             )
+        case "awaits-upgrade":
+            self = .awaitsUpgrade(try container.decode(E2EEKeptPlaintext.self, forKey: .kept))
         default: self = .undecryptable
         }
     }
@@ -36,6 +89,9 @@ extension E2EEPlaintextEntry: Codable {
             try container.encode("readable", forKey: .state)
             try container.encode(content, forKey: .content)
             try container.encode(senderUserId, forKey: .sender)
+        case .awaitsUpgrade(let kept):
+            try container.encode("awaits-upgrade", forKey: .state)
+            try container.encode(kept, forKey: .kept)
         case .undecryptable:
             try container.encode("undecryptable", forKey: .state)
         }
@@ -56,6 +112,11 @@ public protocol E2EEPlaintextStoring: Sendable {
     func storedMessageIds() throws -> [String]
     /// Le coffre est-il enrôlé pour le compte qui le demande ?
     func servesItsOwner() throws -> Bool
+    /// Quand cette génération de l'appareil a été enrôlée, à l'horloge du
+    /// serveur quand il l'a dite (R-3) : un message antérieur n'a aucune
+    /// enveloppe pour elle. `nil` si le coffre ne le sait pas, ou n'est pas
+    /// celui du compte qui le demande.
+    func enrolledAt() throws -> Date?
 }
 
 public enum E2EEPlaintextVaultError: Error, Equatable {
@@ -65,7 +126,7 @@ public enum E2EEPlaintextVaultError: Error, Equatable {
 
 enum E2EEPlaintextRecords {
     static func load(_ messageId: String, in transaction: any E2EERecordTransaction) throws -> E2EEPlaintextEntry? {
-        try transaction.load(.plaintext, messageId).map { try JSONDecoder().decode(E2EEPlaintextEntry.self, from: $0) }
+        try transaction.load(.plaintext, messageId).map { try JSONDecoder().decode(E2EEPlaintextEntry.self, from: $0).rereadIfPossible() }
     }
 
     static func save(_ entry: E2EEPlaintextEntry, for messageId: String, in transaction: any E2EERecordTransaction) throws {
@@ -128,6 +189,13 @@ public final class E2EEPlaintextVault: E2EEPlaintextStoring {
 
     public func servesItsOwner() throws -> Bool {
         try vault.read { try serves(in: $0) }
+    }
+
+    public func enrolledAt() throws -> Date? {
+        try vault.read { transaction in
+            guard try serves(in: transaction) else { return nil }
+            return try E2EELocalEnrollmentRecord.loadDate(in: transaction)
+        }
     }
 
     public func storedMessageIds() throws -> [String] {
@@ -228,6 +296,7 @@ public struct E2EELocalDevice: Codable, Equatable, Sendable {
 
 enum E2EELocalEnrollmentRecord {
     static let key = "current"
+    static let dateKey = "enrolledAt"
 
     static func load(in transaction: any E2EERecordTransaction) throws -> E2EELocalDevice? {
         try transaction.load(.localEnrollment, key).map { try JSONDecoder().decode(E2EELocalDevice.self, from: $0) }
@@ -235,5 +304,24 @@ enum E2EELocalEnrollmentRecord {
 
     static func save(_ device: E2EELocalDevice, in transaction: any E2EERecordTransaction) throws {
         try transaction.save(try JSONEncoder().encode(device), as: .localEnrollment, key)
+    }
+
+    /// La date d'enrôlement de la génération enregistrée, jamais celle d'une autre.
+    static func loadDate(in transaction: any E2EERecordTransaction) throws -> Date? {
+        guard let device = try load(in: transaction),
+              let dated = try transaction.load(.localEnrollment, dateKey).map({ try JSONDecoder().decode(Dated.self, from: $0) }),
+              dated.deviceId == device.deviceId, dated.registrationId == device.registrationId else { return nil }
+        return dated.enrolledAt
+    }
+
+    static func saveDate(_ date: Date, of device: E2EELocalDevice, in transaction: any E2EERecordTransaction) throws {
+        let dated = Dated(deviceId: device.deviceId, registrationId: device.registrationId, enrolledAt: date)
+        try transaction.save(try JSONEncoder().encode(dated), as: .localEnrollment, dateKey)
+    }
+
+    private struct Dated: Codable {
+        let deviceId: UInt32
+        let registrationId: UInt32
+        let enrolledAt: Date
     }
 }

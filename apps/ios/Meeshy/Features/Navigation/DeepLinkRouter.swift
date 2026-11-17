@@ -27,7 +27,6 @@ enum DeepLinkDestination: Equatable {
     /// Direct chat share link (`/chat/<id>`). Same resolution path as
     /// `.joinLink` — the gateway accepts either shape.
     case chatLink(identifier: String)
-    case post(id: String)
     case magicLink(token: String)
     /// `/auth/verify-email?token=…&email=…` — le lien de l'e-mail « code +
     /// lien » : il vérifie l'adresse et ouvre la session.
@@ -685,7 +684,6 @@ final class DeepLinkRouter: ObservableObject {
         case .recentConversation:         return .recentConversation
         case .unreadConversations:        return .unreadConversations
         case .postDetail(let id):         return .postDetail(postId: id)
-        case .post(let id):               return .postDetail(postId: id)
         case .conversation(let id, _):    return .conversation(id: id)
         case .userProfile(let username):  return .userProfile(username: username)
         case .ownProfile:                 return .ownProfile

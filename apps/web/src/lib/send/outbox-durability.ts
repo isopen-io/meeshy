@@ -1,5 +1,7 @@
 import type { StoreApi } from 'zustand/vanilla';
 
+import { mayPersistConversationContent } from '@/lib/end-to-end-regime-ledger';
+
 import { attachmentPreviewOf } from './attachments';
 import type { DeviceRecords } from './device-records';
 import type { OutboxEntry, OutboxState } from './outbox-store';
@@ -58,10 +60,10 @@ const revived = (entry: OutboxEntry): OutboxEntry => ({
   message: entry.upload === undefined ? entry.message : { ...entry.message, attachments: entry.upload.files.map(attachmentPreviewOf) },
 });
 
-const storedOf = (state: OutboxState): StoredOutbox | undefined => {
+const storedOf = (state: OutboxState, mayPersist: (conversationId: string) => boolean): StoredOutbox | undefined => {
   const rows = Object.fromEntries(
     Object.entries(state.entries)
-      .filter(([, entries]) => entries.length > 0)
+      .filter(([conversationId, entries]) => entries.length > 0 && mayPersist(conversationId))
       .map(([conversationId, entries]) => [conversationId, entries.map(withoutLocalPreviews)]),
   );
   return Object.keys(rows).length === 0 ? undefined : rows;
@@ -90,8 +92,14 @@ export function createOutboxDurability(params: {
   readonly activeViewer: () => string | null;
   /** Lu à chaque rejeu : `online` est celui de l'instant. */
   readonly deps: () => SendDeps;
+  /**
+   * L'ENVOI EN FILE D'UNE CONVERSATION FERMÉE AU CLAIR RESTE EN MÉMOIRE
+   * (#18991) : il portera un jour un clair que le serveur ne lit pas, et
+   * IndexedDB survit à la session. Défaut : la garde unique du régime.
+   */
+  readonly mayPersist?: (conversationId: string) => boolean;
 }): OutboxDurability {
-  const { outbox, records, activeViewer } = params;
+  const { outbox, records, activeViewer, mayPersist = mayPersistConversationContent } = params;
   let restoredFor: string | null = null;
   let writing: Promise<void> = Promise.resolve();
   let replaying: Promise<void> | null = null;
@@ -103,7 +111,7 @@ export function createOutboxDurability(params: {
   outbox.subscribe((state) => {
     const viewer = activeViewer();
     if (viewer === null || viewer !== restoredFor) return;
-    const rows = storedOf(state);
+    const rows = storedOf(state, mayPersist);
     write(() => records.save(outboxRecordKey(viewer), rows));
   });
 
