@@ -19,10 +19,7 @@ import os
 /// avançait par-dessus : la fenêtre n'était plus jamais relue.
 extension ConversationSyncEngine {
 
-    enum IssueDeLaRehydratation: Equatable {
-        case faite(resteAuServeur: Bool)
-        case echouee
-    }
+    enum IssueDeLaRehydratation: Equatable { case faite(resteAuServeur: Bool), echouee }
 
     /// Au-delà, la fenêtre est confiée au plein (`mayHaveMore`).
     static let rehydratationMaxPages = 20
@@ -60,9 +57,11 @@ extension ConversationSyncEngine {
     }
 
     /// Relit la fenêtre par la route riche et réécrit ses lignes EN ENTIER —
-    /// la route riche est la vérité de la ligne de liste.
+    /// la route riche est la vérité de la ligne de liste —, sauf la facette
+    /// qu'un événement a écrite pendant la requête (#18936).
     func rehydrateDepuisLaRouteRiche(depuis since: Date) async -> IssueDeLaRehydratation {
         let userId = await currentUserId()
+        let avant = await cache.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
         var recues: [MeeshyConversation] = []
         var resteAuServeur = false
 
@@ -91,7 +90,8 @@ extension ConversationSyncEngine {
         guard !recues.isEmpty else { return .faite(resteAuServeur: resteAuServeur) }
 
         let existing = await cache.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
-        let (merged, removedIds) = Self.mergeDeltaConversations(existing: existing, deltas: recues)
+        let servies = ConversationDeltaRules.gardantLesFacettesEcritesPendantLaRequete(recues, avant: avant, maintenant: existing)
+        let (merged, removedIds) = Self.mergeDeltaConversations(existing: existing, deltas: servies)
         let removedSet = Set(removedIds)
         for removedId in removedIds {
             await cache.messages.invalidate(for: removedId)
