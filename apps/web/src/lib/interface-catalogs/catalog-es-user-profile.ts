@@ -13,11 +13,13 @@ const esUserProfile = {
   'userProfile.conversations.loading': 'Cargando las conversaciones',
   'userProfile.refused.title': 'Este perfil no está disponible',
   'userProfile.refused.body': 'No existe, o no tienes acceso.',
+  'userProfile.refused.search': 'Buscar a alguien',
   'userProfile.throttled.title': 'Demasiadas solicitudes',
   'userProfile.throttled.body': 'Inténtalo de nuevo en un momento.',
   'userProfile.error.title': 'No se pudo cargar este perfil',
   'userProfile.error.body': 'Inténtalo de nuevo en un momento.',
   'userProfile.offline.body': 'El perfil aparecerá al volver a conectarte.',
+  'userProfile.offline.stale': 'Ves la última versión conocida, actualizada hace {time}.',
   'userProfile.posts.empty': 'Sin publicaciones',
   'userProfile.posts.emptyPosts': 'Ninguna publicación aquí',
   'userProfile.posts.emptyReels': 'Ningún reel aquí',
@@ -113,6 +115,7 @@ const esUserProfile = {
   'userProfile.relation.links.title': 'Su enlace',
   'userProfile.relation.links.copy': 'Copiar su enlace',
   'userProfile.relation.links.copied': 'Enlace copiado',
+  'userProfile.relation.links.copyFailed': 'No se pudo copiar',
   'userProfile.relation.links.send': 'Enviar su perfil',
 } satisfies UserProfileCatalogSlice;
 

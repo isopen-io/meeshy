@@ -594,6 +594,12 @@ describe('la fiche rend les gestes qui lui manquaient (#7188)', () => {
     expect(text(lien)).toBe('Modifier mon profil');
   });
 
+  test('sur sa propre fiche, l’édition est sur la face où l’on arrive (revue #18879)', async () => {
+    const el = await mount('vous');
+
+    expect(el.querySelector('[data-profile-face="vitrine"] [data-profile-self] a')?.getAttribute('href')).toBe('/me');
+  });
+
   /**
    * LE CONTRE-TÉMOIN — sans lui, on pourrait poser l'entrée d'édition sur
    * TOUTES les fiches, et proposer à chacun de modifier le profil d'un autre.

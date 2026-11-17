@@ -767,7 +767,7 @@ try {
 
       // ------------------------------------------------ 17. le refus ne répète RIEN
       await page.goto(`${BASE}/u/personne-qui-nexiste-pas`, { waitUntil: 'load' });
-      await page.waitForSelector('#contenu p');
+      await page.waitForSelector('[data-profile-failure="refused"] [data-kit-state-block]');
       await page.waitForTimeout(200);
       const refusal = (await textOf(page, '#contenu')) ?? '';
       check(refusal.includes('Ce profil n’est pas accessible'), `${label} : un profil refusé le dit — « ${refusal.slice(0, 60)} »`);

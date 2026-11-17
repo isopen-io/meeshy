@@ -20,11 +20,13 @@ const frUserProfile = {
   'userProfile.conversations.loading': 'Chargement des conversations',
   'userProfile.refused.title': 'Ce profil n’est pas accessible',
   'userProfile.refused.body': 'Il n’existe pas, ou vous n’y avez pas accès.',
+  'userProfile.refused.search': 'Chercher quelqu’un',
   'userProfile.throttled.title': 'Trop de demandes',
   'userProfile.throttled.body': 'Réessayez dans un instant.',
   'userProfile.error.title': 'Impossible de charger ce profil',
   'userProfile.error.body': 'Réessayez dans un instant.',
   'userProfile.offline.body': 'Le profil s’affichera à la reconnexion.',
+  'userProfile.offline.stale': 'Vous voyez la dernière version connue, mise à jour il y a {time}.',
   'userProfile.posts.empty': 'Aucune publication',
   'userProfile.posts.emptyPosts': 'Aucun poste',
   'userProfile.posts.emptyReels': 'Aucun réel',
@@ -120,6 +122,7 @@ const frUserProfile = {
   'userProfile.relation.links.title': 'Son lien',
   'userProfile.relation.links.copy': 'Copier son lien',
   'userProfile.relation.links.copied': 'Lien copié',
+  'userProfile.relation.links.copyFailed': 'Copie impossible',
   'userProfile.relation.links.send': 'Envoyer son profil',
 } as const;
 

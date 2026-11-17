@@ -70,7 +70,7 @@ export default function LinksScreen() {
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <LinksHeader language={language} back="list" backLabel={translate(language, 'pending.back')} title={translate(language, 'root.menu.links')} />
       <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe">
-        <div className="mx-auto grid max-w-xl gap-4 pb-24" style={{ paddingTop: LINKS_HUB_TOP_RESERVE }}>
+        <div className="mx-auto grid max-w-xl grid-cols-[minmax(0,1fr)] gap-4 pb-24" style={{ paddingTop: LINKS_HUB_TOP_RESERVE }}>
           {user === null ? null : (
             <LinksProfileTicket
               language={language}

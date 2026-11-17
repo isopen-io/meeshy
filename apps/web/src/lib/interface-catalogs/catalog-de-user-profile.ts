@@ -13,11 +13,13 @@ const deUserProfile = {
   'userProfile.conversations.loading': 'Unterhaltungen werden geladen',
   'userProfile.refused.title': 'Dieses Profil ist nicht verfügbar',
   'userProfile.refused.body': 'Es existiert nicht, oder Sie haben keinen Zugriff darauf.',
+  'userProfile.refused.search': 'Jemanden suchen',
   'userProfile.throttled.title': 'Zu viele Anfragen',
   'userProfile.throttled.body': 'Versuchen Sie es gleich noch einmal.',
   'userProfile.error.title': 'Dieses Profil konnte nicht geladen werden',
   'userProfile.error.body': 'Versuchen Sie es gleich noch einmal.',
   'userProfile.offline.body': 'Das Profil erscheint, sobald Sie wieder online sind.',
+  'userProfile.offline.stale': 'Sie sehen die zuletzt bekannte Version, aktualisiert vor {time}.',
   'userProfile.posts.empty': 'Keine Beiträge',
   'userProfile.posts.emptyPosts': 'Hier keine Beiträge',
   'userProfile.posts.emptyReels': 'Hier keine Reels',
@@ -113,6 +115,7 @@ const deUserProfile = {
   'userProfile.relation.links.title': 'Sein Link',
   'userProfile.relation.links.copy': 'Link kopieren',
   'userProfile.relation.links.copied': 'Link kopiert',
+  'userProfile.relation.links.copyFailed': 'Kopieren nicht möglich',
   'userProfile.relation.links.send': 'Profil senden',
 } satisfies UserProfileCatalogSlice;
 

@@ -44,7 +44,7 @@ export function ProfilePeekSheet({ username, onClose }: { readonly username: str
         <div data-profile-peek={person?.username ?? ''} className="min-h-0 flex-1 overflow-y-auto px-4">
           {person !== undefined ? (
             <div className="mx-auto grid w-full max-w-xl gap-6 pb-12 pt-2">
-              {online ? null : <ProfileOfflineBanner language={language} />}
+              {online ? null : <ProfileOfflineBanner language={language} updatedAt={view.dataUpdatedAt} />}
               <ProfileHero
                 profile={person}
                 name={name}

@@ -25,7 +25,7 @@ export function ProfileLinksFace({
   const url = profileShareUrl(username);
   const copy = () =>
     void copyPlainText(url).then((outcome) =>
-      onCopied(translate(language, outcome === 'copied' ? 'userProfile.relation.links.copied' : 'discover.announce.sendFailed'), outcome === 'copied' ? 'neutral' : 'error'),
+      onCopied(translate(language, outcome === 'copied' ? 'userProfile.relation.links.copied' : 'userProfile.relation.links.copyFailed'), outcome === 'copied' ? 'neutral' : 'error'),
     );
   return (
     <section data-profile-links="" className="grid gap-3">

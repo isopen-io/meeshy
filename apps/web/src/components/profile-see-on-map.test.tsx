@@ -82,13 +82,13 @@ describe('« Voir sur la carte » ne dépend pas d’un passage par la carte', (
   });
 
   test('le partage qui arrive à son terme retire la rangée, sans attendre un autre rendu', async () => {
-    const soon = served({ expiresAt: new Date(Date.now() + 60).toISOString() });
+    const soon = served({ expiresAt: new Date(Date.now() + 1_500).toISOString() });
     const node = await row({ items: [soon] });
     await settle();
     await settle();
     expect(node.querySelector('[data-see-on-map]')).not.toBeNull();
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 120));
+      await new Promise((resolve) => setTimeout(resolve, 1_700));
     });
     expect(node.querySelector('[data-see-on-map]')).toBeNull();
   });

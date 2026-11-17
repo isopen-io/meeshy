@@ -578,7 +578,6 @@ const PENDING_CLIENT_ENTRIES = {
   'e2Ee.devicesSelfVerificationsAck': { issue: 18906, reason: 'POST /e2ee/devices/self/verifications/ack — accuser les messages de comparaison lus, même lot web' },
   // « Mes adresses » (serveur-mes-adresses, chantier #18857) : la passerelle sert la lecture, l'écriture et l'ordre des
   // adresses personnelles avant la face Liens web (#18880), qui les appellera.
-  'users.meAddresses': { issue: 18880, reason: 'GET|POST /users/me/addresses — lire et créer mes adresses, face Liens web' },
   'users.meAddressesById': { issue: 18880, reason: 'PATCH|DELETE /users/me/addresses/:id — modifier et retirer une adresse, face Liens web' },
   'users.meAddressesOrder': { issue: 18880, reason: 'PUT /users/me/addresses/order — réordonner mes adresses, face Liens web' },
 };

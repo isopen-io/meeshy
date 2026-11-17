@@ -13,11 +13,13 @@ const enUserProfile = {
   'userProfile.conversations.loading': 'Loading conversations',
   'userProfile.refused.title': 'This profile is not available',
   'userProfile.refused.body': 'It does not exist, or you do not have access to it.',
+  'userProfile.refused.search': 'Search for someone',
   'userProfile.throttled.title': 'Too many requests',
   'userProfile.throttled.body': 'Try again in a moment.',
   'userProfile.error.title': 'Could not load this profile',
   'userProfile.error.body': 'Try again in a moment.',
   'userProfile.offline.body': 'The profile will appear once you are back online.',
+  'userProfile.offline.stale': 'You are seeing the last known version, updated {time} ago.',
   'userProfile.posts.empty': 'No posts',
   'userProfile.posts.emptyPosts': 'No posts here',
   'userProfile.posts.emptyReels': 'No reels here',
@@ -113,6 +115,7 @@ const enUserProfile = {
   'userProfile.relation.links.title': 'Their link',
   'userProfile.relation.links.copy': 'Copy their link',
   'userProfile.relation.links.copied': 'Link copied',
+  'userProfile.relation.links.copyFailed': 'Could not copy',
   'userProfile.relation.links.send': 'Send their profile',
 } satisfies UserProfileCatalogSlice;
 

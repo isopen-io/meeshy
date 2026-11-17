@@ -13,11 +13,13 @@ const arUserProfile = {
   'userProfile.conversations.loading': 'جارٍ تحميل المحادثات',
   'userProfile.refused.title': 'هذا الملف الشخصي غير متاح',
   'userProfile.refused.body': 'إما أنه غير موجود، أو لا تملك صلاحية الوصول إليه.',
+  'userProfile.refused.search': 'ابحث عن شخص',
   'userProfile.throttled.title': 'طلبات كثيرة جدًا',
   'userProfile.throttled.body': 'أعد المحاولة بعد لحظة.',
   'userProfile.error.title': 'تعذّر تحميل هذا الملف الشخصي',
   'userProfile.error.body': 'أعد المحاولة بعد لحظة.',
   'userProfile.offline.body': 'سيظهر الملف الشخصي عند عودة الاتصال.',
+  'userProfile.offline.stale': 'تشاهد آخر نسخة معروفة، حُدّثت منذ {time}.',
   'userProfile.posts.empty': 'لا توجد منشورات',
   'userProfile.posts.emptyPosts': 'لا توجد منشورات هنا',
   'userProfile.posts.emptyReels': 'لا توجد ريلز هنا',
@@ -113,6 +115,7 @@ const arUserProfile = {
   'userProfile.relation.links.title': 'رابطه',
   'userProfile.relation.links.copy': 'انسخ رابطه',
   'userProfile.relation.links.copied': 'تم نسخ الرابط',
+  'userProfile.relation.links.copyFailed': 'تعذّر النسخ',
   'userProfile.relation.links.send': 'أرسل ملفه',
 } satisfies UserProfileCatalogSlice;
 
