@@ -37,16 +37,21 @@ jest.mock('../../../../services/relations/profileCircleView', () => {
 const created: Array<{ originalUrl: string; createdBy?: string; name?: string }> = [];
 const linkUpdates: Array<{ token: string; isActive?: boolean; originalUrl?: string }> = [];
 let tokenSeq = 0;
+type Link = { createdBy: string; isActive: boolean; totalClicks: number; expiresAt?: Date | null };
+let links: Record<string, Link> = {};
 jest.mock('../../../../services/TrackingLinkService', () => ({
   resolveFrontendBaseUrl: () => 'https://meeshy.me',
   TrackingLinkService: class {
     async createTrackingLink(p: { originalUrl: string; createdBy?: string; name?: string }) {
       created.push(p);
       tokenSeq += 1;
+      links[`tok${tokenSeq}`] = { createdBy: p.createdBy ?? '', isActive: true, totalClicks: 0 };
       return { id: `tl${tokenSeq}`, token: `tok${tokenSeq}`, totalClicks: 0 };
     }
     async updateTrackingLink(p: { token: string; isActive?: boolean; originalUrl?: string }) {
+      if (!links[p.token]) throw new Error('Tracking link not found');
       linkUpdates.push(p);
+      if (p.isActive !== undefined) links[p.token].isActive = p.isActive;
       return { token: p.token };
     }
   },
@@ -61,7 +66,6 @@ type Row = {
 };
 let rows: Row[] = [];
 let seq = 0;
-const clicks: Record<string, number> = { tokA: 128 };
 
 const adresse = (over: Partial<Row> = {}): Row => ({
   id: `ad${++seq}`, userId: OWNER, title: 'Site', url: 'https://aissandiaye.studio/', glyph: 'site',
@@ -86,7 +90,11 @@ const prisma = () => ({
     delete: jest.fn<any>(async (a: any) => { rows = rows.filter((r) => r.id !== a.where.id); return {}; }),
   },
   trackingLink: {
-    findMany: jest.fn<any>(async (a: any) => (a.where.token.in as string[]).map((token) => ({ token, totalClicks: clicks[token] ?? 0 }))),
+    findMany: jest.fn<any>(async (a: any) => (a.where.token.in as string[])
+      .filter((token) => links[token]
+        && (a.where.createdBy === undefined || links[token].createdBy === a.where.createdBy)
+        && (a.where.isActive === undefined || links[token].isActive === a.where.isActive))
+      .map((token) => ({ token, ...links[token] }))),
   },
   $transaction: jest.fn<any>(async (ops: Promise<unknown>[]) => Promise.all(ops)),
 });
@@ -105,6 +113,7 @@ async function monter(): Promise<FastifyInstance> {
 
 beforeEach(() => {
   rows = []; created.length = 0; linkUpdates.length = 0; viewerId = OWNER; viewerLevel = 'PUBLIC'; relationReads = 0; tokenSeq = 0;
+  links = { tokA: { createdBy: OWNER, isActive: true, totalClicks: 128 } };
 });
 
 const corps = (over: Record<string, unknown> = {}) => ({ url: 'youtube.com/@aissa.snd', title: 'Vidéos', glyph: 'videos', circle: 'FRIEND', ...over });
@@ -297,5 +306,51 @@ describe('la fiche sert chaque adresse au cercle choisi', () => {
     viewerId = OTHER;
     const data = await fiche(await monter());
     expect('addresses' in data).toBe(false);
+  });
+});
+
+describe('le lien de suivi d’une adresse ne sert que s’il est encore le sien et ouvert', () => {
+  const fiche = async (app: FastifyInstance) => (await app.inject({ method: 'GET', url: '/api/v1/u/aissa' })).json().data;
+
+  it('lien supprimé depuis « Mes liens » : l’adresse se modifie et se supprime encore, la fiche sert l’adresse directe', async () => {
+    rows = [adresse({ id: 'a', trackingToken: 'perdu' }), adresse({ id: 'b', position: 1, trackingToken: 'perdu2' })];
+    const app = await monter();
+    viewerId = OTHER;
+    expect((await fiche(app)).addresses.map((a: any) => a.trackedPath)).toEqual([undefined, undefined]);
+    viewerId = OWNER;
+    const liste = (await app.inject({ method: 'GET', url: '/api/v1/users/me/addresses' })).json().data.addresses;
+    expect(liste.map((a: any) => a.trackedPath)).toEqual([undefined, undefined]);
+    const masque = await app.inject({ method: 'PATCH', url: '/api/v1/users/me/addresses/a', payload: { isShown: false, url: 'https://example.org/' } });
+    expect(masque.statusCode).toBe(200);
+    expect(rows.find((r) => r.id === 'a')?.trackingToken).toBeNull();
+    expect((await app.inject({ method: 'DELETE', url: '/api/v1/users/me/addresses/b' })).statusCode).toBe(200);
+    expect(rows.map((r) => r.id)).toEqual(['a']);
+  });
+
+  it('jeton repris par un AUTRE compte (lien renommé puis recréé) : ni servi, ni compté, ni touché', async () => {
+    links.repris = { createdBy: OTHER, isActive: true, totalClicks: 999 };
+    rows = [adresse({ id: 'a', trackingToken: 'repris' })];
+    const app = await monter();
+    viewerId = OTHER;
+    expect((await fiche(app)).addresses).toEqual([expect.not.objectContaining({ trackedPath: expect.anything() })]);
+    viewerId = OWNER;
+    const [mienne] = (await app.inject({ method: 'GET', url: '/api/v1/users/me/addresses' })).json().data.addresses;
+    expect(mienne).toMatchObject({ clicks: 0 });
+    expect('trackedPath' in mienne).toBe(false);
+    await app.inject({ method: 'PATCH', url: '/api/v1/users/me/addresses/a', payload: { isShown: false } });
+    await app.inject({ method: 'DELETE', url: '/api/v1/users/me/addresses/a' });
+    expect(linkUpdates).toHaveLength(0);
+    expect(links.repris.isActive).toBe(true);
+  });
+
+  it('lien désactivé depuis « Mes liens » : le lecteur reçoit l’adresse directe, le propriétaire garde ses clics', async () => {
+    links.tokA.isActive = false;
+    rows = [adresse({ id: 'a', trackingToken: 'tokA' })];
+    const app = await monter();
+    viewerId = OTHER;
+    expect((await fiche(app)).addresses).toEqual([{ id: 'a', title: 'Site', url: 'https://aissandiaye.studio/', glyph: 'site' }]);
+    viewerId = OWNER;
+    const [mienne] = (await app.inject({ method: 'GET', url: '/api/v1/users/me/addresses' })).json().data.addresses;
+    expect(mienne).toMatchObject({ clicks: 128, trackedPath: '/l/tokA' });
   });
 });
