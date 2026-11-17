@@ -112,11 +112,26 @@ describe('PATCH /users/me — la couleur d’accent', () => {
     expect(res.json().data.user.profileAccentColor).toBeNull();
   });
 
-  it('diffuse le changement par user:updated aux pairs ET aux autres appareils de la personne', async () => {
+  it('diffuse le changement par user:updated aux pairs, et par profile:updated (l’instantané propre) aux autres appareils de la personne', async () => {
     const { emitUserUpdated, to, emit } = await patch({ profileAccentColor: '#4ECDC4' }, { profileAccentColor: '#4ECDC4' });
     expect(emitUserUpdated).toHaveBeenCalledWith({ userId: USER_ID, changes: { profileAccentColor: '#4ECDC4' } });
     expect(to).toHaveBeenCalledWith(ROOMS.user(USER_ID));
-    expect(emit).toHaveBeenCalledWith(SERVER_EVENTS.USER_UPDATED, { userId: USER_ID, changes: { profileAccentColor: '#4ECDC4' } });
+    expect(emit).toHaveBeenCalledWith(SERVER_EVENTS.PROFILE_UPDATED, expect.objectContaining({
+      userId: USER_ID,
+      profile: expect.objectContaining({ profileAccentColor: '#4ECDC4', systemLanguage: 'fr', username: 'alice' }),
+    }));
+  });
+
+  it('n’envoie jamais user:updated sur la room de l’auteur : ses appareils ont profile:updated (#18924)', async () => {
+    const { emit } = await patch({ profileAccentColor: '#4ECDC4' }, { profileAccentColor: '#4ECDC4' });
+    expect(emit.mock.calls.map(([event]) => event)).not.toContain(SERVER_EVENTS.USER_UPDATED);
+  });
+
+  it('`null` part aussi à mes appareils : ils reviennent à l’accent calculé', async () => {
+    const { emit } = await patch({ profileAccentColor: null }, { profileAccentColor: null });
+    expect(emit).toHaveBeenCalledWith(SERVER_EVENTS.PROFILE_UPDATED, expect.objectContaining({
+      profile: expect.objectContaining({ profileAccentColor: null }),
+    }));
   });
 
   it('un ancien client qui ne nomme pas le champ n’écrit ni ne diffuse rien de l’accent', async () => {
