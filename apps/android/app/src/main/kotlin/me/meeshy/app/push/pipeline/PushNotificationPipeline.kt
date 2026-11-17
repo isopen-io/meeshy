@@ -3,6 +3,7 @@ package me.meeshy.app.push.pipeline
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
+import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -13,6 +14,7 @@ import me.meeshy.app.push.PushInteraction
 import me.meeshy.app.push.PushDisplayGate
 import me.meeshy.app.push.PushInteractionBus
 import me.meeshy.app.push.PushTapIntentFactory
+import me.meeshy.app.push.ConversationBannerExtra
 import me.meeshy.app.push.IncomingPush
 import me.meeshy.app.push.MessageNotificationId
 import me.meeshy.app.push.NotificationChannelIds
@@ -135,6 +137,8 @@ class PushNotificationPipeline @Inject constructor(
             // « Sons » coupé, livraison passive ou correction d'un message déjà vu ⇒ ni son ni vibration.
             .setSilent(!playSound || correction)
             .setOnlyAlertOnce(correction)
+        ConversationBannerExtra.of(payload.type, payload.conversationId)
+            ?.let { builder.addExtras(Bundle().apply { putString(ConversationBannerExtra.KEY, it) }) }
 
         val request = EnrichmentRequest(push, preferences, channelId, groupKey, badge, passive, deadline, notificationId)
         enrich(builder, request)
