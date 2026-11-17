@@ -98,9 +98,6 @@ export type AdminPermissionKey = keyof AdminPermissions;
  */
 export type AdminSectionLabelKey = `admin.nav.${AdminSectionId}`;
 
-/** Une ligne qui dit ce qu'on fait dans la section — le hub la pose sous le libellé. */
-export type AdminSectionHintKey = `admin.nav.${AdminSectionId}.hint`;
-
 export type AdminGroupLabelKey = `admin.group.${AdminGroupId}`;
 
 export type AdminSection = {

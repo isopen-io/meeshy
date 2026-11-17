@@ -255,8 +255,6 @@ const ar = {
   'feed.like.error': 'تعذّر الإعجاب بالمنشور',
   'post.bookmark.error': 'تعذّر الحفظ',
   'feed.gesture.pending': 'لم يتم تأكيد الإجراء — غير متصل',
-  'feed.share.error': 'تعذّرت مشاركة المنشور',
-  'feed.share.copied': 'تم نسخ الرابط — لم يتبقَّ سوى لصقه.',
 
   'root.menu.feed': 'التدفق',
   'root.menu.game': 'أسطورتي',

@@ -42,8 +42,6 @@ const LOADERS: Readonly<Record<InterfaceLanguage, () => Promise<CatalogModule>>>
 const loaded = new Map<InterfaceLanguage, SessionsCatalog>();
 const inFlight = new Map<InterfaceLanguage, Promise<SessionsCatalog>>();
 
-export const isSessionsCatalogLoaded = (language: InterfaceLanguage): boolean => loaded.has(language);
-
 export function loadSessionsCatalog(language: InterfaceLanguage): Promise<SessionsCatalog> {
   const ready = loaded.get(language);
   if (ready !== undefined) return Promise.resolve(ready);

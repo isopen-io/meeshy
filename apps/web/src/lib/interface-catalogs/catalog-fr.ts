@@ -244,8 +244,6 @@ const fr = {
   'feed.like.error': 'Impossible d’aimer la publication',
   'post.bookmark.error': 'Erreur lors de l’enregistrement',
   'feed.gesture.pending': 'Geste non confirmé — hors ligne',
-  'feed.share.error': 'Impossible de partager la publication',
-  'feed.share.copied': 'Lien copié — il ne reste qu’à le coller.',
 
   'root.menu.feed': 'Flux',
   'root.menu.game': 'Ma Légende',
