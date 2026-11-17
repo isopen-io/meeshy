@@ -481,8 +481,7 @@ nonisolated enum RiverConversationMapping {
         guard !message.protection().requiresVeil else { return nil }
         let displayed = displayedText(of: message, text: text)
         guard !displayed.isEmpty else { return nil }
-        let resolved = BubbleContent.text(raw: displayed, trackedLinks: message.trackedLinkMap,
-                                           authorIsAnonymous: message.senderIsAnonymous || !message.senderHasAccount)
+        let resolved = BubbleContent.text(raw: displayed, of: message)
         return resolved.firstLinkURL == nil ? nil : resolved
     }
 

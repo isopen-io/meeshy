@@ -46,7 +46,7 @@ import { onLayerEntry } from '@/lib/view/layer-entry';
 // typage de bout en bout de TanStack apportait ici.
 type Segment<C extends string> = C extends `${infer Head}/${infer Rest}`
   ? Segment<Head> | Segment<Rest>
-  : C extends `$${infer Name}`
+  : C extends `${string}$${infer Name}`
     ? Name
     : never;
 
@@ -183,14 +183,22 @@ export function useIsCurrentPath(path: string): boolean {
 
 type CompiledPattern = { readonly regex: RegExp; readonly names: readonly string[] };
 
+const escapeLiteral = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Un segment est un littéral, un paramètre (`$nom`) ou un PRÉFIXE littéral suivi d'un
+ * paramètre (`@$username`, l'adresse courte d'une personne, #18878) : le préfixe se
+ * compare tel quel et n'entre jamais dans la valeur rendue.
+ */
 export function compile(pattern: string): CompiledPattern {
   const names: string[] = [];
   const source = pattern
     .split('/')
     .map((segment) => {
-      if (!segment.startsWith('$')) return segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      names.push(segment.slice(1));
-      return '([^/]+)';
+      const slot = segment.indexOf('$');
+      if (slot < 0) return escapeLiteral(segment);
+      names.push(segment.slice(slot + 1));
+      return `${escapeLiteral(segment.slice(0, slot))}([^/]+)`;
     })
     .join('/');
   return { regex: new RegExp(`^${source}/?$`), names };

@@ -10,7 +10,9 @@ import os
 /// tout téléversement ou transport, par la loi du fil
 /// (`EndToEndDestinationGuard`) : mémoire du compte, ligne et fil du cache. Le
 /// refus est définitif (`OutboxFlusher.isPermanentServerRejection`), la bulle
-/// passe en échec avec sa raison, et le renvoi depuis le fil se scelle.
+/// passe en échec avec sa raison, et le renvoi depuis le fil se scelle. La
+/// ligne refusée ne garde pas son texte en clair : la file l'efface
+/// (`OutboxFlusher.erasesRefusedRow`, #16747).
 struct EndToEndOutboxGate: OutboxDispatching {
     let inner: OutboxDispatcher
     let sealsDestination: @Sendable @concurrent (String) async -> Bool

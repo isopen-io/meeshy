@@ -111,9 +111,10 @@ public final class E2EEGRDBRecordVault: E2EERecordVaultProviding {
         }
     }
 
-    /// La base partagée de l'app et de la NSE : `e2ee.sqlite` du groupe d'apps.
-    /// La clé de scellement se crée sous le verrou inter-processus : l'app et la
-    /// NSE qui démarrent ensemble n'en tirent jamais deux.
+    /// La base partagée de l'app et de la NSE : `E2EE/e2ee.sqlite` du groupe
+    /// d'apps, dans un dossier exclu de la sauvegarde (`E2EEVaultLocation`,
+    /// IOS-03). La clé de scellement se crée sous le verrou inter-processus :
+    /// l'app et la NSE qui démarrent ensemble n'en tirent jamais deux.
     public static func shared(
         appGroup: String = "group.me.meeshy.apps",
         secrets: any E2EESecretStoreProviding,
@@ -122,12 +123,13 @@ public final class E2EEGRDBRecordVault: E2EERecordVaultProviding {
         guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
             throw CocoaError(.fileNoSuchFile)
         }
+        let database = try lock.withLock { try E2EEVaultLocation.preparedDatabase(in: container) }
         var configuration = Configuration()
         configuration.busyMode = .timeout(10)
         // #3707 — le pool s'ouvre désormais à chaque session : sans armement, il
         // prend des verrous SQLite pendant la suspension (0xDEAD10CC).
         DatabaseSuspension.arm(&configuration)
-        let pool = try DatabasePool(path: container.appendingPathComponent("e2ee.sqlite").path, configuration: configuration)
+        let pool = try DatabasePool(path: database.path, configuration: configuration)
         let sealingKey = try lock.withLock { try E2EESealingKey.loadOrCreate(in: secrets) }
         return try E2EEGRDBRecordVault(writer: pool, sealingKey: sealingKey)
     }
