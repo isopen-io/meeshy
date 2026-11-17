@@ -184,7 +184,8 @@ export async function getUserByUsername(fastify: FastifyInstance) {
                 createdAt: { type: 'string', format: 'date-time' },
                 city: publicProfileSchema.properties.city,
                 cityCircle: publicProfileSchema.properties.cityCircle,
-                addresses: publicProfileSchema.properties.addresses
+                addresses: publicProfileSchema.properties.addresses,
+                languages: publicProfileSchema.properties.languages
               }
             }
           }

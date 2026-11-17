@@ -7,6 +7,7 @@ import { servedProfileDecor, servedProfileDecorJsonSchema } from '../../services
 import { startupPackIndex } from '../../services/packs/PackIndex';
 import { withServedCity } from './profile-city';
 import { withServedAddresses } from './profile-addresses';
+import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { isFieldServed } from '../../utils/sparse-fieldset';
 import { targetHasBlockedViewer } from './profile-block-gate';
 import { isGuestViewer, sendAccountRequired, type GuestViewerContext } from '../../services/guests/guestMemberVisibility';
@@ -139,6 +140,9 @@ export const publicProfileSchema = {
     },
     // #10632 / #10932 : le contour d'avatar, la bannière de design et le cadre de bannière ÉQUIPÉS (additif).
     profileDecor: servedProfileDecorJsonSchema,
+    // #19373 : les langues DÉCLARÉES, dans l'ordre du Prisme, dédoublonnées (cercle Public) ;
+    // absent quand aucune n'est déclarée. Jamais la locale de l'appareil, jamais les rangs bruts.
+    languages: { type: 'array', items: { type: 'string' } },
   },
 } as const;
 
@@ -195,6 +199,12 @@ export const publicUserSelect = {
   equippedAvatarRing: true,
   equippedBanner: true,
   equippedBannerFrame: true,
+  // #19373 : chargés, jamais servis tels quels — `buildPublicProfile` les compose en
+  // `languages` (la liste ordonnée, sans dire quelle langue occupe quel rang) et RETIRE les
+  // colonnes brutes que #4161 a sorties de la surface. `deviceLocale` n'est jamais chargée.
+  systemLanguage: true,
+  regionalLanguage: true,
+  customDestinationLanguage: true,
   voiceModel: { select: voiceModelSelect }
 } as const;
 
@@ -237,7 +247,15 @@ export const publicProfilePlan: ColumnPlan<typeof publicUserSelect> = {
     cityCircle: ['cityCircle'],
     addresses: [],
     profileDecor: ['equippedAvatarRing', 'equippedBanner', 'equippedBannerFrame'],
+    languages: ['systemLanguage', 'regionalLanguage', 'customDestinationLanguage'],
   },
+};
+
+/** Les trois rangs DÉCLARÉS du Prisme, matière de `languages` (#19373), jamais servis bruts. */
+type DeclaredLanguageColumns = {
+  systemLanguage?: string | null;
+  regionalLanguage?: string | null;
+  customDestinationLanguage?: string | null;
 };
 
 /**
@@ -252,16 +270,18 @@ export const publicProfilePlan: ColumnPlan<typeof publicUserSelect> = {
  * garde inopérante au typage.
  */
 export function buildPublicProfile<
-  T extends { voiceModel?: VoiceModelFields | null; equippedAvatarRing?: string | null; equippedBanner?: string | null; equippedBannerFrame?: string | null },
+  T extends { voiceModel?: VoiceModelFields | null; equippedAvatarRing?: string | null; equippedBanner?: string | null; equippedBannerFrame?: string | null } & DeclaredLanguageColumns,
 >(user: T) {
   // `autoTranslateEnabled: true` était écrit EN DUR — un champ de contrat qui
   // ne disait rien de vrai, et qu'un client pouvait croire refléter la
   // préférence de la personne. `email: ''` et `phoneNumber: undefined`
   // prétendaient masquer ce qu'il suffit de ne pas charger. Les trois sont
   // retirés (#4161).
-  const { equippedAvatarRing, equippedBanner, equippedBannerFrame, ...visible } = user;
+  const { equippedAvatarRing, equippedBanner, equippedBannerFrame, systemLanguage, regionalLanguage, customDestinationLanguage, ...visible } = user;
+  const languages = resolveUserLanguagesOrdered({ systemLanguage, regionalLanguage, customDestinationLanguage });
   return {
     ...withVoiceFields(visible),
+    ...(languages.length > 0 ? { languages } : {}),
     isAnonymous: false,
     isMeeshyer: true,
     profileDecor: servedProfileDecor(startupPackIndex(), { equippedAvatarRing, equippedBanner, equippedBannerFrame }),
