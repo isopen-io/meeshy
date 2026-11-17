@@ -389,6 +389,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'GET', url: '/api/v1/affiliate/validate/:token', why: "validation publique d'un token d'affiliation (nom/avatar publics uniquement)" },
   { method: 'POST', url: '/api/v1/affiliate/track-visit', why: "tracking de visite public par design (pollution mineure notée séparément dans l'audit)" },
   { method: 'POST', url: '/api/v1/affiliate/click/:token', why: 'comptage de clic public par design' },
+  { method: 'POST', url: '/api/v1/invitations/email/opt-out', why: "désinscription de l'INVITÉ (#19207), qui n'a pas de compte : le jeton secret de son invitation suffit, et seule une empreinte HMAC de l'adresse est gardée" },
 
   // --- Voice : sonde publique, aucune donnée utilisateur ---
   // `GET /api/v1/voice/health` a QUITTÉ cette liste AVEC la route elle-même
