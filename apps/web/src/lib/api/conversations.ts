@@ -12,6 +12,7 @@ import { conversationById, conversationsWithSurged, directConversationWith } fro
 import { pageOfConversations } from './fixtures-pagination';
 import type { ApiResult, ApiSuccess, HttpTransport } from './http';
 import { writeLive, writtenLiveWithin, type LiveWriteOptions } from './live-cache-journal';
+import { withNewestPreferences } from './preferences-version';
 import type { Conversation } from './types';
 import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
 
@@ -170,6 +171,21 @@ async function loadFirstPage(
   return page;
 }
 
+/** Les lignes que la liste en cache tient, par identifiant — lues AVANT que la relecture ne la remplace. */
+function heldRowsOf(client: QueryClient): ReadonlyMap<string, Conversation> {
+  const cache = client.getQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY);
+  if (cache === undefined || !Array.isArray(cache.pages)) return new Map();
+  return new Map(cache.pages.flatMap((page) => page.conversations.map((conversation) => [conversation.id, conversation] as const)));
+}
+
+/** Une page servie, les préférences de chaque ligne arbitrées par version contre celles que le cache tient (#18925). */
+function withNewestPreferencesOn(client: QueryClient | undefined, page: ConversationsPage): ConversationsPage {
+  if (client === undefined) return page;
+  const held = heldRowsOf(client);
+  if (held.size === 0) return page;
+  return { ...page, conversations: page.conversations.map((served) => withNewestPreferences(served, held.get(served.id))) };
+}
+
 function takeMergedPage(client: QueryClient | undefined, pageParam: string): ConversationsPage | undefined {
   const pages = client === undefined ? undefined : mergedPages.get(client);
   const page = pages?.get(pageParam);
@@ -209,11 +225,12 @@ export function conversationsInfiniteOptions(deps: ConversationsDeps) {
     refetchOnMount: rereadsList,
     refetchOnWindowFocus: rereadsList,
     queryFn: async ({ pageParam, signal, client }: { readonly pageParam?: ConversationsPageParam; readonly signal?: AbortSignal; readonly client?: QueryClient }) => {
-      if (pageParam == null) return loadFirstPage(client, deps, signal);
-      return (
-        takeMergedPage(client, pageParam) ??
-        unwrap(await loadConversationsPage({ ...deps, before: pageParam, ...(signal !== undefined ? { signal } : {}) }))
-      );
+      const page =
+        pageParam == null
+          ? await loadFirstPage(client, deps, signal)
+          : (takeMergedPage(client, pageParam) ??
+            unwrap(await loadConversationsPage({ ...deps, before: pageParam, ...(signal !== undefined ? { signal } : {}) })));
+      return withNewestPreferencesOn(client, page);
     },
     initialPageParam: undefined as ConversationsPageParam,
     getNextPageParam: nextConversationsCursor,
@@ -446,8 +463,12 @@ export function conversationQuery(deps: ConversationsDeps, id: string, init?: { 
 
   return {
     queryKey: conversationQueryKey(id),
-    queryFn: async ({ signal }: { readonly signal?: AbortSignal }) =>
-      unwrap(await loadConversation({ ...deps, id, ...(signal !== undefined ? { signal } : {}) })),
+    queryFn: async ({ signal, client }: { readonly signal?: AbortSignal; readonly client?: QueryClient }) => {
+      const served = unwrap(await loadConversation({ ...deps, id, ...(signal !== undefined ? { signal } : {}) }));
+      if (client === undefined) return served;
+      /* #18925 : une fiche servie avant une diffusion déjà appliquée ne fait pas reculer ses préférences. */
+      return withNewestPreferences(served, client.getQueryData<Conversation>(conversationQueryKey(id)) ?? findCachedConversation(client, id));
+    },
     select: decodeConversation,
     ...(found === undefined ? {} : { initialData: found, initialDataUpdatedAt: 0 }),
   };

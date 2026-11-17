@@ -295,7 +295,14 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `messaging/freezeMessageStatus.ts` (déclaré plus bas), même mécanique —
   // le fichier hôte pèse deux fois le plafond de taille et le lot du décompte
   // éphémère devait y ajouter. La lecture a changé de fichier, pas de nature.
-  'MessageReadStatusService.ts': { kind: 'exempt', reads: 10, why: DOES_NOT_SELECT_SENDER },
+  //
+  // 10 → 11 (#18731) : le BALAYAGE de contiguïté de la livraison
+  // (`_computeExactDeliveredCursorTarget`) lit les entrées figées de la fenêtre
+  // pour savoir jusqu'où le curseur a le droit d'avancer. Son `select` est
+  // `{ messageId: true }` — l'exemption tient pour la raison qui la fonde, pas
+  // par héritage : cette lecture ne nomme aucun expéditeur, et ne rend rien à
+  // personne.
+  'MessageReadStatusService.ts': { kind: 'exempt', reads: 11, why: DOES_NOT_SELECT_SENDER },
   'messaging/anonymizeDeletedAccountMessages.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #11381 — le texte à retraduire (colonnes au repos seules, jamais `sender`).
   'messaging/atRestTranslationSource.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },

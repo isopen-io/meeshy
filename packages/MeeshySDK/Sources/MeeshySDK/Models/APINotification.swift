@@ -387,8 +387,6 @@ extension APINotification {
         }
     }
 
-    /// #10526 — une réaction à un mood sans phrase servie dit « votre humeur »,
-    /// comme la passerelle, avec ou sans emoji.
     /// Le repli d'un « J'aime » ou d'une réaction posée sur un contenu : la phrase servie d'abord, puis
     /// l'humeur, puis l'emoji sur la nature du contenu, sinon « a aimé ».
     private func likeFallbackTitle(actorName: String) -> String {
@@ -410,6 +408,8 @@ extension APINotification {
         return "\(actorName) a aime votre \(typeLabel)"
     }
 
+    /// #10526 — une réaction à un mood sans phrase servie dit « votre humeur »,
+    /// comme la passerelle, avec ou sans emoji.
     private func moodReactionFallbackTitle(actorName: String, emoji: String?) -> String {
         guard let emoji, !emoji.isEmpty else {
             return String(format: String(localized: "notification.like.fallbackTitle.mood", defaultValue: "%@ a aimé votre humeur", bundle: .main), actorName)

@@ -69,10 +69,13 @@ final class RelayedActivityNotificationTests: XCTestCase {
 
     // MARK: - Présentation
 
-    func test_presentation_aRelayedActivityWearsTheFriendContentColour_notTheSystemBell() {
+    func test_presentation_aRelayedActivityWearsItsOwnIcon_inTheFriendContentFamily() {
+        XCTAssertEqual(MeeshyNotificationType.friendContentReaction.systemIcon, "heart.fill")
+        XCTAssertEqual(MeeshyNotificationType.friendContentShare.systemIcon, "square.and.arrow.up.fill")
+        XCTAssertEqual(MeeshyNotificationType.friendContentRepost.systemIcon, "arrow.2.squarepath")
+        XCTAssertEqual(MeeshyNotificationType.friendContentQuote.systemIcon, "quote.bubble.fill")
         for type in relayedTypes {
             XCTAssertEqual(type.accentHex, MeeshyNotificationType.friendNewPost.accentHex, type.rawValue)
-            XCTAssertNotEqual(type.systemIcon, MeeshyNotificationType.system.systemIcon, type.rawValue)
         }
     }
 
