@@ -93,6 +93,7 @@ import me.meeshy.ui.modifier.reactionPaletteTrigger
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.bubble.RichMessageText
+import me.meeshy.ui.component.contentcard.PostTextContentCard
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.sdk.model.PostAbsenceReason
 import me.meeshy.ui.component.MeeshySkeletonBox
@@ -384,6 +385,8 @@ internal fun PostDetailContent(
                                     )
                                 }
                             }
+                            // Le premier lien de contenu du texte, déplié en carte vivante (#19331).
+                            PostTextContentCard(text = post.content, postId = post.id)
                         }
 
                         PostSecondaryTranslationPanel(secondaryTranslation)

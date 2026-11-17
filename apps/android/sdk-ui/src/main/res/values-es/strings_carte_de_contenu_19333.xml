@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Carte de contenu (#19333, #19331) : écrit à la main — l'humeur d'un auteur et l'état « enregistré » n'ont pas de clé iOS à adopter (manifeste android-only). -->
+<resources>
+    <string name="content_card_a11y_mood_by">Estado de ánimo de %1$s</string>
+    <string name="content_card_a11y_saved">Guardado</string>
+</resources>

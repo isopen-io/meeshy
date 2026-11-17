@@ -120,6 +120,19 @@ class LinkPreviewParserTest {
             .isEqualTo("https://end.com")
     }
 
+    @Test
+    fun `urls lists every link in order, normalised as firstUrl normalises the first`() {
+        assertThat(LinkPreviewParser.urls("see https://one.com, then www.two.com and HTTPS://meeshy.me/post/x."))
+            .containsExactly("https://one.com", "https://www.two.com", "https://meeshy.me/post/x")
+            .inOrder()
+    }
+
+    @Test
+    fun `urls of a text without a link is empty`() {
+        assertThat(LinkPreviewParser.urls("")).isEmpty()
+        assertThat(LinkPreviewParser.urls("mailto:a@b.co and www. alone")).isEmpty()
+    }
+
     // endregion
 
     // region canonicalize — tracker stripping

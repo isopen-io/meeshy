@@ -70,6 +70,16 @@ class DeepLinkParserTest {
     }
 
     @Test
+    fun `a mood link opens its post, as a tracked mood does`() {
+        assertThat(parse("https://meeshy.me/mood/m1")).isEqualTo(D.PostDetail("m1"))
+        assertThat(parse("https://staging.meeshy.me/mood/m2")).isEqualTo(D.External("https://staging.meeshy.me/mood/m2"))
+        assertThat(DeepLinkParser.parse("https://staging.meeshy.me/mood/m2", "https://staging.meeshy.me")).isEqualTo(D.PostDetail("m2"))
+        assertThat(parse("meeshy://mood/m3")).isEqualTo(D.PostDetail("m3"))
+        assertExternal("https://meeshy.me/mood/")
+        assertExternal("https://meeshy.me/mood/%20")
+    }
+
+    @Test
     fun `communities hashtags and conversation lists`() {
         assertThat(parse("https://meeshy.me/communities/cm1")).isEqualTo(D.Community("cm1"))
         assertThat(parse("meeshy://community/cm2")).isEqualTo(D.Community("cm2"))
@@ -163,7 +173,7 @@ class DeepLinkParserTest {
 
     @Test
     fun `every link produces exactly the same destination on both schemes for the shared forms`() {
-        val shared = listOf("me", "links", "u/a", "c/b", "join/c", "chat/d", "post/e", "story/f", "reel/g", "hashtag/h")
+        val shared = listOf("me", "links", "u/a", "c/b", "join/c", "chat/d", "post/e", "story/f", "reel/g", "hashtag/h", "mood/i")
         shared.forEach { assertThat(parse("meeshy://$it")).isEqualTo(parse("https://meeshy.me/$it")) }
     }
 

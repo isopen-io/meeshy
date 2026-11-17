@@ -42,14 +42,16 @@ public object LinkPreviewParser {
      * `https://`) and with trailing sentence punctuation trimmed. Returns `null` when the text
      * carries no http/www link (mailto/tel and other schemes are ignored).
      */
-    public fun firstUrl(text: String): String? {
-        if (text.isBlank()) return null
-        for (match in candidateRegex.findAll(text)) {
-            val normalized = normalizeCandidate(match.value)
-            if (normalized != null) return normalized
-        }
-        return null
-    }
+    public fun firstUrl(text: String): String? = urlSequence(text).firstOrNull()
+
+    /**
+     * Every HTTP(S) URL in [text], in order, normalised exactly as [firstUrl] normalises the first — the carte de contenu
+     * (#19331) reads the FIRST content link of a message, which is not necessarily its first link.
+     */
+    public fun urls(text: String): List<String> = urlSequence(text).toList()
+
+    private fun urlSequence(text: String): Sequence<String> =
+        if (text.isBlank()) emptySequence() else candidateRegex.findAll(text).mapNotNull { normalizeCandidate(it.value) }
 
     private fun normalizeCandidate(raw: String): String? {
         val trimmed = trimTrailing(raw)

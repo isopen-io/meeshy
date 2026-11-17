@@ -195,6 +195,23 @@
     <string name="contacts_phonebook_write">إرسال رسالة</string>
     <string name="contacts_skeleton_loading">جارٍ التحميل</string>
     <string name="contacts_tab_prefix">تبويب</string>
+    <string name="content_card_a11y_open">يفتح المحتوى</string>
+    <string name="content_card_a11y_post_by">منشور %1$s</string>
+    <string name="content_card_a11y_reel_by">ريل %1$s</string>
+    <string name="content_card_a11y_saves">%1$d عملية حفظ</string>
+    <string name="content_card_a11y_story_by">قصة %1$s</string>
+    <plurals name="content_card_a11y_views">
+        <item quantity="zero">%1$d مشاهدات</item>
+        <item quantity="one">%1$d مشاهدة</item>
+        <item quantity="two">%1$d مشاهدتان</item>
+        <item quantity="few">%1$d مشاهدات</item>
+        <item quantity="many">%1$d مشاهدات</item>
+        <item quantity="other">%1$d مشاهدات</item>
+    </plurals>
+    <string name="content_card_kind_mood">حالة مزاجية</string>
+    <string name="content_card_kind_post">منشور</string>
+    <string name="content_card_kind_reel">مقطع</string>
+    <string name="content_card_kind_story">قصة</string>
     <string name="content_failure_retry">إعادة المحاولة</string>
     <string name="content_failure_server_title">تعذّر على Meeshy تحميل هذا المحتوى</string>
     <string name="content_failure_unavailable_title">لم يعد هذا المحتوى متاحًا</string>

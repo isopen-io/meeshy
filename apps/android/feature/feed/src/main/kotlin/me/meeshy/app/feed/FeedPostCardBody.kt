@@ -36,6 +36,7 @@ import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.text.HashtagLink
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.RichPostText
+import me.meeshy.ui.component.contentcard.PostTextContentCard
 import me.meeshy.ui.profile.LocalProfileSheetOpener
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -78,6 +79,8 @@ internal fun FeedPostCardBody(
                 onHashtagClick = onOpenHashtag,
                 onMentionClick = { username -> post.mentionProfile(username)?.let(profileOpener::open) },
             )
+            // Le premier lien de contenu du texte, déplié en carte vivante sous le texte (#19331).
+            PostTextContentCard(text = post.content, postId = post.id)
         }
 
         if (post.languageStrip.isNotEmpty() || post.languageExplorer != null) {

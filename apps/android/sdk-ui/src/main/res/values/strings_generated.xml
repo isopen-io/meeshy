@@ -187,6 +187,19 @@
     <string name="contacts_phonebook_write">Send a message</string>
     <string name="contacts_skeleton_loading">Loading</string>
     <string name="contacts_tab_prefix">Tab</string>
+    <string name="content_card_a11y_open">Opens the content</string>
+    <string name="content_card_a11y_post_by">Post by %1$s</string>
+    <string name="content_card_a11y_reel_by">Reel by %1$s</string>
+    <string name="content_card_a11y_saves">%1$d saves</string>
+    <string name="content_card_a11y_story_by">Story by %1$s</string>
+    <plurals name="content_card_a11y_views">
+        <item quantity="one">%1$d view</item>
+        <item quantity="other">%1$d views</item>
+    </plurals>
+    <string name="content_card_kind_mood">Mood</string>
+    <string name="content_card_kind_post">Post</string>
+    <string name="content_card_kind_reel">Reel</string>
+    <string name="content_card_kind_story">Story</string>
     <string name="content_failure_retry">Retry</string>
     <string name="content_failure_server_title">Meeshy couldn\'t load this content</string>
     <string name="content_failure_unavailable_title">This content is no longer available</string>

@@ -58,6 +58,7 @@ class DeepLinkRouterTest {
             "https://meeshy.me/s/s1", "https://meeshy.me/users/bob", "https://meeshy.me/me", "https://meeshy.me/reels?seed=r1",
             "meeshy://conversations/recent", "meeshy://conversations/unread", "meeshy://quickreply/c1?text=hi",
             "meeshy://send?contactId=c1&message=hi", "meeshy://contact/c1", "https://meeshy.me/signup?ref=CODE",
+            "https://meeshy.me/mood/m1",
         ).forEach { assertThat(DeepLinkRouter.ownsLink(it)).isTrue() }
     }
 

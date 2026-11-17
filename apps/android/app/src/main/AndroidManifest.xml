@@ -219,6 +219,8 @@
                 <data android:pathPrefix="/communities/" />
                 <data android:pathPrefix="/hashtag/" />
                 <data android:pathPrefix="/signup" />
+                <!-- lot: carte-de-contenu-19333 — l'humeur partagée (/mood/{id}) s'ouvre sur son post, comme sa cible suivie. -->
+                <data android:pathPrefix="/mood/" />
             </intent-filter>
         </activity>
 

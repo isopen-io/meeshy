@@ -18,11 +18,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import me.meeshy.app.chat.conversationcard.LocalConversationLinkCards
 import me.meeshy.feature.chat.R
-import me.meeshy.sdk.model.deeplink.ConversationLinkTarget
 import me.meeshy.sdk.link.LinkPreview
 import me.meeshy.sdk.link.LinkPreviewCache
-import me.meeshy.sdk.link.LinkPreviewOutcome
 import me.meeshy.sdk.link.LinkPreviewParser
+import me.meeshy.sdk.link.LinkPreviewState
+import me.meeshy.sdk.model.link.MessageLinkEmbed
+import me.meeshy.ui.component.contentcard.LocalContentLinkCards
 import me.meeshy.ui.component.bubble.BubbleAccessibilityAction
 import me.meeshy.ui.component.bubble.BubbleCallbacks
 import me.meeshy.ui.component.bubble.BubbleContent
@@ -239,26 +240,28 @@ internal fun ChatMessageRow(
     }
     // Une bulle audio/vidéo résiste : le glissé ne doit pas gêner la barre de lecture.
     val swipeResistance = BubbleSwipeResistance.of(bubble.audios.isNotEmpty(), bubble.videoCount)
-    val linkUrl = remember(bubble.text) {
-        LinkPreviewParser.firstUrl(bubble.text)
+    // Ce que les liens du message attachent sous son texte, résolu une fois (iOS `BubbleLinkEmbed`) : la carte d'une
+    // conversation Meeshy (#13672), celle d'un post, d'un réel, d'une story ou d'une humeur (#19331), sinon l'aperçu
+    // générique — et rien quand le texte n'est lu que par l'appareil ou vient d'un auteur sans compte (`LinkExposure`).
+    val conversationCards = LocalConversationLinkCards.current
+    val contentCards = LocalContentLinkCards.current
+    val linkExposure = bubble.linkExposure()
+    val linkEmbed = remember(bubble.text, linkExposure, conversationCards, contentCards) {
+        MessageLinkEmbed.choose(
+            urls = LinkPreviewParser.urls(bubble.text),
+            exposure = linkExposure,
+            conversationWebOrigin = conversationCards?.webOrigin,
+            showsContentCards = contentCards != null,
+        )
     }
-    if (linkUrl != null) {
+    val linkUrl = linkEmbed.previewUrl
+    // L'aperçu générique d'un lien de contenu n'est cherché que si sa carte retombe dessus.
+    if (linkUrl != null && linkEmbed !is MessageLinkEmbed.ContentCard) {
         LaunchedEffect(linkUrl) { linkPreviewStore.request(linkUrl) }
     }
-    val linkState = LinkPreview.stateFor(
-        bubble.text,
-        linkUrl?.let {
-            linkPreviewCache.outcomeFor(
-                LinkPreviewParser.canonicalize(it),
-                System.currentTimeMillis(),
-            )
-        } ?: LinkPreviewOutcome.Empty,
-    )
-    // Une URL qui désigne une conversation Meeshy devient sa carte (iOS `ConversationLinkCard`, #13672).
-    val conversationCards = LocalConversationLinkCards.current
-    val conversationCardTarget = remember(linkUrl, conversationCards) {
-        conversationCards?.let { cards -> linkUrl?.let { ConversationLinkTarget.target(it, cards.webOrigin) } }
-    }
+    val linkState = linkUrl?.let {
+        LinkPreview.stateFor(it, linkPreviewCache.outcomeFor(LinkPreviewParser.canonicalize(it), System.currentTimeMillis()))
+    } ?: LinkPreviewState.None
     // iOS rend l'aperçu de lien DANS la bulle, sous le texte (`BubbleLinkEmbed`).
     val linkAccessory: (@Composable (Color) -> Unit)? = if (linkUrl == null) {
         null
@@ -267,6 +270,7 @@ internal fun ChatMessageRow(
             // La rangée plate n'a pas de fond : son aperçu prend l'accent, comme une bulle reçue.
             val onTint = bubble.isOutgoing && !flat
             val preview: @Composable () -> Unit = {
+                if (linkEmbed is MessageLinkEmbed.ContentCard) LaunchedEffect(linkUrl) { linkPreviewStore.request(linkUrl) }
                 LinkPreviewCard(
                     state = linkState,
                     isOutgoing = false,
@@ -277,10 +281,13 @@ internal fun ChatMessageRow(
                 )
             }
             MessageLinkAttachment(
-                cardTarget = conversationCardTarget,
+                cardTarget = (linkEmbed as? MessageLinkEmbed.ConversationCard)?.target,
                 cards = conversationCards,
                 fallbackAccent = accentColor,
                 onOpenConversation = actions.onOpenConversation,
+                contentTarget = (linkEmbed as? MessageLinkEmbed.ContentCard)?.target,
+                contentCards = contentCards,
+                onLongPress = { actions.onLongPress(messageId) },
                 preview = preview,
             )
         }
