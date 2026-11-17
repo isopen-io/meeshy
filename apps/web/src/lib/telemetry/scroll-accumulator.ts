@@ -1,3 +1,5 @@
+import { SCROLL_VELOCITY_BUCKETS_PT_PER_S } from '@meeshy/shared/types/social-events-v2';
+
 import type { ScrollListingSummary, VelocityHistogram } from '@/lib/api/social-events-v2-types';
 
 import { ratio2 } from './content-accumulator';
@@ -13,7 +15,7 @@ export { createContentScrollAccumulator } from './content-accumulator';
  */
 export const SCROLL_SAMPLE_MS = 100;
 export const SCROLL_STOP_MS = 1000;
-const VELOCITY_EDGES = [500, 1500, 4000] as const;
+const VELOCITY_EDGES = SCROLL_VELOCITY_BUCKETS_PT_PER_S;
 const FLING_BUCKET = 3;
 const POSITIONS_CAP = 1000;
 
