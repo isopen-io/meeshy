@@ -17,7 +17,6 @@ final class ThemePaletteInjectionGuardTests: XCTestCase {
         "../../packages/MeeshySDK/Sources/MeeshyUI/Media/AudioEditorToolPanel.swift",
         "../../packages/MeeshySDK/Sources/MeeshyUI/Media/MediaTranscriptionView.swift",
         "../../packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyAudioEditorView.swift",
-        "../../packages/MeeshySDK/Sources/MeeshyUI/Media/UniversalAudioRecorderView.swift",
         "../../packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet.swift",
         "../../packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+PostsTab.swift",
         "../../packages/MeeshySDK/Sources/MeeshyUI/Theme/ViewModifiers.swift"

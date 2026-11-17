@@ -113,9 +113,6 @@ nonisolated enum ComposerRailGeometry {
     /// cinq pastilles de fond demandent sans défiler.
     static let roomyPanelWidth: CGFloat = 320
 
-    /// Le panneau se pose à côté du rail droit : la marge de bord, le rail, et
-    /// l'écart d'un rail à la scène.
-    static var roomyPanelTrailing: CGFloat { roomyMargin + railWidth + gutter }
 
     /// **La marge du volet de texte** : sur téléphone, la place d'un rail de
     /// chaque côté (`lane`, #8388) ; sur grand écran, jamais plus large que la

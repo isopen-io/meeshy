@@ -653,36 +653,6 @@ nonisolated enum ComposerSoundRoleCopy {
     }
 }
 
-nonisolated enum ComposerSoundSourcePolicy {
-
-    /// L'ordre n'est pas décoratif : **enregistrer d'abord**. La porte ouvre
-    /// directement le micro, et les deux autres provenances sont des entrées
-    /// offertes SOUS lui, dans la même feuille. L'étagère ne vient pas en tête :
-    /// emprunter serait le geste nominal d'un CHOIX préalable, qui n'existe pas.
-    static let offered: [ComposerSoundSource] = [.record, .library, .files]
-
-    static func label(_ source: ComposerSoundSource) -> String {
-        switch source {
-        case .library:
-            return String(localized: "composer.rail.sound.library",
-                          defaultValue: "Emprunter un son", bundle: .main)
-        case .record:
-            return String(localized: "composer.rail.sound.record",
-                          defaultValue: "Enregistrer un vocal", bundle: .main)
-        case .files:
-            return String(localized: "composer.rail.sound.files",
-                          defaultValue: "Importer un fichier audio", bundle: .main)
-        }
-    }
-
-    /// Le titre de la feuille est **le libellé de la porte**, comme pour le
-    /// média : `composer.rail.sound` dit déjà « Ajouter un son » dans les sept
-    /// langues servies.
-    static var chooserTitle: String { ComposerRailCopy.label(.sound) }
-
-    static var cancel: String { ComposerMediaSourcePolicy.cancel }
-}
-
 
 /// **Les libellés de l'historique**.
 ///

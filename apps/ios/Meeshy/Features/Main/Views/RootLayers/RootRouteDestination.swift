@@ -141,8 +141,7 @@ struct RootRouteDestination: View {
         case .userStats:
             UserStatsView()
                 .navigationBarHidden(true)
-        // L'ancien tableau de bord (#9564, amendement n° 4) ouvre la première page, une version durant.
-        case .progression, .progressionDashboard:
+        case .progression:
             ProgressionView()
                 .navigationBarHidden(true)
         case .progressionSection(let section):

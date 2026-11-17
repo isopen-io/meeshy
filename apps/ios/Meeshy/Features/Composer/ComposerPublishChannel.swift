@@ -106,21 +106,3 @@ nonisolated enum ComposerPublishChannel {
     }
 }
 
-/// **Combien de publications une composition produit** (#4770, #8520).
-///
-/// Arbitrage porteur du 2026-09-02 (`docs/product/meeshy-composer-modele.md`
-/// § 1 bis) : le PROFIL décide de la cardinalité. Une story est une suite
-/// d'unités autonomes — N scènes, N stories ; un post et un réel sont UNE
-/// unité à plusieurs pages — M scènes, un envoi.
-///
-/// Le nom dit ce qu'elle rend, un nombre d'envois ; `deservesAPost` reste le
-/// filtre des unités (« celle-ci mérite-t-elle d'exister »), question distincte.
-nonisolated enum ComposerPublicationCardinality {
-    static func publicationCount(for type: PostType, sceneCount: Int) -> Int {
-        switch type {
-        case .story: return max(1, sceneCount)
-        case .post, .reel, .status: return 1
-        }
-    }
-}
-

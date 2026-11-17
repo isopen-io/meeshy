@@ -82,46 +82,6 @@ struct ProgressionTierDots: View {
     }
 }
 
-struct ProgressionStreakCard: View {
-    let streak: EngagementStreakProgress
-
-    private var theme: ThemeManager { ThemeManager.shared }
-    private let tint = MeeshyColors.warning
-
-    var body: some View {
-        ProgressionCard(tint: tint) {
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                HStack(spacing: MeeshySpacing.sm) {
-                    Image(systemName: "flame.fill")
-                        .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
-                        .foregroundColor(tint)
-                        .accessibilityHidden(true)
-                    Text(ProgressionCopy.streak(streak.currentDays))
-                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold, design: .rounded))
-                        .foregroundStyle(theme.textPrimary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                }
-                Text(ProgressionCopy.streakRecord(streak.longestDays))
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundStyle(theme.textMuted)
-                ProgressionBar(
-                    progress: streak.scale.progress,
-                    tint: tint,
-                    label: String(localized: "progression.a11y.bar.streak", defaultValue: "Ta Flamme, vers son prochain jalon", bundle: .main)
-                )
-                .padding(.top, MeeshySpacing.xs)
-                Text(ProgressionCopy.nextStep(for: streak.scale, kind: .streak))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
 struct ProgressionAxisRow: View {
     let axis: EngagementAxisProgress
 

@@ -16,8 +16,6 @@ final class ComposerFormatWordingTests: XCTestCase {
         "story.composer.a11y.composition",
         "story.location.add.a11y",
         "story.mention.add.a11y",
-        "story.draft.resume.title",
-        "story.draft.resume.a11y",
         "story.sound.library.emptyMine",
         "story.composer.a11y.publishStarted"
     ]
@@ -48,8 +46,6 @@ final class ComposerFormatWordingTests: XCTestCase {
         [wording.compositionSummary(count: "2", objects: "Texte"),
          wording.addPlace,
          wording.mention,
-         wording.draftResumeTitle,
-         wording.draftResumeAccessibility(slideCount: 2),
          wording.soundLibraryEmptyMine,
          wording.publishStarted]
     }
