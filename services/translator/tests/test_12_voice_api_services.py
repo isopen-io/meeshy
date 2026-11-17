@@ -375,10 +375,10 @@ class TestTranslationPipelineService:
 
         service = TranslationPipelineService(audio_output_dir=temp_data_dir)
 
-        job_id = service._generate_job_id("user123")
+        job_id = service._generate_job_id()
 
         assert job_id.startswith("mshy_")
-        assert "user123" in job_id
+        assert "user" not in job_id
 
     @pytest.mark.asyncio
     async def test_generate_output_filename(self, temp_data_dir):

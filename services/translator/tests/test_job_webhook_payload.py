@@ -149,7 +149,7 @@ async def test_the_webhook_payload_of_a_submitted_job_names_no_user(pipeline):
 
 
 async def test_the_job_id_is_opaque_prefixed_and_unique(pipeline):
-    ids = [pipeline._generate_job_id(OBJECT_ID_USER) for _ in range(200)]
+    ids = [pipeline._generate_job_id() for _ in range(200)]
 
     assert len(set(ids)) == len(ids)
     assert all(re.fullmatch(r"mshy_[0-9a-f]{32,}", job_id) for job_id in ids)

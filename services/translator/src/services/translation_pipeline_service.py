@@ -432,7 +432,7 @@ class TranslationPipelineService:
 
         # Créer le job
         job = TranslationJob(
-            id=self._generate_job_id(user_id),
+            id=self._generate_job_id(),
             user_id=user_id,
             audio_path=audio_path,
             audio_url=audio_url,
@@ -791,11 +791,9 @@ class TranslationPipelineService:
             return
         await send_job_webhook(job.webhook_url, webhook_payload(job))
 
-    def _generate_job_id(self, user_id: str) -> str:
-        """Génère un ID unique pour un job"""
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        unique = uuid.uuid4().hex[:8]
-        return f"mshy_{timestamp}_{user_id[:8]}_{unique}"
+    def _generate_job_id(self) -> str:
+        """Identifiant opaque (#19292) : aucun fragment de l'utilisateur ni de l'heure."""
+        return f"mshy_{uuid.uuid4().hex}"
 
     def _generate_output_filename(
         self,

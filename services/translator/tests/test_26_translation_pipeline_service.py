@@ -1157,11 +1157,11 @@ class TestTranslationPipelineServiceJobId:
         """Test generating job ID"""
         logger.info("Test 26.36: generate_job_id")
 
-        job_id = pipeline_service._generate_job_id("user_12345678")
+        job_id = pipeline_service._generate_job_id()
 
         assert job_id.startswith("mshy_")
-        assert "user_123" in job_id  # First 8 chars of user_id
-        assert len(job_id) > 20  # Should have timestamp and unique part
+        assert "user" not in job_id
+        assert len(job_id) >= len("mshy_") + 32
         logger.info("generate_job_id OK")
 
     def test_generate_job_id_unique(self, pipeline_service):
@@ -1170,7 +1170,7 @@ class TestTranslationPipelineServiceJobId:
 
         ids = set()
         for _ in range(100):
-            job_id = pipeline_service._generate_job_id("user_test")
+            job_id = pipeline_service._generate_job_id()
             ids.add(job_id)
 
         assert len(ids) == 100
