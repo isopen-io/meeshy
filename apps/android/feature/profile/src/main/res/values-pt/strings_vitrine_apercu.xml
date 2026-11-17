@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="vitrine_cap_presence">Presença</string>
+    <string name="vitrine_cap_presence_detailed">Presença detalhada</string>
+    <string name="vitrine_cap_level_rank">Nível e classificação</string>
+    <string name="vitrine_cap_sparks">Faíscas</string>
+    <string name="vitrine_cap_battery">Bateria, telefone inacessível</string>
+    <string name="vitrine_cap_location_live">Localização contínua</string>
+    <string name="vitrine_cap_location_history">Histórico de localização</string>
+    <string name="vitrine_as_title">Ver como</string>
+    <string name="vitrine_as_subtitle">A tua vitrine, como cada círculo a vê.</string>
+    <string name="vitrine_as_open_title">Visível neste nível</string>
+    <string name="vitrine_as_hidden_title">Oculto neste nível</string>
+    <string name="vitrine_as_opens_from">A partir de %1$s</string>
+    <string name="vitrine_as_locked_a11y">%1$s, bloqueado, abre a partir de %2$s</string>
+    <string name="vitrine_as_nothing_open">Nada mais é visível neste nível.</string>
+</resources>
