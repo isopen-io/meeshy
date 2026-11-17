@@ -25,11 +25,11 @@ extension CacheCoordinator {
     /// décrivent alors un texte qui n'existe plus. Sans la ligne disque, la
     /// purge en mémoire serait cosmétique — `loadTranslationCaches()` la
     /// réinjecterait au prochain démarrage. Jumelle par MESSAGE de
-    /// `invalidateTranslationCaches()`, qui vide les trois caches de
-    /// traduction/transcription en entier ; `clearTranslationCacheDB()` en est
-    /// le pendant disque global. Les caches de transcription et d'audio
-    /// traduit ne sont PAS touchés : éditer le texte d'un message ne périme
-    /// pas la piste enregistrée.
+    /// `invalidateTranslationCaches()`, qui vide ce cache en entier ;
+    /// `clearTranslationCacheDB()` en est le pendant disque global. Ce cache ne
+    /// tient que les traductions du TEXTE : transcriptions et pistes traduites
+    /// vivent dans la pièce de la ligne canonique (`MessageEnrichmentWriter`),
+    /// et éditer le texte ne les périme pas.
     public func invalidateTranslations(for messageId: String) {
         translationCache.removeValue(forKey: messageId)
         translationTimestamps.removeValue(forKey: messageId)
@@ -175,8 +175,8 @@ extension CacheCoordinator {
         }
     }
 
-    /// Purge ciblée des 3 caches in-memory de traduction/transcription +
-    /// la table GRDB `TranslationCacheRecord`. Exposé publiquement pour
+    /// Purge du cache des traductions du texte — la mémoire et la table GRDB
+    /// `TranslationCacheRecord`. Exposé publiquement pour
     /// que le pull-to-refresh (ou tout autre flow voulant re-traduire)
     /// puisse forcer un re-fetch des traductions sans toucher aux
     /// stores principaux (conversations, messages, etc.).
