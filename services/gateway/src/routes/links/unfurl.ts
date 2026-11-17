@@ -43,6 +43,13 @@ import {
   loadTrackingLinkUnfurlSource,
   type TrackingLinkUnfurlSource
 } from '../../services/linkUnfurl/trackingLink';
+import { addressLinkOpensTo } from '../../services/profile-addresses/address-link-gate';
+import {
+  composePersonUnfurl,
+  isPersonHandle,
+  loadPersonUnfurlSource,
+  type PersonUnfurlSource
+} from '../../services/linkUnfurl/person';
 
 export const LINK_UNFURL_RATE_LIMIT_MAX = 60;
 export const LINK_UNFURL_CACHE_TTL_MS = 5 * 60_000;
@@ -87,9 +94,10 @@ export function publicAppOrigin(raw: string | undefined = process.env.FRONTEND_U
 
 export function registerLinkUnfurlRoute(
   fastify: FastifyInstance,
-  deps: { readonly prisma: PrismaClient; readonly origin: string }
+  deps: { readonly prisma: PrismaClient; readonly origin: string; readonly namedPersonCard?: boolean }
 ): void {
   const { prisma, origin } = deps;
+  const namedPersonCard = deps.namedPersonCard === true;
   const rows = new BoundedTtlCache<string, LinkUnfurlSource | null>({
     maxSize: LINK_UNFURL_CACHE_MAX,
     ttlMs: LINK_UNFURL_CACHE_TTL_MS
@@ -145,12 +153,25 @@ export function registerLinkUnfurlRoute(
     ttlMs: LINK_UNFURL_CACHE_TTL_MS
   });
 
-  const readTracking = async (token: string): Promise<TrackingLinkUnfurlSource | null> => {
+  /**
+   * Le lien d'une ADRESSE de fiche (#18863) ne se met jamais en cache, et passe la loi des autres
+   * portes à chaque requête, un robot étant un lecteur SANS compte (#19196) : fermé, il est vu
+   * comme un lien mort (aperçu générique, jamais l'invitation d'un jeton inconnu). Une lecture
+   * de la garde qui échoue ferme.
+   */
+  const readTracking = async (token: string): Promise<TrackingLinkUnfurlSource | null | 'closed'> => {
     const cached = trackingRows.get(token);
-    if (cached !== undefined) return cached;
-    const row = await loadTrackingLinkUnfurlSource(prisma, token);
-    trackingRows.set(token, row);
-    return row;
+    const row = cached !== undefined ? cached : await loadTrackingLinkUnfurlSource(prisma, token);
+    if (!row?.addressId) {
+      if (cached === undefined) trackingRows.set(token, row);
+      return row;
+    }
+    const opens = await addressLinkOpensTo(prisma, { token, createdBy: row.createdBy, addressId: row.addressId, originalUrl: row.originalUrl }, undefined)
+      .catch((error: unknown) => {
+        logWarn(fastify.log, 'Address link gate read failed — serving the generic preview', error);
+        return false;
+      });
+    return opens ? row : 'closed';
   };
 
   /**
@@ -184,12 +205,15 @@ export function registerLinkUnfurlRoute(
           return undefined;
         })
       : null;
-    const decision = tracking === undefined ? { kind: 'generic' as const } : decideTrackingLinkUnfurl({ token, tracking, origin, now });
+    const decision = tracking === undefined || tracking === 'closed'
+      ? { kind: 'generic' as const }
+      : decideTrackingLinkUnfurl({ token, tracking, origin, now });
 
     if (decision.kind === 'redirect') {
+      const isAddressLink = typeof tracking === 'object' && tracking !== null && Boolean(tracking.addressId);
       return reply
         .headers({
-          'cache-control': RESPONSE_HEADERS['cache-control'],
+          'cache-control': isAddressLink ? 'private, no-store' : RESPONSE_HEADERS['cache-control'],
           'x-robots-tag': RESPONSE_HEADERS['x-robots-tag'],
           'referrer-policy': RESPONSE_HEADERS['referrer-policy']
         })
@@ -261,6 +285,63 @@ export function registerLinkUnfurlRoute(
     const unfurl = composeAffiliateUnfurl({
       source,
       token,
+      acceptLanguage: request.headers['accept-language'],
+      origin,
+      now: new Date()
+    });
+    return reply
+      .code(200)
+      .headers(RESPONSE_HEADERS)
+      .type('text/html; charset=utf-8')
+      .send(renderLinkUnfurlPage(unfurl));
+  });
+
+  const personRows = new BoundedTtlCache<string, PersonUnfurlSource | null>({
+    maxSize: LINK_UNFURL_CACHE_MAX,
+    ttlMs: LINK_UNFURL_CACHE_TTL_MS
+  });
+
+  const readPerson = async (handle: string): Promise<PersonUnfurlSource | null> => {
+    if (!isPersonHandle(handle)) return null;
+    const key = handle.toLowerCase();
+    const cached = personRows.get(key);
+    if (cached !== undefined) return cached;
+    const row = await loadPersonUnfurlSource(prisma, handle);
+    personRows.set(key, row);
+    return row;
+  };
+
+  /**
+   * `GET /people/:username/og` — la page que lisent les robots d'aperçu quand on colle
+   * `https://meeshy.me/u/<pseudo>` ou `https://meeshy.me/@<pseudo>` (#18865). Par défaut
+   * l'aperçu GÉNÉRIQUE, sans lire `User` (#10205) ; drapeau allumé, la carte de profil au
+   * niveau PUBLIC, jamais plus (`services/linkUnfurl/person.ts`).
+   */
+  fastify.get<{ Params: { username: string } }>('/people/:username/og', {
+    schema: {
+      description: 'Aperçu d’une fiche pour les robots d’aperçu des messageries (#18865). Par défaut l’aperçu générique de Meeshy, quel que soit le pseudo : un profil ne se montre qu’à un membre connecté (#10205). Drapeau serveur PERSON_UNFURL_NAMED_CARD=true : carte de profil au niveau PUBLIC. Toujours 200.',
+      tags: ['links'],
+      summary: 'Aperçu d’une fiche pour les robots',
+      params: {
+        type: 'object',
+        required: ['username'],
+        properties: { username: { type: 'string' } }
+      },
+      response: {
+        200: { description: 'Document HTML portant les balises Open Graph et Twitter Card', type: 'string' },
+        429: errorResponseSchema
+      }
+    },
+    config: { rateLimit: unfurlRateLimit('person-unfurl') }
+  }, async (request, reply: FastifyReply) => {
+    const { username } = request.params;
+    const source = !namedPersonCard ? null : await readPerson(username).catch((error: unknown) => {
+      logWarn(fastify.log, 'Person unfurl read failed — serving the generic preview', error);
+      return null;
+    });
+    const unfurl = composePersonUnfurl({
+      source,
+      handle: username,
       acceptLanguage: request.headers['accept-language'],
       origin,
       now: new Date()

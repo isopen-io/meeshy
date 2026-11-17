@@ -345,6 +345,12 @@ jobs:
           # le disque » était annoncée par `vite.config.ts` sans être appliquée
           # par `dist/sw.js`. Lit `dist/sw.js`, donc après le build ci-dessus.
           node scripts/check-sw-api-cache.mjs
+          # #18986 — les condensats de la politique de sécurité du contenu
+          # (`nginx.conf`) sont EXACTEMENT ceux des scripts en ligne des
+          # documents construits : un script changé sans eux casserait la page
+          # servie, un condensat orphelin élargirait la politique. Lit `dist/`,
+          # aucun navigateur : sa place est ici.
+          node scripts/check-csp-hashes.mjs
           # #7305 — le service worker porte enfin `push`/`notificationclick`,
           # et sa table de destinations est un JUMEAU (un script classique
           # chargé par `importScripts` ne peut importer aucun module TS). Ce
@@ -1391,6 +1397,16 @@ jobs:
         run: |
           cd apps/web
           node scripts/check-api-source.mjs
+
+      # #18986 — l'application démarre sous la politique de sécurité du contenu
+      # de `nginx.conf` (servie TELLE QUELLE), le pont libsignal s'instancie
+      # (`'wasm-unsafe-eval'`), et la politique refuse `new Function`, une
+      # amorce altérée et un script tiers.
+      - name: Gate politique de sécurité du contenu
+        if: ${{ !cancelled() && matrix.tranche == 1 }}
+        run: |
+          cd apps/web
+          node scripts/check-csp.mjs
 
       # EN DERNIER, et pas par hasard : ce témoin RECONSTRUIT `dist` en variante
       # de banc (500 messages) pour mesurer la virtualisation, puis le

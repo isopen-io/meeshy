@@ -1,6 +1,6 @@
 import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack/react-query';
 
-import { endToEndRegimeLedger } from '@/lib/end-to-end-regime-ledger';
+import { endToEndRegimeLedger, mayPersistConversationContent } from '@/lib/end-to-end-regime-ledger';
 
 import { createAccountCacheShelf } from './account-caches';
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, keepNewerGameState } from './game-state-order';
@@ -174,8 +174,17 @@ export function persistableQuery(query: {
   readonly state: { readonly status: string };
   readonly queryKey: readonly unknown[];
 }): boolean {
-  return query.state.status === 'success' && !estClefNonPersistable(query.queryKey) && !estFenetreAncree(query.queryKey);
+  return query.state.status === 'success' && !estClefNonPersistable(query.queryKey) && !estFenetreAncree(query.queryKey) && !estFilScelle(query.queryKey);
 }
+
+/**
+ * Le fil d'une conversation FERMÉE AU CLAIR (#18991) — il portera un jour le
+ * clair déchiffré sur l'appareil : il vit en mémoire, jamais dans
+ * `localStorage` ni dans l'étagère des comptes (liste noire,
+ * `lib/e2ee/durable-plaintext-sinks.ts`).
+ */
+const estFilScelle = (key: readonly unknown[]): boolean =>
+  key[0] === 'conversations' && typeof key[1] === 'string' && key[2] === 'messages' && !mayPersistConversationContent(key[1]);
 
 /** La fenêtre autour d'un message (#7420, `messages-window.ts`) — un moment de
  * navigation, jamais rouvert au rechargement : seul le présent du fil se persiste. */
