@@ -27,8 +27,6 @@ export function anchorPoint(object: CanvasObject): AnchorPoint {
   return { x: 0.5, y: object.anchor.edge === 'top' ? BAND_ANCHOR_Y.top : BAND_ANCHOR_Y.bottom };
 }
 
-export type EasingName = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
-
 /** `StoryEasing` (`StoryModels.swift:2367-2385`) — quatre courbes ; tout ce
  * qui n'en fait pas partie (dont `'spring'`, accepté par le contrat zod, § 9
  * Q3) retombe sur `linear` : iOS ne la connaît pas, en inventer une

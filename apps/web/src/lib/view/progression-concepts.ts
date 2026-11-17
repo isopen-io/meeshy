@@ -628,20 +628,6 @@ export function conceptView(concept: ProgressionConcept, view: EngagementWithGam
   };
 }
 
-/** La clé d'une donnée : ce qui la désigne, quel que soit son libellé. */
-export const refKeyOf = (ref: DetailRef): string => {
-  switch (ref.kind) {
-    case 'fact':
-      return ref.fact;
-    case 'element':
-      return `element:${ref.family}`;
-    case 'elan':
-      return `elan:${ref.family}`;
-    case 'note':
-      return 'note';
-  }
-};
-
 /**
  * LES PIÈCES DE JEU QUI SONT LE HÉROS DE LEUR FICHE — et les faits qu'elles montrent déjà, que « Où j'en suis » ne
  * redira pas. `'all'` : la pièce montre tout ce que le concept sert. Les fiches de l'Héritage et des Étincelles ont

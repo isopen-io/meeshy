@@ -27,6 +27,7 @@ export type { VoiceModelFields, PublicVoiceFields } from './public-profile';
  * évoluer, pour un usage qui n'existe pas.
  */
 
+export { userShortAddressAlias } from './profile-short-address';
 export { updateUserProfile, updateUserAvatar, updateUserBanner } from './profile-updates';
 
 export { updateUserPassword, updateUsernameBodySchema, updateUsername } from './profile-credentials';

@@ -89,7 +89,7 @@ const defaultNow = (): number => Date.now();
  * L'ÉLECTION (#5648) — Focal se distingue désormais de Script par l'ÉLECTION
  * d'une rangée au défilement soutenu (carte teintée, chip d'identité
  * agrandi, tampon de date), plus par la courbe continue qu'iOS a retirée
- * (`reading-mode/perspective.ts`, gelée). `elected` est la SEULE donnée que
+ * (retirée du web avec elle). `elected` est la SEULE donnée que
  * l'hôte fait traverser React à ce sujet (`reading-mode/scene.ts`) : quand
  * elle bascule, l'en-tête d'identité et la colonne méta s'effacent
  * (`FocalRow.swift:182, :269, :317-322`), la ligne basse ordinaire cède la

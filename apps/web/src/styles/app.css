@@ -134,9 +134,10 @@
   /* ---- ESPACE : l'echelle FERMEE de la charte (regle 10).
      `--spacing: 4px` fait tomber les 9 pas exactement sur les multiplicateurs
      1 2 3 4 6 8 12 16 24 de Tailwind (4 8 12 16 24 32 48 64 96 px). Les pas
-     intermediaires que Tailwind autoriserait (p-5, p-7...) sont HORS echelle
-     et refuses par scripts/check-echelle.mjs — le gate, pas la config, tient
-     la fermeture, parce que Tailwind n'a pas de moyen de la declarer. ---- */
+     intermediaires que Tailwind autoriserait (p-5, p-7...) sont HORS echelle.
+     AUCUN gate ne les refuse aujourd'hui : le check-echelle.mjs qu'annoncait
+     ce commentaire n'a jamais existe, et Tailwind n'a pas de moyen de
+     declarer la fermeture. ---- */
   --spacing: 4px;
 
   /* ---- GEOMETRIE (cibles, avatars, glyphes) ---- */

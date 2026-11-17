@@ -383,8 +383,8 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
 
   /**
    * LA SCÈNE DU FIL (#5648) — l'ÉLECTION d'une rangée au défilement soutenu
-   * (Focal seul), plus par la courbe continue qu'iOS a retirée
-   * (`reading-mode/perspective.ts`, gelée) ; le RÉVÉLÉ (heure, coches) vit
+   * (Focal seul), plus par la courbe continue qu'iOS a retirée (et le web
+   * avec elle) ; le RÉVÉLÉ (heure, coches) vit
    * en Focal ET en Script — `useThreadScene` le monte donc dès que le mode
    * n'est PAS `bubbles` (« densité uniforme, zéro perspective » ne parle
    * que de l'ÉLECTION, jamais du révélé).

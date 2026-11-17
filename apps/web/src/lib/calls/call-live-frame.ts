@@ -252,5 +252,3 @@ export function createCallLiveFrame(deps: LiveFrameDeps) {
     },
   };
 }
-
-export type CallLiveFrame = ReturnType<typeof createCallLiveFrame>;
