@@ -13,8 +13,13 @@ protocol NotificationFeedProviding: AnyObject {
     var allNotificationsRead: AnyPublisher<Void, Never> { get }
     var notificationReadRolledBack: AnyPublisher<String, Never> { get }
     var notificationWasDeleted: AnyPublisher<String, Never> { get }
+    /// La liste servie vient d'être relue (premier plan, reconnexion, trou de séquence).
+    var resynced: AnyPublisher<Void, Never> { get }
 
     func cachedFeed() async -> CacheResult<[APINotification]>
+    /// Ce que le disque tient, quel que soit son âge : `.expired` dit « revalide »,
+    /// jamais « il n'y a rien ».
+    func cachedFeedIgnoringExpiry() async -> [APINotification]
     func storeFeed(_ notifications: [APINotification]) async throws
     func refreshUnreadCount() async
     func markRead(notificationId: String) async
@@ -42,9 +47,14 @@ final class LiveNotificationFeed: NotificationFeedProviding {
     var allNotificationsRead: AnyPublisher<Void, Never> { manager.allNotificationsRead.eraseToAnyPublisher() }
     var notificationReadRolledBack: AnyPublisher<String, Never> { manager.notificationReadRolledBack.eraseToAnyPublisher() }
     var notificationWasDeleted: AnyPublisher<String, Never> { manager.notificationWasDeleted.eraseToAnyPublisher() }
+    var resynced: AnyPublisher<Void, Never> { NotificationGapResyncCoordinator.shared.resynced.eraseToAnyPublisher() }
 
     func cachedFeed() async -> CacheResult<[APINotification]> {
         await CacheCoordinator.shared.notifications.load(for: Self.persistedCacheKey)
+    }
+
+    func cachedFeedIgnoringExpiry() async -> [APINotification] {
+        await CacheCoordinator.shared.notifications.loadIgnoringExpiry(for: Self.persistedCacheKey)?.items ?? []
     }
 
     func storeFeed(_ notifications: [APINotification]) async throws {

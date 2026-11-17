@@ -93,4 +93,43 @@ final class NotificationListViewModelPaginationTests: XCTestCase {
         XCTAssertTrue(vm.loadDidFail)
         XCTAssertFalse(vm.isLoading)
     }
+
+    // MARK: - #18916 — la cloche ouverte se relit et se peint depuis le disque
+
+    /// Écran Notifications ouvert, app en arrière-plan une heure : au retour, la
+    /// resync remplace le cache et le compteur, mais `notification:new` n'est
+    /// pas rejoué. Sans relecture sur ce signal, les lignes restaient celles
+    /// d'il y a une heure sous un compteur à jour.
+    func test_feedResynced_whileListIsShown_refetchesServedRows() async {
+        let mock = MockNotificationListService()
+        mock.pages = [NotificationStubs.page(["A"]), NotificationStubs.page(["B", "A"])]
+        let feed = MockNotificationFeed()
+        let vm = makeSUT(mock, feed: feed)
+        await vm.loadInitial()
+
+        feed.resyncedSubject.send(())
+        for _ in 0..<300 where vm.notifications.map(\.id) != ["B", "A"] {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(vm.notifications.map(\.id), ["B", "A"], "la resync relit la page servie de la cloche ouverte")
+    }
+
+    /// Cloche rouverte plus de 24 h après son dernier usage, hors ligne : `.expired`
+    /// dit « revalide », jamais « il n'y a rien ». Les lignes du disque se
+    /// peignent tout de suite, sans squelette, et restent là si le réseau échoue.
+    func test_loadInitial_whenCacheExpired_paintsDiskRowsWithoutSkeleton() async {
+        let feed = MockNotificationFeed()
+        feed.cached = .expired
+        feed.diskFeed = [NotificationStubs.notification("A"), NotificationStubs.notification("B")]
+        let vm = makeSUT(MockNotificationListService(), feed: feed)
+        var loadingStates: [Bool] = []
+        let watch = vm.$isLoading.sink { loadingStates.append($0) }
+
+        await vm.loadInitial()
+        watch.cancel()
+
+        XCTAssertEqual(vm.notifications.map(\.id), ["A", "B"], "les lignes du disque restent peintes malgré l'échec réseau")
+        XCTAssertFalse(loadingStates.contains(true), "aucun squelette sur un disque qui tient des lignes")
+    }
 }
