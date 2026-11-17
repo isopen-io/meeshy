@@ -80,6 +80,7 @@ function prismaDouble(row: ReturnType<typeof lien> | null, cible: Cible = {}) {
               createdAt: new Date('2025-01-01T00:00:00Z'),
               registrationCountry: 'FR',
               timezone: 'Europe/Paris',
+              profileAccentColor: '#FF2E63',
               voiceModel: null,
             },
       ),
@@ -244,6 +245,21 @@ describe('?as=<cercle> — « Voir comme », réservé au propriétaire', () => 
   it('un cercle inconnu est refusé (400)', async () => {
     const app = await monter(CIBLE, null);
     expect((await lire(app, '?as=TOUT')).statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+describe('la couleur d’accent de la vitrine (cercle Public, #19201)', () => {
+  it('une CONNAISSANCE la reçoit', async () => {
+    const app = await monter(LECTEUR, lien('ACQUAINTANCE', 'ACQUAINTANCE'));
+    expect(((await lire(app, '')).json().data as Charge).profileAccentColor).toBe('#FF2E63');
+    await app.close();
+  });
+
+  it('« Voir comme » la montre au propriétaire, comme tout lecteur la recevrait', async () => {
+    const app = await monter(CIBLE, null);
+    expect(((await lire(app, '?as=PUBLIC')).json().data as Charge).profileAccentColor).toBe('#FF2E63');
+    expect(((await lire(app, '?as=FRIEND')).json().data as Charge).profileAccentColor).toBe('#FF2E63');
     await app.close();
   });
 });

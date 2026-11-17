@@ -28,6 +28,10 @@ import type { AccountActivation } from '../account-activation.js';
  * `null` sur `displayName`/`firstName`/`lastName` signifie EFFACÉ, et c'est le
  * seul moyen pour le client de faire retomber le nom sur le composant suivant.
  * `username` est obligatoire côté base, donc jamais `null`.
+ *
+ * `profileAccentColor` (#19201) : la couleur d'accent de la vitrine, une teinte de
+ * `PROFILE_ACCENT_HEXES` ; `null` = retour à l'accent CALCULÉ. Champ ajouté, qu'un ancien
+ * client ignore. Il part aussi vers les AUTRES appareils de la personne, pour les repeindre.
  */
 export interface UserUpdatedEventData {
   readonly userId: string;
@@ -38,6 +42,7 @@ export interface UserUpdatedEventData {
     username?: string;
     firstName?: string | null;
     lastName?: string | null;
+    profileAccentColor?: string | null;
   }>;
 }
 
@@ -81,6 +86,7 @@ export interface SocketIOUser {
   readonly displayName?: string;
   readonly avatar?: string;
   readonly banner?: string;  // Profile banner/cover image
+  readonly profileAccentColor?: string | null;  // #19201 : accent de la vitrine, null = automatique
   readonly bio?: string;
   readonly role: string;
   readonly permissions?: UserPermissions;

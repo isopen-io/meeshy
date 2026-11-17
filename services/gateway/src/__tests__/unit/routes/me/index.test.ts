@@ -199,6 +199,9 @@ async function buildApp(opts: {
 
   // Decorate fastify.prisma
   app.decorate('prisma', prisma);
+  // `PUT /me/location/ghost` (#19203) se garde par `fastify.authenticate`, décoré par le serveur :
+  // ce montage, qui ne l'exerce pas, le fournit pour que le plugin s'enregistre.
+  app.decorate('authenticate', async () => undefined);
 
   await app.register(meRoutes, { prefix: PREFIXE_PRODUCTION });
   await app.ready();

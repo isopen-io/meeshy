@@ -78,6 +78,8 @@ import { getUserInCommon } from './in-common';
 
 // Stories « à la une » : albums de l'auteur, chaque story sous sa propre audience (#19394)
 import { storyHighlightRoutes } from './story-highlights';
+// Les visites de mon lien de profil, lues par le propriétaire seul (#19206)
+import { profileLinkStatsRoutes } from './profile-link-stats';
 
 /**
  * Main user routes registration
@@ -96,6 +98,7 @@ export async function userRoutes(fastify: FastifyInstance) {
   await getUserByUsername(fastify);
   await userShortAddressAlias(fastify);
   await meAddressRoutes(fastify);
+  await profileLinkStatsRoutes(fastify);
   await getUserById(fastify);
   await getUserByEmail(fastify);
   await getUserByIdDedicated(fastify);

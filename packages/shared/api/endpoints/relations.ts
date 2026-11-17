@@ -33,6 +33,9 @@ export const byUserIdLevel = (userId: string): string => `/api/v1/relations/${en
 /** GET /api/v1/relations/:userId/location/history */
 export const byUserIdLocationHistory = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/location/history`;
 
+/** POST /api/v1/relations/:userId/location/request */
+export const byUserIdLocationRequest = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/location/request`;
+
 /** GET /api/v1/relations/:userId/phone-reachability */
 export const byUserIdPhoneReachability = (userId: string): string => `/api/v1/relations/${encodeURIComponent(userId)}/phone-reachability`;
 

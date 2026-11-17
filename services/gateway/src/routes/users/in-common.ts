@@ -28,8 +28,9 @@ import { RELATION_REQUEST_LEVELS } from '@meeshy/shared/types/relation';
 import { sendForbidden, sendInternalError, sendSuccess } from '../../utils/response';
 import { logError } from '../../utils/logger';
 import { commonCommunities, commonFriends, readInCommonParts } from '../../services/relations/inCommon';
-import { SHARED_MEDIA_KINDS, isSharedMediaKind, sharedMedia } from '../../services/relations/sharedMedia';
 import { pairHistory } from '../../services/relations/pairHistory';
+import { SHARED_ATTACHMENT_KINDS, SHARED_MEDIA_KINDS, isSharedMediaKind } from '../../services/relations/sharedMedia';
+import { sharedMediaPart } from '../../services/relations/sharedLinks';
 import { profileViewerId } from './profile-block-gate';
 
 export const inCommonFriendsEnabled = (): boolean => process.env.IN_COMMON_FRIENDS_ENABLED === 'true';
@@ -78,7 +79,7 @@ const mediaSchema = {
   additionalProperties: false,
   properties: {
     id: { type: 'string' },
-    kind: { type: 'string', enum: [...SHARED_MEDIA_KINDS] },
+    kind: { type: 'string', enum: [...SHARED_ATTACHMENT_KINDS] },
     messageId: { type: 'string', nullable: true },
     conversationId: { type: 'string' },
     originalName: { type: 'string' },
@@ -91,6 +92,18 @@ const mediaSchema = {
     width: { type: 'number', nullable: true },
     height: { type: 'number', nullable: true },
     uploadedBy: { type: 'string' },
+    createdAt: { type: 'string', format: 'date-time' },
+  },
+} as const;
+
+const linkSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    messageId: { type: 'string' },
+    conversationId: { type: 'string' },
+    url: { type: 'string' },
+    domain: { type: 'string' },
     createdAt: { type: 'string', format: 'date-time' },
   },
 } as const;
@@ -124,6 +137,7 @@ const mediaPartSchema = {
     counts: countsSchema,
     countsCapped: { type: 'boolean', description: 'Counts read over the most recent attachments only' },
     items: { type: 'array', items: mediaSchema },
+    links: { type: 'array', items: linkSchema, description: 'Present only when mediaKind=link — links read in the text of shared messages' },
     pagination: {
       type: 'object',
       additionalProperties: false,
@@ -222,7 +236,7 @@ export async function getUserInCommon(fastify: FastifyInstance) {
           properties: {
             parts: { type: 'string', description: 'Comma-separated subset of communities,friends,media,history (default: communities,friends,media — history is served only when asked)' },
             mediaKind: { type: 'string', enum: [...SHARED_MEDIA_KINDS], description: 'Filter the media page by kind' },
-            cursor: { type: 'string', description: 'Media keyset cursor — the id of the last item of the previous page' },
+            cursor: { type: 'string', description: 'Media keyset cursor — the id of the last item (the message id for links) of the previous page' },
             limit: { type: 'number', minimum: 1, maximum: 100, default: MEDIA_LIMIT_DEFAULT, description: 'Media page size' },
             listLimit: { type: 'number', minimum: 1, maximum: 100, default: LIST_LIMIT_DEFAULT, description: 'Communities and friends list size' },
           },
@@ -254,7 +268,7 @@ export async function getUserInCommon(fastify: FastifyInstance) {
             if (part === 'communities') return [part, { ...verdict, ...(await commonCommunities(fastify.prisma, { ...pair, limit: listLimit })) }] as const;
             if (part === 'history') return [part, { ...verdict, items: await pairHistory(fastify.prisma, pair) }] as const;
             if (part === 'friends') return [part, { ...verdict, ...(await commonFriends(fastify.prisma, { ...pair, limit: listLimit })) }] as const;
-            const media = await sharedMedia(fastify.prisma, {
+            const media = await sharedMediaPart(fastify.prisma, {
               ...pair,
               kind: isSharedMediaKind(query.mediaKind) ? query.mediaKind : undefined,
               cursor,

@@ -248,6 +248,10 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `Promise.all` sous l'unique `withOrphanedSenderRepair`, donc une seule
   // application pour trois lectures.
   'search/globalMessageSearch.ts': { kind: 'applies', reads: 3, applications: 1 },
+  // #19200 — « En commun », rubrique Liens : le curseur (`createdAt` seul) puis la fenêtre de compte
+  // et la page, toutes deux sous `LINK_MESSAGE_SELECT` (id, conversation, contenu, date, colonnes de
+  // protection). Jamais la relation `sender` : un lien partagé ne nomme pas son auteur.
+  'relations/sharedLinks.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
 
   // Deux lectures depuis #9240 : `resolveConversationId` (projette le scalaire
   // `conversationId`) et la garde d'admission d'écriture de

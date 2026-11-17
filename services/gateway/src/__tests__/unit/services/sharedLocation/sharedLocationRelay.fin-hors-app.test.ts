@@ -12,7 +12,7 @@ import {
   captureSharedLocationAccess,
   refreshSharedLocationBetween,
   stopSharedLocation,
-  type SharedLocationEnd,
+  type SharedLocationEndSignal,
 } from '../../../../services/sharedLocation/sharedLocationRelay';
 import { AMI, BLOQUEUR, CONNAISSANCE, demarrer, EMETTEUR, monde, NON_CHOISI, PROCHE, SANG, T0 } from '../../../helpers/shared-location-relay-world';
 
@@ -20,10 +20,10 @@ const MINUTE = 60_000;
 
 function avecSignal(options: { readonly leve?: boolean } = {}) {
   const m = monde();
-  const fins: SharedLocationEnd[] = [];
+  const fins: SharedLocationEndSignal[] = [];
   const deps = {
     ...m.deps,
-    ended: (end: SharedLocationEnd) => {
+    ended: (end: SharedLocationEndSignal) => {
       fins.push(end);
       if (options.leve) throw new Error('push injoignable');
     },

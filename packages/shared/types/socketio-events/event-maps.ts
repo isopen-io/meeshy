@@ -220,11 +220,13 @@ import type {
 } from '../battery.js';
 import type { PhoneReachabilityChangedEventData, PhoneReachabilityClearedEventData } from '../phone-reachability.js';
 import type { BloodMovedEventData, BloodProximityEventData } from '../blood-location.js';
+import type { ContactExchangeReceivedEventData } from '../contact-exchange.js';
 import type {
   SharedLocationAck,
   SharedLocationChangedEventData,
   SharedLocationEndedEventData,
   SharedLocationOwnChangedEventData,
+  SharedLocationRequestedEventData,
   SharedLocationStartPayload,
   SharedLocationStopAck,
   SharedLocationUpdatePayload,
@@ -439,6 +441,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.SHARED_LOCATION_CHANGED]: (data: SharedLocationChangedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_ENDED]: (data: SharedLocationEndedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_OWN_CHANGED]: (data: SharedLocationOwnChangedEventData) => void;
+  [SERVER_EVENTS.SHARED_LOCATION_REQUESTED]: (data: SharedLocationRequestedEventData) => void;
+  [SERVER_EVENTS.CONTACT_EXCHANGE_RECEIVED]: (data: ContactExchangeReceivedEventData) => void;
   [SERVER_EVENTS.BLOOD_PROXIMITY]: (data: BloodProximityEventData) => void;
   [SERVER_EVENTS.BLOOD_MOVED]: (data: BloodMovedEventData) => void;
   [SERVER_EVENTS.TOGETHER_INVITED]: (data: TogetherInvitedEventData) => void;

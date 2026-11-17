@@ -356,6 +356,9 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // qu'il a masqué de sa vue (historique effacé, messages supprimés pour lui)
   // ne lui est pas retraduit. Un invité sans compte n'a rien à masquer.
   'message-translation/ArrivalHistoryBackfill.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #19200 — « En commun », Liens : fenêtre de compte et page ; le masquage personnel est jugé EN MÉMOIRE
+  // (`hiddenFromReader`, marqueurs exigés par `IN_MEMORY_HIDING_SURFACES`), la fenêtre compte ce que la page sert.
+  'relations/sharedLinks.ts': { kind: 'applies', reads: 2, applications: 0 },
 
   /**
    * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes
@@ -714,13 +717,9 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    * un aperçu. Même raison que `attachments/fileRouteVerdict.ts` ci-dessus :
    * rien n'est SERVI, donc rien à masquer.
    */
-  'world/worldSeedOperations.ts': {
-    kind: 'exempt',
-    reads: 1,
-    why:
+  'world/worldSeedOperations.ts': { kind: 'exempt', reads: 1, why:
       "Compte les messages d'UNE conversation (le seed World Wide) pour décider " +
-      "si sa purge doit être refusée — aucun contenu, auteur ni aperçu servi.",
-  },
+      "si sa purge doit être refusée — aucun contenu, auteur ni aperçu servi." },
 };
 
 /**
@@ -791,6 +790,7 @@ const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
    * vert quand on retire le filtre (cycle 62 bis). Un marqueur doit tomber avec
    * ce qu'il garde.
    */
+  'relations/sharedLinks.ts': ['loadPersonalHistoryHidingByConversation(', 'hiddenFromReader('],
   'ConversationBridgeService.ts': [
     'loadPersonalHistoryHidingByUser(',
     'exclusiveFloorMsFor(',

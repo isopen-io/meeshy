@@ -26,7 +26,7 @@ import {
 } from '@meeshy/shared/types/shared-location-live-activity';
 import { hasValidSecretsKey, isSealedSecret, openSecret, sealSecret } from '../../utils/secret-at-rest';
 import type { SharedLocationKv } from './sharedLocationKv';
-import { servedSharedLocationDeadline, type SharedLocationEnd, type SharedLocationRelayDeps } from './sharedLocationRelay';
+import { servedSharedLocationDeadline, type SharedLocationEndSignal, type SharedLocationRelayDeps } from './sharedLocationRelay';
 
 export type LiveActivityApnsEnvironment = 'development' | 'production';
 
@@ -128,7 +128,7 @@ const quietly = async (deps: SharedLocationEndPushDeps, send: () => Promise<void
 };
 
 /** Pousse UNE fin servie : la silencieuse au lecteur, puis `end` à ses jetons pour ce sujet, effacés d'abord. */
-export async function pushSharedLocationEnd(deps: SharedLocationEndPushDeps, end: SharedLocationEnd): Promise<void> {
+export async function pushSharedLocationEnd(deps: SharedLocationEndPushDeps, end: SharedLocationEndSignal): Promise<void> {
   const data: LocationShareEndedPushData = { type: LOCATION_SHARE_ENDED_PUSH_TYPE, userId: end.emitterId, endedAt: end.endedAt };
   await quietly(deps, () => deps.push.silent(end.readerId, data));
 
@@ -145,7 +145,7 @@ export async function pushSharedLocationEnd(deps: SharedLocationEndPushDeps, end
 }
 
 /** Le signal `ended` du relais : synchrone pour lui, la poussée part sans être attendue. */
-export function sharedLocationEndPusherOf(deps: SharedLocationEndPushDeps): (end: SharedLocationEnd) => void {
+export function sharedLocationEndPusherOf(deps: SharedLocationEndPushDeps): (end: SharedLocationEndSignal) => void {
   return (end) => {
     void pushSharedLocationEnd(deps, end);
   };

@@ -50,6 +50,8 @@ const SANS_LECTEUR: ReadonlyMap<string, string> = new Map([
   ['link:message:new', "ÉMIS — `linkMessageEmissions` et le rejeu hors ligne. `services/gateway/CLAUDE.md` lui prêtait « son unique auditeur (le web) » ; la prémisse est CORRIGÉE depuis le cycle 161 — aucun client ne cite ce nom ni sa constante, et le raisonnement du cycle 114 tient pour une raison plus forte."],
   ['location:blood-proximity', 'ÉMIS — `bloodProximity.ts`, DEUX `emit` par alerte. Le client du mode Sang n\'est peut-être pas encore écrit (#13928).'],
   ['location:blood-moved', "ÉMIS — `signalBloodMoved` (`bloodMoved.ts`) vers la room de chaque lecteur autorisé de l'historique d'un Sang, sans coordonnée, à chaque point (#19400). Lecteurs : la carte des proches iOS (`SharedLocationsLive`) et ses miroirs (#18857), qui relisent `GET /relations/locations?include=blood` ; d'ici là la relecture suffit."],
+  ['location:share-requested', 'ÉMIS — `sharedLocationRequest.ts`, à l\'émetteur seul, quand un destinataire demande de prolonger ou de refaire son partage (#19204). Lecteurs : les lots clients de la carte du profil (#18857) ; la notification `location_share_requested` porte la même demande app fermée.'],
+  ['contact-exchange:received', 'ÉMIS — `contactExchange.ts`, à l\'émetteur seul, quand un lecteur accepte son jeton de partage sans contact (#19205), derrière `CONTACT_EXCHANGE_ENABLED` éteint. Lecteurs : les lots clients du partage sans contact (#18857).'],
   ['call:transcription-result', 'ni émis ni lu — dette de contrat.'],
   ['call:translation-enabled', 'ni émis ni lu — dette de contrat.'],
   ['call:translation-requested', 'ni émis ni lu — dette de contrat.'],

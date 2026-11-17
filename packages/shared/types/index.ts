@@ -836,6 +836,7 @@ export type {
 } from './phone-reachability.js';
 export * from './shared-location-constants.js';
 export * from './blood-location.js';
+export * from './contact-exchange.js';
 export type {
   SharedLocationPosition,
   SharedLocationStartPayload,

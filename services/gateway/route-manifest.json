@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 850,
+  "routeCount": 858,
   "routes": [
     {
       "method": "DELETE",
@@ -3826,6 +3826,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/invitations/email",
+      "module": "invitationRoutes~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/l/:token",
       "module": "trackingLinksRoutes",
       "mountPrefix": "/api/v1",
@@ -6584,6 +6598,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/users/me/profile-link/stats",
+      "module": "userRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/users/me/referral-code",
       "module": "userRoutes",
       "mountPrefix": "/api/v1",
@@ -9070,6 +9098,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/contact-exchange/:token/accept",
+      "module": "contactExchangeRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/contacts/resolve",
       "module": "contactsResolveRoutes",
       "mountPrefix": "/api/v1/contacts",
@@ -9522,6 +9564,34 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/invitations/email/:id/resend",
+      "module": "invitationRoutes~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/invitations/email/opt-out",
+      "module": "invitationRoutes~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S0",
+        "S1"
+      ],
+      "securityBasisKey": "no-standard-auth-hook",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/lens/partners/:userId/revoke",
       "module": "lensPartnerRoutes",
       "mountPrefix": "/api/v1/lens",
@@ -9641,6 +9711,20 @@
       "path": "/api/v1/me/categories/reorder",
       "module": "meCategoriesRoutes",
       "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/me/contact-exchange",
+      "module": "contactExchangeRoutes",
+      "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -10567,6 +10651,20 @@
     {
       "method": "POST",
       "path": "/api/v1/relations/:userId/level",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/relations/:userId/location/request",
       "module": "relationsRoutes",
       "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
@@ -11610,6 +11708,20 @@
       "method": "PUT",
       "path": "/api/v1/me/location/blood-settings",
       "module": "bloodLocationMeRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/me/location/ghost",
+      "module": "locationGhostMeRoutes",
       "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [

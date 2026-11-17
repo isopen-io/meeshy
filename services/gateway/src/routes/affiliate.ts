@@ -11,6 +11,7 @@ import {
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
 import { affiliateStatsResponseSchema } from './affiliate-response-schemas';
+import { withReferralFunnelIfAvailable } from '../services/referrals/referralFunnel';
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { generateUniquePublicIdentifier } from '../utils/public-identifier';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
@@ -459,7 +460,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const result = await AffiliateTrackingService.getAffiliateStats(fastify.prisma, userId, filters);
 
       if (result.success) {
-        return sendSuccess(reply, result.data);
+        return sendSuccess(reply, await withReferralFunnelIfAvailable(fastify.prisma, userId, result.data));
       } else {
         return sendBadRequest(reply, result.error);
       }

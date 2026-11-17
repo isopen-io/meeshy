@@ -111,6 +111,11 @@ const mockStoryHighlightFns = {
 };
 
 jest.mock('../../../../routes/users/story-highlights', () => mockStoryHighlightFns);
+const mockProfileLinkStatsFns = {
+  profileLinkStatsRoutes: jest.fn<any>().mockResolvedValue(undefined),
+};
+
+jest.mock('../../../../routes/users/profile-link-stats', () => mockProfileLinkStatsFns);
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
@@ -133,6 +138,7 @@ describe('userRoutes — registers all route handler groups', () => {
     expect(mockProfileFns.getUserByUsername).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.userShortAddressAlias).toHaveBeenCalledWith(mockFastify);
     expect(mockMeAddressFns.meAddressRoutes).toHaveBeenCalledWith(mockFastify);
+    expect(mockProfileLinkStatsFns.profileLinkStatsRoutes).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserById).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByEmail).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByIdDedicated).toHaveBeenCalledWith(mockFastify);

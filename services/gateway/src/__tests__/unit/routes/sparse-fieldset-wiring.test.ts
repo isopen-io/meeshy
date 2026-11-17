@@ -544,6 +544,7 @@ const CLES_ME_NU = [
   'permissions',
   'phoneNumber',
   'phoneVerifiedAt',
+  'profileAccentColor',
   'profileCompletionRate',
   'profileDecor',
   'regionalLanguage',
@@ -585,7 +586,7 @@ async function monterMoi(): Promise<{ app: FastifyInstance; prisma: any }> {
 }
 
 describe('GET /me — sans paramètre, rien ne bouge', () => {
-  it('sert exactement les trente et une clés', async () => {
+  it('sert exactement les trente-deux clés (#19201 : `profileAccentColor` s\'ajoute)', async () => {
     const { app } = await monterMoi();
 
     const user = (await app.inject({ method: 'GET', url: '/me' })).json().data.user;

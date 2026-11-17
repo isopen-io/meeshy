@@ -45,6 +45,7 @@ public object ApiRoutesUsers {
     public const val ME_HIGHLIGHTS_BY_ID: String = "users/me/highlights/{id}"
     public const val ME_HIGHLIGHTS_ORDER: String = "users/me/highlights/order"
     public const val ME_PASSWORD: String = "users/me/password"
+    public const val ME_PROFILE_LINK_STATS: String = "users/me/profile-link/stats"
     public const val ME_PUSH_TO_TALK_TOKEN: String = "users/me/push-to-talk-token"
     public const val ME_REFERRAL_CODE: String = "users/me/referral-code"
     public const val ME_RESEND_EMAIL_CHANGE_VERIFICATION: String = "users/me/resend-email-change-verification"

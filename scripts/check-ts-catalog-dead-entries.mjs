@@ -537,8 +537,6 @@ const PENDING_CLIENT_ENTRIES = {
   // Le jeton d'Activité en direct d'un partage de position (#19463, chantier #18857) : l'iPhone qui affiche
   // « Léo partage sa position » le confie à la passerelle, qui clôt l'Activité si le partage finit avant son terme.
   'me.liveActivityTokens': { issue: 19463, reason: 'POST /me/live-activity-tokens — l\'Activité en direct close par la passerelle à la fin du partage' },
-  // La relecture de mon fantôme de position (#19452, chantier #18857) : les réglages de position des clients la liront.
-  'me.locationGhost': { issue: 19452, reason: 'GET /me/location/ghost — mon fantôme de position relu depuis chaque appareil' },
   // Les entrées d'un lien de communauté (#19429, besoin #19290, chantier #18857) : iOS les lira d'abord
   // (fiche `Lien-Communaute`) ; le web et Android avec leur fiche de lien.
   'communities.byIdEntriesStats': { issue: 19429, reason: 'GET /communities/:id/entries/stats — « N entrées par ce lien », « N cette semaine », la série sur 30 jours' },
@@ -554,6 +552,14 @@ const PENDING_CLIENT_ENTRIES = {
   // « Mes cercles » compté par la passerelle, Communauté comprise (#19375, chantier #18857) : iOS le lira
   // d'abord (rangée « Mes cercles » de la fiche) ; le web et Android le liront avec leur profil.
   'relations.summary': { issue: 19375, reason: 'GET /relations/summary — le compte de chaque cercle et des demandes en attente, rangée « Mes cercles »' },
+  // Le profil de la planche (#18857, PR serveur #19316) : le serveur sert avant le tour client web.
+  'contactExchange.byTokenAccept': { issue: 19205, reason: 'POST /contact-exchange/:token/accept — accepter un partage sans contact (web)' },
+  'me.contactExchange': { issue: 19205, reason: 'POST /me/contact-exchange — émettre le jeton du partage sans contact (web)' },
+  'me.locationGhost': { issue: 19203, reason: 'PUT /me/location/ghost — le fantôme global de position (web)' },
+  'relations.byUserIdLocationRequest': { issue: 19204, reason: 'POST /relations/:userId/location/request — prolonger ou redemander un partage (web)' },
+  'users.meProfileLinkStats': { issue: 19206, reason: 'GET /users/me/profile-link/stats — les visites de mon lien (web)' },
+  'invitations.emailByIdResend': { issue: 19207, reason: 'POST /invitations/email/:id/resend — relancer une invitation (web)' },
+  'invitations.emailOptOut': { issue: 19321, reason: 'POST /invitations/email/opt-out — la page web de désinscription' },
   // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
   'conversations.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (web)' },
   // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la

@@ -42,6 +42,16 @@ export type SharedLocationState = {
   readonly expiresAt: string;
   /** Le début du partage (#19458) ; absent d'un état rangé avant lui. */
   readonly startedAt?: string;
+  /**
+   * La sortie du fantôme global (#19203) : une position antérieure ne se sert plus, seule la
+   * suivante repart. Absente (tout partage rangé avant), tout se sert.
+   */
+  readonly servableFrom?: string;
+  /**
+   * « Partager aussi ma batterie — pendant le partage seulement » (#19204) : l'accord vit et meurt
+   * avec CE partage. Absent (tout partage rangé avant, ou sans la bascule) : rien n'est accordé.
+   */
+  readonly shareBattery?: true;
 };
 
 export type SharedLocationCache = SharedLocationKv;
@@ -104,7 +114,9 @@ function parseState(raw: string): SharedLocationState | null {
   const recipients = row.recipients.map(parseRecipient);
   if (recipients.some((recipient) => recipient === null)) return null;
   const startedAt = typeof row.startedAt === 'string' && !Number.isNaN(Date.parse(row.startedAt)) ? { startedAt: row.startedAt } : {};
-  return { sessionId: row.sessionId, recipients: recipients as SharedLocationRecipient[], position, updatedAt: row.updatedAt, expiresAt: row.expiresAt, ...startedAt };
+  const servableFrom = typeof row.servableFrom === 'string' && !Number.isNaN(Date.parse(row.servableFrom)) ? { servableFrom: row.servableFrom } : {};
+  const shareBattery = row.shareBattery === true ? { shareBattery: true as const } : {};
+  return { sessionId: row.sessionId, recipients: recipients as SharedLocationRecipient[], position, updatedAt: row.updatedAt, expiresAt: row.expiresAt, ...startedAt, ...servableFrom, ...shareBattery };
 }
 
 const ttlOf = (state: Pick<SharedLocationState, 'expiresAt'>, now: number): number =>

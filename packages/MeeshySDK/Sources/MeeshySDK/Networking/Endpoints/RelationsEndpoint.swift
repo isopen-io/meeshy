@@ -19,6 +19,7 @@ public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
     case byUserIdBatterySettings(userId: String)
     case byUserIdLevel(userId: String)
     case byUserIdLocationHistory(userId: String)
+    case byUserIdLocationRequest(userId: String)
     case byUserIdPhoneReachability(userId: String)
     case byUserIdPhoneReachabilitySettings(userId: String)
     case byUserIdRitual(userId: String)
@@ -40,6 +41,7 @@ public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
         case .byUserIdBatterySettings(let userId): return "/api/v1/relations/\(userId)/battery/settings"
         case .byUserIdLevel(let userId): return "/api/v1/relations/\(userId)/level"
         case .byUserIdLocationHistory(let userId): return "/api/v1/relations/\(userId)/location/history"
+        case .byUserIdLocationRequest(let userId): return "/api/v1/relations/\(userId)/location/request"
         case .byUserIdPhoneReachability(let userId): return "/api/v1/relations/\(userId)/phone-reachability"
         case .byUserIdPhoneReachabilitySettings(let userId): return "/api/v1/relations/\(userId)/phone-reachability/settings"
         case .byUserIdRitual(let userId): return "/api/v1/relations/\(userId)/ritual"
