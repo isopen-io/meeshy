@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
+import { createFakeIndexedDB } from '@/test-support/fake-indexed-db';
+
+import { CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, consumeCallAnswerConfirmation } from './call-answer-confirmation';
 import { ANSWER_INTENT_TTL_MS, answerCallIdFromMessage, answerCallIdFromSearch, listenCallAnswerIntents } from './call-answer-intent';
 import { createCallStore, type ActiveCall, type CallPhase } from './call-store';
 
@@ -47,7 +50,7 @@ const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
  * la CONSOMME, comme la vraie lecture (`call-answer-confirmation.ts`) : une
  * confirmation ne sert qu'une fois.
  */
-function harness(options: { readonly search?: string; readonly confirmable?: readonly string[] } = {}) {
+function harness(options: { readonly search?: string; readonly confirmable?: readonly string[]; readonly confirm?: (callId: string) => Promise<boolean> } = {}) {
   const store = createCallStore();
   const accepted: number[] = [];
   const closed: string[] = [];
@@ -63,7 +66,7 @@ function harness(options: { readonly search?: string; readonly confirmable?: rea
     accept: () => void accepted.push(clock),
     closeRinging: (callId) => void closed.push(callId),
     now: () => clock,
-    confirm: async (callId) => confirmable.delete(callId),
+    confirm: options.confirm ?? (async (callId) => confirmable.delete(callId)),
   });
   return {
     store,
@@ -110,11 +113,14 @@ describe('décrocher l’appel désigné', () => {
   });
 
   test('la confirmation du worker ne sert qu’une fois : la même adresse rejouée ne décroche plus', async () => {
-    const first = harness({ search: '?repondre=call-1', confirmable: ['call-1'] });
+    const idb = createFakeIndexedDB();
+    idb.seed(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, 'call-1', { callId: 'call-1', until: 60_000 });
+    const confirm = (callId: string) => consumeCallAnswerConfirmation({ callId, now: 1_000, indexedDB: idb as unknown as IDBFactory });
+    const first = harness({ search: '?repondre=call-1', confirm });
     await settle();
     first.ring('call-1');
     expect(first.accepted).toHaveLength(1);
-    const replay = harness({ search: '?repondre=call-1' });
+    const replay = harness({ search: '?repondre=call-1', confirm });
     await settle();
     replay.ring('call-1');
     expect(replay.accepted).toEqual([]);
