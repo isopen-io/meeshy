@@ -146,11 +146,11 @@ struct BackgroundCallSoundLoopStarter: CallSoundLoopStarting {
 private final class PlayingSoundLoop: CallSoundLoop {
     private let player: Locked<AVAudioPlayer>
 
-    private init(player: AVAudioPlayer) { self.player = Locked(uncheckedState: player) }
+    nonisolated private init(player: AVAudioPlayer) { self.player = Locked(uncheckedState: player) }
 
     nonisolated deinit {}
 
-    static func start(url: URL, volume: Float) -> PlayingSoundLoop? {
+    nonisolated static func start(url: URL, volume: Float) -> PlayingSoundLoop? {
         let logger = MeeshyLog.logger(.callSounds)
         let resource = url.deletingPathExtension().lastPathComponent
         do {
@@ -179,7 +179,7 @@ private final class PlayingSoundLoop: CallSoundLoop {
 /// jamais posé ici : c'est le drapeau audio de l'APPEL, que WebRTC bascule
 /// lui-même à la connexion.
 private enum RingingAudioSession {
-    static func activate() {
+    nonisolated static func activate() {
         let logger = MeeshyLog.logger(.callSounds)
         let rtc = RTCAudioSession.sharedInstance()
         rtc.lockForConfiguration()
