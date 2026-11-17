@@ -197,8 +197,10 @@ export type SessionLeaseInit = {
 /**
  * UN BAIL DE SESSION — le seul chemin par lequel un ratchet avance. Il porte
  * l'état et l'avance à chaque opération ; `state()` rend ce que l'appareil
- * doit ranger (dans la même transaction que le clair ouvert, et AVANT
- * d'envoyer ce qu'il a scellé). Un échec ne change pas l'état.
+ * doit ranger après la DERNIÈRE opération réussie (dans la même transaction
+ * que le clair ouvert, et AVANT d'envoyer ce qu'il a scellé) — `null` tant
+ * qu'aucune n'a réussi : il n'y a alors rien de neuf à ranger. Un échec ne
+ * change pas l'état.
  */
 export type SessionLease = {
   readonly state: () => SessionState | null;
@@ -288,7 +290,7 @@ const leaseSession = (init: SessionLeaseInit): SessionLease => {
   if (heldLeases.has(key)) throw new LibsignalBridgeError('SESSION_BUSY', 'libsignal: un bail est déjà tenu sur cette session dans ce contexte');
   heldLeases.add(key);
   let held = true;
-  let current: SessionState | null = init.session === null || init.remoteIdentity === null ? null : { session: init.session, remoteIdentity: init.remoteIdentity };
+  let current: SessionState | null = null;
   let session = init.session;
   let trusted = init.remoteIdentity;
 

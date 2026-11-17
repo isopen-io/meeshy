@@ -258,6 +258,19 @@ describe('le bail de session — la session ne circule plus par valeur, et un se
     bridge.leaseSession(peer).release();
   });
 
+  test('un bail repris sur une session rangée n’a rien de neuf à ranger avant sa première opération', async () => {
+    const bob = await withBundle('bob');
+    const { alice, sealed } = await aliceWrites(bob, ['un']);
+    const [hello] = sealed;
+    if (hello === undefined) throw new Error('aucun message scellé');
+
+    await bridge.withSession({ local: alice, remote: bob.device.address, session: hello.session, remoteIdentity: hello.remoteIdentity }, async (lease) => {
+      expect(lease.state()).toBeNull();
+      const next = await lease.seal({ plaintext: utf8('deux') });
+      expect(lease.state()).toEqual({ session: next.session, remoteIdentity: next.remoteIdentity });
+    });
+  });
+
   test('l’état rangé après chaque opération est celui du bail — un échec ne le change pas', async () => {
     const bob = await withBundle('bob');
     const alice = deviceOf(await bridge.generateIdentity(), address('alice'));
