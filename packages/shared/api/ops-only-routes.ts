@@ -103,6 +103,23 @@ export const OPS_ONLY_ROUTES: readonly OpsOnlyRoute[] = [
       "d'aperçu quand ils déplient un lien suivi `/l/<jeton>` : aucun écran d'app ne l'appelle, l'app " +
       'résout le lien par `GET /tracking-links/:token/resolve`.',
   },
+  {
+    method: 'GET',
+    path: '/api/v1/people/:username/og',
+    reason:
+      "`services/gateway/src/routes/links/unfurl.ts` (#18865) — aperçu (générique par défaut, #10205) que " +
+      "Traefik sert aux ROBOTS d'aperçu quand ils déplient `/u/<pseudo>` ou `/@<pseudo>` : aucun " +
+      "écran d'app ne l'appelle, l'app lit la carte par `GET /directory/people/:handle?via=link`.",
+  },
+  {
+    method: 'GET',
+    path: '/api/v1/@:username',
+    reason:
+      "`services/gateway/src/routes/users/profile-short-address.ts` (#18862) — l'adresse courte " +
+      "`/@<pseudo>`, une REDIRECTION pour un lien tapé ou partagé : aucun écran d'app ne l'appelle, " +
+      "l'app lit la fiche par `GET /directory/people/:handle`. Son paramètre est au milieu d'un " +
+      'segment, que les générateurs de catalogue ne savent pas écrire.',
+  },
 ];
 
 function routeKey(method: string, path: string): string {

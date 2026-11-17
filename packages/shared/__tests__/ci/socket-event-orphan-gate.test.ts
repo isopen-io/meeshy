@@ -52,6 +52,9 @@ const SANS_LECTEUR: ReadonlyMap<string, string> = new Map([
   ['call:transcription-result', 'ni émis ni lu — dette de contrat.'],
   ['call:translation-enabled', 'ni émis ni lu — dette de contrat.'],
   ['call:translation-requested', 'ni émis ni lu — dette de contrat.'],
+  ['e2ee:verification', 'ÉMIS — `E2EEDeviceVerificationRelay` vers la room de la génération destinataire (#19156). Les lecteurs sont les lots clients de la confirmation par code (iOS lot 4, Android lot 5, web lot 6, spec 2026-11-17 § 10) ; `GET /e2ee/devices/self/verifications` relit sans la socket.'],
+  ['e2ee:own-device-enrolled', 'ÉMIS — `own-device-announcements.ts` à chaque enrôlement d\'une génération neuve ou de retour (#19156). Lecteurs : lots clients 4, 5 et 6 ; le rapprochement par `GET /e2ee/devices` ne dépend pas de l\'événement.'],
+  ['e2ee:own-device-retired', 'ÉMIS — `own-device-announcements.ts` au retrait d\'une génération (#19156). Lecteurs : lots clients 4, 5 et 6.'],
 ]);
 
 const contract = readContractPayloads();

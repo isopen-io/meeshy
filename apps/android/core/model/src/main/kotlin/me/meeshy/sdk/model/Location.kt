@@ -12,14 +12,6 @@ data class MeeshyLocationCoordinate(
 )
 
 @Serializable
-data class LiveLocationStartPayload(
-    val conversationId: String,
-    val latitude: Double = 0.0,
-    val longitude: Double = 0.0,
-    val durationMinutes: Int = 0,
-)
-
-@Serializable
 data class LiveLocationStartedEvent(
     val conversationId: String = "",
     val userId: String = "",
@@ -29,17 +21,6 @@ data class LiveLocationStartedEvent(
     val durationMinutes: Int = 0,
     val expiresAt: String? = null,
     val startedAt: String? = null,
-)
-
-@Serializable
-data class LiveLocationUpdatePayload(
-    val conversationId: String,
-    val latitude: Double = 0.0,
-    val longitude: Double = 0.0,
-    val altitude: Double? = null,
-    val accuracy: Double? = null,
-    val speed: Double? = null,
-    val heading: Double? = null,
 )
 
 @Serializable

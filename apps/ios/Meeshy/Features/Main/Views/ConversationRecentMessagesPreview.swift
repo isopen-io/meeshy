@@ -139,8 +139,10 @@ enum ConversationPreviewRenderer {
     /// Un simple appui long ne fait sortir aucun lien d'un message chiffré :
     /// ni aperçu OpenGraph vers un site tiers, ni carte de conversation
     /// interrogée au serveur (#11232, F3). Le clair déchiffré reste sur l'appareil.
+    /// La loi est celle de la bulle (`BubbleContent.LinkExposure`, #12768) ;
+    /// l'environnement ne fait que la doubler.
     static func mountsLinkEmbed(for message: Message) -> Bool {
-        !message.isEncrypted && !message.isContentDecryptedOnDevice
+        !BubbleContent.LinkExposure.isReadOnlyOnDevice(message)
     }
 
     /// Les messages arrivés EN CLAIR dans une conversation chiffrée

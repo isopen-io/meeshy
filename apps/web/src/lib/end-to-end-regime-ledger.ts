@@ -222,6 +222,20 @@ export function endToEndSealed(state: Pick<EndToEndRegimeState, 'sealed'> & Part
   return isEndToEndMode(input.servedMode) || state.sealed[input.conversationId] === true || state.held?.[input.conversationId] === true;
 }
 
+/**
+ * **LE CONTENU D'UNE CONVERSATION FERMÉE AU CLAIR NE SE RANGE PAS SUR LE
+ * DISQUE** (#18991) — la garde UNIQUE des puits durables de la liste noire
+ * (`lib/e2ee/durable-plaintext-sinks.ts`) : cache de requêtes déshydraté,
+ * brouillons, file d'envoi durable. Un clair déchiffré sur l'appareil vit dans
+ * le coffre scellé et en mémoire au rendu, jamais au-delà de la session.
+ */
+export function mayPersistConversationContent(
+  conversationId: string,
+  state: Pick<EndToEndRegimeState, 'sealed'> & Partial<Pick<EndToEndRegimeState, 'held'>> = endToEndRegimeLedger.getState(),
+): boolean {
+  return !endToEndSealed(state, { conversationId });
+}
+
 /** Le refus local d'un envoi en clair vers une conversation vue e2ee : rien ne part au réseau. */
 export const E2EE_PLAINTEXT_WITHHELD = 'E2EE_PLAINTEXT_WITHHELD';
 

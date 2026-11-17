@@ -20,7 +20,6 @@ final class LinkPreviewStore: ObservableObject {
     static let shared = LinkPreviewStore()
 
     private let fetcher: LinkPreviewFetcher = .shared
-    private let fileName = "link_preview_cache.json"
     private let maxAge: TimeInterval = 7 * 24 * 3600
     /// Negative cache: URLs we've tried and failed (404 / non-HTML / empty OG)
     /// are remembered briefly so we don't hammer the same host over and over.
@@ -41,7 +40,8 @@ final class LinkPreviewStore: ObservableObject {
     }()
 
     init() {
-        self.cache = Self.loadFromDisk(fileName: fileName, decoder: decoder, maxAge: maxAge)
+        Self.removeLegacyBackedUpCache(inDocuments: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0])
+        self.cache = Self.loadFromDisk(decoder: decoder, maxAge: maxAge)
         wireAuthLogoutHook()
     }
 
@@ -108,7 +108,7 @@ final class LinkPreviewStore: ObservableObject {
         cache.removeAll()
         negativeCache.removeAll()
         pendingKeys.removeAll()
-        FileManager.default.removeItemLogging(at: Self.fileURL(fileName), context: "link preview cache reset", logger: Logger.linkPreview)
+        FileManager.default.removeItemLogging(at: Self.cacheFileURL(), context: "link preview cache reset", logger: Logger.linkPreview)
     }
 
     // MARK: - Persistence
@@ -116,28 +116,45 @@ final class LinkPreviewStore: ObservableObject {
     private func persist() {
         let snapshot = cache
         let encoder = self.encoder
-        let fileName = self.fileName
         Task.detached(priority: .utility) {
             guard let data = encoder.encodeOrLog(snapshot, field: "link previews", logger: Logger.linkPreview) else { return }
             do {
-                try data.write(to: Self.fileURL(fileName), options: .atomic)
+                let file = Self.cacheFileURL()
+                try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try data.write(to: file, options: .atomic)
             } catch {
                 Logger.linkPreview.error("Link preview cache not written, previews will be refetched: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
 
-    private nonisolated static func fileURL(_ fileName: String) -> URL {
-        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: cacheDir.path) {
-            FileManager.default.createDirectoryLogging(at: cacheDir, context: "link preview cache dir", logger: Logger.linkPreview)
-        }
-        return cacheDir.appendingPathComponent(fileName)
+    /// Le cache vit dans `Library/Caches` : un cache, purgeable par le système,
+    /// jamais sauvegardé. Il a vécu dans `Documents/meeshy_cache/`, que iCloud et
+    /// Finder SAUVEGARDENT : l'adresse d'une page lue dans une conversation —
+    /// chiffrée comprise —, son titre et sa description partaient dans la
+    /// sauvegarde, hors de l'appareil (#12768).
+    nonisolated static let fileName = "link_preview_cache.json"
+
+    nonisolated static func cacheFileURL(fileManager: FileManager = .default) -> URL {
+        fileManager.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("link_previews", isDirectory: true)
+            .appendingPathComponent(fileName)
     }
 
-    private static func loadFromDisk(fileName: String, decoder: JSONDecoder, maxAge: TimeInterval) -> [String: LinkMetadata] {
-        let url = fileURL(fileName)
+    /// La copie que les versions précédentes laissaient dans `Documents/`.
+    nonisolated static func legacyBackedUpCacheFile(inDocuments documents: URL) -> URL {
+        documents.appendingPathComponent("meeshy_cache", isDirectory: true).appendingPathComponent(fileName)
+    }
+
+    /// Efface cette copie : la sauvegarde suivante ne la porte plus.
+    nonisolated static func removeLegacyBackedUpCache(inDocuments documents: URL) {
+        let legacy = legacyBackedUpCacheFile(inDocuments: documents)
+        guard FileManager.default.fileExists(atPath: legacy.path) else { return }
+        FileManager.default.removeItemLogging(at: legacy, context: "link preview cache left in Documents", logger: Logger.linkPreview)
+    }
+
+    private static func loadFromDisk(decoder: JSONDecoder, maxAge: TimeInterval) -> [String: LinkMetadata] {
+        let url = cacheFileURL()
         // Le `fileExists` ci-dessus filtre le cas « pas encore de cache » :
         // un échec de lecture ici est une vraie I/O.
         guard FileManager.default.fileExists(atPath: url.path) else { return [:] }

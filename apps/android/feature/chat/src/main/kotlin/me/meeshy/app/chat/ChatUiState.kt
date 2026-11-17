@@ -170,10 +170,10 @@ data class ChatUiState(
         get() = isEndToEnd && !endToEndTextOpen
 
     /**
-     * La conversation est servie chiffrée de bout en bout (#13110). L'Android natif ne
-     * sait ni chiffrer ni lire l'e2ee (#13015) : rien n'en part du fil — chaque porte
-     * d'envoi du composeur lit [composerAffordances] fermé, AVANT tout octet émis
-     * (texte, pièce, vocal, édition) —, et le composeur dit où elle s'écrit. Le
+     * La conversation est servie chiffrée de bout en bout (#13110). L'Android natif chiffre et lit le TEXTE d'un
+     * tête-à-tête par libsignal (#14591) ; rien d'autre n'en part du fil — chaque porte d'envoi du composeur lit
+     * [composerAffordances] fermé pour une pièce, un vocal ou une édition, AVANT tout octet émis —, et le composeur dit
+     * quand il ne peut pas écrire (groupe chiffré). Le
      * transfert, le partage et les stories l'excluent par `mayCurrentUserWrite`.
      *
      * #12956 — le mode vient de la ligne Room, que `ConversationCacheSource` ne rétrograde

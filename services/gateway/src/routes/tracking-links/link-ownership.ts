@@ -20,3 +20,17 @@ export function mayManageTrackingLink(
   if (link.createdBy) return link.createdBy === caller.id;
   return permissionsService.hasPermission(caller.role as UserRoleEnum, 'canModerateContent');
 }
+
+/**
+ * Le lien d'une ADRESSE de fiche (#18863) n'existe pour personne d'autre que son propriétaire
+ * (#19196) : ses portes de lecture rendent à tout autre lecteur, avec ou sans compte, la réponse
+ * d'un jeton INCONNU (404), jamais un refus (401/403) qui dirait qu'il existe.
+ */
+export function isForeignAddressLink(
+  link: { readonly createdBy?: string | null; readonly addressId?: string | null },
+  authContext: { readonly registeredUser?: { readonly id: string } | null } | null | undefined
+): boolean {
+  if (!link.addressId) return false;
+  const viewerId = authContext?.registeredUser?.id;
+  return !link.createdBy || viewerId !== link.createdBy;
+}

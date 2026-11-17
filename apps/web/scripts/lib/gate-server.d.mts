@@ -27,5 +27,10 @@ export declare function startDistServer(
      * À ne PAS poser sur un gate qui MESURE le service worker.
      */
     readonly serviceWorker?: boolean;
+    /**
+     * Les en-têtes que nginx poserait sur la réponse d'un fichier servi (#18986) —
+     * la garde de la CSP sert `dist/` sous la politique réelle de `nginx.conf`.
+     */
+    readonly headers?: (pathname: string) => Readonly<Record<string, string>>;
   },
 ): Promise<DistServer>;

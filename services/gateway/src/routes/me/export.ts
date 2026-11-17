@@ -26,6 +26,7 @@ import { exportReadingActivity } from './export-reading';
 import { relationsExportSchema } from './export-relations';
 import { exportRelations } from '../../services/relations/relationExport';
 import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
+import { PROFILE_ADDRESS_EXPORT_SELECT, withExportedAddresses } from './export-addresses';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
 
@@ -622,6 +623,9 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
               email: true,
               phoneNumber: true,
               bio: true,
+              // #18862 — la ville déclarée et le cercle qui la lit.
+              city: true,
+              cityCircle: true,
               avatar: true,
               banner: true,
               systemLanguage: true,
@@ -638,11 +642,18 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
               lastLoginAt: true,
               lastLoginIp: true,
               lastLoginLocation: true,
+              // #18863 — les adresses de fiche, masquées comprises, avec le cercle choisi pour chacune.
+              profileAddresses: {
+                select: PROFILE_ADDRESS_EXPORT_SELECT,
+                orderBy: { position: 'asc' },
+              },
             },
           });
 
           // Les adresses de plus de 12 mois ne se servent plus, purge armée ou non.
-          exportData.profile = user ? withoutExpiredConnectionTraces(user, new Date()) : user;
+          exportData.profile = user
+            ? await withExportedAddresses(fastify.prisma, userId, withoutExpiredConnectionTraces(user, new Date()))
+            : user;
         }
 
         // Calculée UNE fois, réutilisée par `messages` et `reactions` : une

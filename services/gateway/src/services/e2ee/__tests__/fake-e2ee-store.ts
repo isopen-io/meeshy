@@ -200,7 +200,7 @@ export function createFakeE2EEStore() {
     E2EEDevice: new FakeCollection(
       [['userId', 'deviceId']],
       () => ({ retiredAt: null, pushTokenId: null, label: null, createdAt: new Date(), lastSeenAt: new Date(), signedPreKeyRotatedAt: new Date() }),
-      () => ({ createdAt: new Date(), lastSeenAt: new Date(), signedPreKeyRotatedAt: new Date() }),
+      () => ({ createdAt: new Date(), lastSeenAt: new Date(), signedPreKeyRotatedAt: new Date(), capabilities: [] }),
     ),
     E2EEOneTimePreKey: new FakeCollection(
       [['userId', 'deviceId', 'registrationId', 'kind', 'keyId']],
@@ -208,6 +208,7 @@ export function createFakeE2EEStore() {
       () => ({ createdAt: new Date() }),
     ),
     MessageEnvelope: new FakeCollection([['messageId', 'recipientUserId', 'recipientDeviceId']], () => ({ createdAt: new Date() }), () => ({ createdAt: new Date() })),
+    E2EEDeviceVerificationMessage: new FakeCollection([], () => ({ createdAt: new Date(), ackedAt: null, answeredByDeviceId: null, answeredByRegistrationId: null }), () => ({ createdAt: new Date() })),
     E2EERevokedIdentity: new FakeCollection([['userId', 'identityKey']], () => ({ revokedAt: new Date() }), () => ({ revokedAt: new Date() })),
     E2EEBindingProof: new FakeCollection([], () => ({})),
     Participant: new FakeCollection([], () => ({ isActive: true, type: 'user' })),
@@ -245,6 +246,7 @@ export function createFakeE2EEStore() {
     e2EEDevice: collections.E2EEDevice.delegate(),
     e2EEOneTimePreKey: collections.E2EEOneTimePreKey.delegate(),
     messageEnvelope: collections.MessageEnvelope.delegate(),
+    e2EEDeviceVerificationMessage: collections.E2EEDeviceVerificationMessage.delegate(),
     e2EERevokedIdentity: collections.E2EERevokedIdentity.delegate(),
     e2EEBindingProof: collections.E2EEBindingProof.delegate(),
     participant: collections.Participant.delegate(),

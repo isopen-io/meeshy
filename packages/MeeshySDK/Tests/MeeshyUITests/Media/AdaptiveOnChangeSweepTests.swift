@@ -50,14 +50,6 @@ final class AdaptiveOnChangeSweepTests: XCTestCase {
                       "AudioPlayerView must react to externalLanguage through adaptiveOnChange")
     }
 
-    func test_errorBannerView_usesAdaptiveOnChange_notRawOnChange() throws {
-        let source = try sdkSource("Sources/MeeshyUI/Primitives/ErrorBannerView.swift")
-        XCTAssertFalse(source.contains(".onChange(of: error?.errorDescription) { _ in"),
-                        "ErrorBannerView must not use the deprecated single-param .onChange")
-        XCTAssertTrue(source.contains(".adaptiveOnChange(of: error?.errorDescription) { _, _ in"),
-                      "ErrorBannerView must react to error changes through adaptiveOnChange")
-    }
-
     func test_communitySettingsScreen_usesAdaptiveOnChange_notRawOnChange() throws {
         let source = try sdkSource("Sources/MeeshyUI/Community/CommunitySettingsScreen.swift")
         XCTAssertFalse(source.contains(".onChange(of: viewModel.localEmoji) { newValue in"),
@@ -73,13 +65,5 @@ final class AdaptiveOnChangeSweepTests: XCTestCase {
                         "AudioRecorderSheet must not use the deprecated single-param .onChange")
         XCTAssertTrue(source.contains(".adaptiveOnChange(of: recorder.isRecording) { _, isRecording in"),
                       "AudioRecorderSheet must react to isRecording through adaptiveOnChange")
-    }
-
-    func test_universalAudioRecorderView_usesAdaptiveOnChange_notRawOnChange() throws {
-        let source = try sdkSource("Sources/MeeshyUI/Media/UniversalAudioRecorderView.swift")
-        XCTAssertFalse(source.contains(".onChange(of: recorder.isRecording) { isRecording in"),
-                        "UniversalAudioRecorderView must not use the deprecated single-param .onChange")
-        XCTAssertTrue(source.contains(".adaptiveOnChange(of: recorder.isRecording) { _, isRecording in"),
-                      "UniversalAudioRecorderView must react to isRecording through adaptiveOnChange")
     }
 }

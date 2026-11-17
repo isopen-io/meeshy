@@ -11,6 +11,13 @@
 
 import type { E2EEServedEnvelope } from '../e2ee-directory.js';
 import type { E2EESignalAck, E2EESignalSocketPayload } from '../e2ee-signals.js';
+import type {
+  DeviceVerificationSend,
+  DeviceVerificationSendAck,
+  E2EEOwnDeviceEnrolledEventData,
+  E2EEOwnDeviceRetiredEventData,
+  ServedDeviceVerification,
+} from '../e2ee-device-trust.js';
 import type { AdminMetricsSubscribeAck, HostMetricsSample } from '../admin-ops.js';
 import type { ConversationEngagementSnapshot, PostEngagementSnapshot } from '../engagement-scale.js';
 import type { GameMissionsUpdatedEventData, GameUpdatedEventData } from '../game-sync.js';
@@ -349,6 +356,12 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUTH_SESSION_REVOKED]: (data: AuthSessionRevokedEventData) => void;
   /** L'enveloppe libsignal de CET appareil (#3706), vers `ROOMS.device`. */
   [SERVER_EVENTS.E2EE_ENVELOPE]: (data: E2EEServedEnvelope) => void;
+  /** Un message de comparaison pour CETTE génération (#19156), vers `ROOMS.device`. */
+  [SERVER_EVENTS.E2EE_VERIFICATION]: (data: ServedDeviceVerification) => void;
+  /** Un appareil a rejoint mon compte (ou y revient), vers mes autres appareils capables (#19156). */
+  [SERVER_EVENTS.E2EE_OWN_DEVICE_ENROLLED]: (data: E2EEOwnDeviceEnrolledEventData) => void;
+  /** Une génération de mon compte a été retirée, vers mes autres appareils capables (#19156). */
+  [SERVER_EVENTS.E2EE_OWN_DEVICE_RETIRED]: (data: E2EEOwnDeviceRetiredEventData) => void;
   [SERVER_EVENTS.ERROR]: (data: ErrorEventData) => void;
   [SERVER_EVENTS.CONVERSATION_STATS]: (data: ConversationStatsEventData) => void;
   [SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED]: (data: ConversationUnreadUpdatedEventData) => void;
@@ -583,6 +596,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.MESSAGE_DELETE]: (data: MessageDeleteData, callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.MESSAGE_CAPTURE_DETECTED]: (data: ContentCaptureReportInput, callback?: (response: ContentCaptureAck) => void) => void;
   [CLIENT_EVENTS.E2EE_SEND_SIGNAL]: (data: E2EESignalSocketPayload, callback?: (response: E2EESignalAck) => void) => void;
+  [CLIENT_EVENTS.E2EE_SEND_VERIFICATION]: (data: DeviceVerificationSend, callback?: (response: DeviceVerificationSendAck) => void) => void;
   [CLIENT_EVENTS.TALKIE_START]: (data: TalkieStartPayload, callback?: (response: TalkieStartAck) => void) => void;
   [CLIENT_EVENTS.TALKIE_SEND_CHUNK]: (data: TalkieChunkPayload) => void;
   [CLIENT_EVENTS.TALKIE_END]: (data: TalkieEndPayload) => void;

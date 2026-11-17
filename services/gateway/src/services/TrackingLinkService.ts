@@ -4,6 +4,7 @@ import { TrackingLink, TrackingLinkClick } from '@meeshy/shared/types/tracking-l
 import { TrackingTargetCarriesEmailSecretError, isServableTrackingTarget, servedTrackingLinkTarget } from './tracking-link-target';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { EngagementService } from './engagement/EngagementService';
+import { addressLinkOpensTo } from './profile-addresses/address-link-gate';
 import type { LinkVisitor, LinkVisitRecorder } from '../routes/links/utils/link-visitor';
 import {
   clickStatsPipeline,
@@ -89,6 +90,9 @@ const reuseScopeWhere = (scope: TrackingLinkReuseScope) =>
   scope.kind === 'conversation'
     ? { conversationId: scope.conversationId }
     : { createdBy: scope.createdBy, ...(scope.conversationId ? { conversationId: scope.conversationId } : {}) };
+
+/** Le lien d'une adresse de fiche lui appartient (#18863) : aucun contenu ne le réutilise. */
+const NOT_AN_ADDRESS_LINK = { OR: [{ addressId: null }, { addressId: { isSet: false } }] };
 
 /**
  * La portée d'un contenu (message, post, story, commentaire) : la conversation
@@ -199,6 +203,8 @@ export class TrackingLinkService {
     messageId?: string;
     expiresAt?: Date;
     customToken?: string;
+    /** L'adresse de fiche dont ce lien est le lien DÉDIÉ (#18863). */
+    addressId?: string;
     /**
      * `true` ⇒ la création est un geste de l'auteur (`POST /tracking-links`)
      * et lui paie `social.tracked_link`. La réécriture automatique des URL
@@ -238,6 +244,7 @@ export class TrackingLinkService {
         conversationId: params.conversationId,
         messageId: params.messageId,
         expiresAt: params.expiresAt,
+        ...(params.addressId ? { addressId: params.addressId } : {}),
         isActive: true,
         totalClicks: 0,
         uniqueClicks: 0
@@ -278,8 +285,9 @@ export class TrackingLinkService {
    * mais marqué `isActive: false` (la page/app décide). Renvoie `null` si aucun
    * lien ne correspond (→ 404 côté route).
    */
-  async resolveTarget(token: string): Promise<ResolvedLinkTarget | null> {
+  async resolveTarget(token: string, viewerId?: string): Promise<ResolvedLinkTarget | null> {
     const link = await this.prisma.trackingLink.findUnique({ where: { token } });
+    if (link && !(await addressLinkOpensTo(this.prisma, link, viewerId))) return null;
     if (link) {
       const servable = isServableTrackingTarget(link.originalUrl);
       return {
@@ -324,7 +332,7 @@ export class TrackingLinkService {
    */
   async findExistingTrackingLink(originalUrl: string, scope: TrackingLinkReuseScope): Promise<TrackingLink | null> {
     const trackingLink = await this.prisma.trackingLink.findFirst({
-      where: { originalUrl, isActive: true, ...reuseScopeWhere(scope) }
+      where: { originalUrl, isActive: true, ...reuseScopeWhere(scope), ...NOT_AN_ADDRESS_LINK }
     });
 
     return trackingLink as TrackingLink | null;
@@ -371,8 +379,8 @@ export class TrackingLinkService {
     /** Le visiteur établi par le SERVEUR (`linkVisitorFromRequest`) — absent ⇒ rien n'est crédité. */
     visitor?: LinkVisitor;
   }): Promise<{ trackingLink: TrackingLink; click: TrackingLinkClick }> {
-    // Vérifier que le lien existe et est actif
-    const trackingLink = await this.getTrackingLinkByToken(params.token);
+    const found = await this.getTrackingLinkByToken(params.token);
+    const trackingLink = found && (await addressLinkOpensTo(this.prisma, found, params.userId)) ? found : null;
 
     if (!trackingLink) {
       throw new Error('Tracking link not found');
@@ -933,6 +941,7 @@ export class TrackingLinkService {
   async updateTrackingLink(params: {
     token: string;
     originalUrl?: string;
+    name?: string;
     expiresAt?: Date | null;
     isActive?: boolean;
     newToken?: string;
@@ -961,6 +970,7 @@ export class TrackingLinkService {
     if (params.originalUrl !== undefined) {
       updateData.originalUrl = params.originalUrl;
     }
+    if (params.name !== undefined) updateData.name = params.name;
     if (params.expiresAt !== undefined) {
       updateData.expiresAt = params.expiresAt;
     }

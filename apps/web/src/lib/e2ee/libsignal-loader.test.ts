@@ -68,12 +68,19 @@ describe('le chargement du pont libsignal (#17114)', () => {
 });
 
 describe('le binaire du pont est celui que la construction a consigné (#17114)', () => {
-  type Manifest = { readonly libsignal: string; readonly wasmSha256: string; readonly rustToolchain: string; readonly wasmBindgen: string };
+  type Manifest = { readonly libsignal: string; readonly wasmSha256: string; readonly glueSha256: string; readonly rustToolchain: string; readonly wasmBindgen: string };
   const manifest = JSON.parse(readFileSync(join(WEB_ROOT, LIBSIGNAL_WASM_DIRECTORY, 'manifest.json'), 'utf8')) as Manifest;
   const cargo = readFileSync(join(REPO, 'packages', 'libsignal-wasm', 'Cargo.toml'), 'utf8');
 
   test('le condensat du WASM livré est celui du manifeste', () => {
     expect(createHash('sha256').update(readFileSync(join(WEB_ROOT, LIBSIGNAL_WASM_FILE))).digest('hex')).toBe(manifest.wasmSha256);
+  });
+
+  /* #17292 (constat WEB-11) — la COLLE fournit l'aléa au binaire
+     (`globalThis.crypto.getRandomValues`) : une colle altérée pour rendre un
+     aléa constant ne serait vue par aucun témoin fonctionnel. */
+  test('le condensat de la colle livrée est celui du manifeste', () => {
+    expect(createHash('sha256').update(readFileSync(join(WEB_ROOT, LIBSIGNAL_WASM_DIRECTORY, 'libsignal_wasm.js'))).digest('hex')).toBe(manifest.glueSha256);
   });
 
   test('le manifeste, la crate, son tag libsignal et l’écran Licences portent la même version', () => {

@@ -107,6 +107,13 @@ nonisolated final class MockEndToEndMessaging: EndToEndMessagingProviding, @unch
     /// Les identifiants rangés, vus de l'extérieur du coffre (témoins).
     var storedIds: [String] { lock.withLock { stored.keys.sorted() } }
 
+    /// Quand cet appareil a été enrôlé (R-3) ; `nil` : le coffre ne le sait pas.
+    var enrollmentDate: Date?
+
+    func enrolledAt(as account: String) async -> Date? {
+        lock.withLock { serves(account) ? enrollmentDate : nil }
+    }
+
     private func serves(_ account: String) -> Bool {
         vaultAccount.map { $0 == account } ?? true
     }

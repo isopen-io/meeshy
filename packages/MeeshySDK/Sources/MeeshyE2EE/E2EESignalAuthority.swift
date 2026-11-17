@@ -114,6 +114,12 @@ public enum E2EESignalAuthority {
             return row == received.conversationId ? .apply : .reject(.targetElsewhere)
         case .undecryptable:
             return target.rowConversation == received.conversationId ? .apply : .reject(.targetElsewhere)
+        case .awaitsUpgrade(let kept):
+            // Gardé pour une version future (IOS-04) : situé par son enveloppe et sa ligne.
+            guard kept.conversationId == received.conversationId, target.rowAgrees(with: received.conversationId) else {
+                return .reject(.targetElsewhere)
+            }
+            return .apply
         case .readable(let content, _):
             guard content.belongs(to: received.conversationId), target.rowAgrees(with: received.conversationId) else {
                 return .reject(.targetElsewhere)
@@ -131,6 +137,13 @@ public enum E2EESignalAuthority {
             return .awaitTarget
         case .undecryptable:
             return .reject(.notAuthor)
+        case .awaitsUpgrade(let kept):
+            // Son auteur est celui que libsignal a authentifié : il peut le
+            // retirer, et ses octets gardés partent avec lui.
+            guard kept.conversationId == received.conversationId, target.rowAgrees(with: received.conversationId) else {
+                return .reject(.targetElsewhere)
+            }
+            return kept.senderUserId == received.senderUserId ? .apply : .reject(.notAuthor)
         case .readable(let content, let author):
             guard content.belongs(to: received.conversationId), target.rowAgrees(with: received.conversationId) else {
                 return .reject(.targetElsewhere)

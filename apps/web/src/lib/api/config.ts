@@ -13,8 +13,9 @@
  * Une origine figée au build interdisait de promouvoir en production l'image
  * recettée sur le staging (#9325), et d'installer Meeshy sur site sans le
  * reconstruire. L'entrypoint de l'image (`docker/runtime-config.sh`) écrit
- * `/config.js` depuis `MEESHY_API_URL` / `MEESHY_WEB_URL`, chargé avant le
- * bundle ; sans déclaration, l'origine se DÉRIVE de l'hôte qui sert la page.
+ * `/config.json` depuis `MEESHY_API_URL` / `MEESHY_WEB_URL`, lue comme une
+ * DONNÉE avant que ce module ne s'évalue (`runtime-config.ts`, #18988) ;
+ * sans déclaration, l'origine se DÉRIVE de l'hôte qui sert la page.
  * Ordre, du plus explicite au plus implicite : exécution → build → proxy de
  * dev → hôte de la page → production.
  *
@@ -36,6 +37,7 @@
  */
 
 import { PRODUCTION_ORIGIN } from './production-origin';
+import { readRuntimeConfig } from './runtime-config';
 
 /** Le CHOIX de source de données — jamais lu ailleurs qu'ici et par les
  * consommateurs de `apiConfig.source`. */
@@ -65,8 +67,8 @@ export type ApiConfig = {
 };
 
 /**
- * Ce que l'entrypoint du conteneur pose dans `window.__MEESHY_RUNTIME__`
- * (`public/config.js`, réécrit au démarrage). Donnée NON FIABLE par principe :
+ * Ce que l'entrypoint du conteneur écrit dans `/config.json` (#10208), lu et
+ * décodé par `runtime-config.ts` (#18988). Donnée NON FIABLE par principe :
  * chaque champ est relu et validé ici, jamais cru sur sa forme.
  */
 export type RuntimeConfig = {
@@ -190,7 +192,7 @@ function resolveBase(env: ApiEnv, { shell, runtime, page }: ResolveOptions): str
  * (`docker/runtime-config.sh`, `is_origin`) : `http(s)://hôte[:port][/chemin]`,
  * sans identifiants, requête ni guillemet. Une valeur malformée est ignorée,
  * jamais réparée : l'entrypoint refuse déjà de démarrer sur elle, ce filtre ne
- * sert que le cas où `config.js` aurait été écrit à la main.
+ * sert que le cas où `config.json` aurait été écrit à la main.
  */
 const DECLARED_ORIGIN_PATTERN = /^https?:\/\/([a-z0-9]([a-z0-9.-]*[a-z0-9])?|\[[0-9a-f:.]+\])(:\d{1,5})?(\/[\w.~/-]*)?$/i;
 
@@ -233,6 +235,16 @@ export function resolveApiConfig(env: ApiEnv, options: ResolveOptions): ApiConfi
 
 
 /**
+ * LA CONFIGURATION DE DÉMARRAGE, LUE AVANT `apiConfig` (#18988) — une DONNÉE
+ * (`/config.json`), lue de façon synchrone à l'évaluation de ce module, comme
+ * l'était le script bloquant qu'elle remplace (`runtime-config.ts` dit
+ * pourquoi). `__RUNTIME_CONFIG__` est faux dans la coque (son origine est
+ * celle de son build, la configuration ne la concerne pas) et sous `bun test`
+ * (`bunfig.toml`) : aucun témoin ne part sur le réseau en important ce module.
+ */
+const declaredRuntime: RuntimeConfig | undefined = __RUNTIME_CONFIG__ ? readRuntimeConfig(() => new XMLHttpRequest()) : undefined;
+
+/**
  * `__SHELL__` — littéral de construction posé par `vite.config.ts` (même
  * mécanique que `__BENCH__`) : `true` sous `MEESHY_TARGET=capacitor`, `false`
  * sinon.
@@ -246,6 +258,6 @@ export function resolveApiConfig(env: ApiEnv, options: ResolveOptions): ApiConfi
  */
 export const apiConfig: ApiConfig = resolveApiConfig(import.meta.env, {
   shell: __SHELL__,
-  runtime: (globalThis as { __MEESHY_RUNTIME__?: RuntimeConfig }).__MEESHY_RUNTIME__,
+  runtime: declaredRuntime,
   page: typeof window === 'undefined' ? undefined : window.location,
 });
