@@ -313,8 +313,7 @@ struct ProfileView: View {
         case .vitrine:
             vitrineFace
         case .links:
-            ProfileLinksFace(profileLink: ProfileLink(username: user?.username), accentColor: accentColor,
-                             onOpen: { router.push($0) })
+            ProfileLinksFace(user: user, accentColor: accentColor, onOpen: { router.push($0) })
         case .actions:
             ProfileActionsFace(user: user, stats: stats, accentColor: accentColor,
                                canShare: ProfileLink(username: user?.username) != nil,

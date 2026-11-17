@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import MeeshySDK
 import MeeshyUI
 @testable import Meeshy
@@ -383,18 +384,20 @@ final class ProfileSectionsTests: XCTestCase {
 
     func test_actionsFace_opensWithMyAvatar_theActionsTitle_andMyHandle() throws {
         let face = try code("Meeshy/Features/Profile/Faces/ProfileActionsFace.swift")
-        XCTAssertTrue(face.contains("MeeshyAvatar(name:"), "l'avatar de la planche, celui du kit")
-        XCTAssertTrue(face.contains("ProfileActionsCopy.title"))
-        XCTAssertTrue(face.contains("ProfileActionsCopy.handle(of: user)"))
-        XCTAssertTrue(face.contains(".accessibilityAddTraits(.isHeader)"), "« Actions » est le titre de la face pour VoiceOver")
+        let header = try code("Meeshy/Features/Profile/Faces/ProfileFaceHeader.swift")
+        XCTAssertTrue(face.contains("ProfileFaceHeader(user: user, title: ProfileActionsCopy.title"),
+                      "l'en-tête commun des faces, titré « Actions »")
+        XCTAssertTrue(header.contains("MeeshyAvatar(name:"), "l'avatar de la planche, celui du kit")
+        XCTAssertTrue(header.contains("ProfileActionsCopy.handle(of: user)"))
+        XCTAssertTrue(header.contains(".accessibilityAddTraits(.isHeader)"), "le nom de la face est son titre pour VoiceOver")
     }
 
     func test_actionsHeader_sitsOnTheLivingBannerOfTheKit_asAVeilOfThePlancheHeight() throws {
-        let face = try code("Meeshy/Features/Profile/Faces/ProfileActionsFace.swift")
-        XCTAssertTrue(face.contains("MeeshyLivingBanner(tint: accent, mode: .veil, height: Self.headerHeight)"),
+        let header = try code("Meeshy/Features/Profile/Faces/ProfileFaceHeader.swift")
+        XCTAssertTrue(header.contains("MeeshyLivingBanner(tint: Color(hex: accentColor), mode: .veil, height: Self.height)"),
                       "le dégradé et les orbes de la planche sont la bannière K27, jamais redessinés (loi 12)")
-        XCTAssertFalse(face.contains("LinearGradient("), "aucun dégradé redessiné sur place")
-        XCTAssertEqual(ProfileActionsFace.headerHeight, 150, "la hauteur de l'en-tête de Moi-Actions")
+        XCTAssertFalse(header.contains("LinearGradient("), "aucun dégradé redessiné sur place")
+        XCTAssertEqual(ProfileFaceHeader<EmptyView>.height, 150, "la hauteur de l'en-tête de Moi-Actions et Moi-Liens")
     }
 
     func test_actionsFace_offersMyStatus_whichOpensTheMoodComposerDoor_onlyWhereTheStatusModelIsServed() throws {
@@ -536,4 +539,214 @@ final class ProfileSectionsTests: XCTestCase {
 
     /// La valeur SERVIE par le catalogue pour la langue du simulateur : le témoin tient en français comme en anglais (CI).
     private func served(_ key: String) -> String { Bundle.main.localizedString(forKey: key, value: nil, table: nil) }
+}
+
+// MARK: - La face Liens (#18871, planche `Moi-Liens`)
+
+/// Mes adresses sur le fil, pour les témoins : chaque appel se note, un refus se commande.
+private actor AddressServiceDouble: ProfileAddressProviding {
+    private(set) var listed: [ProfileAddress]
+    private(set) var updates: [(id: String, draft: ProfileAddressDraft)] = []
+    private(set) var reorders: [[String]] = []
+    private(set) var removed: [String] = []
+    private let refuses: Bool
+
+    init(listed: [ProfileAddress] = [], refuses: Bool = false) {
+        self.listed = listed
+        self.refuses = refuses
+    }
+
+    func list() async throws -> [ProfileAddress] {
+        if refuses { throw URLError(.notConnectedToInternet) }
+        return listed
+    }
+
+    func create(_ draft: ProfileAddressDraft) async throws -> ProfileAddress {
+        if refuses { throw URLError(.badServerResponse) }
+        return ProfileAddress(id: "new", title: draft.title ?? "", url: draft.url ?? "", glyph: draft.glyph ?? .site,
+                              circle: draft.circle, position: listed.count, clicks: 0, trackedPath: "/l/new")
+    }
+
+    func update(id: String, _ draft: ProfileAddressDraft) async throws -> ProfileAddress {
+        updates.append((id, draft))
+        if refuses { throw URLError(.badServerResponse) }
+        return listed.first { $0.id == id } ?? ProfileAddress(id: id, title: "", url: "")
+    }
+
+    func remove(id: String) async throws {
+        removed.append(id)
+        if refuses { throw URLError(.badServerResponse) }
+    }
+
+    func reorder(ids: [String]) async throws -> [ProfileAddress] {
+        reorders.append(ids)
+        if refuses { throw URLError(.badServerResponse) }
+        return ids.enumerated().map { index, id in ProfileAddress(id: id, title: id, url: "https://\(id).io", position: index) }
+    }
+}
+
+private nonisolated struct AddressCacheDouble: ProfileAddressCaching {
+    let result: CacheResult<[ProfileAddress]>
+
+    func load() async -> CacheResult<[ProfileAddress]> { result }
+    func save(_ addresses: [ProfileAddress]) async {}
+}
+
+@MainActor
+final class ProfileLinksFaceTests: XCTestCase {
+
+    private func address(_ id: String, shown: Bool = true, clicks: Int? = nil) -> ProfileAddress {
+        ProfileAddress(id: id, title: id.capitalized, url: "https://\(id).io", glyph: .site, circle: .public,
+                       isShown: shown, clicks: clicks)
+    }
+
+    private func shareLink(_ id: String) -> MyShareLink {
+        MyShareLink(id: id, linkId: "mshy_\(id)", identifier: nil, name: "Studio", isActive: true, currentUses: 23,
+                    maxUses: 50, expiresAt: nil, createdAt: Date(timeIntervalSince1970: 0), conversationTitle: nil)
+    }
+
+    private func sources(cached: ProfileLinksSnapshot, fetched: ProfileLinksSnapshot,
+                         fetches: @escaping () -> Void = {}) -> ProfileLinksSources {
+        ProfileLinksSources(cached: { cached }, fetch: { fetches(); return fetched }, save: { _ in })
+    }
+
+    // MARK: Liens créés — cache d'abord
+
+    func test_createdLinks_aCachedListIsShownAtOnce_andSurvivesANetworkFailure() async {
+        let cached = ProfileLinksSnapshot(share: [shareLink("a")], isFresh: false)
+        let model = ProfileLinksFaceModel(sources: sources(cached: cached, fetched: .none))
+
+        await model.load()
+
+        XCTAssertEqual(model.phase, .ready, "un cache non vide ne montre jamais d'erreur ni de squelette")
+        XCTAssertEqual(model.summary.tickets.map(\.title), ["Studio"])
+    }
+
+    func test_createdLinks_anEmptyCacheAndAFailedNetwork_offerRetry() async {
+        let model = ProfileLinksFaceModel(sources: sources(cached: .none, fetched: .none))
+
+        await model.load()
+
+        XCTAssertEqual(model.phase, .failed)
+    }
+
+    func test_createdLinks_aFreshCacheIsNotRefetched() async {
+        var fetches = 0
+        let fresh = ProfileLinksSnapshot(share: [shareLink("a")], tracking: [], community: [], referral: [], isFresh: true)
+        let model = ProfileLinksFaceModel(sources: sources(cached: fresh, fetched: .none, fetches: { fetches += 1 }))
+
+        await model.load()
+
+        XCTAssertEqual(fetches, 0)
+        XCTAssertEqual(model.phase, .ready)
+    }
+
+    func test_createdLinks_aFamilyThatFailsAtTheNetworkKeepsWhatTheCacheHad() async {
+        let cached = ProfileLinksSnapshot(share: [shareLink("a")], community: [])
+        let fetched = ProfileLinksSnapshot(share: nil, community: [], isFresh: true)
+        let model = ProfileLinksFaceModel(sources: sources(cached: cached, fetched: fetched))
+
+        await model.load()
+
+        XCTAssertEqual(model.summary.count(of: .share), 1)
+    }
+
+    func test_createdLinks_aFilterWhoseFamilyVanishedFallsBackToAll() async {
+        let model = ProfileLinksFaceModel(sources: sources(cached: .none,
+                                                           fetched: ProfileLinksSnapshot(share: [], isFresh: true)))
+        model.filter = .family(.tracking)
+
+        await model.refresh()
+
+        XCTAssertEqual(model.filter, .all)
+    }
+
+    // MARK: Mes adresses — optimiste, défait sur refus
+
+    func test_addresses_aStaleCacheIsShown_thenTheServedListReplacesIt() async {
+        let service = AddressServiceDouble(listed: [address("site"), address("music")])
+        let store = ProfileAddressesStore(service: service,
+                                          cache: AddressCacheDouble(result: .stale([address("site")], age: 600)))
+
+        await store.load()
+
+        XCTAssertEqual(store.addresses.map(\.id), ["site", "music"])
+        XCTAssertEqual(store.phase, .ready)
+    }
+
+    func test_addresses_hidingAnAddressAppliesAtOnce_andIsSent() async {
+        let service = AddressServiceDouble(listed: [address("site")])
+        let store = ProfileAddressesStore(service: service, cache: AddressCacheDouble(result: .empty))
+        await store.load()
+
+        await store.setShown(false, for: "site")
+
+        XCTAssertEqual(store.addresses.first?.isShown, false)
+        let updates = await service.updates
+        XCTAssertEqual(updates.first?.draft, ProfileAddressDraft(isShown: false))
+        XCTAssertNil(store.refusal)
+    }
+
+    func test_addresses_aRefusedGestureIsUndone_andSaid() async {
+        let store = ProfileAddressesStore(service: AddressServiceDouble(refuses: true),
+                                          cache: AddressCacheDouble(result: .fresh([address("site")], age: 1)))
+        await store.load()
+
+        await store.remove(id: "site")
+
+        XCTAssertEqual(store.addresses.map(\.id), ["site"], "le geste refusé se défait")
+        XCTAssertEqual(store.refusal, ProfileLinksCopy.addressRefused)
+    }
+
+    func test_addresses_movingSendsEveryIdOnce_inTheNewOrder() async {
+        let service = AddressServiceDouble(listed: [address("a"), address("b"), address("c")])
+        let store = ProfileAddressesStore(service: service, cache: AddressCacheDouble(result: .empty))
+        await store.load()
+
+        await store.move(from: 2, to: 0)
+
+        let reorders = await service.reorders
+        XCTAssertEqual(reorders, [["c", "a", "b"]])
+        XCTAssertEqual(store.addresses.map(\.id), ["c", "a", "b"])
+    }
+
+    func test_addresses_theClicksAddUp_andTwelveIsTheCeiling() async {
+        let many = (0..<ProfileAddressRules.maxCount).map { address("a\($0)", clicks: 2) }
+        let store = ProfileAddressesStore(service: AddressServiceDouble(), cache: AddressCacheDouble(result: .fresh(many, age: 1)))
+        await store.load()
+
+        XCTAssertEqual(store.totalClicks, 24)
+        XCTAssertFalse(store.canAdd)
+    }
+
+    // MARK: La face est faite du kit (loi 12)
+
+    private func code(_ path: String) throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
+    }
+
+    func test_linksFace_isMadeOfTheKit() throws {
+        let face = try code("Meeshy/Features/Profile/Faces/ProfileLinksFace.swift")
+        XCTAssertTrue(face.contains("MeeshyTicket("), "le lien de profil est un billet K30")
+        XCTAssertTrue(face.contains("MeeshyCodeCard("), "son QR est la carte de code K31")
+        XCTAssertTrue(face.contains("MeeshyLabeledAction("), "ses gestes sont des actions libellées K32")
+        for drawn in ["RoundedRectangle(", "LinearGradient(", "Capsule("] {
+            XCTAssertFalse(face.contains(drawn), "\(drawn) : aucun composant redessiné sur place")
+        }
+    }
+
+    func test_linksHub_isTheLinksFace_inAPushedPage() throws {
+        let hub = try code("Meeshy/Features/Links/Views/LinksHubView.swift")
+        XCTAssertTrue(hub.contains("ProfileLinksFace(user: authManager.currentUser"))
+        XCTAssertTrue(hub.contains("showsHeader: false"), "la page poussée a déjà son en-tête")
+    }
+
+    func test_profileCard_sendsTheProfileAsACardAndShowsOnlyThePublicAddress() {
+        let user = MeeshyUser(id: "u1", username: "aissa")
+        let link = ProfileLink(username: user.username)
+        let card = link.map { ProfileLinksShare.card(of: user, link: $0) }
+        XCTAssertEqual(card?.kind, .profile)
+        XCTAssertEqual(card?.url?.absoluteString, "https://meeshy.me/@aissa")
+        XCTAssertEqual(card?.subtitle, "@aissa")
+    }
 }

@@ -2,49 +2,125 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// La face Liens de MA fiche (#18869) : en attendant ses billets (#18871 — mon lien de profil, son QR, mes adresses),
-/// elle mène, d'un geste, à chaque famille de liens que l'app sait déjà gérer, et donne l'adresse courte de ma page
-/// publique. Faite du kit : rangées à chevron (K06) dans un verre de thème, en-tête de section (K44).
+/// La face Liens de MA fiche (#18871, planche `Moi-Liens`) : ce qui amène vers moi.
+///
+/// Faite du kit (loi 12) : mon lien de profil sur un billet héros (K30) avec son QR (K31) et ses quatre gestes libellés
+/// (K32) — Copier, QR, Envoyer, Sans contact —, « Mes adresses » en billets compacts sur un rail, « Liens créés » en
+/// billets de rangée filtrés par famille (K04), chacun avec son chiffre. Le cache se peint d'abord, le réseau revalide
+/// en silence (loi 8) ; une section vide a une sortie, une section en échec a « Réessayer ».
+///
+/// `showsHeader` : l'en-tête de face (avatar, « Mes liens », pseudo, scanner) n'apparaît que sur ma fiche ; la page
+/// « Mes liens » poussée a déjà le sien.
 struct ProfileLinksFace: View {
-    let profileLink: ProfileLink?
+    let user: MeeshyUser?
     let accentColor: String
+    let showsHeader: Bool
     let onOpen: (Route) -> Void
 
+    @StateObject private var links: ProfileLinksFaceModel
+    @ObservedObject private var addresses: ProfileAddressesStore
+    @State private var presented: ProfileLinksPresented?
+    @State private var sent: SharedContentWrapper?
+
+    init(user: MeeshyUser?, accentColor: String, showsHeader: Bool = true,
+         links: ProfileLinksFaceModel? = nil, addresses: ProfileAddressesStore = .shared,
+         onOpen: @escaping (Route) -> Void) {
+        self.user = user
+        self.accentColor = accentColor
+        self.showsHeader = showsHeader
+        self.onOpen = onOpen
+        _links = StateObject(wrappedValue: links ?? ProfileLinksFaceModel())
+        _addresses = ObservedObject(wrappedValue: addresses)
+    }
+
     private var accent: Color { Color(hex: accentColor) }
+    private var profileLink: ProfileLink? { ProfileLink(username: user?.username) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            MeeshySectionHeader(title: String(localized: "links.hub.title", defaultValue: "Mes liens", bundle: .main))
-            if let profileLink {
-                MeeshyNote(profileLink.displayText, lead: .systemImage("link"))
-            }
-            VStack(spacing: 0) {
-                ForEach(Array(Self.entries.enumerated()), id: \.offset) { index, entry in
-                    MeeshyToggleRow(entry.title, systemImage: entry.systemImage, accessory: .chevron,
-                                    showsDivider: index < Self.entries.count - 1, tint: accent,
-                                    action: { onOpen(entry.route) })
-                }
-            }
-            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
+            if showsHeader { header }
+            if let profileLink { profileTicket(profileLink) }
+            ProfileAddressesRail(store: addresses, accent: accent, onManage: { onOpen(.myAddresses) })
+            ProfileCreatedLinks(model: links, accent: accent, onOpen: onOpen,
+                                onCreate: { presented = .create })
+        }
+        .task { await loadAll() }
+        .modifier(ProfileLinksPresentations(
+            user: user, link: profileLink, accentColor: accentColor, presented: $presented, sent: $sent,
+            onOpen: onOpen, onCreated: { Task { await links.refresh() } }
+        ))
+    }
+
+    private func loadAll() async {
+        async let created: Void = links.load()
+        async let mine: Void = addresses.load()
+        _ = await (created, mine)
+    }
+
+    // MARK: - En-tête
+
+    private var header: some View {
+        ProfileFaceHeader(user: user, title: ProfileLinksCopy.title, accentColor: accentColor,
+                          identifier: "profile.links.header") {
+            MeeshyGlassButton(systemImage: "qrcode.viewfinder", label: ProfileLinksCopy.scan, size: .s44,
+                              action: { presented = .scanner })
         }
     }
 
-    struct Entry {
-        let title: String
-        let systemImage: String
-        let route: Route
+    // MARK: - Mon lien de profil
+
+    /// Le billet héros : « Mon lien de profil », l'adresse en chasse fixe et le QR qui s'agrandit ; sous la coupe, les
+    /// quatre gestes. Le QR ne porte que l'adresse publique, jamais une donnée de cercle.
+    private func profileTicket(_ link: ProfileLink) -> some View {
+        MeeshyTicket(
+            title: ProfileLinksCopy.profileLinkTitle,
+            code: link.displayText,
+            tint: accent,
+            size: .hero,
+            isFlipped: false,
+            isSelected: false,
+            isDragging: false,
+            label: "\(ProfileLinksCopy.profileLinkTitle), \(link.displayText)",
+            onPress: nil,
+            stub: { profileActions(link) },
+            leading: { EmptyView() },
+            trailing: {
+                MeeshyCodeCard(payload: link.url.absoluteString, label: ProfileLinksCopy.enlargeQR, tint: accent,
+                               style: .plain, size: .mini, tilt: .none, boostsBrightness: false,
+                               onPress: { presented = .card(.qr) })
+            },
+            status: { EmptyView() },
+            back: { EmptyView() }
+        )
+        .accessibilityAction(named: Text(ProfileLinksCopy.enlargeQR)) { presented = .card(.qr) }
+        .accessibilityIdentifier("profile.links.profileTicket")
     }
 
-    static var entries: [Entry] {
-        [
-            Entry(title: String(localized: "links.hub.share.title", defaultValue: "Liens de partage", bundle: .main),
-                  systemImage: "link", route: .shareLinks),
-            Entry(title: String(localized: "links.hub.tracking.title", defaultValue: "Liens de suivi", bundle: .main),
-                  systemImage: "chart.line.uptrend.xyaxis", route: .trackingLinks),
-            Entry(title: String(localized: "links.hub.community.title", defaultValue: "Liens communauté", bundle: .main),
-                  systemImage: "person.3", route: .communityLinks),
-            Entry(title: String(localized: "links.hub.affiliate.title", defaultValue: "Parrainage", bundle: .main),
-                  systemImage: "gift", route: .affiliate),
-        ]
+    private func profileActions(_ link: ProfileLink) -> some View {
+        MeeshyActionGrid(columns: .fixed(4)) {
+            MeeshyLabeledAction(title: ProfileLinksCopy.copy, systemImage: "doc.on.doc", tint: accent,
+                                hint: link.displayText,
+                                action: { LinksClipboard.copy(link.url.absoluteString, message: ProfileLinksCopy.copied) })
+            MeeshyLabeledAction(title: ProfileLinksCopy.qr, systemImage: "qrcode", tint: accent,
+                                action: { presented = .card(.qr) })
+            MeeshyLabeledAction(title: ProfileLinksCopy.send, systemImage: "paperplane", tint: accent,
+                                hint: ProfileLinksCopy.sendHint, action: { sendProfile(link) })
+            MeeshyLabeledAction(title: ProfileLinksCopy.contactless, systemImage: "wave.3.right", tint: accent,
+                                action: { presented = .card(.contactless) })
+        }
+    }
+
+    /// « Envoyer » : ma vitrine part comme une carte dans une conversation, par la feuille d'envoi Meeshy.
+    private func sendProfile(_ link: ProfileLink) {
+        guard let user else { return }
+        sent = SharedContentWrapper(subject: .card(ProfileLinksShare.card(of: user, link: link)))
+    }
+}
+
+/// La carte d'un profil qui part dans une conversation : son nom, son pseudo, son avatar et l'adresse courte.
+enum ProfileLinksShare {
+    static func card(of user: MeeshyUser, link: ProfileLink) -> ShareCard {
+        ShareCard(kind: .profile, contentId: user.id, title: user.displayName ?? user.username,
+                  subtitle: "@\(link.username)", url: link.url, imageURL: user.avatar)
     }
 }

@@ -56,45 +56,11 @@ struct ProfileActionsFace: View {
 
     // MARK: - En-tête
 
-    /// La hauteur de l'en-tête de la planche `Moi-Actions`.
-    static let headerHeight: Double = 150
-
-    /// Mon avatar, « Actions » en grand, et mon pseudo dessous, posés sur la bannière vivante du kit (K27) en voile :
-    /// le dégradé de ma teinte, ses orbes, et le fondu vers le fond (planche `Moi-Actions`). La bannière déborde la
-    /// marge de la face, bord à bord comme sur la planche, et se tait pour VoiceOver.
+    /// Mon avatar, « Actions » en grand et mon pseudo, sur la bannière vivante (planche `Moi-Actions`) : l'en-tête
+    /// commun des faces de ma fiche.
     private var header: some View {
-        headerRow
-            .padding(.bottom, MeeshySpacing.sm)
-            .frame(maxWidth: .infinity, minHeight: Self.headerHeight, alignment: .bottomLeading)
-            .background(alignment: .bottom) {
-                MeeshyLivingBanner(tint: accent, mode: .veil, height: Self.headerHeight)
-                    .padding(.horizontal, -MeeshySpacing.lg)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-    }
-
-    private var headerRow: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(name: user?.displayName ?? user?.username ?? "", context: .custom(40),
-                         accentColor: accentColor, avatarURL: user?.avatar, thumbHash: user?.avatarThumbHash)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(ProfileActionsCopy.title)
-                    .font(MeeshyFont.relative(MeeshyFont.largeTitleSize, weight: .heavy, design: .rounded))
-                    .foregroundStyle(theme.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                if let handle = ProfileActionsCopy.handle(of: user) {
-                    Text(handle)
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium, design: .monospaced))
-                        .foregroundStyle(theme.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("profile.actions.header")
+        ProfileFaceHeader(user: user, title: ProfileActionsCopy.title, accentColor: accentColor,
+                          identifier: "profile.actions.header")
     }
 
     // MARK: - Montrer
