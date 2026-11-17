@@ -154,7 +154,7 @@ struct MeeshyWavePlayerTests {
         #expect(MeeshyWavePlayerWords.toggleLabel(label: "Voix de Léo", isPlaying: false, bundle: fr, locale: locale) == "Lire, Voix de Léo")
         #expect(MeeshyWavePlayerWords.toggleLabel(label: "Voix de Léo", isPlaying: true, bundle: fr, locale: locale) == "Mettre en pause, Voix de Léo")
         let spoken = MeeshyWavePlayerWords.position(duration: 9, progress: 5.0 / 9.0, bundle: fr, locale: locale)
-        #expect(spoken.contains("sur"), spoken)
+        #expect(spoken.contains("sur"), "\(spoken)")
         #expect(MeeshyWavePlayerWords.stateWord(.buffering, bundle: fr, locale: locale) != nil)
         #expect(MeeshyWavePlayerWords.stateWord(.unavailable, bundle: fr, locale: locale) != nil)
         #expect(MeeshyWavePlayerWords.stateWord(.playing, bundle: fr, locale: locale) == nil)

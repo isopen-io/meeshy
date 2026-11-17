@@ -206,6 +206,14 @@ public nonisolated struct MeeshyButtonHoldLaw: Sendable, Equatable {
         return release()
     }
 
+    /// Le bouton cesse d'être disponible (éteint, occupé) pendant qu'on le tient :
+    /// relâche sans attendre que le doigt bouge, et un doigt encore posé ne
+    /// réarme plus jusqu'à ce qu'il se lève.
+    public mutating func revoke(isTouching: Bool) -> Bool? {
+        if isTouching { isTouchSpent = true }
+        return release()
+    }
+
     /// Le doigt se pose : `true` une seule fois, `nil` s'il tenait déjà.
     public mutating func press() -> Bool? {
         guard !isHeld else { return nil }
@@ -229,6 +237,52 @@ public nonisolated struct MeeshyButtonHoldLaw: Sendable, Equatable {
     public mutating func toggle(isEnabled: Bool) -> Bool? {
         if isHeld { return release() }
         return isEnabled ? press() : nil
+    }
+}
+
+/// Le retour d'un changement d'état du maintien : un tic ferme, ou une erreur.
+public nonisolated enum MeeshyButtonHoldFeedback: String, Sendable, Equatable {
+    case firm
+    case error
+}
+
+/// **Le décor du maintien** : tant que l'hôte dit « en émission », deux ondes
+/// partent du disque (2,6 s, décalées de 1,3 s, de 1 à 1,85 fois, de 0,75 à 0) ;
+/// sous mouvement réduit, un anneau plein de 6 à leur place. Un tic ferme à
+/// l'ouverture et à la fermeture de l'émission, une erreur au refus.
+public nonisolated struct MeeshyButtonHoldDecor: Sendable, Equatable {
+    public static let liveWaveCount = 2
+    public static let wavePeriodSeconds: Double = 2.6
+    public static let waveStartOpacity: Double = 0.75
+    public static let waveEndScale: Double = 1.85
+    public static let waveStroke: Double = 2
+    public static let stillRingWidth: Double = 6
+
+    public let waveCount: Int
+    public let showsStillRing: Bool
+
+    public static func resolve(holdState: MeeshyButtonHoldState, reduceMotion: Bool) -> MeeshyButtonHoldDecor {
+        let isLive = holdState == .live
+        return MeeshyButtonHoldDecor(waveCount: isLive && !reduceMotion ? liveWaveCount : 0,
+                                     showsStillRing: isLive && reduceMotion)
+    }
+
+    /// L'onde `index` sur `count` après `elapsed` secondes : échelle et opacité.
+    public static func wave(index: Int, count: Int, elapsed: Double) -> MeeshyMedallionWave {
+        let share = count > 0 ? Double(min(max(index, 0), count - 1)) / Double(count) : 0
+        let turns = (elapsed.isFinite ? elapsed : 0) / wavePeriodSeconds + share
+        let progress = turns - turns.rounded(.down)
+        return MeeshyMedallionWave(scale: 1 + (waveEndScale - 1) * progress,
+                                   opacity: waveStartOpacity * (1 - progress))
+    }
+
+    /// Le retour à jouer quand l'hôte change l'état : `nil` quand rien ne s'ouvre,
+    /// ne se ferme ni n'est refusé.
+    public static func feedback(from old: MeeshyButtonHoldState,
+                                to new: MeeshyButtonHoldState) -> MeeshyButtonHoldFeedback? {
+        guard old != new else { return nil }
+        if new == .refused { return .error }
+        return old == .live || new == .live ? .firm : nil
     }
 }
 

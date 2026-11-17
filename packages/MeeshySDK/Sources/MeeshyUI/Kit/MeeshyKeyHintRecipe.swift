@@ -123,6 +123,10 @@ public nonisolated struct MeeshyKeyHintRecipe: Sendable, Equatable {
 
     public static let glyphSize: Double = 12
     public static let pressDuration: Double = 0.12
+    /// Enfoncée, la face descend de 1,5 ; la lèvre reste.
+    public static let pressDepth: Double = 1.5
+    /// Le filet des trois autres côtés de la touche.
+    public static let edgeWidth: Double = 1
 
     public let side: Double
     public let minimumWidth: Double
@@ -148,7 +152,7 @@ public nonisolated struct MeeshyKeyHintRecipe: Sendable, Equatable {
             combinationGap: compact ? 3 : 4,
             horizontalPadding: compact ? 5 : 6,
             isPressed: isPressed,
-            pressOffset: isPressed && !reduceMotion ? 1 : 0,
+            pressOffset: isPressed && !reduceMotion ? pressDepth : 0,
             isHittable: false,
             isHiddenFromVoiceOver: true
         )
