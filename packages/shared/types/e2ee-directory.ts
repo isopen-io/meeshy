@@ -77,6 +77,8 @@ export const E2EE_ERROR_CODES = {
   DEVICE_LIMIT_REACHED: 'E2EE_DEVICE_LIMIT_REACHED',
   ENVELOPES_INVALID: 'E2EE_ENVELOPES_INVALID',
   KEYS_FORBIDDEN: 'E2EE_KEYS_FORBIDDEN',
+  /** Un compte réserve trop de bundles, toutes cibles confondues : il patiente (`Retry-After`) (#18906, GW-01). */
+  KEYS_BUDGET_EXCEEDED: 'E2EE_KEYS_BUDGET_EXCEEDED',
   REGIME_CHANGED: 'E2EE_REGIME_CHANGED',
   /** Une conversation chiffrée de bout en bout ne repasse jamais en clair (#12949). */
   IRREVERSIBLE: 'E2EE_IRREVERSIBLE',
