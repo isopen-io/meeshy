@@ -71,17 +71,6 @@ const shellApiPreconnect = (): Plugin => ({
 });
 
 /**
- * DEUX runtimes, UN code source.
- *
- * `MEESHY_RUNTIME=react` construit avec React 19 ; par defaut on construit avec
- * Preact via `preact/compat`. Le code applicatif est IDENTIQUE dans les deux
- * cas — c'est tout l'interet de compat, et c'est ce qui rend la comparaison de
- * poids honnete : le meme arbre, le meme Tailwind, le meme routeur, seul le
- * runtime change. Le POC mesure les deux (scripts/measure-weight.mjs).
- */
-const runtime = process.env.MEESHY_RUNTIME === 'react' ? 'react' : 'preact';
-
-/**
  * Forme TABLEAU avec motifs ancres, et non objet.
  *
  * Un alias objet fait un remplacement de PREFIXE : la cle `react` capture aussi
@@ -90,9 +79,7 @@ const runtime = process.env.MEESHY_RUNTIME === 'react' ? 'react' : 'preact';
  * n'attrapent que le specificateur exact.
  */
 const aliasPreact = [
-  // `react` pointe le SHIM, pas compat directement : voir src/lib/react-shim.js
-  // (TanStack Router lit `React.use`, que compat n'expose pas).
-  { find: /^react$/, replacement: fileURLToPath(new URL('./src/lib/react-shim.js', import.meta.url)) },
+  { find: /^react$/, replacement: 'preact/compat' },
   { find: /^react-dom$/, replacement: 'preact/compat' },
   { find: /^react-dom\/client$/, replacement: 'preact/compat/client' },
   { find: /^react\/jsx-runtime$/, replacement: 'preact/jsx-runtime' },
@@ -118,8 +105,8 @@ const forCapacitor = process.env.MEESHY_TARGET === 'capacitor';
  * normal il vaut `0`, la branche qui rembourre la fixture devient
  * `if (0 > 0)`, et rolldown l'élimine : le coût est nul, et le gate de poids
  * le prouve plutôt que ce commentaire. `MEESHY_BENCH=500 bun run build` produit
- * la variante que le témoin mesure — même mécanique que `MEESHY_RUNTIME` et
- * `MEESHY_TARGET`, déjà en place.
+ * la variante que le témoin mesure — même mécanique que `MEESHY_TARGET`,
+ * déjà en place.
  */
 const bench = Number.parseInt(process.env.MEESHY_BENCH ?? '0', 10) || 0;
 
@@ -521,7 +508,7 @@ export default defineConfig({
   },
   resolve: {
     alias: [
-      ...(runtime === 'preact' ? aliasPreact : []),
+      ...aliasPreact,
       { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
     ],
   },

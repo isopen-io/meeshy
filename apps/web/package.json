@@ -7,7 +7,6 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:react": "MEESHY_RUNTIME=react vite build",
     "preview": "vite preview --port 4173",
     "type-check": "tsc --noEmit",
     "measure": "node scripts/measure-weight.mjs",
@@ -108,7 +107,6 @@
     "fflate": "0.8.3",
     "fontkit": "2.0.4",
     "lottie-web": "5.13.0",
-    "preact-render-to-string": "6.8.2",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "tailwindcss": "4.3.4",
