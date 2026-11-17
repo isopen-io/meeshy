@@ -77,9 +77,9 @@ struct MeeshyCircleScaleTests {
 
     @Test("pilule : seul le rang courant s'affiche ; anneaux : le second rang est en tirets, ignoré par la pilule")
     func recipe_otherLevel() {
-        #expect(Self.recipe(form: .rings, current: 4, other: 5).otherLevel == 5)
-        #expect(Self.recipe(form: .pill, current: 4, other: 5).otherLevel == nil)
-        #expect(Self.recipe(form: .rings, current: 4, other: 99).otherLevel == 5)
+        #expect(Self.recipe(current: 4, other: 5, form: .rings).otherLevel == 5)
+        #expect(Self.recipe(current: 4, other: 5, form: .pill).otherLevel == nil)
+        #expect(Self.recipe(current: 4, other: 99, form: .rings).otherLevel == 5)
     }
 
     @Test("l'encre est sombre dès que le fond est assez plein ; elle suit l'intensité, pas la teinte")
