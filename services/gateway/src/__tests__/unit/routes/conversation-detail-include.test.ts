@@ -103,12 +103,11 @@ describe('conversationUserPreferencesSelect (titre DM stable)', () => {
       'appearance',
       'categoryId',
       // Ajouté pour le masquage personnel de l'aperçu de ligne de liste
-      // (`resolveVisibleLastMessages`). Contrairement aux autres clés, il est
-      // lu SERVEUR-side uniquement : le wire ne le déclare pas, donc
-      // fast-json-stringify le strippe. Il est ici parce qu'il vit dans le
-      // MÊME document que les préférences déjà sélectionnées — le lire coûte
-      // zéro requête, alors qu'une lecture séparée en aurait coûté une par
-      // chargement de liste.
+      // (`resolveVisibleLastMessages`), longtemps lu SERVEUR-side seulement ;
+      // DÉCLARÉ et servi au lecteur depuis #18925. Il est ici parce qu'il vit
+      // dans le MÊME document que les préférences déjà sélectionnées — le lire
+      // coûte zéro requête, alors qu'une lecture séparée en aurait coûté une
+      // par chargement de liste.
       //
       // `deletedForUserAt` figurait ici pour la même raison, et n'y figure
       // plus : `95ca2becd2` l'a retiré du `select` en même temps que des deux
@@ -122,13 +121,19 @@ describe('conversationUserPreferencesSelect (titre DM stable)', () => {
       'isArchived',
       'isMuted',
       'isPinned',
+      // #18925 — diffusé par `user:preferences-updated`, servi par la ligne.
+      'mentionsOnly',
+      // #18925 — l'ordre manuel dans la catégorie : sans lui, un balayage riche
+      // effaçait l'ordre que `user:preferences-reordered` venait de poser.
+      'orderInCategory',
       'reaction',
       // G-123 — choix collant du mode de lecture (G-121), lu pour l'entrée
-      // d'orchestrateur du pont ✦ (workshop A6). SERVEUR-side uniquement,
-      // comme `clearHistoryBefore` : le wire ne le
-      // déclare pas, `fast-json-stringify` le strippe de la réponse.
+      // d'orchestrateur du pont ✦ (workshop A6). SERVEUR-side uniquement : le
+      // wire ne le déclare pas, `fast-json-stringify` le strippe de la réponse.
       'readingMode',
-      'tags'
+      'tags',
+      // #18925 — l'arbitre des diffusions (`incoming.version <= local -> drop`).
+      'version'
     ]);
   });
 });
