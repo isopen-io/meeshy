@@ -171,7 +171,10 @@ const COLONNES_LIEN = {
   // `closedAt`/`isActive` du conteneur : jamais servis tels quels, ils
   // n'alimentent que `inactiveReason` ci-dessous (§ #3740). Le chargement est
   // gratuit — c'est la MÊME jointure que `conversationTitle` exige déjà.
-  conversation: { select: { id: true, title: true, type: true, description: true, closedAt: true, isActive: true } },
+  //
+  // `memberCount` (#19283) : la colonne DÉNORMALISÉE du conteneur, chargée par
+  // la même jointure — « Mène à Studio · 8 membres » sans lire un seul membre.
+  conversation: { select: { id: true, title: true, type: true, description: true, closedAt: true, isActive: true, memberCount: true } },
   creator: {
     select: { id: true, username: true, firstName: true, lastName: true, displayName: true, avatar: true },
   },
@@ -247,6 +250,7 @@ type LinkRow = {
     description?: string | null;
     closedAt?: Date | null;
     isActive?: boolean;
+    memberCount?: number;
   } | null;
   creator?: {
     id: string;
@@ -412,7 +416,8 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
                       id: { type: 'string' },
                       title: { type: 'string', nullable: true },
                       type: { type: 'string' },
-                      description: { type: 'string', nullable: true }
+                      description: { type: 'string', nullable: true },
+                      memberCount: { type: 'integer', description: 'Members of the conversation the link leads to (#19283)' }
                     }
                   },
                   creator: {
@@ -644,6 +649,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
             title: l.conversation.title,
             type: l.conversation.type,
             description: l.conversation.description ?? null,
+            memberCount: l.conversation.memberCount ?? 0,
           };
         }
         if (expand.has('creator')) {
