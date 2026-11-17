@@ -112,8 +112,36 @@ export type SharedLocationChangedEventData = {
 
 export type SharedLocationEndedEventData = { readonly userId: string };
 
-/** `GET /relations/locations` : les partages servis au lecteur, déjà tronqués. */
-export type SharedLocationSnapshot = { readonly items: readonly SharedLocationChangedEventData[] };
+/**
+ * Le dernier point d'un Sang qui m'a consenti sa position continue (#19202), tel que
+ * l'historique le servirait : la position exacte qu'il a consentie, sa date, son cercle.
+ */
+export type SharedLocationBloodItem = {
+  readonly userId: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly accuracy?: number;
+  readonly recordedAt: string;
+  readonly circle?: SharedLocationCircle;
+};
+
+/** Un partage qui me visait, terminé depuis moins d'un jour (#19202) : qui, quand, son cercle — jamais une position. */
+export type SharedLocationEndedItem = {
+  readonly userId: string;
+  readonly endedAt: string;
+  readonly circle?: SharedLocationCircle;
+};
+
+/**
+ * `GET /relations/locations` : les partages servis au lecteur, déjà tronqués. `blood` et
+ * `ended` ne sont présents que si `include` les demande (#19202) : un ancien client lit la
+ * même réponse qu'avant.
+ */
+export type SharedLocationSnapshot = {
+  readonly items: readonly SharedLocationChangedEventData[];
+  readonly blood?: readonly SharedLocationBloodItem[];
+  readonly ended?: readonly SharedLocationEndedItem[];
+};
 
 /** `location:share-own-changed` : sans charge — l'appareil relit son partage. */
 export type SharedLocationOwnChangedEventData = Readonly<Record<string, never>>;

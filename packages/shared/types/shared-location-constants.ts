@@ -70,3 +70,21 @@ export const SHARED_LOCATION_ERROR_CODES = {
   UNAVAILABLE: 'SHARED_LOCATION_UNAVAILABLE',
 } as const;
 export type SharedLocationErrorCode = (typeof SHARED_LOCATION_ERROR_CODES)[keyof typeof SHARED_LOCATION_ERROR_CODES];
+
+/**
+ * Ce que `GET /relations/locations?include=` ajoute aux partages en cours (#19202) : le
+ * dernier point de chaque Sang qui me l'a consenti, et les partages qui me visaient,
+ * terminés depuis moins d'un jour. Sans `include`, la réponse est celle d'avant.
+ */
+export const SHARED_LOCATION_SNAPSHOT_INCLUDES = ['blood', 'ended'] as const;
+export type SharedLocationSnapshotInclude = (typeof SHARED_LOCATION_SNAPSHOT_INCLUDES)[number];
+export type SharedLocationSnapshotIncludes = Readonly<Record<SharedLocationSnapshotInclude, boolean>>;
+
+/** Un partage terminé reste dit « terminé il y a… » à ceux qu'il servait, un jour durant. */
+export const SHARED_LOCATION_ENDED_WINDOW_HOURS = 24;
+
+/** `include` : une liste séparée par des virgules ; un mot inconnu s'ignore, une valeur illisible n'ajoute rien. */
+export function parseSharedLocationIncludes(raw: unknown): SharedLocationSnapshotIncludes {
+  const words = typeof raw === 'string' ? raw.split(',').map((word) => word.trim().toLowerCase()) : [];
+  return { blood: words.includes('blood'), ended: words.includes('ended') };
+}
