@@ -33,7 +33,10 @@ import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.MarkReadResponse
 import me.meeshy.sdk.model.NotificationCachePatch
 import me.meeshy.sdk.model.NotificationCounts
+import me.meeshy.sdk.model.NotificationFlightChanges
+import me.meeshy.sdk.model.NotificationFlightLanding
 import me.meeshy.sdk.model.NotificationTypeSelection
+import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.RegisterDeviceTokenRequest
 import me.meeshy.sdk.model.RegisterDeviceTokenResponse
 import me.meeshy.sdk.model.UnregisterDeviceTokenRequest
@@ -87,6 +90,16 @@ class NotificationRepository @Inject constructor(
 
     /** Le vidage disque de [clear] : toute relecture ou écriture du compte suivant l'attend, jamais l'inverse. */
     @Volatile private var pendingDiskClear: Job? = null
+
+    /**
+     * #18915 (AND-05) — les relectures en vol, chacune avec son journal ([NotificationFlightChanges]) ouvert au départ
+     * de sa requête : chaque arrivée en direct et chaque lecture posée sur la liste « all » pendant qu'elle attend s'y
+     * inscrit, et la page construite avant elles atterrit par-dessus ([NotificationFlightLanding]). Tout passe sous
+     * [flightLock] : une arrivée ne se glisse jamais entre la lecture du journal et l'écriture de la page.
+     */
+    private val flightLock = Any()
+    private var flights: Map<Long, NotificationFlightChanges> = emptyMap()
+    private var flightCount = 0L
 
     init {
         if (store !== NoNotificationCacheStore) startPersisting()
@@ -154,20 +167,20 @@ class NotificationRepository @Inject constructor(
     /**
      * A real-time `notification:new` arrival (feature-parity §M) prepends into the SAME cache
      * [notificationsStream] serves — a live notification is never silently overwritten by the
-     * next observer's re-read or a concurrent revalidate. Dedupes by id (a REST-list race or a
-     * duplicate delivery is a no-op) and bumps [unreadCountStream] only when unread.
+     * next observer's re-read or a concurrent revalidate: a re-read in flight journals it, and its
+     * page lands over it (#18915). Dedupes by id (a REST-list race or a duplicate delivery is a
+     * no-op) and bumps [unreadCountStream] only when unread.
      */
     fun prependLive(notification: ApiNotification) {
-        val current = _notificationsCache.value
-        if (current == null) {
+        synchronized(flightLock) {
+            val current = _notificationsCache.value
+            if (current != null && current.any { it.id == notification.id }) return
             // Aucune liste chargée : fabriquer un cache d'une ligne ferait croire qu'il est complet et masquerait la
-            // vraie liste. Le compteur, lui, est exact — la prochaine révalidation apporte la ligne.
+            // vraie liste. Le compteur, lui, est exact — la page d'une relecture en vol, ou la suivante, apporte la ligne.
+            if (current != null) _notificationsCache.value = NotificationCachePatch.insertingAtHead(current, notification)
             if (!notification.state.isRead) _unreadCount.update { it + 1 }
-            return
+            flights = flights.mapValues { (_, changes) -> changes.arrived(notification) }
         }
-        if (current.any { it.id == notification.id }) return
-        _notificationsCache.value = NotificationCachePatch.insertingAtHead(current, notification)
-        if (!notification.state.isRead) _unreadCount.update { it + 1 }
     }
 
     /**
@@ -176,7 +189,7 @@ class NotificationRepository @Inject constructor(
      */
     fun patch(scope: NotificationScope = NotificationScope.All, transform: (List<ApiNotification>) -> List<ApiNotification>) {
         if (scope.isAll) {
-            _notificationsCache.update { current -> current?.let(transform) }
+            rewriteAll(transform)
         } else {
             scopedLists.computeIfPresent(scope) { _, current -> transform(current) }
         }
@@ -204,7 +217,7 @@ class NotificationRepository @Inject constructor(
      * lit dans TOUTES les vues montées (cloche, onglets, non lues seulement), pas seulement dans la liste complète.
      */
     fun patchEverywhere(transform: (List<ApiNotification>) -> List<ApiNotification>) {
-        _notificationsCache.update { current -> current?.let(transform) }
+        rewriteAll(transform)
         scopedLists.replaceAll { _, current -> transform(current) }
     }
 
@@ -232,9 +245,7 @@ class NotificationRepository @Inject constructor(
         val current = _notificationsCache.value ?: return
         val wasUnread = current.firstOrNull { it.id == notificationId }?.state?.isRead == false
         if (!wasUnread) return
-        _notificationsCache.value = current.map {
-            if (it.id == notificationId) it.copy(state = it.state.copy(isRead = true)) else it
-        }
+        rewriteAll { list -> NotificationCachePatch.markingRead(list, notificationId) }
         _unreadCount.update { (it - 1).coerceAtLeast(0) }
     }
 
@@ -253,11 +264,13 @@ class NotificationRepository @Inject constructor(
         val current = _notificationsCache.value ?: return
         val touched = current.any { !it.state.isRead && notificationMatchesReadBulkScope(scope, it) }
         if (!touched) return
-        _notificationsCache.value = current.map {
-            if (!it.state.isRead && notificationMatchesReadBulkScope(scope, it)) {
-                it.copy(state = it.state.copy(isRead = true))
-            } else {
-                it
+        rewriteAll { list ->
+            list.map {
+                if (!it.state.isRead && notificationMatchesReadBulkScope(scope, it)) {
+                    it.copy(state = it.state.copy(isRead = true))
+                } else {
+                    it
+                }
             }
         }
     }
@@ -405,18 +418,12 @@ class NotificationRepository @Inject constructor(
     suspend fun markAsRead(notificationId: String): NetworkResult<ApiNotification> {
         val previous = _notificationsCache.value
         val wasUnread = previous?.firstOrNull { it.id == notificationId }?.state?.isRead == false
-        _notificationsCache.value = previous?.map {
-            if (it.id == notificationId) it.copy(state = it.state.copy(isRead = true)) else it
-        }
+        rewriteAll { list -> NotificationCachePatch.markingRead(list, notificationId) }
         if (wasUnread) _unreadCount.update { (it - 1).coerceAtLeast(0) }
 
         val result = apiCall { notificationApi.markAsRead(notificationId) }
         if (result is NetworkResult.Failure) {
-            _notificationsCache.update { current ->
-                current?.map {
-                    if (it.id == notificationId) it.copy(state = it.state.copy(isRead = false)) else it
-                }
-            }
+            rewriteAll { list -> NotificationCachePatch.markingUnread(list, notificationId) }
             if (wasUnread) _unreadCount.update { it + 1 }
         }
         return result
@@ -436,17 +443,16 @@ class NotificationRepository @Inject constructor(
         val previouslyUnreadIds = previous.orEmpty()
             .filter { !it.state.isRead }
             .mapTo(HashSet()) { it.id }
-        _notificationsCache.value = previous?.map { it.copy(state = it.state.copy(isRead = true)) }
+        rewriteAll { list -> NotificationCachePatch.markingAllRead(list) }
         _unreadCount.value = 0
 
         val result = rawApiCall { notificationApi.markAllAsRead().count ?: 0 }
         if (result is NetworkResult.Failure) {
-            val current = _notificationsCache.value
-            val revertedIds = current.orEmpty()
+            val revertedIds = _notificationsCache.value.orEmpty()
                 .filter { it.id in previouslyUnreadIds && it.state.isRead }
                 .mapTo(HashSet()) { it.id }
-            _notificationsCache.value = current?.map {
-                if (it.id in revertedIds) it.copy(state = it.state.copy(isRead = false)) else it
+            rewriteAll { list ->
+                list.map { if (it.id in revertedIds) it.copy(state = it.state.copy(isRead = false)) else it }
             }
             _unreadCount.update { it + revertedIds.size }
         }
@@ -596,9 +602,7 @@ class NotificationRepository @Inject constructor(
             .filter { !it.state.isRead && notificationMatchesReadBulkScope(scope, it) }
             .mapTo(HashSet()) { it.id }
         if (flipped.isNotEmpty()) {
-            _notificationsCache.update { current ->
-                current?.map { if (it.id in flipped) it.copy(state = it.state.copy(isRead = true)) else it }
-            }
+            rewriteAll { list -> list.map { if (it.id in flipped) it.copy(state = it.state.copy(isRead = true)) else it } }
             _unreadCount.update { (it - flipped.size).coerceAtLeast(0) }
         }
 
@@ -607,9 +611,7 @@ class NotificationRepository @Inject constructor(
             val reverted = _notificationsCache.value.orEmpty()
                 .filter { it.id in flipped && it.state.isRead }
                 .mapTo(HashSet()) { it.id }
-            _notificationsCache.update { current ->
-                current?.map { if (it.id in reverted) it.copy(state = it.state.copy(isRead = false)) else it }
-            }
+            rewriteAll { list -> list.map { if (it.id in reverted) it.copy(state = it.state.copy(isRead = false)) else it } }
             _unreadCount.update { it + reverted.size }
         }
         return result
@@ -619,20 +621,74 @@ class NotificationRepository @Inject constructor(
      * Le compteur est demandé EN MÊME TEMPS que la liste et posé AVANT elle : écrire le cache
      * relance `transformLatest` de [notificationsStream], qui annule le bloc en cours — un
      * `unreadCount()` demandé après la liste était annulé 3 ms après l'envoi (#13354).
+     *
+     * #18915 (AND-05) — la relecture ouvre son journal AVANT ses requêtes : ce qui arrive ou se lit
+     * pendant son vol ([prependLive], [rewriteAll]) y est inscrit, et la page atterrit par-dessus
+     * ([landPage]) au lieu d'écraser la liste et le compteur.
      */
     private suspend fun revalidateNotifications(onError: (Throwable) -> Unit = {}) = coroutineScope {
-        val count = async { unreadCount() }
-        val page = pagedApiCall { notificationApi.list(0, PAGE_SIZE, null) }
-        val countResult = count.await()
-        if (countResult is NetworkResult.Success) _unreadCount.value = countResult.data
-        when (page) {
-            is NetworkResult.Success -> {
-                _hasMore.value = page.data.pagination?.hasMore ?: false
-                _nextCursor.value = page.data.pagination?.nextCursor
-                _notificationsCache.value = page.data.data
-                _notificationsSyncedAt.value = clock.nowMillis()
+        val flight = openFlight()
+        try {
+            val count = async { unreadCount() }
+            val page = pagedApiCall { notificationApi.list(0, PAGE_SIZE, null) }
+            val countResult = count.await()
+            val servedUnread = when (countResult) {
+                is NetworkResult.Success -> countResult.data
+                is NetworkResult.Failure -> null
             }
-            is NetworkResult.Failure -> onError(Exception(page.error.message))
+            when (page) {
+                is NetworkResult.Success -> landPage(flight, page.data.data, page.data.pagination, servedUnread)
+                is NetworkResult.Failure -> {
+                    servedUnread?.let { _unreadCount.value = it }
+                    onError(Exception(page.error.message))
+                }
+            }
+        } finally {
+            closeFlight(flight)
+        }
+    }
+
+    private fun openFlight(): Long = synchronized(flightLock) {
+        flightCount += 1
+        flights = flights + (flightCount to NotificationFlightChanges.NONE)
+        flightCount
+    }
+
+    private fun closeFlight(flight: Long) {
+        synchronized(flightLock) { flights = flights - flight }
+    }
+
+    /**
+     * The page lands over the journal of its flight in ONE critical section: an arrival or a read
+     * can never slip between reading the journal and writing the list. The count goes first (see
+     * [revalidateNotifications]).
+     */
+    private fun landPage(flight: Long, items: List<ApiNotification>, pagination: Pagination?, servedUnread: Int?) {
+        synchronized(flightLock) {
+            val changes = flights[flight] ?: NotificationFlightChanges.NONE
+            flights = flights - flight
+            val landing = NotificationFlightLanding.land(items, servedUnread, _notificationsCache.value, changes)
+            landing.unreadCount?.let { _unreadCount.value = it }
+            _hasMore.value = pagination?.hasMore ?: false
+            _nextCursor.value = pagination?.nextCursor
+            _notificationsCache.value = landing.items
+            _notificationsSyncedAt.value = clock.nowMillis()
+        }
+    }
+
+    /**
+     * The one write of the « all » list that may change a read state: during a re-read's flight,
+     * the ids whose read state it flips are journaled, so the page built before cannot undo them.
+     * A list not loaded yet is left as it is.
+     */
+    private fun rewriteAll(transform: (List<ApiNotification>) -> List<ApiNotification>) {
+        synchronized(flightLock) {
+            val before = _notificationsCache.value ?: return
+            val after = transform(before)
+            _notificationsCache.value = after
+            if (flights.isEmpty()) return
+            val flips = NotificationFlightChanges.readFlips(before, after)
+            if (flips.isNotEmpty()) flights = flights.mapValues { (_, changes) -> changes.readChanged(flips) }
         }
     }
 

@@ -1,0 +1,82 @@
+package me.meeshy.sdk.model
+
+/**
+ * #18915 (AND-05) — what changed in the « all » notification list WHILE a re-read waited for its page: the live
+ * arrivals (`notification:new`, most recent first) and the ids whose read state changed on this device (a gesture,
+ * its echo, another device's read). The page was built before them; it replaces everything else, never them.
+ */
+data class NotificationFlightChanges(
+    val arrivals: List<ApiNotification> = emptyList(),
+    val readChanged: Set<String> = emptySet(),
+) {
+    fun arrived(notification: ApiNotification): NotificationFlightChanges =
+        if (arrivals.any { it.id == notification.id }) this else copy(arrivals = listOf(notification) + arrivals)
+
+    fun readChanged(ids: Set<String>): NotificationFlightChanges =
+        if (ids.isEmpty()) this else copy(readChanged = readChanged + ids)
+
+    companion object {
+        val NONE: NotificationFlightChanges = NotificationFlightChanges()
+
+        /** The ids present on both sides of a write whose read state it flipped — a read, or the rollback of one. */
+        fun readFlips(before: List<ApiNotification>, after: List<ApiNotification>): Set<String> {
+            val readBefore = before.associate { it.id to it.state.isRead }
+            return after.filter { item -> readBefore[item.id]?.let { it != item.state.isRead } == true }
+                .mapTo(HashSet()) { it.id }
+        }
+    }
+}
+
+/** The list a re-read leaves, and the unread count to pose with it (`null`: the count was not obtained, keep the live one). */
+data class NotificationLanding(
+    val items: List<ApiNotification>,
+    val unreadCount: Int?,
+)
+
+/**
+ * #18915 (AND-05) — lands a re-read page over what changed during its flight. A snapshot the server built BEFORE an
+ * arrival or a read can neither erase the one nor undo the other: REST pages only seed what the socket and the user
+ * did not already settle (ARCHITECTURE.md, « never regress a socket-owned value »).
+ */
+object NotificationFlightLanding {
+
+    /**
+     * The [page] replaces the list, except what the flight changed:
+     *  - an arrival the page does not serve stays at the head, as the [live] list holds it now — as it arrived when no
+     *    list was loaded; an arrival removed from the live list during the flight does not come back;
+     *  - a served notification whose read state changed on this device keeps its live state.
+     * The served count ([servedUnread]) is corrected by what the server could not count yet: an unread arrival it does
+     * not serve counts one more; a read posed on a row it served unread, one less (a rolled-back read, one more).
+     */
+    fun land(
+        page: List<ApiNotification>,
+        servedUnread: Int?,
+        live: List<ApiNotification>?,
+        changes: NotificationFlightChanges,
+    ): NotificationLanding {
+        val servedIds = page.mapTo(HashSet()) { it.id }
+        val liveById = live?.associateBy { it.id }
+        val kept = changes.arrivals
+            .filterNot { it.id in servedIds }
+            .mapNotNull { arrival -> if (liveById == null) arrival else liveById[arrival.id] }
+        val relabeled = page.map { served -> withLiveRead(served, liveById, changes.readChanged) }
+        val delta = kept.sumOf { unread(it) } + page.zip(relabeled).sumOf { (served, landed) -> unread(landed) - unread(served) }
+        return NotificationLanding(
+            items = kept + relabeled,
+            unreadCount = servedUnread?.let { (it + delta).coerceAtLeast(0) },
+        )
+    }
+
+    private fun withLiveRead(
+        served: ApiNotification,
+        liveById: Map<String, ApiNotification>?,
+        readChanged: Set<String>,
+    ): ApiNotification {
+        if (served.id !in readChanged) return served
+        val liveRead = liveById?.get(served.id)?.state?.isRead ?: return served
+        if (liveRead == served.state.isRead) return served
+        return served.copy(state = served.state.copy(isRead = liveRead))
+    }
+
+    private fun unread(notification: ApiNotification): Int = if (notification.state.isRead) 0 else 1
+}
