@@ -5,11 +5,10 @@ import MeeshySDK
 /// `docs/product/composer-plein-ecran/Main.dc.html`, « chaque objet a sa
 /// piste »).
 ///
-/// La frise de l'atelier (`StoryTimelineHost`) est un éditeur de montage :
-/// zoom, transitions, images-clés. La scène plein écran n'en montre que ce que
-/// la maquette dessine — un objet, une barre, sa fenêtre d'apparition — et la
-/// lit ici, dans le projet que les deux frises partagent, pour qu'elles ne
-/// puissent jamais dire deux choses.
+/// La scène plein écran ne montre de la timeline que ce que la maquette
+/// dessine — un objet, une barre, sa fenêtre d'apparition — et la lit ici,
+/// dans le projet du `TimelineViewModel`, pour que toute frise qui le lit
+/// dise la même chose.
 public nonisolated struct SceneFriseTrack: Equatable, Sendable, Identifiable {
     public enum Kind: Equatable, Sendable {
         case text, sticker, image, video, audio, place
