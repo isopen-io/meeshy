@@ -105,12 +105,7 @@ extension ConversationSyncEngine {
         messageSocket.conversationRestored
             .relay(through: lane) { [weak self] in await self?.handleConversationRestored($0) }
             .store(in: &socketSubscriptions)
-        messageSocket.conversationJoined
-            .relay(through: lane) { [weak self] in await self?.cache.participants.invalidate(for: $0.conversationId) }
-            .store(in: &socketSubscriptions)
-        messageSocket.conversationLeft
-            .relay(through: lane) { [weak self] in await self?.cache.participants.invalidate(for: $0.conversationId) }
-            .store(in: &socketSubscriptions)
+        socketSubscriptions.formUnion(ParticipantRosterInvalidation.relays(from: messageSocket, into: cache, on: lane))
         messageSocket.participantRoleUpdated
             .relay(through: lane) { [weak self] in await ViewerRoleApplier(engine: self)?.apply($0) }
             .store(in: &socketSubscriptions)

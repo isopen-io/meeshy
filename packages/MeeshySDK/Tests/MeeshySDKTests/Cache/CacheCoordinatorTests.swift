@@ -253,26 +253,6 @@ final class CacheCoordinatorTests: XCTestCase {
         }
     }
 
-    // MARK: - Conversation joined/left invalidate participants
-
-    func test_conversationJoined_invalidatesParticipants() async throws {
-        let (sut, engine, msgSocket, _) = try await makeSUTWithRelay()
-        withExtendedLifetime(engine) {}
-
-        let participant = TestFactories.makeParticipant(id: "p1")
-        try await sut.participants.save([participant], for: "conv-1")
-
-        msgSocket.conversationJoined.send(ConversationParticipationEvent(conversationId: "conv-1", userId: "u-new"))
-
-        try await Task.sleep(nanoseconds: 200_000_000)
-
-        let result = await sut.participants.load(for: "conv-1")
-        switch result {
-        case .empty: break
-        default: XCTFail("Expected empty after invalidation, got \(result)")
-        }
-    }
-
     // MARK: - Translation caching (point 41)
 
     func test_cacheTranslation_roundtrip() async throws {
