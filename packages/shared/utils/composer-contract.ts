@@ -48,8 +48,6 @@ export const COMPOSER_DOORS = [
   'conversationMedia',
 ] as const;
 
-export type ComposerDoorKind = (typeof COMPOSER_DOORS)[number];
-
 /**
  * Deux portes PORTENT leur format au lieu de le deviner : l'appelant l'a déjà
  * en main, puisqu'on tape « reposter » ou « modifier » sur une carte rendue.

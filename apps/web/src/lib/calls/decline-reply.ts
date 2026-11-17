@@ -18,8 +18,6 @@ export const DECLINE_REPLY_KEYS = [
 
 export const DECLINE_REPLY_MAX_LENGTH = 500;
 
-export type DeclineReplyKey = (typeof DECLINE_REPLY_KEYS)[number];
-
 export type DeclineReplyDeps = {
   readonly decline: () => void;
   readonly send: (message: { readonly conversationId: string; readonly content: string; readonly language: string }) => void;

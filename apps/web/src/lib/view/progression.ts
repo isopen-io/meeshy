@@ -22,7 +22,7 @@ import { awardedDate } from '@/lib/view/game-copy-v2';
  * c'est le témoin d'exhaustivité que le compilateur tient gratuitement, et
  * `progression.test.ts` le rejoue sur les valeurs.
  *
- * Sous-ensemble de `GlyphName | ProgressionGlyphName` (`@/components`) —
+ * Sous-ensemble des clés de `GLYPHS` et de `PROGRESSION_GLYPHS` (`@/components`) —
  * délibérément NON importé ici : `src/lib/` reste en amont de `src/components/`,
  * jamais l'inverse (même règle que `RowActionGlyph`). L'écran vérifie la
  * compatibilité structurelle à l'usage.

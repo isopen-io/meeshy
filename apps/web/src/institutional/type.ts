@@ -5,7 +5,7 @@
  * cinq `contenu.ts` qui l'habitent. C'est le seul travail de l'ancienne refonte
  * qui se transporte sans réécriture, et pour une bonne raison : ce sont des
  * DONNÉES, pas du rendu. Le contenu lui-même vient du legacy mot pour mot
- * (`apps/web/locales/fr/`), parce qu'un texte juridique qui change en passant
+ * (`legacy-web-final:apps/web/locales/fr/`), parce qu'un texte juridique qui change en passant
  * d'une application à l'autre est un incident, pas une refonte.
  */
 
