@@ -164,9 +164,9 @@ class ServedPlaintextErasureTest {
         assertThat(erasures.keys()).isEmpty()
     }
 
-    /** [pageServing], the recent window saying whether older messages remain behind it (`pagination.hasMore`). */
-    private fun windowServing(hasMore: Boolean?, vararg messages: ApiMessage): MessageApi = pageServing(*messages).also { api ->
-        val pagination = hasMore?.let { Pagination(total = messages.size, offset = 0, limit = 20, hasMore = it) }
+    /** [pageServing], the recent window saying whether older messages remain behind it (`pagination.hasMore`), under [limit]. */
+    private fun windowServing(hasMore: Boolean?, vararg messages: ApiMessage, limit: Int = 20): MessageApi = pageServing(*messages).also { api ->
+        val pagination = hasMore?.let { Pagination(total = messages.size, offset = 0, limit = limit, hasMore = it) }
         coEvery { api.listConditional("c1", any()) } returns
             Response.success(ApiResponse(success = true, data = messages.toList(), pagination = pagination))
     }
@@ -174,11 +174,12 @@ class ServedPlaintextErasureTest {
     private suspend fun MessageCollaboratorHarness.holdOlderThanTheWindow() =
         seedSynced(sealed("m0", "me", cid = "cid_0", at = "2026-11-01T08:00:00Z"))
 
-    private fun theWholeHistory(hasMore: Boolean?) = windowServing(
+    private fun theWholeHistory(hasMore: Boolean?, limit: Int = 20) = windowServing(
         hasMore,
         sealed("m1", "alice", at = "2026-11-01T09:00:00Z"),
         sealed("m2", "alice", at = "2026-11-01T09:10:00Z"),
         sealed("m3", "alice", at = "2026-11-01T09:20:00Z"),
+        limit = limit,
     )
 
     /**
@@ -203,6 +204,22 @@ class ServedPlaintextErasureTest {
         val erasures = ledger(harness)
 
         source(harness, theWholeHistory(hasMore = true), erasures).revalidate()
+
+        assertThat(harness.database.messageDao().find("m0")).isNotNull()
+        assertThat(erasures.keys()).isEmpty()
+    }
+
+    /**
+     * #19423 — the gateway counts `total` and reads the page in two queries that share no snapshot: a message written
+     * between them lets a FULL page (its `limit` reached) claim `hasMore == false` while an older message still exists
+     * behind it. Only a page shorter than its limit proves, by its own read, that nothing older remains.
+     */
+    @Test
+    fun `a full window claiming no older message keeps the older held row and its plaintext`() = runHarnessTest { harness ->
+        harness.holdOlderThanTheWindow()
+        val erasures = ledger(harness)
+
+        source(harness, theWholeHistory(hasMore = false, limit = 3), erasures).revalidate()
 
         assertThat(harness.database.messageDao().find("m0")).isNotNull()
         assertThat(erasures.keys()).isEmpty()
