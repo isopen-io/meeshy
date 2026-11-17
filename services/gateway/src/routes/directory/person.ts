@@ -15,8 +15,9 @@ import { getOptionalAuth } from '../users/presence-gate';
 import { parseFieldList, parseTokenSet, restrictFields } from '../../utils/sparse-fieldset';
 import { hasBlocked } from '../../utils/blocking';
 import { isRelationLevel, type RelationLevel } from '@meeshy/shared/types/relation';
-import { PROFILE_CAPABILITIES, resolveProfileCircleViewAs, type ProfileCircleView } from '@meeshy/shared/utils/profile-circle-view';
-import { profileSeenAs, readProfileCircleView } from '../../services/relations/profileCircleView';
+import { PROFILE_CAPABILITIES, type ProfileCircleView } from '@meeshy/shared/utils/profile-circle-view';
+import { profileSeenAs, readProfileCircleView, readProfileSeenAs } from '../../services/relations/profileCircleView';
+import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { sendBadRequest, sendForbidden } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'DirectoryPerson' });
@@ -371,10 +372,18 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
       // « Voir comme » est la fiche du PROPRIÉTAIRE : tout autre lecteur est refusé
       // avant la moindre composition, et aucune charge ne part avec le refus.
       if (voirComme && viewerId !== String(profil.id)) return sendForbidden(reply, 'Only the owner can view the profile as a circle');
-      const vue: ProfileCircleView | undefined = voirComme
-        ? resolveProfileCircleViewAs({ level: voirComme, targetId: String(profil.id) })
+      // Le lecteur est synthétique, le propriétaire RÉEL : son âge, son rôle, ses
+      // préférences de présence et sa désactivation décident comme pour un vrai lecteur.
+      const vuComme = voirComme
+        ? await readProfileSeenAs(fastify.prisma, new PrivacyPreferencesService(fastify.prisma), {
+            ownerId: String(profil.id),
+            level: voirComme,
+          })
         : undefined;
-      const base: Record<string, unknown> = vue ? { ...profileSeenAs(vue, profil), viewAs: voirComme } : profil;
+      const vue: ProfileCircleView | undefined = vuComme?.view;
+      const base: Record<string, unknown> = vuComme
+        ? { ...profileSeenAs(vuComme.visibility, profil), viewAs: voirComme }
+        : profil;
 
       // La présence est RETIRÉE par défaut, jamais ajoutée par ce paramètre :
       // `servirProfilPublic` a déjà appliqué la loi du 2026-08-25, et ce qui

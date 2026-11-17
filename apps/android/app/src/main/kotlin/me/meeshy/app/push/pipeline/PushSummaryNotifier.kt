@@ -12,14 +12,15 @@ import javax.inject.Singleton
 /**
  * Posts the summary of a tray group (one per conversation / post) so several notifications
  * of the same thread fold together, like the iOS `threadIdentifier`. The summary never
- * alerts by itself ([NotificationCompat.GROUP_ALERT_CHILDREN]) and carries the badge.
+ * alerts by itself ([NotificationCompat.GROUP_ALERT_CHILDREN]) and carries NO number : launchers add the
+ * numbers of every active notification, the count lives on each banner ([me.meeshy.sdk.model.push.PushBadgePolicy]).
  */
 @Singleton
 class PushSummaryNotifier @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
 
-    fun post(groupKey: String, channelId: String, badge: Int?) {
+    fun post(groupKey: String, channelId: String) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val summary = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_meeshy)
@@ -28,7 +29,6 @@ class PushSummaryNotifier @Inject constructor(
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
             .setSilent(true)
             .setAutoCancel(true)
-            .apply { badge?.let { setNumber(it) } }
             .build()
         manager.notify(PushGrouping.summaryNotificationId(groupKey), summary)
     }
