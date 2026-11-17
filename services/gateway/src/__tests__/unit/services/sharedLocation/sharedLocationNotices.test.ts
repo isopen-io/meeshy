@@ -121,6 +121,48 @@ describe('prévenu d\'un partage (#19204)', () => {
   });
 });
 
+describe('un avis qui ne part pas ne consomme pas la fenêtre de la paire (#19204)', () => {
+  const avecCreation = (createNotification: SharedLocationNotifier['createNotification']) => {
+    const claimed = new Set<string>();
+    const lang = { regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null };
+    const notices = sharedLocationNoticesOf({
+      prisma: { user: table([
+        { id: EMETTEUR, username: 'leo', displayName: 'Léo', avatar: null, systemLanguage: 'fr', ...lang },
+        { id: LECTEUR, username: 'awa', displayName: null, avatar: null, systemLanguage: 'fr', ...lang },
+      ]) } as never,
+      notifications: { createNotification },
+      claim: async (key) => (claimed.has(key) ? false : (claimed.add(key), true)),
+      release: async (key) => { claimed.delete(key); },
+    });
+    return { notices, claimed };
+  };
+  const notice = { emitterId: EMETTEUR, readerId: LECTEUR, durationMinutes: 60, expiresAt: TERME };
+
+  it('la création lève : la clé est rendue, le démarrage suivant prévient', async () => {
+    const created: unknown[] = [];
+    let panne = true;
+    const m = avecCreation(async (p) => {
+      if (panne) throw new Error('panne');
+      created.push(p);
+      return { id: 'n' } as never;
+    });
+
+    await m.notices.started([notice]);
+    panne = false;
+    await m.notices.started([notice]);
+
+    expect(created).toHaveLength(1);
+  });
+
+  it('la création rend null : la clé est rendue', async () => {
+    const m = avecCreation(async () => null);
+
+    await m.notices.started([notice]);
+
+    expect(m.claimed.size).toBe(0);
+  });
+});
+
 describe('une demande adressée à l\'émetteur (#19204)', () => {
   it('« prolonger » : l\'émetteur lit qui demande et que rien ne change sans lui', async () => {
     const m = monde();

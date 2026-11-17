@@ -177,7 +177,14 @@ describe('accepter un jeton (#19205)', () => {
     const g = guichet({ befriends: false });
     const res = await g.accepter(await jeton(g, ['friendRequest']));
     expect(res.success && res.data.friendRequest).toBe('not-sent');
-    expect((g.emissions[0].payload as { received: string[] }).received).toEqual([]);
+    expect(g.emissions).toEqual([]);
+  });
+
+  it('seule la demande était offerte et le lecteur ne reçoit pas de demandes : aucun accusé, l\'identité du lecteur ne part pas vers l\'émetteur', async () => {
+    const g = guichet({ acceptsRequests: false });
+    const res = await g.accepter(await jeton(g, ['friendRequest']));
+    expect(res.success && res.data.friendRequest).toBe('not-sent');
+    expect(g.emissions).toEqual([]);
   });
 
   it('le cœur des demandes tombe en panne : le jeton déjà consommé rend quand même la vitrine, la demande dite `not-sent`', async () => {
