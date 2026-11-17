@@ -31,6 +31,10 @@ nonisolated enum ProfileActionsCopy {
         String(localized: "profile.actions.edit", defaultValue: "Modifier", bundle: .main)
     }
 
+    static var mood: String {
+        String(localized: "profile.actions.mood", defaultValue: "Mon statut", bundle: .main)
+    }
+
     static var legend: String {
         String(localized: "profile.actions.legend", defaultValue: "Ma Légende", bundle: .main)
     }

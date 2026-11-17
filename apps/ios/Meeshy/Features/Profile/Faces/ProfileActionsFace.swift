@@ -7,6 +7,7 @@ enum ProfileFaceAction: Hashable {
     case share
     case seenAs
     case edit
+    case mood
     case stats
     case legend
     case security
@@ -27,6 +28,8 @@ struct ProfileActionsFace: View {
     let stats: UserStats?
     let accentColor: String
     let canShare: Bool
+    /// Vrai là où le modèle des statuts est servi : « Mon statut » ouvre alors le composer de mood.
+    var canSetMood: Bool = false
     let onAction: (ProfileFaceAction) -> Void
 
     @ObservedObject var prefs: UserPreferencesManager
@@ -108,6 +111,10 @@ struct ProfileActionsFace: View {
                                     tint: accent, hint: VitrineSeenAsCopy.viewedByHint, action: { onAction(.seenAs) })
                 MeeshyLabeledAction(title: ProfileActionsCopy.edit, systemImage: "pencil",
                                     tint: accent, action: { onAction(.edit) })
+                if canSetMood {
+                    MeeshyLabeledAction(title: ProfileActionsCopy.mood, systemImage: "face.smiling",
+                                        tint: accent, action: { onAction(.mood) })
+                }
                 MeeshyLabeledAction(title: ProfileActionsCopy.legend, systemImage: "trophy",
                                     tint: accent, action: { onAction(.legend) })
             }

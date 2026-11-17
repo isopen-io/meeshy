@@ -397,6 +397,22 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertEqual(ProfileActionsFace.headerHeight, 150, "la hauteur de l'en-tête de Moi-Actions")
     }
 
+    func test_actionsFace_offersMyStatus_whichOpensTheMoodComposerDoor_onlyWhereTheStatusModelIsServed() throws {
+        let face = try code("Meeshy/Features/Profile/Faces/ProfileActionsFace.swift")
+        XCTAssertTrue(face.contains("if canSetMood"), "« Mon statut » n'est offert que là où le modèle des statuts est servi")
+        XCTAssertTrue(face.contains("ProfileActionsCopy.mood"))
+        XCTAssertTrue(face.contains("onAction(.mood)"))
+        let presentations = try code("Meeshy/Features/Profile/Faces/ProfileFacesPresentations.swift")
+        XCTAssertTrue(presentations.contains("MoodComposerDoor("), "la même porte que la pastille d'humeur, jamais un composer redessiné")
+        XCTAssertTrue(presentations.contains("ComposerIntent(origin: .moodChip)"))
+        let chrome = try code("Meeshy/Features/Navigation/SocialChromeEnvironment.swift")
+        XCTAssertTrue(chrome.contains(".environment(\\.meeshyStatusComposer, status)"),
+                      "le modèle des statuts voyage par EnvironmentValues : une feuille en hérite, l'absence ne trappe pas")
+        let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
+        XCTAssertTrue(profile.contains("case .mood: moodComposerShown = true"))
+        XCTAssertTrue(profile.contains("canSetMood: statusComposer != nil"))
+    }
+
     // MARK: - Publications (K49)
 
     func test_publicationTiles_onAnEmptyCacheWhileLoading_areThreeSkeletons_neverASpinner() {

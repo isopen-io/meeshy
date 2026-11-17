@@ -56,6 +56,8 @@ struct ProfileView: View {
     @State private var shareShown = false
     @State private var securityShown = false
     @State private var logoutAsked = false
+    @State private var moodComposerShown = false
+    @Environment(\.meeshyStatusComposer) private var statusComposer
     /// #10093 — la bannière ou la photo ouverte en plein écran (son URL).
     @State private var fullscreenImage: IdentifiedString?
     /// La vignette touchée et son plein écran sont liés : la photo s'agrandit depuis l'endroit touché (iOS 18+).
@@ -98,7 +100,8 @@ struct ProfileView: View {
         .modifier(ProfileFacesPresentations(
             user: user, authManager: authManager,
             seenAsShown: $seenAsShown, shareShown: $shareShown, securityShown: $securityShown,
-            logoutAsked: $logoutAsked, onLogout: { logout() }
+            logoutAsked: $logoutAsked, moodComposerShown: $moodComposerShown, statusComposer: statusComposer,
+            onLogout: { logout() }
         ))
         .sheet(item: $securityFocus) { focus in
             SecurityView(focus: focus).environmentObject(authManager).closesForConversationOpening(.sheet)
@@ -315,6 +318,7 @@ struct ProfileView: View {
         case .actions:
             ProfileActionsFace(user: user, stats: stats, accentColor: accentColor,
                                canShare: ProfileLink(username: user?.username) != nil,
+                               canSetMood: statusComposer != nil,
                                onAction: { perform($0) }, prefs: UserPreferencesManager.shared)
         }
     }
@@ -354,6 +358,7 @@ struct ProfileView: View {
         case .edit:
             face = .vitrine
             setEditing(true)
+        case .mood: moodComposerShown = true
         case .stats: router.push(.userStats)
         case .legend: router.push(.progression)
         case .security: securityShown = true
