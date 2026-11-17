@@ -38,6 +38,7 @@ import {
   type SharedLocationAck,
   type SharedLocationChangedEventData,
   type SharedLocationCircle,
+  type SharedLocationEndedItem,
   type SharedLocationErrorCode,
   type SharedLocationOwnSnapshot,
   type SharedLocationPrecision,
@@ -73,6 +74,7 @@ import {
   type SharedLocationCell,
   type SharedLocationState,
 } from './sharedLocationStore';
+import { forgetSharedLocationEnds, noteSharedLocationServed, noteSharedLocationStopped, sharedLocationEndsFor } from './sharedLocationEnds';
 
 export type SharedLocationDb = PairAccessDb;
 
@@ -396,7 +398,10 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
   try {
     const after = await fanOut(deps, emitterId, state);
     await drainRetiring(deps, emitterId, after.served);
-    if ((await currentSharedLocationSession(deps.cache, emitterId)) === state.sessionId) return ack;
+    if ((await currentSharedLocationSession(deps.cache, emitterId)) === state.sessionId) {
+      await noteServedEnds(deps, emitterId, state, after.served);
+      return ack;
+    }
     await reconcile(deps, emitterId, after.served);
     return STOPPED;
   } catch {
@@ -450,7 +455,20 @@ export async function stopSharedLocation(deps: SharedLocationRelayDeps, emitterI
   } catch {
     return UNAVAILABLE;
   }
+  await noteSharedLocationStopped(deps.cache, emitterId, deps.now()).catch(() => undefined);
   return { success: true };
+}
+
+/**
+ * Le partage devenu courant note l'échéance de chacun de ceux qu'il a servis (#19202), pour que
+ * sa fin leur soit dite un jour durant. Jamais bloquant : une panne laisse la fin non dite.
+ */
+async function noteServedEnds(deps: SharedLocationRelayDeps, emitterId: string, state: SharedLocationState, served: readonly string[]): Promise<void> {
+  const ends = served.flatMap((readerId) => {
+    const precision = recipientOf(state, readerId)?.precision;
+    return precision ? [{ userId: readerId.toLowerCase(), endsAt: deadlineOf(state, readerId), precision }] : [];
+  });
+  await noteSharedLocationServed(deps.cache, emitterId, ends, deps.now()).catch(() => undefined);
 }
 
 /** L'accès de chaque sens d'une paire, pour les seuls émetteurs qui ont un partage en cours. */
@@ -531,6 +549,7 @@ export async function endSharedLocationOfAccount(
   if (!stopped.success || !options.forget) return stopped;
   try {
     await purgeSharedLocationKeys(deps.cache, accountId);
+    await forgetSharedLocationEnds(deps.cache, accountId);
   } catch {
     return UNAVAILABLE;
   }
@@ -594,6 +613,26 @@ export async function sharedLocationSnapshotFor(
   const current = await currentSharedLocationSessions(deps.cache, kept.map(({ emitterId }) => emitterId));
   const items = kept.filter(({ emitterId, state }) => current.get(emitterId) === state.sessionId).map(({ projection }) => projection);
   return { items: items.filter((item) => within(item, options.bbox)) };
+}
+
+/**
+ * « Pas sur la carte » (#19202) : les partages qui servaient `readerId`, terminés depuis moins
+ * d'un jour — qui, quand, son cercle, jamais une position. La loi `location.temporary` est relue
+ * maintenant : rien sous Ami, rien à un bloqueur, rien d'un compte parti. L'heure d'un lecteur
+ * flouté tombe sur le quart d'heure, comme celle de ses points.
+ */
+export async function sharedLocationEndedFor(deps: SharedLocationRelayDeps, readerId: string): Promise<readonly SharedLocationEndedItem[]> {
+  const now = deps.now();
+  const ends = await sharedLocationEndsFor(deps.cache, readerId, await snapshotCandidates(deps, readerId), now);
+  if (ends.size === 0) return [];
+  const allowed = await snapshotAllowed(deps, readerId, [...ends.keys()], now);
+  return [...ends]
+    .flatMap(([emitterId, end]): SharedLocationEndedItem[] => {
+      if (!allowed.has(emitterId)) return [];
+      const circle = allowed.get(emitterId);
+      return [{ userId: emitterId, endedAt: end.precision === 'exact' ? end.endsAt : roundedClock(end.endsAt), ...(circle ? { circle } : {}) }];
+    })
+    .sort((a, b) => Date.parse(b.endedAt) - Date.parse(a.endedAt));
 }
 
 /**
