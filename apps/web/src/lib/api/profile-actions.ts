@@ -18,7 +18,7 @@ import {
   type ProfilePatch,
 } from './profile';
 import { publicProfileQueryKey, type PublicProfileView } from './public-profile';
-import { holdProfileEdit, sessionFieldsOfProfile } from './served-profile-session';
+import { holdProfileEdit, noteProfileTaken, sessionFieldsOfProfile } from './served-profile-session';
 import type { SessionProfileFields, SessionStoreApi, SessionUser } from './session';
 
 /**
@@ -133,10 +133,17 @@ function confirmOntoPublicProfile(queryClient: QueryClient, profile: MyProfile):
  *
  * Le décor (#10632) n'est composé que par `GET /me` : une réponse de `PATCH`
  * qui ne le sert pas ne dit rien de lui, et le cache garde le sien.
+ *
+ * Une relecture de `GET /me` encore EN VOL est annulée d'abord (#18914) :
+ * partie pendant le `PATCH`, lue avant son écriture, elle arrivait après la
+ * confirmation et faisait reculer le cache, la session et la ligne du compte.
+ * La date servie est notée : aucune copie plus ancienne ne la défait ensuite.
  */
-function confirm(deps: ProfileActionDeps, served: MyProfile): void {
+async function confirm(deps: ProfileActionDeps, served: MyProfile): Promise<void> {
+  await deps.queryClient.cancelQueries({ queryKey: MY_PROFILE_QUERY_KEY });
   const held = deps.queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.profileDecor;
   const profile = served.profileDecor === undefined && held !== undefined ? { ...served, profileDecor: held } : served;
+  noteProfileTaken(deps.queryClient, profile);
   deps.queryClient.setQueryData(MY_PROFILE_QUERY_KEY, profile);
   deps.session.getState().updateUser(sessionFieldsOfProfile(profile));
   confirmOntoPublicProfile(deps.queryClient, profile);
@@ -195,7 +202,7 @@ async function editProfile(deps: ProfileActionDeps, patch: ProfilePatch): Promis
     return { status: 'refused', error: result.error, ...(result.field === undefined ? {} : { field: result.field }) };
   }
 
-  confirm(deps, result.data);
+  await confirm(deps, result.data);
   repaintMyName(deps.queryClient, patch, result.data);
   if (touchesPrism(patch)) void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
   return { status: 'saved' };
@@ -223,12 +230,25 @@ export type ImageUpdateDeps = ProfileActionDeps & {
  * `bytesSent` est la taille RÉELLEMENT montée — la preuve que la
  * recompression a eu lieu, pas une estimation.
  */
-export async function performImageUpdate(params: {
+type ImageUpdateParams = {
   readonly kind: ProfileImageKind;
   readonly file: Blob;
   readonly signal?: AbortSignal;
   readonly deps: ImageUpdateDeps;
-}): Promise<ImageUpdateOutcome> {
+};
+
+/** Tenue comme une édition de profil (`holdProfileEdit`) : une relecture de
+ * `GET /me` servie pendant le téléversement ou le `PATCH` ne touche pas la session. */
+export async function performImageUpdate(params: ImageUpdateParams): Promise<ImageUpdateOutcome> {
+  const release = holdProfileEdit(params.deps.queryClient);
+  try {
+    return await updateImage(params);
+  } finally {
+    release();
+  }
+}
+
+async function updateImage(params: ImageUpdateParams): Promise<ImageUpdateOutcome> {
   const { kind, file, signal, deps } = params;
   const upload = await uploadProfileImage({ kind, file, deps, ...(signal === undefined ? {} : { signal }) });
   if (upload.status !== 'uploaded') return upload;
@@ -237,7 +257,7 @@ export async function performImageUpdate(params: {
   const result = await patchMyImage(deps, kind, url);
   if (!result.ok) return { status: 'refused', error: result.error };
 
-  confirm(deps, result.data);
+  await confirm(deps, result.data);
   repaintMyPortrait(deps.queryClient, { userId: result.data.id, avatar: result.data.avatar, banner: result.data.banner });
   return { status: 'saved', url, bytesSent };
 }

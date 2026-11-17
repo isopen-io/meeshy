@@ -1,13 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import { QueryClient, dehydrate, hydrate } from '@tanstack/react-query';
 
+import * as attachmentsEndpoints from '@meeshy/shared/api/endpoints/attachments';
 import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
+import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
 
 import { resolveReaderLanguages } from '../reader';
 import { createAccountVault, type AccountVault } from './accounts';
 import { createHttpTransport, type HttpTransport } from './http';
 import { MY_PROFILE_QUERY_KEY, myProfileQueryOptions, type MyProfile } from './profile';
-import { performProfileEdit } from './profile-actions';
+import { performImageUpdate, performProfileEdit } from './profile-actions';
 import { followServedProfile } from './served-profile-session';
 import { createSessionStore, type SessionStorage, type SessionStoreApi, type SessionUser } from './session';
 
@@ -81,6 +83,28 @@ const gateway = (me: () => Readonly<Record<string, unknown>>) => {
     pending: () => held.length,
   };
 };
+
+/** Une passerelle dont CHAQUE requête attend qu'on la libère, dans l'ordre que
+ * le témoin choisit — `GET /me` compris. */
+const heldGateway = () => {
+  const held: Array<{ readonly method: string; readonly path: string; readonly release: (reply: Reply) => void }> = [];
+  const fetchImpl = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
+    new Promise((resolve) => {
+      held.push({ method: init?.method ?? 'GET', path: new URL(String(input)).pathname, release: (reply) => resolve(replyOf(reply)) });
+    });
+  const transport: HttpTransport = createHttpTransport({ base: 'https://gate.test', fetchImpl: fetchImpl as typeof fetch, timeoutMs: 0 });
+  const take = (method: string, path: string) => {
+    const index = held.findIndex((request) => request.method === method && request.path === path);
+    const [request] = index === -1 ? [] : held.splice(index, 1);
+    if (request === undefined) throw new Error(`aucune requête ${method} ${path} en attente`);
+    return request;
+  };
+  return { transport, take };
+};
+
+const servedUser = (wire: Readonly<Record<string, unknown>>): Reply => ({ status: 200, body: { success: true, data: { user: wire } } });
+
+const tick = (): Promise<void> => new Promise((settled) => setTimeout(settled, 0));
 
 const vaultKnowing = (user: SessionUser): AccountVault => {
   const vault = createAccountVault({ storage: memoryStorage(), now: () => NOW });
@@ -196,6 +220,114 @@ describe('la session suit le profil SERVI par GET /me (WEB-01)', () => {
 
     expect(notified.count).toBe(0);
     unsubscribe();
+    stop();
+  });
+
+  test('une relecture partie PENDANT le PATCH et arrivée après lui ne défait pas la langue enregistrée', async () => {
+    const session = signedIn();
+    const { queryClient, accounts, stop } = following({ session });
+    const { transport, take } = heldGateway();
+    const deps = { source: 'gateway' as const, transport, queryClient, session, accounts, isOnline: () => true };
+
+    const edit = performProfileEdit({ patch: { systemLanguage: 'en' }, deps });
+    await tick();
+    const reread = readMe(queryClient, transport).catch(() => undefined);
+    await tick();
+    const getMe = take('GET', meEndpoints.root);
+    take('PATCH', usersEndpoints.me).release(servedUser(wireUser({ systemLanguage: 'en' })));
+    expect(await edit).toEqual({ status: 'saved' });
+
+    getMe.release(servedUser(wireUser()));
+    await reread;
+    await tick();
+
+    expect(readerOf(session)[0]).toBe('en');
+    expect(accounts.list()[0]?.user.systemLanguage).toBe('en');
+    stop();
+  });
+
+  test('une photo que je viens de poser n’est pas défaite par un GET /me parti avant elle', async () => {
+    const session = signedIn({ ...ADA, avatar: '2026/01/u-ada/ancienne.webp' });
+    const { queryClient, accounts, stop } = following({ session });
+    const { transport, take } = heldGateway();
+    const deps = { source: 'gateway' as const, transport, queryClient, session, accounts, isOnline: () => true, recompress: async (file: Blob) => file };
+
+    const reread = readMe(queryClient, transport).catch(() => undefined);
+    await tick();
+    const getMe = take('GET', meEndpoints.root);
+    const update = performImageUpdate({ kind: 'avatar', file: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' }), deps });
+    for (const _ of [1, 2, 3, 4, 5]) await tick();
+    take('POST', attachmentsEndpoints.upload).release({
+      status: 200,
+      body: { success: true, data: { attachments: [{ id: 'a-1', fileUrl: '2026/11/u-ada/nouvelle.webp' }] } },
+    });
+    for (const _ of [1, 2, 3, 4, 5]) await tick();
+    take('PATCH', usersEndpoints.meAvatar).release(servedUser(wireUser({ avatar: '2026/11/u-ada/nouvelle.webp' })));
+    expect((await update).status).toBe('saved');
+
+    getMe.release(servedUser(wireUser({ avatar: '2026/01/u-ada/ancienne.webp' })));
+    await reread;
+    await tick();
+
+    expect(sessionUser(session)?.avatar).toBe('2026/11/u-ada/nouvelle.webp');
+    expect(accounts.list()[0]?.user.avatar).toBe('2026/11/u-ada/nouvelle.webp');
+    stop();
+  });
+
+  test('une copie de GET /me plus ANCIENNE que l’écriture confirmée (service worker, cache de la passerelle) ne fait pas reculer la session', async () => {
+    const session = signedIn();
+    const { queryClient, accounts, stop } = following({ session });
+    const { transport, take } = heldGateway();
+    const deps = { source: 'gateway' as const, transport, queryClient, session, accounts, isOnline: () => true };
+    const edit = performProfileEdit({ patch: { systemLanguage: 'en' }, deps });
+    await tick();
+    take('PATCH', usersEndpoints.me).release(servedUser(wireUser({ systemLanguage: 'en', updatedAt: '2026-11-17T09:00:05.000Z' })));
+    expect(await edit).toEqual({ status: 'saved' });
+
+    await queryClient.invalidateQueries({ queryKey: MY_PROFILE_QUERY_KEY });
+    const reread = readMe(queryClient, transport);
+    await tick();
+    take('GET', meEndpoints.root).release(servedUser(wireUser({ systemLanguage: 'fr', updatedAt: '2026-11-17T08:00:00.000Z' })));
+    await reread;
+    await tick();
+
+    expect(readerOf(session)[0]).toBe('en');
+    expect(accounts.list()[0]?.user.systemLanguage).toBe('en');
+    stop();
+  });
+
+  test('une copie plus ANCIENNE qu’une relecture déjà prise ne la défait pas, une plus RÉCENTE se projette', async () => {
+    const session = signedIn();
+    const { queryClient, stop } = following({ session });
+    const served = { user: wireUser({ systemLanguage: 'en', updatedAt: '2026-11-17T09:00:00.000Z' }) };
+    const { transport } = gateway(() => served.user);
+
+    await readMe(queryClient, transport);
+    served.user = wireUser({ systemLanguage: 'fr', updatedAt: '2026-11-10T09:00:00.000Z' });
+    await queryClient.invalidateQueries({ queryKey: MY_PROFILE_QUERY_KEY });
+    await readMe(queryClient, transport);
+    expect(readerOf(session)[0]).toBe('en');
+
+    served.user = wireUser({ systemLanguage: 'es', updatedAt: '2026-11-17T09:30:00.000Z' });
+    await queryClient.invalidateQueries({ queryKey: MY_PROFILE_QUERY_KEY });
+    await readMe(queryClient, transport);
+    expect(readerOf(session)[0]).toBe('es');
+    stop();
+  });
+
+  test('après un changement de compte, le profil de l’AUTRE compte se projette, même daté avant la dernière écriture du premier', async () => {
+    const session = signedIn();
+    const { queryClient, stop } = following({ session, accounts: vaultKnowing(ADA) });
+    const served = { user: wireUser({ systemLanguage: 'en', updatedAt: '2026-11-17T09:00:00.000Z' }) };
+    const { transport } = gateway(() => served.user);
+    await readMe(queryClient, transport);
+
+    session.getState().establish({ user: { id: 'u-bob', username: 'bob', systemLanguage: 'fr' }, token: 'jeton-bob', sessionToken: 'session-bob', expiresIn: 3600 });
+    served.user = wireUser({ id: 'u-bob', username: 'bob', systemLanguage: 'es', regionalLanguage: null, updatedAt: '2026-11-01T09:00:00.000Z' });
+    queryClient.clear();
+    await readMe(queryClient, transport);
+
+    expect(readerOf(session)[0]).toBe('es');
     stop();
   });
 

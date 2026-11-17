@@ -67,6 +67,9 @@ export type MyProfile = {
   readonly email: MaskedContact | null;
   readonly phone: MaskedContact | null;
   readonly createdAt: string | null;
+  /** La date de la DERNIÈRE écriture du compte, telle que la passerelle la sert (`GET /me` et les `PATCH` du
+   * profil) ; absente = ancien serveur. Elle dit si une réponse est plus ancienne que ce que la session tient. */
+  readonly updatedAt?: string;
   /** Le contour et la bannière de design équipés (#10632) ; absent = ancien serveur, les sélecteurs ne s'ouvrent pas. */
   readonly profileDecor?: ServedProfileDecor;
 };
@@ -112,6 +115,7 @@ const WireUser = z.object({
   emailVerifiedAt: z.optional(z.unknown()),
   phoneVerifiedAt: z.optional(z.unknown()),
   createdAt: z.optional(z.unknown()),
+  updatedAt: z.optional(z.unknown()),
   profileDecor: z.optional(z.unknown()),
 });
 
@@ -146,6 +150,7 @@ export function decodeMyProfile(raw: unknown): MyProfile | null {
     email: email === null ? null : { masked: maskEmail(email), verified: isStamped(user.emailVerifiedAt) },
     phone: phone === null ? null : { masked: maskPhone(phone), verified: isStamped(user.phoneVerifiedAt) },
     createdAt: typeof user.createdAt === 'string' ? user.createdAt : null,
+    ...(typeof user.updatedAt === 'string' ? { updatedAt: user.updatedAt } : {}),
     ...decorOf(raw),
   };
 }
