@@ -9,6 +9,7 @@ import { permissionsService } from '../../services/admin/permissions.service';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
+import { contentCountReaderFor } from '../../services/posts/authorContentCounts';
 import { publicProfileSchema, servirProfilPublic } from '../users/public-profile';
 import { cityAsReaderOf } from '../users/profile-city';
 import { addressesSeenAs, type ServedAddress } from '@meeshy/shared/utils/profile-addresses';
@@ -327,6 +328,7 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
                     postsCount: { type: 'number' },
                     reelsCount: { type: 'number' },
                     storiesCount: { type: 'number' },
+                    statusesCount: { type: 'number' },
                     languages: { type: 'array', items: { type: 'string' } },
                     achievements: {
                       type: 'array',
@@ -447,13 +449,21 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
       }
 
       if (demande.has('stats')) {
-        const stats = await computeUserStats(fastify.prisma, cibleId);
-        base.stats = servedUserStats(stats, {
+        const audience = {
           estSoi: lecteurReel === cibleId,
           estAdministration:
             !vue &&
             permissionsService.hasPermission((acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum, 'canViewUsers'),
+        };
+        // #19368 : les compteurs de publications se comptent pour CE lecteur (ou le cercle de « Voir comme »).
+        const lecteurDesCompteurs = contentCountReaderFor({
+          subjectId: cibleId,
+          viewerId,
+          isAdministration: audience.estAdministration,
+          seenAs: voirComme,
         });
+        const stats = await computeUserStats(fastify.prisma, cibleId, lecteurDesCompteurs);
+        base.stats = servedUserStats(stats, audience);
       }
 
       const servi = restrictFields(base, champs, epinglesServis(demande));

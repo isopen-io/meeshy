@@ -25,6 +25,7 @@ import { permissionsService } from '../../services/admin/permissions.service';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
+import { contentCountReaderFor } from '../../services/posts/authorContentCounts';
 import { keepDiscoverable } from '../../services/profile-discoverability';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
 import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS } from '../communities/serialization';
@@ -462,7 +463,20 @@ export async function getUserStats(fastify: FastifyInstance) {
       // le filtre ne matchait RIEN. `totalTranslations` valait 0 pour tout le
       // monde sur cette route depuis sa création, et le succès « Traducteur »
       // (100 traductions) ne pouvait donc jamais s'y débloquer.
-      const stats = await computeUserStats(fastify.prisma, user.id);
+      const acteur = (request as unknown as UnifiedAuthRequest).authContext;
+      const audience = {
+        estSoi: acteur?.userId === user.id,
+        estAdministration: permissionsService.hasPermission(
+          (acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum,
+          'canViewUsers'
+        ),
+      };
+      // #19368 : les compteurs de publications se comptent pour CE lecteur — même loi que `?expand=stats`.
+      const stats = await computeUserStats(
+        fastify.prisma,
+        user.id,
+        contentCountReaderFor({ subjectId: user.id, viewerId: acteur?.userId, isAdministration: audience.estAdministration })
+      );
 
       reply.header('Cache-Control', 'private, max-age=300, stale-while-revalidate=3600');
 
@@ -473,14 +487,7 @@ export async function getUserStats(fastify: FastifyInstance) {
       // Les quatre compteurs intimes partaient à TOUT compte authentifié, sans
       // filtre d'amitié ni préférence de confidentialité — mesuré en
       // intégration sur un viewer tiers.
-      const acteur = (request as unknown as UnifiedAuthRequest).authContext;
-      return sendSuccess(reply, servedUserStats(stats, {
-        estSoi: acteur?.userId === user.id,
-        estAdministration: permissionsService.hasPermission(
-          (acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum,
-          'canViewUsers'
-        ),
-      }));
+      return sendSuccess(reply, servedUserStats(stats, audience));
 
     } catch (error) {
       logError(fastify.log, '[USER_STATS] Error getting user stats', error);

@@ -1,9 +1,8 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { PostType } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendInternalError } from '../utils/response';
-import { NOT_DELETED } from '../services/posts/softDelete';
+import { countAuthorContent, type ContentCountReader } from '../services/posts/authorContentCounts';
 import { logError } from '../utils/logger.js';
 import { getBlockRelatedUserIds } from '../utils/blocking';
 
@@ -39,14 +38,15 @@ export type UserStats = {
   memberDays: number;
   /**
    * Compteurs de contenu du profil (phase 2 du bandeau de stats iOS —
-   * `ProfilePostsStatsBand`). `storiesCount` compte TOUTES les stories non
-   * supprimées de l'auteur, expirées comprises : l'auteur garde son archive,
-   * et la valeur dérivée côté client était structurellement 0
-   * (`GET /posts/user/:id` exclut le type STORY).
+   * `ProfilePostsStatsBand`). Pour soi et l'administration, `storiesCount`
+   * compte TOUTES les stories non supprimées, expirées comprises (archive) ;
+   * pour tout autre lecteur, ce qu'il peut voir, stories en ligne (#19368).
    */
   postsCount: number;
   reelsCount: number;
   storiesCount: number;
+  /** #19368 — les statuts, comptés comme les trois autres pour le lecteur servi. */
+  statusesCount: number;
   languages: string[];
   achievements: Achievement[];
 };
@@ -71,7 +71,7 @@ export type UserAchievementStats = Pick<
 >;
 
 /** Les trois compteurs de CONTENU publié — la part que les succès n'utilisent pas. */
-type UserContentCounts = Pick<UserStats, 'postsCount' | 'reelsCount' | 'storiesCount'>;
+type UserContentCounts = Pick<UserStats, 'postsCount' | 'reelsCount' | 'storiesCount' | 'statusesCount'>;
 
 /**
  * Les SIX agrégations dont dépendent les succès.
@@ -188,33 +188,6 @@ export async function computeUserAchievementStats(
 }
 
 /**
- * Les trois compteurs de contenu publié.
- *
- * `deletedAt: NOT_DELETED` (champ ABSENT sur un post vivant : `null` brut ne
- * matcherait rien sur Mongo, cf. softDelete.ts). Les stories comptent SANS
- * filtre d'expiration : l'auteur garde l'accès à ses stories passées
- * (archive), le compteur reflète tout ce qu'il a publié.
- */
-async function computeUserContentCounts(
-  prisma: PrismaClient,
-  userId: string
-): Promise<UserContentCounts> {
-  const [postsCount, reelsCount, storiesCount] = await Promise.all([
-    prisma.post.count({
-      where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.POST },
-    }),
-    prisma.post.count({
-      where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.REEL },
-    }),
-    prisma.post.count({
-      where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.STORY },
-    }),
-  ]);
-
-  return { postsCount, reelsCount, storiesCount };
-}
-
-/**
  * Single source of truth for a user's aggregated statistics.
  *
  * Mirrors the iOS `UserStats` decoding shape. Used by both the authenticated
@@ -224,14 +197,19 @@ async function computeUserContentCounts(
  *
  * `GET /users/me/stats/achievements` ne l'appelle PLUS (#4391) : il n'a besoin
  * que de `computeUserAchievementStats`.
+ *
+ * `lecteur` (#19368) : les compteurs de CONTENU se comptent pour celui qui lit,
+ * avec l'audience des listes (`countAuthorContent`). Le défaut `total` est celui
+ * de `/users/me/stats` — soi garde son archive.
  */
 export async function computeUserStats(
   prisma: PrismaClient,
-  userId: string
+  userId: string,
+  lecteur: ContentCountReader = { kind: 'total' }
 ): Promise<UserStats> {
-  const [base, contenu] = await Promise.all([
+  const [base, contenu]: [UserAchievementStats, UserContentCounts] = await Promise.all([
     computeUserAchievementStats(prisma, userId),
-    computeUserContentCounts(prisma, userId),
+    countAuthorContent(prisma, userId, lecteur),
   ]);
 
   return { ...base, ...contenu };
