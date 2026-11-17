@@ -40,9 +40,33 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertNil(ProfileCirclesSection.emptyPhrase(for: filled, hasServedLinks: true))
     }
 
-    func test_pillColumns_atAccessibilityTextSizes_wrapTheFiveCirclesOnTwoRows() {
-        XCTAssertEqual(ProfileCirclesSection.pillColumns(isAccessibilitySize: false), 5, "les cinq cercles d'une seule rangée")
-        XCTAssertEqual(ProfileCirclesSection.pillColumns(isAccessibilitySize: true), 3, "aux grandes tailles, aucun nom n'est écrasé")
+    func test_scaleLevels_areTheFiveCircles_fromTheWidestToTheMostIntimate() {
+        let summary = ProfileCirclesSummary.make(links: [], pendingCount: 0)
+        XCTAssertEqual(ProfileCirclesSection.scaleLevels(of: summary).map(\.title),
+                       ProfileCirclesSummary.levels.map(CircleLevelNames.title(of:)))
+        XCTAssertEqual(ProfileCirclesSection.scaleLevels(of: summary).map(\.systemImage),
+                       ProfileCirclesSummary.levels.map(VitrineSeenAsCopy.glyph(of:)),
+                       "le même glyphe que l'échelle de « Voir comme »")
+    }
+
+    func test_scaleCounts_sayHowManyPeopleLiveInEachCircle_zeroIncluded() {
+        let summary = ProfileCirclesSummary.make(links: [
+            RelationLink(userId: "a", effectiveLevel: .friend, grantedByMe: .friend),
+            RelationLink(userId: "b", effectiveLevel: .friend, grantedByMe: .close),
+            RelationLink(userId: "c", effectiveLevel: .blood, grantedByMe: .blood)
+        ], pendingCount: 0)
+        XCTAssertEqual(ProfileCirclesSection.scaleCounts(of: summary), [0, 0, 2, 0, 1])
+    }
+
+    func test_scaleAccessibilityLabel_namesTheSectionThenEveryCircleWithItsPeople() {
+        let summary = ProfileCirclesSummary.make(links: [RelationLink(userId: "a", effectiveLevel: .friend, grantedByMe: .friend)],
+                                                 pendingCount: 0)
+        let label = ProfileCirclesSection.accessibilityLabel(summary: summary)
+        XCTAssertTrue(label.hasPrefix(ProfileCirclesSection.title), label)
+        let friend = ProfileCirclesSection.pillAccessibilityLabel(title: CircleLevelNames.title(of: .friend), count: 1)
+        XCTAssertTrue(label.contains(friend), label)
+        let blood = ProfileCirclesSection.pillAccessibilityLabel(title: CircleLevelNames.title(of: .blood), count: 0)
+        XCTAssertTrue(label.contains(blood), "un cercle vide se dit aussi : \(label)")
     }
 
     func test_emptyPhrase_beforeTheLinksAreServed_isAbsent() {
@@ -112,17 +136,23 @@ final class ProfileSectionsTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
     }
 
-    func test_activityBand_atAccessibilityTextSizes_stacksItsCardsOnePerLine() {
-        XCTAssertTrue(ProfileActivityBand.stacksVertically(isAccessibilitySize: true),
-                      "côte à côte en grand texte, « Conversations » se tronquait")
-        XCTAssertFalse(ProfileActivityBand.stacksVertically(isAccessibilitySize: false))
+    func test_activityFigures_areTheThreeCardsOfMyActivity_writtenByTheLocale() {
+        let stats = UserStats(totalMessages: 12480, totalConversations: 86, totalTranslations: 9310)
+        let figures = ProfileActivityBand.figures(of: stats, locale: Locale(identifier: "en_US"))
+        XCTAssertEqual(figures.map(\.value), ["12,480", "86", "9,310"])
+        XCTAssertEqual(figures.map(\.unit), UserActivityCards.make(stats: stats).map(\.label))
     }
 
-    func test_pillLayouts_atStandardSizes_triesOneRowThenTwo_neverShrinkingTheNames() {
-        XCTAssertEqual(ProfileCirclesSection.pillLayouts(isAccessibilitySize: false), [5, 3])
-        XCTAssertEqual(ProfileCirclesSection.pillLayouts(isAccessibilitySize: true), [3])
-        XCTAssertGreaterThanOrEqual(ProfileCirclesSection.pillSpacing, MeeshySpacing.sm,
-                                    "« Communauté » et « Connaissance » ne se touchent plus")
+    func test_circlesAndActivity_areMadeOfTheKit_theScaleWithCountsAndTheFigureBand() throws {
+        let circles = try code("Meeshy/Features/Profile/Views/ProfileCirclesSection.swift")
+        XCTAssertTrue(circles.contains("MeeshyCircleScale("), "les pastilles sont l'échelle K33")
+        XCTAssertTrue(circles.contains("form: .dots"))
+        XCTAssertTrue(circles.contains("counts: Self.scaleCounts(of: summary)"))
+        XCTAssertTrue(circles.contains("ScrollView(.horizontal"), "aux grandes tailles, l'échelle défile au lieu d'écraser les noms")
+        XCTAssertFalse(circles.contains("ProfileCirclePill"), "aucune pastille redessinée sur place (loi 12)")
+        let band = try code("Meeshy/Features/Profile/Views/ProfileActivityBand.swift")
+        XCTAssertTrue(band.contains("MeeshyFigureBand("), "les trois nombres sont la bande K34")
+        XCTAssertFalse(band.contains("RoundedRectangle"), "aucune carte redessinée sur place (loi 12)")
     }
 
     func test_profileButtons_answerTheTouch_withThePressResponseOfTheKit() throws {

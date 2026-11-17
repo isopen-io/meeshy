@@ -45,7 +45,7 @@ final class ProfileViewStatsAccessibilityTests: XCTestCase {
 
     func test_profileView_mountsTheActivityBand_whichOpensTheDetailedStats() throws {
         let profile = try source("ProfileView.swift")
-        XCTAssertTrue(profile.contains("ProfileActivityBand(stats: stats, onOpen: openActivity)"))
+        XCTAssertTrue(profile.contains("ProfileActivityBand(stats: stats, accentHex: accentColor, onOpen: openActivity)"))
         XCTAssertTrue(profile.contains("router.push(.userStats)"), "Mon activité s'ouvre sur la pile, comme depuis toute autre porte")
         XCTAssertFalse(profile.contains("UserStatsView()"), "plus de feuille : le même écran n'a qu'une présentation")
         XCTAssertFalse(profile.contains("statsSection"), "l'ancienne section Statistiques a disparu")

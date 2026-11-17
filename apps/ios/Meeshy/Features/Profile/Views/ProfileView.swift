@@ -538,7 +538,7 @@ struct ProfileView: View {
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             ProfileSectionHeader(icon: "chart.bar.fill", title: ProfileActivityBand.title, color: MeeshyColors.indigo300)
-            ProfileActivityBand(stats: stats, onOpen: openActivity)
+            ProfileActivityBand(stats: stats, accentHex: accentColor, onOpen: openActivity)
             progressionEntry
             ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })
         }
