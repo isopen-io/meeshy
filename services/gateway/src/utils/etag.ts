@@ -83,14 +83,34 @@ export function sendWithETag(
   reply: FastifyReply,
   payload: unknown
 ): boolean {
-  const etag = computeETag(payload);
+  return sendWithValidator(request, reply, computeETag(payload)) === 'not-modified';
+}
+
+/**
+ * Ce qu'une lecture conditionnelle a rendu — la MESURE de #19049 : la part de
+ * 200 et de 304 parmi les revalidations ne se lit qu'en distinguant une requête
+ * sans `If-None-Match` (`unconditional`) d'une revalidation ratée (`modified`).
+ */
+export type ConditionalOutcome = 'not-modified' | 'modified' | 'unconditional';
+
+/**
+ * `sendWithETag` pour un validateur DÉJÀ calculé (fort ou faible) : pose `ETag`
+ * et `Cache-Control: private, no-cache`, répond un 304 sans corps sur une
+ * correspondance, et dit ce qu'il a rendu.
+ */
+export function sendWithValidator(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  etag: string
+): ConditionalOutcome {
   reply.header('ETag', etag);
   reply.header('Cache-Control', 'private, no-cache');
-  if (ifNoneMatchMatches(request.headers['if-none-match'], etag)) {
+  const ifNoneMatch = request.headers['if-none-match'];
+  if (ifNoneMatchMatches(ifNoneMatch, etag)) {
     reply.code(304).send();
-    return true;
+    return 'not-modified';
   }
-  return false;
+  return ifNoneMatch === undefined ? 'unconditional' : 'modified';
 }
 
 /**

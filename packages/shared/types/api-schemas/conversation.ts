@@ -697,7 +697,17 @@ export const conversationMinimalSchema = {
           categoryId: { type: 'string', nullable: true, description: 'Category ID for organization' },
           customName: { type: 'string', nullable: true, description: 'User-defined custom conversation name (drives DM display name)' },
           reaction: { type: 'string', nullable: true, description: 'User reaction/emoji for conversation' },
-          appearance: { type: 'object', nullable: true, additionalProperties: true, description: 'Personal conversation background and accent (ConversationAppearance); the reader only' }
+          appearance: { type: 'object', nullable: true, additionalProperties: true, description: 'Personal conversation background and accent (ConversationAppearance); the reader only' },
+          // #18925 — ce que `user:preferences-updated` diffuse et que la ligne
+          // ne servait pas. ADDITIFS et OPTIONNELS : une ligne d'un serveur
+          // antérieur ne les porte pas, et un client qui ne les lit pas les ignore.
+          // `version` est le compteur sur lequel les trois clients arbitrent le
+          // temps réel (`incoming.version <= local -> drop`) — sans lui, une
+          // relecture REST ne se départage pas d'une diffusion.
+          version: { type: 'number', description: 'Monotonic version of the reader preferences (optimistic-concurrency arbiter for user:preferences-updated)' },
+          mentionsOnly: { type: 'boolean', description: 'Only notify for mentions and @everyone' },
+          orderInCategory: { type: 'number', nullable: true, description: 'Manual order within the category (null = no manual order)' },
+          clearHistoryBefore: { type: 'string', format: 'date-time', nullable: true, description: 'Messages before this instant are hidden for the reader (clear history); null = nothing hidden' }
         }
       },
       description: 'User preferences for this conversation'

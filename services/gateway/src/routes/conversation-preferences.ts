@@ -77,6 +77,10 @@ const conversationPreferencesSchema = {
     tags: { type: 'array', items: { type: 'string' }, description: 'User-defined tags' },
     categoryId: { type: 'string', nullable: true, description: 'Category ID if conversation is categorized' },
     orderInCategory: { type: 'number', nullable: true, description: 'Display order within category' },
+    // #18925 — l'effacement d'historique du lecteur : `GET` le relit, le `PUT` le
+    // rend, et la ligne de liste le sert désormais aussi. Sans déclaration,
+    // fast-json-stringify le retirait des trois réponses de cette route.
+    clearHistoryBefore: { type: 'string', format: 'date-time', nullable: true, description: 'Messages before this instant are hidden for the reader (clear history); null = nothing hidden' },
     customName: { type: 'string', nullable: true, description: 'User-defined custom conversation name' },
     reaction: { type: 'string', nullable: true, description: 'User reaction/emoji for conversation' },
     // `ReadingModePreference` (packages/shared/types/reading-modes.ts) — ce que
