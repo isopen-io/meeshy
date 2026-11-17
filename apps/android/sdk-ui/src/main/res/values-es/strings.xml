@@ -8,11 +8,6 @@
     <string name="bubble_reply_attachment">Adjunto</string>
     <string name="bubble_file_open">Abrir archivo</string>
     <string name="live_location_remaining">%1$s restantes</string>
-    <string name="live_location_duration_15m">15 min</string>
-    <string name="live_location_duration_30m">30 min</string>
-    <string name="live_location_duration_1h">1 hora</string>
-    <string name="live_location_duration_2h">2 horas</string>
-    <string name="live_location_duration_8h">8 horas</string>
     <string name="bubble_audio_play">Reproducir mensaje de voz</string>
     <string name="bubble_file_size_bytes">%1$s B</string>
     <string name="bubble_file_size_kb">%1$s KB</string>
