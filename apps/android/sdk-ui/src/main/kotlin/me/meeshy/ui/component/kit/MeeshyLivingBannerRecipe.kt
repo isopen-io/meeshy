@@ -113,11 +113,14 @@ public object MeeshyLivingBannerRecipe {
     public fun currentHeight(height: Double, collapse: Double): Double =
         if (height <= HEIGHT_BAR) height else height + (HEIGHT_BAR - height) * clampedCollapse(collapse)
 
-    /** La parallaxe : ±15° donnent ±12 px à l'orbe proche et ±6 px, à contresens, à la lointaine ; au-delà, ça plafonne. */
+    /**
+     * La parallaxe : ±15° donnent ±12 px à l'orbe proche et ±6 px, à contresens, à la lointaine ; au-delà, ça plafonne. À plat,
+     * 0,0 et jamais −0,0 (la portée lointaine est négative, et l'égalité d'une `data class` Kotlin distingue les deux zéros).
+     */
     public fun parallax(tiltDegrees: Double): MeeshyLivingBannerParallax {
         if (!tiltDegrees.isFinite()) return MeeshyLivingBannerParallax(0.0, 0.0)
         val share = (tiltDegrees / TILT_FULL_DEGREES).coerceIn(-1.0, 1.0)
-        return MeeshyLivingBannerParallax(share * NEAR_REACH, share * FAR_REACH)
+        return MeeshyLivingBannerParallax(0.0 + share * NEAR_REACH, 0.0 + share * FAR_REACH)
     }
 
     private fun orbOpacity(isDark: Boolean, near: Boolean, hasImage: Boolean, mode: MeeshyLivingBannerMode): Double {

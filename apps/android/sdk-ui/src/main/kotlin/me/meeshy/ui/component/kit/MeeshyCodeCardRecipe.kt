@@ -91,7 +91,11 @@ public object MeeshyCodeCardRecipe {
         )
     }
 
-    /** L'inclinaison : pivot borné à ±16° en lacet et ±6° en tangage ; le reflet balaie de 112 % à −32 % de la carte. */
+    /**
+     * L'inclinaison : pivot borné à ±16° en lacet et ±6° en tangage ; le reflet balaie de 112 % à −32 % de la carte. À plat, les
+     * glissements valent 0,0 et jamais −0,0 : la carte droite est ÉGALE à [MeeshyCodeCardMotion.Flat] (l'égalité d'une `data class`
+     * Kotlin distingue les deux zéros).
+     */
     public fun motion(yaw: Double, pitch: Double): MeeshyCodeCardMotion {
         val boundedYaw = bounded(yaw, YAW_LIMIT)
         val share = boundedYaw / YAW_LIMIT
@@ -99,8 +103,8 @@ public object MeeshyCodeCardRecipe {
             yaw = boundedYaw,
             pitch = bounded(pitch, PITCH_LIMIT),
             reflectionPosition = REFLECTION_REST - share * REFLECTION_SWEEP,
-            plateShift = -share * PLATE_SHIFT_REACH,
-            centerShift = -share * CENTER_SHIFT_REACH,
+            plateShift = 0.0 - share * PLATE_SHIFT_REACH,
+            centerShift = 0.0 - share * CENTER_SHIFT_REACH,
         )
     }
 

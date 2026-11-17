@@ -97,4 +97,12 @@ class MeeshyTicketTest {
         }
         assertThat(MeeshyTicketRecipe.ink(Color(0xFF312E81))).isEqualTo(Color.White)
     }
+
+    @Test
+    fun `l encre de la pastille suit les vecteurs de parite iOS`() {
+        val dark = MeeshyTicketRecipe.DARK_INK
+        mapOf(0xFF818CF8 to dark, 0xFF4F46E5 to Color.White, 0xFFFBBF24 to dark, 0xFF34D399 to dark).forEach { (argb, ink) ->
+            assertThat(MeeshyTicketRecipe.ink(Color(argb))).isEqualTo(ink)
+        }
+    }
 }
