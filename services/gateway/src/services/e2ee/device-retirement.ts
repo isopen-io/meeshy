@@ -168,7 +168,12 @@ export async function sweepDevicesOfEndedSessions(
   }
 }
 
-/** La purge du compte : ses appareils, ses pré-clés, les enveloppes qui lui sont adressées et la trace de ses preuves de liaison disparaissent. */
+/**
+ * La purge du compte : ses appareils, ses pré-clés, les enveloppes qui lui sont
+ * adressées ET celles qu'il a émises (GWX-02, #12544 : ses messages sont
+ * anonymisés pour tout le monde, un correspondant qui se reconnecte n'en reçoit
+ * plus les enveloppes), et la trace de ses preuves de liaison disparaissent.
+ */
 export async function eraseE2EEDataOfUser(
   prisma: ErasurePrisma,
   userId: string,
@@ -176,7 +181,7 @@ export async function eraseE2EEDataOfUser(
   const [devices, preKeys, envelopes] = await Promise.all([
     prisma.e2EEDevice.deleteMany({ where: { userId } }),
     prisma.e2EEOneTimePreKey.deleteMany({ where: { userId } }),
-    prisma.messageEnvelope.deleteMany({ where: { recipientUserId: userId } }),
+    prisma.messageEnvelope.deleteMany({ where: { OR: [{ recipientUserId: userId }, { senderUserId: userId }] } }),
     prisma.e2EERevokedIdentity.deleteMany({ where: { userId } }),
     prisma.e2EEBindingProof.deleteMany({ where: { userId } }),
   ]);

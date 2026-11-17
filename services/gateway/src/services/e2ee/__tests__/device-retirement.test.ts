@@ -3,6 +3,9 @@ import {
   retireDevicesOfSession,
   sweepDevicesOfEndedSessions,
 } from '../device-retirement';
+import { createE2EEDirectory } from '../E2EEDirectory';
+import { createE2EEEnvelopeRelay } from '../E2EEEnvelopeRelay';
+import { fakeDeviceKeys, fakeVerifier } from './fake-signatures';
 import { createFakeE2EEStore, type FakeE2EEStore } from './fake-e2ee-store';
 
 const ALICE = 'a1'.repeat(12);
@@ -113,5 +116,54 @@ describe("le retrait d'un appareil chiffré à la fin de sa session (#12543)", (
 
     expect(store.collections.E2EEDevice.rows.map((row) => row.userId)).toEqual([BOB]);
     expect(leftoversOf(store, BOB, 1)).toEqual({ preKeys: 1, envelopes: 1 });
+  });
+
+  // #12544 — après la purge, aucun correspondant ne réserve plus de bundle vers le
+  // compte : l'annuaire n'a plus aucun de ses appareils.
+  it('après la purge du compte, plus aucune réservation de bundle n’aboutit vers lui (contrôle : une avant)', async () => {
+    const store = createFakeE2EEStore();
+    const SESSION = 'a5'.repeat(12);
+    store.collections.UserSession.insert({ id: SESSION, userId: ALICE, isValid: true, expiresAt: new Date(NOW.getTime() + 86_400_000) });
+    const directory = createE2EEDirectory({ prisma: store.prisma as never, verifier: fakeVerifier, now: () => NOW });
+    const keys = fakeDeviceKeys({ oneTime: 2, kyber: 2 });
+    await directory.enrollDevice({
+      userId: ALICE,
+      sessionId: SESSION,
+      request: {
+        binding: keys.binding(ALICE, NOW.getTime()), registrationId: keys.registrationId, identityKey: keys.identityKey,
+        signedPreKey: keys.signedPreKey, kyberLastResort: keys.kyberLastResort, platform: 'ios',
+        oneTimePreKeys: keys.oneTimePreKeys, kyberPreKeys: keys.kyberPreKeys,
+      },
+    });
+    await expect(directory.reserveBundles({ requesterUserId: BOB, targetUserId: ALICE })).resolves.toHaveLength(1);
+
+    await eraseE2EEDataOfUser(store.prisma as never, ALICE);
+
+    await expect(directory.reserveBundles({ requesterUserId: BOB, targetUserId: ALICE })).resolves.toEqual([]);
+    expect(store.collections.E2EEOneTimePreKey.rows.filter((row) => row.userId === ALICE)).toEqual([]);
+  });
+
+  // GWX-02 (#12544) — les messages d'un compte effacé sont anonymisés pour tout
+  // le monde : un appareil de son correspondant qui se reconnecte ne doit pas en
+  // recevoir encore les enveloppes, déchiffrables, pendant 30 jours.
+  it('la purge du compte efface aussi les enveloppes qu’il a ÉMISES : son correspondant ne les reçoit plus, celles d’un tiers restent', async () => {
+    const CAROL = 'c3'.repeat(12);
+    const BOB_SESSION = 'b5'.repeat(12);
+    const store = createFakeE2EEStore();
+    store.collections.E2EEDevice.insert({ userId: BOB, deviceId: 1, registrationId: 7, sessionId: BOB_SESSION, identityKey: 'ik', platform: 'ios' });
+    const envelope = (n: number, senderUserId: string, recipientUserId: string, recipientRegistrationId: number) =>
+      store.collections.MessageEnvelope.insert({
+        messageId: `${n}`.padStart(24, '0'), conversationId: 'f'.repeat(24), recipientUserId, recipientDeviceId: 1, recipientRegistrationId,
+        senderUserId, senderDeviceId: 1, type: 2, body: Buffer.from(`de ${n}`).toString('base64'),
+      });
+    envelope(1, ALICE, BOB, 7);
+    envelope(2, CAROL, BOB, 7);
+    envelope(3, BOB, ALICE, 9);
+
+    await expect(eraseE2EEDataOfUser(store.prisma as never, ALICE)).resolves.toMatchObject({ envelopes: 2 });
+
+    const served = await createE2EEEnvelopeRelay({ prisma: store.prisma as never }).listFor({ userId: BOB, sessionId: BOB_SESSION });
+    expect(served.map((row) => row.senderUserId)).toEqual([CAROL]);
+    expect(store.collections.MessageEnvelope.rows.map((row) => row.messageId)).toEqual(['2'.padStart(24, '0')]);
   });
 });

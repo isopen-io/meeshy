@@ -126,7 +126,7 @@ describe('purgeAccountIsolatedData', () => {
     expect(summary.sessionsDeleted).toBe(3);
   });
 
-  it("efface ses appareils chiffrés, leurs pré-clés, les enveloppes qui lui sont adressées (#12543) et la trace de ses preuves de liaison (#12933)", async () => {
+  it("efface ses appareils chiffrés, leurs pré-clés, les enveloppes qui lui sont adressées (#12543) ou qu'il a émises (#12544) et la trace de ses preuves de liaison (#12933)", async () => {
     const prisma = fakePrisma({
       e2EEDevice: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 2 }) },
       e2EEOneTimePreKey: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 150 }) },
@@ -137,7 +137,7 @@ describe('purgeAccountIsolatedData', () => {
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(prisma.e2EEDevice.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(prisma.e2EEOneTimePreKey.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
-    expect(prisma.messageEnvelope.deleteMany).toHaveBeenCalledWith({ where: { recipientUserId: USER_ID } });
+    expect(prisma.messageEnvelope.deleteMany).toHaveBeenCalledWith({ where: { OR: [{ recipientUserId: USER_ID }, { senderUserId: USER_ID }] } });
     expect(prisma.e2EERevokedIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(prisma.e2EEBindingProof.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(summary.e2eeErased).toEqual({ devices: 2, preKeys: 150, envelopes: 4 });
