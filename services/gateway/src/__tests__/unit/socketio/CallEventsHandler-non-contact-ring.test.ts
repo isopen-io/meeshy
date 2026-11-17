@@ -156,6 +156,17 @@ describe('call:initiate — « Appels hors contacts » dans un appel de groupe',
     expect(pushedUserIds(sendToUser).sort()).toEqual([FRIEND, STRANGER].sort());
   });
 
+  it("dit à chaque appelé réveillé par push que l'appel est de groupe", async () => {
+    const { initiate, sendToUser } = makeHarness(makePrisma(openCallRingTables()));
+
+    await initiate();
+
+    expect(sendToUser).toHaveBeenCalled();
+    for (const [push] of sendToUser.mock.calls as Array<[{ payload: { data: Record<string, string> } }]>) {
+      expect(push.payload.data).toMatchObject({ conversationType: 'group', isGroup: 'true' });
+    }
+  });
+
   it("n'annonce pas d'appel manqué au non-contact qui n'a pas sonné", async () => {
     mockGetUnrespondedParticipants.mockResolvedValue([FRIEND, STRANGER]);
     const { handler, createMissedCallNotification } = makeHarness(makePrisma(closedCallRingTables(friendship)));
