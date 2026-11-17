@@ -18,11 +18,15 @@ const AUTRE = '507f1f77bcf86cd799439022';
 
 type Row = Record<string, unknown> & { id: string };
 
+const fieldMatches = (row: Row, field: string, expected: unknown): boolean => {
+  if (field === 'NOT') return !matches(row, expected as Record<string, unknown>);
+  if (expected && typeof expected === 'object' && 'in' in (expected as object)) return (expected as { in: unknown[] }).in.includes(row[field]);
+  if (expected && typeof expected === 'object' && 'isSet' in (expected as object)) return (row[field] !== undefined) === (expected as { isSet: boolean }).isSet;
+  return row[field] === expected;
+};
+
 const matches = (row: Row, where: Record<string, unknown> | undefined): boolean =>
-  !where || Object.entries(where).every(([field, expected]) =>
-    expected && typeof expected === 'object' && 'in' in (expected as object)
-      ? (expected as { in: unknown[] }).in.includes(row[field])
-      : row[field] === expected);
+  !where || Object.entries(where).every(([field, expected]) => fieldMatches(row, field, expected));
 
 function table(rows: Row[]) {
   const state = { rows: [...rows] };
@@ -50,7 +54,8 @@ function base() {
     { id: 'ad3', userId: AUTRE, url: 'https://autre.example/', title: 'Autre', trackingToken: 'tokB' },
   ]);
   const trackingLink = table([
-    { id: 'tl1', token: 'tokA', createdBy: PARTI, originalUrl: 'https://ma-banque.fr/', name: 'Banque', isActive: true },
+    { id: 'tl1', token: 'tokA', createdBy: PARTI, addressId: 'ad1', originalUrl: 'https://ma-banque.fr/', name: 'Banque', isActive: true },
+    { id: 'tl4', token: 'orphe', createdBy: PARTI, addressId: 'ad-partie', originalUrl: 'https://ancienne.example/', name: 'Ancienne', isActive: false },
     { id: 'tl2', token: 'tokB', createdBy: AUTRE, originalUrl: 'https://autre.example/', name: 'Autre', isActive: true },
     { id: 'tl3', token: 'msg', createdBy: PARTI, originalUrl: 'https://lien-de-message.example/', name: null, isActive: true },
   ]);
@@ -58,6 +63,7 @@ function base() {
     { id: 'k1', trackingLinkId: 'tl1', ipAddress: '203.0.113.7' },
     { id: 'k2', trackingLinkId: 'tl1', ipAddress: '198.51.100.9' },
     { id: 'k3', trackingLinkId: 'tl2', ipAddress: '192.0.2.1' },
+    { id: 'k4', trackingLinkId: 'tl4', ipAddress: '203.0.113.8' },
   ]);
   return { prisma: { profileAddress, trackingLink, trackingLinkClick }, profileAddress, trackingLink, trackingLinkClick };
 }
@@ -71,6 +77,15 @@ describe('eraseProfileAddressesOf — rien de ses adresses ne survit à la purge
     expect(profileAddress.state.rows.filter((row) => row.userId === PARTI)).toEqual([]);
     expect(trackingLink.state.rows.filter((row) => row.originalUrl === 'https://ma-banque.fr/' || row.name === 'Banque')).toEqual([]);
     expect(trackingLinkClick.state.rows.filter((row) => row.trackingLinkId === 'tl1')).toEqual([]);
+  });
+
+  it("efface aussi un lien d'adresse que plus aucune ligne ne désigne, et ses clics", async () => {
+    const { prisma, trackingLink, trackingLinkClick } = base();
+
+    await eraseProfileAddressesOf(prisma as never, PARTI);
+
+    expect(trackingLink.state.rows.filter((row) => row.id === 'tl4')).toEqual([]);
+    expect(trackingLinkClick.state.rows.filter((row) => row.trackingLinkId === 'tl4')).toEqual([]);
   });
 
   it("laisse les liens et les clics des autres comptes, et ses liens qui ne sont pas des adresses", async () => {
