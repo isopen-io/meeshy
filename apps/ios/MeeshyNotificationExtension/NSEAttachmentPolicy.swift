@@ -183,9 +183,9 @@ nonisolated enum NSEAttachmentPolicy {
     ///
     /// La bannière du message supprimé ne peut pas être supprimée par l'extension (pas de
     /// filtrage) : on livre le contenu de BASE — sans pièce jointe, sans le texte, sans les clés de
-    /// contenu, sans action rapide — et les balayages la retirent ensuite. Ne restent que ce qui
-    /// route, nomme l'expéditeur et déclare la protection (`notificationLocKey`), dont
-    /// `notificationId`, par lequel les balayages retrouvent la bannière.
+    /// contenu, sans action rapide, sans son ni réveil de l'écran — et les balayages la retirent
+    /// ensuite. Ne restent que ce qui route, nomme l'expéditeur et déclare la protection
+    /// (`notificationLocKey`), dont `notificationId`, par lequel les balayages retrouvent la bannière.
     static func withdrawing(
         _ content: UNMutableNotificationContent,
         neutralBody: String
@@ -193,6 +193,8 @@ nonisolated enum NSEAttachmentPolicy {
         content.body = neutralBody
         content.attachments = []
         content.categoryIdentifier = lockedConversationCategory
+        content.sound = nil
+        content.interruptionLevel = .passive
         content.userInfo = content.userInfo
             .filter { key, _ in (key as? String).map(sealedConversationKeys.contains) ?? false }
             .merging([AnyHashable("notificationLocKey"): withdrawnBannerLocKey]) { _, sealed in sealed }
