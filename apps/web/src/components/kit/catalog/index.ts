@@ -89,7 +89,7 @@ const contents: Readonly<Record<string, KitContent>> = {
 export const MeeshyKitCatalog = {
   entries,
   atoms: atomEntries,
-  atomFiles: MEESHY_KIT_ATOMS.map((atom) => atom.file),
+  atomFiles: MEESHY_KIT_ATOMS.flatMap((atom) => [atom.file, ...(atom.alsoFiles ?? [])]),
   atomContent,
   listedEntries: (): readonly MeeshyKitCatalogEntry[] => listedEntries(entries),
   listedEntry: (key: string): MeeshyKitCatalogEntry | null => listedEntry(key, entries),

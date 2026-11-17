@@ -12,31 +12,6 @@ extension StoryViewerView {
 
     // MARK: - Filter Overlay
 
-    var filterOverlay: some View {
-        Group {
-            if let filter = currentStory?.storyEffects?.filter {
-                switch filter {
-                case "vintage":
-                    MeeshyColors.tileSaffron.opacity(0.15)
-                        .blendMode(.multiply)
-                case "bw":
-                    Color.gray.opacity(0.4)
-                        .blendMode(.saturation)
-                case "warm":
-                    MeeshyColors.error.opacity(0.1)
-                        .blendMode(.softLight)
-                case "cool":
-                    MeeshyColors.indigo300.opacity(0.1)
-                        .blendMode(.softLight)
-                default:
-                    EmptyView()
-                }
-            }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
 
 
     /// Fondu entre deux stories d'un auteur : la sortante reste peinte pendant que

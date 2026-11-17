@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import type { MeeshyGlassMaterial, MeeshyGlassTone } from './meeshy-glass-recipe';
 
 export type MeeshyGlassButtonKind = 'normal' | 'active' | 'destructive' | 'soft';
-export type MeeshyGlassButtonSize = 36 | 40 | 44 | 48;
+export type MeeshyGlassButtonSize = 36 | 40 | 44 | 48 | 56 | 60 | 64;
 export type MeeshyGlassButtonHaptic = 'light' | 'none';
 export type MeeshyGlassButtonFill = 'clear' | 'light' | 'red' | 'veil' | 'themeInk';
 export type MeeshyGlassButtonGlassRequest = 'none' | 'neutral';
@@ -36,7 +36,7 @@ const MEASURE = {
 
 export const MEESHY_GLASS_BUTTON_LONG_PRESS = { durationMs: 500, maxMovement: 10 } as const;
 
-const GLYPH_SIZE: Readonly<Record<MeeshyGlassButtonSize, number>> = { 36: 18, 40: 18, 44: 20, 48: 22 };
+const GLYPH_SIZE: Readonly<Record<MeeshyGlassButtonSize, number>> = { 36: 18, 40: 18, 44: 20, 48: 22, 56: 26, 60: 28, 64: 30 };
 
 export type MeeshyGlassButtonShadow = { readonly opacity: number; readonly blur: number; readonly y: number };
 

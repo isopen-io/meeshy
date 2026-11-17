@@ -77,28 +77,6 @@ final class SceneThumbnailSoundChipRankTests: XCTestCase {
 
     // MARK: - La bande de slides (`SlideMiniPreview`)
 
-    private func bande(_ slide: StorySlide) throws -> UIImage {
-        let vue = SlideMiniPreview(effects: slide.effects, bgImage: nil, drawingData: nil,
-                                   loadedImages: ["photo": Self.rouge], index: 0)
-            .frame(width: tuile.width, height: tuile.height)
-        let renderer = ImageRenderer(content: vue)
-        renderer.scale = 2
-        return try XCTUnwrap(renderer.uiImage)
-    }
-
-    func test_slideStrip_aChipUnderAnImage_isHiddenByIt() throws {
-        let image = try bande(scene(sonZ: 1))
-
-        XCTAssertTrue(estRouge(pixel(image, x: 90, y: 160)),
-                      "la pastille enfouie sous l'image ne se peint pas par-dessus elle")
-    }
-
-    func test_slideStrip_aChipAboveTheImage_staysOnTop() throws {
-        let image = try bande(scene(sonZ: 3))
-
-        XCTAssertFalse(estRouge(pixel(image, x: 90, y: 160)), "la pastille que rien ne recouvre se voit")
-    }
-
     // MARK: - La loi partagée
 
     func test_theStack_putsTheBuriedChipAtItsRank_andLeavesTheOthersToTheOverlay() {

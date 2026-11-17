@@ -47,7 +47,7 @@ export type StudioTiming = { readonly start: number; readonly end: number };
  * iOS (`TextEditToolOptions.swift:454-460`), donc les sept de l'app. */
 export const STUDIO_TEXT_LANGUAGES = ['fr', 'en', 'es', 'de', 'it', 'pt', 'ar'] as const;
 
-/** La palette de l'éditeur de texte iOS (`StoryTextEditorView.swift:488-492`),
+/** La palette de l'éditeur de texte iOS (`StoryTextColors.swift`),
  * dans son ordre — quatorze couleurs, recopiées telles quelles. */
 export const STUDIO_TEXT_COLORS = [
   'FFFFFF', '000000', 'FF2E63', '08D9D6', 'F8B500', '9B59B6', '2ECC71',

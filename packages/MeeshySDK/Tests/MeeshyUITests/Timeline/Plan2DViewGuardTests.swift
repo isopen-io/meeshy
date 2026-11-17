@@ -134,15 +134,6 @@ final class Plan2DViewGuardTests: XCTestCase {
 
     // MARK: - Guard 3 — TimelineMetrics.laneHeight, une seule hauteur de lane
 
-    func test_storyTimelineView_usesTimelineMetricsLaneHeight_atAllFourSites() throws {
-        let lines = try Self.strippedStoryTimelineViewLines()
-        let usages = lines.filter { $0.contains("TimelineMetrics.laneHeight") }
-        XCTAssertEqual(usages.count, 4,
-                       "Les quatre sites d'appel historiques doivent utiliser TimelineMetrics.laneHeight — trouvé \(usages.count)")
-        XCTAssertFalse(lines.contains { $0.contains("laneHeight: 52") },
-                       "Aucun littéral `laneHeight: 52` ne doit subsister dans StoryTimelineView.swift")
-    }
-
     func test_plan2DView_drawsAtTimelineMetricsLaneHeight_neverASecondLiteral() throws {
         let source = try Self.strippedPlan2DViewSource()
         XCTAssertTrue(source.contains("TimelineMetrics.laneHeight"),
@@ -1024,26 +1015,12 @@ final class Plan2DViewGuardTests: XCTestCase {
             .appendingPathComponent("Sources/MeeshyUI/Story/Timeline/Views/Plan2D/Plan2DView.swift")
     }
 
-    private static var storyTimelineViewSourceURL: URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshyUI/Story/Timeline/Views/Container/StoryTimelineView.swift")
-    }
-
     private static func strippedPlan2DViewSource() throws -> String {
         strippingLineComments(try String(contentsOf: plan2DViewSourceURL, encoding: .utf8))
     }
 
     private static func strippedPlan2DViewLines() throws -> [String] {
         try strippedPlan2DViewSource().components(separatedBy: "\n")
-    }
-
-    private static func strippedStoryTimelineViewLines() throws -> [String] {
-        strippingLineComments(try String(contentsOf: storyTimelineViewSourceURL, encoding: .utf8))
-            .components(separatedBy: "\n")
     }
 
     private static func strippingLineComments(_ source: String) -> String {

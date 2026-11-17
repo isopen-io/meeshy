@@ -128,8 +128,6 @@ extension RootView {
         // entity carries it. Keeping the two apart is what lets a comment on a
         // réel open the réel with its comments, instead of the story viewer.
 
-        /// Which affordance the story surface auto-opens once resolved.
-        var storyIntent: StoryIntent { NotificationContentRouter.intent(for: type) }
 
         /// `true` when the notification is ABOUT a comment — the post detail
         /// surface then opens with its comments sheet already showing.

@@ -9,14 +9,6 @@ enum WorldGuestEntryCopy {
         String(format: String(localized: "worldEntry.enter", defaultValue: "Entrer dans %@", bundle: .main), worldTitle)
     }
 
-    static var cardSubtitle: String {
-        String(localized: "worldEntry.card.subtitle", defaultValue: "Sans compte · votre nom et votre langue", bundle: .main)
-    }
-
-    static var withAccountDivider: String {
-        String(localized: "worldEntry.card.divider", defaultValue: "ou avec votre compte", bundle: .main)
-    }
-
     static var namePrompt: String {
         String(localized: "worldEntry.name.prompt", defaultValue: "Comment doit-on vous appeler ?", bundle: .main)
     }
