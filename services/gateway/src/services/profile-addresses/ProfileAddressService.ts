@@ -17,6 +17,7 @@ import {
 } from '@meeshy/shared/utils/profile-addresses';
 import { TrackingTargetCarriesEmailSecretError } from '../tracking-link-target';
 import { TrackingLinkService } from '../TrackingLinkService';
+import { ownedAddressLinks, type AddressLink } from './address-links';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'ProfileAddressService' });
@@ -73,17 +74,20 @@ const validated = (input: AddressInput, base?: Fields): Outcome<Fields> => {
   return ok({ url, title, glyph, circle });
 };
 
-const toOwner = (row: Row, clicks: ReadonlyMap<string, number>): OwnerAddress => ({
-  id: row.id,
-  title: row.title,
-  url: row.url,
-  glyph: row.glyph,
-  circle: row.circle,
-  position: row.position,
-  isShown: row.isShown,
-  clicks: row.trackingToken ? (clicks.get(row.trackingToken) ?? 0) : 0,
-  ...(row.trackingToken ? { trackedPath: `/l/${row.trackingToken}` } : {}),
-});
+const toOwner = (row: Row, links: ReadonlyMap<string, AddressLink>): OwnerAddress => {
+  const link = row.trackingToken ? links.get(row.trackingToken) : undefined;
+  return {
+    id: row.id,
+    title: row.title,
+    url: row.url,
+    glyph: row.glyph,
+    circle: row.circle,
+    position: row.position,
+    isShown: row.isShown,
+    clicks: link?.totalClicks ?? 0,
+    ...(link && row.trackingToken ? { trackedPath: `/l/${row.trackingToken}` } : {}),
+  };
+};
 
 export class ProfileAddressService {
   private readonly links: TrackingLinkService;
@@ -96,16 +100,18 @@ export class ProfileAddressService {
     return this.prisma.profileAddress.findMany({ where: { userId }, orderBy: { position: 'asc' }, take: ADDRESS_MAX_COUNT }) as Promise<Row[]>;
   }
 
-  private async clicksOf(rows: ReadonlyArray<Row>): Promise<ReadonlyMap<string, number>> {
-    const tokens = rows.flatMap((row) => (row.trackingToken ? [row.trackingToken] : []));
-    if (tokens.length === 0) return new Map();
-    const links = await this.prisma.trackingLink.findMany({ where: { token: { in: tokens } }, select: { token: true, totalClicks: true } });
-    return new Map(links.map((link) => [link.token, link.totalClicks]));
+  private linksOf(userId: string, rows: ReadonlyArray<Row>): Promise<ReadonlyMap<string, AddressLink>> {
+    return ownedAddressLinks(this.prisma, userId, rows.flatMap((row) => (row.trackingToken ? [row.trackingToken] : [])));
   }
 
-  private async viewsOf(rows: ReadonlyArray<Row>): Promise<OwnerAddress[]> {
-    const clicks = await this.clicksOf(rows);
-    return rows.map((row) => toOwner(row, clicks));
+  /** Le jeton de l'adresse s'il désigne encore un lien de son propriétaire (supprimé, renommé ou repris ⇒ `null`). */
+  private async ownedToken(userId: string, row: Row): Promise<string | null> {
+    return row.trackingToken && (await this.linksOf(userId, [row])).has(row.trackingToken) ? row.trackingToken : null;
+  }
+
+  private async viewsOf(userId: string, rows: ReadonlyArray<Row>): Promise<OwnerAddress[]> {
+    const links = await this.linksOf(userId, rows);
+    return rows.map((row) => toOwner(row, links));
   }
 
   private async setLinkActive(token: string, isActive: boolean): Promise<void> {
@@ -118,7 +124,7 @@ export class ProfileAddressService {
   }
 
   async list(userId: string): Promise<OwnerAddress[]> {
-    return this.viewsOf(await this.rows(userId));
+    return this.viewsOf(userId, await this.rows(userId));
   }
 
   async create(userId: string, input: AddressInput): Promise<Outcome<OwnerAddress>> {
@@ -134,7 +140,7 @@ export class ProfileAddressService {
       const row = (await this.prisma.profileAddress.create({
         data: { userId, ...fields.value, position, isShown, trackingToken },
       })) as Row;
-      return ok(toOwner(row, new Map()));
+      return ok(toOwner(row, new Map(trackingToken ? [[trackingToken, { totalClicks: 0, isOpen: isShown }]] : [])));
     } catch (error) {
       if (error instanceof TrackingTargetCarriesEmailSecretError) return refuse(400, 'INVALID_ADDRESS_URL', 'This address cannot be tracked');
       throw error;
@@ -153,7 +159,7 @@ export class ProfileAddressService {
         where: { id },
         data: { ...fields.value, isShown, trackingToken },
       })) as Row;
-      return ok((await this.viewsOf([row]))[0]);
+      return ok((await this.viewsOf(userId, [row]))[0]);
     } catch (error) {
       if (error instanceof TrackingTargetCarriesEmailSecretError) return refuse(400, 'INVALID_ADDRESS_URL', 'This address cannot be tracked');
       throw error;
@@ -162,7 +168,7 @@ export class ProfileAddressService {
 
   /** Le jeton du lien de suivi après modification : ouvert, suivi, rouvert, fermé ou détaché. */
   private async reconcileLink(userId: string, current: Row, next: Fields, isShown: boolean, countClicks: boolean | undefined): Promise<string | null> {
-    const token = current.trackingToken;
+    const token = await this.ownedToken(userId, current);
     if (countClicks === false) {
       if (token) await this.setLinkActive(token, false);
       return null;
@@ -181,7 +187,8 @@ export class ProfileAddressService {
   async remove(userId: string, id: string): Promise<Outcome<null>> {
     const current = (await this.prisma.profileAddress.findFirst({ where: { id, userId } })) as Row | null;
     if (!current) return refuse(404, 'ADDRESS_NOT_FOUND', 'Address not found');
-    if (current.trackingToken) await this.setLinkActive(current.trackingToken, false);
+    const token = await this.ownedToken(userId, current);
+    if (token) await this.setLinkActive(token, false);
     await this.prisma.profileAddress.delete({ where: { id } });
     return ok(null);
   }

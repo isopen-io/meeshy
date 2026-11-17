@@ -39,6 +39,9 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     friendRequest: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // Les adresses d'amis d'un réseau tiers (#17117) : aucune conversation externe ouverte.
     externalConversationPeer: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    // Les adresses de fiche (#18863) : un compte qui n'en a publié aucune.
+    profileAddress: { findMany: jest.fn<any>().mockResolvedValue([]), deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    trackingLink: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // L'annuaire E2EE (#12543) : un compte qui n'a jamais enrôlé d'appareil chiffré.
     ...Object.fromEntries(['e2EEDevice', 'e2EEOneTimePreKey', 'messageEnvelope', 'e2EERevokedIdentity', 'e2EEBindingProof'].map((model) =>
       [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
@@ -148,6 +151,23 @@ describe('purgeAccountIsolatedData', () => {
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(prisma.externalConversationPeer.deleteMany).toHaveBeenCalledWith({ where: { openedByUserId: USER_ID } });
     expect(summary.externalPeerHandlesDeleted).toBe(2);
+  });
+
+  it("efface ses adresses de fiche (#18863) et ferme leurs liens de suivi : un /l/<jeton> déjà partagé ne mène plus à ses sites", async () => {
+    const prisma = fakePrisma({
+      profileAddress: {
+        findMany: jest.fn<any>().mockResolvedValue([{ trackingToken: 'tokA' }, { trackingToken: null }, { trackingToken: 'tokB' }]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 3 }),
+      },
+      trackingLink: { updateMany: jest.fn<any>().mockResolvedValue({ count: 2 }) },
+    });
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
+    expect(prisma.trackingLink.updateMany).toHaveBeenCalledWith({
+      where: { token: { in: ['tokA', 'tokB'] }, createdBy: USER_ID },
+      data: { isActive: false },
+    });
+    expect(prisma.profileAddress.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(summary.profileAddressesDeleted).toBe(3);
   });
 
   it('deletes the UserVoiceModel row for the account', async () => {
