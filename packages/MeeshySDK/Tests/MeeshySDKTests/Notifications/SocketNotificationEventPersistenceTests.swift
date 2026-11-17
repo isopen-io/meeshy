@@ -61,7 +61,7 @@ final class SocketNotificationEventPersistenceTests: XCTestCase {
     func test_toAPINotification_carriesTheLinkedContentDates() throws {
         let event = try makeEvent("""
         {
-            "id": "n7", "userId": "u1", "type": "story_reaction",
+            "id": "n7", "userId": "u1", "type": "story_reaction", "content": "a réagi à votre story",
             "context": { "postId": "p1", "postCreatedAt": "2026-11-01T08:00:00.000Z", "postExpiresAt": "2026-11-02T08:00:00.000Z" }
         }
         """)
