@@ -4,6 +4,8 @@ import type { ConversationStoreState } from '../conversation-store';
 import type { EndToEndRegimeState } from '../end-to-end-regime-ledger';
 import type { OutboxState } from '../send/outbox-store';
 
+import { callBackPromptStore } from '../calls/call-back-prompt';
+import { forgetCallIdentities } from '../calls/call-notice';
 import { closeConversationPreview } from '../notifications/conversation-preview';
 import { resetInAppBanner } from '../notifications/in-app-banner';
 
@@ -26,6 +28,8 @@ import type { EngagementState } from './conversation-engagement';
  *  - les POINTS d'engagement d'A par conversation (#8906), qui sont À LUI ;
  *  - la BANNIÈRE in-app d'A et l'aperçu qu'elle a ouvert (#18907) : sous B, la toucher aurait ouvert la
  *    conversation d'A et marqué lu avec le jeton de B ;
+ *  - l'invite « Rappeler … ? » d'A et les noms d'appel qu'A a vus (#18907) : sous B, « Appeler » aurait
+ *    composé vers la conversation d'A avec la connexion de B, sous le nom qu'A voyait ;
  *  - les conversations qu'A a VUES chiffrées de bout en bout (#12949) : le
  *    registre se lie au compte ouvert, dès la surveillance puis à chaque
  *    changement, et retrouve ce que CE compte a vu (il survit au rechargement).
@@ -48,6 +52,8 @@ export function resetIdentityScopedStores({ outbox, conversations, typing, engag
   engagement?.getState().clear();
   resetInAppBanner();
   closeConversationPreview();
+  callBackPromptStore.setState({ request: null });
+  forgetCallIdentities();
 }
 
 export function watchIdentityScopedStores(stores: IdentityScopedStores): () => void {

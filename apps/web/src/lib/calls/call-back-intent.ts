@@ -131,7 +131,7 @@ async function callBackActions(): Promise<CallBackActions> {
   return {
     ready: whenCallTransportReady,
     start: (request) => callActions.start(identified(request)),
-    confirm: (request) => callBackPromptStore.setState({ request: identified(request) }),
+    confirm: (request) => callBackPromptStore.setState({ request }),
   };
 }
 

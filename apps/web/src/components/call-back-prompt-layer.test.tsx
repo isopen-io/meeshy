@@ -88,7 +88,7 @@ describe('« Appeler » relit l’identité du fil au toucher (#18907)', () => {
     const root = createRoot(host);
     try {
       await act(async () => root.render(<CallBackPromptLayer />));
-      rememberCallIdentity('conv-cold-group', { title: 'Famille', avatar: null, isGroup: true });
+      await act(async () => rememberCallIdentity('conv-cold-group', { title: 'Famille', avatar: null, isGroup: true }));
       const call = host.querySelector<HTMLButtonElement>('[data-call-back-prompt-action="call"]');
       if (call === null) throw new Error('invite absente');
       await act(async () => call.click());
@@ -97,6 +97,25 @@ describe('« Appeler » relit l’identité du fil au toucher (#18907)', () => {
       await act(async () => root.unmount());
       host.remove();
       callActions.start = original;
+      callBackPromptStore.setState({ request: null });
+    }
+  });
+});
+
+describe('l’invite d’une adresse attend que le fil se soit nommé (#18907)', () => {
+  test('avant que l’en-tête du fil ne déclare l’identité, rien à toucher ; ensuite, la question nomme le groupe', async () => {
+    callBackPromptStore.setState({ request: request({ conversationId: 'conv-slow-header', title: '', isGroup: false, media: 'video' }) });
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    try {
+      await act(async () => root.render(<CallBackPromptLayer />));
+      expect(host.querySelector('[data-call-back-prompt-action="call"]')).toBeNull();
+      await act(async () => rememberCallIdentity('conv-slow-header', { title: 'Les cousins', avatar: null, isGroup: true }));
+      expect(host.querySelector('[data-call-back-prompt]')?.getAttribute('aria-label')).toBe('Rappeler Les cousins en vidéo ?');
+    } finally {
+      await act(async () => root.unmount());
+      host.remove();
       callBackPromptStore.setState({ request: null });
     }
   });

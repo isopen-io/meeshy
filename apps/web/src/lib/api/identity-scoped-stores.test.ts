@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
+import { callBackPromptStore } from '../calls/call-back-prompt';
+import { callIdentityOf, rememberCallIdentity } from '../calls/call-notice';
 import { conversationStore } from '../conversation-store';
 import { inAppBannerStore, offerInAppBanner } from '../notifications/in-app-banner';
 import { conversationPreviewStore, openConversationPreview } from '../notifications/conversation-preview';
@@ -143,6 +145,47 @@ describe('la bannière d’A ne survit ni à sa déconnexion ni au compte de B',
     signIn(session, 'a');
 
     expect(inAppBannerStore.getState().current?.id).toBe('n-a');
+    unwatch();
+  });
+});
+
+describe('l’invite de rappel et les identités d’appel d’A ne passent pas à B (#18907)', () => {
+  const promptOfA = { conversationId: 'c-maman', media: 'video', title: 'Maman', avatar: null, isGroup: false } as const;
+
+  const appAsAWithCallBack = () => {
+    const { session, unwatch } = appAsA();
+    rememberCallIdentity('c-maman', { title: 'Maman', avatar: 'https://cdn/maman.png', isGroup: false });
+    callBackPromptStore.setState({ request: promptOfA });
+    return { session, unwatch };
+  };
+
+  test('A → déconnecté : l’invite « Rappeler Maman » se retire et le nom vu par A est oublié', () => {
+    const { session, unwatch } = appAsAWithCallBack();
+
+    session.getState().clearSession();
+
+    expect(callBackPromptStore.getState().request).toBeNull();
+    expect(callIdentityOf('c-maman').title).toBe('');
+    unwatch();
+  });
+
+  test('A → B : l’invite ne compose jamais vers la conversation d’A avec la connexion de B', () => {
+    const { session, unwatch } = appAsAWithCallBack();
+
+    signIn(session, 'b');
+
+    expect(callBackPromptStore.getState().request).toBeNull();
+    expect(callIdentityOf('c-maman').title).toBe('');
+    unwatch();
+  });
+
+  test('même compte, jeton renouvelé ⇒ l’invite reste', () => {
+    const { session, unwatch } = appAsAWithCallBack();
+
+    signIn(session, 'a');
+
+    expect(callBackPromptStore.getState().request).toEqual(promptOfA);
+    callBackPromptStore.setState({ request: null });
     unwatch();
   });
 });
