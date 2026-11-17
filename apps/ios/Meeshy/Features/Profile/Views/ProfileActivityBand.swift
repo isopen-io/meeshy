@@ -15,6 +15,8 @@ import MeeshyUI
 struct ProfileActivityBand: View {
 
     let stats: UserStats?
+    /// Vrai tant que ni le cache ni le serveur n'ont répondu : sur un cache vide, le kit dessine son squelette.
+    var isLoading: Bool = false
     let accentHex: String
     let onOpen: () -> Void
 
@@ -23,7 +25,8 @@ struct ProfileActivityBand: View {
             HapticFeedback.light()
             onOpen()
         } label: {
-            MeeshyFigureBand(items: Self.figures(of: stats), size: .compact, emptyLabel: Self.emptyLabel)
+            MeeshyFigureBand(items: Self.figures(of: stats, isLoading: isLoading), size: .compact,
+                             isLoading: isLoading, emptyLabel: Self.emptyLabel)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, MeeshySpacing.lg)
                 .padding(.horizontal, MeeshySpacing.md)
@@ -32,7 +35,7 @@ struct ProfileActivityBand: View {
         }
         .buttonStyle(PressableButtonStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.accessibilityLabel(stats: stats))
+        .accessibilityLabel(Self.accessibilityLabel(stats: stats, isLoading: isLoading))
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("profile.activity")
     }
@@ -48,20 +51,29 @@ struct ProfileActivityBand: View {
         String(localized: "profile.activity.empty", defaultValue: "Aucune donnée", bundle: .main)
     }
 
-    /// Avant la réponse du serveur, la bande dit zéro : elle ne garde ni n'estime rien.
+    /// Ce que le lecteur d'écran dit pendant le squelette.
+    static var loadingLabel: String {
+        String(localized: "profile.activity.loading", defaultValue: "Chargement", bundle: .main)
+    }
+
+    /// Sans cache ni réponse, et le chargement fini (échec), la bande dit zéro : elle ne garde ni n'estime rien.
     static func values(of stats: UserStats?) -> [UserActivityCards.Card] {
         UserActivityCards.make(stats: stats)
     }
 
     /// Les chiffres de la bande, déjà écrits par la langue courante (« 12 480 »), chacun sous son nom.
-    static func figures(of stats: UserStats?, locale: Locale = .current) -> [MeeshyFigureItem] {
-        values(of: stats).map { card in
-            MeeshyFigureItem(value: card.value.formatted(.number.locale(locale)), unit: card.label)
+    /// Sur un cache vide pendant le chargement, aucune valeur : le squelette du kit, jamais un zéro inventé.
+    static func figures(of stats: UserStats?, isLoading: Bool = false,
+                        locale: Locale = .current) -> [MeeshyFigureItem] {
+        let showsSkeleton = isLoading && stats == nil
+        return values(of: stats).map { card in
+            MeeshyFigureItem(value: showsSkeleton ? nil : card.value.formatted(.number.locale(locale)), unit: card.label)
         }
     }
 
     /// Le titre de la section, puis chaque valeur avec son nom : « MON ACTIVITÉ: 12 Messages, 3 Conversations, … ».
-    static func accessibilityLabel(stats: UserStats?) -> String {
+    static func accessibilityLabel(stats: UserStats?, isLoading: Bool = false) -> String {
+        if isLoading && stats == nil { return "\(title): \(loadingLabel)" }
         let pairs = values(of: stats).map { "\($0.value) \($0.label)" }.joined(separator: ", ")
         return "\(title): \(pairs)"
     }

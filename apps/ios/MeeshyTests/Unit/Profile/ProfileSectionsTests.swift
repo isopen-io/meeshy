@@ -97,6 +97,24 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertEqual(ProfileActivityBand.values(of: nil).map(\.value), [0, 0, 0])
     }
 
+    func test_activityFigures_whileLoadingAnEmptyCache_haveNoValue_soTheKitDrawsItsSkeleton() {
+        let figures = ProfileActivityBand.figures(of: nil, isLoading: true)
+        XCTAssertEqual(figures.map(\.value), [nil, nil, nil], "jamais un zéro inventé pendant le chargement")
+        XCTAssertEqual(figures.map(\.unit), UserActivityCards.make(stats: nil).map(\.label))
+    }
+
+    func test_activityFigures_whileLoadingWithACachedValue_showTheCache() {
+        let stats = UserStats(totalMessages: 12, totalConversations: 3, totalTranslations: 40)
+        let figures = ProfileActivityBand.figures(of: stats, isLoading: true, locale: Locale(identifier: "en_US"))
+        XCTAssertEqual(figures.map(\.value), ["12", "3", "40"], "le cache se peint, le squelette cède")
+    }
+
+    func test_activityAccessibilityLabel_whileLoading_saysItLoads_andNoZero() {
+        let label = ProfileActivityBand.accessibilityLabel(stats: nil, isLoading: true)
+        XCTAssertEqual(label, "\(ProfileActivityBand.title): \(ProfileActivityBand.loadingLabel)")
+        XCTAssertFalse(label.contains("0"), label)
+    }
+
     func test_activityValues_withServedStats_areTheCardsOfMyActivity() {
         let stats = UserStats(totalMessages: 12, totalConversations: 3, totalTranslations: 40)
 
@@ -306,6 +324,29 @@ final class ProfileSectionsTests: XCTestCase {
         let tiles = ProfilePublicationTiles.items(posts: [], isLoading: true)
         XCTAssertEqual(tiles.map(\.kind), [.skeleton, .skeleton, .skeleton])
         XCTAssertTrue(ProfilePublicationTiles.items(posts: [], isLoading: false).isEmpty, "rien de publié : la section se tait")
+    }
+
+    func test_publicationsState_whenTheFirstLoadFailsOnAnEmptyCache_offersToRetry_insteadOfFallingSilent() {
+        let state = ProfilePublicationTiles.state(posts: [], isLoading: false, pagination: .error("x"))
+        XCTAssertEqual(state, .failed, "une erreur a toujours une sortie : Réessayer")
+    }
+
+    func test_publicationsState_whileRetrying_showsTheSkeletons_andAServedListIsNeverHiddenByAnError() {
+        let retrying = ProfilePublicationTiles.state(posts: [], isLoading: true, pagination: .error("x"))
+        XCTAssertEqual(retrying, .tiles(ProfilePublicationTiles.items(posts: [], isLoading: true)))
+        let post = FeedPost(id: "p1", author: "Aïcha", content: "Bonjour")
+        let served = ProfilePublicationTiles.state(posts: [post], isLoading: false, pagination: .error("x"))
+        XCTAssertEqual(served, .tiles(ProfilePublicationTiles.items(posts: [post], isLoading: false)),
+                       "une page suivante en échec ne retire pas ce qui est déjà affiché")
+        let nothing = ProfilePublicationTiles.state(posts: [], isLoading: false, pagination: .exhausted)
+        XCTAssertEqual(nothing, .silent, "rien de publié : la section se tait")
+    }
+
+    func test_publicationsSection_onFailure_isTheStateBlockOfTheKit_withRetry() throws {
+        let section = try code("Meeshy/Features/Profile/Faces/ProfilePublicationsSection.swift")
+        XCTAssertTrue(section.contains("MeeshyStateBlock(kind: .error"), "l'erreur est le bloc d'état K38")
+        XCTAssertTrue(section.contains("await viewModel.loadInitial()"))
+        XCTAssertTrue(section.contains("ProfilePublicationsCopy.retry"))
     }
 
     func test_publicationTiles_showMyThreeLatest_aPictureTile_orATextTile() {

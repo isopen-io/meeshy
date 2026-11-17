@@ -18,6 +18,15 @@ enum ProfilePublicationTiles {
         return posts.prefix(limit).map(item(for:))
     }
 
+    /// Ce que la section montre. Un premier chargement en échec sur un cache vide propose Réessayer au lieu de se
+    /// taire ; un rechargement en cours repasse aux squelettes ; une liste déjà servie ne cède jamais à une erreur.
+    static func state(posts: [FeedPost], isLoading: Bool, pagination: PaginationState) -> ProfilePublicationsState {
+        let tiles = items(posts: posts, isLoading: isLoading)
+        if !tiles.isEmpty { return .tiles(tiles) }
+        if case .error = pagination { return .failed }
+        return .silent
+    }
+
     static func item(for post: FeedPost) -> MeeshyMediaGridItem {
         let hasPicture = thumbnail(of: post) != nil
         let text = post.content.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -58,6 +67,13 @@ enum ProfilePublicationTiles {
     }
 }
 
+/// Les trois états de « Publications » sur la Vitrine.
+enum ProfilePublicationsState: Equatable {
+    case silent
+    case tiles([MeeshyMediaGridItem])
+    case failed
+}
+
 /// Les mots de « Publications ».
 nonisolated enum ProfilePublicationsCopy {
 
@@ -71,6 +87,14 @@ nonisolated enum ProfilePublicationsCopy {
 
     static var loading: String {
         String(localized: "profile.vitrine.posts.loading", defaultValue: "Chargement d'une publication", bundle: .main)
+    }
+
+    static var failed: String {
+        String(localized: "profile.vitrine.posts.failed", defaultValue: "Publications indisponibles", bundle: .main)
+    }
+
+    static var retry: String {
+        String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main)
     }
 
     static func kindName(of post: FeedPost) -> String {

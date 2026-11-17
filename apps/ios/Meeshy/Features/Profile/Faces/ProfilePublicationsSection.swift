@@ -5,7 +5,7 @@ import MeeshyUI
 /// « Publications » sur la Vitrine (planche `Main`) : mes trois dernières publications dans la grille du kit (K49), et
 /// « Tout voir » qui ouvre toute la liste. Les publications viennent du même modèle que la liste du profil (cache
 /// d'abord, puis le réseau) : trois squelettes seulement sur un cache vide, jamais un spinner ; rien de publié ⇒ la
-/// section se tait.
+/// section se tait ; un premier chargement en échec propose Réessayer.
 struct ProfilePublicationsSection: View {
     let userId: String
     let accentColor: String
@@ -21,17 +21,27 @@ struct ProfilePublicationsSection: View {
     }
 
     var body: some View {
-        let items = ProfilePublicationTiles.items(posts: viewModel.posts, isLoading: viewModel.isLoading)
+        let state = ProfilePublicationTiles.state(posts: viewModel.posts, isLoading: viewModel.isLoading,
+                                                  pagination: viewModel.paginationState)
         // Un ancrage réel, même sans tuile : `.task` ne part pas sur une vue vide, et c'est lui qui charge.
         ZStack(alignment: .top) {
             Color.clear.frame(height: 0).accessibilityHidden(true)
-            if !items.isEmpty {
+            switch state {
+            case .silent:
+                EmptyView()
+            case .tiles(let items):
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     header
                     MeeshyMediaGrid(label: ProfilePublicationsCopy.title, items: items, layout: .row, columns: 3,
                                     shape: .tall, tint: Color(hex: accentColor),
                                     onOpen: { id in open(id) },
                                     content: { item, size in thumbnail(of: item, size: size) })
+                }
+                .meeshyTransition(.opacity)
+            case .failed:
+                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                    header
+                    failure
                 }
                 .meeshyTransition(.opacity)
             }
@@ -54,6 +64,16 @@ struct ProfilePublicationsSection: View {
                     .accessibilityIdentifier("profile.posts.seeAll")
             }
         }
+    }
+
+    /// Le premier chargement a échoué sur un cache vide : le bloc d'état du kit (K38), avec Réessayer.
+    private var failure: some View {
+        MeeshyStateBlock(kind: .error, title: ProfilePublicationsCopy.failed,
+                         primary: MeeshyStateBlockAction(title: ProfilePublicationsCopy.retry,
+                                                         systemImage: "arrow.clockwise",
+                                                         perform: { Task { await viewModel.loadInitial() } }),
+                         art: .none, size: .compact, tint: Color(hex: accentColor))
+            .accessibilityIdentifier("profile.posts.failed")
     }
 
     @ViewBuilder

@@ -29,6 +29,8 @@ struct ProfileView: View {
     @State private var errorMessage: String?
     @State private var securityFocus: SettingsFocus?
     @State private var stats: UserStats?
+    /// Vrai jusqu'à la réponse du cache ou du serveur : la bande « Mon activité » montre son squelette sur un cache vide.
+    @State private var statsLoading = true
     @State private var showSystemLanguagePicker = false
     @State private var showRegionalLanguagePicker = false
     @State private var showCustomLanguagePicker = false
@@ -179,6 +181,7 @@ struct ProfileView: View {
             stats = fresh
             await bestEffort("profileView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([fresh], for: userId) }
         }
+        statsLoading = false
     }
 
     // MARK: - Header
@@ -553,7 +556,7 @@ struct ProfileView: View {
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             ProfileSectionHeader(icon: "chart.bar.fill", title: ProfileActivityBand.title, color: MeeshyColors.indigo300)
-            ProfileActivityBand(stats: stats, accentHex: accentColor, onOpen: openActivity)
+            ProfileActivityBand(stats: stats, isLoading: statsLoading, accentHex: accentColor, onOpen: openActivity)
             progressionEntry
             ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })
         }
