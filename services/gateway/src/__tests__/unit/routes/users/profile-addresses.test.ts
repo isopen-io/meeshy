@@ -20,6 +20,7 @@ const X = '65a0000000000000000000f9';
 let viewerId: string | null = OWNER;
 let viewerLevel: string = 'PUBLIC';
 let relationReads = 0;
+let ownerState: { isActive: boolean; deletedAt: Date | null; deactivatedAt: Date | null } | null = { isActive: true, deletedAt: null, deactivatedAt: null };
 
 jest.mock('../../../../routes/users/presence-gate', () => ({
   viewerFromRequest: () => null,
@@ -91,6 +92,7 @@ const adresse = (over: Partial<Row> = {}): Row => ({
 
 const prisma = () => ({
   user: {
+    findUnique: jest.fn<any>(async () => ownerState),
     findFirst: jest.fn<any>(async (a?: any) => (a?.where?.blockedUserIds ? null : {
       id: OWNER, username: 'aissa', firstName: 'A', lastName: 'N', displayName: 'Aissa', avatar: null, banner: null,
       bio: '', role: 'USER', isOnline: false, lastActiveAt: null, createdAt: new Date('2026-01-01T00:00:00Z'), voiceModel: null,
@@ -157,6 +159,7 @@ async function monter(): Promise<FastifyInstance> {
 
 beforeEach(() => {
   rows = []; clicks = []; created.length = 0; linkUpdates.length = 0; viewerId = OWNER; viewerLevel = 'PUBLIC'; relationReads = 0; tokenSeq = 0;
+  ownerState = { isActive: true, deletedAt: null, deactivatedAt: null };
   addressReads = 0; onCreate = null;
   links = { tokA: { createdBy: OWNER, isActive: true, totalClicks: 128, originalUrl: 'https://aissandiaye.studio/', addressId: A } };
 });
@@ -444,6 +447,18 @@ describe('la fiche sert chaque adresse au cercle choisi', () => {
     rows = [adresse({ id: 'pub' })];
     await fiche(await monter());
     expect(relationReads).toBe(0);
+  });
+
+  it.each([
+    ['désactivé', { isActive: true, deletedAt: null, deactivatedAt: new Date('2026-11-01') }],
+    ['inactif', { isActive: false, deletedAt: null, deactivatedAt: null }],
+    ['supprimé', { isActive: true, deletedAt: new Date('2026-11-01'), deactivatedAt: null }],
+  ])('propriétaire %s : aucune adresse servie, même publique (#19196)', async (_cas, state) => {
+    viewerId = OTHER;
+    ownerState = state;
+    rows = [adresse({ id: 'pub' })];
+    const data = await fiche(await monter());
+    expect('addresses' in data).toBe(false);
   });
 
   it('personne sans adresse : le champ est absent (ancien contrat intact)', async () => {
