@@ -7,7 +7,7 @@ import { createInvitationRateLimitConfig } from '../middleware/rate-limit';
 import { requireEmailVerification } from '../middleware/auth';
 import { generateUniqueAffiliateToken } from './affiliate';
 import { EngagementService } from '../services/engagement/EngagementService';
-import { isInvitationOptedOut } from '../services/referrals/emailInvitations';
+import { invitationOptOutUrl, isInvitationOptedOut } from '../services/referrals/emailInvitations';
 import { invitationMailerOf, invitationUrlOf, registerSentInvitationRoutes } from './invitations-sent';
 
 const sendEmailInvitationSchema = z.object({
@@ -95,6 +95,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
           senderName,
           senderAvatar: user.avatar,
           downloadUrl: invitationUrl,
+          optOutUrl: invitationOptOutUrl(email),
           language: recipientLanguage(user, 'fr'),
         });
         // `social.email_invite` (#8959) — seulement quand l'e-mail est PARTI :

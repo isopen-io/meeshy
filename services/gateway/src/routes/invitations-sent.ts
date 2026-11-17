@@ -3,8 +3,9 @@
  *
  * - `GET /invitations/email` — la liste de MES invitations, adresse masquée, état, relance.
  * - `POST /invitations/email/:id/resend` — une relance par 72 h, trois au plus.
- * - `POST /invitations/email/opt-out` — public : le porteur du lien d'une invitation refuse
- *   toute invitation future à cette adresse.
+ * - `POST /invitations/email/opt-out` — public : le porteur du lien « Ne plus recevoir
+ *   d'invitation » de l'e-mail (`{ address, key }`) refuse toute invitation future à cette
+ *   adresse. Le jeton d'inscription, que le parrain détient, n'y suffit pas.
  *
  * Les règles et l'accès aux tables vivent dans `services/referrals/emailInvitations.ts`.
  */
@@ -18,6 +19,7 @@ import { createInvitationRateLimitConfig, createRateLimitConfig } from '../middl
 import { requireEmailVerification } from '../middleware/auth';
 import {
   claimInvitationResend,
+  invitationOptOutUrl,
   listSentInvitations,
   optOutOfInvitations,
   type ResendRefusal,
@@ -28,6 +30,7 @@ type InvitationEmailData = {
   readonly senderName: string;
   readonly senderAvatar?: string | null;
   readonly downloadUrl: string;
+  readonly optOutUrl?: string;
   readonly language?: string;
 };
 
@@ -49,7 +52,7 @@ const listQuerySchema = z.object({
 
 const resendParamsSchema = z.object({ id: z.string().regex(/^[0-9a-f]{24}$/i) });
 
-const optOutBodySchema = z.object({ token: z.string().min(1).max(200) });
+const optOutBodySchema = z.object({ address: z.string().regex(/^[0-9a-f]{64}$/), key: z.string().regex(/^[0-9a-f]{64}$/) });
 
 const sentInvitationSchema = {
   type: 'object',
@@ -120,6 +123,7 @@ async function resendHandler(fastify: FastifyInstance, request: FastifyRequest, 
         senderName: sender.displayName ?? sender.username,
         senderAvatar: sender.avatar,
         downloadUrl: invitationUrlOf(claim.token),
+        optOutUrl: invitationOptOutUrl(claim.email),
         language: recipientLanguage(sender, 'fr'),
       });
     } catch (error) {
@@ -135,9 +139,9 @@ async function resendHandler(fastify: FastifyInstance, request: FastifyRequest, 
 
 async function optOutHandler(fastify: FastifyInstance, request: FastifyRequest, reply: FastifyReply) {
   const parsed = optOutBodySchema.safeParse(request.body);
-  if (!parsed.success) return sendError(reply, 400, 'Jeton invalide', { code: 'VALIDATION_ERROR' });
+  if (!parsed.success) return sendError(reply, 400, 'Lien invalide', { code: 'VALIDATION_ERROR' });
   try {
-    const optedOut = await optOutOfInvitations(fastify.prisma, parsed.data.token);
+    const optedOut = await optOutOfInvitations(fastify.prisma, parsed.data);
     if (!optedOut) return sendNotFound(reply, 'Invitation introuvable', { code: 'INVITATION_NOT_FOUND' });
     return sendSuccess(reply, { optedOut: true });
   } catch (error) {

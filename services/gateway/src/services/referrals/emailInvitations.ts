@@ -23,11 +23,15 @@
  * ## La désinscription
  *
  * Le serveur ne garde qu'une empreinte HMAC de l'adresse (secret `READER_KEY_HMAC_SECRET`,
- * domaine `invitation-opt-out:`), comme pour un non-inscrit du carnet d'adresses (#9225). Une
+ * domaine `invitation-opt-out:`), comme pour un non-inscrit du carnet d'adresses (#9225).
+ * Le lien de l'e-mail porte cette empreinte et sa CLÉ (domaine `invitation-opt-out-link:`),
+ * que seul l'e-mail transporte : jamais le jeton d'inscription, que le parrain détient
+ * (`invitationUrl`) — sans quoi il désinscrirait l'adresse pour tout le monde. Le lien ne
+ * dépend d'aucune ligne : il vaut encore après l'effacement du compte du parrain. Une
  * liste où l'on dit pourquoi une adresse est refusée apprendrait au parrain qui l'a refusé : la
  * liste ne dit que « pas de relance possible ».
  */
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   invitationResendWindow,
@@ -189,16 +193,26 @@ export async function claimInvitationResend(
 const isUniqueViolation = (error: unknown): boolean =>
   typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002';
 
-/** L'invité refuse toute nouvelle invitation. `false` si le jeton ne porte aucune invitation. */
-export async function optOutOfInvitations(prisma: PrismaClient, token: string): Promise<boolean> {
-  const affiliateToken = await prisma.affiliateToken.findUnique({
-    where: { token },
-    select: { emailInvitations: { select: { email: true }, take: 1 } },
-  });
-  const email = affiliateToken?.emailInvitations[0]?.email;
-  if (!email) return false;
+const OPT_OUT_HEX = /^[0-9a-f]{64}$/;
+
+export const invitationOptOutKey = (emailHash: string, secret: string = readerKeySecret()): string =>
+  createHmac('sha256', secret).update(`invitation-opt-out-link:${emailHash}`).digest('hex');
+
+/** Le lien « Ne plus recevoir d'invitation » de l'e-mail : l'empreinte et sa clé, jamais l'adresse. */
+export function invitationOptOutUrl(email: string): string {
+  const address = invitationOptOutHash(email);
+  const params = new URLSearchParams({ address, key: invitationOptOutKey(address) });
+  return `${process.env.FRONTEND_URL || 'http://localhost:3100'}/invitations/opt-out?${params.toString()}`;
+}
+
+const isOptOutKeyValid = (address: string, key: string): boolean =>
+  OPT_OUT_HEX.test(address) && OPT_OUT_HEX.test(key) && timingSafeEqual(Buffer.from(invitationOptOutKey(address), 'hex'), Buffer.from(key, 'hex'));
+
+/** L'invité refuse toute nouvelle invitation. `false` si la clé n'est pas celle de l'empreinte. */
+export async function optOutOfInvitations(prisma: PrismaClient, link: { readonly address: string; readonly key: string }): Promise<boolean> {
+  if (!isOptOutKeyValid(link.address, link.key)) return false;
   try {
-    await prisma.emailInvitationOptOut.create({ data: { emailHash: invitationOptOutHash(email) } });
+    await prisma.emailInvitationOptOut.create({ data: { emailHash: link.address } });
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
   }
