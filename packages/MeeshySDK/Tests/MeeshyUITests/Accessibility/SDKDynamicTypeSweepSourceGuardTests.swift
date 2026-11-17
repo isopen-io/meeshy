@@ -266,7 +266,6 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Primitives/ProfileCompletionRing.swift": 1,
         "Primitives/UserIdentityBar.swift": 1,
         "Profile/UserProfileSheet.swift": 1,
-        "Story/SlideMiniPreview.swift": 3,
         "Story/StickerPickerView+Emoji.swift": 1,
         "Story/StickerPickerView+Packs.swift": 1,
         "Story/StickerPickerView+Vertical.swift": 1,

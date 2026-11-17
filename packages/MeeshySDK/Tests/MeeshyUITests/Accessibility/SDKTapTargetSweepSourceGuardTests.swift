@@ -14,7 +14,6 @@ final class SDKTapTargetSweepSourceGuardTests: XCTestCase {
         "Media/MeeshyVideoPlayer+Controls.swift",
         "Conversation/ConversationSettingsView.swift",
         "Community/CommunityMembersScreen.swift",
-        "Story/DrawingEditFloatingBubbles.swift",
         "Media/MeeshyAudioEditorView.swift"
     ]
 

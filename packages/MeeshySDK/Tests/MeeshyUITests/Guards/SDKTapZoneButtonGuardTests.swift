@@ -17,9 +17,6 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
     private static let convertedSites: [(file: String, action: String)] = [
         ("Profile/UserProfileSheet+ConversationsTab.swift", "openSharedConversation(conv)"),
         ("Story/StoryTextEditTopBar.swift", "onFinish()"),
-        ("Story/DrawingEditFloatingBubbles.swift", "onSelectTool(tool)"),
-        ("Story/DrawingEditFloatingBubbles.swift", "action()"),
-        ("Story/DrawingEditFloatingBubbles.swift", "onDismiss()"),
         ("Community/CommunitySettingsScreen.swift", "viewModel.localColor = hex"),
         ("Community/CommunityListScreen.swift", "onTap()"),
         ("Community/CommunityDetailScreen.swift", "onSelectConversation?(conversation)"),

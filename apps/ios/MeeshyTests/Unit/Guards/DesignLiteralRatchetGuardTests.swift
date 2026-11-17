@@ -143,14 +143,11 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
             globs: [
                 "\(ui)/Story/Canvas/*",
                 "\(ui)/Story/StoryComposerSupportTypes.swift",
-                "\(ui)/Story/StoryTextEditorView.swift",
                 "\(ui)/Story/StoryTextEffectStyle.swift",
                 "\(ui)/Story/StoryBackgroundStyle.swift",
                 "\(ui)/Story/StoryFilterGridView.swift",
                 "\(ui)/Story/StorySlideRenderer.swift",
-                "\(ui)/Story/SlideMiniPreview.swift",
                 "\(ui)/Story/TextEditToolOptions*.swift",
-                "\(ui)/Story/TextStyleSpecimenBand.swift",
             ]
         ),
         Exemption(
@@ -158,8 +155,6 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
             globs: [
                 "\(ui)/Story/Drawing/*",
                 "\(ui)/Story/DrawingEditToolOptions.swift",
-                "\(ui)/Story/DrawingStrokeList.swift",
-                "\(ui)/Story/StoryDrawingToolbar.swift",
             ]
         ),
         Exemption(
@@ -306,7 +301,8 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
     /// Marges numériques hors cadre libre. **Ne doit que DESCENDRE.**
     /// `… | xargs grep -Po '\.padding\((\.[a-z]+,[ \t]*|\[[^\]\n]*\],[ \t]*)?[0-9]' | wc -l` → 190.
     /// 179 au 2026-11-17 (#18899) : la frise d'atelier du SDK sort, mesuré par la commande de référence.
-    private static let paddingCeiling = 179
+    /// 178 au 2026-11-17 (#18899) : les commandes et éditeurs de l'ancien atelier sortent, mesuré par la commande de référence.
+    private static let paddingCeiling = 178
 
     private static func ceiling(_ population: Population) -> Int {
         switch population {
