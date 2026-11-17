@@ -118,7 +118,6 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             // a quitté `ReelsPlayerView.swift` pour `ReelPageChrome.swift`.
             "Features/Main/Views/ReelPageChrome.swift",
             "Features/Main/Components/ConversationDashboardView.swift",
-            "Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",
         ]
         for host in hosts {
             let url = appRoot.appendingPathComponent(host)
@@ -238,11 +237,6 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             // vue a quitté le dépôt, le viseur du composeur la porte.
             "Features/Composer/ComposerSceneCameraBar.swift",
             "Features/Main/Components/MediaKindLabel.swift",
-            // #7005 — la minuterie de l'aperçu d'appui long a DÉMÉNAGÉ, elle
-            // n'a pas disparu : `OverlayAudioPlayer` a quitté
-            // `MessageOverlayMenu.swift` (hôte hors budget) pour son propre
-            // fichier. La liste SUIT l'hôte, comme au 248i.
-            "Features/Main/Components/OverlayAudioPlayer.swift",
             // La durée de la vidéo récente a suivi la cellule hors de `RecentMediaStrip`.
             "Features/Main/Components/RecentMediaCell.swift",
             "Features/Main/Components/UniversalComposerBar+Recording.swift",

@@ -582,7 +582,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/AttachmentLoadingTile.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Components/MessageActionsMenu.swift",  // 13
         "apps/ios/Meeshy/Features/Main/Components/MessageOverlayMenu.swift",  // 2
-        "apps/ios/Meeshy/Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+MessageRow.swift",  // 13
         "apps/ios/Meeshy/Features/Links/Views/AffiliateCreateView.swift",  // 12
         "apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift",  // 12
