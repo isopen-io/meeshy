@@ -242,7 +242,7 @@ struct ComposerSceneCameraBar: View {
         }
     }
 
-    private static let barSpace = "composer.camera.bar"
+    nonisolated private static let barSpace = "composer.camera.bar"
 
     /// **Le flash.** Le toucher change son mode ; allumé, l'éclair joue DANS
     /// l'icône (#17463) et, caméra avant, la jauge paraît SOUS lui pour 2 s (#9566, #9753).
