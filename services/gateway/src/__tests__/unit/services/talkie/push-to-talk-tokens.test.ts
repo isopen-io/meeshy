@@ -17,12 +17,18 @@ type Session = { id: string; userId: string; sessionToken: string; isValid: bool
 
 function store(tokens: Token[], sessions: Session[]) {
   let rows = [...tokens];
-  const matches = (t: Token, where: Record<string, any>) =>
-    (where.userId === undefined || (typeof where.userId === 'string' ? t.userId === where.userId : where.userId.in.includes(t.userId)))
+  const sessionMatches = (actual: string | null, condition: any): boolean =>
+    condition === null ? actual === null
+      : typeof condition === 'string' ? actual === condition
+      : condition.isSet === false ? false
+      : condition.in.includes(actual);
+  const matches = (t: Token, where: Record<string, any>): boolean =>
+    (where.OR === undefined || where.OR.some((branch: Record<string, any>) => matches(t, branch)))
+    && (where.userId === undefined || (typeof where.userId === 'string' ? t.userId === where.userId : where.userId.in.includes(t.userId)))
     && (where.type === undefined || (typeof where.type === 'string' ? t.type === where.type : where.type.in ? where.type.in.includes(t.type) : t.type !== where.type.not))
     && (where.isActive === undefined || t.isActive === where.isActive)
-    && (where.id === undefined || where.id.in.includes(t.id))
-    && (where.sessionId === undefined || (typeof where.sessionId === 'string' ? t.sessionId === where.sessionId : where.sessionId.in.includes(t.sessionId)));
+    && (where.id === undefined || (typeof where.id === 'string' ? t.id === where.id : where.id.in.includes(t.id)))
+    && (where.sessionId === undefined || sessionMatches(t.sessionId, where.sessionId));
   return {
     get rows() { return rows; },
     prisma: {

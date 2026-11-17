@@ -21,7 +21,7 @@
  * Un PushToTalk se SUPPRIME (c'est un jeton de réveil sans autre usage) ; les autres types sont
  * DÉSACTIVÉS (`isActive: false`) : le client les réinscrit à chaque lancement, ce qui les réactive.
  */
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import type { SessionEndScope } from './e2ee/device-retirement';
 
 export type PushTokenSessionPrisma = Pick<PrismaClient, 'pushToken' | 'userSession'>;
@@ -47,13 +47,24 @@ async function hasLiveSession(prisma: PushTokenSessionPrisma, userId: string, no
   return live.length > 0;
 }
 
-/** Retire les lignes : PushToTalk supprimé, autres types désactivés. */
-async function retireRows(prisma: PushTokenSessionPrisma, userId: string, rows: readonly Pick<TokenRow, 'id' | 'type'>[]): Promise<number> {
-  const ptt = rows.filter((row) => row.type === PTT).map((row) => row.id);
-  const others = rows.filter((row) => row.type !== PTT).map((row) => row.id);
+type RetiredRow = Pick<TokenRow, 'id' | 'type' | 'sessionId'>;
+
+const UNBOUND: Prisma.PushTokenWhereInput[] = [{ sessionId: null }, { sessionId: { isSet: false } }];
+
+/**
+ * Compare-and-set sur le lien lu : un appareil qui se reconnecte ENTRE la lecture et l'écriture réinscrit son
+ * jeton sous sa nouvelle session (`routes/push-tokens`) ; la ligne a changé de `sessionId` et n'est plus visée.
+ */
+const asRead = (rows: readonly RetiredRow[]): Prisma.PushTokenWhereInput[] =>
+  rows.map((row) => (row.sessionId ? { id: row.id, sessionId: row.sessionId } : { id: row.id, OR: UNBOUND }));
+
+/** Retire les lignes, telles qu'elles ont été lues : PushToTalk supprimé, autres types désactivés. */
+async function retireRows(prisma: PushTokenSessionPrisma, userId: string, rows: readonly RetiredRow[]): Promise<number> {
+  const ptt = rows.filter((row) => row.type === PTT);
+  const others = rows.filter((row) => row.type !== PTT);
   const [deleted, deactivated] = await Promise.all([
-    ptt.length === 0 ? { count: 0 } : prisma.pushToken.deleteMany({ where: { id: { in: ptt }, userId, type: PTT } }),
-    others.length === 0 ? { count: 0 } : prisma.pushToken.updateMany({ where: { id: { in: others }, userId, type: { not: PTT }, isActive: true }, data: { isActive: false } }),
+    ptt.length === 0 ? { count: 0 } : prisma.pushToken.deleteMany({ where: { userId, type: PTT, OR: asRead(ptt) } }),
+    others.length === 0 ? { count: 0 } : prisma.pushToken.updateMany({ where: { userId, type: { not: PTT }, isActive: true, OR: asRead(others) }, data: { isActive: false } }),
   ]);
   return deleted.count + deactivated.count;
 }
