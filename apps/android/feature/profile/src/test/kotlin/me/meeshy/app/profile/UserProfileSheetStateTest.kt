@@ -60,31 +60,31 @@ class UserProfileSheetStateTest {
     }
 
     @Test
-    fun `un refus type se dit sans reessayer`() {
+    fun `un refus type se dit sans reessayer et se confond avec un profil introuvable`() {
         val load = after(
             ProfileLoadEvent.CacheRead(profile = null, stats = null),
             ProfileLoadEvent.ProfileFailed(ProfileFailure.Forbidden),
         )
-        assertThat(shown(load).content).isEqualTo(ProfileSheetContent.Refused)
+        assertThat(shown(load).content).isEqualTo(ProfileSheetContent.Nobody)
         assertThat(shown(load).canRetry).isFalse()
     }
 
     @Test
-    fun `bloque par la cible en 403 la feuille se ferme`() {
+    fun `bloque par la cible en 403 la feuille dit Personne ici sans se fermer ni dire le blocage`() {
         val load = after(
             ProfileLoadEvent.CacheRead(profile = null, stats = null),
             ProfileLoadEvent.ProfileFailed(ProfileFailure.Http(403)),
         )
-        assertThat(shown(load).content).isEqualTo(ProfileSheetContent.Close)
+        assertThat(shown(load).content).isEqualTo(ProfileSheetContent.Nobody)
     }
 
     @Test
-    fun `un 404 sur fiche deja peinte ferme la feuille`() {
+    fun `un 404 sur fiche deja peinte dit Personne ici au lieu de garder la fiche`() {
         val load = after(
             ProfileLoadEvent.CacheRead(profile = bob, stats = null),
             ProfileLoadEvent.ProfileFailed(ProfileFailure.Http(404)),
         )
-        assertThat(shown(load).content).isEqualTo(ProfileSheetContent.Close)
+        assertThat(shown(load).content).isEqualTo(ProfileSheetContent.Nobody)
     }
 
     @Test
@@ -94,5 +94,35 @@ class UserProfileSheetStateTest {
             ProfileLoadEvent.ProfileFailed(ProfileFailure.Http(404)),
         )
         assertThat(shown(load).content).isEqualTo(ProfileSheetContent.Failed)
+    }
+
+    @Test
+    fun `hors ligne sur une fiche peinte la capsule de cache est montree`() {
+        val load = after(ProfileLoadEvent.CacheRead(profile = bob, stats = null))
+        assertThat(shown(load).copy(isOffline = true).showsOfflineCapsule).isTrue()
+    }
+
+    @Test
+    fun `hors ligne sans fiche peinte le bloc d'etat parle et pas la capsule`() {
+        val load = after(
+            ProfileLoadEvent.CacheRead(profile = null, stats = null),
+            ProfileLoadEvent.ProfileFailed(ProfileFailure.Other),
+        )
+        assertThat(shown(load).copy(isOffline = true).showsOfflineCapsule).isFalse()
+    }
+
+    @Test
+    fun `en ligne la capsule de cache n'est jamais montree`() {
+        val load = after(ProfileLoadEvent.CacheRead(profile = bob, stats = null))
+        assertThat(shown(load).showsOfflineCapsule).isFalse()
+    }
+
+    @Test
+    fun `une fiche bloquee par la cible ne montre pas la capsule hors ligne`() {
+        val load = after(
+            ProfileLoadEvent.CacheRead(profile = bob, stats = null),
+            ProfileLoadEvent.ProfileFailed(ProfileFailure.Http(404)),
+        )
+        assertThat(shown(load).copy(isOffline = true).showsOfflineCapsule).isFalse()
     }
 }

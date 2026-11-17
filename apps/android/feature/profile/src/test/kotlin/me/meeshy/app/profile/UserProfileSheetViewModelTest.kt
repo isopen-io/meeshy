@@ -46,11 +46,15 @@ class UserProfileSheetViewModelTest {
         return session
     }
 
-    private fun viewModel(vararg states: ProfileLoadState, me: MeeshyUser? = null): UserProfileSheetViewModel {
+    private fun viewModel(
+        vararg states: ProfileLoadState,
+        me: MeeshyUser? = null,
+        network: me.meeshy.sdk.network.NetworkMonitor = me.meeshy.sdk.network.InMemoryNetworkMonitor(),
+    ): UserProfileSheetViewModel {
         every { loader.open(any(), any(), any()) } returns flowOf(*states)
         val socket = mockk<MessageSocketManager>()
         every { socket.userUpdated } returns updates
-        return UserProfileSheetViewModel(loader, cache, socket, session(me))
+        return UserProfileSheetViewModel(loader, cache, socket, session(me), network)
     }
 
     @Test
@@ -151,5 +155,19 @@ class UserProfileSheetViewModelTest {
         vm.onEvent(UserProfileSheetEvent.Open(ProfileSheetUser(userId = "64b7f0a1c2d3e4f5a6b7c8ee", username = "eve")))
         assertThat(vm.state.value.profile).isNull()
         assertThat(vm.state.value.content).isEqualTo(ProfileSheetContent.Skeleton)
+    }
+
+    @Test
+    fun `la fiche sait que l'appareil est hors ligne et le suit au retour du reseau`() = runTest(dispatcher) {
+        val network = me.meeshy.sdk.network.InMemoryNetworkMonitor(initialOnline = false)
+        val vm = viewModel(ProfileLoadState(profile = bob), network = network)
+        vm.onEvent(UserProfileSheetEvent.Open(ProfileSheetUser(userId = bob.id, username = "bob")))
+        advanceUntilIdle()
+        assertThat(vm.state.value.isOffline).isTrue()
+        assertThat(vm.state.value.showsOfflineCapsule).isTrue()
+        network.simulateOnline()
+        advanceUntilIdle()
+        assertThat(vm.state.value.isOffline).isFalse()
+        assertThat(vm.state.value.showsOfflineCapsule).isFalse()
     }
 }
