@@ -5,7 +5,6 @@
     <string name="reels_action_send">Envoyer</string>
     <string name="reels_author_profile">Profil de l\'auteur</string>
     <string name="reels_caption_translated">Traduction disponible</string>
-    <string name="reels_close">Fermer</string>
     <plurals name="reels_comments_count">
         <item quantity="one">%1$d commentaire</item>
         <item quantity="many">%1$d commentaires</item>
@@ -33,7 +32,6 @@
     <string name="reels_report_reason_spam">Spam</string>
     <string name="reels_report_reason_violence">Violence</string>
     <string name="reels_scrub">Avancer ou reculer</string>
-    <string name="reels_share">Partager</string>
     <string name="reels_toast_delete_failed">Erreur lors de la suppression</string>
     <string name="reels_toast_deleted">Publication supprimée</string>
     <string name="reels_toast_pin_failed">Erreur lors de l\'épinglage</string>

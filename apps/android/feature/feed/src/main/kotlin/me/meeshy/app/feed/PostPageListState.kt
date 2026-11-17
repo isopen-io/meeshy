@@ -103,7 +103,7 @@ data class PostPageListState(
         )
     }
 
-    /** Un commentaire envoyé depuis la feuille : le compteur de [postId] le suit (iOS `CommentsTitleCount.afterSend`). */
+    /** Un commentaire envoyé depuis la feuille : le compteur de [postId] le suit (comme sur iOS). */
     fun commented(postId: String): PostPageListState {
         if (posts.none { it.id == postId }) return this
         return copy(

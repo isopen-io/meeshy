@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { CALL_ANSWER_PARAM } from '@/lib/calls/call-answer-intent';
+import { CALL_ANSWER_PARAM, ANSWER_INTENT_TTL_MS } from '@/lib/calls/call-answer-intent';
+import { CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, consumeCallAnswerConfirmation } from '@/lib/calls/call-answer-confirmation';
 
 import type { DeliveryReceiptCredential } from './delivery-receipt-credential';
 import { mount, push, windowClient } from '@/test-support/sw-push-harness';
@@ -105,6 +106,38 @@ describe('les actions de la notification d’appel', () => {
     await worker.dispatch('notificationclick', click({ type: 'call', callId: 'call-1', conversationId: 'conv-1' }, 'answer'));
     /* Composé avec la constante de la PAGE : le jumeau du worker qui dériverait rougit ici. */
     expect(worker.opened).toEqual([`/c/conv-1?${CALL_ANSWER_PARAM}=call-1`]);
+  });
+
+  test('Répondre, aucun onglet ouvert : le worker pose la confirmation que SEULE la page lira, avant d’ouvrir l’onglet (#18907)', async () => {
+    const worker = mount();
+    const before = Date.now();
+    await worker.dispatch('notificationclick', click({ type: 'call', callId: 'call-1', conversationId: 'conv-1' }, 'answer'));
+    const posted = worker.idb.peek(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, 'call-1') as { callId: string; until: number };
+    expect(posted.callId).toBe('call-1');
+    expect(posted.until).toBeGreaterThanOrEqual(before + ANSWER_INTENT_TTL_MS);
+    expect(posted.until).toBeLessThanOrEqual(Date.now() + ANSWER_INTENT_TTL_MS);
+    /* La moitié « page » lit CE QUE le worker a écrit : le jumeau qui dériverait rougit ici. */
+    expect(await consumeCallAnswerConfirmation({ callId: 'call-1', now: Date.now(), indexedDB: worker.idb as unknown as IDBFactory })).toBe(true);
+  });
+
+  test('Répondre, aucun onglet ouvert : une IndexedDB qui tarde ne retient pas l’ouverture de l’onglet au-delà de la fenêtre du clic (#18907)', async () => {
+    const worker = mount({ indexedDBStalls: true });
+    void worker.dispatch('notificationclick', click({ type: 'call', callId: 'call-1', conversationId: 'conv-1' }, 'answer'));
+    /* Firefox n'autorise `openWindow` qu'environ une seconde après le clic : la confirmation ne doit jamais coûter l'onglet. */
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(worker.opened).toEqual([`/c/conv-1?${CALL_ANSWER_PARAM}=call-1`]);
+  });
+
+  test('Répondre, onglet déjà ouvert : rien n’est posé, le message du worker suffit', async () => {
+    const worker = mount({ clients: [windowClient('hidden')] });
+    await worker.dispatch('notificationclick', click({ type: 'call', callId: 'call-1', conversationId: 'conv-1' }, 'answer'));
+    expect(worker.idb.peek(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, 'call-1')).toBeUndefined();
+  });
+
+  test('le corps de la notification, onglet fermé, ne pose aucune confirmation de décrochage', async () => {
+    const worker = mount();
+    await worker.dispatch('notificationclick', click({ type: 'call', callId: 'call-1', conversationId: 'conv-1' }, ''));
+    expect(worker.idb.peek(CALL_INTENT_DB_NAME, CALL_INTENT_STORE_NAME, 'call-1')).toBeUndefined();
   });
 
   test('Répondre, onglet déjà ouvert : il est focalisé et reçoit l’appel à décrocher', async () => {

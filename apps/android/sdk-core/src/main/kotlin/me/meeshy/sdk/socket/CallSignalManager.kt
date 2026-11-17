@@ -2,9 +2,6 @@ package me.meeshy.sdk.socket
 
 import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -151,14 +148,6 @@ class CallSignalManager internal constructor(
      */
     private val _participantArrivals = SocketInboundRoute.subject<CallParticipantArrival>()
     val participantArrivals: SharedFlow<CallParticipantArrival> = _participantArrivals.exposed()
-
-    private val _lastParticipantArrival = MutableStateFlow<CallParticipantArrival?>(null)
-
-    /**
-     * Le dernier participant arrivé, mémorisé pour les abonnés tardifs (iOS `lastParticipantJoined`) : un écran qui
-     * s'abonne après la trame le lit ici ; [participantArrivals] reste chaud, sans rejeu. Le consommateur filtre par `callId`.
-     */
-    val lastParticipantArrival: StateFlow<CallParticipantArrival?> = _lastParticipantArrival.asStateFlow()
 
     /** La requête accessoire récente à laquelle ce `call:error` répond (fenêtre de [CallAccessoryRequestLedger]), sinon `false`. */
     fun accessoryRequestAnswered(error: CallErrorSignal): Boolean =
@@ -514,10 +503,7 @@ class CallSignalManager internal constructor(
             CallSignalMapper.iceServersRefreshed(raw)?.let(_iceServersRefreshed::emitArrived)
         }
         if (event == PARTICIPANT_JOINED_EVENT) {
-            CallSignalMapper.participantArrival(raw)?.let { arrival ->
-                _lastParticipantArrival.value = arrival
-                _participantArrivals.emitArrived(arrival)
-            }
+            CallSignalMapper.participantArrival(raw)?.let(_participantArrivals::emitArrived)
         }
         if (event == PARTICIPANT_LEFT_EVENT) {
             CallSignalMapper.participantLeft(raw)?.let(_participantLeft::emitArrived)

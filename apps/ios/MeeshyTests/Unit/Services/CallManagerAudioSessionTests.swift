@@ -931,8 +931,8 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
         // offer description. Without it, the polite peer can't detect offer glare.
         let source = try p2pClientSource()
         XCTAssertTrue(
-            source.contains("private var makingOffer"),
-            "P2PWebRTCClient must declare `private var makingOffer` for §3.4 perfect negotiation"
+            source.contains("var makingOffer"),
+            "P2PWebRTCClient must declare `var makingOffer` for §3.4 perfect negotiation"
         )
     }
 
@@ -940,8 +940,8 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
         // §3.4: `ignoreOffer` signals the impolite peer to discard a colliding remote offer.
         let source = try p2pClientSource()
         XCTAssertTrue(
-            source.contains("private var ignoreOffer"),
-            "P2PWebRTCClient must declare `private var ignoreOffer` for §3.4 glare detection"
+            source.contains("var ignoreOffer"),
+            "P2PWebRTCClient must declare `var ignoreOffer` for §3.4 glare detection"
         )
     }
 
@@ -950,8 +950,8 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
         // answer-application as offer-ready, avoiding a spurious second rollback.
         let source = try p2pClientSource()
         XCTAssertTrue(
-            source.contains("private var isSettingRemoteAnswerPending"),
-            "P2PWebRTCClient must declare `private var isSettingRemoteAnswerPending` for §3.4"
+            source.contains("var isSettingRemoteAnswerPending"),
+            "P2PWebRTCClient must declare `var isSettingRemoteAnswerPending` for §3.4"
         )
     }
 
@@ -1074,8 +1074,8 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
         let source = try p2pClientSource()
 
         XCTAssertTrue(
-            source.contains("private var toggleVideoTask: Task<Void, Never>?"),
-            "P2PWebRTCClient must declare `private var toggleVideoTask` to track the in-flight capturer task"
+            source.contains("var toggleVideoTask: Task<Void, Never>?"),
+            "P2PWebRTCClient must declare `var toggleVideoTask` to track the in-flight capturer task"
         )
         XCTAssertTrue(
             source.contains("toggleVideoTask?.cancel()"),
@@ -1097,7 +1097,7 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
         // capturer running with `videoCapturer == nil` — there is no path that will
         // ever stop the LED. The pattern mirrors `buildLocalVideoTrackAndStartCapture`
         // which already has the generation check.
-        let source = try p2pClientSource()
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+MediaControls.swift")
 
         guard let fnBody = DeclarationBodyScanner.body(containing: "private func restartCapturerIfStopped()", in: source) else {
             XCTFail("restartCapturerIfStopped not found in P2PWebRTCClient.swift"); return
@@ -1120,7 +1120,7 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
         // generation check the camera restarts after teardown (LED stays on, no
         // shutdown path). The guard matches buildLocalVideoTrackAndStartCapture
         // and restartCapturerIfStopped.
-        let source = try p2pClientSource()
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+MediaControls.swift")
 
         // Corps équilibré, pas une fenêtre de 1 500 caractères : la fonction a
         // grossi et la vérification post-`startCapture` en est sortie, faisant
@@ -1144,7 +1144,7 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
         // as switchCamera(). A disconnect() in the async window leaves the capturer
         // restarted on a different device after teardown — the session-generation
         // token detects this and stops the orphan via the local reference.
-        let source = try p2pClientSource()
+        let source = try AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+MediaControls.swift")
 
         guard let fnRange = source.range(of: "func switchToCamera(uniqueID: String) async throws {") else {
             XCTFail("switchToCamera(uniqueID:) not found in P2PWebRTCClient.swift"); return

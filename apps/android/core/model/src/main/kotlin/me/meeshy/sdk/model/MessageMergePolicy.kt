@@ -33,10 +33,14 @@ data class MessageMergeGuards(
     val pendingPin: Boolean = false,
 )
 
-/** Le message fusionné et le fait qu'il diffère de la copie locale : `false` ⇒ aucune écriture. */
+/**
+ * Le message fusionné et le fait qu'il diffère de la copie locale : `false` ⇒ aucune écriture. [disavowed] : la fusion a
+ * tenu à l'écart des réactions ou un épinglage que la charge servait ([MessageMergePolicy.mergeOverFlightWrite]).
+ */
 data class MessageMergeOutcome(
     val message: ApiMessage,
     val changed: Boolean,
+    val disavowed: Boolean = false,
 )
 
 /**
@@ -59,7 +63,8 @@ data class MessageMergeOutcome(
  *     ne survit pas à la page qui la sert (iso iOS `APIMessageUpsert+Merge`, #15897).
  *
  * Restent faisant autorité dans la charge servie, parce qu'ils se vident légitimement : le
- * résumé des réactions et l'épinglage (hors garde).
+ * résumé des réactions et l'épinglage (hors garde). La garde vaut aussi pour une ligne qu'une autre
+ * écriture a touchée pendant le vol d'une page ([mergeOverFlightWrite], #18915).
  */
 object MessageMergePolicy {
 
@@ -79,6 +84,22 @@ object MessageMergePolicy {
         next = next.copy(attachments = mergedAttachments(existing.attachments, incoming.attachments))
         next = ConversationEventDeltas.sealedIfOpened(next, openedHere = false)
         return MessageMergeOutcome(message = next, changed = next != existing)
+    }
+
+    /**
+     * #18915 — [merge] d'une page servie dans une ligne qu'une AUTRE écriture a touchée pendant le vol de cette page (une
+     * réaction, un épinglage arrivés par la socket) : la page a été bâtie avant, la ligne garde donc ses réactions et son
+     * épinglage, les deux champs que la charge servie a sinon autorité à vider. [MessageMergeOutcome.disavowed] dit si
+     * la page en servait d'autres : elle ne décrit alors plus la ligne, et son validateur ne doit pas la confirmer (un 304
+     * figerait pour de bon les valeurs gardées).
+     */
+    fun mergeOverFlightWrite(
+        existing: ApiMessage,
+        incoming: ApiMessage,
+        guards: MessageMergeGuards = MessageMergeGuards(),
+    ): MessageMergeOutcome {
+        val kept = merge(existing, incoming, guards.copy(pendingReaction = true, pendingPin = true))
+        return kept.copy(disavowed = kept.message != merge(existing, incoming, guards).message)
     }
 
     /**

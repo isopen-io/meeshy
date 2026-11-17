@@ -39,8 +39,6 @@ final class CoreModelsTests: XCTestCase {
         }
     }
 
-    // MARK: - MeeshyFeedItem
-
     // MARK: - ConversationType Enum
 
     func testConversationTypeAllCasesRawValues() {

@@ -1,6 +1,6 @@
 import Foundation
 
-// Extrait de `CoreModels.swift` (hors budget de taille — un fichier hors
+// Extrait de l'ancien fichier de modèles du SDK (hors budget de taille — un fichier hors
 // budget est interdit d'ajout). La citation porte les FAITS du média cité :
 // on extrait d'abord, on ajoute ensuite.
 

@@ -23,7 +23,7 @@
     "motion-raw-animation": 317,
     "motion-raw-animation-root": 4,
     "motion-reduced-raw-with-animation": 14,
-    "narrative-comment": 1078,
+    "narrative-comment": 1077,
     "nonisolated-unsafe": 56,
     "nse-full-sdk-import": 2,
     "nslock": 14,
@@ -36,12 +36,12 @@
     "sink-task": 33,
     "sleep-nanoseconds": 0,
     "status-bar-hidden": 0,
-    "task-detached": 104,
+    "task-detached": 99,
     "try-sleep": 6,
     "uiscreen-main": 1,
     "unchecked-sendable": 112,
     "unchecked-sendable-total": 205,
-    "viewmodel-shared": 548
+    "viewmodel-shared": 543
   },
   "version": 1
 }

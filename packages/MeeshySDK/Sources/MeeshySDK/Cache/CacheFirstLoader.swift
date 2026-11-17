@@ -59,7 +59,7 @@ public final class CacheFirstLoader<Store: MutableCacheStore>: @unchecked Sendab
     /// `-O -whole-module-optimization`. The class is generic
     /// (`<Store: MutableCacheStore>`) and held with `@unchecked Sendable`,
     /// the exact shape that has tripped the inliner elsewhere
-    /// (`WeakBox<T>`, `FABPanGestureWrapper<Content>.Coordinator`).
+    /// (`WeakBox<T>`, a former generic gesture wrapper's `Coordinator`).
     deinit {}
 
     /// Cache-first load. Returns the in-flight revalidation `Task` for the

@@ -51,8 +51,9 @@ import '@/styles/conversation-peek.css';
  * LA PEAU DU FIL (#12633) : la carte pose ce que le fil pose sur sa racine
  * (`routes/thread.tsx`) — l'accent, la couleur PERSONNELLE des bulles envoyées
  * (`personalBubbleVars`) et, quand le lecteur en a choisi un, le FOND de la
- * conversation (`ConversationBackdrop`, non vivant comme dans la feuille
- * d'apparence). Signature garde la surface de la carte, comme iOS (#11231) :
+ * conversation (`ConversationBackdrop`, comme dans la feuille d'apparence ;
+ * ses préférences suivent le puits de la connexion). Signature garde la surface
+ * de la carte, comme iOS (#11231) :
  * ce que le fond choisi n'a pas encore prêt (photo en route) la laisse voir.
  * Le fond se lit du cache du client de la carte — aucune requête de plus quand
  * le fil l'a déjà chargé.
@@ -223,7 +224,7 @@ export function ConversationPeekCard({
     >
       {painted ? (
         <QueryClientProvider client={client}>
-          <ConversationBackdrop conversation={conversation} accent={accent} live={false} deps={deps} />
+          <ConversationBackdrop conversation={conversation} accent={accent} deps={deps} />
         </QueryClientProvider>
       ) : null}
       <div ref={bodyRef} className="conversation-peek-body" inert {...(overflowing ? { 'data-peek-overflowing': '' } : {})} {...(idBase === undefined ? {} : { id: `${idBase}-body` })}>

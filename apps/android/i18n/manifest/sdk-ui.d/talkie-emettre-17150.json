@@ -89,12 +89,6 @@
         { "androidName": "talkie_info_a11y", "status": "android-only" },
         {
           "catalog": "app",
-          "iosKey": "talkie.header.live",
-          "androidName": "talkie_header_live",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "talkie.header.badge.live",
           "androidName": "talkie_header_badge_live",
           "status": "adopted"

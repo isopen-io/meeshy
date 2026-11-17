@@ -6,8 +6,7 @@ import SwiftUI
 /// the in-app FeedbackToast (action feedback: "post sent", "changes saved"…).
 ///
 /// The transition can't be inspected directly (`AnyTransition` is opaque), so
-/// these tests pin the named geometry the transition is built from — the same
-/// approach `AttachmentDisplayTests` uses for design constants. If someone
+/// these tests pin the named geometry the transition is built from. If someone
 /// flips the anchor to `.bottom` or makes the toast shrink instead of grow,
 /// these break.
 @Suite("FeedbackToastReveal")

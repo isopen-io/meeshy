@@ -3,7 +3,7 @@ import SwiftUI
 /// **La forme du billet (K30)** : un rectangle arrondi moins deux demi-disques
 /// centrés sur la coupe, aux bords gauche et droit. Un seul tracé : fond, bord et
 /// zone de toucher en sortent, et le fond de l'hôte passe au travers des encoches.
-public struct MeeshyTicketShape: Shape {
+nonisolated public struct MeeshyTicketShape: Shape {
     public var cut: CGFloat
     public var notch: CGFloat
     public var radius: CGFloat
@@ -59,7 +59,7 @@ public struct MeeshyTicketShape: Shape {
 }
 
 /// Le pointillé de coupe : un trait horizontal en tirets, marges de 16.
-struct MeeshyTicketCutLine: Shape {
+nonisolated struct MeeshyTicketCutLine: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         path.move(to: CGPoint(x: rect.minX, y: rect.midY))

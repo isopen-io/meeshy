@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { PLAYBACK_QUARTILE } from '@meeshy/shared/types/social-events-v2';
+
 import { bindPlaybackQoe, createPlaybackAccumulator } from './playback-qoe';
 
 /**
@@ -51,6 +53,19 @@ describe('createPlaybackAccumulator', () => {
     expect(summary.loops).toBe(1);
     expect(summary.quartiles).toBe(15);
     expect(summary.playedMs).toBe(9900);
+  });
+
+  test('chaque quartile atteint pose le bit que la loi partagée lui donne (PLAYBACK_QUARTILE)', () => {
+    const reach = (t: number): number => {
+      const acc = start();
+      acc.on('playing', { at: 0 });
+      acc.on('timeupdate', { at: t * 1000, currentTime: t, duration: 10 });
+      return acc.finish({ at: 11_000, exitReason: 'closed', durationMs: 10_000 }).quartiles;
+    };
+    expect(reach(2.5)).toBe(PLAYBACK_QUARTILE.q25);
+    expect(reach(5)).toBe(PLAYBACK_QUARTILE.q25 | PLAYBACK_QUARTILE.q50);
+    expect(reach(7.5)).toBe(PLAYBACK_QUARTILE.q25 | PLAYBACK_QUARTILE.q50 | PLAYBACK_QUARTILE.q75);
+    expect(reach(9.9)).toBe(PLAYBACK_QUARTILE.q25 | PLAYBACK_QUARTILE.q50 | PLAYBACK_QUARTILE.q75 | PLAYBACK_QUARTILE.q100);
   });
 
   test('pauses, bascules du son, erreur réduite à son code', () => {

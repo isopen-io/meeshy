@@ -47,7 +47,7 @@ const seen = (host: ParentNode): string[] => {
   const lines: string[] = [];
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     const text = (node.textContent ?? '').replace(/\s+/gu, ' ').trim();
-    if (text === '' || node.parentElement?.closest('.sr-only') != null) continue;
+    if (text === '' || node.parentElement?.closest('.sr-only, [data-links-family-figure]') != null) continue;
     lines.push(text);
   }
   return lines;

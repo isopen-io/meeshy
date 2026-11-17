@@ -4,7 +4,7 @@ import GRDB
 /// One-time migration of legacy JSON-file queues into the unified `outbox` table.
 /// Safe to call on every app launch — it's idempotent (skips already-migrated items).
 ///
-/// Wave 1 Task 3.6 — the `MessageRetryQueue` and `ReactionQueue` actors were
+/// Wave 1 Task 3.6 — the former message-retry and reaction queue actors were
 /// folded into `OfflineQueue`. Their `migrateToOutbox` helpers no longer exist
 /// because both queues now share `OfflineQueue`'s outbox-backed persistence
 /// from the first enqueue call, so there is nothing to migrate FROM. The

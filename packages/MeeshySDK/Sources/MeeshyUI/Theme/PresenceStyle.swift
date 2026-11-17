@@ -4,7 +4,7 @@ import MeeshySDK
 // MARK: - Presence Style (mapping couleur CENTRAL)
 
 /// Mapping unique etat de presence -> couleur, partage par TOUTES les surfaces
-/// (MeeshyAvatar, UserIdentityBar, profils, stories, listes). Regle produit
+/// (MeeshyAvatar, en-têtes d'identité, profils, stories, listes). Regle produit
 /// 1/3/5 identique web (`PRESENCE_DOT_CLASS`) et Android (`meeshyPresenceDotColor`) :
 ///   online  -> vert   MeeshyColors.success    (#34D399), pulse
 ///   away    -> orange MeeshyColors.warning    (#FBBF24)

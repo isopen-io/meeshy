@@ -10,8 +10,6 @@
     <string name="feed_media_next">Image suivante</string>
     <string name="feed_media_saved">Enregistré dans la galerie</string>
     <string name="feed_media_save_failed">Échec de l’enregistrement</string>
-    <string name="feed_pinned">Épinglé</string>
-    <string name="feed_edited">Modifié</string>
     <string name="feed_post_reach_a11y">Vues et impressions</string>
     <string name="feed_repost_quoted">Cité</string>
     <string name="feed_repost_open">Ouvrir la publication republiée</string>
@@ -19,15 +17,10 @@
     <string name="feed_repost_more_media">+%1$d</string>
     <string name="bookmarks_title">Enregistrés</string>
     <string name="bookmarks_empty">Aucune publication enregistrée</string>
-    <string name="bookmarks_remove">Retirer des enregistrés</string>
-    <string name="post_detail_not_found">Cette publication n\'est plus disponible</string>
-    <string name="post_detail_empty">Impossible de charger cette publication</string>
     <string name="post_comments_empty">Aucun commentaire</string>
     <string name="post_comments_load_more">Voir plus de commentaires</string>
-    <string name="post_comments_input_hint">Ajouter un commentaire…</string>
     <string name="post_comments_delete_action">Supprimer le commentaire</string>
     <string name="post_comments_replying_to_generic">Réponse…</string>
-    <string name="post_comments_reply_hint">Ajouter une réponse…</string>
     <string name="post_comments_hide_replies">Masquer les réponses</string>
     <plurals name="post_comments_view_all_replies">
         <item quantity="one">Voir la %1$d réponse</item>
@@ -37,7 +30,6 @@
     <string name="status_composer_republishing">Republication de @%1$s</string>
     <string name="status_composer_mood_label">Humeur %1$s</string>
     <string name="feed_composer_open_placeholder">Partager quelque chose…</string>
-    <string name="feed_composer_attach_media">Ajouter une photo ou une vidéo</string>
     <string name="feed_composer_remove_media">Supprimer le média</string>
     <string name="feed_composer_media_unusable">Ce média n\'a pas pu être joint</string>
 

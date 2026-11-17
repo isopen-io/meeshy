@@ -34,15 +34,12 @@ extension MeeshyComposerHost {
     ///
     /// ## Pourquoi une FUSION, et dans ce sens-là
     ///
-    /// Deux portes écrivent aujourd'hui la même colonne `PostMedia.caption` :
-    /// le panneau d'accessibilité de l'atelier (`MediaAccessibilityStore`, dans
-    /// le SDK) et le volet de description de la scène (ici). Deux stores pour un
-    /// champ — la dérive que ce dépôt nomme partout, et qu'on ne peut pas fermer
-    /// depuis l'app seule : `StoryComposerView.accessibilityStore` est un
-    /// `@StateObject` privé de la vue SDK, que le meuble ne peut ni lire ni
-    /// injecter. Le suivi est ouvert et nommé plutôt que masqué.
+    /// Deux cartes peuvent porter la même colonne `PostMedia.caption` : celle
+    /// que la publication reçoit (`base`, `ComposerMediaAccessibility`) et le
+    /// volet de description de la scène (ici). Deux sources pour un champ — la
+    /// dérive que ce dépôt nomme partout.
     ///
-    /// En attendant, **le composer l'emporte là où il a écrit**. La raison n'est
+    /// **Le composer l'emporte là où il a écrit**. La raison n'est
     /// pas « le dernier gagne » (on ne sait pas lequel a été touché en dernier)
     /// mais : le volet de la scène est le seul des deux qui affiche sa légende
     /// PAR-DESSUS le média qu'elle décrit (#4993). C'est celui dont l'auteur voit

@@ -185,4 +185,58 @@ final class NotificationCachePatchTests: XCTestCase {
 
         XCTAssertEqual(result.map(\.id), ["n2"])
     }
+
+
+    // MARK: - Réécriture et demandes d'ami (#19104)
+
+    private func makeDated(id: String, createdAt: String, isRead: Bool = false, friendRequestId: String? = nil) -> APINotification {
+        APINotification(
+            id: id,
+            userId: "u1",
+            type: "friend_request",
+            priority: nil,
+            title: "Titre",
+            subtitle: nil,
+            content: "Contenu",
+            actor: nil,
+            context: NotificationContext(friendRequestId: friendRequestId),
+            metadata: nil,
+            state: NotificationState(isRead: isRead, readAt: nil, createdAt: createdAt, expiresAt: nil),
+            delivery: nil
+        )
+    }
+
+    func test_upsertingByCreatedAt_ranksTheRowByItsDate_notOnTop() {
+        let items = [
+            makeDated(id: "n3", createdAt: "2026-11-03T10:00:00.000Z"),
+            makeDated(id: "n1", createdAt: "2026-11-01T10:00:00.000Z")
+        ]
+
+        let result = NotificationCachePatch.upsertingByCreatedAt(items, makeDated(id: "n2", createdAt: "2026-11-02T10:00:00.000Z"))
+
+        XCTAssertEqual(result.map(\.id), ["n3", "n2", "n1"])
+    }
+
+    func test_upsertingByCreatedAt_replacesTheRowOfTheSameId() {
+        let items = [
+            makeDated(id: "n2", createdAt: "2026-11-02T10:00:00.000Z"),
+            makeDated(id: "n1", createdAt: "2026-11-01T10:00:00.000Z")
+        ]
+
+        let result = NotificationCachePatch.upsertingByCreatedAt(items, makeDated(id: "n2", createdAt: "2026-11-02T10:00:00.000Z", isRead: true))
+
+        XCTAssertEqual(result.map(\.id), ["n2", "n1"])
+        XCTAssertTrue(result[0].isRead)
+    }
+
+    func test_markingRead_friendRequestId_marksOnlyTheRowsOfThatRequest() {
+        let items = [
+            makeDated(id: "a", createdAt: "2026-11-02T10:00:00.000Z", friendRequestId: "fr1"),
+            makeDated(id: "b", createdAt: "2026-11-01T10:00:00.000Z", friendRequestId: "fr2")
+        ]
+
+        let result = NotificationCachePatch.markingRead(items, friendRequestId: "fr1")
+
+        XCTAssertEqual(result.map(\.isRead), [true, false])
+    }
 }

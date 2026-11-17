@@ -20,7 +20,6 @@ const enCallJoin = {
   'callJoin.detail.loading': 'Loading call',
   'callJoin.detail.notFound.title': 'Call not found',
   'callJoin.detail.notFound.body': 'This call no longer exists or isn’t available to you.',
-  'callJoin.detail.joining': 'Joining the call…',
   'keypad.title': 'Keypad',
   'keypad.open': 'Dial a number',
   'keypad.input.placeholder': 'Number or name',

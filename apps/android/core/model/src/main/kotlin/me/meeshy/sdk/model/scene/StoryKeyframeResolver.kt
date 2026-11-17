@@ -18,7 +18,7 @@ data class ResolvedKeyframeTransform(
 
 /**
  * Pure resolver applying keyframe interpolation to a canvas clip — the Android
- * port of iOS's `ReaderKeyframeResolver` (`MeeshyUI/Story/Canvas/StoryReaderResolvers.swift`).
+ * port of the iOS reader resolvers (`MeeshyUI/Story/Canvas/StoryReaderResolvers.swift`).
  *
  * A wire [StoryKeyframe] carries four independently-optional channels (`x`, `y`,
  * `scale`, `opacity`); a point that keys only one leaves the others `null`, and

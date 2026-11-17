@@ -179,7 +179,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
 }
 
 /// La barre repliée : un rectangle aux coins bas arrondis de 28.
-struct MeeshyCollapsingHeroBarShape: Shape {
+nonisolated struct MeeshyCollapsingHeroBarShape: Shape {
     let cornerRadius: CGFloat
 
     func path(in rect: CGRect) -> Path {

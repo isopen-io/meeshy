@@ -38,6 +38,11 @@ public protocol AuthServiceProviding: Sendable {
     /// Authorization header at all. Default forwards to the parameterless
     /// variant for conformers that haven't opted in (tests, stubs).
     func logoutThrowing(token: String) async throws
+    /// #18911 (ios-systeme-1) — retire de la passerelle les jetons push (APNs ET
+    /// VoIP) de CETTE installation, sous `token` épinglé comme
+    /// `logoutThrowing(token:)`. Se joue AVANT la fermeture de la session : une
+    /// fois close, son JWT serait refusé. Repli des doubles : rien.
+    func unregisterPushDevice(deviceId: String, token: String) async throws
 }
 
 public extension AuthServiceProviding {
@@ -57,6 +62,8 @@ public extension AuthServiceProviding {
     func logoutThrowing(token: String) async throws {
         try await logoutThrowing()
     }
+
+    func unregisterPushDevice(deviceId: String, token: String) async throws {}
 
     /// Repli des doubles qui ne l'implémentent pas : la vérification par code
     /// d'avant #8035, sans session.
@@ -392,6 +399,24 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
             AuthEndpoint.logout,
             method: "POST",
             body: nil,
+            headers: [:],
+            bearerToken: token
+        )
+    }
+
+    /// #18911 (ios-systeme-1) — `DELETE /users/register-device-token` avec le SEUL
+    /// corps `{ deviceId }` : la passerelle retire alors toutes les lignes de
+    /// l'installation, la VoIP comme l'APNs. Un `deviceId` vide est refusé AVANT
+    /// d'écrire : un corps sans clé effacerait les jetons de TOUS les appareils.
+    public func unregisterPushDevice(deviceId: String, token: String) async throws {
+        guard !deviceId.isEmpty else {
+            throw MeeshyError.server(statusCode: 400, message: "deviceId manquant")
+        }
+        let body = try JSONEncoder().encode(UnregisterPushDeviceRequest(deviceId: deviceId))
+        let _: APIResponse<DiscardedResponseBody> = try await pinned.requestPinned(
+            UsersEndpoint.registerDeviceToken,
+            method: "DELETE",
+            body: body,
             headers: [:],
             bearerToken: token
         )

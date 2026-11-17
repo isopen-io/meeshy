@@ -90,7 +90,7 @@ const REM = 16;
 export const avatarMorphRem = (px: number): string => `${px / REM}rem`;
 
 /** Un nom de transition valide pour un identifiant opaque. */
-export const meeshyAvatarMorphName = (id: string): string => `kit-morph-${id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+export { meeshyAvatarMorphName } from './meeshy-avatar-morph-name';
 
 export const meeshyAvatarMorphStyle = (size: number, progress: number | null): CSSProperties => {
   const jewels = meeshyAvatarMorphJewels(size);

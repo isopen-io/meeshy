@@ -7,7 +7,7 @@ import MeeshyUI
 /// ConversationView), lesquels ne peuvent pas héberger le pattern
 /// optimistic+outbox+observeOutcome sans le dupliquer inline.
 ///
-/// Encapsule le pattern EXACT de `UserProfileViewModel.blockUser` :
+/// Encapsule le pattern du block/unblock durable :
 /// 1. flip optimiste de la blocklist canonique (`BlockService.setBlockedOptimistic`,
 ///    lue par les swipe labels) ;
 /// 2. `OfflineQueue.enqueue(.blockUser/.unblockUser)` durable (survit offline + kill) ;

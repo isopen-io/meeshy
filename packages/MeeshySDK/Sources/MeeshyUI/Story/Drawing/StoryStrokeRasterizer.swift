@@ -6,8 +6,8 @@ import MeeshySDK
 
 /// Bake un `[StoryDrawingStroke]` en `UIImage` sur le canvas design (1080×1920).
 /// Drop-in de remplacement du legacy `PKDrawing.image(from: CGRect(designSize), scale:)`
-/// utilisé par les chemins de rendu (`StoryRenderer`, `StoryCanvasUIView` drawingLayer,
-/// `SlideMiniPreview`). Les traits sont déjà en coords design → aucune projection ici ;
+/// utilisé par les chemins de rendu (`StoryRenderer`, `StoryCanvasUIView` drawingLayer).
+/// Les traits sont déjà en coords design → aucune projection ici ;
 /// l'appelant place l'image dans une `CALayer.frame = renderSize` qui l'étire (comme
 /// le legacy).
 ///

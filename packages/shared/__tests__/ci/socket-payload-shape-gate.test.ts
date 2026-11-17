@@ -79,7 +79,8 @@
 //
 // **Un quart des événements du contrat.** Mesuré le 2026-11-15 après `community:updated` (#18439)
 // et le lot Android de la batterie (#14147, trois `battery:*` de plus), puis le téléphone injoignable
-// (#18737, `phone:unreachable` et `phone:reachable`) : la garde balaie **131 des 183**
+// (#18737, `phone:unreachable` et `phone:reachable`), puis mon profil synchronisé (#18924, `profile:updated`) :
+// la garde balaie **132 des 190**
 // événements de `ServerToClientEvents`, par CINQ
 // idiomes de routage — les trois d'origine, plus le `decode<T>` réifié derrière
 // `socketManager.on(…)` (les quatre `viewing:*`) et la route qui appelle un

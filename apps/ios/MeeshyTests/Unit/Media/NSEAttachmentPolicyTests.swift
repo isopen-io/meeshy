@@ -1,4 +1,5 @@
 import XCTest
+import UserNotifications
 @testable import Meeshy
 
 /// **Un message vidéo lourd TUAIT l'extension de notification, en silence**
@@ -269,7 +270,7 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         "contentId", "contentType",
         "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
         "unreadCount", "badge", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",
-        "callType", "isVideo", "callBackLabel", "callId", "callerUserId", "callerName", "callerAvatar",
+        "callType", "isVideo", "isGroup", "callBackLabel", "callId", "callerUserId", "callerName", "callerAvatar",
         "iceServers",
         "isEncrypted", "apiBaseURL",
         "notificationLocKey",
@@ -292,9 +293,12 @@ final class NSEAttachmentPolicyTests: XCTestCase {
     /// Ce qui DÉCRIT le contenu : le texte et ses traductions, le chiffré, la
     /// pièce jointe, le détail (position, contact, invitation, lien, vignette),
     /// la réaction, le type de message, le motif d'un retrait, les libellés
-    /// d'action qui nomment le contenu.
+    /// d'action qui nomment le contenu. Et ce que l'iPhone ne lit pas : le
+    /// non-lu PAR conversation, que seul le registre Android indexe (#18910) —
+    /// sous PIN, il ne survit pas au scellé.
     private static let contentKeys: Set<String> = [
         "content", "originalLanguage", "translatedContent", "translatedLanguage", "encryptedContent",
+        "conversationUnread",
         "reactionEmoji", "messageType", "reason", "contentActionLabel", "replyActionLabel",
         "attachmentUrl", "attachmentMimeType", "attachmentDurationMs", "attachmentFileSize",
         "attachmentId", "attachmentLanguage",
@@ -349,10 +353,12 @@ final class NSEAttachmentPolicyTests: XCTestCase {
             .map { $0.components(separatedBy: " // ")[0] }
             .joined(separator: "\n")
         let direct = try matches(#"(?:^|[{\s,(])([a-z][A-Za-z]*):\s"#, in: Substring(code))
-            .subtracting(["metadata", "language", "detail"])
+            .subtracting(["metadata", "language", "detail", "actor"])
         let detail = try between(try source("content-detail.ts"), "export function contentDetailPushFields", "\n}\n")
+        let identity = try between(try source("senderIdentityPushFields.ts"), "export type SenderIdentityPushFields = {", "};")
         return direct
             .union(try matches(#"^\s+readonly (\w+): string;"#, in: Substring(try source("push-media-fields.ts"))))
+            .union(try matches(#"^\s+readonly (\w+): string;"#, in: identity))
             .union(try matches(#"\['(\w+)',"#, in: detail))
             .union(try matches(#"(\w+)\?: string"#, in: Substring(try source("ephemeralPushFields.ts"))))
             .union(try matches(#"readonly (\w+)\?:"#, in: Substring(try source("callBackPushFields.ts"))))
@@ -575,5 +581,93 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertTrue(code.contains("NSEPreparationStep.plan(for: lock)"))
         XCTAssertTrue(code.contains("perform(step, on: content, lock: lock)"),
                       "le verrou qui choisit le plan est celui qui garde la catégorie")
+    }
+
+    // MARK: - Une bannière révoquée pendant sa préparation (ios-systeme-7, #19104)
+
+    private func makeAttachment() throws -> UNNotificationAttachment {
+        let png = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("withdrawn-\(UUID().uuidString).png")
+        try png.write(to: url)
+        return try UNNotificationAttachment(identifier: "media", url: url, options: nil)
+    }
+
+    private func makeRevokedContent() throws -> UNMutableNotificationContent {
+        let content = UNMutableNotificationContent()
+        content.title = "Bob"
+        content.body = "📷 Photo"
+        content.categoryIdentifier = "MEESHY_MESSAGE"
+        content.attachments = [try makeAttachment()]
+        content.userInfo = [
+            "type": "new_message", "notificationId": "n1", "conversationId": "c1", "messageId": "m1",
+            "content": "le texte du message supprimé", "firstAttachmentUrl": "https://gate.meeshy.me/u/photo.jpg",
+            "translatedContent": "the deleted message text",
+        ]
+        return content
+    }
+
+    /// Le message n'existe plus : ni sa pièce jointe, ni son texte ne se montrent.
+    func test_withdrawing_dropsTheAttachmentAndShowsTheNeutralBody() throws {
+        let content = try makeRevokedContent()
+
+        let withdrawn = NSEAttachmentPolicy.withdrawing(content, neutralBody: "Hidden message")
+
+        XCTAssertTrue(withdrawn.attachments.isEmpty)
+        XCTAssertEqual(withdrawn.body, "Hidden message")
+        XCTAssertEqual(withdrawn.title, "Bob", "le nom de l'expéditeur reste : la bannière dit seulement qu'il n'y a plus rien à lire")
+    }
+
+    func test_withdrawing_keepsOnlyWhatRoutesAndDeclaresTheProtection() throws {
+        let withdrawn = NSEAttachmentPolicy.withdrawing(try makeRevokedContent(), neutralBody: "Hidden message")
+
+        XCTAssertEqual(withdrawn.userInfo["notificationId"] as? String, "n1", "les balayages retrouvent la bannière par cet id")
+        XCTAssertNil(withdrawn.userInfo["content"], "le texte du message supprimé ne reste pas dans le Centre de notifications")
+        XCTAssertNil(withdrawn.userInfo["firstAttachmentUrl"])
+        XCTAssertNil(withdrawn.userInfo["translatedContent"])
+        XCTAssertEqual(withdrawn.userInfo["notificationLocKey"] as? String, NSEAttachmentPolicy.withdrawnBannerLocKey)
+        XCTAssertTrue(NSEAttachmentPolicy.declaresProtection(userInfo: withdrawn.userInfo))
+    }
+
+    func test_withdrawing_offersNoQuickAction() throws {
+        let withdrawn = NSEAttachmentPolicy.withdrawing(try makeRevokedContent(), neutralBody: "Hidden message")
+
+        XCTAssertEqual(withdrawn.categoryIdentifier, NSEAttachmentPolicy.lockedConversationCategory,
+                       "répondre ou marquer lu un message supprimé n'a pas de sens")
+    }
+
+    /// Ce qui part À CÔTÉ du corps neutre : la bannière d'un message supprimé n'existe que le temps
+    /// qu'un balayage la retire — elle ne sonne pas et n'allume pas l'écran pour lui.
+    func test_withdrawing_neitherRingsNorLightsTheScreen() throws {
+        let content = try makeRevokedContent()
+        content.sound = .default
+        content.interruptionLevel = .active
+
+        let withdrawn = NSEAttachmentPolicy.withdrawing(content, neutralBody: "Hidden message")
+
+        XCTAssertNil(withdrawn.sound)
+        XCTAssertEqual(withdrawn.interruptionLevel, .passive)
+    }
+
+    /// Le neutre est un libellé du catalogue de l'extension, jamais un texte écrit ici.
+    func test_withdrawnBannerLocKey_isTheNeutralLabelTheGatewayAlreadyUsesForHiddenMessages() {
+        XCTAssertEqual(NSEAttachmentPolicy.withdrawnBannerLocKey, "notification.hidden_message")
+    }
+
+    /// Câblage de l'extension, sans autre témoin (pas d'hôte de test) : la révocation se relit
+    /// APRÈS le téléchargement et AVANT la livraison, aussi à l'expiration, et les balayages
+    /// retirent ce qui a passé entre-temps.
+    func test_extension_checksTheRevocationsRightBeforeDelivering() throws {
+        let code = AppSourceGuard.stripComments(try nseSource())
+        let funnel = try XCTUnwrap(code.range(of: "private static func deliverEnriched("))
+        let body = code[funnel.upperBound...]
+        let check = try XCTUnwrap(body.range(of: "isRevokedWhilePreparing("))
+        let final = try XCTUnwrap(body.range(of: "finalContent(from: working"))
+
+        XCTAssertLessThan(check.lowerBound, final.lowerBound, "relue avant de livrer le contenu enrichi")
+        XCTAssertTrue(code.contains("withdrawnContent("))
+        let expiry = try XCTUnwrap(code.range(of: "override func serviceExtensionTimeWillExpire()"))
+        XCTAssertTrue(code[expiry.upperBound...].prefix(400).contains("withdrawnContent("),
+                      "la livraison de repli, à l'expiration, ne livre pas non plus un message révoqué")
+        XCTAssertTrue(code.contains("revokedIdentifiers("), "le balayage de la NSE retire les bannières révoquées déjà livrées")
     }
 }

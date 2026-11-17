@@ -1,5 +1,8 @@
+import type { QueryClient } from '@tanstack/react-query';
+
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
+import { CALL_HISTORY_QUERY_PREFIX } from '@/lib/api/me-keys';
 import type { SocketClient } from '@/lib/net/socket';
 
 import { CALL_RECORDING_SERVER_EVENT_NAMES } from './call-recording';
@@ -46,11 +49,20 @@ type LiveFrameModule = { readonly attachCallLiveFrame: (socket: SocketClient) =>
 type BridgeOptions = {
   /** Le chunk du cadre en direct (#16943) ; imposé par les témoins. */
   readonly loadLiveFrame?: () => Promise<LiveFrameModule>;
+  /** Le cache dont le journal d'appels se relit quand un appel finit (#18922). */
+  readonly queryClient?: QueryClient;
 };
+
+/**
+ * UN APPEL QUI FINIT ENTRE AU JOURNAL (#18922) — terminé, manqué ou refusé
+ * (`call:ended` porte la raison, `call:missed` le complète). La passerelle a
+ * écrit la ligne avant de diffuser : le journal que l'écran regarde se relit.
+ */
+const CALL_HISTORY_EVENTS: ReadonlySet<string> = new Set([SERVER_EVENTS.CALL_ENDED, SERVER_EVENTS.CALL_MISSED]);
 
 const noDetach = (): void => undefined;
 
-export function bridgeCallEvents(socket: SocketClient, { loadLiveFrame = () => import('./call-live-frame-live') }: BridgeOptions = {}): () => void {
+export function bridgeCallEvents(socket: SocketClient, { loadLiveFrame = () => import('./call-live-frame-live'), queryClient }: BridgeOptions = {}): () => void {
   if (__SHELL__) void import('./shell-call-runtime').then(({ startShellCall }) => startShellCall());
   void import('./call-wake-lock').then(({ startCallWakeLock }) => startCallWakeLock());
   const binding = bindCallTransport({
@@ -62,7 +74,11 @@ export function bridgeCallEvents(socket: SocketClient, { loadLiveFrame = () => i
         : socket.emitWithAck(event, payload, timeoutMs),
   });
   const handlers = CALL_SERVER_EVENTS.map((event) => {
-    const handler = (payload: unknown): void => binding.dispatch(event, payload);
+    const history = CALL_HISTORY_EVENTS.has(event) ? queryClient : undefined;
+    const handler = (payload: unknown): void => {
+      binding.dispatch(event, payload);
+      if (history !== undefined) void history.invalidateQueries({ queryKey: CALL_HISTORY_QUERY_PREFIX });
+    };
     socket.on(event, handler);
     return [event, handler] as const;
   });

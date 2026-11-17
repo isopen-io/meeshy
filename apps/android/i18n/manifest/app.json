@@ -89,41 +89,7 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "a11y.back",
-          "androidName": "chat_back",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "commands.menu.message",
-          "androidName": "chat_message_placeholder",
-          "status": "adopted"
-        },
-        {
           "androidName": "chat_no_messages",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversations.error.retry",
-          "androidName": "chat_retry",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "call.feedback.send",
-          "androidName": "chat_send",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "dashboard.stat.messages",
-          "androidName": "chat_title",
-          "status": "adopted"
-        },
-        {
-          "androidName": "conversations_empty",
           "status": "android-only"
         },
         {
@@ -138,48 +104,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "conversations.error.retry",
-          "androidName": "conversations_retry",
-          "status": "adopted"
-        },
-        {
-          "androidName": "conversations_title",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.empty.title",
-          "androidName": "feed_empty",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "a11y.feed.post.like",
-          "androidName": "feed_like",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "a11y.floating.feed",
           "androidName": "feed_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "auth.login.submit",
-          "androidName": "login_button",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "auth.signup.password.label",
-          "androidName": "login_password_label",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "auth.signup.identity.username",
-          "androidName": "login_username_label",
           "status": "adopted"
         },
         {
@@ -219,68 +145,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "notifications.empty.all",
-          "androidName": "notifications_empty",
-          "status": "adopted"
-        },
-        {
           "androidName": "notifications_mark_all_read",
           "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "route.title.notifications",
-          "androidName": "notifications_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "a11y.back",
-          "androidName": "profile_back",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "profile.bio",
-          "androidName": "profile_bio_label",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "profile.display_name",
-          "androidName": "profile_display_name_label",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "profile.edit",
-          "androidName": "profile_edit",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "a11y.floating.menu.profile-action",
-          "androidName": "profile_edit_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "profile.save",
-          "androidName": "profile_save",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "profile.title",
-          "androidName": "profile_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "a11y.message.unknown_sender",
-          "androidName": "profile_unknown",
-          "status": "adopted"
         },
         {
           "catalog": "app",
@@ -304,12 +170,6 @@
           "catalog": "ui",
           "iosKey": "community.detail.tab.feed",
           "androidName": "tab_feed",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "profile.title",
-          "androidName": "tab_profile",
           "status": "adopted"
         },
         {

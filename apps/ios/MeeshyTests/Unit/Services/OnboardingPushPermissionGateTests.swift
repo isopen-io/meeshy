@@ -181,7 +181,25 @@ final class OnboardingPushPermissionGateTests: XCTestCase {
 
     // MARK: - Entrée 2 : l'inscription
 
-    func test_onSessionOpened_registration_neverAsks() async {
+    /// Une inscription passe par la porte en déclarant son propre report : tant que la fenêtre
+    /// système peut servir, la porte la garde — on reporte et on ne demande rien.
+    func test_onSessionOpened_registration_whileTheGateHolds_postponesAndNeverAsks() async {
+        let deferral = MockPushPermissionDeferral()
+        let probe = RequestProbe()
+        let gate = StubGate(holds: true)
+
+        await PushPermissionPrompt.onSessionOpened(
+            origin: .registration, deferral: deferral, gate: gate, request: probe.request
+        )
+
+        XCTAssertEqual(gate.askedWithReportPending, [true], "l'inscription porte son report à elle seule")
+        XCTAssertEqual(probe.count, 0)
+        XCTAssertTrue(deferral.isPending)
+    }
+
+    /// ios-systeme-5 (#19104) — une permission déjà tranchée ne se garde pas : l'appareil se
+    /// déclare à APNs dès l'inscription, sans report.
+    func test_onSessionOpened_registration_whenTheGateDoesNotHold_asksAtOnce() async {
         let deferral = MockPushPermissionDeferral()
         let probe = RequestProbe()
 
@@ -189,8 +207,8 @@ final class OnboardingPushPermissionGateTests: XCTestCase {
             origin: .registration, deferral: deferral, gate: StubGate(holds: false), request: probe.request
         )
 
-        XCTAssertEqual(probe.count, 0)
-        XCTAssertTrue(deferral.isPending)
+        XCTAssertEqual(probe.count, 1)
+        XCTAssertFalse(deferral.isPending)
     }
 
     /// Le report d'une inscription s'honore au premier message ENVOYÉ — sauf

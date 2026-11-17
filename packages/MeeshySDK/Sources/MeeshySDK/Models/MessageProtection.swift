@@ -10,7 +10,7 @@ import Foundation
 ///
 /// Ce que ce type remplace, mesuré sur `dev` 3ff99d3aa3 : `flame` désignait la
 /// VUE UNIQUE dans la liste de conversations (`LentilleConversationRow`,
-/// `ThemedConversationRow`) et l'ÉPHÉMÈRE dans la bulle (`BubbleEphemeralBadge`)
+/// `ThemedConversationRow`) et l'ÉPHÉMÈRE dans l'ancien badge de la bulle
 /// — le même pictogramme pour deux sens opposés, et aucun des deux n'était
 /// celui du choix (`hourglass`, `1.circle`).
 public enum MessageProtectionSymbols {

@@ -107,7 +107,7 @@ struct MeeshyTimelineFriseKeyMark: View, Equatable {
     }
 }
 
-/// La ligne d'accroche : le pointillé de `SnapGuideView`, reteint au jaune de
+/// La ligne d'accroche : le pointillé de l'ancienne frise, reteint au jaune de
 /// la coupe (à l'encre du thème sur une feuille claire), sur toute la hauteur.
 struct MeeshyTimelineFriseSnapLine: View, Equatable {
     let height: CGFloat

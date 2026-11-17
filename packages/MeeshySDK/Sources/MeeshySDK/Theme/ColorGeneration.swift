@@ -91,7 +91,7 @@ public struct ConversationContext: Sendable {
 // Access pattern:
 //   conversation.accentColor     → colorPalette.primary (main accent hex)
 //   conversation.colorPalette    → ConversationColorPalette { primary, secondary, accent, saturationBoost }
-//   conversation.colorContext    → ConversationContext { name, type, language, theme, memberCount }
+//   MeeshyConversation.computeColorPalette(...) → builds the ConversationContext { name, type, language, theme, memberCount }
 //
 
 public struct DynamicColorGenerator {

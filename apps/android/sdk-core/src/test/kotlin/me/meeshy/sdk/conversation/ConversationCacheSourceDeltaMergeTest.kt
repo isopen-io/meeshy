@@ -143,6 +143,23 @@ class ConversationCacheSourceDeltaMergeTest {
     }
 
     @Test
+    fun `un dernier message supprime pendant l'absence fait relire la route riche, et l'apercu recule`() = runTest {
+        source(SyncDeltaFetching.None).revalidate()
+        val regressed = seeded.copy(
+            lastMessage = ApiConversationLastMessage(id = "m0", content = "Avant-hier", createdAt = "2023-11-14T08:00:00.000Z"),
+            updatedAt = "2023-11-14T11:00:00.000Z",
+        )
+        coEvery { api.listConditional(any(), any(), any(), any()) } returns Response.success(
+            ApiResponse(success = true, data = listOf(regressed), pagination = Pagination(total = 1, offset = 0, limit = 100, hasMore = false)),
+        )
+
+        source(delta(row(lastMessageAt = "2023-11-14T08:00:00.000Z"))).revalidate()
+
+        assertThat(cached()!!.lastMessage?.id).isEqualTo("m0")
+        coVerify(exactly = 2) { api.listConditional(any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `sync indisponible retombe sur les conversations sans perdre le point de reprise`() = runTest {
         source(SyncDeltaFetching.None).revalidate()
         val before = db.syncMetaDao().watermark(ConversationCacheSource.RESOURCE_KEY)

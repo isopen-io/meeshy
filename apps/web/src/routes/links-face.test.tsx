@@ -1,0 +1,80 @@
+import { beforeAll, describe, expect, test } from 'bun:test';
+import { renderToStaticMarkup } from 'react-dom/server';
+
+import { GlyphSvg } from '@/components/glyph';
+import { LINKS_GLYPHS } from '@/components/glyphs-links';
+import type { MyAddress } from '@/lib/api/my-addresses';
+import { loadLinkFamiliesCatalog } from '@/lib/i18n-link-families-catalog';
+
+import { LinkFamilyCard } from './link-families-parts';
+import { LinksAddresses } from './links-addresses';
+import { LinksProfileTicket } from './links-profile-ticket';
+
+beforeAll(async () => {
+  await loadLinkFamiliesCatalog('fr');
+});
+
+const noop = () => undefined;
+const address = (overrides: Partial<MyAddress> = {}): MyAddress => ({ id: 'a1', title: 'Site', url: 'https://aissandiaye.studio', glyph: 'site', position: 0, isShown: true, clicks: 0, ...overrides });
+
+describe('le billet du lien de profil', () => {
+  const render = () => renderToStaticMarkup(<LinksProfileTicket language="fr" username="aissa" onCopy={noop} onOpenCode={noop} onSend={noop} />);
+
+  test('il dit mon adresse canonique et porte son QR', () => {
+    const html = render();
+    expect(html).toContain('meeshy.me/u/aissa');
+    expect(html).toContain('data-kit-code-plate');
+    expect(html).toMatch(/aria-label="[^"]*QR[^"]*"/);
+  });
+
+  test('copier, QR et envoyer sont des actions nommées', () => {
+    const html = render();
+    expect(html).toContain('Copier');
+    expect(html).toContain('Envoyer');
+    expect(html).toMatch(/data-links-profile-action="code"/);
+  });
+
+  test('sans geste d’envoi (hors connexion), « Envoyer » n’est pas dessiné', () => {
+    const bare = renderToStaticMarkup(<LinksProfileTicket language="fr" username="aissa" onCopy={noop} onOpenCode={noop} onSend={undefined} />);
+    expect(bare).not.toContain('data-links-profile-action="send"');
+  });
+});
+
+describe('mes adresses', () => {
+  test('la section n’apparaît pas quand le serveur n’en sert aucune', () => {
+    expect(renderToStaticMarkup(<LinksAddresses language="fr" addresses={null} />)).toBe('');
+    expect(renderToStaticMarkup(<LinksAddresses language="fr" addresses={[]} />)).toBe('');
+  });
+
+  test('chaque adresse est un billet qui ouvre son site hors de l’application', () => {
+    const html = renderToStaticMarkup(<LinksAddresses language="fr" addresses={[address(), address({ id: 'a2', title: 'Musique', url: 'https://soundcloud.com/aissa', glyph: 'music' })]} />);
+    expect(html).toContain('Musique');
+    expect(html).toContain('soundcloud.com/aissa');
+    expect(html).toMatch(/<a[^>]*href="https:\/\/soundcloud.com\/aissa"[^>]*rel="noopener noreferrer"/);
+  });
+
+  test('chaque adresse porte le glyphe que son propriétaire a choisi', () => {
+    const glyph = (name: keyof typeof LINKS_GLYPHS) => renderToStaticMarkup(<GlyphSvg glyph={LINKS_GLYPHS[name]} size={16} />);
+    const site = renderToStaticMarkup(<LinksAddresses language="fr" addresses={[address()]} />);
+    const music = renderToStaticMarkup(<LinksAddresses language="fr" addresses={[address({ glyph: 'music' })]} />);
+    const photos = renderToStaticMarkup(<LinksAddresses language="fr" addresses={[address({ glyph: 'photos' })]} />);
+    expect(site).toContain(glyph('globeHemisphereWest'));
+    expect(music).toContain(glyph('vinylRecord'));
+    expect(photos).toContain(glyph('camera'));
+    expect(music).not.toContain(glyph('globeHemisphereWest'));
+  });
+
+  test('une adresse masquée sur la fiche reste dans la liste de son propriétaire', () => {
+    const html = renderToStaticMarkup(<LinksAddresses language="fr" addresses={[address({ isShown: false })]} />);
+    expect(html).toContain('Site');
+  });
+});
+
+describe('les familles du hub', () => {
+  test('une famille dit son chiffre quand il est connu, et rien quand il ne l’est pas', () => {
+    const withFigure = renderToStaticMarkup(<LinkFamilyCard language="fr" family="tracking" figure={{ value: '1 284', caption: 'clics' }} />);
+    expect(withFigure).toContain('data-links-family-figure');
+    expect(withFigure).toContain('1 284');
+    expect(renderToStaticMarkup(<LinkFamilyCard language="fr" family="tracking" />)).not.toContain('data-links-family-figure');
+  });
+});

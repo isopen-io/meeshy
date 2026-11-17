@@ -20,7 +20,6 @@ const esCallJoin = {
   'callJoin.detail.loading': 'Cargando la llamada',
   'callJoin.detail.notFound.title': 'Llamada no encontrada',
   'callJoin.detail.notFound.body': 'Esta llamada ya no existe o no está disponible para ti.',
-  'callJoin.detail.joining': 'Conectando a la llamada…',
   'keypad.title': 'Teclado',
   'keypad.open': 'Marcar un número',
   'keypad.input.placeholder': 'Número o nombre',

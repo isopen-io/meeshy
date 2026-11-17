@@ -203,7 +203,7 @@ internal fun MessageActionsSheet(
 
             // Interactive audio preview for a playable voice/audio attachment —
             // play/pause, scrubber, ±5s, tap-to-cycle speed — driven by the pure
-            // [OverlayMediaTransport]. Mirrors iOS `PreviewAudioPlayer` in the overlay.
+            // [OverlayMediaTransport]. Mirrors the iOS overlay audio player.
             bubble.audios.firstOrNull { it.isPlayable }?.let { audio ->
                 OverlayMediaPreview(
                     audio = audio,

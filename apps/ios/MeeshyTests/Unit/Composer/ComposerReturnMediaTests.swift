@@ -78,7 +78,7 @@ final class ComposerReturnMediaTests: XCTestCase {
     }
 
     /// **Une vidéo prise ou jointe s'édite dans la SCÈNE** (#9124) : plus
-    /// aucune couverture `MeeshyVideoEditorView` dans la conversation.
+    /// aucune couverture de l'ancien éditeur vidéo dans la conversation.
     func test_conversationVideos_openTheScene_notTheOldVideoEditor() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
         XCTAssertFalse(code.contains("MeeshyVideoEditorView("),

@@ -8,7 +8,7 @@ import me.meeshy.ui.component.bubble.LanguageChip
 /** Qui cède sa place en premier quand la ligne manque de largeur. */
 public enum class IdentityTruncation { First, Second, Never }
 
-/** Une entrée du menu d'action (iOS `ActionMenuItem`). */
+/** Une entrée du menu d'action. */
 @Immutable
 public class IdentityMenuItem(
     public val label: String,
@@ -16,7 +16,7 @@ public class IdentityMenuItem(
     public val onClick: () -> Unit,
 )
 
-/** Les éléments déclaratifs d'une `UserIdentityBar` (iOS `IdentityBarElement`). */
+/** Les éléments déclaratifs d'une `UserIdentityBar`. */
 public sealed interface IdentityBarElement {
     public val id: String
     public val truncation: IdentityTruncation get() = IdentityTruncation.Never

@@ -31,13 +31,7 @@ import XCTest
 final class P2PWebRTCClientSwitchCameraFailureRevertSourceTests: XCTestCase {
 
     private static let source: String = {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Services/
-            .deletingLastPathComponent()   // Unit/
-            .deletingLastPathComponent()   // MeeshyTests/
-            .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
-        return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        (try? AppSourceGuard.unit("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+MediaControls.swift")) ?? ""
     }()
 
     /// Loud by construction: a missing start OR end marker fails the test via

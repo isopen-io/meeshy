@@ -7,7 +7,7 @@ import CoreGraphics
 /// Mesure d'origine (build `dev` @ `161e14af`, iPhone 16 Pro, 402 pt, Dynamic
 /// Type NOMINAL) : sept entrées de 44 pt séparées de 16 pt occupaient 436 pt
 /// marges comprises. La septième — la timeline — ne rendait aucun pixel, pas
-/// même un liseré. `ComposerToolRow` est un `ScrollView` : le geste existait,
+/// même un liseré. la rangée de l'atelier était un `ScrollView` : le geste existait,
 /// donc la loi 4 était tenue. **Ce qui manquait était le SIGNAL**, et un
 /// défilement n'a pas d'état d'échec — rien ne pouvait rougir.
 ///

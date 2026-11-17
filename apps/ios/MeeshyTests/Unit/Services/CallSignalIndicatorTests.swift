@@ -242,7 +242,7 @@ final class CallHangupFastPathTests: XCTestCase {
     }
 
     func test_dataChannelCreation_isIdempotent_acrossRenegotiations() throws {
-        let client = try source("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
+        let client = try source("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient+DataChannel.swift")
         guard let range = client.range(of: "func createDataChannel(label: String) -> Bool {") else {
             XCTFail("P2PWebRTCClient must define createDataChannel")
             return

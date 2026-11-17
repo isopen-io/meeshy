@@ -873,7 +873,6 @@ extension MessageOverlayMenu {
     }
 }
 
-// `OverlayAudioPlayer` vit chez lui depuis #7005 :
-// `Meeshy/Features/Main/Components/OverlayAudioPlayer.swift`. Un lecteur média
+// Le lecteur audio de l'aperçu a quitté ce fichier au #7005 : un lecteur média
 // n'a rien à faire dans le fichier d'un menu contextuel, et cet hôte était déjà
 // hors budget — il fallait extraire avant d'ajouter la garde d'idempotence.

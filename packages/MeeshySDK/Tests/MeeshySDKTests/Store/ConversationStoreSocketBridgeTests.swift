@@ -1,6 +1,28 @@
 import XCTest
 import Combine
+import os
 @testable import MeeshySDK
+
+/// La relecture SERVIE des préférences par conversation, scriptée appel par
+/// appel : chaque relecture rend la page suivante (puis rien), et garde le
+/// filigrane qu'on lui a demandé.
+final class ServedPreferencesFeed: Sendable {
+    private let state: OSAllocatedUnfairLock<(pages: [[APIConversationPreferences]], asked: [Date?])>
+
+    init(_ pages: [[APIConversationPreferences]]) {
+        state = OSAllocatedUnfairLock(initialState: (pages: pages, asked: []))
+    }
+
+    var asked: [Date?] { state.withLock { $0.asked } }
+
+    func serve(changedSince: Date?) -> [APIConversationPreferences] {
+        state.withLock { feed in
+            feed.asked.append(changedSince)
+            guard !feed.pages.isEmpty else { return [] }
+            return feed.pages.removeFirst()
+        }
+    }
+}
 
 @MainActor
 final class ConversationStoreSocketBridgeTests: XCTestCase {
@@ -63,12 +85,14 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
 
         init(
             store: ConversationStore, categoryStore: UserCategoryStore, currentUserId: String? = "me",
-            onReadingModePreferenceChanged: (@Sendable (String, String) -> Void)? = nil
+            onReadingModePreferenceChanged: (@Sendable (String, String) -> Void)? = nil,
+            servedPreferences: ServedPreferencesFeed = ServedPreferencesFeed([])
         ) {
             bridge = ConversationStoreSocketBridge(
                 store: store,
                 categoryStore: categoryStore,
-                currentUserId: { currentUserId }
+                currentUserId: { currentUserId },
+                fetchChangedPreferences: { changedSince in servedPreferences.serve(changedSince: changedSince) }
             )
             bridge.activate(
                 conversationUpdated: conversationUpdated.eraseToAnyPublisher(),
@@ -369,6 +393,99 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         // Outbox flush retries the queued preference mutation → 2nd call.
         let flushed = await waitUntil { prefs.calls.count >= 2 }
         XCTAssertTrue(flushed, "didReconnect must trigger flushOutbox, retrying the queued preference mutation")
+    }
+
+    // MARK: Préférences posées ailleurs pendant la coupure (#18916)
+
+    private func makeServedRow(
+        _ conversationId: String,
+        version: Int,
+        isPinned: Bool = false,
+        isMuted: Bool = false,
+        isArchived: Bool = false,
+        updatedAt: Date = Date(timeIntervalSince1970: 1_700_000_900)
+    ) -> APIConversationPreferences {
+        APIConversationPreferences(
+            isPinned: isPinned, isMuted: isMuted, isArchived: isArchived, tags: [],
+            categoryId: nil, reaction: nil, customName: nil, mentionsOnly: false, version: version,
+            conversationId: conversationId, orderInCategory: nil, updatedAt: updatedAt
+        )
+    }
+
+    /// L'iPhone dormait quand le web a épinglé et archivé « c1 ». La passerelle
+    /// n'écrit que `UserConversationPreferences` : ni `/sync` ni le delta ne
+    /// resservent la ligne, et la diffusion manquée n'est jamais rejouée.
+    func test_didReconnect_whenPreferencesChangedElsewhere_appliesServedPreferences() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let feed = ServedPreferencesFeed([[], [makeServedRow("c1", version: 3, isPinned: true, isArchived: true)]])
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), servedPreferences: feed)
+        await env.bridge.awaitPendingEvents()
+
+        env.didReconnect.send(())
+        await env.bridge.awaitPendingEvents()
+
+        let state = await store.conversation(id: "c1")?.userState
+        XCTAssertEqual(state?.isArchived, true, "la reconnexion relit les préférences servies")
+        XCTAssertEqual(state?.isPinned, true)
+        XCTAssertEqual(state?.version, 3)
+    }
+
+    /// La ligne servie par `/user-preferences/conversations` ne porte pas
+    /// `clearHistoryBefore` : un rattrapage branché sur `applyRemote` l'aurait
+    /// remis à `nil`, et l'historique effacé serait réapparu.
+    func test_didReconnect_servedRowWithoutClearHistory_keepsLocalClearHistoryBefore() async {
+        let store = makeStore()
+        let clearedAt = Date(timeIntervalSince1970: 1_700_000_500)
+        var cleared = makeConv(id: "c1")
+        cleared.userState.clearHistoryBefore = clearedAt
+        await store.hydrate(cleared)
+        let feed = ServedPreferencesFeed([[], [makeServedRow("c1", version: 2, isArchived: true)]])
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), servedPreferences: feed)
+        await env.bridge.awaitPendingEvents()
+
+        env.didReconnect.send(())
+        await env.bridge.awaitPendingEvents()
+
+        let state = await store.conversation(id: "c1")?.userState
+        XCTAssertEqual(state?.isArchived, true, "le champ servi s'applique")
+        XCTAssertEqual(state?.clearHistoryBefore, clearedAt, "le champ que la route ne sert pas ne s'efface pas")
+    }
+
+    /// `didReconnect` ne part pas au premier connect : le démarrage à froid se
+    /// rattrape après la PREMIÈRE hydratation du store — une seule fois.
+    func test_firstHydration_catchesUpPreferencesChangedWhileTheAppWasClosed() async {
+        let store = makeStore()
+        let feed = ServedPreferencesFeed([[makeServedRow("c1", version: 4, isMuted: true)]])
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), servedPreferences: feed)
+
+        await store.hydrate(makeConv(id: "c1"))
+        await store.hydrate(makeConv(id: "c2"))
+        await env.bridge.awaitPendingEvents()
+
+        let state = await store.conversation(id: "c1")?.userState
+        XCTAssertEqual(state?.isMuted, true, "la première hydratation relit les préférences servies")
+        XCTAssertEqual(feed.asked.count, 1, "une seule relecture : la première hydratation, pas chacune")
+    }
+
+    /// La route trie `updatedAt desc` : la relecture suivante ne demande que ce
+    /// qui a changé depuis la ligne servie la plus récente — l'horloge du
+    /// SERVEUR, jamais celle de l'appareil.
+    func test_didReconnect_asksOnlyForPreferencesChangedSinceTheNewestServed() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let newest = Date(timeIntervalSince1970: 1_700_000_900)
+        let feed = ServedPreferencesFeed([[
+            makeServedRow("c1", version: 2, isPinned: true, updatedAt: newest),
+            makeServedRow("c2", version: 1, updatedAt: newest.addingTimeInterval(-60))
+        ]])
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), servedPreferences: feed)
+        await env.bridge.awaitPendingEvents()
+
+        env.didReconnect.send(())
+        await env.bridge.awaitPendingEvents()
+
+        XCTAssertEqual(feed.asked, [nil, newest], "la première relecture lit tout, la suivante part du filigrane servi")
     }
 
     // MARK: ConversationStore routes

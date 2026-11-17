@@ -10,8 +10,6 @@
     <string name="chat_no_messages">No messages yet</string>
 
     <!-- Conversation list screen -->
-    <string name="conversations_title">Meeshy Chats</string>
-    <string name="conversations_empty">No conversations yet</string>
     <string name="conversations_no_messages">No messages yet</string>
 
     <!-- Notifications screen -->

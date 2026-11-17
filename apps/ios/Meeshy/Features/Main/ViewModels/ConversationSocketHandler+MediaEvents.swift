@@ -248,25 +248,13 @@ extension ConversationSocketHandler {
         delegate.messageTranslations = next
     }
 
+    /// Le site que partage la conversation fermée (#18934), et sa règle des messages protégés.
     private func persistTranslations(_ events: [TranslationEvent], in persistence: MessagePersistenceActor) async {
         for event in events {
-            for t in event.translations {
-                let record = TranslationRecord(
-                    id: t.id,
-                    messageLocalId: t.messageId,
-                    messageServerId: t.messageId,
-                    targetLanguage: t.targetLanguage,
-                    translatedContent: t.translatedContent,
-                    translationModel: t.translationModel,
-                    confidenceScore: t.confidenceScore,
-                    sourceLanguage: t.sourceLanguage,
-                    receivedAt: Date()
-                )
-                do {
-                    try await persistence.saveTranslation(record)
-                } catch {
-                    Logger.messages.error("Persistence saveTranslation failed: \(error, privacy: .public) messageId=\(t.messageId, privacy: .public) lang=\(t.targetLanguage, privacy: .public)")
-                }
+            do {
+                try await MessageEnrichmentWriter.save(event.translations, into: persistence)
+            } catch {
+                Logger.messages.error("Persistence saveTranslation failed: \(error, privacy: .public) messageId=\(event.messageId, privacy: .public)")
             }
         }
     }

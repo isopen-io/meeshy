@@ -32,7 +32,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 /**
  * "Seen and deleted" tombstone for a consumed view-once message — Android render of the
- * iOS `BubbleBurnedView`. A flame glyph plus a muted italic label sit in a warning-tinted
+ * iOS burned tombstone. A flame glyph plus a muted italic label sit in a warning-tinted
  * capsule, aligned to the sender's side (like the deleted tombstone) rather than centered.
  */
 @Composable

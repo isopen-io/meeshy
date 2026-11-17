@@ -47,9 +47,23 @@ public struct SocketNotificationEvent: Decodable, Sendable {
     /// que leurs nombres voyagent en nombre OU en chaîne selon l'émetteur.
     public let detailFields: SocketNotificationDetailFields
 
+    /// L'état de la ligne tel que la passerelle le sert : `formatNotification` émet
+    /// `state: { isRead, readAt, createdAt }`, jamais `isRead` à la racine. Ne lire
+    /// que la racine laissait toute notification arrivée par le socket NON LUE et
+    /// datée de son arrivée — une notification RÉÉCRITE après une édition
+    /// (`notification:deleted` puis `notification:new`, même id, état conservé)
+    /// ressonnait, repassait non lue et comptait de nouveau (#19104).
+    public let state: SocketNotificationState?
+
+    /// `metadata` sous sa forme durable (`NotificationMetadata`) : la ligne que le
+    /// socket range dans le cache de la cloche garde `postType`, la vignette du
+    /// post et les paliers, sans attendre le prochain rafraîchissement REST
+    /// (#19104). Décodé à part et en tolérant, comme `detailFields`.
+    public let apiMetadata: NotificationMetadata?
+
     private enum CodingKeys: String, CodingKey {
         case id, userId, type, title, subtitle, content, priority, isRead
-        case actor, context, metadata
+        case actor, context, metadata, state
         case seq = "_seq"
     }
 
@@ -70,7 +84,16 @@ public struct SocketNotificationEvent: Decodable, Sendable {
         let fromContext = (try? container.decodeIfPresent(SocketNotificationDetailFields.self, forKey: .context)) ?? nil
         let fromMetadata = (try? container.decodeIfPresent(SocketNotificationDetailFields.self, forKey: .metadata)) ?? nil
         detailFields = (fromContext ?? .empty).merging(fallback: fromMetadata ?? .empty)
+        state = (try? container.decodeIfPresent(SocketNotificationState.self, forKey: .state)) ?? nil
+        apiMetadata = (try? container.decodeIfPresent(NotificationMetadata.self, forKey: .metadata)) ?? nil
     }
+
+    /// L'état lu SERVI : `state.isRead` (le fil), puis `isRead` à la racine
+    /// (passerelle plus ancienne, #9223). `nil` : aucun des deux n'est porté.
+    public var resolvedIsRead: Bool? { state?.isRead ?? isRead }
+
+    /// La date de création servie par la passerelle, quand le fil la porte.
+    public var wireCreatedAt: String? { state?.createdAt }
 
     // Computed accessors: resolve from nested structs (gateway format)
     public var senderUsername: String? { actor?.username }
@@ -113,6 +136,12 @@ public struct SocketNotificationEvent: Decodable, Sendable {
     public var notificationType: MeeshyNotificationType {
         MeeshyNotificationType(rawValue: type) ?? .system
     }
+}
+
+/// `state` d'une notification sur le fil : seules les clés que le client sert.
+public struct SocketNotificationState: Decodable, Sendable {
+    public let isRead: Bool?
+    public let createdAt: String?
 }
 
 public struct SocketNotificationActor: Decodable, Sendable {

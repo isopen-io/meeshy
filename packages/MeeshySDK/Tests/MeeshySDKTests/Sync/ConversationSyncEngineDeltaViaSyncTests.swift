@@ -133,6 +133,61 @@ final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
         XCTAssertEqual(mockSync.demandes.count, 1)
     }
 
+    // MARK: - Une liste EXPIRÉE n'est pas une liste vide (#18916)
+
+    /// `.expired` dit « revalide », jamais « il n'y a rien ». Le delta fusionnait
+    /// pourtant sur `load(...).snapshot() ?? []` : 25 h sans delta réussi, le
+    /// retour au premier plan écrivait une liste vide FRAÎCHE, puis la seule
+    /// fenêtre réhydratée — « c2 », que rien n'avait changé, disparaissait.
+    func test_syncSinceLastCheckpoint_whenListExpiredAndDeltaServesOneRow_keepsTheOtherRows() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        var c1 = MeeshyConversation(
+            id: "c1", identifier: "equipe-lagos", type: .group,
+            lastMessageAt: WireDate.date(from: "2026-09-04T11:59:00.000Z")!,
+            updatedAt: WireDate.date(from: "2026-09-04T11:00:00.000Z")!
+        )
+        c1.title = "Équipe Lagos"
+        let c2 = MeeshyConversation(
+            id: "c2", identifier: "famille", type: .group, title: "Famille",
+            lastMessageAt: WireDate.date(from: "2026-09-03T08:00:00.000Z")!,
+            updatedAt: WireDate.date(from: "2026-09-03T08:00:00.000Z")!
+        )
+        try? await CacheCoordinator.shared.conversations.save([c1, c2], for: "list")
+        await CacheCoordinator.shared.conversations.debugRewindFetchTimestamp(by: 25 * 3600, for: "list")
+        mockSync.scripte = .delta(json: deltaJSON(), validateur: nil)
+        mockAPI.stub("/conversations", result: OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: [Self.c1Riche()],
+            pagination: OffsetPagination(total: 1, hasMore: false, limit: 100, offset: 0),
+            error: nil
+        ))
+
+        _ = await engine.syncSinceLastCheckpoint()
+
+        let surLeDisque = await CacheCoordinator.shared.conversations.loadIgnoringExpiry(for: "list")?.items ?? []
+        XCTAssertEqual(Set(surLeDisque.map(\.id)), ["c1", "c2"],
+                       "la ligne que le delta n'a pas servie reste dans la liste")
+        XCTAssertEqual(surLeDisque.first(where: { $0.id == "c1" })?.title, "Lagos — renommée")
+    }
+
+    /// La ligne RICHE de « c1 » que la réhydratation relit.
+    private static func c1Riche() -> APIConversation {
+        let json = """
+        {
+          "id": "c1",
+          "type": "group",
+          "identifier": "equipe-lagos",
+          "title": "Lagos — renommée",
+          "isActive": true,
+          "memberCount": 5,
+          "lastMessageAt": "2026-09-04T11:59:00.000Z",
+          "createdAt": "2026-08-01T10:00:00.000Z",
+          "updatedAt": "2026-09-04T11:59:30.000Z",
+          "unreadCount": 2
+        }
+        """
+        return try! MeeshyCoders.decoder(.api).decode(APIConversation.self, from: Data(json.utf8))
+    }
+
     func test_inchange_neToucheNiCacheNiReseau() async {
         let riche = await semeLeCache()
         mockSync.scripte = .inchange

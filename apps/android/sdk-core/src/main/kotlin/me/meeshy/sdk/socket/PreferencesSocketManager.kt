@@ -4,6 +4,7 @@ import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
+import me.meeshy.sdk.model.UserPreferencesReorderedSocketData
 import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
@@ -46,14 +47,18 @@ import javax.inject.Singleton
  *   left this device's store stale for good. The broadcast carries only the category
  *   NAME, so the consumer re-reads it — see `PreferencesSyncCoordinator`.
  *
- * ## What is NOT listened to, and why
+ * ## The reorder, a second event
  *
- * `user:preferences-reordered` and `user:preferences-community-reordered` carry
- * `orderInCategory` only. `ConversationSections.of` buckets on `isPinned` +
- * `categoryId`, Android exposes no drag-reorder gesture, and
- * [me.meeshy.sdk.model.ApiConversationPreferences] holds no order column — a
- * listener for them would decode a payload no surface can read. Deliberately left
- * out until Android grows the gesture that gives it an effect.
+ * `user:preferences-reordered` carries `orderInCategory` only, and the list DOES
+ * read it: [me.meeshy.sdk.model.ApiConversationPreferences.orderInCategory] sorts a
+ * category's section (`ConversationSortOrder`), whatever device dragged. The
+ * gateway broadcasts a drag through this event only — unversioned, and the list's
+ * REST reads do not serve the order — so a drag on the web or on the iPhone never
+ * reached this device (#18915). It is relayed by [conversationsReordered], decoded
+ * as the gateway emits it.
+ *
+ * `user:preferences-community-reordered` stays unheard: measured, nothing under
+ * `apps/android` caches a community-preference row, so nothing can go stale.
  */
 @Singleton
 class PreferencesSocketManager @Inject constructor(
@@ -85,8 +90,19 @@ class PreferencesSocketManager @Inject constructor(
      */
     val categoryPreferencesUpdated: SharedFlow<String> = _categoryPreferencesUpdated.exposed()
 
+    private val _conversationsReordered =
+        SocketInboundRoute.subject<UserPreferencesReorderedSocketData>()
+
+    /** `user:preferences-reordered` — the order of a category's conversations, dragged on another device (#18915). */
+    val conversationsReordered: SharedFlow<UserPreferencesReorderedSocketData> = _conversationsReordered.exposed()
+
     fun attach() {
-        router.install(listOf(SocketInboundRoute.raw(EVENT, handle = ::route)))
+        router.install(
+            listOf(
+                SocketInboundRoute.raw(EVENT, handle = ::route),
+                SocketInboundRoute.decoding(REORDERED_EVENT, json, _conversationsReordered),
+            ),
+        )
     }
 
     private fun route(raw: JSONObject) {
@@ -105,6 +121,7 @@ class PreferencesSocketManager @Inject constructor(
 
     private companion object {
         const val EVENT = SocketEventNames.USER_PREFERENCES_UPDATED
+        const val REORDERED_EVENT = SocketEventNames.USER_PREFERENCES_REORDERED
         const val CONVERSATION_SCOPE_KEY = "conversationId"
         const val CATEGORY_SCOPE_KEY = "category"
     }

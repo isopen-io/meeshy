@@ -8,6 +8,7 @@ import {
   purgeAccountLocalData,
   type PreservedSession,
 } from './accounts';
+import { rowGesturesStorageKey } from './row-gestures';
 import { createAppQueryClient } from './query-client';
 import { createSessionStore, type SessionStorage, type SessionUser } from './session';
 
@@ -245,6 +246,17 @@ describe('les données locales d’un compte déconnecté', () => {
     purgeAccountLocalData({ storage, userId: 'a1', keys: [...storage.raw.keys()] });
 
     expect([...storage.raw.keys()].sort()).toEqual(['meeshy.call-journal.u_b2', 'meeshy.draft.story.b2', 'meeshy.draft.u_b2.c1', 'meeshy.scheme']);
+  });
+
+  test('ses gestes de rangée en attente partent avec lui (#18917), jamais ceux d’un autre compte', () => {
+    const storage = memoryStorage({
+      [rowGesturesStorageKey('a1')]: '[]',
+      [rowGesturesStorageKey('b2')]: '[]',
+    });
+
+    purgeAccountLocalData({ storage, userId: 'a1', keys: [...storage.raw.keys()] });
+
+    expect([...storage.raw.keys()]).toEqual([rowGesturesStorageKey('b2')]);
   });
 
   test('ses identités anonymes tenues partent avec lui (#8816), jamais celles d’un autre compte', () => {

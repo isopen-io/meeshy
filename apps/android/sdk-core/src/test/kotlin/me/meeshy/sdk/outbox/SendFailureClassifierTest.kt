@@ -50,6 +50,22 @@ class SendFailureClassifierTest {
             .isInstanceOf(SendResult.PermanentFailure::class.java)
     }
 
+    /** #19047 — an exhausted row keeps its refusal as the reason [SendFailureClassifier.classify] wrote, and only that. */
+    @Test
+    fun `a refusal that says the target is gone reads back from the reason it left, and no other does`() {
+        fun reason(error: ApiError) = (SendFailureClassifier.classify(error) as SendResult.PermanentFailure).reason
+
+        assertThat(SendFailureClassifier.refusedAsGone(reason(gateway(404, "MESSAGE_NOT_FOUND")))).isTrue()
+        assertThat(SendFailureClassifier.refusedAsGone(reason(gateway(410, "")))).isTrue()
+        listOf(400, 403, 413, 415, 422).forEach { status ->
+            assertThat(SendFailureClassifier.refusedAsGone(reason(gateway(status)))).isFalse()
+        }
+        assertThat(SendFailureClassifier.refusedAsGone(reason(gateway(429, "DAILY_REACTION_LIMIT")))).isFalse()
+        listOf(null, "", "refused for good", "Refused: HTTP 4040 X", "Refused: HTTP").forEach {
+            assertThat(SendFailureClassifier.refusedAsGone(it)).isFalse()
+        }
+    }
+
     @Test
     fun `a status the gateway did not envelope may come from a proxy and is retried, except a too-large body`() {
         assertThat(SendFailureClassifier.classify(ApiError("404 page not found", code = "HTTP_404", httpStatus = 404)))

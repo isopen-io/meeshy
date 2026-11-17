@@ -36,18 +36,31 @@ export const flush = async (): Promise<void> => {
   for (let i = 0; i < 10; i += 1) await Promise.resolve();
 };
 
+/** Le verrou entre onglets d'un même compte (`navigator.locks` en vrai) : un FIFO partagé par les mondes qui le reçoivent. */
+export type AcrossTabs = <T>(run: () => Promise<T>) => Promise<T>;
+export const makeAcrossTabs = (): AcrossTabs => {
+  let tail: Promise<unknown> = Promise.resolve();
+  return <T,>(run: () => Promise<T>): Promise<T> => {
+    const turn = tail.then(run);
+    tail = turn.catch(() => undefined);
+    return turn;
+  };
+};
+
 export function makeWorld({
   fix = { kind: 'fix', fix: PARIS } as SharedLocationFixResult,
   stored = null as string | null,
   granted = true,
   memory = new Map<string, string>(),
   served = null as SharedLocationOwnSnapshot | null,
+  acrossTabs = undefined as AcrossTabs | undefined,
 }: {
   readonly fix?: SharedLocationFixResult;
   readonly stored?: string | null;
   readonly granted?: boolean;
   readonly memory?: Map<string, string>;
   readonly served?: SharedLocationOwnSnapshot | null;
+  readonly acrossTabs?: AcrossTabs;
 } = {}) {
   const clock = { now: T0 };
   const account = { current: OWNER as string | null };
@@ -71,12 +84,12 @@ export function makeWorld({
       return (stopQueue.shift() ?? (async () => true))();
     },
   };
-  const source = { result: fix, granted, prompts: 0, following: 0, listener: null as ((fix: SharedLocationFix) => void) | null };
+  const source = { result: fix, pending: null as Promise<SharedLocationFixResult> | null, granted, prompts: 0, following: 0, listener: null as ((fix: SharedLocationFix) => void) | null };
   const fixes: SharedLocationFixSource = {
     isGranted: async () => source.granted,
     currentFix: async () => {
       source.prompts += 1;
-      return source.result;
+      return source.pending ?? source.result;
     },
     follow: (onFix) => {
       source.following += 1;
@@ -113,6 +126,7 @@ export function makeWorld({
       server.reads += 1;
       return server.served;
     },
+    ...(acrossTabs === undefined ? {} : { acrossTabs }),
   });
   const advance = async (ms: number): Promise<void> => {
     clock.now += ms;

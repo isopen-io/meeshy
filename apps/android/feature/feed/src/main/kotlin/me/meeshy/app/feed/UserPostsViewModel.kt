@@ -22,7 +22,7 @@ import me.meeshy.sdk.socket.SocialSocketManager
 import javax.inject.Inject
 
 /**
- * A single user's authored-posts feed — the Android take on iOS `UserProfileView`'s posts
+ * A single user's authored-posts feed — the Android take on the iOS profile posts
  * list. Loads the profile owner's posts cursor-page by cursor-page, projects each through
  * the shared [FeedPostBuilder] so the Prisme language resolution matches the main feed, and
  * pages in more as the reader nears the tail.

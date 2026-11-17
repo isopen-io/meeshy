@@ -3,8 +3,9 @@ import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
 
 import type { CallHistoryData } from '@/lib/calls/view';
 
-import { CALLS_QUERY_PREFIX, type CallRecord, type CallsDeps } from './calls';
+import type { CallRecord, CallsDeps } from './calls';
 import type { ApiResult } from './http';
+import { CALL_HISTORY_QUERY_PREFIX } from './me-keys';
 
 /**
  * **EFFACER DU JOURNAL D'APPELS** (#8066) — miroir de la suppression par
@@ -20,7 +21,7 @@ import type { ApiResult } from './http';
 
 export type CallHistoryActionDeps = CallsDeps & { readonly queryClient: QueryClient };
 
-const HISTORY_QUERY_KEY = [...CALLS_QUERY_PREFIX, 'history'] as const;
+const HISTORY_QUERY_KEY = CALL_HISTORY_QUERY_PREFIX;
 
 type HistorySnapshot = ReadonlyArray<readonly [readonly unknown[], CallHistoryData | undefined]>;
 

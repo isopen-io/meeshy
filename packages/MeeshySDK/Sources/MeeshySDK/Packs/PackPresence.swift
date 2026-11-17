@@ -2,8 +2,8 @@ import Foundation
 
 // MARK: - La présence d'un pack sur l'appareil (#10148, § 5.10.6)
 //
-// MIROIR de `packages/shared/types/pack-presence.ts` et de la machine
-// `apps/web/src/lib/packs/presence.ts` : une machine PURE, sans horloge, sans
+// MIROIR de `packages/shared/types/pack-presence.ts` (`apps/web` ne porte pas
+// encore la machine) : une machine PURE, sans horloge, sans
 // réseau, sans disque. Elle rend l'état suivant et les effets ORDONNÉS que la
 // file de téléchargement exécute (arrêter, supprimer, élaguer). Les vecteurs
 // `packages/shared/design/packs/presence-vectors.json` sont rejoués par

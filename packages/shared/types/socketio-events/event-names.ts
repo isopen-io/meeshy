@@ -635,6 +635,11 @@ export const SERVER_EVENTS = {
   // --- Décor de profil (#10632) : contour d'avatar et bannière équipés, synchronisés entre mes appareils ---
   PROFILE_DECOR_UPDATED: 'profile:decor-updated',
 
+  // --- Mon profil (#18924) : langues, nom, photo et bannière, synchronisés entre mes appareils ---
+  // Sur `user:<moi>` seulement — jamais vers les partenaires, qui ont `user:updated` et sa charge publique.
+  // `ProfileUpdatedEventData` (`types/own-profile-sync.ts`) : l'instantané de ces champs et son `updatedAt`.
+  PROFILE_UPDATED: 'profile:updated',
+
   // --- Mes stickers (#16515) : la bibliothèque de stickers du COMPTE, synchronisée entre mes appareils ---
   STICKER_LIBRARY_UPDATED: 'sticker:library-updated',
 

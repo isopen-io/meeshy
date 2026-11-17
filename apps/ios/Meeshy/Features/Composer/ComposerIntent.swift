@@ -294,9 +294,8 @@ nonisolated enum ComposerOpening: Equatable, CaseIterable {
 /// silencieuse propre aux gardes négatives.
 ///
 /// **`editPostSheet` désigne l'édition d'un POST ou d'un RÉEL.** `.storyEdit`
-/// désigne `storyEditComposerCover` (`StoryTrayView`, quatre montages), qui
-/// monte `StoryComposerView` sur une `StoryEditSession` : c'est l'atelier d'une
-/// STORY. Éditer un POST ou un RÉEL — ce que font les CINQ montages
+/// désigne `storyEditComposerCover`, qui monte `StoryEditComposer` sur une
+/// `StoryEditSession` : c'est l'édition d'une STORY. Éditer un POST ou un RÉEL — ce que font les CINQ montages
 /// d'`EditPostSheet` (`PostDetailView`, `ProfileUserPostsList`,
 /// `ReelsPlayerView`, `RootViewComponents`, `FeedView`) — a sa propre
 /// représentation : une valeur manquante se voit ; une valeur voisine qui tient

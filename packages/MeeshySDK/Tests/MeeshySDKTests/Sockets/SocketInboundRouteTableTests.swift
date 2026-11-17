@@ -50,7 +50,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "notification:read", "notification:read-bulk", "now-playing:changed", "now-playing:cleared",
         "participant:rights-updated", "participant:role-updated",
         "phone:reachable", "phone:unreachable",
-        "presence:snapshot", "profile:decor-updated", "reaction:added", "reaction:removed", "read-status:updated",
+        "presence:snapshot", "profile:decor-updated", "profile:updated", "reaction:added", "reaction:removed", "read-status:updated",
         "relation:level-raised", "relation:ritual-completed", "relation:ritual-progress", "relation:ritual-started",
         "talkie:chunk", "talkie:ended", "talkie:incoming",
         "together:ended", "together:invited", "together:started", "together:synced",
@@ -298,6 +298,32 @@ final class SocketInboundRouteTableTests: XCTestCase {
                 "communityId": "c-renamed", "identifier": "mshy_c", "name": "Nouveau nom",
                 "description": NSNull(), "avatar": NSNull(), "banner": NSNull(),
                 "isPrivate": true, "memberCount": 7, "updatedAt": "2026-11-15T10:00:00.000Z",
+            ])
+        }
+    }
+
+    /// #18924 — ma langue changée sur un autre appareil repeint le compte connecté, quel que soit l'écran.
+    @MainActor
+    func test_profileUpdated_repaintsTheSignedInAccount() async {
+        let auth = AuthManager.shared
+        let previousUser = auth.currentUser
+        let previousPending = auth.pendingOptimisticProfile
+        defer {
+            auth.currentUser = previousUser
+            auth.pendingOptimisticProfile = previousPending
+        }
+        auth.pendingOptimisticProfile = nil
+        auth.currentUser = MeeshyUser(id: "moi-route", username: "alice", systemLanguage: "fr", updatedAt: "2026-11-17T10:00:00.000Z")
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+
+        await expectOneValue(from: auth.$currentUser, where: { $0?.systemLanguage == "en" }) {
+            registrar.deliver("profile:updated", [
+                "userId": "moi-route", "updatedAt": "2026-11-17T10:05:00.000Z",
+                "profile": [
+                    "systemLanguage": "en", "regionalLanguage": NSNull(), "customDestinationLanguage": NSNull(),
+                    "displayName": NSNull(), "firstName": "Alice", "lastName": "Dupont", "username": "alice",
+                    "avatar": NSNull(), "banner": NSNull(),
+                ] as [String: Any],
             ])
         }
     }

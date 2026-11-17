@@ -3,8 +3,15 @@ package me.meeshy.app.chat
 import androidx.work.WorkManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
@@ -69,6 +76,21 @@ internal class ChatForwardController(
     private companion object {
         /** Refusals the plan states in « Ce qui part » (and the builder never posts). */
         val WITHDRAWN_BY_THE_PLAN = setOf(ForwardRefusalReason.VIEW_ONCE, ForwardRefusalReason.AFTER_READ)
+    }
+
+    /**
+     * #18932 — the conversation list feeds the picker only WHILE it is open: closed, nothing collects [conversations] —
+     * no decoding of the whole list on every write, no revalidation of it on every stale emission. The picker searches
+     * EVERY conversation the list holds ([ForwardTargets.of]), so the read is never bounded to the most recent ones; the
+     * last list loaded stays for the next opening, repainted as soon as the stream answers.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun followConversationsWhileOpen(conversations: () -> Flow<CacheResult<List<ApiConversation>>>) {
+        scope.launch {
+            state.flow.map { it.forward != null }.distinctUntilChanged()
+                .flatMapLatest { open -> if (open) conversations() else emptyFlow() }
+                .collect { result -> onConversationsLoaded(result.windowOrNull()) }
+        }
     }
 
     /**

@@ -16,7 +16,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { declaredAgeClass, type DeclaredAgeClass } from '@meeshy/shared/utils/age';
-import { ACCOUNT_STATE_SELECT, lawRoleOf } from './usableAccount';
+import { ACCOUNT_STATE_SELECT, isUsableAccount, lawRoleOf } from './usableAccount';
 import { relationAccessReads, resolveRelationAccess, type RelationAccess, type RelationConsent } from '@meeshy/shared/utils/relation-access';
 import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
@@ -41,7 +41,13 @@ export type PairAccessAmongParams = {
   readonly consentOf?: (otherId: string) => RelationConsent;
 };
 
-export type PairPerson = { readonly age: DeclaredAgeClass; readonly role: string | null; readonly deactivated: boolean };
+export type PairPerson = {
+  readonly age: DeclaredAgeClass;
+  readonly role: string | null;
+  readonly deactivated: boolean;
+  /** Actif, ni supprimé, ni désactivé (`isUsableAccount`). */
+  readonly usable: boolean;
+};
 
 export async function peopleOf(prisma: PairAccessDb, ids: readonly string[], now: Date): Promise<ReadonlyMap<string, PairPerson>> {
   const rows = await prisma.user.findMany({
@@ -49,7 +55,10 @@ export async function peopleOf(prisma: PairAccessDb, ids: readonly string[], now
     select: { id: true, birthDate: true, role: true, ...ACCOUNT_STATE_SELECT },
   });
   return new Map(
-    rows.map((row) => [row.id, { age: declaredAgeClass(row.birthDate ?? null, now), role: lawRoleOf(row), deactivated: row.deactivatedAt != null }]),
+    rows.map((row) => [
+      row.id,
+      { age: declaredAgeClass(row.birthDate ?? null, now), role: lawRoleOf(row), deactivated: row.deactivatedAt != null, usable: isUsableAccount(row) },
+    ]),
   );
 }
 

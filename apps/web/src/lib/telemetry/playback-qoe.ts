@@ -1,3 +1,5 @@
+import { PLAYBACK_QUARTILE } from '@meeshy/shared/types/social-events-v2';
+
 import type { PlaybackExitReason, PlaybackSummary } from '@/lib/api/social-events-v2-types';
 
 import type { PlaybackPageProbe } from './page-vitals';
@@ -36,10 +38,10 @@ const MEDIA_ERRORS: Readonly<Record<number, string>> = {
 };
 
 const QUARTILE_BITS = [
-  [0.25, 1],
-  [0.5, 2],
-  [0.75, 4],
-  [0.97, 8],
+  [0.25, PLAYBACK_QUARTILE.q25],
+  [0.5, PLAYBACK_QUARTILE.q50],
+  [0.75, PLAYBACK_QUARTILE.q75],
+  [0.97, PLAYBACK_QUARTILE.q100],
 ] as const;
 
 export function createPlaybackAccumulator(params: { readonly playbackId: string; readonly mediaId: string; readonly mutedAtStart: boolean; readonly startedAt: number }) {

@@ -20,7 +20,7 @@ import MeeshyUI
 ///
 /// ## Ce qui change pour l'auteur
 ///
-/// L'ancien cover montait `StoryComposerView` NU. Il n'avait donc ni éventail de
+/// L'ancien cover montait l'atelier du SDK NU. Il n'avait donc ni éventail de
 /// format, ni plateau, ni socle — c'est-à-dire qu'une republication ne pouvait
 /// pas devenir un post, alors que la table des portes déclare cet ancrage
 /// depuis le lot 4.7 (`offeredFormats: [sourceFormat, .post]`, « garder la chose

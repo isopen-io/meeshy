@@ -42,7 +42,7 @@ const mockSendInternalError = jest.fn<any>((reply: any, msg: any) => {
   reply._body = { success: false, error: msg };
   return reply;
 });
-const mockSendWithETag = jest.fn<any>().mockReturnValue(false);
+const mockSendWithValidator = jest.fn<any>().mockReturnValue('unconditional');
 const mockResolveUserLanguage = jest.fn<any>().mockReturnValue('fr');
 const mockValidatePagination = jest.fn<any>().mockReturnValue({ offset: 0, limit: 20 });
 const mockBuildPaginationMeta = jest.fn<any>().mockReturnValue({ total: 0, offset: 0, limit: 20, hasMore: false });
@@ -107,9 +107,7 @@ jest.mock('../../../utils/response', () => ({
   sendNotFound: (...args: any[]) => mockSendNotFound(...args),
   sendInternalError: (...args: any[]) => mockSendInternalError(...args),
 }));
-jest.mock('../../../utils/etag', () => ({
-  sendWithETag: (...args: any[]) => mockSendWithETag(...args),
-}));
+jest.mock('../../../utils/etag', () => ({ ...(jest.requireActual('../../../utils/etag') as object), sendWithValidator: (...args: any[]) => mockSendWithValidator(...args) }));
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
   ...(jest.requireActual('@meeshy/shared/utils/conversation-helpers') as object),
   resolveUserLanguage: (...args: any[]) => mockResolveUserLanguage(...args),
@@ -464,7 +462,7 @@ beforeEach(() => {
   // Restore default mock behaviours
   mockResolveConversationId.mockResolvedValue('resolved-conv-id');
   mockCanAccessConversation.mockResolvedValue(true);
-  mockSendWithETag.mockReturnValue(false);
+  mockSendWithValidator.mockReturnValue('unconditional');
   mockValidatePagination.mockReturnValue({ offset: 0, limit: 20 });
   mockBuildPaginationMeta.mockReturnValue({ total: 0, offset: 0, limit: 20, hasMore: false });
   mockTransformTranslationsToArray.mockReturnValue([]);
@@ -1201,12 +1199,12 @@ describe('GET /conversations/:id/messages', () => {
     expect(reply.send).toHaveBeenCalled();
   });
 
-  it('ETag match: sendWithETag returns true → handler returns early without extra work', async () => {
-    mockSendWithETag.mockReturnValue(true);
+  it('ETag match: sendWithValidator returns not-modified → handler returns early without extra work', async () => {
+    mockSendWithValidator.mockReturnValue('not-modified');
     prisma.message.findMany.mockResolvedValue([]);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    // reply.send should NOT be called since sendWithETag short-circuited
+    // reply.send should NOT be called since sendWithValidator short-circuited
     expect(reply.send).not.toHaveBeenCalled();
   });
 

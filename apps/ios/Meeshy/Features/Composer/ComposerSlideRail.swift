@@ -28,7 +28,7 @@ import MeeshyUI
 /// La VIGNETTE de sa scène — fond et objets posés, noire quand la scène est
 /// vide — rendue par le composite partagé (`SceneThumbnailRenderer`, SDK), le
 /// même qui produit la couverture du plateau et le ThumbHash. Elle peignait
-/// auparavant `SlideMiniPreview`, un second chemin de rendu en modifiers
+/// auparavant une mini-vue de slide, un second chemin de rendu en modifiers
 /// SwiftUI que #5037 nommait comme piège : il approxime les filtres et pouvait
 /// mentir sur le rendu final.
 ///

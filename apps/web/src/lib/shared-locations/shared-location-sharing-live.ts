@@ -11,7 +11,7 @@ import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 
 import { readSharedLocationAck, sharedLocationFixOf, sharedLocationStopAccepted, type SharedLocationVerdict } from './shared-location-sending';
 import { sharedLocationWithdrawalsKey } from './shared-location-roster';
-import { createSharedLocationSharingCenter, type SharedLocationEmitter, type SharedLocationFixSource, type SharedLocationSharingCenter } from './shared-location-sharing';
+import { createSharedLocationSharingCenter, sharedLocationAcrossTabs, type SharedLocationEmitter, type SharedLocationFixSource, type SharedLocationSharingCenter } from './shared-location-sharing';
 
 /**
  * **LE CENTRE DE PARTAGE BRANCHÉ SUR LE NAVIGATEUR ET LA SOCKET VIVANTE** (#18345) —
@@ -107,7 +107,8 @@ const accountOf = (session: SessionStoreApi): string | null => {
  * et rejoue les retraits en attente : un appareil revenu en ligne ne republie jamais une
  * liste qu'un autre a changée entre-temps (#18389). `location:share-own-changed` (un autre
  * appareil du compte a démarré ou arrêté) recale aussi. Un autre onglet du même compte qui
- * change la liste (événement `storage`) la fait relire ici.
+ * change la liste (événement `storage`) la fait relire ici, et chaque opération attend que
+ * celles des autres onglets du compte soient finies (`navigator.locks`, #18431).
  */
 export function createSharedLocationSharingHolder({
   session,
@@ -115,6 +116,7 @@ export function createSharedLocationSharingHolder({
   fixes = browserSharedLocationFixSource(),
   storage = safeLocalStorage(),
   served = () => loadOwnSharedLocation(apiDeps),
+  locks = globalThis.navigator?.locks,
   schedule = (delay, run) => {
     const id = setTimeout(run, delay);
     return () => clearTimeout(id);
@@ -125,6 +127,8 @@ export function createSharedLocationSharingHolder({
   readonly fixes?: SharedLocationFixSource;
   readonly storage?: SafeStorage;
   readonly served?: () => Promise<SharedLocationOwnSnapshot | null>;
+  /** `navigator.locks` : les onglets du compte sérialisent leurs opérations (#18431). */
+  readonly locks?: unknown;
   readonly schedule?: (delayMs: number, run: () => void) => () => void;
 }) {
   let current: { readonly userId: string; readonly center: SharedLocationSharingCenter; readonly unwatch: () => void } | null = null;
@@ -146,6 +150,7 @@ export function createSharedLocationSharingHolder({
       owner: userId,
       currentAccount: () => accountOf(session),
       served,
+      acrossTabs: sharedLocationAcrossTabs(locks, `${rosterKey(userId)}.lock`),
     });
     const key = rosterKey(userId);
     const onStorage = (event: StorageEvent): void => {

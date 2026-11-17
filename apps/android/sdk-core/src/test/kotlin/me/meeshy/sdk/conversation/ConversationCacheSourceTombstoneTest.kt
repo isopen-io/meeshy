@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.sync.SyncConversationRow
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.core.database.entity.MessageEntity
+import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.sync.SyncCheckpointStore
 import me.meeshy.sdk.model.sync.SyncCheckpoint
 import me.meeshy.sdk.model.sync.ReconcilePlan
@@ -97,6 +98,8 @@ class ConversationCacheSourceTombstoneTest {
         source(SyncDeltaFetching.None).revalidate()
         seedMessage("c1")
         seedMessage("c2")
+        db.syncMetaDao().upsert(SyncMetaEntity("messages:c1", lastSyncedAt = 1L, etag = "\"e1\""))
+        db.syncMetaDao().upsert(SyncMetaEntity("messages:c2", lastSyncedAt = 1L, etag = "\"e2\""))
 
         source(delta(rows = emptyList(), deleted = listOf("c1"))).revalidate()
 
@@ -104,6 +107,9 @@ class ConversationCacheSourceTombstoneTest {
         assertThat(db.conversationDao().find("c2")).isNotNull()
         assertThat(db.messageDao().find("msg-c1")).isNull()
         assertThat(db.messageDao().find("msg-c2")).isNotNull()
+        // #19050 — the thread's validator leaves with its messages; the other thread keeps its own.
+        assertThat(db.syncMetaDao().etag("messages:c1")).isNull()
+        assertThat(db.syncMetaDao().etag("messages:c2")).isEqualTo("\"e2\"")
     }
 
     @Test

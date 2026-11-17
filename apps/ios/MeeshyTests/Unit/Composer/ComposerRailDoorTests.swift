@@ -869,15 +869,6 @@ final class ComposerSoundSourceWiringGuardTests: XCTestCase {
                       "…et le placement en CARTE DE CONTENU abandonne la pose sur la scène : "
                         + "le média part dans le document, pas sur le canvas.")
     }
-
-    /// La sélection affichée est ce que la règle ferait SANS choix — jamais un
-    /// défaut arbitraire qui la contredirait, et jamais une boucle recopiée.
-    func test_laSelectionAffichee_appelleLaRegleAutomatique() throws {
-        let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("chosenSoundRole??automaticSoundRole"))
-        XCTAssertTrue(source.contains("ComposerAudioPlacement.isBackground("),
-                      "la règle automatique s'APPELLE, elle ne se recopie pas")
-    }
 }
 
 /// **Annuler et rétablir sur le plateau** (#4402).

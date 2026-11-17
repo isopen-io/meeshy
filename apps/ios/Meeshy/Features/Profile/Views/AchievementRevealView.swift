@@ -160,7 +160,7 @@ struct AchievementRevealView: View {
         // rend `indigo300` à 70 % — sur un disque de 128 pt, un lavande PLEIN
         // qui se lit comme une SECONDE récompense plutôt que comme une absence.
         // Le gris neutre est déjà le vocabulaire du verrouillé dans cette app
-        // (`AchievementBadgeView`, teinte « 808080 »).
+        // (teinte « 808080 » des badges verrouillés).
         guard occasion.estObtenu else { return MeeshyColors.neutral500 }
         switch reveal {
         case .achievement, .composedAchievement: return MeeshyColors.purple500

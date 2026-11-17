@@ -24,7 +24,9 @@ final class AnswerWithoutVideoSourceGuardTests: XCTestCase {
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }
 
-    private static let client = source("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
+    private static let client = [
+        "P2PWebRTCClient.swift", "P2PWebRTCClient+Negotiation.swift", "P2PWebRTCClient+MediaControls.swift",
+    ].map { source("Meeshy/Features/Call/Services/WebRTC/\($0)") }.joined(separator: "\n")
     private static let answer = source("Meeshy/Features/Call/Services/CallManager+Answer.swift")
     private static let withholding = source("Meeshy/Features/Call/Services/CallAnswerWithoutVideo.swift")
     private static let view = source("Meeshy/Features/Call/Views/IncomingCallView.swift")
@@ -42,7 +44,7 @@ final class AnswerWithoutVideoSourceGuardTests: XCTestCase {
     // MARK: - Client WebRTC
 
     func test_answererDoesNotReattachAWithheldCamera() {
-        guard let fn = slice(Self.client, from: "private func attachAnswererTracks(on pc: RTCPeerConnection) {", to: "func forceSendRecv(") else { return }
+        guard let fn = slice(Self.client, from: "func attachAnswererTracks(on pc: RTCPeerConnection) {", to: "func forceSendRecv(") else { return }
         XCTAssertTrue(
             fn.contains("if let video = localVideoTrack_, !localVideoWithheld {"),
             "La réponse ne rattache la caméra que si elle n'a pas été retirée : sinon « Répondre sans vidéo » renverrait l'image."
