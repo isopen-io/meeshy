@@ -10,7 +10,6 @@ final class MainQueueTimerSourceGuardTests: XCTestCase {
         "Media/DocumentViewerView.swift": 0,
         "Media/ImageViewerView.swift": 0,
         "Media/MeeshyVideoPlayer+FullscreenSave.swift": 0,
-        "Story/TimelineExportFlow.swift": 0,
         "Utilities/TextAnalyzer.swift": 0,
     ]
 

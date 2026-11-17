@@ -4,7 +4,6 @@ final class MeeshyUICompletionSweepSourceGuardTests: XCTestCase {
 
     private static let lockFree: [String] = [
         "Story/MeeStickerCatalog.swift",
-        "Story/Timeline/Util/ImageStill.swift",
         "Story/Canvas/StoryStickerRasterizer.swift",
         "Story/StoryFilterProcessor.swift",
         "Story/StoryFilterThumbnails.swift",

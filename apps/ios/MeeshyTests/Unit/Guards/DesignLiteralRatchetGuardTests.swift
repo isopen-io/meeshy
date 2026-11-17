@@ -300,11 +300,13 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
     /// `… | xargs grep -Po 'cornerRadius(:|\()[ \t]*[0-9]' | wc -l` → 120 au 2026-09-30 ;
     /// 119 au 2026-10-21, quand les styles de survol pointeur passent sur `MeeshyRadius`
     /// et `MeeshyPointerShape.rectangle`.
-    private static let cornerRadiusCeiling = 119
+    /// 108 au 2026-11-17 (#18899) : la frise d'atelier du SDK sort, mesuré par la commande de référence.
+    private static let cornerRadiusCeiling = 108
 
     /// Marges numériques hors cadre libre. **Ne doit que DESCENDRE.**
     /// `… | xargs grep -Po '\.padding\((\.[a-z]+,[ \t]*|\[[^\]\n]*\],[ \t]*)?[0-9]' | wc -l` → 190.
-    private static let paddingCeiling = 190
+    /// 179 au 2026-11-17 (#18899) : la frise d'atelier du SDK sort, mesuré par la commande de référence.
+    private static let paddingCeiling = 179
 
     private static func ceiling(_ population: Population) -> Int {
         switch population {

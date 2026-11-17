@@ -684,8 +684,8 @@ Les quatre autres noms restent à écrire.
 > **`place`, et non `location`** (#4960) — et cette ligne a dit `location`
 > jusqu'au 2026-09-04, seule de tout le dépôt. Le contrat du fil dit `place`
 > (`ACTIVE_KINDS`, `packages/shared/types/canvas-v3.ts`), son miroir Swift dit
-> `place` (`ObjectKind`), la timeline dit `place` (`TimelineClipKind`) et
-> l'inspecteur aussi (`ClipSnapshot.Kind`). Un document qui GOUVERNE le
+> `place` (`ObjectKind`) et la timeline dit `place` (`TimelineClipKind`).
+> Un document qui GOUVERNE le
 > vocabulaire est le pire endroit où laisser le mot abandonné : il ne casse
 > aucune compilation, et il réintroduit la divergence chez le prochain qui
 > nomme quelque chose d'après lui.

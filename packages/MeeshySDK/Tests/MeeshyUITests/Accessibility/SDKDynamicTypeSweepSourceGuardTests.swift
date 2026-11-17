@@ -275,7 +275,6 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Story/StoryFilterGridView.swift": 1,
         "Story/TextEditToolOptionsGrid.swift": 1,
         "Story/Timeline/Views/Overlay/RulerView.swift": 1,
-        "Story/Timeline/Views/Overlay/SnapGuideView.swift": 1
     ]
 
     private static let featuresMainFixedFontCeiling = 88

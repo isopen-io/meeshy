@@ -29,8 +29,6 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
     ]
 
     private static let exposedGestures: [(file: String, action: String)] = [
-        ("Story/Timeline/Views/Track/TransitionBadge.swift", "onTap()"),
-        ("Story/Timeline/Views/Track/TransitionCreationBadge.swift", "onCreate()"),
         ("Story/Controls/AudioForegroundChip.swift", "onTap"),
         ("Primitives/MeeshyAvatar.swift", "performTap"),
         ("Primitives/UserIdentityBar.swift", "onTap?(code)"),
@@ -152,13 +150,6 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
                               "\(site.file):\(gesture + 1) : le geste \(site.action) n'est ni trait bouton ni action VoiceOver")
             }
         }
-    }
-
-    func test_unCurseurDeClipSeDeclareBouton() {
-        let lines = Self.lines(of: "Story/Timeline/Views/Track/ClipBarAccessibility.swift") ?? []
-        let text = lines.joined(separator: "\n")
-        XCTAssertTrue(text.contains(".accessibilityAddTraits(.isButton)"))
-        XCTAssertTrue(text.contains(".accessibilityAction { callbacks.onTap() }"))
     }
 
     func test_lesCyclesDuTexteOntUneActionParDefaut() {
