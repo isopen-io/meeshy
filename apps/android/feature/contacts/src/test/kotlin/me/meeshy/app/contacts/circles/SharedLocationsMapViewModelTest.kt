@@ -3,6 +3,7 @@ package me.meeshy.app.contacts.circles
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -66,8 +67,26 @@ class SharedLocationsMapViewModelTest {
         val vm = SharedLocationsMapViewModel(live, { emptyMap() }, 300L)
         advanceUntilIdle()
 
-        assertThat(vm.updatedAtMillis("u2")).isEqualTo(1L)
-        assertThat(vm.updatedAtMillis("u9")).isNull()
+        assertThat(vm.updatedAt.value["u2"]).isEqualTo(1L)
+        assertThat(vm.updatedAt.value["u9"]).isNull()
+    }
+
+    @Test
+    fun `une personne immobile reservie reste en direct - la fraicheur suit le magasin sans que l'epingle change`() = scope.runTest {
+        val live = FakeLive(mapOf("u2" to entry()))
+        val vm = SharedLocationsMapViewModel(live, { emptyMap() }, 300L)
+        advanceUntilIdle()
+        val pinsBefore = vm.pins.value
+        val seen = mutableListOf<Long?>()
+        val watching = backgroundScope.launch { vm.updatedAt.collect { seen += it["u2"] } }
+        runCurrent()
+
+        live.state.value = mapOf("u2" to entry().copy(updatedAtMillis = 90_000L))
+        runCurrent()
+
+        assertThat(vm.pins.value).isEqualTo(pinsBefore)
+        assertThat(seen).containsExactly(1L, 90_000L).inOrder()
+        watching.cancel()
     }
 
     @Test
