@@ -22,6 +22,7 @@ import { profileSeenAs, readProfileCircleView, readProfileSeenAs } from '../../s
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { sendBadRequest, sendForbidden, sendNotFound } from '../../utils/response.js';
 import { linkCardIsClosed } from './person-link-gate';
+import { noteProfileLinkVisit } from '../../services/profile-link-visits/profileLinkVisits';
 
 const logger = enhancedLogger.child({ module: 'DirectoryPerson' });
 
@@ -380,6 +381,8 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
       // « Voir comme » est la fiche du PROPRIÉTAIRE : tout autre lecteur est refusé
       // avant la moindre composition, et aucune charge ne part avec le refus.
       if (voirComme && viewerId !== String(profil.id)) return sendForbidden(reply, 'Only the owner can view the profile as a circle');
+      // #19206 : une ouverture de fiche par un autre compte, jamais la carte d'un lien collé ni « Voir comme ».
+      if (via !== 'link' && !voirComme) noteProfileLinkVisit(fastify, request, String(profil.id));
       // Le lecteur est synthétique, le propriétaire RÉEL : son âge, son rôle, ses
       // préférences de présence et sa désactivation décident comme pour un vrai lecteur.
       const vuComme = voirComme

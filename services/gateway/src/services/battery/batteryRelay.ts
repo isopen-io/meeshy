@@ -89,8 +89,25 @@ export type BatteryRelayDeps = {
   readonly trackedDeviceConnected?: (userId: string) => Promise<boolean>;
   /** Retire chez chaque lecteur les notifications de batterie d'un émetteur qu'il ne voit plus. */
   readonly retractPushes?: (pairs: readonly BatteryPushPair[]) => Promise<void>;
+  /**
+   * L'accord de batterie des partages de position en cours (#19204) : pour chaque émetteur
+   * (minuscules), les lecteurs à qui son partage l'accorde. Absent : seuls les réglages durables valent.
+   */
+  readonly sharedBatteryGrants?: (emitterIds: readonly string[]) => Promise<ReadonlyMap<string, ReadonlySet<string>>>;
   readonly config?: BatteryConfig;
 };
+
+type AccessParams = Omit<Parameters<typeof batteryAccessAmong>[1], 'sharedGrants'>;
+
+/**
+ * La loi de la batterie, avec l'accord des partages de position en cours (#19204) lu MAINTENANT
+ * pour les émetteurs en jeu. Une lecture ratée de l'accord n'ouvre rien : seuls les réglages durables valent.
+ */
+async function accessAmong(deps: BatteryRelayDeps, params: AccessParams): Promise<ReadonlyMap<string, BatteryReaderAccess>> {
+  const emitterIds = params.subjectIs === 'target' ? [params.subjectId] : params.otherIds;
+  const sharedGrants = deps.sharedBatteryGrants ? await deps.sharedBatteryGrants(emitterIds).catch(() => new Map<string, ReadonlySet<string>>()) : undefined;
+  return batteryAccessAmong(deps.prisma, { ...params, ...(sharedGrants ? { sharedGrants } : {}) });
+}
 
 const configOf = (deps: BatteryRelayDeps): BatteryConfig => deps.config ?? BATTERY_CONFIG;
 
@@ -159,7 +176,7 @@ const emitCleared = (deps: BatteryRelayDeps, readerId: string, emitterId: string
 async function audienceOf(deps: BatteryRelayDeps, emitterId: string): Promise<ReadonlyMap<string, BatteryReaderAccess>> {
   const candidates = await batteryCandidatesOf(deps.prisma, emitterId);
   if (candidates.length === 0) return new Map();
-  const access = await batteryAccessAmong(deps.prisma, { subjectId: emitterId, otherIds: candidates, subjectIs: 'target', now: new Date(deps.now()) });
+  const access = await accessAmong(deps, { subjectId: emitterId, otherIds: candidates, subjectIs: 'target', now: new Date(deps.now()) });
   return new Map([...access].filter(([, a]) => isServed(a)));
 }
 
@@ -332,7 +349,7 @@ export async function batterySnapshotFor(deps: BatteryRelayDeps, readerId: strin
   const states = (await Promise.all(candidates.map(async (id) => servedBatteryState(id, await readBatteryRecord(deps.cache, id)))))
     .filter((state): state is BatteryReaderState => state !== null);
   if (states.length === 0) return { items: [] };
-  const access = await batteryAccessAmong(deps.prisma, { subjectId: readerId, otherIds: states.map((s) => s.userId), subjectIs: 'viewer', now: new Date(deps.now()) });
+  const access = await accessAmong(deps, { subjectId: readerId, otherIds: states.map((s) => s.userId), subjectIs: 'viewer', now: new Date(deps.now()) });
   return { items: states.filter((state) => isServed(access.get(state.userId))) };
 }
 
@@ -340,7 +357,7 @@ export async function batterySnapshotFor(deps: BatteryRelayDeps, readerId: strin
 export async function batteryStateFor(deps: BatteryRelayDeps, params: { readonly readerId: string; readonly emitterId: string }): Promise<BatteryReaderState | null> {
   const state = servedBatteryState(params.emitterId, await readBatteryRecord(deps.cache, params.emitterId));
   if (!state) return null;
-  const access = await batteryAccessAmong(deps.prisma, { subjectId: params.emitterId, otherIds: [params.readerId], subjectIs: 'target', now: new Date(deps.now()) });
+  const access = await accessAmong(deps, { subjectId: params.emitterId, otherIds: [params.readerId], subjectIs: 'target', now: new Date(deps.now()) });
   return isServed(access.get(params.readerId)) ? state : null;
 }
 
@@ -351,7 +368,7 @@ const directions = (userA: string, userB: string) => [[userA, userB], [userB, us
 export const batteryDirectionKey = (emitterId: string, readerId: string): string => `${emitterId}>${readerId}`;
 
 async function seesNow(deps: BatteryRelayDeps, emitterId: string, readerId: string): Promise<boolean> {
-  const access = await batteryAccessAmong(deps.prisma, { subjectId: emitterId, otherIds: [readerId], subjectIs: 'target', now: new Date(deps.now()) });
+  const access = await accessAmong(deps, { subjectId: emitterId, otherIds: [readerId], subjectIs: 'target', now: new Date(deps.now()) });
   return isServed(access.get(readerId));
 }
 
@@ -461,7 +478,7 @@ export async function reconcileBatteryOfAccount(deps: BatteryRelayDeps, userId: 
   ]);
   const emitters = [...new Set([...linked.map((link) => link.id), ...team])].filter((id) => id !== userId);
   if (emitters.length === 0) return;
-  const access = await batteryAccessAmong(deps.prisma, { subjectId: userId, otherIds: emitters, subjectIs: 'viewer', now: new Date(deps.now()) });
+  const access = await accessAmong(deps, { subjectId: userId, otherIds: emitters, subjectIs: 'viewer', now: new Date(deps.now()) });
   const lost = emitters.filter((emitterId) => !isServed(access.get(emitterId)));
   for (const emitterId of lost) {
     const record = await readBatteryRecord(deps.cache, emitterId);

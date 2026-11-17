@@ -66,6 +66,9 @@ export const NotificationPreferenceSchema = z.object({
   // #18737 — « le téléphone de mes Proches et de mes Sangs est injoignable » (`device_unreachable`).
   // Absent d'un document existant ⇒ reçu.
   deviceUnreachableEnabled: z.boolean().default(true),
+  // #19204 — « partages de position » (`location_share_started`, `location_share_requested`).
+  // Absent d'un document existant ⇒ reçu.
+  locationShareEnabled: z.boolean().default(true),
   // « Jeu » (#9490) — la RÉCEPTION des notifications du jeu (invitation et acceptation de duo,
   // résultat de la semaine de ligue, étape de saison). Absent d'un document existant ⇒ reçu.
   gameEnabled: z.boolean().default(true),
@@ -159,6 +162,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   contactActivityEnabled: true,
   deviceBatteryEnabled: true,
   deviceUnreachableEnabled: true,
+  locationShareEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   bringEnabled: true,
