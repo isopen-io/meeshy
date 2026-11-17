@@ -52,10 +52,11 @@ export function applyMessageReactionUpdate(
   const existing = findCachedThreadMessage(queryClient, data.conversationId, data.messageId);
   if (existing === undefined || existing.conversationId !== data.conversationId) return;
 
-  const next = withCount(existing, data.emoji, data.aggregation.count);
-  if (next !== existing) {
+  /* Posé SUR la rangée reçue, jamais sur un instantané : une relecture en vol
+     rejoue cette écriture sur sa réponse (#18914). */
+  if (withCount(existing, data.emoji, data.aggregation.count) !== existing) {
     patchThreadMessages(queryClient, data.conversationId, (messages) =>
-      messages.map((m) => (m.id === data.messageId ? next : m)),
+      messages.map((m) => (m.id === data.messageId ? withCount(m, data.emoji, data.aggregation.count) : m)),
     );
   }
 

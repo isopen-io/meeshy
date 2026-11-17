@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
 import type { ConversationsInfiniteData } from './conversations-pages';
+import { writeLive } from './live-cache-journal';
 
 /**
  * UNE CONVERSATION FERMÉE OU RENDUE OBSOLÈTE QUITTE L'ÉCRAN (#14645) —
@@ -32,8 +33,9 @@ export function viewerConversationOf(payload: unknown, viewerId: string): string
   return (payload as Readonly<Record<string, unknown>>).userId === viewerId ? conversationId : null;
 }
 
+/** Une relecture de la liste partie avant l'évènement ne rend pas la ligne (#18914) : le retrait passe par le journal. */
 export function applyConversationGone(queryClient: QueryClient, conversationId: string): void {
-  queryClient.setQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY, (data) => {
+  writeLive<ConversationsInfiniteData>(queryClient, CONVERSATIONS_QUERY_KEY, (data) => {
     if (data === undefined || !Array.isArray(data.pages)) return data;
     if (!data.pages.some((page) => page.conversations.some((c) => c.id === conversationId))) return data;
     return { ...data, pages: data.pages.map((page) => ({ ...page, conversations: page.conversations.filter((c) => c.id !== conversationId) })) };

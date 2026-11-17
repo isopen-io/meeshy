@@ -473,19 +473,19 @@ export function applyMessageAttachmentUpdated(queryClient: QueryClient, data: At
   const attachmentId = attachmentIdOf(data.attachment);
   if (attachmentId === undefined) return;
 
-  const existing = findCachedThreadMessage(queryClient, data.conversationId, data.messageId);
-  if (existing === undefined) return;
-  const attachments = existing.attachments;
+  const attachments = findCachedThreadMessage(queryClient, data.conversationId, data.messageId)?.attachments;
   if (attachments === undefined || !attachments.some((a) => a.id === attachmentId)) return;
 
   const incoming = data.attachment as Record<string, unknown>;
-  const next: Message = {
-    ...existing,
-    attachments: attachments.map((a) => (a.id === attachmentId ? mergedAttachment(a, incoming) : a)),
-  };
+  /* Fusionnée SUR la rangée reçue, jamais sur un instantané : une relecture en
+     vol rejoue cette écriture sur sa réponse (#18914). */
+  const enriched = (message: Message): Message =>
+    message.attachments === undefined
+      ? message
+      : { ...message, attachments: message.attachments.map((a) => (a.id === attachmentId ? mergedAttachment(a, incoming) : a)) };
 
   patchThreadMessages(queryClient, data.conversationId, (messages) =>
-    messages.map((m) => (m.id === data.messageId ? next : m)),
+    messages.map((m) => (m.id === data.messageId ? enriched(m) : m)),
   );
 }
 
@@ -607,27 +607,26 @@ export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatu
       : latestCachedThreadMessage(queryClient, data.conversationId);
   if (target === undefined) return;
 
-  const counters: Message = {
-    ...target,
-    deliveredCount: summary.deliveredCount,
-    readCount: summary.readCount,
-    recipientCount: summary.totalMembers,
+  /* Posés SUR la rangée reçue, jamais sur un instantané : une relecture en vol
+     rejoue cette écriture sur sa réponse (#18914). */
+  const counted = (message: Message): Message => {
+    const counters: Message = {
+      ...message,
+      deliveredCount: summary.deliveredCount,
+      readCount: summary.readCount,
+      recipientCount: summary.totalMembers,
+    };
+    if (summary.readByAllAt === undefined) return counters;
+    if (summary.readByAllAt !== null) return { ...counters, readByAllAt: summary.readByAllAt };
+    // `exactOptionalPropertyTypes` refuse `{ readByAllAt: undefined }` — un
+    // `null` de la charge EFFACE la date connue en RETIRANT la clé, jamais en
+    // lui assignant `undefined`.
+    const { readByAllAt: _drop, ...rest } = counters;
+    return rest;
   };
-  // `exactOptionalPropertyTypes` refuse `{ readByAllAt: undefined }` — un
-  // `null` de la charge EFFACE la date connue en RETIRANT la clé, jamais en
-  // lui assignant `undefined`.
-  let next: Message = counters;
-  if (summary.readByAllAt !== undefined) {
-    if (summary.readByAllAt === null) {
-      const { readByAllAt: _drop, ...rest } = counters;
-      next = rest;
-    } else {
-      next = { ...counters, readByAllAt: summary.readByAllAt };
-    }
-  }
 
   patchThreadMessages(queryClient, data.conversationId, (messages) =>
-    messages.map((m) => (m.id === target.id ? next : m)),
+    messages.map((m) => (m.id === target.id ? counted(m) : m)),
   );
 
   void queryClient.invalidateQueries({ queryKey: messageReceiptsPeopleQueryKey(data.conversationId, target.id) });

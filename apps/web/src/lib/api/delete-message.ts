@@ -7,6 +7,7 @@ import type { RowExit } from '@/lib/view/row-exit-motion';
 
 import { CONVERSATIONS_QUERY_KEY, findCachedConversation, patchConversation } from './conversations';
 import type { ApiResult, HttpRequest } from './http';
+import { writeLive } from './live-cache-journal';
 import { mediaHubConversationKey } from './media-hub-cache';
 import { findCachedThreadMessage, messagesQueryKey, patchThreadMessages } from './messages';
 import type { MessagesPage, MessagesPageParam } from './messages-pages';
@@ -161,11 +162,13 @@ function removeRows(queryClient: QueryClient, queryKey: QueryKey, ids: ReadonlyS
     ),
   );
   if (removed.length === 0) return removed;
-  queryClient.setQueriesData<PagedMessages>({ queryKey }, (data) =>
+  /* Par le journal (#18914) : une relecture du fil partie avant le geste — ou
+     avant `message:hidden-for-me` d'un autre appareil — ne rend pas la rangée. */
+  const without = (data: PagedMessages | undefined): PagedMessages | undefined =>
     data === undefined || !Array.isArray(data.pages)
       ? data
-      : { ...data, pages: data.pages.map((page) => ({ ...page, messages: page.messages.filter((m) => !ids.has(m.id)) })) },
-  );
+      : { ...data, pages: data.pages.map((page) => ({ ...page, messages: page.messages.filter((m) => !ids.has(m.id)) })) };
+  queryClient.getQueryCache().findAll({ queryKey }).forEach((query) => writeLive(queryClient, query.queryKey, without));
   return removed;
 }
 
@@ -200,7 +203,7 @@ function restoreRow(data: PagedMessages, removed: RemovedRow): PagedMessages {
 
 function restoreRows(queryClient: QueryClient, removed: readonly RemovedRow[]): void {
   removed.forEach((row) => {
-    queryClient.setQueryData<PagedMessages>(row.key, (data) => (data === undefined || !Array.isArray(data.pages) ? data : restoreRow(data, row)));
+    writeLive<PagedMessages>(queryClient, row.key, (data) => (data === undefined || !Array.isArray(data.pages) ? data : restoreRow(data, row)));
   });
 }
 

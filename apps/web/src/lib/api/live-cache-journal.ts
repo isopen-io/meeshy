@@ -1,4 +1,11 @@
-import { replaceEqualDeep, type QueryClient, type QueryKey } from '@tanstack/react-query';
+import {
+  partialMatchKey,
+  replaceEqualDeep,
+  type QueryClient,
+  type QueryFunction,
+  type QueryFunctionContext,
+  type QueryKey,
+} from '@tanstack/react-query';
 
 /**
  * **LE JOURNAL DES ÉCRITURES VIVES** (#18914, WEB-04 et M1).
@@ -10,22 +17,31 @@ import { replaceEqualDeep, type QueryClient, type QueryKey } from '@tanstack/rea
  * écriture : trois écrivains seulement, une relance sans fin sous un flux de
  * messages, et la page plus ancienne qu'on remontait annulée.
  *
- * Désormais, une écriture VIVE (`writeLive`, que `patchConversation`,
- * `patchConversationDetail`, `patchThreadMessages` et `upsertThreadMessage`
- * empruntent) faite pendant une relecture est notée, puis REJOUÉE sur la
- * réponse dans `structuralSharing` : TanStack l'appelle de façon synchrone
- * avant de notifier le moindre observateur, qui ne voit donc jamais l'état
- * d'avant revenir. Le journal suit la donnée (clé : l'objet en cache), se
- * vide quand la relecture aboutit, échoue ou repart, et n'existe que sur un
- * client où il est posé (`installLiveCacheJournal`, `createAppQueryClient`).
+ * Désormais, une écriture VIVE (`writeLive`, qu'empruntent `patchConversation`,
+ * `patchConversationDetail`, `patchThreadMessages` et `upsertThreadMessage`)
+ * faite pendant une relecture est notée, puis REJOUÉE sur sa réponse dans
+ * `structuralSharing` : TanStack l'appelle de façon synchrone, avant de
+ * notifier le moindre observateur, qui ne voit donc jamais l'état d'avant
+ * revenir. Le journal suit la donnée (clé : l'objet en cache) et repart de
+ * zéro à chaque relecture qui commence ou échoue.
  *
- * Deux règles :
+ * `structuralSharing` reçoit TOUTE donnée qui entre dans une requête — la
+ * réponse d'une relecture comme une écriture locale. Seule la réponse rejoue
+ * le journal : la rejouer après une écriture locale la déferait. La réponse
+ * se reconnaît à l'objet exact que rend la relecture, marqué au passage par le
+ * crochet `persister` de TanStack, qui enveloppe l'appel de la `queryFn` —
+ * toutes les pages d'une requête infinie comprises. Toute autre écriture PORTE
+ * le journal jusqu'à la donnée qu'elle produit.
+ *
+ * Trois règles pour qui écrit :
  *  - une écriture vive garde la date de la dernière LECTURE serveur
  *    (`updatedAt`) : le temps réel ne fait pas passer un cache pour frais
  *    (WEB-08) ;
  *  - un delta RELATIF (`relative: true`, ma réaction +1) n'est jamais rejoué :
- *    la réponse le compte peut-être déjà. Ce qui est rejoué doit être absolu
- *    ou idempotent, et calculé depuis la donnée reçue.
+ *    la réponse le compte peut-être déjà ;
+ *  - ce qui est rejoué se calcule SUR la donnée reçue, jamais sur un
+ *    instantané pris avant elle : rejoué sur une réponse plus fraîche,
+ *    l'instantané la ferait reculer.
  */
 export const LIVE_CACHE_ROOT = ['conversations'] as const;
 
@@ -37,34 +53,41 @@ export type LiveWriteOptions = {
 type Replay = (data: unknown) => unknown;
 
 const journals = new WeakMap<object, readonly Replay[]>();
+const servedResponses = new WeakSet<object>();
 const installed = new WeakSet<QueryClient>();
-const writing = { live: false };
 
 const isObject = (value: unknown): value is object => typeof value === 'object' && value !== null;
 
-function replayLiveWrites(previous: unknown, next: unknown): unknown {
-  const writes = writing.live || !isObject(previous) ? undefined : journals.get(previous);
-  if (writes === undefined) return replaceEqualDeep(previous, next);
-  const replayed = replaceEqualDeep(previous, writes.reduce((data, write) => write(data), next));
-  if (isObject(replayed)) journals.set(replayed, writes);
-  return replayed;
+const replayed = (writes: readonly Replay[], response: unknown): unknown =>
+  writes.reduce((data, write) => write(data) ?? data, response);
+
+function shareWithLiveWrites(previous: unknown, next: unknown): unknown {
+  const writes = isObject(previous) ? journals.get(previous) : undefined;
+  if (isObject(next) && servedResponses.delete(next)) return replaceEqualDeep(previous, writes === undefined ? next : replayed(writes, next));
+  const shared = replaceEqualDeep(previous, next);
+  if (writes !== undefined && isObject(shared)) journals.set(shared, writes);
+  return shared;
+}
+
+async function markServed(queryFn: QueryFunction<unknown, QueryKey, never>, context: QueryFunctionContext<QueryKey>): Promise<unknown> {
+  const response = await queryFn(context);
+  if (isObject(response)) servedResponses.add(response);
+  return response;
 }
 
 export function installLiveCacheJournal(queryClient: QueryClient): void {
   if (installed.has(queryClient)) return;
   installed.add(queryClient);
-  queryClient.setQueryDefaults(LIVE_CACHE_ROOT, { structuralSharing: replayLiveWrites });
+  queryClient.setQueryDefaults(LIVE_CACHE_ROOT, { structuralSharing: shareWithLiveWrites, persister: markServed });
   queryClient.getQueryCache().subscribe((event) => {
     if (event.type !== 'updated' || !isObject(event.query.state.data)) return;
-    const { action } = event;
-    const settled = action.type === 'fetch' || action.type === 'error' || (action.type === 'success' && action.manual !== true);
-    if (settled) journals.delete(event.query.state.data);
+    if (event.action.type === 'fetch' || event.action.type === 'error') journals.delete(event.query.state.data);
   });
 }
 
 /**
  * Écrit `updater` dans `queryKey` sans rajeunir la donnée ; pendant une
- * relecture, le note pour la rejouer sur sa réponse.
+ * relecture d'une clé de la racine, le note pour le rejouer sur sa réponse.
  */
 export function writeLive<T>(
   queryClient: QueryClient,
@@ -74,15 +97,10 @@ export function writeLive<T>(
 ): void {
   const query = queryClient.getQueryCache().find<T>({ queryKey, exact: true });
   if (query === undefined || query.state.data === undefined) return;
-  const before = query.state.data;
-  writing.live = true;
-  try {
-    queryClient.setQueryData<T>(queryKey, updater, { updatedAt: query.state.dataUpdatedAt });
-  } finally {
-    writing.live = false;
-  }
-  const after = query.state.data;
-  if (options.relative === true || !installed.has(queryClient) || query.state.fetchStatus === 'idle' || !isObject(after)) return;
-  const earlier = isObject(before) ? (journals.get(before) ?? []) : [];
-  journals.set(after, [...earlier, (data) => updater(data as T) as unknown]);
+  queryClient.setQueryData<T>(queryKey, updater, { updatedAt: query.state.dataUpdatedAt });
+  const written = query.state.data;
+  const journaled = installed.has(queryClient) && options.relative !== true && query.state.fetchStatus !== 'idle' && partialMatchKey(queryKey, LIVE_CACHE_ROOT);
+  if (!journaled || !isObject(written)) return;
+  /* Le journal d'une requête ne reçoit jamais que SA donnée : `T`. */
+  journals.set(written, [...(journals.get(written) ?? []), (data) => updater(data as T)]);
 }
