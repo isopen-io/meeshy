@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { resolveProfileCircleView } from '@meeshy/shared/utils/profile-circle-view';
 
-import { circleLadderOf, PROFILE_FACES, relationActionsOf, resolveProfileFace } from './relation-face';
+import { circleLadderOf, PROFILE_FACES, relationActionsOf, requestedFaceOf, resolveProfileFace } from './relation-face';
 
 const viewAt = (granted: RelationLevel, overrides: { readonly target?: RelationLevel; readonly blocked?: boolean } = {}) =>
   resolveProfileCircleView({
@@ -81,5 +81,13 @@ describe('les faces', () => {
   test('une adresse inconnue retombe sur le défaut', () => {
     expect(resolveProfileFace({ requested: 'nimporte', fallback: 'vitrine' })).toBe('vitrine');
     expect(resolveProfileFace({ requested: 'actions', fallback: 'vitrine' })).toBe('actions');
+  });
+});
+
+describe('les liens déjà partagés', () => {
+  test('un ancien ?tab=details mène à la face Actions ; ?face= prime ; sinon rien', () => {
+    expect(requestedFaceOf(new URLSearchParams('tab=details'))).toBe('actions');
+    expect(requestedFaceOf(new URLSearchParams('tab=details&face=liens'))).toBe('liens');
+    expect(requestedFaceOf(new URLSearchParams('tab=posts'))).toBeNull();
   });
 });

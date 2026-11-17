@@ -87,3 +87,38 @@ export function profileViewAsQueryOptions(deps: PublicProfileDeps & { readonly h
     queryFn: ({ signal }: { readonly signal: AbortSignal }) => loadProfileViewAs({ ...deps, signal }).then(unwrap),
   };
 }
+
+/**
+ * **LA FICHE PAR CERCLE DU LECTEUR RÉEL** (#18879) — `?expand=circle` sans `as` : la passerelle juge la
+ * PAIRE (accords des deux côtés, blocage, communauté, âge, rôle) et sert le verdict. `null` quand le
+ * champ n'est pas servi (passerelle plus ancienne, lecteur sans compte) : l'écran garde son
+ * comportement d'avant, il n'invente pas de cercle.
+ */
+export async function loadProfileCircle(params: PublicProfileDeps & { readonly handle: string; readonly signal?: AbortSignal }): Promise<ApiResult<ProfileCircleView | null>> {
+  if (__FIXTURES__ && params.source === 'fixtures') return { ok: true, data: null };
+  const result = await params.transport.request<unknown>({
+    method: 'GET',
+    path: `${directoryEndpoints.peopleByHandle(params.handle)}?expand=circle`,
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
+  if (!result.ok) return result;
+  return { ...result, data: isRecord(result.data) ? decodeProfileCircleView(result.data.circle) : null };
+}
+
+/** Une famille À PART (`people-circle`) ET par lecteur : le verdict d'une paire ne sert jamais un autre compte. */
+export const PROFILE_CIRCLE_QUERY_PREFIX = ['directory', 'people-circle'] as const;
+
+export const profileCircleQueryKey = (handle: string, viewerId: string) =>
+  [...PROFILE_CIRCLE_QUERY_PREFIX, handle.toLowerCase(), viewerId] as const;
+
+/** Les accords bougent par un geste de l'un ou de l'autre : une minute, et le geste local l'invalide. */
+export const PROFILE_CIRCLE_STALE_TIME = 60_000;
+
+export function profileCircleQueryOptions(deps: PublicProfileDeps & { readonly handle: string; readonly viewerId: string }) {
+  return {
+    queryKey: profileCircleQueryKey(deps.handle, deps.viewerId),
+    staleTime: PROFILE_CIRCLE_STALE_TIME,
+    retry: false,
+    queryFn: ({ signal }: { readonly signal: AbortSignal }) => loadProfileCircle({ ...deps, signal }).then(unwrap),
+  };
+}

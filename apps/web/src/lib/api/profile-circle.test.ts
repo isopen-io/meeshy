@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { RELATION_LEVELS } from '@meeshy/shared/types/relation';
 
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
-import { decodeProfileCircleView, loadProfileViewAs, profileViewAsQueryKey } from './profile-circle';
+import { decodeProfileCircleView, loadProfileCircle, loadProfileViewAs, profileCircleQueryKey, profileViewAsQueryKey } from './profile-circle';
 
 const served = {
   isSelf: false,
@@ -78,5 +78,28 @@ describe('« Voir comme », lecture du propriétaire', () => {
     expect(new Set(keys).size).toBe(RELATION_LEVELS.length);
     expect(keys[0]).not.toContain('"directory","people","aissa"');
     expect(keys[0]).toContain('aissa');
+  });
+});
+
+describe('la fiche par cercle du LECTEUR RÉEL', () => {
+  test('demande expand=circle SANS ?as= : le serveur juge la paire réelle', async () => {
+    const seen: HttpRequest[] = [];
+    const result = await loadProfileCircle({ source: 'gateway', transport: transportOf({ ok: true, data: { id: 'u1', username: 'leo', circle: served } } as ApiResult<unknown>, seen), handle: 'leo' });
+    expect(seen[0]?.path).toContain('expand=circle');
+    expect(seen[0]?.path).not.toContain('as=');
+    expect(result.ok && result.data?.level).toBe('FRIEND');
+  });
+
+  test('rend null sans champ servi (ancienne passerelle, visiteur sans compte) : aucun verdict inventé', async () => {
+    const result = await loadProfileCircle({ source: 'gateway', transport: transportOf({ ok: true, data: { id: 'u1', username: 'leo' } } as ApiResult<unknown>), handle: 'leo' });
+    expect(result.ok && result.data).toBeNull();
+  });
+
+  test('sa clé de cache est à part de la fiche, de « Voir comme » et sépare les lecteurs', () => {
+    const mine = JSON.stringify(profileCircleQueryKey('Leo', 'viewer-1'));
+    expect(mine).toContain('leo');
+    expect(mine).not.toBe(JSON.stringify(profileCircleQueryKey('Leo', 'viewer-2')));
+    expect(mine).not.toContain('"directory","people","leo"');
+    expect(mine).not.toContain('people-view-as');
   });
 });
