@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { mayManageTrackingLink } from './link-ownership';
+import { isForeignAddressLink, mayManageTrackingLink } from './link-ownership';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { servedTrackingLinkTarget } from '../../services/tracking-link-target';
 import { clickGeo } from './click-geo';
@@ -487,7 +487,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
 
-      if (!trackingLink) {
+      if (!trackingLink || isForeignAddressLink(trackingLink, request.authContext)) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
