@@ -115,6 +115,22 @@ public nonisolated struct ProfileRelationLockedGroup: Equatable, Sendable {
         return formatter.string(from: titles) ?? titles.joined(separator: ", ")
     }
 
+    /// Ce qui l'ouvre, dit sur la rangée verrouillée : « dès Ami ».
+    public var requirement: String {
+        ProfileRelationLockedGroup.requirement(opensAt: opensAt)
+    }
+
+    public static func requirement(opensAt level: RelationLevel) -> String {
+        switch level {
+        case .public: return String(localized: "profile.relation.opensAt.public", defaultValue: "pour tous", bundle: .module)
+        case .community: return String(localized: "profile.relation.opensAt.community", defaultValue: "dès Communauté", bundle: .module)
+        case .acquaintance: return String(localized: "profile.relation.opensAt.acquaintance", defaultValue: "dès Connaissance", bundle: .module)
+        case .friend: return String(localized: "profile.relation.opensAt.friend", defaultValue: "dès Ami", bundle: .module)
+        case .close: return String(localized: "profile.relation.opensAt.close", defaultValue: "dès Proche", bundle: .module)
+        case .blood: return String(localized: "profile.relation.opensAt.blood", defaultValue: "dès Sang", bundle: .module)
+        }
+    }
+
     /// Le glyphe de la première opération du groupe.
     public var systemImage: String {
         actions.first?.systemImage ?? "lock"

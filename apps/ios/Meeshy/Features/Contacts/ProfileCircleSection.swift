@@ -39,6 +39,7 @@ struct ProfileCircleSection: View {
                         ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName, center: sharing)
                     }
                     deviceRows
+                    ProfileLockedCapabilities(level: viewModel.toolGateLevel, tint: CircleLevelColor.color(for: level))
                     promoteButton
                     loweringButton(from: level)
                 }

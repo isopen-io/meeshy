@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Le profil d'un Ami ou d'un Proche montre le niveau COMMUN (#13940) — celui que `GET /relations` sert à l'appelant
@@ -287,6 +288,26 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertTrue(rig.sut.offersBring)
         XCTAssertFalse(rig.sut.offersTalkie)
         XCTAssertFalse(rig.sut.offersTogether)
+    }
+
+    /// #18870 — la face Actions ne montre jamais une opération à la fois offerte et verrouillée : ce qui reste fermé
+    /// se juge au même cercle que ce que le profil propose.
+    func test_toolGateLevel_aFriend_locksExactlyWhatIsNotOffered() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+        rig.relations.linkResult = .success(link("a", .friend))
+
+        await rig.sut.load()
+
+        let gate = rig.sut.toolGateLevel
+        XCTAssertEqual(gate, .friend)
+        XCTAssertEqual(ProfileRelationAction.talkie.gate(at: gate) == .offered, rig.sut.offersTalkie)
+        XCTAssertEqual(ProfileRelationAction.together.gate(at: gate) == .offered, rig.sut.offersTogether)
+        XCTAssertEqual(ProfileRelationAction.bring.gate(at: gate) == .offered, rig.sut.offersBring)
+        XCTAssertEqual(ProfileRelationAction.battery.gate(at: gate) == .offered, rig.sut.offersBattery)
+        XCTAssertEqual(ProfileRelationAction.unreachable.gate(at: gate) == .offered, rig.sut.offersPhoneReachability)
+        XCTAssertEqual(ProfileRelationAction.location.gate(at: gate) == .offered, rig.sut.offersSharedLocation)
+        XCTAssertEqual(ProfileRelationAction.lockedGroups(at: gate).map(\.opensAt), [.close])
     }
 
     func test_offersTalkieAndTogether_aStrangerWithoutAccessLevel_areNotOffered() async {

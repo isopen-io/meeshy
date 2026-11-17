@@ -24,8 +24,9 @@ struct ProfileRelationSlot<Unlinked: View>: View {
     let section: ProfileRelationSection?
     let userId: String?
     let displayName: String
+    /// Porté par la fiche : le cercle commun n'est plus Public dès qu'un lien est montré (#18870).
+    @Binding var linked: Bool
     @ViewBuilder let unlinked: () -> Unlinked
-    @State private var linked = false
 
     var body: some View {
         if let section, let userId, !userId.isEmpty {

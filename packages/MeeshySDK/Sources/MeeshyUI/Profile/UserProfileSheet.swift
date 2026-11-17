@@ -4,7 +4,7 @@ import MeeshySDK
 
 // MARK: - User Profile Sheet
 
-public enum ConnectionStatus: Equatable, Sendable {
+public nonisolated enum ConnectionStatus: Equatable, Sendable {
     case none
     case pendingSent(requestId: String)
     case pendingReceived(requestId: String)
@@ -68,7 +68,12 @@ public struct UserProfileSheet: View {
     @Environment(\.profileRelationSection) var relationSection
     @Environment(\.profileLoading) private var injectedProfileLoading
     @Environment(\.dismiss) var dismiss
-    @State var selectedTab: ProfileTab = .details
+    /// La face lue (loi 1, #18870) ; la Vitrine d'abord.
+    @State var face: RelationFace = .vitrine
+    /// L'app montre un lien d'au moins Connaissance dans l'emplacement du cercle (#14910) : le cercle commun n'est plus
+    /// Public, écrire n'est plus une demande.
+    @State var relationLinked = false
+    @State var sharesProfile = false
     /// #10093 — la bannière ou la photo ouverte en plein écran, PRÉSENTÉE par-dessus la feuille (`fullScreenCover`) :
     /// posée dans la pile de la feuille, la visionneuse ne pouvait pas déborder de sa hauteur (mi-écran en `.medium`).
     @State private var fullscreenImage: ProfileFullscreenImage?
@@ -113,6 +118,9 @@ public struct UserProfileSheet: View {
     var resolvedAccent: String {
         user.accentColor
     }
+
+    /// L'accent de la fiche en couleur, pour les composants du kit qui le reçoivent.
+    var accentTint: Color { Color(hex: resolvedAccent) }
 
     /// La couleur du PROFIL (#10754) — avatar sans photo, bannière de design — et non
     /// l'accent de l'écran d'où la fiche s'ouvre : la même source que ma propre fiche.
@@ -199,7 +207,7 @@ public struct UserProfileSheet: View {
     }
 
     /// The redesigned single-scroll layout: a big collapsible header scrolls
-    /// away while the tab bar pins, with a compact identity bar fading in.
+    /// away, a compact identity bar fades in, and the face selector floats at the bottom (loi 5).
     @ViewBuilder
     private var collapsibleLayout: some View {
         ScrollView(showsIndicators: false) {
@@ -208,16 +216,10 @@ public struct UserProfileSheet: View {
                     bigCollapsibleHeader(offset: offset)
                 }
 
-                Section {
-                    tabContent
-                        .padding(.top, MeeshySpacing.lg)
-                } header: {
-                    ScrollOffsetReader(relay: scrollRelay) { offset in
-                        pinnedTabBar(offset: offset)
-                    }
-                }
+                faceContent
+                    .padding(.top, MeeshySpacing.lg)
 
-                Color.clear.frame(height: 40)
+                Color.clear.frame(height: showsFaceSelector ? MeeshySpacing.xxl * 3 : 40)
             }
 
             GeometryReader { geo in
@@ -248,16 +250,20 @@ public struct UserProfileSheet: View {
         .overlay(alignment: .topLeading) {
             closeButton
         }
+        .overlay(alignment: .bottom) {
+            if showsFaceSelector {
+                RelationFaceSelector(face: $face, writeShortcut: writeShortcut)
+            }
+        }
         .task {
             await loadDataIfNeeded()
             await loadConversationsIfNeeded()
         }
     }
 
-    /// Tab content switch — each tab content is defined in its own extension
-    /// file. Loading placeholder shown only on cold cache.
+    /// La face lue — chacune dans son extension. Le squelette seulement sur cache vide (loi 8).
     @ViewBuilder
-    var tabContent: some View {
+    var faceContent: some View {
         if effectiveIsLoading {
             loadingPlaceholder
                 .padding(.horizontal, MeeshySpacing.xl)
@@ -265,15 +271,30 @@ public struct UserProfileSheet: View {
             profileLoadFailedState
                 .padding(.horizontal, MeeshySpacing.xl)
         } else {
-            switch selectedTab {
-            case .posts:
-                postsTab
-            case .conversations:
-                conversationsTab
-            case .details:
-                detailsTab
+            switch RelationFace.shown(face, isCurrentUser: isCurrentUser) {
+            case .vitrine:
+                vitrineFace
+            case .links:
+                linksFace
+            case .actions:
+                actionsFace
             }
         }
+    }
+
+    var showsFaceSelector: Bool {
+        RelationFace.showsSelector(isCurrentUser: isCurrentUser, isBlocked: isBlocked, loadFailed: loader.profileLoadFailed)
+    }
+
+    /// « Écrire » à droite du sélecteur, sur la Vitrine seulement (brief § 1).
+    private var writeShortcut: (() -> Void)? {
+        guard face.offersWriteShortcut(isInteractionDisabled: isInteractionDisabled) else { return nil }
+        return { openConversation() }
+    }
+
+    /// Sans lien ni connexion acceptée, écrire part en demande de message.
+    var writesARequest: Bool {
+        RelationFace.writesARequest(linked: relationLinked, connection: connectionStatus)
     }
 
     // MARK: - Profil non chargé (#8025)
@@ -570,17 +591,7 @@ public struct UserProfileSheet: View {
     private func sendMessageButtonContent(compact: Bool) -> some View {
         Button {
             HapticFeedback.medium()
-            if let onSendMessage {
-                onSendMessage()
-            } else if let targetUserId = loader.profile?.id ?? user.userId {
-                dismiss()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    NotificationCenter.default.post(
-                        name: Notification.Name("sendMessageToUser"),
-                        object: targetUserId
-                    )
-                }
-            }
+            openConversation()
         } label: {
             HStack(spacing: compact ? 6 : 8) {
                 Image(systemName: "paperplane.fill")
@@ -603,6 +614,21 @@ public struct UserProfileSheet: View {
             .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: compact ? 4 : 8, y: compact ? 2 : 4)
         }
         .pressable()
+    }
+
+    /// Écrire : l'hôte ouvre la conversation (ou la demande de message) ; sans hôte, l'annonce historique.
+    func openConversation() {
+        if let onSendMessage {
+            onSendMessage()
+        } else if let targetUserId = loader.profile?.id ?? user.userId {
+            dismiss()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(
+                    name: Notification.Name("sendMessageToUser"),
+                    object: targetUserId
+                )
+            }
+        }
     }
 
     // MARK: - Loading Placeholder
@@ -668,28 +694,5 @@ public struct UserProfileSheet: View {
     /// Sans image, rien ne s'ouvre : un plein écran de l'avatar à initiales n'a rien à montrer.
     func openFullscreenImage(url: String?, fallback: String) {
         fullscreenImage = ProfileFullscreenImage.opening(url, fallbackText: fallback)
-    }
-}
-
-// MARK: - Profile Tab Enum
-
-/// L'ordre des cas est celui des onglets (#17202) : Détails, Conversations, Publications.
-enum ProfileTab: String, CaseIterable {
-    case details, conversations, posts
-
-    var title: String {
-        switch self {
-        case .posts: return String(localized: "profile.tab.posts", defaultValue: "Publications", bundle: .module)
-        case .conversations: return String(localized: "profile.tab.conversations", defaultValue: "Conversations", bundle: .module)
-        case .details: return String(localized: "profile.tab.details", defaultValue: "Détails", bundle: .module)
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .posts: return "square.text.square.fill"
-        case .conversations: return "bubble.left.and.bubble.right.fill"
-        case .details: return "person.text.rectangle.fill"
-        }
     }
 }

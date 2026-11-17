@@ -73,4 +73,13 @@ final class ProfileRelationActionTests: XCTestCase {
         XCTAssertTrue(title.contains(ProfileRelationAction.talkie.title), title)
         XCTAssertTrue(title.contains(ProfileRelationAction.together.title), title)
     }
+
+    func test_requirement_namesTheCircleThatOpensTheGroup_andDiffersByCircle() {
+        let friend = ProfileRelationLockedGroup(opensAt: .friend, actions: [.bring]).requirement
+        let close = ProfileRelationLockedGroup(opensAt: .close, actions: [.talkie]).requirement
+        XCTAssertFalse(friend.isEmpty)
+        XCTAssertNotEqual(friend, close)
+        XCTAssertEqual(Set(RelationLevel.allCases.map { ProfileRelationLockedGroup.requirement(opensAt: $0) }).count,
+                       RelationLevel.allCases.count)
+    }
 }

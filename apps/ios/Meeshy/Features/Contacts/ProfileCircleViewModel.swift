@@ -118,6 +118,10 @@ final class ProfileCircleViewModel: ObservableObject {
         max(shownLevel ?? .public, toolLevel ?? .public)
     }
 
+    /// Le cercle auquel la face Actions juge ce qui reste fermé (#18870) : le même que celui qui PROPOSE les outils,
+    /// pour qu'une opération ne soit jamais à la fois offerte et verrouillée.
+    var toolGateLevel: RelationLevel { effectiveToolLevel }
+
     /// « Partager ma position » se PROPOSE dès Ami (feature `location.temporary`, #16983), par le lien affiché ou par le
     /// verdict servi. La passerelle rejuge la loi à chaque envoi et ne sert rien sous Ami.
     var offersSharedLocation: Bool {

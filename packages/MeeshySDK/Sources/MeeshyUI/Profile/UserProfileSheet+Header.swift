@@ -1,7 +1,7 @@
 import SwiftUI
 import MeeshySDK
 
-// MARK: - UserProfileSheet — Collapsible header + pinned tab bar
+// MARK: - UserProfileSheet — Collapsible header
 //
 // Split out of UserProfileSheet.swift for readability. All members are
 // `extension` computed properties on the single stateful `UserProfileSheet`
@@ -18,7 +18,7 @@ extension UserProfileSheet {
     /// state (full banner + avatar + name + @pseudo) and the collapsed state
     /// (banner shrunk toward `collapsedBar`, avatar/name faded — the compact
     /// pinned bar takes over). Bio, languages, country and the rest live in the
-    /// Détails tab, not the header. Driven by
+    /// Vitrine face, not the header. Driven by
     /// `ProfileHeaderMetrics.progress(offset: scrollOffset)`.
     @ViewBuilder
     func bigCollapsibleHeader(offset: CGFloat) -> some View {
@@ -257,37 +257,6 @@ extension UserProfileSheet {
         return state.dotColor
     }
 
-    // MARK: - Pinned tab bar (section header — pins on scroll)
-
-    @ViewBuilder
-    func pinnedTabBar(offset: CGFloat) -> some View {
-        let progress = ProfileHeaderMetrics.progress(offset: offset)
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                ForEach(ProfileTab.allCases, id: \.self) { tab in
-                    tabButton(tab)
-                }
-            }
-            .padding(.horizontal, MeeshySpacing.xl)
-            .padding(.top, MeeshySpacing.md)
-
-            Divider()
-                .opacity(MeeshyOpacity.medium)
-        }
-        // Le fond est posé AVANT le padding : posé après, il remplissait aussi
-        // la bande de `collapsedBar` pt d'écart et la rendait hit-testable —
-        // cet en-tête de section épinglé flotte AU-DESSUS du contenu, la bande
-        // interceptait donc les taps destinés aux cartes (barre d'actions du
-        // haut de liste inopérante). La zone d'écart est couverte visuellement
-        // par la barre compacte opaque quand elle est épinglée.
-        .background(theme.backgroundPrimary)
-        // When the big header has scrolled away (progress → 1) the compact
-        // identity bar (banner + avatar réduits) pins at the very top; the tabs
-        // slide down by its height so they sit JUST BELOW it instead of being
-        // covered by the overlay. No gap while expanded (progress 0).
-        .padding(.top, ProfileHeaderMetrics.collapsedBar * progress)
-    }
-
     // MARK: - Close button (Liquid Glass, top-leading)
 
     /// Floating close affordance using the adaptive Liquid Glass helper
@@ -309,34 +278,6 @@ extension UserProfileSheet {
         .padding(EdgeInsets(top: MeeshySpacing.mdPlus - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular), leading: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular), bottom: 0, trailing: 0))
         .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
         .accessibilityHint(String(localized: "profile.close.hint", defaultValue: "Ferme le profil", bundle: .module))
-    }
-
-    private func tabButton(_ tab: ProfileTab) -> some View {
-        Button {
-            HapticFeedback.light()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                selectedTab = tab
-            }
-        } label: {
-            VStack(spacing: MeeshySpacing.xs) {
-                HStack(spacing: MeeshySpacing.xs) {
-                    Image(systemName: tab.icon)
-                        .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
-                    Text(tab.title)
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                }
-                .foregroundStyle(selectedTab == tab ? Color(hex: resolvedAccent) : theme.textMuted)
-                .padding(.vertical, MeeshySpacing.smPlus)
-
-                Rectangle()
-                    .fill(selectedTab == tab ? Color(hex: resolvedAccent) : Color.clear)
-                    .frame(height: 2)
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-        }
-        .accessibilityLabel(tab.title)
-        .accessibilityAddTraits(selectedTab == tab ? [.isButton, .isSelected] : .isButton)
     }
 
     // MARK: - Compact pinned bar (overlay, fades in when collapsed)
