@@ -40,7 +40,7 @@ private const val CORNER_ARM = 0.6f
 /**
  * Cadre de recadrage interactif : quatre coins en L et quatre poignées de bord (cachées en mode
  * ratio), voile sombre hors cadre, grille de tiers, déplacement du cadre entier au centre. Les
- * poignées se dessinent à 24 dp mais se saisissent sur 48 dp. Miroir d'iOS `CropOverlayView`.
+ * poignées se dessinent à 24 dp mais se saisissent sur 48 dp. Miroir d'iOS.
  *
  * [onInteraction] se déclenche dès qu'une poignée (ou le cadre) est saisie — au premier appui, avant
  * le seuil de glissement, comme iOS `DragGesture(minimumDistance: 0)` : l'hôte ne cuit le

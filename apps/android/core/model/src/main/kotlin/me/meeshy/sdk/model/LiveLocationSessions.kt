@@ -2,7 +2,7 @@ package me.meeshy.sdk.model
 
 /**
  * Immutable registry of the live-location sessions active in one conversation — the pure
- * heart of what iOS scatters across `ConversationSocketManager.activeLiveLocations`
+ * heart of what iOS scatters across `ConversationSocketHandler`
  * (the `started` / `updated` / `stopped` socket handlers maintain a `[userId: session]`
  * map). Keyed by `userId`, at most one session per participant; every transition returns
  * a new value so the store stays a testable reducer with no in-place mutation.

@@ -20,7 +20,7 @@ public data class NormalizedCrop(
 
 /**
  * Description complète et non destructive d'une retouche : une petite valeur rejouable à
- * toute résolution depuis l'original intact. Miroir d'iOS `ImageEditState`.
+ * toute résolution depuis l'original intact. Miroir d'iOS.
  */
 public data class ImageEditState(
     val orientationTurns: Int = 0,

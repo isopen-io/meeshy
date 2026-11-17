@@ -1,8 +1,8 @@
 package me.meeshy.sdk.model
 
 /**
- * Pure countdown breakdown for a live-location share — port of the `formattedRemaining`
- * logic in iOS `LiveLocationBadge.swift`. iOS bakes the localised word ("restantes")
+ * Pure countdown breakdown for a live-location share — port of the iOS `formattedRemaining`
+ * logic. iOS bakes the localised word ("restantes")
  * into the string; the Android core returns only the numeric shape ([clockLabel]) plus a
  * structured [Remaining.Tier], leaving the "… remaining" wording to a localised resource
  * app-side (EN/FR/ES/PT). The Compose badge re-derives this each second off the clock.

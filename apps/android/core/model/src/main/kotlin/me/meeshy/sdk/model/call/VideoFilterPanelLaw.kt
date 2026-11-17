@@ -2,7 +2,7 @@ package me.meeshy.sdk.model.call
 
 import kotlin.math.abs
 
-/** One colorimetry slider of the filters panel (iOS `VideoFilterControlView`): range, neutral and the config field it drives. */
+/** One colorimetry slider of the filters panel: range, neutral and the config field it drives. */
 enum class VideoFilterSlider(val range: ClosedFloatingPointRange<Float>, val neutral: Float) {
     Temperature(0f..1f, 0.5f),
     Brightness(-0.5f..0.5f, 0f),
