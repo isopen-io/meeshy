@@ -593,9 +593,6 @@ const PENDING_CLIENT_ENTRIES = {
   // La conversation externe (#17117, chantier #17007) : la passerelle ouvre une conversation chiffrée de bout en
   // bout avec un ami WhatsApp, derrière un drapeau éteint en production ; le lot clients (#17118) l'appellera.
   'ConversationsEndpoint.external': { issue: 17118, reason: 'POST /conversations/external — ouvrir une conversation avec un ami WhatsApp depuis iOS' },
-  // La position du Sang (#13937, derrière un drapeau éteint) : la passerelle sert l'historique scellé, le fantôme, le
-  // journal et la proximité avant les clients ; `sang-position-historique@ios` les appellera.
-  'MeEndpoint.locationBlood': { issue: 13937, reason: 'POST /me/location/blood — ranger un point au réveil sur changement significatif' },
   // Le relais de la confirmation d'un appareil par code (#19156, spec 2026-11-17 § 5.2) : la passerelle le sert avant
   // le SDK et l'app iOS (§ 10, lots 3 et 4), portés par #18906.
   'E2EeEndpoint.devicesSelfVerifications': { issue: 18906, reason: 'POST|GET /e2ee/devices/self/verifications — déposer et relire les messages de comparaison, appelés par le SDK iOS de la confirmation par code' },

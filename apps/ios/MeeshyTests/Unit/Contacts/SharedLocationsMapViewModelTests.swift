@@ -299,6 +299,14 @@ final class BloodLocationModelTests: XCTestCase {
         }
 
         func eraseHistory() async throws {}
+
+        var recorded: [BloodLocationReading] = []
+        var keeps = true
+
+        func record(_ reading: BloodLocationReading) async throws -> Bool {
+            recorded.append(reading)
+            return keeps
+        }
     }
 
     final class GhostMemory: BloodGhostStoring {
@@ -373,5 +381,88 @@ final class BloodLocationModelTests: XCTestCase {
         await sut.load()
 
         XCTAssertEqual(sut.state, .failed(offline: true))
+    }
+}
+
+/// LE RELEVÉ DU SANG (#18872) : au retour au premier plan, un point part si un Sang peut le relire, hors fantôme, avec
+/// une permission déjà donnée ; le même lieu ne repart pas avant un quart d'heure ; un refus ne repose pas la question
+/// à chaque retour.
+@MainActor
+final class BloodLocationRecorderTests: XCTestCase {
+
+    @MainActor
+    final class FixedFix: BloodLocationFixReading {
+        var fix: SharedLocationFix?
+        var asked = 0
+        init(_ fix: SharedLocationFix?) { self.fix = fix }
+        nonisolated deinit {}
+        func authorizedFix() async -> SharedLocationFix? {
+            asked += 1
+            return fix
+        }
+    }
+
+    final class Clock {
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        nonisolated deinit {}
+    }
+
+    private func makeSUT(service: BloodLocationModelTests.FakeBloodLocation, fix: FixedFix, clock: Clock,
+                         enabled: Bool = true, levels: [RelationLevel] = [.blood], ghost: Bool = false,
+                         account: String? = "me") -> BloodLocationRecorder {
+        let links = levels.enumerated().map { RelationLink(userId: "u\($0.offset)", effectiveLevel: $0.element, grantedByMe: $0.element) }
+        let context = BloodLocationRecorderContext(isEnabled: { enabled }, links: { links })
+        return BloodLocationRecorder(service: service, fixes: fix, context: context, isGhost: { _ in ghost },
+                                     account: { account }, now: { clock.now })
+    }
+
+    private var lisbon: SharedLocationFix? { SharedLocationFix(latitude: 38.71, longitude: -9.13, accuracy: 20) }
+
+    func test_aBloodCanReadIt_soTheFirstPointLeaves_andTheSamePlaceWaitsAQuarterHour() async {
+        let service = BloodLocationModelTests.FakeBloodLocation()
+        let clock = Clock()
+        let sut = makeSUT(service: service, fix: FixedFix(lisbon), clock: clock)
+
+        await sut.recordIfDue()
+        clock.now = clock.now.addingTimeInterval(5 * 60)
+        await sut.recordIfDue()
+        clock.now = clock.now.addingTimeInterval(10 * 60)
+        await sut.recordIfDue()
+
+        XCTAssertEqual(service.recorded.count, 2)
+        XCTAssertEqual(service.recorded.first?.accuracy, 20)
+    }
+
+    func test_withoutABlood_nothingLeaves_andTheQuestionIsNotAskedAgainAtOnce() async {
+        let service = BloodLocationModelTests.FakeBloodLocation()
+        let fix = FixedFix(lisbon)
+        let sut = makeSUT(service: service, fix: fix, clock: Clock(), levels: [.friend, .close])
+
+        await sut.recordIfDue()
+        await sut.recordIfDue()
+
+        XCTAssertTrue(service.recorded.isEmpty)
+        XCTAssertEqual(fix.asked, 1)
+    }
+
+    func test_ghostFlagOffNoPermissionOrNoAccount_nothingLeaves() async {
+        let service = BloodLocationModelTests.FakeBloodLocation()
+        await makeSUT(service: service, fix: FixedFix(lisbon), clock: Clock(), ghost: true).recordIfDue()
+        await makeSUT(service: service, fix: FixedFix(lisbon), clock: Clock(), enabled: false).recordIfDue()
+        await makeSUT(service: service, fix: FixedFix(nil), clock: Clock()).recordIfDue()
+        await makeSUT(service: service, fix: FixedFix(lisbon), clock: Clock(), account: nil).recordIfDue()
+
+        XCTAssertTrue(service.recorded.isEmpty)
+    }
+
+    func test_aPointTheGatewayDidNotKeep_isOfferedAgainAtTheNextReturn() async {
+        let service = BloodLocationModelTests.FakeBloodLocation()
+        service.keeps = false
+        let sut = makeSUT(service: service, fix: FixedFix(lisbon), clock: Clock())
+
+        await sut.recordIfDue()
+        await sut.recordIfDue()
+
+        XCTAssertEqual(service.recorded.count, 2)
     }
 }

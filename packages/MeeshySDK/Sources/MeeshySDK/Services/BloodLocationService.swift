@@ -14,6 +14,8 @@ public protocol BloodLocationProviding: Sendable {
     func update(_ change: BloodLocationSettingsChange) async throws -> Bool
     /// `DELETE /me/location/history` — efface tout mon historique.
     func eraseHistory() async throws
+    /// `POST /me/location/blood` — range un point de mon historique ; `false` : la passerelle ne l'a pas rangé (fantôme).
+    func record(_ reading: BloodLocationReading) async throws -> Bool
 }
 
 public final class BloodLocationService: BloodLocationProviding, Sendable {
@@ -52,6 +54,16 @@ public final class BloodLocationService: BloodLocationProviding, Sendable {
         let _: APIResponse<SettingsAck> = try await api.request(
             MeEndpoint.locationHistory, method: "DELETE", body: nil, queryItems: nil
         )
+    }
+
+    public func record(_ reading: BloodLocationReading) async throws -> Bool {
+        let response: APIResponse<RecordAck> = try await api.post(MeEndpoint.locationBlood, body: reading)
+        return response.data.recorded ?? false
+    }
+
+    /// La passerelle sert `{ recorded }` au relevé.
+    private struct RecordAck: Decodable {
+        let recorded: Bool?
     }
 
     /// La passerelle sert `{ ok }` au réglage et `{ erased }` à l'effacement : seul `ok` se lit.

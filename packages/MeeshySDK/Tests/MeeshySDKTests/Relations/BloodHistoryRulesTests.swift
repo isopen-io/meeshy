@@ -104,3 +104,56 @@ struct BloodHistoryRulesTests {
         #expect(rows.map(\.isExcessive) == [false, true])
     }
 }
+
+/// LE RELEVÉ DU SANG (#18872) : ce qui part vers `POST /me/location/blood`, et quand. Un pas trop court ou un relevé
+/// trop flou ne part pas ; immobile, un point par quart d'heure suffit à dire un arrêt ; sans Sang, rien ne part.
+struct BloodLocationRecordGateTests {
+
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func last(_ latitude: Double, _ longitude: Double, minutesAgo: Double) -> BloodLocationPoint {
+        BloodLocationPoint(latitude: latitude, longitude: longitude, recordedAt: now.addingTimeInterval(-minutesAgo * 60))
+    }
+
+    @Test("un relevé hors du globe ou non fini n'existe pas ; une précision illisible est omise")
+    func readingIsBounded() {
+        #expect(BloodLocationReading(latitude: 95, longitude: 0) == nil)
+        #expect(BloodLocationReading(latitude: 0, longitude: .infinity) == nil)
+        let reading = BloodLocationReading(latitude: 38.71, longitude: -9.13, accuracy: -4)
+        #expect(reading?.accuracy == nil)
+        let huge = BloodLocationReading(latitude: 38.71, longitude: -9.13, accuracy: 900_000)
+        #expect(huge?.accuracy == 100_000)
+    }
+
+    @Test("le premier relevé part ; un relevé trop flou ne part jamais")
+    func firstAndBlurry() throws {
+        let first = try #require(BloodLocationReading(latitude: 38.71, longitude: -9.13, accuracy: 30))
+        #expect(BloodLocationRecordGate.isDue(first, at: now, after: nil))
+        let blurry = try #require(BloodLocationReading(latitude: 38.71, longitude: -9.13, accuracy: 3_000))
+        #expect(!BloodLocationRecordGate.isDue(blurry, at: now, after: nil))
+    }
+
+    @Test("un pas de moins de 200 m il y a cinq minutes ne part pas ; un kilomètre part aussitôt")
+    func distance() throws {
+        let near = try #require(BloodLocationReading(latitude: 38.7105, longitude: -9.13))
+        #expect(!BloodLocationRecordGate.isDue(near, at: now, after: last(38.71, -9.13, minutesAgo: 5)))
+        let far = try #require(BloodLocationReading(latitude: 38.72, longitude: -9.13))
+        #expect(BloodLocationRecordGate.isDue(far, at: now, after: last(38.71, -9.13, minutesAgo: 5)))
+    }
+
+    @Test("immobile, un nouveau point part après un quart d'heure")
+    func interval() throws {
+        let still = try #require(BloodLocationReading(latitude: 38.71, longitude: -9.13))
+        #expect(!BloodLocationRecordGate.isDue(still, at: now, after: last(38.71, -9.13, minutesAgo: 14)))
+        #expect(BloodLocationRecordGate.isDue(still, at: now, after: last(38.71, -9.13, minutesAgo: 15)))
+    }
+
+    @Test("sans lien Sang, personne ne relirait : rien ne part")
+    func audience() {
+        let friend = RelationLink(userId: "a", effectiveLevel: .friend, grantedByMe: .blood)
+        let blood = RelationLink(userId: "b", effectiveLevel: .blood, grantedByMe: .blood)
+        #expect(!BloodLocationRecordGate.hasAudience([]))
+        #expect(!BloodLocationRecordGate.hasAudience([friend]))
+        #expect(BloodLocationRecordGate.hasAudience([friend, blood]))
+    }
+}

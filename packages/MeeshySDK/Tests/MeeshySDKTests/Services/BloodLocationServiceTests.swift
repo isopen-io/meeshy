@@ -92,6 +92,30 @@ final class BloodLocationServiceTests: XCTestCase {
         XCTAssertEqual(api.lastRequest?.endpoint, "/me/location/history")
     }
 
+    func test_record_postsTheReadingWithoutANullAccuracy_andReadsWhetherItWasKept() async throws {
+        let (service, api) = makeSUT()
+        api.stubWire("/me/location/blood", json: #"{"success":true,"data":{"recorded":true}}"#)
+        let reading = try XCTUnwrap(BloodLocationReading(latitude: 38.71, longitude: -9.13))
+
+        let recorded = try await service.record(reading)
+
+        XCTAssertTrue(recorded)
+        XCTAssertEqual(api.lastRequest?.method, "POST")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?.keys.sorted(), ["latitude", "longitude"])
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["latitude"] as? Double, 38.71)
+    }
+
+    func test_record_aGhostAnswerIsNotKept() async throws {
+        let (service, api) = makeSUT()
+        api.stubWire("/me/location/blood", json: #"{"success":true,"data":{"recorded":false}}"#)
+        let reading = try XCTUnwrap(BloodLocationReading(latitude: 38.71, longitude: -9.13, accuracy: 25))
+
+        let recorded = try await service.record(reading)
+
+        XCTAssertFalse(recorded)
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["accuracy"] as? Double, 25)
+    }
+
     func test_config_bloodLocationIsOpenOnlyWhenTheServerSaysSo() throws {
         func decode(_ json: String) throws -> RelationsConfig {
             try JSONDecoder().decode(RelationsConfig.self, from: Data(json.utf8))
