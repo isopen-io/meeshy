@@ -24,6 +24,15 @@ import { applyUserPreferences, isCallPushDataType } from './push-delivery-prefer
 import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
 import { apnsThreadIdOf } from './notifications/push-thread';
 import { sendViaPushToTalk, type PushToTalkTokenRecord } from './talkie/pushToTalkApns';
+import {
+  APNS_PERMANENT_REASONS,
+  apnsFailureOutcome,
+  circuitOpenError,
+  fcmFailureIsProviderFault,
+  isFcmTokenDeadCode,
+  isRetryableApnsReason,
+  isRetryableFcmCode,
+} from './pushFailureClassification';
 import { apnsReady, pushTransportConfigFromEnv, type PushTransports } from './push-transport-config';
 import { keepTokensOfLiveSessions } from './pushTokenSessions';
 
@@ -144,33 +153,6 @@ const config = pushTransportConfigFromEnv(process.env);
 // TRANSIENT ERROR CLASSIFICATION
 // ============================================
 
-// Apple-reported reasons that indicate a provider-side hiccup, not a bad
-// device token. Worth a short retry before counting as a delivery failure.
-const APNS_TRANSIENT_REASONS = new Set(['InternalServerError', 'ServiceUnavailable', 'TooManyRequests', 'Shutdown']);
-
-// FCM error codes for the same class of provider-side issue (as opposed to
-// `messaging/registration-token-not-registered` / `invalid-registration-token`,
-// which mean the token itself is dead).
-const FCM_TRANSIENT_ERROR_CODES = new Set([
-  'messaging/internal-error',
-  'messaging/server-unavailable',
-  'messaging/unavailable',
-  'messaging/quota-exceeded',
-]);
-
-// Apple-reported reasons that mean the token itself is dead (wrong environment,
-// app uninstalled, expired, wrong topic). Retrying or counting strikes on these
-// only keeps sending doomed pushes — the token is deactivated on first sight.
-const APNS_PERMANENT_REASONS = new Set(['BadDeviceToken', 'Unregistered', 'ExpiredToken', 'DeviceTokenNotForTopic']);
-
-function isTransientApnsReason(reason: string | undefined): boolean {
-  return !!reason && APNS_TRANSIENT_REASONS.has(reason);
-}
-
-function isTransientFcmErrorCode(code: string | undefined): boolean {
-  return !!code && FCM_TRANSIENT_ERROR_CODES.has(code);
-}
-
 // Up to 2 retries (3 attempts total) with exponential backoff before a
 // transient failure is surfaced as a real delivery failure.
 const PUSH_RETRY_MAX_ATTEMPTS = 2;
@@ -212,7 +194,7 @@ export class PushNotificationService {
     resetTimeoutMs: 60_000,
     successThreshold: 2,
     timeout: 10_000,
-    fallback: () => ({ success: false, tokenId: '', error: 'FCM circuit breaker OPEN' }),
+    fallback: () => { throw circuitOpenError('FCM'); },
   });
   private apnsCircuitBreaker = new CircuitBreaker({
     name: 'APNS',
@@ -221,7 +203,7 @@ export class PushNotificationService {
     resetTimeoutMs: 60_000,
     successThreshold: 2,
     timeout: 10_000,
-    fallback: () => ({ success: false, tokenId: '', error: 'APNS circuit breaker OPEN' }),
+    fallback: () => { throw circuitOpenError('APNS'); },
   });
 
   // In-flight deactivation guard: prevents duplicate DB writes when the same
@@ -606,13 +588,17 @@ export class PushNotificationService {
         platform: tokenRecord.platform,
         collapseId: payload.collapseId ?? undefined
       };
-      await this.fcmCircuitBreaker.execute(() =>
+      const outcome = await this.fcmCircuitBreaker.execute(() =>
         performanceLogger.withTiming(
           'push.sendViaFCM',
           () => this.sendFcmWithRetry(message, fcmCorr),
           fcmCorr
         )
       );
+      if (outcome.tokenInvalid) {
+        pushLogger.warn('push.sendViaFCM.tokenInvalid', fcmCorr);
+        return { success: false, tokenId: tokenRecord.id, error: 'TOKEN_INVALID' };
+      }
       pushLogger.info('push.sendViaFCM.success', fcmCorr);
       return { success: true, tokenId: tokenRecord.id };
     } catch (error: any) {
@@ -627,17 +613,11 @@ export class PushNotificationService {
         errorMessage: error?.message
       });
 
-      if (errorCode === 'messaging/registration-token-not-registered' ||
-          errorCode === 'messaging/invalid-registration-token') {
-        // Token is invalid, mark for removal
-        return { success: false, tokenId: tokenRecord.id, error: 'TOKEN_INVALID' };
-      }
-
       return {
         success: false,
         tokenId: tokenRecord.id,
         error: error.message || 'FCM error',
-        transient: isTransientFcmErrorCode(errorCode),
+        transient: fcmFailureIsProviderFault(errorCode),
       };
     }
   }
@@ -648,13 +628,16 @@ export class PushNotificationService {
    * throw immediately on the first attempt — retrying them would just waste
    * round-trips and delay the TOKEN_INVALID classification.
    */
-  private async sendFcmWithRetry(message: unknown, corr: Record<string, unknown>): Promise<unknown> {
+  private async sendFcmWithRetry(message: unknown, corr: Record<string, unknown>): Promise<{ tokenInvalid: boolean }> {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await this.firebaseMessaging!.send(message);
+        await this.firebaseMessaging!.send(message);
+        return { tokenInvalid: false };
       } catch (error: any) {
         const code = error?.code || error?.errorInfo?.code;
-        if (!isTransientFcmErrorCode(code) || attempt >= PUSH_RETRY_MAX_ATTEMPTS) {
+        // Un jeton désinscrit est une réponse de Firebase, pas une panne : rendu en valeur, le disjoncteur ne le compte pas.
+        if (isFcmTokenDeadCode(code)) return { tokenInvalid: true };
+        if (!isRetryableFcmCode(code) || attempt >= PUSH_RETRY_MAX_ATTEMPTS) {
           throw error;
         }
         pushLogger.warn('push.sendViaFCM.retry', { ...corr, attempt: attempt + 1, code });
@@ -807,18 +790,13 @@ export class PushNotificationService {
 
       if (result.failed.length > 0) {
         const failure = result.failed[0];
-        const reason = failure.response?.reason || 'APNS delivery failed';
+        const { error, transient } = apnsFailureOutcome(failure);
         pushLogger.warn('push.sendViaAPNS.failure', {
           ...apnsCorr,
-          reason,
+          reason: error,
           statusCode: failure.status
         });
-        return {
-          success: false,
-          tokenId: tokenRecord.id,
-          error: reason,
-          transient: isTransientApnsReason(reason),
-        };
+        return { success: false, tokenId: tokenRecord.id, error, transient };
       }
 
       pushLogger.info('push.sendViaAPNS.success', apnsCorr);
@@ -830,7 +808,8 @@ export class PushNotificationService {
         isVoIP,
         errorMessage: error?.message
       });
-      return { success: false, tokenId: tokenRecord.id, error: error.message || 'APNS error' };
+      // Une exception n'est jamais la faute du jeton : réseau, disjoncteur ouvert, client APNs.
+      return { success: false, tokenId: tokenRecord.id, error: error.message || 'APNS error', transient: true };
     }
   }
 
@@ -839,7 +818,6 @@ export class PushNotificationService {
       hasClient: (env) => !!(env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction),
       send: (env, notification, token, corr) => this.apnsCircuitBreaker.execute(() => performanceLogger.withTiming('push.sendViaPushToTalk',
         () => this.sendApnsWithRetry(env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction, notification, token, corr), corr)),
-      isTransient: isTransientApnsReason,
       defaultBundleId: config.apns.bundleId,
       log: (event, fields) => (event === 'success' ? pushLogger.info : pushLogger.warn).call(pushLogger, `push.sendViaPushToTalk.${event}`, fields),
     }, tokenRecord, payload);
@@ -863,7 +841,7 @@ export class PushNotificationService {
         sent: unknown[];
       };
       const reason = result.failed[0]?.response?.reason;
-      if (result.failed.length === 0 || !isTransientApnsReason(reason) || attempt >= PUSH_RETRY_MAX_ATTEMPTS) {
+      if (result.failed.length === 0 || !isRetryableApnsReason(reason) || attempt >= PUSH_RETRY_MAX_ATTEMPTS) {
         return result;
       }
       pushLogger.warn('push.sendViaAPNS.retry', { ...corr, attempt: attempt + 1, reason });
