@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -170,17 +171,23 @@ private fun BadgeLeading(leading: MeeshyBadgeLeading, ink: Color, glyphDp: Int) 
         MeeshyBadgeLeading.Dot -> Box(Modifier.size(MeeshyBadgeRecipe.DOT_DP.dp).background(ink, CircleShape).decorative())
         MeeshyBadgeLeading.LiveDot -> {
             val reduce = LocalReduceMotion.current
-            val alpha = if (reduce) {
-                1f
+            val alpha: State<Float>? = if (reduce) {
+                null
             } else {
                 rememberInfiniteTransition(label = "badge-live-dot").animateFloat(
                     initialValue = 1f,
                     targetValue = LIVE_DOT_LOW_ALPHA,
                     animationSpec = infiniteRepeatable(tween(durationMillis = MeeshyMotionRecipe.PULSE_MILLIS, easing = LinearEasing), RepeatMode.Reverse),
                     label = "badge-live-dot-alpha",
-                ).value
+                )
             }
-            Box(Modifier.size(MeeshyBadgeRecipe.DOT_DP.dp).alpha(alpha).background(ink, CircleShape).decorative())
+            Box(
+                Modifier
+                    .size(MeeshyBadgeRecipe.DOT_DP.dp)
+                    .graphicsLayer { this.alpha = alpha?.value ?: 1f }
+                    .background(ink, CircleShape)
+                    .decorative(),
+            )
         }
     }
 }
