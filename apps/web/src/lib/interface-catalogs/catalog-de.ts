@@ -255,8 +255,6 @@ const de = {
   'feed.like.error': 'Fehler beim Liken des Beitrags',
   'post.bookmark.error': 'Speichern fehlgeschlagen',
   'feed.gesture.pending': 'Aktion nicht bestätigt — offline',
-  'feed.share.error': 'Fehler beim Teilen des Beitrags',
-  'feed.share.copied': 'Link kopiert — einfach einfügen.',
 
   'root.menu.feed': 'Feed',
   'root.menu.game': 'Meine Legende',

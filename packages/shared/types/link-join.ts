@@ -59,6 +59,3 @@ export const linkJoinProfileSchema = z.object({
     .default('fr'),
   deviceFingerprint: z.string().optional(),
 });
-
-export type LinkJoinProfileInputShape = z.input<typeof linkJoinProfileSchema>;
-export type LinkJoinProfileShape = z.output<typeof linkJoinProfileSchema>;

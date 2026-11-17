@@ -351,7 +351,6 @@ export type GamePersonalMission = z.infer<typeof gamePersonalMissionSchema>;
 export type GameMissions = z.infer<typeof gameMissionsSchema>;
 export type GameChest = z.infer<typeof gameChestSchema>;
 export type GameChestReward = z.infer<typeof chestRewardSchema>;
-export type GameChestContent = z.infer<typeof chestContentSchema>;
 export type GameStarFragments = z.infer<typeof starFragmentsSchema>;
 export type GameFlame = z.infer<typeof gameFlameSchema>;
 export type GameBoosts = z.infer<typeof gameBoostsSchema>;
@@ -463,13 +462,9 @@ export const meeshMintRequestSchema = writeRequest.extend({
 });
 export type MeeshMintRequest = z.infer<typeof meeshMintRequestSchema>;
 
-export type MissionRerollRequest = z.infer<typeof missionRerollRequestSchema>;
 export type MissionRerollResponse = z.infer<typeof missionRerollResponseSchema>;
-export type ChestClaimRequest = z.infer<typeof chestClaimRequestSchema>;
 export type ChestClaimResponse = z.infer<typeof chestClaimResponseSchema>;
-export type FlameFreezeRequest = z.infer<typeof flameFreezeRequestSchema>;
 export type FlameFreezeResponse = z.infer<typeof flameFreezeResponseSchema>;
-export type FlameRelightRequest = z.infer<typeof flameRelightRequestSchema>;
 export type FlameRelightResponse = z.infer<typeof flameRelightResponseSchema>;
 export type GuideSeenRequest = z.infer<typeof guideSeenRequestSchema>;
 export type GuideSeenResponse = z.infer<typeof guideSeenResponseSchema>;

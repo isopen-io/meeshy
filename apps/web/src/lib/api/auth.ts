@@ -14,7 +14,7 @@ import {
   type VerifyEmailRequest,
 } from './verify-email';
 
-export { verificationOpensSession, type VerificationStatusData, type VerifyEmailData, type VerifyEmailRequest } from './verify-email';
+export { type VerificationStatusData, type VerifyEmailData, type VerifyEmailRequest } from './verify-email';
 
 /**
  * LE FLUX DE CONNEXION (#5605, T4) — compose les requêtes EXACTES de

@@ -46,7 +46,7 @@ export const unreadOf = (conversation: Conversation): number => conversation.unr
  * Le défaut ne vient PAS de la v2, qui ne pose aucun titre à la création d'un
  * direct (`api/conversations.ts § createDirectConversation` : `{ type,
  * participantIds }`, sans titre). Il vient du LEGACY, qui composait un titre
- * CÔTÉ CLIENT et l'envoyait (`apps/web/components/conversations/
+ * CÔTÉ CLIENT et l'envoyait (`legacy-web-final:apps/web/components/conversations/
  * create-conversation-modal.tsx:102-130`) — d'où les « X & Y » gravés sur des
  * lignes créées avant la bascule. Les ignorer à l'affichage corrige le symptôme
  * sans toucher une seule donnée ; le nettoyage en base, s'il est décidé, reste

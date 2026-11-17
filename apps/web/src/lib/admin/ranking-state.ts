@@ -87,7 +87,6 @@ export const RANKING_CRITERIA = {
 
 type Criteria = typeof RANKING_CRITERIA;
 export type RankingCriterionCode = Criteria[RankingEntityType][number]['code'];
-export type RankingCriterionLabelKey = Criteria[RankingEntityType][number]['label'];
 export type RankingCriterionDefinition = Criteria[RankingEntityType][number];
 
 export type RankingState = {

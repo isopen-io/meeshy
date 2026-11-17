@@ -23,8 +23,6 @@ export type PreferenceStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 export const CALL_DEVICES_KEY = 'meeshy.call.devices.v1';
 
-export const CALL_DEVICE_ROLES: readonly CallDeviceRole[] = ['camera', 'microphone', 'speaker'];
-
 const KIND_ROLE: Readonly<Record<MediaDeviceKind, CallDeviceRole>> = {
   videoinput: 'camera',
   audioinput: 'microphone',

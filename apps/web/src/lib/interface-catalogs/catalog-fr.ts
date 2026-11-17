@@ -244,8 +244,6 @@ const fr = {
   'feed.like.error': 'Impossible d’aimer la publication',
   'post.bookmark.error': 'Erreur lors de l’enregistrement',
   'feed.gesture.pending': 'Geste non confirmé — hors ligne',
-  'feed.share.error': 'Impossible de partager la publication',
-  'feed.share.copied': 'Lien copié — il ne reste qu’à le coller.',
 
   'root.menu.feed': 'Flux',
   'root.menu.game': 'Ma Légende',
@@ -893,7 +891,7 @@ const fr = {
 
   /* LA BANNIÈRE DE MISE À JOUR (#6936) — les libellés du legacy
      (`updateAvailable`, `updateNow`, `wait`, dans les catalogues
-     `apps/web/locales`), plus l'état du clic et le nom de la région annoncée,
+     `legacy-web-final:apps/web/locales`), plus l'état du clic et le nom de la région annoncée,
      que le legacy n'avait pas. */
   'appUpdate.available': 'Une nouvelle version de Meeshy est disponible !',
   'appUpdate.hint': 'Rechargez pour avoir les dernières nouveautés.',

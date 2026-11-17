@@ -35,5 +35,3 @@ export function SummarySkeleton() {
     </div>
   );
 }
-
-export default SummarySkeleton;

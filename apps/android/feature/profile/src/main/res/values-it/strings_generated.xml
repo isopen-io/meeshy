@@ -14,7 +14,6 @@
     <string name="profile_action_send_message">Invia un messaggio</string>
     <string name="profile_activity_title">Attività</string>
     <string name="profile_avatar_edit">Modifica la foto del profilo</string>
-    <string name="profile_back">Indietro</string>
     <string name="profile_bio_label">Bio</string>
     <string name="profile_bio_placeholder">Raccontaci di te...</string>
     <string name="profile_blocked_by_me">Hai bloccato questo utente</string>
@@ -36,10 +35,7 @@
     <string name="profile_decor_shop">Altro nel negozio</string>
     <string name="profile_decor_subtitle">Visibili a tutti sul tuo profilo</string>
     <string name="profile_decor_title">Contorno e banner</string>
-    <string name="profile_detail_country">Paese</string>
-    <string name="profile_detail_system_language">Lingua principale</string>
     <string name="profile_display_name_label">Nome visualizzato</string>
-    <string name="profile_e2ee">Crittografata end-to-end</string>
     <string name="profile_e2ee_enabled">Crittografia end-to-end attiva</string>
     <string name="profile_edit">Modifica</string>
     <string name="profile_email">Email</string>
@@ -51,7 +47,6 @@
     <string name="profile_language_none">Nessuna</string>
     <string name="profile_language_primary">Lingua principale</string>
     <string name="profile_language_regional">Lingua regionale</string>
-    <string name="profile_language_unset">Non impostato</string>
     <string name="profile_last_name_label">Cognome</string>
     <string name="profile_loadFailed_message">Impossibile caricare questo profilo.</string>
     <string name="profile_name_min_characters">Almeno %1$d caratteri.</string>
@@ -104,7 +99,6 @@
     <string name="profile_toast_unblock_failed">Impossibile sbloccare</string>
     <string name="profile_toast_user_blocked">Utente bloccato</string>
     <string name="profile_toast_user_unblocked">Utente sbloccato</string>
-    <string name="profile_unknown">Sconosciuto</string>
     <string name="profile_username">Nome utente</string>
     <string name="profile_verified">Verificato</string>
     <string name="profile_view_posts">Post</string>

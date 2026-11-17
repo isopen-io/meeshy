@@ -123,15 +123,6 @@ data class UnregisterDeviceTokenResponse(
     val message: String? = null,
 )
 
-/** Lightweight notification preferences — port of NotificationPreferences (NotificationModels.swift). */
-@Serializable
-data class NotificationPreferences(
-    val pushEnabled: Boolean = true,
-    val messageNotifications: Boolean = true,
-    val socialNotifications: Boolean = true,
-    val soundEnabled: Boolean = true,
-)
-
 /** Notification type — raw values match backend strings — port of MeeshyNotificationType (NotificationModels.swift). */
 @Serializable
 enum class MeeshyNotificationType(val wire: String) {

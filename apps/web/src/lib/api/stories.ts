@@ -305,7 +305,7 @@ export function storyFeedQueryOptions(deps: StoriesDeps) {
  * plafond serveur) ; une story partagée par LIEN mais plus
  * ancienne que ces 50-là (ou publiée par un auteur dont aucune autre story
  * ne figure dans la fenêtre) reste pourtant une adresse « partageable
- * publiquement » (`parity.md:310`). Cette marche la retrouve À LA DEMANDE,
+ * publiquement » (`parity.md:411`). Cette marche la retrouve À LA DEMANDE,
  * sans jamais élargir la fenêtre du corpus principal.
  *
  * `GET /posts/:postId` (`services/gateway/src/routes/posts/core.ts:475-500`,
