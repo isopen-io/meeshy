@@ -30,6 +30,13 @@ type Link = {
  * par `findExistingTrackingLink` (findFirst) — reproduit la dédup au niveau base
  * qui fait que la 2ᵉ occurrence d'une même URL réutilise le lien existant.
  */
+const matchesWhere = (row: Record<string, unknown>, where: Record<string, unknown>): boolean =>
+  Object.entries(where).every(([key, value]) => {
+    if (key === 'OR') return (value as Array<Record<string, unknown>>).some((branch) => matchesWhere(row, branch));
+    if (typeof value === 'object' && value !== null && 'isSet' in value) return (row[key] !== undefined) === (value as { isSet: boolean }).isSet;
+    return row[key] === value;
+  });
+
 const buildPrisma = () => {
   const store: Link[] = [];
   let seq = 0;
@@ -39,7 +46,7 @@ const buildPrisma = () => {
     findFirst: jest.fn(async (arg: any): Promise<Link | null> => {
       const where: Record<string, unknown> = arg?.where ?? {};
       return store.find((l) =>
-        Object.entries(where).every(([key, value]) => (l as Record<string, unknown>)[key] === value)) ?? null;
+        matchesWhere(l as Record<string, unknown>, where)) ?? null;
     }),
     // tokenExists(token) — always unique in this mock (no collisions)
     findUnique: jest.fn(async (arg: any): Promise<Link | null> => {

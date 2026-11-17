@@ -15,13 +15,15 @@ import me.meeshy.ui.icons.MeeshyIcons
  * perdu sur l'appareil (#13554). Dans les deux cas la bulle le DIT, et son geste n'est plus « renvoyer » — le même échec
  * reviendrait à chaque essai — mais « retirer », pour que l'auteur choisisse de nouveau le fichier. Partagé par la bulle
  * standard et la rangée plate. Le droit de joindre ce type de pièce manque (#16053) : la bulle le DIT aussi, mais son geste reste
- * « renvoyer », car le droit peut venir.
+ * « renvoyer », car le droit peut venir. Le compte a déjà son maximum d'appareils chiffrés (#18976) : la bulle dit où en
+ * retirer un (« Mes appareils chiffrés »), et son geste reste « renvoyer ».
  */
 internal enum class BubbleFailure {
     RETRY,
     LOCATION_REFUSED,
     MEDIA_LOST,
     ATTACHMENT_RIGHT,
+    ENCRYPTED_DEVICE_LIMIT,
     ;
 
     val removes: Boolean get() = this == LOCATION_REFUSED || this == MEDIA_LOST
@@ -34,6 +36,7 @@ internal enum class BubbleFailure {
             content.isLocationRefused -> LOCATION_REFUSED
             content.isMediaLost -> MEDIA_LOST
             content.isAttachmentRightRefused -> ATTACHMENT_RIGHT
+            content.isEndToEndDeviceLimit -> ENCRYPTED_DEVICE_LIMIT
             else -> RETRY
         }
     }
@@ -55,6 +58,7 @@ internal fun BubbleFailureCaption(failure: BubbleFailure, color: Color, modifier
         BubbleFailure.LOCATION_REFUSED -> R.string.bubble_failed_location_refused
         BubbleFailure.MEDIA_LOST -> R.string.bubble_failed_media_lost
         BubbleFailure.ATTACHMENT_RIGHT -> R.string.bubble_failed_attachment_right
+        BubbleFailure.ENCRYPTED_DEVICE_LIMIT -> R.string.bubble_failed_e2ee_device_limit
     }
     Text(
         text = stringResource(text),

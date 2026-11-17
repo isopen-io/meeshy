@@ -72,6 +72,8 @@ async function buildApp(opts: {
     user: { findUnique: mocks.userFindUnique },
     participant: { findMany: mocks.participantFindMany },
     message: { findMany: mocks.messageFindMany },
+    // Les liens d'adresse (#18863) : un compte qui n'en a aucun.
+    trackingLink: { findMany: jest.fn().mockResolvedValue([]) },
     // #3633 — le défaut "toutes les types" en couvre désormais dix, pas trois ;
     // ce fichier ne teste que profile/messages/contacts, ces doubles évitent
     // seulement qu'un modèle non simulé fasse lever le chemin par défaut.
@@ -184,6 +186,22 @@ describe('GET /export — profile only', () => {
     expect(res.statusCode).toBe(200);
     expect(mocks.userFindUnique).toHaveBeenCalled();
     expect(mocks.messageFindMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('GET /export — la ville déclarée (#18862)', () => {
+  it('lit et rend la ville et le cercle qui la lit dans la section profile', async () => {
+    const mocks = {
+      ...makeMocks(),
+      userFindUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, city: 'Dakar', cityCircle: 'FRIEND' }),
+    };
+    const { app } = await buildApp({ mocks });
+    const res = await app.inject({ method: 'GET', url: '/export?types=profile' });
+    expect(res.statusCode).toBe(200);
+    const [{ select }] = mocks.userFindUnique.mock.calls[0] as [{ select: Record<string, boolean> }];
+    expect(select).toMatchObject({ city: true, cityCircle: true });
+    expect(res.json().data.profile).toMatchObject({ city: 'Dakar', cityCircle: 'FRIEND' });
     await app.close();
   });
 });

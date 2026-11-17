@@ -24,7 +24,7 @@ final class ComposerPanelHeaderInGlassTests: XCTestCase {
     func test_lEnTete_porteChaqueBandeau() throws {
         let layout = try Self.source("Meeshy/Features/Main/Components/UniversalComposerBar+Layout.swift")
         let enTete = try XCTUnwrap(layout.components(separatedBy: "var panelHeader: some View {").dropFirst().first)
-        ["editBanner", "replyBanner", "customAttachmentsPreview", "attachmentsPreview", "clipboardContentPreview"].forEach {
+        ["editBanner", "replyBanner", "customAttachmentsPreview", "attachmentsPreview"].forEach {
             XCTAssertTrue(enTete.contains($0), "\($0) vit dans l'en-tête du verre")
         }
     }

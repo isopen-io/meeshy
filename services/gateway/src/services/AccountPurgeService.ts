@@ -16,6 +16,7 @@ import { deleteShareLinksRevokingGuests } from '../socketio/deleteShareLinksRevo
 import { eraseCallTelemetryOf } from './calls/callTelemetryPrivacy';
 import { eraseE2EEDataOfUser } from './e2ee/device-retirement';
 import { eraseExternalPeerHandlesOpenedBy } from './external-conversation/erase-external-peers';
+import { eraseProfileAddressesOf } from './profile-addresses/address-links';
 import type { ShareLinkRevocationLive } from './cleanupExpiredData';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
@@ -59,6 +60,7 @@ export type AccountPurgeSummary = {
   readonly e2eeErased: { readonly devices: number; readonly preKeys: number; readonly envelopes: number };
   /** Le numéro des amis d'un réseau tiers qu'il avait ouverts (#17117) : gardé pour lui seul, il ne sert plus personne. */
   readonly externalPeerHandlesDeleted: number;
+  readonly profileAddressesDeleted: number;
 };
 
 export type AccountPurgeOptions = {
@@ -87,7 +89,9 @@ export type AccountPurgeOptions = {
  * faites à d'autres à son sujet : elles désignent un compte qui n'existe plus),
  * et les traductions PARTAGÉES (#9899) que ses participants avaient scellées
  * pour les autres membres (`eraseSharedTranslationsOfAccount`, par
- * `sharedById` — le `Participant.id`, jamais le `User.id`).
+ * `sharedById` — le `Participant.id`, jamais le `User.id`), et les adresses
+ * publiées sur sa fiche (#18863, `eraseProfileAddressesOf`, qui ferme leurs
+ * liens de suivi : la ligne `User` survit, la cascade de Prisma ne joue donc pas).
  * Certaines de ces lignes sont PARTAGÉES avec un tiers, et c'est assumé : un
  * lien de cercle (`UserRelation`, #13927), l'agrégat des échanges de la paire
  * (`PairInteractionDay`), un consentement de cercle dont le tiers est
@@ -137,7 +141,7 @@ export async function purgeAccountIsolatedData(
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
   if (!isValidObjectId(userId)) throw new Error('INVALID_USER_ID');
-  const [sessions, pushTokens, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles] =
+  const [sessions, pushTokens, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles, profileAddresses] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
       prisma.pushToken.deleteMany({ where: { userId } }),
@@ -171,6 +175,8 @@ export async function purgeAccountIsolatedData(
       eraseCallTelemetryOf(prisma, userId),
       eraseE2EEDataOfUser(prisma, userId),
       eraseExternalPeerHandlesOpenedBy(prisma, userId),
+      // #18863 : ses adresses de fiche partent, et leurs liens de suivi se ferment.
+      eraseProfileAddressesOf(prisma, userId),
       // #13937 : l'historique de position du Sang et le journal de ses consultations partent avec le compte.
       prisma.bloodLocationPoint.deleteMany({ where: { ownerId: userId } }),
       prisma.bloodLocationConsultation.deleteMany({ where: { OR: [{ observedId: userId }, { observerId: userId }] } }),
@@ -197,6 +203,7 @@ export async function purgeAccountIsolatedData(
     callTelemetryErased: callTelemetry,
     e2eeErased: e2ee,
     externalPeerHandlesDeleted: externalPeerHandles,
+    profileAddressesDeleted: profileAddresses,
   };
 
   logger.info(
@@ -208,7 +215,7 @@ export async function purgeAccountIsolatedData(
       `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
       `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} packOwnerships=${packs.ownershipsDeleted} partnerProfiles=${packs.partnerProfilesDeleted} ` +
       `impressions=${readingTelemetry.impressions} engagements=${readingTelemetry.engagements} ` +
-      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry} externalPeerHandles=${externalPeerHandles}`
+      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry} externalPeerHandles=${externalPeerHandles} profileAddresses=${profileAddresses}`
   );
 
   return summary;
@@ -292,6 +299,9 @@ export async function anonymizeUserIdentity(
       equippedBannerFrame: null,
       bio: '',
       birthDate: null,
+      // #18862 — la ville DÉCLARÉE est une donnée personnelle : elle part avec le compte, et son réglage aussi.
+      city: null,
+      cityCircle: null,
       searchTokens: [],
       blockedUserIds: [],
       referralCode: null,

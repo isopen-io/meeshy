@@ -185,8 +185,16 @@ class RedisStore {
       throw new Error('Redis pipeline failed');
     }
 
-    const count = results[0]?.[1] as number;
-    const ttl = results[1]?.[1] as number;
+    // Audit du delta de #19080, D3 — un Redis joignable répond une erreur PAR
+    // COMMANDE (LOADING, READONLY, OOM) sans faire lever `exec()`. Un compte
+    // absent n'est pas « sous le plafond » : c'est une panne du magasin.
+    const replyError = results.find(([error]) => error)?.[0];
+    if (replyError) throw replyError;
+    const count = results[0]?.[1];
+    const ttl = results[1]?.[1];
+    if (typeof count !== 'number' || typeof ttl !== 'number') {
+      throw new Error('Redis pipeline returned no count');
+    }
 
     if (count === amount || ttl === -1) {
       await this.redis.pexpire(windowKey, windowMs);

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="chat_composer_end_to_end">Esta conversación está cifrada de extremo a extremo: escribe en ella desde la app Meeshy en iPhone</string>
-    <string name="chat_menu_e2ee_signals_notice">Reaccionar, fijar y eliminar para todos: desde la app Meeshy en iPhone.</string>
-    <string name="chat_menu_e2ee_signals_notice_alone">Cifrada de extremo a extremo: reaccionar, fijar y eliminar para todos se hacen desde la app Meeshy en iPhone.</string>
+    <string name="chat_composer_end_to_end">Esta conversación cifrada aún no se puede escribir desde este dispositivo</string>
+    <string name="chat_menu_e2ee_signals_notice">Reaccionar, fijar y eliminar para todos: aún no en este dispositivo.</string>
+    <string name="chat_menu_e2ee_signals_notice_alone">Cifrada de extremo a extremo: reaccionar, fijar y eliminar para todos, aún no aquí.</string>
+    <string name="chat_e2ee_send_not_sent">Mensaje cifrado no enviado: tu texto ha vuelto al campo</string>
 </resources>

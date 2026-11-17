@@ -77,7 +77,7 @@ REGISTRY_NS="isopen"
 # passerelle, puis la webapp — qui peut appeler une route que seule la
 # nouvelle passerelle sert, jamais l'inverse.
 SERVICES_PROMOUVABLES="translator agent gateway webapp"
-# L'entrypoint qui écrit `config.js` au démarrage (#10208) : sa présence
+# L'entrypoint qui écrit `config.json` (et `config.js`) au démarrage (#10208, #18988) : sa présence
 # prouve que l'image ne porte aucune origine figée au build.
 WEBAPP_ENTRYPOINT="meeshy-runtime-config"
 

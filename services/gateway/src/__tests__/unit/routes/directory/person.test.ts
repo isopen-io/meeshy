@@ -110,6 +110,7 @@ const projete = (ligne: LigneDemande, select: unknown): Partial<LigneDemande> =>
 
 function prismaDouble(bloquesParLeLecteur: readonly string[] = [], demandes: readonly LigneDemande[] = []) {
   return {
+    profileAddress: { findMany: async () => [] },
     user: {
       findMany: jest.fn(async () => []),
       // La ligne rend PLUS que la projection publique — c'est le point : si le

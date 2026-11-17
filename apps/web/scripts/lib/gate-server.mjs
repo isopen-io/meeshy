@@ -89,7 +89,12 @@ export const distCandidates = (pathname) => {
 /** `/sw.js` et les runtimes Workbox qui l'accompagnent. */
 const EST_SERVICE_WORKER = /^\/(sw\.js|workbox-[^/]+\.js|sw-[^/]+\.js)$/;
 
-export const startDistServer = async (dist, { readFile = readFileDefault, stat = statDefault, serviceWorker = true } = {}) => {
+/**
+ * `headers(pathname)` rend les en-têtes que nginx poserait sur la réponse d'un
+ * FICHIER servi — la garde de la politique de sécurité du contenu sert `dist/`
+ * sous la politique réelle de `nginx.conf` (#18986). Défaut : aucun.
+ */
+export const startDistServer = async (dist, { readFile = readFileDefault, stat = statDefault, serviceWorker = true, headers = () => ({}) } = {}) => {
   const server = createServer(async (req, res) => {
     const pathname = normalize(new URL(req.url, 'http://x').pathname);
     /* LE PRÉCACHE N'EST PAS GRATUIT (#6988). Le manifeste porte ~240 entrées,
@@ -117,7 +122,7 @@ export const startDistServer = async (dist, { readFile = readFileDefault, stat =
         // panne repart alors en réponse 200 tronquée — soit exactement le
         // déguisement que ce fichier existe pour supprimer.
         const body = await readFile(file);
-        res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' });
+        res.writeHead(200, { ...headers(pathname), 'content-type': TYPES[extname(file)] ?? 'application/octet-stream' });
         res.end(body);
         return;
       } catch (cause) {

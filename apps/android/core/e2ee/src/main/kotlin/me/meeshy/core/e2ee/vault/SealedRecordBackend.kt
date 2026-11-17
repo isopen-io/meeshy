@@ -45,9 +45,13 @@ public class RecordSealer(private val key: SecretKey, private val random: Secure
     }
 }
 
-/** Un enregistrement scellé qui ne s'ouvre pas : le coffre REFUSE (jamais « absent »), la décision remonte. */
+/**
+ * Un enregistrement scellé qui ne s'ouvre pas : le coffre REFUSE (jamais « absent »), la décision remonte. Non vérifiée
+ * (#18970) : levée DANS un rappel de store, elle traverse libsignal telle quelle — une exception vérifiée y deviendrait une
+ * `AssertionError`, hors de tout `catch (Exception)`.
+ */
 public class SealedRecordException(id: RecordId, cause: Throwable? = null) :
-    Exception("sealed e2ee record does not open (${id.kind.tag})", cause)
+    IllegalStateException("sealed e2ee record does not open (${id.kind.tag})", cause)
 
 /** Un [RecordBackend] dont chaque valeur est scellée avant de toucher [raw], et ouverte à la lecture. */
 public class SealedRecordBackend(private val raw: RecordBackend, private val sealer: RecordSealer) : RecordBackend {

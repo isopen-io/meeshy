@@ -28,7 +28,7 @@ Ce code va dans `apps/ios/Meeshy/Features/Main/Views/` (ou ViewModels selon le c
 | Rule engines stateless (pures functions) | SDK | `MediaDownloadPolicyEngine.shouldAutoDownload` |
 | Services low-level | SDK | `APIClient`, `CacheCoordinator`, `NetworkConditionMonitor` |
 | Stores de préférences | SDK | `MediaDownloadPreferencesStore` |
-| State machines internes | SDK (internal) | `VideoPlaybackController` |
+| State machines internes | SDK (internal) | `SyncEngineState` |
 | **View wrappers cascadant cache + policy + downloader** | **APP** | `VideoAvailabilityResolver` |
 | **Downloaders qui parlent au CacheCoordinator nommé du produit** | **APP** | `AttachmentDownloader` |
 | **ViewModels** | APP | `ConversationViewModel`, `FeedViewModel` |
@@ -78,7 +78,6 @@ MeeshySDK/                      -> Target core (logique mtier)
     StoryItem.swift            -> StoryItem, StorySlide.swift, StoryGroup.swift, StoryEffects.swift
     UserModels.swift           -> UpdateProfileRequest/Response, changement e-mail/telephone
     APINotification.swift      -> APINotification ; NotificationContext.swift, MeeshyNotificationType.swift
-    SampleData.swift           -> Donnes de dmo
   Cache/
     CachePolicy.swift          -> TTL, staleTTL, maxItemCount, StorageLocation, predefined policies
     CacheIdentifiable.swift    -> Protocol for cached models (requires `id: String`)
