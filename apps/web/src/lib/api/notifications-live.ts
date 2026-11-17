@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import { offerInAppBanner } from '@/lib/notifications/in-app-banner';
+import { inAppBannerStore, offerInAppBanner, retractInAppBanner } from '@/lib/notifications/in-app-banner';
 import { decodeRealtimeNotification } from '@/lib/notifications/record';
 
 import {
@@ -35,6 +35,12 @@ const MESSAGE_ARRIVAL_NOTIFICATIONS: ReadonlySet<string> = new Set(['new_message
 
 const SEEN_NOTIFICATIONS_CAP = 200;
 
+/** La fenêtre où un `new` du même id qu'un `deleted` est une RÉÉCRITURE (la passerelle annonce une édition par les deux, à la suite). */
+const REWRITE_WINDOW_MS = 5_000;
+const REWRITES_CAP = 50;
+
+type Rewrite = { readonly at: number; readonly wasShowing: boolean };
+
 export type NotificationLiveHandlers = {
   readonly onNew: (payload: unknown) => void;
   readonly onRead: (payload: unknown) => void;
@@ -44,19 +50,31 @@ export type NotificationLiveHandlers = {
   readonly onCounts: (payload: unknown) => void;
 };
 
-export function createNotificationLiveHandlers(deps: { readonly queryClient: QueryClient }): NotificationLiveHandlers {
+export function createNotificationLiveHandlers(deps: {
+  readonly queryClient: QueryClient;
+  readonly now?: (() => number) | undefined;
+}): NotificationLiveHandlers {
   const { queryClient } = deps;
+  const now = deps.now ?? Date.now;
   const seenNotifications = new Set<string>();
+  const recentlyDeleted = new Map<string, Rewrite>();
+
+  const takeRewrite = (id: string): Rewrite | null => {
+    const deleted = recentlyDeleted.get(id);
+    recentlyDeleted.delete(id);
+    return deleted !== undefined && now() - deleted.at <= REWRITE_WINDOW_MS ? deleted : null;
+  };
 
   const onNew = (payload: unknown): void => {
     const notification = decodeRealtimeNotification(payload);
     if (notification === null || seenNotifications.has(notification.id)) return;
+    const rewrite = takeRewrite(notification.id);
     seenNotifications.add(notification.id);
     if (seenNotifications.size > SEEN_NOTIFICATIONS_CAP) {
       const oldest = seenNotifications.values().next().value;
       if (oldest !== undefined) seenNotifications.delete(oldest);
     }
-    applyNotificationNew(queryClient, notification);
+    applyNotificationNew(queryClient, notification, { rewrite: rewrite !== null });
     /* LA CLOCHE SONNE, LE FIL SUIT (#9291) — la notification d'un message
        absent du fil ouvert le relit. */
     const { conversationId, messageId } = notification.context;
@@ -66,15 +84,29 @@ export function createNotificationLiveHandlers(deps: { readonly queryClient: Que
     /* LA BANNIÈRE IN-APP (#8727) — seulement devant un onglet VISIBLE : un
        onglet caché reçoit le push système, et une bannière posée pendant
        l'absence surgirait, périmée, au retour. */
-    if (typeof document !== 'undefined' && !document.hidden) offerInAppBanner(notification, { pathname: window.location.pathname });
+    if (typeof document === 'undefined' || document.hidden) return;
+    /* Une RÉÉCRITURE ne redescend pas : la bannière reprend sa place, remplacée en place par le texte édité,
+       seulement si elle était affichée à la suppression et que rien d'autre n'a pris sa place depuis. */
+    if (rewrite !== null && !(rewrite.wasShowing && inAppBannerStore.getState().current === null)) return;
+    offerInAppBanner(notification, { pathname: window.location.pathname });
   };
 
   /* Un id supprimé qui revient est une notification RÉÉCRITE (édition :
      `notification:deleted` puis `notification:new`, même identité) — la
-     mémoire de dédoublonnage l'oublie pour la laisser reprendre sa place. */
+     mémoire de dédoublonnage l'oublie pour la laisser reprendre sa place, et
+     la suppression retire AUSSITÔT sa bannière (le contenu peut avoir été
+     supprimé pour tous) en retenant si elle était affichée (#18907). */
   const onDeleted = (payload: unknown): void => {
     const id = notificationIdOf(payload);
-    if (id !== null) seenNotifications.delete(id);
+    if (id !== null) {
+      seenNotifications.delete(id);
+      recentlyDeleted.set(id, { at: now(), wasShowing: inAppBannerStore.getState().current?.id === id });
+      if (recentlyDeleted.size > REWRITES_CAP) {
+        const oldest = recentlyDeleted.keys().next().value;
+        if (oldest !== undefined) recentlyDeleted.delete(oldest);
+      }
+      retractInAppBanner(id);
+    }
     applyNotificationDeleted(queryClient, payload);
   };
 

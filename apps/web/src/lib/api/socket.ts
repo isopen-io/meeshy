@@ -896,7 +896,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * règles vivent dans `notifications-realtime.ts`, le câblage de la connexion
    * dans `notifications-live.ts` (le budget de ce fichier est plein).
    */
-  const notificationLive = createNotificationLiveHandlers({ queryClient: deps.queryClient });
+  const notificationLive = createNotificationLiveHandlers({ queryClient: deps.queryClient, now: deps.now });
   const onNotificationNew = notificationLive.onNew;
   const onNotificationRead = notificationLive.onRead;
   const onNotificationReadBulk = notificationLive.onReadBulk;

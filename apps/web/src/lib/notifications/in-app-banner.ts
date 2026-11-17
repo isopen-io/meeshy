@@ -44,6 +44,12 @@ export const inAppBannerStore = createStore<BannerState>((set) => ({
   dismiss: () => set({ current: null }),
 }));
 
+/** Une notification retirée (message supprimé pour tous, réaction retirée) emporte SA bannière — jamais celle d'une autre (#18907). */
+export function retractInAppBanner(id: string): void {
+  if (inAppBannerStore.getState().current?.id !== id) return;
+  inAppBannerStore.setState({ current: null });
+}
+
 /** La bannière appartient à l'identité qui l'a reçue : elle se vide quand celle-ci change (`identity-scoped-stores.ts`, #18907). */
 export function resetInAppBanner(): void {
   inAppBannerStore.setState({ current: null });

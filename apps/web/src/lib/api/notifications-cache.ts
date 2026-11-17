@@ -98,6 +98,26 @@ export function prependNotification(queryClient: QueryClient, notification: Noti
   });
 }
 
+/**
+ * Range une notification RÉÉCRITE à son rang `createdAt` dans la première page de chaque catégorie qui l'accepte
+ * (#18907) : l'éditer ne la fait pas remonter en tête de la cloche. Plus ancienne que toute la première page, elle
+ * appartient à une page non chargée — qui se relira, les listes étant marquées périmées — et n'est pas insérée.
+ */
+export function insertNotificationByCreatedAt(queryClient: QueryClient, notification: NotificationRecord): void {
+  const rank = Date.parse(notification.state.createdAt);
+  updateLists(queryClient, (data, category) => {
+    if (!categoryAccepts(category, notification)) return data;
+    const [first, ...rest] = data.pages;
+    if (first === undefined || first.notifications.some((n) => n.id === notification.id)) return data;
+    const index = Number.isNaN(rank) ? 0 : first.notifications.findIndex((n) => Date.parse(n.state.createdAt) <= rank);
+    const reachesOlderPages = rest.length > 0 || first.hasMore;
+    if (index === -1 && reachesOlderPages) return data;
+    const at = index === -1 ? first.notifications.length : index;
+    const notifications = [...first.notifications.slice(0, at), notification, ...first.notifications.slice(at)];
+    return { ...data, pages: [{ ...first, notifications }, ...rest] };
+  });
+}
+
 /** `ofType` : le type des lignes que `total` compte — `byType` compte, comme la passerelle, TOUTES les lignes d'un type, lues ou non. */
 export function adjustNotificationCounts(
   queryClient: QueryClient,

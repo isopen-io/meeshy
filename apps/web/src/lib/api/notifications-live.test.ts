@@ -6,6 +6,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 import { conversationStore } from '@/lib/conversation-store';
 import type { SocketClient, SocketHandler } from '@/lib/net/socket';
 import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
+import type { NotificationRecord } from '@/lib/notifications/record';
 import { createOutboxStore } from '@/lib/send/outbox-store';
 
 import {
@@ -193,5 +194,30 @@ describe('web-notifs-2 — une notification ÉDITÉE (deleted puis new, même id
     socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, served('n1', '2026-11-17T08:00:00.000Z', 'Rendez-vous à 18h'));
 
     expect(bannerId()).toBe('n3');
+  });
+});
+
+describe('web-notifs-2 — une réécriture plus ancienne que la première page n’y est pas insérée', () => {
+  test('elle appartient à une page non chargée : la cloche ne la pose pas en tête', () => {
+    const { socket, queryClient } = connect();
+    const row = (id: string, createdAt: string): NotificationRecord => ({
+      id,
+      type: 'new_message',
+      title: null,
+      content: id,
+      actor: null,
+      context: { conversationId: 'conv-1' },
+      metadata: {},
+      state: { isRead: false, createdAt },
+    });
+    queryClient.setQueryData(notificationListKey('all'), {
+      pages: [{ notifications: [row('n9', '2026-11-17T09:00:00.000Z'), row('n8', '2026-11-17T08:00:00.000Z')], hasMore: true, nextCursor: 'c' }],
+      pageParams: [undefined],
+    });
+
+    socket.fire(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: 'n1' });
+    socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, served('n1', '2026-11-17T07:00:00.000Z', 'édité'));
+
+    expect(ids(queryClient)).toEqual(['n9', 'n8']);
   });
 });
