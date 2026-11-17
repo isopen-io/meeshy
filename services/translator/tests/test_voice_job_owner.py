@@ -157,3 +157,24 @@ async def test_a_failing_store_answers_a_fixed_message(handler, pipeline, monkey
     for response in (status, cancel):
         assert response["errorCode"] == "INTERNAL_ERROR"
         assert "SENTINEL-SECRET-19293" not in response["error"]
+
+
+@pytest.mark.parametrize("kind", ["voice_job_status", "voice_job_cancel"])
+async def test_a_job_without_owner_is_never_served_to_a_request_without_user(handler, pipeline, kind):
+    job = await _submit(pipeline, user_id=None)
+
+    response = await handler.handle_request(_request(kind, job.id, None))
+
+    assert response["errorCode"] == "NOT_FOUND"
+    assert (await pipeline.get_job(job.id)).status == JobStatus.PENDING
+
+
+async def test_the_cancel_message_tells_a_cancellation_from_a_refusal(handler, pipeline):
+    pending = await _submit(pipeline)
+    finished = await _submit(pipeline)
+    finished.status = JobStatus.COMPLETED
+
+    cancelled = await handler.handle_request(_request("voice_job_cancel", pending.id, OWNER))
+    refused = await handler.handle_request(_request("voice_job_cancel", finished.id, OWNER))
+
+    assert cancelled["result"]["message"] != refused["result"]["message"]
