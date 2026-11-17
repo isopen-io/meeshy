@@ -44,6 +44,7 @@ import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.net.rawApiCall
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -82,6 +83,9 @@ class NotificationRepository @Inject constructor(
 
     /** Change à chaque [clear] : une écriture différée d'un compte qui part ne se pose jamais sur le suivant. */
     @Volatile private var epoch = 0L
+
+    /** Change à chaque remplacement COMPLET de la liste « all » (révalidation, [replaceAll]) : un vol qui l'a lue avant se jette. */
+    private val listVersion = AtomicLong(0)
     private val persistScope = CoroutineScope(SupervisorJob() + ioDispatcher)
     private var lastPersisted: PersistedNotifications? = null
 
@@ -197,6 +201,7 @@ class NotificationRepository @Inject constructor(
             scopedLists[scope] = items
             return
         }
+        listVersion.incrementAndGet()
         _hasMore.value = hasMore
         _nextCursor.value = nextCursor
         _notificationsCache.value = items
@@ -374,6 +379,11 @@ class NotificationRepository @Inject constructor(
     suspend fun loadMore(): NetworkResult<Unit> {
         val current = _notificationsCache.value ?: return NetworkResult.Success(Unit)
         if (!_hasMore.value) return NetworkResult.Success(Unit)
+        // Le vol dure : la page se POSE sur la liste d'ARRIVÉE, jamais sur celle d'avant l'appel (une arrivée en direct,
+        // un « lu » d'un autre appareil ou une suppression l'auraient perdue), et elle se jette si le compte a changé
+        // ou si une révalidation a remplacé la liste — son curseur et son `hasMore` décrivent alors une autre tête.
+        val startedEpoch = epoch
+        val startedVersion = listVersion.get()
         // Le CURSEUR gagne (#4901) : l'ancre servie est relayée verbatim, et la
         // tranche est insensible aux insertions en tête. Le RANG ne reste que
         // face à un gateway antérieur — et SANS dédoublonnage : l'union par
@@ -386,7 +396,8 @@ class NotificationRepository @Inject constructor(
             }
         ) {
             is NetworkResult.Success -> {
-                _notificationsCache.value = current + result.data.data
+                if (startedEpoch != epoch || startedVersion != listVersion.get()) return NetworkResult.Success(Unit)
+                _notificationsCache.update { latest -> latest?.plus(result.data.data) }
                 _hasMore.value = result.data.pagination?.hasMore ?: false
                 _nextCursor.value = result.data.pagination?.nextCursor
                 NetworkResult.Success(Unit)
@@ -633,6 +644,7 @@ class NotificationRepository @Inject constructor(
             is NetworkResult.Success -> {
                 _hasMore.value = page.data.pagination?.hasMore ?: false
                 _nextCursor.value = page.data.pagination?.nextCursor
+                listVersion.incrementAndGet()
                 _notificationsCache.value = page.data.data
                 _notificationsSyncedAt.value = clock.nowMillis()
             }
