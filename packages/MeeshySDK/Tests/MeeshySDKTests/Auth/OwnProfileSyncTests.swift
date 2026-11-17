@@ -137,4 +137,74 @@ final class OwnProfileSyncTests: XCTestCase {
 
         XCTAssertNil(auth.pendingOptimisticProfile, "l'instantané porte l'écriture : la garde se lève")
     }
+
+    // MARK: - Une relecture plus ancienne que l'instantané tenu (#18924, #19281)
+    //
+    // `GET /me` et la session rafraîchie peuvent servir une ligne lue AVANT
+    // l'écriture faite ailleurs (cache d'authentification de la passerelle,
+    // réponse en vol) : reçues après `profile:updated`, elles le défaisaient.
+
+    func test_reconciled_readOlderThanTheHeldSnapshot_keepsItsNineFieldsAndInstant() throws {
+        let held = try XCTUnwrap(OwnProfileSync.projected(user(), applying: event()))
+        let readBefore = user(systemLanguage: "fr", regionalLanguage: "en", displayName: "Alice D.", updatedAt: "2026-11-17T10:01:00.000Z")
+
+        let kept = OwnProfileSync.reconciled(readBefore, holding: held)
+
+        XCTAssertEqual(kept.systemLanguage, "en")
+        XCTAssertEqual(kept.regionalLanguage, "es")
+        XCTAssertNil(kept.displayName)
+        XCTAssertEqual([kept.firstName, kept.lastName, kept.username], ["Alicia", "Durand", "alicia"])
+        XCTAssertEqual(kept.avatar, "https://cdn/a-new.jpg")
+        XCTAssertEqual(kept.updatedAt, Self.later, "l'instant tenu reste celui de l'instantané : un écho plus ancien reste écarté")
+    }
+
+    func test_reconciled_readOlderThanTheHeldSnapshot_stillCarriesWhatTheSnapshotDoesNot() throws {
+        let held = try XCTUnwrap(OwnProfileSync.projected(user(), applying: event()))
+        let activation = UserActivation(phase: .invite, deadline: "2026-11-30T00:00:00.000Z", missing: [.email])
+        let readBefore = MeeshyUser(
+            id: Self.me, username: "alice", systemLanguage: "fr", updatedAt: "2026-11-17T10:01:00.000Z",
+            isActive: true, emailVerifiedAt: "2026-11-17T09:00:00.000Z", activation: activation
+        )
+
+        let kept = OwnProfileSync.reconciled(readBefore, holding: held)
+
+        XCTAssertEqual(kept.activation, activation, "l'activation n'est pas dans l'instantané : la relecture la sert")
+        XCTAssertEqual(kept.isActive, true)
+        XCTAssertEqual(kept.emailVerifiedAt, "2026-11-17T09:00:00.000Z")
+        XCTAssertEqual(kept.systemLanguage, "en")
+    }
+
+    func test_reconciled_newerReadAnotherAccountOrNoInstant_appliesAsServed() throws {
+        let held = try XCTUnwrap(OwnProfileSync.projected(user(), applying: event()))
+
+        XCTAssertEqual(OwnProfileSync.reconciled(user(systemLanguage: "de", updatedAt: "2026-11-17T10:06:00.000Z"), holding: held).systemLanguage, "de")
+        XCTAssertEqual(OwnProfileSync.reconciled(user(systemLanguage: "de", updatedAt: nil), holding: held).systemLanguage, "de",
+                       "sans instant, rien ne prouve qu'elle est plus ancienne")
+        XCTAssertEqual(OwnProfileSync.reconciled(user(systemLanguage: "de"), holding: nil).systemLanguage, "de")
+        let anotherAccount = MeeshyUser(id: "autre", username: "bob", systemLanguage: "de", updatedAt: Self.held)
+        XCTAssertEqual(OwnProfileSync.reconciled(anotherAccount, holding: held).systemLanguage, "de")
+    }
+
+    @MainActor
+    func test_updateUserAfterRevalidation_readBeforeTheSnapshot_doesNotRevertIt() {
+        let auth = AuthManager.shared
+        let previousUser = auth.currentUser
+        let previousPending = auth.pendingOptimisticProfile
+        let previousAccounts = auth.savedAccounts
+        defer {
+            auth.currentUser = previousUser
+            auth.pendingOptimisticProfile = previousPending
+            auth.savedAccounts = previousAccounts
+        }
+        auth.pendingOptimisticProfile = nil
+        auth.currentUser = user()
+        OwnProfileSync.apply(event(), to: auth)
+
+        auth.updateUserAfterRevalidation(
+            user(updatedAt: "2026-11-17T10:01:00.000Z"), userId: Self.me, generation: auth.sessionGeneration
+        )
+
+        XCTAssertEqual(auth.currentUser?.systemLanguage, "en", "une relecture plus ancienne que l'instantané ne le défait pas")
+        XCTAssertEqual(auth.currentUser?.updatedAt, Self.later)
+    }
 }
