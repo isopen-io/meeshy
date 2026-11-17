@@ -329,8 +329,10 @@ const rendrePlace = () => {
 // ---------------------------------------------------------------------------
 async function lot(l, depart) {
   const d = await developper(l, depart)
-  signalerDev(l.cle, d && !d.bloque && d.branche ? { cle: l.cle, branche: d.branche } : { cle: l.cle, raison: d ? d.bloque : 'agent perdu' })
-  if (!d || d.bloque) return { cle: l.cle, lot: titre(l), etat: 'bloqué', raison: d ? d.bloque : 'agent perdu' }
+  const bloquant = !!d && !!(d.bloque || '').trim() && (!d.branche || !d.sha || /^(cédé|cede|déjà|deja|limite|cadrage impossible)/i.test(d.bloque.trim()))
+  if (d && !bloquant && (d.bloque || '').trim()) { log(`${titre(l)} : réserve non bloquante gardée — ${d.bloque}`); d.gatesLocaux = `${d.gatesLocaux || ''}\nRÉSERVES : ${d.bloque}`; d.bloque = '' }
+  signalerDev(l.cle, d && !bloquant && d.branche ? { cle: l.cle, branche: d.branche } : { cle: l.cle, raison: d ? d.bloque : 'agent perdu' })
+  if (!d || bloquant) return { cle: l.cle, lot: titre(l), etat: 'bloqué', raison: d ? d.bloque : 'agent perdu' }
   const r = await relire(l, d)
   if (!r) return { cle: l.cle, lot: titre(l), etat: 'bloqué', branche: d.branche, raison: 'revue perdue' }
   if (r.sensible) {
