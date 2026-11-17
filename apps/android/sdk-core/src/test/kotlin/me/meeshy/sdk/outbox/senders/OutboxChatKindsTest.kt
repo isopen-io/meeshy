@@ -97,16 +97,17 @@ class OutboxChatKindsTest {
     }
 
     @Test
-    fun `a refused restore rereads the conversation and a failed one does not`() = runTest {
+    fun `a restore refused for good rereads the message it named and a failed attempt does not`() = runTest {
         val handler = RestoreForMeHandler(messageApi, messages, senderJson)
         coEvery { messageApi.restoreForMe("m1") } throws refusal(403)
 
         val result = handler.send(outboxRow(OutboxKind.RESTORE_FOR_ME, "m1", hiding))
         assertThat(result).isInstanceOf(SendResult.PermanentFailure::class.java)
-        coVerify(exactly = 0) { messages.refresh(any()) }
+        coVerify(exactly = 0) { messages.refreshMessage(any(), any()) }
 
         handler.onExhausted(outboxRow(OutboxKind.RESTORE_FOR_ME, "m1", hiding))
-        coVerify(exactly = 1) { messages.refresh("c1") }
+        coVerify(exactly = 1) { messages.refreshMessage("c1", "m1") }
+        coVerify(exactly = 0) { messages.refresh(any()) }
     }
 
     @Test

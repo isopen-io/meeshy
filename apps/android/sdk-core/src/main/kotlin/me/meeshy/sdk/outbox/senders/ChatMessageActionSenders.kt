@@ -83,7 +83,10 @@ public class HideForMeHandler @Inject constructor(
     }
 }
 
-/** `RESTORE_FOR_ME` : le message masqué revient chez moi ; un refus relit la fenêtre (la vérité du serveur gagne). */
+/**
+ * `RESTORE_FOR_ME` : le message masqué revient chez moi ; un refus définitif relit CE message par son id (#18915) — la
+ * vérité du serveur gagne, où qu'il soit dans le fil : relire la conversation n'en lit que la fenêtre récente.
+ */
 public class RestoreForMeHandler @Inject constructor(
     private val messageApi: MessageChatRestApi,
     private val messageRepository: MessageRepository,
@@ -97,7 +100,7 @@ public class RestoreForMeHandler @Inject constructor(
     }
 
     override suspend fun onExhausted(row: OutboxEntity) {
-        refreshOf(messageRepository, row, conversationOfHiding(json))
+        conversationOfHiding(json)(row.payload)?.let { messageRepository.refreshMessage(it, row.targetId) }
     }
 }
 

@@ -2,7 +2,6 @@ package me.meeshy.sdk.outbox.senders
 
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coVerify
-import io.mockk.coVerifyOrder
 import io.mockk.confirmVerified
 import io.mockk.mockk
 import io.mockk.verify
@@ -24,7 +23,6 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxKindHandler
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxRepository
-import me.meeshy.sdk.outbox.PinPayload
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.UserRepository
@@ -96,36 +94,26 @@ class ExhaustionHandlersTest {
         coVerify(exactly = 1) { sessionRepository.refresh() }
     }
 
+    /**
+     * What an exhausted pin, unpin, edit or deletion gives back is pinned on the cached ROW, by
+     * `ExhaustedMessageGestureTest` (#18915) — a verified call proved nothing: the conversation refresh it
+     * checked never re-read an old message. Only the two refusals to act stay here.
+     */
     @Test
-    fun `an exhausted pin or unpin refreshes the conversation named by its payload`() = runTest {
-        val payload = encodedPayload(PinPayload("c1"))
-
-        PinMessageHandler(mockk<MessageApi>(), messageRepository, senderJson)
-            .onExhausted(outboxRow(OutboxKind.PIN_MESSAGE, payload = payload))
-        UnpinMessageHandler(mockk<MessageApi>(), messageRepository, senderJson)
-            .onExhausted(outboxRow(OutboxKind.UNPIN_MESSAGE, payload = payload))
-
-        coVerify(exactly = 2) { messageRepository.refresh("c1") }
-    }
-
-    @Test
-    fun `an exhausted delete for everyone lifts its tombstone then refreshes the conversation, so the message comes back`() = runTest {
-        DeleteMessageHandler(mockk<MessageApi>(), messageRepository)
-            .onExhausted(outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1", lane = OutboxLanes.forMessage("c1")))
-
-        coVerifyOrder {
-            messageRepository.markUndeleted("m1", null)
-            messageRepository.refresh("c1")
-        }
-        coVerify(exactly = 0) { messageRepository.confirmDeletion(any()) }
-    }
-
-    @Test
-    fun `an exhausted pin whose payload cannot be read refreshes nothing`() = runTest {
+    fun `an exhausted pin whose payload cannot be read reads nothing back`() = runTest {
         PinMessageHandler(mockk<MessageApi>(), messageRepository, senderJson)
             .onExhausted(outboxRow(OutboxKind.PIN_MESSAGE, payload = "garbage"))
 
+        coVerify(exactly = 0) { messageRepository.refreshMessage(any(), any()) }
         coVerify(exactly = 0) { messageRepository.refresh(any()) }
+    }
+
+    @Test
+    fun `an exhausted delete for everyone never confirms the erasure of its plaintext`() = runTest {
+        DeleteMessageHandler(mockk<MessageApi>(), messageRepository)
+            .onExhausted(outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1", lane = OutboxLanes.forMessage("c1")))
+
+        coVerify(exactly = 0) { messageRepository.confirmDeletion(any()) }
     }
 
     @Test
@@ -156,7 +144,6 @@ class ExhaustionHandlersTest {
         val postApi = mockk<PostApi>()
         val outboxRepository = mockk<OutboxRepository>()
         val untouchable: Map<OutboxKind, OutboxKindHandler> = mapOf(
-            OutboxKind.EDIT_MESSAGE to EditMessageHandler(messageApi, senderJson),
             OutboxKind.READ_RECEIPT to ReadReceiptHandler(conversationApi, senderJson),
             OutboxKind.MARK_UNREAD to MarkUnreadHandler(conversationApi),
             OutboxKind.UPDATE_CONVERSATION_PREFS to UpdateConversationPrefsHandler(conversationApi, senderJson, io.mockk.mockk(relaxed = true), io.mockk.mockk(relaxed = true), me.meeshy.sdk.outbox.UserStateRollbackEvents()),
