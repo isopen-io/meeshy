@@ -3759,6 +3759,39 @@ model E2EEOneTimePreKey {
   @@index([userId, deviceId, registrationId, kind, usedAt])
 }
 
+/// Un message de COMPARAISON (confirmation d'un appareil par code court, #19156, spec
+/// 2026-11-17 § 5.2), relayé EN CLAIR entre deux générations d'appareil du MÊME compte.
+/// Il ne porte que des données publiques (descripteur, engagement, aléas révélés, motif) :
+/// aucune clé privée, aucun contenu de conversation. Il vit dix minutes (`expiresAt`).
+/// L'accusé le retire de ce qui est servi (`ackedAt`) ; la ligne reste jusqu'à son échéance
+/// pour que le relais sache à qui une demande a été adressée quand elle est prise
+/// (`cancel(accepted-elsewhere)` substitué, `answeredBy*`).
+model E2EEDeviceVerificationMessage {
+  id                       String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId                   String    @db.ObjectId
+  /// La transaction : 16 octets, base64 canonique.
+  tx                       String
+  /// request | accept | reveal | method | cancel
+  kind                     String
+  /// `relayedFrom` : la génération liée à la session émettrice, vérifiée par le relais.
+  senderDeviceId           Int
+  senderRegistrationId     Int
+  recipientDeviceId        Int
+  recipientRegistrationId  Int
+  /// Seulement sur un `cancel(accepted-elsewhere)` substitué par le relais : la génération qui a répondu.
+  answeredByDeviceId       Int?
+  answeredByRegistrationId Int?
+  /// Le message validé, sérialisé tel que reçu (≤ 2 Kio).
+  body                     String
+  createdAt                DateTime  @default(now())
+  expiresAt                DateTime
+  ackedAt                  DateTime?
+
+  @@index([userId, recipientDeviceId, recipientRegistrationId, createdAt])
+  @@index([userId, tx])
+  @@index([expiresAt])
+}
+
 /// Une enveloppe libsignal opaque adressée à UN appareil destinataire. Effacée à
 /// l'accusé de réception de cet appareil, au plus tard à 30 jours.
 model MessageEnvelope {

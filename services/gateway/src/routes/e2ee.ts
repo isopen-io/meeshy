@@ -35,6 +35,7 @@ import { currentE2EEIO } from '../services/e2ee/envelope-delivery';
 import { invalidateSession } from '../services/SessionService';
 import { disconnectSession } from '../socketio/disconnectSession';
 import { createRetiredDeviceSessionCloser } from '../services/e2ee/retired-device-session';
+import { deviceTrustRuntime } from '../services/e2ee/device-trust-runtime';
 
 const logger = enhancedLogger.child({ module: 'E2EERoutes' });
 
@@ -91,8 +92,14 @@ export type E2EERouteDeps = {
    * seulement si la session n'est plus valide après l'appel.
    */
   readonly closeSession: (session: { readonly userId: string; readonly sessionId: string }) => Promise<boolean>;
-  /** Après un enrôlement : les sockets déjà ouvertes de la session rejoignent la room de l'appareil. */
-  readonly onEnrolled?: (enrolled: Caller & { readonly deviceId: number; readonly registrationId: number }) => Promise<void>;
+  /**
+   * Après un enrôlement : les sockets déjà ouvertes de la session rejoignent la room de
+   * l'appareil, et une génération neuve (`created`) ou de retour (`returning`) s'annonce à
+   * mes autres appareils (#19156).
+   */
+  readonly onEnrolled?: (
+    enrolled: Caller & { readonly deviceId: number; readonly registrationId: number; readonly created: boolean; readonly returning: boolean },
+  ) => Promise<void>;
 };
 
 function callerOf(request: FastifyRequest): Caller | null {
@@ -143,10 +150,10 @@ function registerDeviceRoutes(fastify: FastifyInstance, deps: E2EERouteDeps): vo
     const body = parsedOr400(reply, e2eeEnrollDeviceRequestSchema.safeParse(request.body));
     if (!body) return;
     const enrolled = await deps.directory.enrollDevice({ ...caller, request: body });
-    await deps.onEnrolled?.({ ...caller, deviceId: enrolled.deviceId, registrationId: body.registrationId }).catch((error: unknown) =>
-      logger.warn('e2ee device room not joined after enrolment', { error }),
-    );
-    return sendSuccess(reply, enrolled, { statusCode: enrolled.created ? 201 : 200 });
+    await deps
+      .onEnrolled?.({ ...caller, deviceId: enrolled.deviceId, registrationId: body.registrationId, created: enrolled.created, returning: enrolled.returning })
+      .catch((error: unknown) => logger.warn('e2ee device room not joined or not announced after enrolment', { error }));
+    return sendSuccess(reply, { deviceId: enrolled.deviceId, created: enrolled.created }, { statusCode: enrolled.created ? 201 : 200 });
   }));
 
   fastify.get('/e2ee/devices', { preValidation }, guarded(async (_request, reply, caller) =>
@@ -250,7 +257,12 @@ export default async function e2eeRoutes(fastify: FastifyInstance): Promise<void
     relay: createE2EEEnvelopeRelay({ prisma }),
     mayReadKeysOf: (requester, target) => mayReadKeysOf(prisma, requester, target),
     keyBudget: createKeyReservationBudget(fastify.redis ?? undefined),
-    onEnrolled: (enrolled) => joinSessionSocketsToDeviceRoom(currentE2EEIO(), enrolled),
+    onEnrolled: async (enrolled) => {
+      await joinSessionSocketsToDeviceRoom(currentE2EEIO(), enrolled);
+      if (!enrolled.created && !enrolled.returning) return;
+      const { userId, deviceId, registrationId, returning } = enrolled;
+      await deviceTrustRuntime(prisma).announcements.enrolled({ userId, deviceId, registrationId, returning });
+    },
     closeSession: createRetiredDeviceSessionCloser({
       invalidate: (sessionId) => invalidateSession(sessionId, 'user_revoked'),
       isLive: async ({ userId, sessionId }) =>

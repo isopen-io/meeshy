@@ -20,10 +20,11 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { leaveDeviceRooms } from './device-room';
 import { currentE2EEIO } from './envelope-delivery';
+import { announceRetiredGenerations } from './own-device-announcements';
 
-export type RetirementPrisma = Pick<PrismaClient, 'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | 'userSession'>;
+export type RetirementPrisma = Pick<PrismaClient, 'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | 'e2EEDeviceVerificationMessage' | 'userSession'>;
 
-type RowsPrisma = Pick<PrismaClient, 'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope'>;
+type RowsPrisma = Pick<PrismaClient, 'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | 'e2EEDeviceVerificationMessage'>;
 
 type ErasurePrisma = RowsPrisma & Pick<PrismaClient, 'e2EERevokedIdentity' | 'e2EEBindingProof'>;
 
@@ -63,12 +64,15 @@ export async function retireDeviceRows(
     retired.push(device);
   }
   leaveDeviceRooms(currentE2EEIO(), retired);
+  await announceRetiredGenerations(prisma, retired);
   return retired;
 }
 
 /**
- * Les pré-clés et, sauf `keepEnvelopes`, les enveloppes d'UNE génération d'une
- * place, et d'elle seule.
+ * Les pré-clés, les messages de comparaison (#19156 : adressés à cette génération ou
+ * émis par elle — ils ne vivent que dix minutes, et aucune invite ne doit survivre au
+ * retrait de l'appareil qui l'a lancée) et, sauf `keepEnvelopes`, les enveloppes d'UNE
+ * génération d'une place, et d'elle seule.
  */
 export async function eraseGeneration(
   prisma: RowsPrisma,
@@ -76,6 +80,15 @@ export async function eraseGeneration(
   options: { readonly keepEnvelopes?: boolean } = {},
 ): Promise<void> {
   await prisma.e2EEOneTimePreKey.deleteMany({ where: { userId: device.userId, deviceId: device.deviceId, registrationId: device.registrationId } });
+  await prisma.e2EEDeviceVerificationMessage.deleteMany({
+    where: {
+      userId: device.userId,
+      OR: [
+        { recipientDeviceId: device.deviceId, recipientRegistrationId: device.registrationId },
+        { senderDeviceId: device.deviceId, senderRegistrationId: device.registrationId },
+      ],
+    },
+  });
   if (options.keepEnvelopes) return;
   await prisma.messageEnvelope.deleteMany({
     where: { recipientUserId: device.userId, recipientDeviceId: device.deviceId, recipientRegistrationId: device.registrationId },
@@ -172,7 +185,8 @@ export async function sweepDevicesOfEndedSessions(
  * La purge du compte : ses appareils, ses pré-clés, les enveloppes qui lui sont
  * adressées ET celles qu'il a émises (GWX-02, #12544 : ses messages sont
  * anonymisés pour tout le monde, un correspondant qui se reconnecte n'en reçoit
- * plus les enveloppes), et la trace de ses preuves de liaison disparaissent.
+ * plus les enveloppes), ses messages de comparaison (#19156) et la trace de ses
+ * preuves de liaison disparaissent.
  */
 export async function eraseE2EEDataOfUser(
   prisma: ErasurePrisma,
@@ -184,6 +198,7 @@ export async function eraseE2EEDataOfUser(
     prisma.messageEnvelope.deleteMany({ where: { OR: [{ recipientUserId: userId }, { senderUserId: userId }] } }),
     prisma.e2EERevokedIdentity.deleteMany({ where: { userId } }),
     prisma.e2EEBindingProof.deleteMany({ where: { userId } }),
+    prisma.e2EEDeviceVerificationMessage.deleteMany({ where: { userId } }),
   ]);
   return { devices: devices.count, preKeys: preKeys.count, envelopes: envelopes.count };
 }

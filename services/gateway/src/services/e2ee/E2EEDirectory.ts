@@ -43,8 +43,23 @@ import type { SignatureVerifier } from './signature-verifier';
 
 export type DirectoryPrisma = Pick<
   PrismaClient,
-  'e2EEDevice' | 'e2EEOneTimePreKey' | 'messageEnvelope' | 'userSession' | 'e2EERevokedIdentity' | 'e2EEBindingProof' | '$runCommandRaw'
+  | 'e2EEDevice'
+  | 'e2EEOneTimePreKey'
+  | 'messageEnvelope'
+  | 'e2EEDeviceVerificationMessage'
+  | 'userSession'
+  | 'e2EERevokedIdentity'
+  | 'e2EEBindingProof'
+  | '$runCommandRaw'
 >;
+
+/**
+ * L'issue d'un enrôlement : `created` = une génération NEUVE (place neuve ou reprise par une
+ * autre installation) ; `returning` = une génération retirée qui revient sous la même identité
+ * (#12593). Les deux s'annoncent à mes autres appareils (#19156) ; un réenrôlement d'un
+ * appareil déjà actif n'est ni l'un ni l'autre.
+ */
+export type Enrolment = { readonly deviceId: number; readonly created: boolean; readonly returning: boolean };
 
 export type E2EEDirectoryDeps = {
   readonly prisma: DirectoryPrisma;
@@ -263,7 +278,7 @@ export class E2EEDirectory {
    * révocation — l'un des deux voit toujours l'autre, et l'identité révoquée ne
    * reste jamais active (#12546).
    */
-  async enrollDevice(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest }): Promise<{ deviceId: number; created: boolean }> {
+  async enrollDevice(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest }): Promise<Enrolment> {
     assertCanonicalIdentityKey(params.request.identityKey);
     const at = this.now();
     await assertBinding(this.verifier, { userId: params.userId, request: params.request, now: at });
@@ -293,7 +308,7 @@ export class E2EEDirectory {
    * installation lié à cette session, ou elle est refusée. Rejouer un
    * placement republierait le lot capturé.
    */
-  private async consumeBinding(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest; at: Date }): Promise<{ deviceId: number; created: false } | null> {
+  private async consumeBinding(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest; at: Date }): Promise<Enrolment | null> {
     const { userId, sessionId, request, at } = params;
     const installation = { userId, identityKey: request.identityKey, registrationId: request.registrationId };
     const id = bindingProofId(installation);
@@ -313,10 +328,10 @@ export class E2EEDirectory {
     if (last === null || last.sessionId !== sessionId || last.signedAt.getTime() !== signedAt.getTime()) throw bindingReplayed();
     const bound = await this.prisma.e2EEDevice.findFirst({ where: { ...installation, sessionId, ...ACTIVE }, select: { deviceId: true } });
     if (!bound) throw bindingReplayed();
-    return { deviceId: bound.deviceId, created: false };
+    return { deviceId: bound.deviceId, created: false, returning: false };
   }
 
-  private async placeDevice(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest; at: Date }): Promise<{ deviceId: number; created: boolean }> {
+  private async placeDevice(params: { userId: string; sessionId: string; request: E2EEEnrollDeviceRequest; at: Date }): Promise<Enrolment> {
     const { userId, sessionId, request, at } = params;
     const keyFields = { ...signedPreKeyFields(request.signedPreKey, at), ...kyberLastResortFields(request.kyberLastResort) };
     // Un (ré)enrôlement dit ce que l'appareil sait faire MAINTENANT (#19155) : absent = rien de neuf.
@@ -330,7 +345,7 @@ export class E2EEDirectory {
       await this.prisma.e2EEDevice.update({ where: { id: existing.id }, data: { sessionId, ...keyFields, ...profile } });
       await this.replaceOneTimeKeys(existing, request);
       await this.addOneTimeKeys(existing, request);
-      return { deviceId: existing.deviceId, created: false };
+      return { deviceId: existing.deviceId, created: false, returning: false };
     }
 
     await retireDevicesOfEndedSessions(this.prisma, { userId, now: at });
@@ -339,7 +354,7 @@ export class E2EEDirectory {
       registrationId: request.registrationId, identityKey: request.identityKey, sessionId, ...keyFields, ...profile,
     });
     await this.addOneTimeKeys({ userId, deviceId: claimed.deviceId, registrationId: request.registrationId }, request);
-    return { deviceId: claimed.deviceId, created: !claimed.returning };
+    return { deviceId: claimed.deviceId, created: !claimed.returning, returning: claimed.returning };
   }
 
   async publishKeys(params: { userId: string; sessionId: string; deviceId: number; request: E2EEPublishKeysRequest }): Promise<PreKeyStock> {
