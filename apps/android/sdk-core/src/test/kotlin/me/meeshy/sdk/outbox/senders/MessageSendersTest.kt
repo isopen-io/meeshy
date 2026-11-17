@@ -145,7 +145,7 @@ class MessageSendersTest {
             lane = OutboxLanes.forMessage("c9"),
         )
 
-        val result = EditMessageHandler(messageApi, senderJson, ledger).send(row)
+        val result = EditMessageHandler(messageApi, messageRepository, senderJson, ledger).send(row)
 
         assertThat(result).isEqualTo(SendResult.PermanentFailure(OutboxPlaintextAdmission.REASON_END_TO_END))
         assertThat(ledger.isSealed("c9")).isTrue()
@@ -187,7 +187,7 @@ class MessageSendersTest {
     @Test
     fun `edit message patches the content and maps the outcome`() = runTest {
         val body = EditMessageRequest(content = "corrigé")
-        val handler = EditMessageHandler(messageApi, senderJson)
+        val handler = EditMessageHandler(messageApi, messageRepository, senderJson)
         val row = outboxRow(OutboxKind.EDIT_MESSAGE, targetId = "m1", payload = encodedPayload(body))
         coEvery { messageApi.edit("m1", body) } returns accepted(serverMessage)
 
@@ -199,7 +199,7 @@ class MessageSendersTest {
 
     @Test
     fun `edit message with an undecodable payload fails permanently`() = runTest {
-        val handler = EditMessageHandler(messageApi, senderJson)
+        val handler = EditMessageHandler(messageApi, messageRepository, senderJson)
 
         val result = handler.send(outboxRow(OutboxKind.EDIT_MESSAGE, payload = "{"))
 

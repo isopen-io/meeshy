@@ -1,5 +1,7 @@
 package me.meeshy.sdk.conversation
 
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import me.meeshy.sdk.media.MediaAdoption
 import me.meeshy.sdk.media.PendingMediaPreviewing
 import me.meeshy.sdk.model.ApiMessageAttachment
@@ -13,6 +15,10 @@ import timber.log.Timber
  * aperçus en attente que la nouvelle ligne ne référence plus sont libérés. Une pièce encore référencée en `file://`
  * n'est pas touchée : sa bulle la lit toujours, et la réécriture suivante la réglera. [origin] nomme, au journal de
  * débogage, le chemin qui a réglé l'envoi (accusé, `message:new`, page servie).
+ *
+ * Un règlement commencé va à son terme (#18915) : la ligne est déjà réécrite quand il part, et l'émission de cette même
+ * écriture annule souvent l'appelant (la revalidation du fil, dans le `transformLatest` du flux). Coupé en route, il
+ * laissait l'aperçu orphelin et le fichier joué à retélécharger.
  */
 internal class AcknowledgedBubbleMedia(
     private val adoption: MediaAdoption?,
@@ -21,11 +27,13 @@ internal class AcknowledgedBubbleMedia(
 ) {
     suspend fun settle(previous: List<ApiMessageAttachment>, written: List<ApiMessageAttachment>) {
         if (previous.isEmpty()) return
-        val adopted = adoption?.adopt(previous, written) ?: 0
-        val stillLocal = written.flatMap { listOfNotNull(it.fileUrl, it.thumbnailUrl) }.filter(LocalFileUrl::isLocal).toSet()
-        val gone = previous.filter { attachment -> listOfNotNull(attachment.fileUrl, attachment.thumbnailUrl).none { it in stillLocal } }
-        if (gone.isNotEmpty()) previews?.release(gone)
-        Timber.d("Envoi réglé par %s : %d fichier(s) adopté(s), %d pièce(s) libérée(s)", origin, adopted, gone.size)
+        withContext(NonCancellable) {
+            val adopted = adoption?.adopt(previous, written) ?: 0
+            val stillLocal = written.flatMap { listOfNotNull(it.fileUrl, it.thumbnailUrl) }.filter(LocalFileUrl::isLocal).toSet()
+            val gone = previous.filter { attachment -> listOfNotNull(attachment.fileUrl, attachment.thumbnailUrl).none { it in stillLocal } }
+            if (gone.isNotEmpty()) previews?.release(gone)
+            Timber.d("Envoi réglé par %s : %d fichier(s) adopté(s), %d pièce(s) libérée(s)", origin, adopted, gone.size)
+        }
     }
 
     companion object {

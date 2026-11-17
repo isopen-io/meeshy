@@ -16,6 +16,7 @@
  */
 
 import { EXTERNAL_CONVERSATIONS_CAPABILITY } from '@meeshy/shared/types/external-conversation';
+import { LIVE_RECEIPTS_CAPABILITY } from '@meeshy/shared/types/live-receipts';
 
 export const CLIENT_CAPABILITIES_HEADER = 'x-meeshy-capabilities';
 
@@ -28,6 +29,8 @@ export const CLIENT_CAPABILITIES = {
   linkDeviceBinding: 'link-device-binding',
   /** #17117 — ce client sait lire une conversation `external` (un ami d'un réseau tiers) ; sans le jeton, la liste ne la sert pas. */
   externalConversations: EXTERNAL_CONVERSATIONS_CAPABILITY,
+  /** #19049 — ce client tient ses accusés par la socket : la fenêtre de messages se revalide sans eux (ETag faible). */
+  liveReceipts: LIVE_RECEIPTS_CAPABILITY,
 } as const;
 
 export type ClientCapability = (typeof CLIENT_CAPABILITIES)[keyof typeof CLIENT_CAPABILITIES];

@@ -41,7 +41,9 @@ export async function loadViewerBirthDate(
 /**
  * La ligne de préférences servie quand le lecteur n'en a aucune en base — les
  * colonnes que la liste déclare au fil (`conversationMinimalSchema`), à leur
- * valeur par défaut, archivée.
+ * valeur par défaut, archivée. `version: 0` pour la raison de la route
+ * `GET /user-preferences/conversations/:id` sans ligne : une ligne jamais écrite
+ * n'a jamais été diffusée, elle est sous toute version que le serveur émettra.
  */
 const ARCHIVED_DEFAULT_PREFERENCES = {
   isPinned: CONVERSATION_PREFERENCES_DEFAULTS.isPinned,
@@ -51,6 +53,10 @@ const ARCHIVED_DEFAULT_PREFERENCES = {
   categoryId: CONVERSATION_PREFERENCES_DEFAULTS.categoryId,
   customName: CONVERSATION_PREFERENCES_DEFAULTS.customName,
   reaction: CONVERSATION_PREFERENCES_DEFAULTS.reaction,
+  version: 0,
+  mentionsOnly: CONVERSATION_PREFERENCES_DEFAULTS.mentionsOnly,
+  orderInCategory: CONVERSATION_PREFERENCES_DEFAULTS.orderInCategory,
+  clearHistoryBefore: CONVERSATION_PREFERENCES_DEFAULTS.clearHistoryBefore,
 } as const;
 
 export function servedListRowRestriction<P extends object>(params: {

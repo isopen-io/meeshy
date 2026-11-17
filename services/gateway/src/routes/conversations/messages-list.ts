@@ -42,7 +42,7 @@ import type {
   MessagesQuery
 } from './types';
 import { sendBadRequest, sendInternalError } from '../../utils/response.js';
-import { sendWithETag } from '../../utils/etag';
+import { revalidateMessageWindow } from './messages-window-validator';
 import type { PaginationMeta } from '../../utils/pagination';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
@@ -962,6 +962,10 @@ export function registerMessagesListRoute(
         }
       }
 
+      // T15 + #19049 — ETag + If-None-Match→304, validateur FORT sauf pour un client `live-receipts`
+      // (`messages-window-validator.ts`) ; il reflète le résultat filtré, tous modes de pagination compris.
+      const { conditional, validator } = revalidateMessageWindow(request, reply, responsePayload);
+
       timings.total = performance.now() - reqStart;
       const level = timings.total > 5000 ? 'warn' : 'info';
       logger[level](`⏱️ GET /conversations/${conversationId}/messages`, {
@@ -974,15 +978,13 @@ export function registerMessagesListRoute(
         offset,
         before: before || null,
         around: around || null,
-        timings: Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, Math.round(v)]))
+        timings: Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, Math.round(v)])),
+        // #19049 — la part de 304 parmi les revalidations, par régime de validateur.
+        conditional,
+        validator
       });
 
-      // T15 — ETag + If-None-Match→304: don't re-send an unchanged message
-      // page body. `sendWithETag` sets ETag + Cache-Control: private, no-cache
-      // and short-circuits with a body-less 304 on a match. The ETag reflects
-      // the filtered result, so it composes with the `after`/`before`/`around`
-      // delta-sync modes without special handling.
-      if (sendWithETag(request, reply, responsePayload)) return;
+      if (conditional === 'not-modified') return;
       reply.send(responsePayload);
 
     } catch (error) {

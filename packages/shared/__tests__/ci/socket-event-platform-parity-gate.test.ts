@@ -138,6 +138,13 @@ const ASYMETRIES: readonly {
       + 'pas encore la surface. La parité suivra le portage du Jeu, qui a ses propres issues.',
     events: ['game:missions-updated'],
   },
+  {
+    absents: ['web', 'ios'],
+    raison:
+      "mon profil synchronisé entre mes appareils (#18924) : la passerelle l'émet sur `user:<moi>` et le lot Android "
+      + "le lit ; les lots web et iOS de #18924 le liront à leur tour, et `GET /me` reste la relecture sans la socket.",
+    events: ['profile:updated'],
+  },
 ];
 
 const contract = readContractPayloads();

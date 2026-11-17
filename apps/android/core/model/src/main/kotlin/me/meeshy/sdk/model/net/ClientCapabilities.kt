@@ -10,6 +10,13 @@ public enum class ClientCapability(public val wire: String) {
 
     /** Le lien de connexion lié à l'appareil. */
     LINK_DEVICE_BINDING("link-device-binding"),
+
+    /**
+     * #19049 — ce binaire tient les compteurs d'accusés des messages par la socket : la fenêtre de messages se revalide sans
+     * eux (ETag faible). Aucun cache HTTP ne resservirait ici le corps d'un 200 sur un 304 (le client API n'en installe
+     * pas), et une fenêtre se relit en entier après chaque (re)connexion (`LiveReceiptsContinuity`).
+     */
+    LIVE_RECEIPTS("live-receipts"),
 }
 
 /**
@@ -20,12 +27,13 @@ public enum class ClientCapability(public val wire: String) {
  * nouvelle qu'au client qui la DÉCLARE. Déclarer avant de savoir lire échangerait une
  * dégradation lisible contre un écran vide. [declared] ne liste donc que ce dont l'écran
  * est livré : `ONBOARDING_AGE` et `LINK_DEVICE_BINDING` y entrent le jour où leurs écrans
- * existent, jamais avant. `ONBOARDING_PROFILE` y est : la carte « Montre-toi » est livrée (#17238).
+ * existent, jamais avant. `ONBOARDING_PROFILE` y est : la carte « Montre-toi » est livrée (#17238). `LIVE_RECEIPTS` y est :
+ * les accusés voyagent par la socket et la fenêtre se relit en entier après une coupure (#19049).
  */
 public object ClientCapabilities {
     public const val HEADER_NAME: String = "X-Meeshy-Capabilities"
 
-    public val declared: List<ClientCapability> = listOf(ClientCapability.ONBOARDING_PROFILE)
+    public val declared: List<ClientCapability> = listOf(ClientCapability.ONBOARDING_PROFILE, ClientCapability.LIVE_RECEIPTS)
 
     /** La valeur de l'en-tête, ou `null` quand rien n'est déclaré (l'en-tête est alors omis). */
     public fun headerValue(capabilities: List<ClientCapability> = declared): String? =

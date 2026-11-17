@@ -46,6 +46,11 @@ data class ApiResponse<T>(
     val requiredConsents: List<String>? = null,
     /** La pagination par curseur des routes qui ne passent pas par `sendSuccess` (`messages/search`), à la racine. */
     val cursorPagination: CursorPagination? = null,
+    /**
+     * Le compte des notifications non lues que `GET /notifications` calcule DANS LA MÊME RÉPONSE que sa page, à la racine
+     * (#19048) : le seul compte qui ne s'ordonne pas autrement que la page par rapport à une arrivée en direct.
+     */
+    val unreadCount: Int? = null,
 )
 
 /**
