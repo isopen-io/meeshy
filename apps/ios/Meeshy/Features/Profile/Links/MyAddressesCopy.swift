@@ -46,9 +46,6 @@ nonisolated enum MyAddressesCopy {
     static var countClicks: String {
         String(localized: "profile.addresses.add.count", defaultValue: "Compter les clics", bundle: .main)
     }
-    static var countClicksDetail: String {
-        String(localized: "profile.addresses.add.countDetail", defaultValue: "Crée un lien de suivi meeshy.me/l/…", bundle: .main)
-    }
     static var limitReached: String {
         String(localized: "profile.addresses.add.limit", defaultValue: "12 adresses au plus", bundle: .main)
     }

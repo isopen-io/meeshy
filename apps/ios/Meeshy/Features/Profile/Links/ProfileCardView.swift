@@ -97,7 +97,7 @@ struct ProfileCardView: View {
 
     private func avatar(_ side: CGFloat) -> some View {
         MeeshyAvatar(name: user?.displayName ?? link.username, context: .custom(side), accentColor: accentColor,
-                     avatarURL: user?.avatar, thumbHash: user?.avatarThumbHash)
+                     avatarURL: user?.avatar, thumbHash: user?.avatarThumbHash, ring: user?.profileDecor?.avatarRing)
             .accessibilityHidden(true)
     }
 
@@ -138,7 +138,6 @@ struct ProfileCardView: View {
             codeCard(size: .compact)
                 .frame(maxWidth: .infinity)
             MeeshySectionHeader(title: ProfileLinksCopy.orScan)
-            MeeshyNote(ProfileLinksCopy.orScanDetail, lead: .systemImage("qrcode.viewfinder"))
             MeeshyButton(ProfileLinksCopy.scan, systemImage: "qrcode.viewfinder", kind: .primary, width: .fill,
                          tint: accent, action: { scannerShown = true })
         }

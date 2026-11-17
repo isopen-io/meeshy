@@ -123,7 +123,8 @@ struct VitrineSeenAsView: View {
                 accentColor: accentColor,
                 secondaryColor: MeeshyColors.indigo300Hex,
                 avatarURL: shown.avatar,
-                presenceState: model.preview.isOnline ? .online : nil
+                presenceState: model.preview.isOnline ? .online : nil,
+                ring: shown.profileDecor?.avatarRing
             )
             .offset(y: -MeeshySpacing.xxxl)
             .padding(.bottom, -MeeshySpacing.xxxl)
@@ -211,9 +212,6 @@ struct VitrineSeenAsView: View {
             if rows.isEmpty {
                 MeeshyNote(VitrineSeenAsCopy.nothingMasked, kind: .neutral)
             } else {
-                Text(VitrineSeenAsCopy.maskedSubtitle)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                    .foregroundStyle(theme.textMuted)
                 ForEach(rows) { locked in
                     MeeshyLockedRow(
                         title: VitrineSeenAsCopy.rowTitle(locked.row),

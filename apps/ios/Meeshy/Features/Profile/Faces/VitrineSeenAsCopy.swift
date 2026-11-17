@@ -34,10 +34,6 @@ nonisolated enum VitrineSeenAsCopy {
         String(localized: "profile.seenAs.viewedByMe", defaultValue: "Vue par : Moi", bundle: .main)
     }
 
-    static var viewedByHint: String {
-        String(localized: "profile.seenAs.viewedBy.hint", defaultValue: "Montre ta vitrine telle que chaque cercle la voit", bundle: .main)
-    }
-
     /// « Ce que voit un Ami » : le cercle courant, dit au-dessus de la Vitrine rendue.
     static func whatSees(_ level: RelationLevel) -> String {
         let format = String(localized: "profile.seenAs.whatSees", defaultValue: "Ce que voit le cercle %@", bundle: .main)
@@ -62,10 +58,6 @@ nonisolated enum VitrineSeenAsCopy {
 
     static var maskedTitle: String {
         String(localized: "profile.seenAs.masked.title", defaultValue: "Masqué à ce niveau", bundle: .main)
-    }
-
-    static var maskedSubtitle: String {
-        String(localized: "profile.seenAs.masked.subtitle", defaultValue: "Ce cercle ne voit rien de tout ça.", bundle: .main)
     }
 
     static var nothingMasked: String {
@@ -100,10 +92,6 @@ nonisolated enum VitrineSeenAsCopy {
 
     static var cransTitle: String {
         String(localized: "profile.seenAs.crans.title", defaultValue: "Trois crans", bundle: .main)
-    }
-
-    static var cransSubtitle: String {
-        String(localized: "profile.seenAs.crans.subtitle", defaultValue: "Ce qui se déverrouille", bundle: .main)
     }
 
     static var cranNothing: String {
@@ -143,7 +131,7 @@ nonisolated enum VitrineSeenAsCopy {
         case .gameBasic: return String(localized: "profile.seenAs.feature.gameBasic", defaultValue: "niveau et rang", bundle: .main)
         case .bring: return String(localized: "profile.seenAs.feature.bring", defaultValue: "Bring", bundle: .main)
         case .locationTemporary: return String(localized: "profile.seenAs.feature.locationTemporary", defaultValue: "position temporaire", bundle: .main)
-        case .presenceDetailed: return String(localized: "profile.seenAs.feature.presenceDetailed", defaultValue: "présence détaillée", bundle: .main)
+        case .presenceDetailed: return String(localized: "profile.seenAs.feature.presenceFull", defaultValue: "présence détaillée", bundle: .main)
         case .gameSparksGlory: return String(localized: "profile.seenAs.feature.gameSparksGlory", defaultValue: "étincelles", bundle: .main)
         case .listeningCategory: return String(localized: "profile.seenAs.feature.listeningCategory", defaultValue: "ce que tu écoutes", bundle: .main)
         case .talkie: return String(localized: "profile.seenAs.feature.talkie", defaultValue: "Talkie", bundle: .main)

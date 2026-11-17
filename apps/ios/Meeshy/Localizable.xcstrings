@@ -164036,53 +164036,6 @@
         }
       }
     },
-    "profile.progression.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يفتح تقدّمك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Öffnet Ihren Fortschritt"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opens your progress"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abre tu progreso"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvre votre progression"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apre i tuoi progressi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abre seu progresso"
-          }
-        }
-      }
-    },
     "profile.progression.subtitle": {
       "extractionState": "manual",
       "localizations": {
@@ -230880,7 +230833,7 @@
         }
       }
     },
-    "shareLink.detail.pageTitle": {
+    "shareLink.sheet.pageTitle": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -230927,7 +230880,7 @@
         }
       }
     },
-    "shareLink.detail.inactiveHint": {
+    "shareLink.sheet.inactiveState": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -230974,7 +230927,7 @@
         }
       }
     },
-    "shareLink.detail.disableLink": {
+    "shareLink.sheet.disableLink": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231021,7 +230974,7 @@
         }
       }
     },
-    "shareLink.detail.enableLink": {
+    "shareLink.sheet.enableLink": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231068,7 +231021,7 @@
         }
       }
     },
-    "shareLink.detail.leadsTo": {
+    "shareLink.sheet.leadsTo": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231115,7 +231068,7 @@
         }
       }
     },
-    "shareLink.detail.entries": {
+    "shareLink.sheet.entries": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231162,7 +231115,7 @@
         }
       }
     },
-    "shareLink.detail.entries.unit": {
+    "shareLink.sheet.entries.unit": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231209,7 +231162,7 @@
         }
       }
     },
-    "shareLink.detail.entries.unitOf": {
+    "shareLink.sheet.entries.unitOf": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231256,7 +231209,7 @@
         }
       }
     },
-    "shareLink.detail.entries.spoken": {
+    "shareLink.sheet.entries.spoken": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231303,7 +231256,7 @@
         }
       }
     },
-    "shareLink.detail.quota.share": {
+    "shareLink.sheet.quota.share": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231350,7 +231303,7 @@
         }
       }
     },
-    "shareLink.detail.quota.left": {
+    "shareLink.sheet.quota.left": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231397,7 +231350,7 @@
         }
       }
     },
-    "shareLink.detail.quota.full": {
+    "shareLink.sheet.quota.full": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231444,7 +231397,7 @@
         }
       }
     },
-    "shareLink.detail.expiresInDays": {
+    "shareLink.sheet.expiresInDays": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231491,7 +231444,7 @@
         }
       }
     },
-    "shareLink.detail.expiresTomorrow": {
+    "shareLink.sheet.expiresTomorrow": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231538,7 +231491,7 @@
         }
       }
     },
-    "shareLink.detail.expiresToday": {
+    "shareLink.sheet.expiresToday": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231585,7 +231538,7 @@
         }
       }
     },
-    "shareLink.detail.whoCanEnter": {
+    "shareLink.sheet.whoCanEnter": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231632,7 +231585,7 @@
         }
       }
     },
-    "shareLink.detail.rule.guests": {
+    "shareLink.sheet.rule.guests": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231679,7 +231632,7 @@
         }
       }
     },
-    "shareLink.detail.rule.history": {
+    "shareLink.sheet.rule.history": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231726,7 +231679,7 @@
         }
       }
     },
-    "shareLink.detail.rule.asked": {
+    "shareLink.sheet.rule.asked": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231773,7 +231726,7 @@
         }
       }
     },
-    "shareLink.detail.rule.concurrent": {
+    "shareLink.sheet.rule.concurrent": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231820,7 +231773,7 @@
         }
       }
     },
-    "shareLink.detail.seeAll": {
+    "shareLink.sheet.seeAll": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231867,7 +231820,7 @@
         }
       }
     },
-    "shareLink.detail.guest": {
+    "shareLink.sheet.guest": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231914,7 +231867,7 @@
         }
       }
     },
-    "shareLink.detail.removeArrival": {
+    "shareLink.sheet.removeArrival": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -231961,7 +231914,7 @@
         }
       }
     },
-    "shareLink.detail.removeArrivalTitle": {
+    "shareLink.sheet.removeArrivalTitle": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -232008,7 +231961,7 @@
         }
       }
     },
-    "shareLink.detail.byCountry": {
+    "shareLink.sheet.byCountry": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -348661,7 +348614,7 @@
         }
       }
     },
-    "profile.actions.stats.subtitle": {
+    "profile.actions.stats.counts": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -350024,7 +349977,7 @@
         }
       }
     },
-    "profile.seenAs.feature.presenceDetailed": {
+    "profile.seenAs.feature.presenceFull": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -350490,53 +350443,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nada fica oculto neste nível."
-          }
-        }
-      }
-    },
-    "profile.seenAs.masked.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هذه الدائرة لا ترى شيئًا من هذا."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieser Kreis sieht nichts davon."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This circle sees none of this."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este círculo no ve nada de esto."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce cercle ne voit rien de tout ça."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Questa cerchia non vede nulla di tutto ciò."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este círculo não vê nada disso."
           }
         }
       }
@@ -351007,53 +350913,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Prévia da minha vitrine"
-          }
-        }
-      }
-    },
-    "profile.seenAs.viewedBy.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يعرض واجهتك كما تراها كل دائرة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zeigt dein Schaufenster so, wie jeder Kreis es sieht"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shows your showcase as each circle sees it"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muestra tu vitrina como la ve cada círculo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Montre ta vitrine telle que chaque cercle la voit"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostra la tua vetrina come la vede ogni cerchia"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostra sua vitrine como cada círculo a vê"
           }
         }
       }
@@ -351810,53 +351669,6 @@
         }
       }
     },
-    "profile.seenAs.crans.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ما يُفتح"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Was sich freischaltet"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "What unlocks"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lo que se desbloquea"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce qui se déverrouille"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cosa si sblocca"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O que é desbloqueado"
-          }
-        }
-      }
-    },
     "profile.seenAs.crans.nothing": {
       "extractionState": "manual",
       "localizations": {
@@ -352041,53 +351853,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Meu status"
-          }
-        }
-      }
-    },
-    "circles.ours.pill.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يفتح دائرتنا: ما يمنحه كلٌّ منكما وما ينقص للارتقاء."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Öffnet Unser Kreis: was jeder gewährt und was zum Aufsteigen fehlt."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opens Our circle: what each of you grants and what is missing to move up."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abre Nuestro círculo: lo que cada uno concede y lo que falta para subir."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvre Notre cercle : ce que chacun accorde et ce qui manque pour monter."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apre Il nostro cerchio: ciò che ciascuno concede e ciò che manca per salire."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abre Nosso círculo: o que cada um concede e o que falta para subir."
           }
         }
       }
@@ -352891,7 +352656,7 @@
         }
       }
     },
-    "circles.ours.feature.presenceDetailed": {
+    "circles.ours.feature.presenceFull": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -354019,53 +353784,6 @@
         }
       }
     },
-    "profile.addresses.add.countDetail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ينشئ رابط تتبّع meeshy.me/l/…"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erstellt einen Tracking-Link meeshy.me/l/…"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Creates a tracking link meeshy.me/l/…"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crea un enlace de seguimiento meeshy.me/l/…"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crée un lien de suivi meeshy.me/l/…"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crea un link di tracciamento meeshy.me/l/…"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cria um link de rastreamento meeshy.me/l/…"
-          }
-        }
-      }
-    },
     "profile.addresses.add.limit": {
       "extractionState": "manual",
       "localizations": {
@@ -354955,53 +354673,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Link copiado"
-          }
-        }
-      }
-    },
-    "profile.links.send.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أرسل واجهتك في محادثة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sende deine Vitrine in einer Unterhaltung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Send your showcase in a conversation"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Envía tu escaparate en una conversación"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Envoie ta vitrine dans une conversation"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invia la tua vetrina in una conversazione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Envie sua vitrine em uma conversa"
           }
         }
       }
@@ -357215,101 +356886,54 @@
         }
       }
     },
-    "profile.contactless.orScan.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "وجّه الكاميرا إلى رمزه فيُفتح ملفه."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Richte die Kamera auf den QR-Code, das Profil öffnet sich."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aim at their QR code and their profile opens."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apunta a su QR y se abre su perfil."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vise son QR, sa fiche s'ouvre."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inquadra il suo QR e si apre il suo profilo."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aponte para o QR e o perfil abre."
-          }
-        }
-      }
-    },
     "profile.contactless.noChip": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "على iPhone، لا يتبادل هاتفان ملفًا شخصيًا عبر الشريحة: رمز QR يؤدي المهمة نفسها."
+            "value": "على iPhone، لا تتبادل الشريحة الملفات الشخصية: رمز QR يؤدي المهمة نفسها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auf dem iPhone tauschen zwei Telefone kein Profil über den Chip aus: Der QR-Code erledigt dasselbe."
+            "value": "Auf dem iPhone tauscht der Chip kein Profil aus: Der QR-Code erledigt dasselbe."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "On iPhone, two phones can't swap a profile over the chip: the QR code does the same thing."
+            "value": "On iPhone, the chip can't swap a profile: the QR code does the same thing."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "En iPhone, dos teléfonos no intercambian un perfil por el chip: el QR hace lo mismo."
+            "value": "En iPhone, el chip no intercambia perfiles: el QR hace lo mismo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sur iPhone, deux téléphones ne s'échangent pas un profil par la puce : le QR fait le même geste."
+            "value": "Sur iPhone, la puce n'échange pas de profil : le QR fait le même geste."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Su iPhone due telefoni non si scambiano un profilo tramite il chip: il QR fa lo stesso."
+            "value": "Su iPhone il chip non scambia profili: il QR fa lo stesso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "No iPhone, dois telefones não trocam um perfil pelo chip: o QR faz o mesmo."
+            "value": "No iPhone, o chip não troca perfis: o QR faz o mesmo."
           }
         }
       }
     },
-    "profile.scanner.hint": {
+    "profile.scanner.aim": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -357450,7 +357074,7 @@
         }
       }
     },
-    "tracking.link.detail.qr.enlarge": {
+    "tracking.link.sheet.qr.enlarge": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -357497,7 +357121,7 @@
         }
       }
     },
-    "tracking.link.detail.inactiveHint": {
+    "tracking.link.sheet.inactiveState": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -357544,7 +357168,7 @@
         }
       }
     },
-    "tracking.link.detail.deleteLink": {
+    "tracking.link.sheet.deleteLink": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -357591,7 +357215,7 @@
         }
       }
     },
-    "tracking.link.detail.figure.clicks": {
+    "tracking.link.sheet.figure.clicks": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -357638,7 +357262,7 @@
         }
       }
     },
-    "tracking.link.detail.figure.unique": {
+    "tracking.link.sheet.figure.unique": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -357685,7 +357309,7 @@
         }
       }
     },
-    "tracking.link.detail.figure.countries": {
+    "tracking.link.sheet.figure.countries": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -357732,7 +357356,7 @@
         }
       }
     },
-    "tracking.link.detail.chart.title": {
+    "tracking.link.sheet.chart.title": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -357779,7 +357403,7 @@
         }
       }
     },
-    "tracking.link.detail.chart.empty": {
+    "tracking.link.sheet.chart.empty": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -357826,7 +357450,7 @@
         }
       }
     },
-    "tracking.link.detail.period.label": {
+    "tracking.link.sheet.period.label": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -357873,7 +357497,7 @@
         }
       }
     },
-    "tracking.link.detail.period.week": {
+    "tracking.link.sheet.period.week": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -357920,7 +357544,7 @@
         }
       }
     },
-    "tracking.link.detail.period.month": {
+    "tracking.link.sheet.period.month": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -357967,7 +357591,7 @@
         }
       }
     },
-    "tracking.link.detail.period.all": {
+    "tracking.link.sheet.period.all": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358014,7 +357638,7 @@
         }
       }
     },
-    "tracking.link.detail.period.week.a11y": {
+    "tracking.link.sheet.period.week.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358061,7 +357685,7 @@
         }
       }
     },
-    "tracking.link.detail.period.month.a11y": {
+    "tracking.link.sheet.period.month.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358108,7 +357732,7 @@
         }
       }
     },
-    "tracking.link.detail.period.all.a11y": {
+    "tracking.link.sheet.period.all.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358155,7 +357779,7 @@
         }
       }
     },
-    "tracking.link.detail.chart.summary": {
+    "tracking.link.sheet.chart.summary": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358202,7 +357826,7 @@
         }
       }
     },
-    "tracking.link.detail.chart.day": {
+    "tracking.link.sheet.chart.day": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358249,7 +357873,7 @@
         }
       }
     },
-    "tracking.link.detail.chart.count": {
+    "tracking.link.sheet.chart.count": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358296,7 +357920,7 @@
         }
       }
     },
-    "tracking.link.detail.origins.title": {
+    "tracking.link.sheet.origins.title": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358343,7 +357967,7 @@
         }
       }
     },
-    "tracking.link.detail.means.title": {
+    "tracking.link.sheet.means.title": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358390,7 +358014,7 @@
         }
       }
     },
-    "tracking.link.detail.sources": {
+    "tracking.link.sheet.sources": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358437,7 +358061,7 @@
         }
       }
     },
-    "tracking.link.detail.device.phone": {
+    "tracking.link.sheet.device.phone": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358484,7 +358108,7 @@
         }
       }
     },
-    "tracking.link.detail.device.desktop": {
+    "tracking.link.sheet.device.desktop": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358531,7 +358155,7 @@
         }
       }
     },
-    "tracking.link.detail.device.tablet": {
+    "tracking.link.sheet.device.tablet": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358578,7 +358202,7 @@
         }
       }
     },
-    "tracking.link.detail.device.other": {
+    "tracking.link.sheet.device.other": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358625,7 +358249,7 @@
         }
       }
     },
-    "tracking.link.detail.source.direct": {
+    "tracking.link.sheet.source.direct": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358672,7 +358296,7 @@
         }
       }
     },
-    "communityLink.detail.pageTitle": {
+    "communityLink.sheet.pageTitle": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358719,7 +358343,7 @@
         }
       }
     },
-    "communityLink.detail.animates": {
+    "communityLink.sheet.animates": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358766,7 +358390,7 @@
         }
       }
     },
-    "communityLink.detail.moderates": {
+    "communityLink.sheet.moderates": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358813,7 +358437,7 @@
         }
       }
     },
-    "communityLink.detail.copyIdentifier": {
+    "communityLink.sheet.copyIdentifier": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358860,7 +358484,7 @@
         }
       }
     },
-    "communityLink.detail.identifierCopied": {
+    "communityLink.sheet.identifierCopied": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358907,7 +358531,7 @@
         }
       }
     },
-    "communityLink.detail.members": {
+    "communityLink.sheet.members": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -358954,7 +358578,7 @@
         }
       }
     },
-    "communityLink.detail.figure.members": {
+    "communityLink.sheet.figure.members": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359001,7 +358625,7 @@
         }
       }
     },
-    "communityLink.detail.figure.week": {
+    "communityLink.sheet.figure.week": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359048,7 +358672,7 @@
         }
       }
     },
-    "communityLink.detail.figure.month": {
+    "communityLink.sheet.figure.month": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359095,7 +358719,7 @@
         }
       }
     },
-    "communityLink.detail.chart.title": {
+    "communityLink.sheet.chart.title": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359142,7 +358766,7 @@
         }
       }
     },
-    "communityLink.detail.chart.empty": {
+    "communityLink.sheet.chart.empty": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359189,7 +358813,7 @@
         }
       }
     },
-    "communityLink.detail.chart.perDay": {
+    "communityLink.sheet.chart.perDay": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359236,7 +358860,7 @@
         }
       }
     },
-    "communityLink.detail.chart.summary": {
+    "communityLink.sheet.chart.summary": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359283,7 +358907,7 @@
         }
       }
     },
-    "communityLink.detail.chart.day": {
+    "communityLink.sheet.chart.day": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359330,7 +358954,7 @@
         }
       }
     },
-    "communityLink.detail.chart.count": {
+    "communityLink.sheet.chart.count": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359377,7 +359001,7 @@
         }
       }
     },
-    "communityLink.detail.rules.title": {
+    "communityLink.sheet.rules.title": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359424,7 +359048,7 @@
         }
       }
     },
-    "communityLink.detail.rules.open": {
+    "communityLink.sheet.rules.open": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359471,7 +359095,7 @@
         }
       }
     },
-    "communityLink.detail.rules.invitation": {
+    "communityLink.sheet.rules.invitation": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359518,7 +359142,7 @@
         }
       }
     },
-    "communityLink.detail.rules.role": {
+    "communityLink.sheet.rules.role": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359565,7 +359189,7 @@
         }
       }
     },
-    "communityLink.detail.rules.countries": {
+    "communityLink.sheet.rules.countries": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359612,7 +359236,7 @@
         }
       }
     },
-    "communityLink.detail.rules.noExpiry": {
+    "communityLink.sheet.rules.noExpiry": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359659,7 +359283,7 @@
         }
       }
     },
-    "communityLink.detail.recent.title": {
+    "communityLink.sheet.recent.title": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359706,7 +359330,7 @@
         }
       }
     },
-    "communityLink.detail.recent.empty": {
+    "communityLink.sheet.recent.empty": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359753,7 +359377,7 @@
         }
       }
     },
-    "communityLink.detail.recent.failed": {
+    "communityLink.sheet.recent.failed": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359800,7 +359424,7 @@
         }
       }
     },
-    "communityLink.detail.recent.joined": {
+    "communityLink.sheet.recent.joined": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359847,7 +359471,7 @@
         }
       }
     },
-    "communityLink.detail.close": {
+    "communityLink.sheet.close": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359894,7 +359518,7 @@
         }
       }
     },
-    "communityLink.detail.reopen": {
+    "communityLink.sheet.reopen": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -359941,7 +359565,7 @@
         }
       }
     },
-    "communityLink.detail.closedHint": {
+    "communityLink.sheet.closedState": {
       "extractionState": "manual",
       "localizations": {
         "ar": {

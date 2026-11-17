@@ -62,7 +62,7 @@ nonisolated enum OurCircleFeature: String, CaseIterable, Sendable {
         case .presenceOnline: return String(localized: "circles.ours.feature.presenceOnline", defaultValue: "Présence « en ligne »", bundle: .main)
         case .bring: return String(localized: "circles.ours.feature.bring", defaultValue: "Bring", bundle: .main)
         case .sharedLocation: return String(localized: "circles.ours.feature.sharedLocation", defaultValue: "Position partagée", bundle: .main)
-        case .presenceDetailed: return String(localized: "circles.ours.feature.presenceDetailed", defaultValue: "Présence détaillée", bundle: .main)
+        case .presenceDetailed: return String(localized: "circles.ours.feature.presenceFull", defaultValue: "Présence détaillée", bundle: .main)
         case .talkie: return String(localized: "circles.ours.feature.talkie", defaultValue: "Talkie", bundle: .main)
         case .together: return String(localized: "circles.ours.feature.together", defaultValue: "Ensemble", bundle: .main)
         case .battery: return String(localized: "circles.ours.feature.battery", defaultValue: "Batterie", bundle: .main)

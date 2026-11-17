@@ -76,7 +76,7 @@ struct ProfileActionsFace: View {
                                         tint: accent, action: { onAction(.share) })
                 }
                 MeeshyLabeledAction(title: ProfileActionsCopy.seenAs, systemImage: "eye",
-                                    tint: accent, hint: VitrineSeenAsCopy.viewedByHint, action: { onAction(.seenAs) })
+                                    tint: accent, action: { onAction(.seenAs) })
                 MeeshyLabeledAction(title: ProfileActionsCopy.edit, systemImage: "pencil",
                                     tint: accent, action: { onAction(.edit) })
                 if canSetMood {

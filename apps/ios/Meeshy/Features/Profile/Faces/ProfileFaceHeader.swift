@@ -45,7 +45,8 @@ struct ProfileFaceHeader<Trailing: View>: View {
     private var identity: some View {
         HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(name: user?.displayName ?? user?.username ?? "", context: .custom(40),
-                         accentColor: accentColor, avatarURL: user?.avatar, thumbHash: user?.avatarThumbHash)
+                         accentColor: accentColor, avatarURL: user?.avatar, thumbHash: user?.avatarThumbHash,
+                         ring: user?.profileDecor?.avatarRing)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)

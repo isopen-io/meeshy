@@ -58,6 +58,5 @@ struct ProfileProgressionEntry: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(String(localized: "profile.progression.title", defaultValue: "Ma Légende", bundle: .main))
-        .accessibilityHint(String(localized: "profile.progression.hint", defaultValue: "Ouvre votre progression", bundle: .main))
     }
 }

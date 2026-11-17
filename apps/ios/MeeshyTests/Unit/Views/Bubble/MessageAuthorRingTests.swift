@@ -156,6 +156,12 @@ final class MessageAuthorRingTests: XCTestCase {
         "MeeshyUI/Story/Controls/SoundLibraryPicker.swift": (1, "décor, illustration ou son — aucune personne"),
         "MeeshyUI/Packs/PackElementStage.swift": (2, "soi, essai d'un décor — le contour essayé se pose AUTOUR de l'avatar (`.avatarRing`), la bannière essayée n'en montre aucun"),
         "MeeshyUI/Packs/PublisherPageView.swift": (1, "page d'un éditeur — `PackPublisherOwner` servi ne porte pas le contour (#10957)"),
+        "Links/Views/CommunityLinkDetailView+Sections.swift": (1, "entrées par un lien de communauté — `CommunityLinkEntry` servie ne porte pas le contour (#10957)"),
+        "SharedLocation/Map/NearbyMapScreen.swift": (1, "carte « Autour de toi » — la position servie ne porte pas le contour (#10957)"),
+        "SharedLocation/Map/PersonLocationMapScreen.swift": (1, "carte d'une personne — l'épingle servie ne porte pas le contour (#10957)"),
+        "SharedLocation/Map/LocationMapPinsLayer.swift": (1, "épingles de la carte — la position servie ne porte pas le contour (#10957)"),
+        "SharedLocation/Map/BloodLocationSheet.swift": (1, "qui a regardé ma position — l'observateur servi ne porte pas le contour (#10957)"),
+        "SharedLocation/Map/ShareMyLocationSheet.swift": (1, "destinataires du partage de position — le destinataire choisi ne porte pas le contour (#10957)"),
     ]
 
     func test_everyPersonAvatar_passesTheServedRing_orIsCountedWithItsReason() throws {

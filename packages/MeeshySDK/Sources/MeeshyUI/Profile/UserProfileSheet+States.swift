@@ -229,7 +229,7 @@ enum ProfileStatesCopy {
                           bundle: .module)
         case .unreachable:
             return String(localized: "profile.state.failed.unreachable",
-                          defaultValue: "Ta connexion va bien. Le souci est de notre côté, et ça ne dure jamais longtemps.",
+                          defaultValue: "Ta connexion va bien. Le souci vient de nous et ne dure jamais.",
                           bundle: .module)
         }
     }
