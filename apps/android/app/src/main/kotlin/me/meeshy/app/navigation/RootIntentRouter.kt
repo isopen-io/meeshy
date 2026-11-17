@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.chat.ChatViewModel
+import me.meeshy.app.push.ConversationBannerExtra
 import me.meeshy.app.push.MessageNotificationId
 import me.meeshy.app.startup.AppOverlay
 import me.meeshy.sdk.conversation.DirectConversationOpener
@@ -73,13 +74,19 @@ class RootIntentRouter @Inject constructor() {
     }
 }
 
-/** Retire les notifications systeme de la conversation ouverte (celles que l'application a posees ou que FCM a rendues). */
+/**
+ * Retire les notifications systeme de la conversation ouverte (celles que l'application a posees ou que FCM a rendues),
+ * y compris la banniere a part d'un message ephemere, reconnue a la conversation que portent ses extras.
+ */
 internal class ConversationNotificationCanceller(private val context: Context) {
     fun cancel(conversationId: String) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
         MessageNotificationId.forConversation(type = "new_message", conversationId = conversationId)
             ?.let(manager::cancel)
         manager.cancel(conversationId, 0)
+        runCatching { manager.activeNotifications }.getOrNull().orEmpty()
+            .filter { it.tag == null && it.notification.extras.getString(ConversationBannerExtra.KEY) == conversationId }
+            .forEach { manager.cancel(it.id) }
     }
 }
 
