@@ -8,6 +8,7 @@ import {
   updateUserPassword,
   updateUsername,
   getUserByUsername,
+  userShortAddressAlias,
   getUserById,
   getUserByEmail,
   getUserByIdDedicated,
@@ -84,6 +85,7 @@ export async function userRoutes(fastify: FastifyInstance) {
   await updateUserPassword(fastify);
   await updateUsername(fastify);
   await getUserByUsername(fastify);
+  await userShortAddressAlias(fastify);
   await getUserById(fastify);
   await getUserByEmail(fastify);
   await getUserByIdDedicated(fastify);

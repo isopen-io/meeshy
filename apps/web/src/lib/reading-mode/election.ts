@@ -19,11 +19,10 @@ import { HIGH_VELOCITY_THRESHOLD, SUSTAINED_SCROLL_MS } from './metrics';
 /**
  * `THREAD_FOCUS_BAND_HYSTERESIS` — DÉRIVÉE de
  * `packages/shared/utils/focus-curve.ts::THREAD_FOCUS_BAND_HYSTERESIS`
- * (:88), littéral et non import : même raison que `lens/law.ts:1-27` et
- * `perspective.ts:33` (`THREAD_FOCUS_BAND_OFFSET`) — ce paquet tire
+ * (:88), littéral et non import : même raison que `lens/law.ts:1-27` — ce paquet tire
  * `@prisma/client` et `zod` par ses autres modules, qu'une application de
  * 25 Ko ne peut pas se permettre de charger pour une seule constante.
- * Gardée par `scripts/check-curve.mjs` PARTIE 3.
+ * Gardée par `scripts/check-curve.mjs` PARTIE 3 (hystérésis).
  */
 export const THREAD_FOCUS_BAND_HYSTERESIS = 95;
 

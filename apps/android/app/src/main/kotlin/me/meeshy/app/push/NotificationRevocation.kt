@@ -134,3 +134,15 @@ object MessageNotificationId {
     fun forNotification(notificationId: String?): Int =
         notificationId?.takeIf { it.isNotBlank() }?.hashCode() ?: 0
 }
+
+/**
+ * La conversation d'une bannière de MESSAGE, posée dans ses extras quel que soit son index : un éphémère a le sien
+ * ([MessageNotificationId.of]), et « conversation ouverte ou lue ailleurs » doit l'atteindre aussi — sans quoi sa
+ * bannière restait jusqu'à son délai, jusqu'à 24 h, sur un message déjà lu.
+ */
+object ConversationBannerExtra {
+    const val KEY = "meeshy.conversationId"
+
+    fun of(type: String?, conversationId: String?): String? = conversationId
+        ?.takeIf { it.isNotBlank() && ConversationIndexedNotifications.replacesBannerOfItsConversation(type) }
+}

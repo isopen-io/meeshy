@@ -126,5 +126,3 @@ export function LivingSummary({
     </div>
   );
 }
-
-export default LivingSummary;

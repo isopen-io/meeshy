@@ -1,7 +1,7 @@
 import type { ContentPage } from './type';
 
 /**
- * « À propos » — le contenu de `apps/web/locales/fr/about.json`, mot pour mot.
+ * « À propos » — le contenu de `legacy-web-final:apps/web/locales/fr/about.json`, mot pour mot.
  *
  * CE QUI N'A PAS SUIVI, ET POURQUOI. `cta.joinUs` est la seule clé du
  * catalogue que la page legacy ne rend PAS : elle n'a aucune destination, et un
