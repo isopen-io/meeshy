@@ -630,6 +630,19 @@ final class NSEAttachmentPolicyTests: XCTestCase {
                        "répondre ou marquer lu un message supprimé n'a pas de sens")
     }
 
+    /// Ce qui part À CÔTÉ du corps neutre : la bannière d'un message supprimé n'existe que le temps
+    /// qu'un balayage la retire — elle ne sonne pas et n'allume pas l'écran pour lui.
+    func test_withdrawing_neitherRingsNorLightsTheScreen() throws {
+        let content = try makeRevokedContent()
+        content.sound = .default
+        content.interruptionLevel = .active
+
+        let withdrawn = NSEAttachmentPolicy.withdrawing(content, neutralBody: "Hidden message")
+
+        XCTAssertNil(withdrawn.sound)
+        XCTAssertEqual(withdrawn.interruptionLevel, .passive)
+    }
+
     /// Le neutre est un libellé du catalogue de l'extension, jamais un texte écrit ici.
     func test_withdrawnBannerLocKey_isTheNeutralLabelTheGatewayAlreadyUsesForHiddenMessages() {
         XCTAssertEqual(NSEAttachmentPolicy.withdrawnBannerLocKey, "notification.hidden_message")
