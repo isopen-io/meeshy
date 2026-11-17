@@ -315,10 +315,10 @@ export function createSharedLocationSharingCenter({
       .filter(([id]) => rosterOps.entry(next, id) !== null)
       .reduce((folded, [id, until]) => rosterOps.union(rosterOps.withdrawing(folded, id, now()), { entries: {}, withdrawals: { [id]: until } }), next);
 
-  const engage = (served: SharedLocationRoster, fix: SharedLocationFix): void => {
+  const engage = (served: SharedLocationRoster, fix: SharedLocationFix | null): void => {
     const next = withKeptWithdrawals(served);
     adopt(next);
-    lastSent = { fix, at: now() };
+    if (fix !== null) lastSent = { fix, at: now() };
     if (rosterOps.hasRecipients(next) && !received) startFollowing();
     else stopFollowing();
     if (rosterOps.equals(next, served)) scheduleDeadline();
@@ -332,15 +332,18 @@ export function createSharedLocationSharingCenter({
     return legacy === null || !isLive() ? verdict : emitter.start(legacy);
   };
 
-  /* La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte. */
-  const publish = async (wanted: SharedLocationRoster, fix: SharedLocationFix, previous: SharedLocationRoster): Promise<SharedLocationShareProblem | null> => {
+  /*
+   * La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte. Sans
+   * position (liste seule, #19284), un seul envoi : une passerelle qui la connaît connaît aussi l'échéance par personne.
+   */
+  const publish = async (wanted: SharedLocationRoster, fix: SharedLocationFix | null, previous: SharedLocationRoster): Promise<SharedLocationShareProblem | null> => {
     const next = rosterOps.settled(wanted);
     const payload = sharedLocationStartPayloadOf({ recipients: rosterOps.deadlinedRecipients(next, now()), durationMinutes: rosterOps.serverDurationMinutes(next, now()), fix });
     if (payload === null) return 'invalid';
     if (!isLive()) return 'failed';
     /* Avant l'accusé, la liste gardée couvre les deux : un onglet fermé pendant l'attente garde « Arrêter » pour chacun. */
     persist(rosterOps.union(previous, next));
-    const verdict = await startTolerant(payload);
+    const verdict = fix === null ? await emitter.start(payload) : await startTolerant(payload);
     if (!isLive()) return 'failed';
     if (verdict.kind === 'started') {
       engage(next, fix);
@@ -360,9 +363,22 @@ export function createSharedLocationSharingCenter({
     return null;
   };
 
-  /* Redémarrer avec une liste réduite demande une position : la dernière envoyée, sinon celle de l'appareil. Sans l'une ni l'autre, TOUT s'arrête. */
+  /*
+   * Retirer quelqu'un ou solder une échéance republie la LISTE SEULE (#19284) : la passerelle reprend le point qu'elle
+   * garde, et cet onglet n'envoie pas sa position — il peut n'avoir fait que recevoir la liste d'un autre appareil
+   * (#18580). Sans partage côté passerelle, il n'y a plus rien à retirer chez personne. Une passerelle d'avant refuse
+   * la liste seule : la liste repart avec une position, la dernière envoyée, sinon celle de l'appareil ; sans l'une ni
+   * l'autre, TOUT s'arrête.
+   */
   const republish = async (wanted: SharedLocationRoster): Promise<SharedLocationShareProblem | null> => {
     if (!rosterOps.hasRecipients(wanted)) return stopAll();
+    const listOnly = await publish(wanted, null, roster());
+    if (listOnly !== 'invalid' && listOnly !== 'not-sharing') return listOnly;
+    if (!isLive()) return 'failed';
+    if (listOnly === 'not-sharing') {
+      wipe();
+      return null;
+    }
     const fix = freshLastFix() ?? (await silentFix());
     if (fix === null) return stopAll();
     if (!isLive()) return 'failed';

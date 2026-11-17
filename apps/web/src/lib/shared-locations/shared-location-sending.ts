@@ -55,12 +55,13 @@ export function sharedLocationStartPayloadOf({
 }: {
   readonly recipients: readonly SharedLocationRecipient[];
   readonly durationMinutes: SharedLocationDurationMinutes;
-  readonly fix: SharedLocationFix;
+  /** `null` : liste seule (#19284), la passerelle reprend la position du partage en cours. */
+  readonly fix: SharedLocationFix | null;
 }): SharedLocationStartPayload | null {
   const latest = new Map(recipients.filter((r) => OBJECT_ID.test(r.userId)).map((r) => [r.userId.toLowerCase(), r] as const));
   const ordered = [...latest.entries()].map(([userId, { precision, expiresInSeconds }]) => ({ userId, precision, ...(expiresInSeconds === undefined ? {} : { expiresInSeconds }) }));
   if (ordered.length === 0 || ordered.length > SHARED_LOCATION_RECIPIENTS_MAX) return null;
-  return { recipients: ordered, durationMinutes, position: fix };
+  return fix === null ? { recipients: ordered, durationMinutes } : { recipients: ordered, durationMinutes, position: fix };
 }
 
 /**
