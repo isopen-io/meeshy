@@ -1134,6 +1134,7 @@
 		3C33C4F6C4B45CFD99E43752 /* SettingsAuditFixesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2851865D6482DCE01DFE1585 /* SettingsAuditFixesTests.swift */; };
 		3C355D85E75D2DC54D1A8898 /* VoIPPushManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431DA91335E0D99E752473B2 /* VoIPPushManagerTests.swift */; };
 		2639C8B1E6F2A0D91E75C57A /* PushTapAddresseeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79DEDA297A2939F3F813F866 /* PushTapAddresseeTests.swift */; };
+		DB6F9431B4E8F235B132F9C3 /* PushTapWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33DB9679DD558369B6C2ECA9 /* PushTapWiringTests.swift */; };
 		218779A897A3F3E8269C5965 /* VoIPPushSessionBoundaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAD790469FBB1015380A8D08 /* VoIPPushSessionBoundaryTests.swift */; };
 		3C4E0C123FE26DF6B618D98F /* ShareLinkArrivalsListViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30B3B8DBF1C1BBC08BE1B36F /* ShareLinkArrivalsListViewModelTests.swift */; };
 		3C558C1682D9F701DBA2833C /* ConversationCreator.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDB91898D5F8E18EA46BD1A3 /* ConversationCreator.swift */; };
@@ -6075,6 +6076,7 @@
 		43178A787FA413CCEAEB1C74 /* ConversationAttachmentFileReadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAttachmentFileReadTests.swift; sourceTree = "<group>"; };
 		431DA91335E0D99E752473B2 /* VoIPPushManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoIPPushManagerTests.swift; sourceTree = "<group>"; };
 		79DEDA297A2939F3F813F866 /* PushTapAddresseeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushTapAddresseeTests.swift; sourceTree = "<group>"; };
+		33DB9679DD558369B6C2ECA9 /* PushTapWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushTapWiringTests.swift; sourceTree = "<group>"; };
 		DAD790469FBB1015380A8D08 /* VoIPPushSessionBoundaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoIPPushSessionBoundaryTests.swift; sourceTree = "<group>"; };
 		432514B94A0B4DFD9F87C1CB /* NSEPendingPostConsumer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEPendingPostConsumer.swift; sourceTree = "<group>"; };
 		433839B4987FC07899C2E564 /* DeletedAccountRetirementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeletedAccountRetirementTests.swift; sourceTree = "<group>"; };
@@ -11591,6 +11593,7 @@
 				8A7E03CF0905080B1731EA1B /* VoIPDedupRingTests.swift */,
 				431DA91335E0D99E752473B2 /* VoIPPushManagerTests.swift */,
 				79DEDA297A2939F3F813F866 /* PushTapAddresseeTests.swift */,
+				33DB9679DD558369B6C2ECA9 /* PushTapWiringTests.swift */,
 				DAD790469FBB1015380A8D08 /* VoIPPushSessionBoundaryTests.swift */,
 				16701F7F76F76A609504E139 /* WebRTCErrorTests.swift */,
 				8C1B1A06225A496E77EFDC50 /* WebRTCServiceDataProfileTests.swift */,
@@ -20722,6 +20725,7 @@
 				6820B5F6A7E9D83BFF9FF107 /* VoIPDedupRingTests.swift in Sources */,
 				3C355D85E75D2DC54D1A8898 /* VoIPPushManagerTests.swift in Sources */,
 				2639C8B1E6F2A0D91E75C57A /* PushTapAddresseeTests.swift in Sources */,
+				DB6F9431B4E8F235B132F9C3 /* PushTapWiringTests.swift in Sources */,
 				218779A897A3F3E8269C5965 /* VoIPPushSessionBoundaryTests.swift in Sources */,
 				98D3EA5BBD16B70DE8BA50F1 /* VoiceConsentFetchTests.swift in Sources */,
 				E708BFB8606834EC5E1539B1 /* VoiceConsentGateTests.swift in Sources */,
