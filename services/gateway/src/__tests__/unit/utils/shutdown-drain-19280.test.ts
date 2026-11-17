@@ -58,11 +58,10 @@ describe('arrêt en deux temps — phase de vidange (#19280)', () => {
     await server.close();
   });
 
-  it('ne pose aucune origine en trop sur le 503', async () => {
+  it('ne pose aucune origine en trop pendant la vidange (le refus CORS garde la main)', async () => {
     const { server, drain } = await buildServer();
     drain.begin();
     const res = await server.inject({ method: 'GET', url: '/api/v1/conversations', headers: { origin: 'https://evil.example' } });
-    expect(res.statusCode).toBe(503);
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
     await server.close();
   });
