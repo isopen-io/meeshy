@@ -22,6 +22,16 @@
  * (`curl -i -H 'Origin: https://meeshy.me'` sur le staging passerelle arrêtée)
  * reste à faire sur l'hôte : le dépôt ne déploie pas la configuration de Traefik.
  *
+ * LIMITE, en production : « chaque origine du repli est admise par la
+ * passerelle » se confronte aux DÉFAUTS du code (`DEFAULT_ALLOWED_ORIGINS`),
+ * pas à la liste servie — la passerelle de production lit `CORS_ORIGINS` dans
+ * le `.env` de l'hôte (`docker-compose.prod.yml`), hors du dépôt. Le staging,
+ * lui, l'écrit dans son compose, et le témoin la lit. Une origine ajoutée au
+ * repli de production se vérifie donc aussi dans ce `.env`. Le dernier cas
+ * ci-dessous tient la prémisse : si la production écrivait un jour sa liste
+ * dans le compose, il rougirait, pour que le témoin la lise comme celle du
+ * staging.
+ *
  * @jest-environment node
  */
 import fs from 'fs';
@@ -81,6 +91,8 @@ const PASSERELLES = [
     compose: 'docker-compose.prod.yml',
     healthyRouters: ['gateway', 'gateway-signed-files'],
     healthySignedRouter: 'gateway-signed-files',
+    // Les DÉFAUTS du code, faute de mieux : la liste servie vit dans le `.env`
+    // de l'hôte (`CORS_ORIGINS`), que le dépôt ne voit pas — voir l'en-tête.
     acceptedByGateway: () => [...DEFAULT_ALLOWED_ORIGINS, ...NATIVE_SHELL_ORIGINS],
   },
   {
@@ -179,6 +191,14 @@ describe.each(PASSERELLES)('$environnement — la passerelle absente répond une
     for (const healthy of passerelle.healthyRouters) {
       expect(middlewaresOf(healthy).filter((name) => /cors/i.test(name))).toEqual([]);
     }
+  });
+});
+
+describe('la liste d’origines de la PRODUCTION n’est pas dans le dépôt : le témoin n’en voit que les défauts du code (#18920)', () => {
+  it('la passerelle de production lit `CORS_ORIGINS` dans le `.env` de l’hôte, sans valeur écrite dans le compose', () => {
+    const prod = fs.readFileSync(path.join(COMPOSE_DIR, 'docker-compose.prod.yml'), 'utf8');
+
+    expect(/^\s*-\s*CORS_ORIGINS=(.+)$/m.exec(prod)?.[1]).toMatch(/^\$\{CORS_ORIGINS:\?/);
   });
 });
 

@@ -84,6 +84,12 @@ http:
     # de repli ci-dessous, jamais sur ceux de la passerelle saine. Leurs origines
     # sont un SOUS-ENSEMBLE de celles que la passerelle admet (garde :
     # services/gateway/src/__tests__/unit/config/gateway-unavailable-cors-18920.test.ts).
+    # Limite de cette garde en PRODUCTION : la passerelle y lit `CORS_ORIGINS`
+    # dans le `.env` de l'hôte (`docker-compose.prod.yml`), hors du dépôt, et le
+    # témoin ne confronte la liste ci-dessous qu'aux DÉFAUTS du code
+    # (`DEFAULT_ALLOWED_ORIGINS`). Une origine ajoutée au repli de production se
+    # vérifie donc aussi dans ce `.env`. Le staging écrit la sienne dans son
+    # compose, et le témoin la lit.
     # Leur prévol laisse passer la requête réelle jusqu'au 503 : tous les en-têtes
     # (`*`, `Authorization` nommé — le joker ne le couvre pas), les verbes de la
     # passerelle ; sans `accessControlMaxAge`, rien n'est gardé en cache.
