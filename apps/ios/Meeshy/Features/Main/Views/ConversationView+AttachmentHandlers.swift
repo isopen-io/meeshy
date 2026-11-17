@@ -82,7 +82,7 @@ extension ConversationView {
 
     func sendMessageWithAttachments() {
         let text = composerText.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        Logger.messages.info("SendTap composer tap convId=\(viewModel.conversationId, privacy: .public) isUploading=\(composerState.isUploading, privacy: .public) textLen=\(text.count, privacy: .public) pendingAttachments=\(composerState.pendingAttachments.count, privacy: .public) vmInFlightSends=\(viewModel.sendActivity.inFlight, privacy: .public)")
+        Logger.messages.info("SendTap composer tap convId=\(viewModel.conversationId, privacy: .public) isUploading=\(composerState.isUploading, privacy: .public) textLen=\(text.count, privacy: .private) pendingAttachments=\(composerState.pendingAttachments.count, privacy: .public) vmInFlightSends=\(viewModel.sendActivity.inFlight, privacy: .public)")
         let place = composerState.pendingPlace
         guard SendEligibility.canSend(text: text, attachmentIds: composerState.pendingAttachments.map(\.id), location: place) else {
             Logger.messages.error("SendTap BLOCKED guard=emptyContent convId=\(viewModel.conversationId, privacy: .public)")
@@ -130,7 +130,7 @@ extension ConversationView {
         composerState.pendingThumbnails.removeAll()
         purgeDraftAttachmentMedia()
         clearComposerForSend()
-        Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — field cleared, launching sendMessage Task")
+        Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .private) — field cleared, launching sendMessage Task")
         let outgoing = OutgoingMessage(
             conversationId: ConversationID(viewModel.conversationId), content: text, relation: intent.relation,
             attachments: .none, protection: intent.protection, originalLanguage: intent.language, location: intent.place

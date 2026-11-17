@@ -135,7 +135,9 @@ public actor LinkPreviewFetcher {
             }
             return nil
         } catch {
-            logger.debug("Link preview fetch failed for \(urlString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            // L'adresse d'une page lue dans une conversation ne sort jamais en
+            // clair du journal unifié (#12768) : `.private` la masque hors débogueur.
+            logger.debug("Link preview fetch failed for \(urlString, privacy: .private): \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }

@@ -27,26 +27,29 @@ nonisolated enum EndToEndThreadPlaintexts {
     }
 
     /// Pose sur chaque message le clair rangé à SA place, et sa langue. Rend
-    /// ce qui a été posé, par identifiant affiché : la cellule, qui rend la
-    /// ligne du magasin (le littéral servi), le repose (#12916).
+    /// ce que le coffre sait de chaque message, par identifiant affiché — le
+    /// clair posé, ou ce qui le retient (illisible, gardé pour une version
+    /// future) : la cellule, qui rend la ligne du magasin (le littéral servi),
+    /// le repose ou dit pourquoi elle ne le peut pas (#12916, IOS-04).
     @discardableResult
     static func apply(
         _ entries: [String: E2EEPlaintextEntry],
         to messages: inout [MeeshyMessage],
         conversationId: String
     ) -> [String: E2EEPlaintextEntry] {
-        var adopted: [String: E2EEPlaintextEntry] = [:]
+        var known: [String: E2EEPlaintextEntry] = [:]
         for index in messages.indices where awaitsPlaintext(messages[index]) {
             let message = messages[index]
-            guard let entry = entry(for: message, in: entries), case .readable = entry else { continue }
+            guard let entry = entry(for: message, in: entries) else { continue }
+            known[message.id] = entry
+            guard case .readable = entry else { continue }
             guard let readable = adoption(of: entry, by: message, conversationId: conversationId) else {
                 Logger.e2ee.warning("e2ee plaintext refused message=\(message.id, privacy: .public): not in place")
                 continue
             }
             messages[index] = readable
-            adopted[readable.id] = entry
         }
-        return adopted
+        return known
     }
 
     /// Le clair rangé pour ce message : sous son identifiant serveur, ou sous
