@@ -20,13 +20,15 @@ import XCTest
 final class P2PWebRTCClientConcurrencySourceTests: XCTestCase {
 
     private static let source: String = {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Services/
-            .deletingLastPathComponent()   // Unit/
-            .deletingLastPathComponent()   // MeeshyTests/
-            .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Call/Services/WebRTC/P2PWebRTCClient.swift")
-        return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        // Les marqueurs de ces gardes sont uniques par fichier : la source est la
+        // concaténation EXPLICITE du client et de ses extensions média / canal de
+        // données, jamais l'unité entière (`+Fallback` y redéclare les mêmes
+        // signatures en coquilles vides, qui capteraient le premier marqueur).
+        let parts = ["P2PWebRTCClient.swift", "P2PWebRTCClient+MediaControls.swift", "P2PWebRTCClient+DataChannel.swift"]
+        return parts.compactMap { part in
+            AppSourceGuard.unitURLs("Meeshy/Features/Call/Services/WebRTC/\(part)").first
+                .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+        }.joined(separator: "\n")
     }()
 
     /// Loud by construction: a missing start OR end marker fails the test via
@@ -53,8 +55,8 @@ final class P2PWebRTCClientConcurrencySourceTests: XCTestCase {
 
     func test_buildLocalVideoTrackAndStartCapture_reHopsGenerationCheckToMainActor() {
         guard let fn = body(
-            from: "private func buildLocalVideoTrackAndStartCapture()",
-            to: "private func applyAudioCodecPreferences"
+            from: "func buildLocalVideoTrackAndStartCapture()",
+            to: "func applyAudioCodecPreferences"
         ) else { return }
         XCTAssertTrue(
             fn.contains("try await capturer.startCapture(with: camera, format: format, fps: fps)"),

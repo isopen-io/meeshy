@@ -609,7 +609,7 @@ final class RiverConversationMappingTests: XCTestCase {
         let byId = Dictionary(uniqueKeysWithValues: contents(of: [flame, viewOnce, ordinary, blurred]).map { ($0.bubble.messageId, $0) })
         XCTAssertEqual(byId["m1"]?.capturesBlocked, true, "une flamme que la Rivière ne peut pas annoncer reste noire (#9617)")
         XCTAssertEqual(byId["m3"]?.capturesBlocked, false, "un message ordinaire n'est pas enveloppé")
-        XCTAssertEqual(byId["m4"]?.capturesBlocked, false, "le flou n'est pas une nature de disparition : la capture reste libre")
+        XCTAssertEqual(byId["m4"]?.capturesBlocked, true, "un message flouté sort noir de toute capture (#18831)")
         if let sealed = byId["m2"] {
             XCTAssertEqual(sealed.capturesBlocked, true, "une vue unique est noire dans une capture")
         }
