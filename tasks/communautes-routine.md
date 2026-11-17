@@ -467,3 +467,11 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Cliquets partagés : la famille « effectif d'une communauté » quitte `ASYMETRIES` (les trois clients lisent) ; `SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE` 162 → 165. `__tests__/ci/` 25 fichiers, 215 tests verts.
 - Témoins : SDK `CommunityMemberEventsTests` (9), `SocketInboundRouteTableTests` (+1, relevé figé +3 noms), `CacheCoordinatorCommunityMemberChangesTests` (2) ; app `CommunityDetailViewModelTests` (+5), `CommunityListViewModelTests` (+3), `MyCommunitiesTests` (+2), `CommunityMembersViewModelTests` (+3). Preuve : CI iOS de la PR (pas de Swift en conteneur). Gardes iOS locales : `check_house_rules.sh` (42 règles tenues), `check_cohesion_budget.sh`, `check_test_registration.sh`, accent-color verts.
 - Prochain lot recommandé : la suppression d'une communauté (reste de #16857) ; les entrées INDIRECTES (salon rejoint via `applyCommunityAdmission`, compte supprimé) n'émettent toujours pas.
+
+## 2026-11-17 — réveil 21:38 UTC
+
+- Début du run : #19297 (#18767, iOS lit l'effectif) ouverte, dernière poussée à 19:38, donc inactive : run consacré à la mener à la fusion.
+- État trouvé : CI de `70124379f` encore en file Mac depuis 19:38 (builds app et SDK non partis) ; seul rouge, la tranche 4 des gardes navigateur web (`media-16` lit `flow-end` pour `justify-end`, plus un 404 de script) — étrangère au lot (aucun fichier web touché) et suivie par #19370.
+- `dev` (60 commits) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 215 tests verts ; `check_house_rules.sh` 42 règles tenues, `check_cohesion_budget.sh` et `check_test_registration.sh` verts, `check-accent-color-hardcoding.mjs` conforme.
+- Les runs de l'ancienne tête sont annulés, ci.yml / ios.yml / ios-sdk relancés sur la nouvelle.
+- Prochain lot recommandé : fusionner #19297 dès que la CI iOS est verte (la tranche 4 web reste rouge tant que #19370 est ouverte : fusion à faire valider par Jacques), puis la suppression d'une communauté (#16857).
