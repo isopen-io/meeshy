@@ -12,9 +12,10 @@ enum PushTapAddressee {
         AuthManager.shared.currentUser?.id ?? AuthManager.shared.persistedActiveUserId
     }
 
-    /// `nil` sans compte, ou quand la charge nomme un AUTRE destinataire (push
-    /// FCM du compte A touché pendant que B est actif) : la même loi que les
-    /// actions de bannière, `NotificationReplyFailure.isAddressed`.
+    /// `nil` sans compte, ou quand la charge nomme un AUTRE destinataire : la même
+    /// loi que les actions de bannière, `NotificationReplyFailure.isAddressed`.
+    /// Une charge APNs ne nomme pas encore son destinataire (#8668) : sous une
+    /// session ouverte, c'est le compte actif qui fait foi.
     static func resolve(userInfo: [AnyHashable: Any], currentUserId: String?) -> String? {
         guard let userId = currentUserId,
               NotificationReplyFailure.isAddressed(to: userId, userInfo: userInfo) else { return nil }

@@ -96,7 +96,7 @@ final class LogoutUnregistersPushDeviceAppTests: XCTestCase {
 
         XCTAssertTrue(switched)
         XCTAssertEqual(service.events, [],
-                       "A garde sa session : ses pushes restent prévus, sous la garde d'adressage")
+                       "A garde sa session : ses pushes restent prévus (leur adressage sous B relève de #8668)")
     }
 }
 

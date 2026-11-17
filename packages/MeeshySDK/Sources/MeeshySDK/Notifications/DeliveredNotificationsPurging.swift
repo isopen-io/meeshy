@@ -30,7 +30,10 @@ public struct SystemDeliveredNotificationsPurger: DeliveredNotificationsPurging 
 /// Purge la sortie qui TERMINE la session (Déconnexion, suspension sans garde :
 /// `endingIt`) ou qui retire le compte actif supprimé côté serveur. Ne purge PAS
 /// le simple changement de compte : la session de A est gardée, ses pushes
-/// restent prévus et son retour les retrouve (garde d'adressage).
+/// restent prévus et son retour les retrouve. Rien ne les protège encore sous B :
+/// une charge APNs ne nomme pas son destinataire (`recipientUserId` n'est posé que
+/// sur FCM), donc toucher une bannière de A sous B ouvre sa conversation sous B
+/// (#8668).
 public enum SessionExitNotificationPolicy {
     public static func purgesDelivered(endingIt: Bool, retiringActiveAccount: Bool) -> Bool {
         endingIt || retiringActiveAccount
