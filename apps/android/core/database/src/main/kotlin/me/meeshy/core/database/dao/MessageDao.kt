@@ -245,6 +245,17 @@ public interface MessageDao {
     )
     public suspend fun newestSyncedCreatedAt(conversationId: String): Long?
 
+    /**
+     * #18915 — the versions of the [limit] newest rows of a conversation, optimistic bubbles included, read by a
+     * revalidation BEFORE its request: a row some other write moved while the page was in flight keeps what that
+     * page, built before, may not undo.
+     */
+    @Query(
+        "SELECT id, changeVersion, createdAt FROM messages WHERE conversationId = :conversationId " +
+            "ORDER BY createdAt DESC LIMIT :limit",
+    )
+    public suspend fun recentVersions(conversationId: String, limit: Int): List<MessageRowVersion>
+
     /** The ids of the local send bubbles in [sendState] (`SENDING` / `FAILED`) — the boot reconciliation's input. */
     @Query("SELECT id FROM messages WHERE sendState = :sendState")
     public suspend fun idsInSendState(sendState: String): List<String>
@@ -302,6 +313,9 @@ public interface MessageDao {
 
 /** Les deux identifiants sous lesquels les tables filles peuvent référencer un message. */
 public data class MessageKeys(val id: String, val serverId: String?)
+
+/** Une ligne telle qu'une revalidation la photographie avant sa requête : sa clé, sa version, sa date (#18915). */
+public data class MessageRowVersion(val id: String, val changeVersion: Long, val createdAt: Long)
 
 /**
  * Upserts server-truth rows without erasing what only this device knows (retry counter, last

@@ -59,7 +59,9 @@ data class MessageMergeOutcome(
  *     ne survit pas à la page qui la sert (iso iOS `APIMessageUpsert+Merge`, #15897).
  *
  * Restent faisant autorité dans la charge servie, parce qu'ils se vident légitimement : le
- * résumé des réactions et l'épinglage (hors garde).
+ * résumé des réactions et l'épinglage (hors garde). La garde vaut aussi pour une ligne qu'une autre
+ * écriture a touchée pendant le vol d'une page : l'ingestion la pose alors comme pour une mutation
+ * en file, la page bâtie avant ne l'efface pas (#18915).
  */
 object MessageMergePolicy {
 

@@ -8,6 +8,7 @@ import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ConversationEventDeltas
+import me.meeshy.sdk.model.MessageMergeGuards
 import me.meeshy.sdk.model.MessageMergePolicy
 import me.meeshy.sdk.model.PendingMessageMutations
 import me.meeshy.sdk.model.ReplyReferenceBuilder
@@ -61,12 +62,16 @@ internal class MessageIngestPipeline(
      *
      * Lève [PendingOutboxReadException] quand l'outbox est illisible : la transaction est alors
      * abandonnée plutôt que d'écraser une mutation en attente.
+     *
+     * [heldBefore] — les lignes telles qu'une revalidation les a trouvées AVANT sa requête (#18915) : une ligne qu'une
+     * autre écriture a touchée pendant le vol garde ses réactions et son épinglage, que la page, bâtie avant, ignore.
      */
     suspend fun mergeInTransaction(
         messages: List<ApiMessage>,
         nowMillis: Long,
         conversationId: String? = null,
         settlements: MutableList<LocalFilesSettlement>? = null,
+        heldBefore: HeldRowVersions? = null,
     ): Set<String> {
         if (messages.isEmpty()) return emptySet()
         val pending = outboxGuard.load()
@@ -89,7 +94,7 @@ internal class MessageIngestPipeline(
             // Une vue unique déjà ouverte par ce lecteur entre scellée, même à sa première ingestion (#15897).
             val incoming = if (base == null) sealedIfOpened(ReplyReferenceBuilder.engrave(served), openedHere = false) else served
             val fresh = MessageEntityFactory.cached(incoming, cachedAt = nowMillis, conversationId = filedUnder)
-            val row = if (base == null) fresh else merged(base, incoming, fresh, pending)
+            val row = if (base == null) fresh else merged(base, incoming, fresh, guardsFor(incoming.id, base, pending, heldBefore))
             rowIdOfMessage[incoming.id] = row.id
             if (base != null) baseOfRow[row.id] = base
             listOfNotNull(direct, optimistic).filter { it.id != row.id }.forEach {
@@ -163,7 +168,7 @@ internal class MessageIngestPipeline(
         base: MessageEntity,
         incoming: ApiMessage,
         fresh: MessageEntity,
-        pending: PendingMessageMutations,
+        guards: MessageMergeGuards,
     ): MessageEntity {
         val openedHere = base.viewOnceOpenedAt != null
         val cached = runCatching { MeeshyApi.json.decodeFromString<ApiMessage>(base.payload) }.getOrNull()
@@ -171,7 +176,7 @@ internal class MessageIngestPipeline(
                 viewOnceOpenedAt = base.viewOnceOpenedAt ?: fresh.viewOnceOpenedAt,
                 changeVersion = base.changeVersion + 1,
             )
-        val outcome = MessageMergePolicy.merge(cached, incoming, pending.guardsFor(incoming.id))
+        val outcome = MessageMergePolicy.merge(cached, incoming, guards)
         val sameRow = base.id == fresh.id
         val rebuilt = MessageEntityFactory.refreshed(fresh, sealedIfOpened(outcome.message, openedHere)).copy(
             createdAt = isoToEpochMillisOrNull(outcome.message.createdAt) ?: base.createdAt,
@@ -184,6 +189,22 @@ internal class MessageIngestPipeline(
         } else {
             rebuilt
         }
+    }
+
+    /**
+     * Ce que la fusion protège sur la ligne [base] : les mutations encore dans l'outbox, et, quand une autre écriture l'a
+     * touchée pendant le vol de la page ([heldBefore], #18915), ses réactions et son épinglage — une réaction ou un
+     * épinglage arrivés par la socket pendant ce vol sont plus récents que la page, qui ne les efface donc pas.
+     */
+    private fun guardsFor(
+        messageId: String,
+        base: MessageEntity,
+        pending: PendingMessageMutations,
+        heldBefore: HeldRowVersions?,
+    ): MessageMergeGuards {
+        val guards = pending.guardsFor(messageId)
+        if (heldBefore?.movedSince(base) != true) return guards
+        return guards.copy(pendingReaction = true, pendingPin = true)
     }
 
     /**

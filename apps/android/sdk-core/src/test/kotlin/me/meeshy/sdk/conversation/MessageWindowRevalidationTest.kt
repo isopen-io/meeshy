@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CursorPagination
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessagePinChanged
 import me.meeshy.sdk.model.MessagesApiResponse
 import me.meeshy.sdk.net.api.MessageApi
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -170,6 +171,56 @@ class MessageWindowRevalidationTest {
 
             assertThat(harness.database.messageDao().find("m3")).isNotNull()
             assertThat(harness.database.messageDao().find("m1")).isNotNull()
+        }
+
+    // — what the page may overwrite: reactions and pin, unless a write landed on the row during its flight (#18915, F4) —
+
+    @Test
+    fun `a reaction the socket brings while the recent window is in flight survives the page that predates it`() =
+        runHarnessTest { harness ->
+            harness.held(message("m1", T1))
+            lateinit var repo: MessageRepository
+            val api = mockk<MessageApi> {
+                coEvery { listConditional(CONVERSATION, any()) } coAnswers {
+                    repo.applyReactionDelta("m1", "👍", 1)
+                    page(message("m1", T1))
+                }
+            }
+            repo = harness.repository(api)
+
+            repo.refresh(CONVERSATION)
+
+            assertThat(harness.cachedMessage("m1").reactionSummary).containsExactly("👍", 1)
+        }
+
+    @Test
+    fun `a pin the socket brings while the recent window is in flight survives the page that predates it`() =
+        runHarnessTest { harness ->
+            harness.held(message("m1", T1))
+            val deltas = MessageDeltaApplier(harness.database, harness.updater, harness.clock)
+            val api = mockk<MessageApi> {
+                coEvery { listConditional(CONVERSATION, any()) } coAnswers {
+                    deltas.apply(MessagePinChanged("m1", CONVERSATION, pinned = true, pinnedAt = T2, pinnedBy = "u-peer"), viewerId = "me")
+                    page(message("m1", T1))
+                }
+            }
+
+            harness.repository(api).refresh(CONVERSATION)
+
+            assertThat(harness.cachedMessage("m1").pinnedAt).isEqualTo(T2)
+        }
+
+    /** The boundary of the two above: a row nothing wrote during the flight takes the page's reactions and pin, emptied. */
+    @Test
+    fun `a reaction withdrawn and a pin removed elsewhere reach the held row at the next refresh`() =
+        runHarnessTest { harness ->
+            harness.held(message("m1", T1).copy(reactionSummary = mapOf("👍" to 1), pinnedAt = T2, pinnedBy = "u-peer"))
+            val gateway = GatewayMessageHistory(served = listOf(message("m1", T1)))
+
+            harness.repository(gateway).refresh(CONVERSATION)
+
+            assertThat(harness.cachedMessage("m1").reactionSummary.orEmpty()).isEmpty()
+            assertThat(harness.cachedMessage("m1").pinnedAt).isNull()
         }
 
     // — what the revalidation reads: the window first —

@@ -127,16 +127,18 @@ internal class MessageCacheSource(
      * moved in Room the stream does not emit again — no reread loop.
      *
      * The high-water mark is read BEFORE any request: the page prunes only what was held before it left
-     * ([prunableSpan]). Every success writes `sync_meta` — a 304 as much as a page — so a revalidation that
-     * found nothing new still leaves the cache fresh, and the next Room write (a receipt, a translation)
-     * starts no new request.
+     * ([prunableSpan]). So are the versions of the newest rows ([heldVersions]): a row another write moved
+     * during the flight (a reaction, a pin the socket brought) keeps them over the page built before. Every
+     * success writes `sync_meta` — a 304 as much as a page — so a revalidation that found nothing new still
+     * leaves the cache fresh, and the next Room write (a receipt, a translation) starts no new request.
      */
     override suspend fun revalidate() {
         val ticket = fence?.currentTicket()
         val heldUpTo = messageDao.newestSyncedCreatedAt(conversationId)
+        val heldBefore = heldVersions()
         val window = readWindow(ticket) ?: return
         val gap = readGap(window.messages, heldUpTo)
-        fence.commitOrWrite(ticket) { persist(window, gap, heldUpTo) }
+        fence.commitOrWrite(ticket) { persist(window, gap, heldUpTo, heldBefore) }
     }
 
     /**
@@ -148,9 +150,14 @@ internal class MessageCacheSource(
     suspend fun revalidatePresent() {
         val ticket = fence?.currentTicket()
         val heldUpTo = messageDao.newestSyncedCreatedAt(conversationId)
+        val heldBefore = heldVersions()
         val window = readWindow(ticket) ?: return
-        fence.commitOrWrite(ticket) { persist(window, gap = emptyList(), heldUpTo = heldUpTo) }
+        fence.commitOrWrite(ticket) { persist(window, gap = emptyList(), heldUpTo = heldUpTo, heldBefore = heldBefore) }
     }
+
+    /** The versions of the newest rows, read BEFORE the request: what the page may not undo (#18915). */
+    private suspend fun heldVersions(): HeldRowVersions =
+        HeldRowVersions.of(messageDao.recentVersions(conversationId, HELD_VERSIONS), HELD_VERSIONS)
 
     /** The recent window as the server served it, and the validator to keep with it. */
     private class ServedWindow(val messages: List<ApiMessage>, val etag: String?)
@@ -246,14 +253,14 @@ internal class MessageCacheSource(
      * keeps the gap's copy, read last), the prune of the held span the window covers, and `sync_meta` with the
      * window's validator — the gap's rows are all newer than [heldUpTo], so they never widen the prune.
      */
-    private suspend fun persist(window: ServedWindow, gap: List<ApiMessage>, heldUpTo: Long?) {
+    private suspend fun persist(window: ServedWindow, gap: List<ApiMessage>, heldUpTo: Long?, heldBefore: HeldRowVersions) {
         val now = clock.nowMillis()
         val rows = window.messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
         val servedIds = rows.map { it.id }
         val span = prunableSpan(rows, heldUpTo)
         val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
         database.withTransaction {
-            ingestion.mergeInTransaction(window.messages + gap, now, conversationId, settlements)
+            ingestion.mergeInTransaction(window.messages + gap, now, conversationId, settlements, heldBefore)
             span?.let {
                 erasures?.recordRemovedRows(pruned(window.messages, it, servedIds))
                 messageDao.deleteMissingBetween(conversationId, it.first, it.last, servedIds)
@@ -294,5 +301,11 @@ internal class MessageCacheSource(
 
         /** Hard ceiling on one revalidate's gap-catch-up — 20 × 50 = 1 000 messages. */
         const val MAX_AFTER_PAGES = 20
+
+        /**
+         * How many of the newest rows a revalidation snapshots before its request (#18915): the recent window the
+         * gateway serves (20) and the held rows it may have deleted meanwhile, with room to spare.
+         */
+        const val HELD_VERSIONS = 50
     }
 }
