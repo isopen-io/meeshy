@@ -16,7 +16,7 @@ extension UserProfileSheet {
 
     @ViewBuilder
     var withThemSection: some View {
-        if showsRelationBlocks {
+        if showsRelationBlocks, !ProfileAcquaintanceSection.replacesWithThem(self) {
             ProfileWithThemCard(
                 name: displayUser.resolvedDisplayName, isOffline: ProfileTalkReach.isOffline(phase),
                 offersCall: offersCall, tint: accentTint, map: locationMap, mapRequest: vitrineMapRequest,

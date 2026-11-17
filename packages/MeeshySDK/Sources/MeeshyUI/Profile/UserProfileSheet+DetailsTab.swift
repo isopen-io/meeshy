@@ -23,6 +23,7 @@ extension UserProfileSheet {
             statsSection
             commonSection
             publicationsSection
+            ProfileAcquaintanceSection.of(self)
         }
     }
 

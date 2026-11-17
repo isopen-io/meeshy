@@ -9,7 +9,8 @@ extension UserProfileDependencies {
         social: LiveProfileSocialActions(),
         userUpdates: MessageSocketManager.shared.userUpdated.eraseToAnyPublisher(),
         fallbackProfileLoading: UncachedProfileLoading(),
-        inCommon: LiveProfileInCommonLoading()
+        inCommon: LiveProfileInCommonLoading(),
+        acquaintance: LiveProfileAcquaintance()
     )
 }
 
@@ -37,5 +38,36 @@ final class LiveProfileInCommonLoading: ProfileInCommonLoading {
         await bestEffort("profileInCommon.save", category: .cache) {
             try await CacheCoordinator.shared.profileInCommon.save([inCommon], for: inCommon.id)
         }
+    }
+}
+
+/// « Faire connaissance » (#19456) : le verdict vient du lien servi (`GET /relations/:userId`, PUBLIC pour un inconnu),
+/// la demande part par le chemin unique du partage — directe créée à l'envoi, file durable hors ligne, et rien en clair
+/// vers une directe chiffrée (fail-closed). La passerelle range ce premier message dans ses demandes.
+@MainActor
+final class LiveProfileAcquaintance: ProfileAcquaintanceProviding {
+    nonisolated deinit {}
+
+    private let relations: RelationsProviding
+    private let dispatcher: () -> ShareDispatching
+
+    init(relations: RelationsProviding = RelationsService.shared,
+         dispatcher: @escaping () -> ShareDispatching = { LiveShareDispatcher() }) {
+        self.relations = relations
+        self.dispatcher = dispatcher
+    }
+
+    func writesARequest(to userId: String) async -> Bool? {
+        guard let served = try? await relations.link(userId: userId),
+              served.userId.lowercased() == userId.lowercased() else { return nil }
+        return ProfileRelationAction.writesARequest(at: served.effectiveLevel)
+    }
+
+    func sendMessageRequest(to userId: String, text: String) async -> Bool {
+        let request = ShareSendRequest(subject: .text(text), keptMessageIds: [], caption: "", captionPlacement: nil,
+                                       grouping: .together, chosenDurationSeconds: nil, copyOnDevice: false)
+        let recipient = ShareRecipient(id: "user:\(userId)", kind: .person, conversationId: nil, userId: userId,
+                                       title: "", detail: .direct, avatarURL: nil)
+        return await dispatcher().deliver(request, to: recipient).conversationId != nil
     }
 }

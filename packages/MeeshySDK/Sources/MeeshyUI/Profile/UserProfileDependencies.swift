@@ -10,6 +10,8 @@ public struct UserProfileDependencies {
     public let fallbackProfileLoading: any ProfileLoading
     /// « En commun » (#19377) : communautés, amis et médias partagés, cache d'abord. Absente, la fiche s'en passe.
     public let inCommon: any ProfileInCommonLoading
+    /// « Faire connaissance » (#19456) : le verdict « écrire part en demande » et l'envoi. Absente, la fiche s'en passe.
+    public let acquaintance: (any ProfileAcquaintanceProviding)?
 
     public init(
         currentUser: @escaping @MainActor () -> MeeshyUser?,
@@ -17,7 +19,8 @@ public struct UserProfileDependencies {
         social: any ProfileSocialActionsProviding,
         userUpdates: AnyPublisher<UserUpdatedEvent, Never>,
         fallbackProfileLoading: any ProfileLoading,
-        inCommon: any ProfileInCommonLoading = ProfileInCommonUnavailable()
+        inCommon: any ProfileInCommonLoading = ProfileInCommonUnavailable(),
+        acquaintance: (any ProfileAcquaintanceProviding)? = nil
     ) {
         self.currentUser = currentUser
         self.relationships = relationships
@@ -25,5 +28,6 @@ public struct UserProfileDependencies {
         self.userUpdates = userUpdates
         self.fallbackProfileLoading = fallbackProfileLoading
         self.inCommon = inCommon
+        self.acquaintance = acquaintance
     }
 }

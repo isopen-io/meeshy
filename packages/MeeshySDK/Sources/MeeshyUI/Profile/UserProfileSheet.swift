@@ -98,6 +98,7 @@ public struct UserProfileSheet: View {
     @State var scrollRelay = ScrollOffsetRelay()
     /// #10093 — profil et statistiques : le cache d'abord, la synchronisation dès l'ouverture.
     @StateObject var loader = ProfileSheetLoader()
+    @StateObject var acquaintance = ProfileAcquaintanceModel()
     @State private var internalConversations: [MeeshyConversation] = []
     @State private var internalIsLoadingConversations = false
 
@@ -242,6 +243,7 @@ public struct UserProfileSheet: View {
         .task {
             await loadDataIfNeeded()
             await loadConversationsIfNeeded()
+            await acquaintance.resolve(userId: resolvedUserId, host: dependencies.acquaintance)
         }
     }
 
