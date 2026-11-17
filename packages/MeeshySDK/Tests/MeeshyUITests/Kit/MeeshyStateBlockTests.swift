@@ -108,6 +108,15 @@ struct MeeshyStateBlockTests {
         #expect(MeeshyStateBlockRecipe.ghostCount(9) == 4)
     }
 
+    @Test("un bloc qui CHANGE de genre sur place annonce le nouveau genre s'il annonce, jamais le même deux fois")
+    func announce_onKindChange() {
+        #expect(MeeshyStateBlockRecipe.announcesTransition(from: .empty, to: .error))
+        #expect(MeeshyStateBlockRecipe.announcesTransition(from: .error, to: .offline))
+        #expect(!MeeshyStateBlockRecipe.announcesTransition(from: .error, to: .error))
+        #expect(!MeeshyStateBlockRecipe.announcesTransition(from: .offline, to: .empty))
+        #expect(!MeeshyStateBlockRecipe.announcesTransition(from: .error, to: .success))
+    }
+
     @Test("garde de source : le bloc ne sait ni lien, ni fiche, ni permission, ni réseau")
     func source_isAnAgnosticAtom() throws {
         try KitAssemblyGuards.assertAgnostic(["MeeshyStateBlock.swift", "MeeshyStateBlockRecipe.swift"])

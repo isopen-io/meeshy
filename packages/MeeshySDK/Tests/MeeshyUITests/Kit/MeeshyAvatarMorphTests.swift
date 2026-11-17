@@ -30,6 +30,15 @@ struct MeeshyAvatarMorphTests {
             path: path, progress: progress, reduceMotion: reduceMotion, hasScope: hasScope)
     }
 
+    @Test("l'arrivée se dit au bout du voyage (la durée de travel), tout de suite sous le fondu")
+    func arrival_waitsForTheTravel() {
+        let travel = MeeshyMotionRecipe.resolve(token: .travel).durationMilliseconds
+        #expect(travel > 0)
+        #expect(Self.recipe().arrivalDelayMilliseconds == travel)
+        #expect(Self.recipe(reduceMotion: true).arrivalDelayMilliseconds == 0)
+        #expect(Self.recipe(hasScope: false).arrivalDelayMilliseconds == 0)
+    }
+
     @Test("sans portée ou sous mouvement réduit : fondu ; avec progress : piloté ; sinon partagé")
     func mode_followsTheVectors() throws {
         for row in try KitAtomVectors.rows(Self.file, "mode") {

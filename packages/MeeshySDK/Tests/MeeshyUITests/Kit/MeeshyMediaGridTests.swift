@@ -108,6 +108,18 @@ struct MeeshyMediaGridTests {
         #expect(!MeeshyMediaGridRecipe.shouldReachEnd(index: 3, count: 20, columns: 3))
     }
 
+    @Test("la suite se demande UNE fois par page : les tuiles des deux dernières lignes ne la redemandent pas")
+    func reachEnd_firesOncePerPage() {
+        let first = MeeshyMediaGridRecipe.reachEndRequest(index: 15, count: 20, columns: 3, lastRequestedCount: nil)
+        #expect(first == 20)
+        let again = (14..<20).compactMap {
+            MeeshyMediaGridRecipe.reachEndRequest(index: $0, count: 20, columns: 3, lastRequestedCount: first)
+        }
+        #expect(again.isEmpty, "\(again)")
+        #expect(MeeshyMediaGridRecipe.reachEndRequest(index: 38, count: 40, columns: 3, lastRequestedCount: 20) == 40)
+        #expect(MeeshyMediaGridRecipe.reachEndRequest(index: 2, count: 40, columns: 3, lastRequestedCount: 20) == nil)
+    }
+
     @Test("garde de source : aucune publication, réel, story ni pièce jointe dans les signatures")
     func source_isAnAgnosticAtom() throws {
         try KitAssemblyGuards.assertAgnostic(["MeeshyMediaGrid.swift", "MeeshyMediaGridRecipe.swift"])

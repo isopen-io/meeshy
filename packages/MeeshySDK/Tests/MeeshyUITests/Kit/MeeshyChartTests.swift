@@ -105,6 +105,12 @@ struct MeeshyChartTests {
         #expect(MeeshyChartRecipe.index(forX: 10, width: 100, count: 0) == nil)
     }
 
+    @Test("sans selection, le graphique ne prend aucun geste : le défilement de l'hôte passe à travers")
+    func gesture_onlyWithASelection() {
+        #expect(MeeshyChartRecipe.gestureMask(hasSelection: false) == .subviews)
+        #expect(MeeshyChartRecipe.gestureMask(hasSelection: true) == .all)
+    }
+
     @Test("garde de source : aucun clic, lien, pays, filleul ni cercle dans les signatures")
     func source_isAnAgnosticAtom() throws {
         try KitAssemblyGuards.assertAgnostic(["MeeshyChart.swift", "MeeshyChart+Shapes.swift", "MeeshyChartRecipe.swift", "MeeshyChartScale.swift"])

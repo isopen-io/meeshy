@@ -57,6 +57,25 @@ struct MeeshyMapTraceTests {
         }
     }
 
+    @Test("pointIndex désigne un des points REÇUS : un point non fini écarté ne décale pas les arrêts suivants")
+    func stopIndex_readsTheReceivedPoints() throws {
+        let received = [CGPoint.zero, CGPoint(x: CGFloat.nan, y: 0), CGPoint(x: 3, y: 0), CGPoint(x: 3, y: 4)]
+        let path = try #require(MeeshyMapTracePath.resolve(points: received, kind: .route))
+        #expect(path.fraction(ofPointAt: 0) == 0)
+        #expect(path.fraction(ofPointAt: 1) == nil)
+        #expect(abs((path.fraction(ofPointAt: 2) ?? -1) - 3.0 / 7.0) < 0.0001)
+        #expect(path.fraction(ofPointAt: 3) == 1)
+    }
+
+    @Test("link ne trace que le premier et le dernier point reçus : un arrêt intermédiaire n'est pas posé, le dernier tombe au bout")
+    func stopIndex_onALink() throws {
+        let received = [CGPoint.zero, CGPoint(x: 100, y: 100), CGPoint(x: 3, y: 4)]
+        let path = try #require(MeeshyMapTracePath.resolve(points: received, kind: .link))
+        #expect(path.fraction(ofPointAt: 0) == 0)
+        #expect(path.fraction(ofPointAt: 1) == nil)
+        #expect(path.fraction(ofPointAt: 2) == 1)
+    }
+
     @Test("des points confondus donnent un chemin de longueur nulle, sans division par zéro")
     func degeneratePath() throws {
         let path = try #require(MeeshyMapTracePath.resolve(points: [.zero, .zero], kind: .route))

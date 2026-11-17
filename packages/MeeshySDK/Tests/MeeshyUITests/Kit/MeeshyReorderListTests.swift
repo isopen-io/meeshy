@@ -49,6 +49,15 @@ struct MeeshyReorderListTests {
         #expect(MeeshyReorder.destination(forIndex: 0, direction: .down) == 1)
     }
 
+    @Test("la voix n'offre que les directions possibles : ni « monter » en tête, ni « descendre » en queue, rien d'éteint ni d'en attente")
+    func voiceDirections_areOnlyThePossibleOnes() {
+        #expect(MeeshyReorder.voiceDirections(index: 0, count: 3, isActive: true, isPending: false) == [.down])
+        #expect(MeeshyReorder.voiceDirections(index: 1, count: 3, isActive: true, isPending: false) == [.up, .down])
+        #expect(MeeshyReorder.voiceDirections(index: 2, count: 3, isActive: true, isPending: false) == [.up])
+        #expect(MeeshyReorder.voiceDirections(index: 1, count: 3, isActive: false, isPending: false).isEmpty)
+        #expect(MeeshyReorder.voiceDirections(index: 1, count: 3, isActive: true, isPending: true).isEmpty)
+    }
+
     @Test("la pastille de rang : plein au premier, 34 % au deuxième, 16 % ensuite")
     func rankPill_followsTheVectors() throws {
         for row in try KitAtomVectors.rows(Self.file, "pastille") {
