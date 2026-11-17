@@ -1,0 +1,189 @@
+{
+  "composant": "MeeshyReorderList",
+  "cle": "K52",
+  "note": "Vecteurs de parité (fiche K52 § 02, § 06). Le glisser, les actions de la voix et les flèches appellent le même onMove(from, to) ; to est l'index final.",
+  "deplacer": [
+    {
+      "ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "de": 0,
+      "vers": 2,
+      "attendu": [
+        "b",
+        "c",
+        "a"
+      ]
+    },
+    {
+      "ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "de": 2,
+      "vers": 0,
+      "attendu": [
+        "c",
+        "a",
+        "b"
+      ]
+    },
+    {
+      "ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "de": 1,
+      "vers": 1,
+      "attendu": [
+        "a",
+        "b",
+        "c"
+      ]
+    },
+    {
+      "ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "de": 0,
+      "vers": 9,
+      "attendu": [
+        "b",
+        "c",
+        "a"
+      ]
+    },
+    {
+      "ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "de": 5,
+      "vers": 0,
+      "attendu": [
+        "a",
+        "b",
+        "c"
+      ]
+    }
+  ],
+  "cible": [
+    {
+      "de": 0,
+      "decalage": 0,
+      "hauteurs": [
+        60,
+        60,
+        60
+      ],
+      "ecart": 8,
+      "vers": 0
+    },
+    {
+      "de": 0,
+      "decalage": 70,
+      "hauteurs": [
+        60,
+        60,
+        60
+      ],
+      "ecart": 8,
+      "vers": 1
+    },
+    {
+      "de": 0,
+      "decalage": 140,
+      "hauteurs": [
+        60,
+        60,
+        60
+      ],
+      "ecart": 8,
+      "vers": 2
+    },
+    {
+      "de": 2,
+      "decalage": -70,
+      "hauteurs": [
+        60,
+        60,
+        60
+      ],
+      "ecart": 8,
+      "vers": 1
+    },
+    {
+      "de": 2,
+      "decalage": -500,
+      "hauteurs": [
+        60,
+        60,
+        60
+      ],
+      "ecart": 8,
+      "vers": 0
+    },
+    {
+      "de": 1,
+      "decalage": 10,
+      "hauteurs": [
+        60,
+        60,
+        60
+      ],
+      "ecart": 8,
+      "vers": 1
+    }
+  ],
+  "actions": [
+    {
+      "index": 0,
+      "nombre": 3,
+      "monter": false,
+      "descendre": true
+    },
+    {
+      "index": 1,
+      "nombre": 3,
+      "monter": true,
+      "descendre": true
+    },
+    {
+      "index": 2,
+      "nombre": 3,
+      "monter": true,
+      "descendre": false
+    },
+    {
+      "index": 0,
+      "nombre": 1,
+      "monter": false,
+      "descendre": false
+    }
+  ],
+  "pastille": [
+    {
+      "position": 0,
+      "opacite": 1
+    },
+    {
+      "position": 1,
+      "opacite": 0.34
+    },
+    {
+      "position": 2,
+      "opacite": 0.16
+    },
+    {
+      "position": 7,
+      "opacite": 0.16
+    }
+  ]
+}
