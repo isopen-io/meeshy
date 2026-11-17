@@ -76,18 +76,22 @@ const PASSERELLES = [
     environnement: 'production',
     host: 'gate.meeshy.me',
     router: 'gateway-unavailable',
+    signedRouter: 'gateway-signed-files-unavailable',
     middleware: 'gateway-unavailable-cors-prod',
     compose: 'docker-compose.prod.yml',
     healthyRouters: ['gateway', 'gateway-signed-files'],
+    healthySignedRouter: 'gateway-signed-files',
     acceptedByGateway: () => [...DEFAULT_ALLOWED_ORIGINS, ...NATIVE_SHELL_ORIGINS],
   },
   {
     environnement: 'staging',
     host: 'gate.staging.meeshy.me',
     router: 'gateway-staging-unavailable',
+    signedRouter: 'gateway-staging-signed-files-unavailable',
     middleware: 'gateway-unavailable-cors-staging',
     compose: 'docker-compose.staging.yml',
     healthyRouters: ['gateway-staging', 'gateway-staging-signed-files'],
+    healthySignedRouter: 'gateway-staging-signed-files',
     acceptedByGateway: () => [...stagingOrigins(), ...NATIVE_SHELL_ORIGINS],
   },
 ] as const;
@@ -113,7 +117,7 @@ describe.each(PASSERELLES)('$environnement — la passerelle absente répond une
     expect(scalar(blockOf(blockOf(SERVICES, 'gateway-unavailable', 4), 'loadBalancer', 6), 'servers')).toBe('[]');
   });
 
-  it('son intergiciel CORS est le sien, et seul ce routeur le porte', () => {
+  it('son intergiciel CORS est le sien, et seuls ses routeurs de repli le portent', () => {
     expect(listUnder(router, 'middlewares')).toEqual([passerelle.middleware]);
   });
 
@@ -130,6 +134,42 @@ describe.each(PASSERELLES)('$environnement — la passerelle absente répond une
     expect(listUnder(middleware, 'accessControlAllowHeaders')).toEqual(expect.arrayContaining(['*', 'Authorization']));
     expect(scalar(middleware, 'accessControlAllowCredentials')).toBe('true');
     expect(scalar(middleware, 'accessControlMaxAge')).toBeUndefined();
+  });
+
+  /**
+   * #9600 — le jeton d'une adresse signée vit dans son CHEMIN, et suffit à lire
+   * les octets pendant sa vie. Passerelle saine, son routeur Docker propre coupe
+   * le journal d'accès ; passerelle absente, ce routeur disparaît avec elle, et
+   * le repli de l'hôte journalisait chaque adresse signée demandée pendant la
+   * panne. Le repli signé reprend la règle du routeur sain, lue dans le compose.
+   */
+  it('les adresses SIGNÉES ont leur propre repli, hors du journal d’accès — celui de l’hôte, lui, journalise', () => {
+    const signed = blockOf(ROUTERS, passerelle.signedRouter, 4);
+    const compose = fs.readFileSync(path.join(COMPOSE_DIR, passerelle.compose), 'utf8');
+    const healthyRule = new RegExp(`traefik\\.http\\.routers\\.${passerelle.healthySignedRouter}\\.rule=([^"\\n]+)`).exec(compose)?.[1] ?? '';
+    const signedPrefix = /PathPrefix\(`[^`]+`\)/.exec(healthyRule)?.[0];
+
+    expect(signedPrefix).toBe('PathPrefix(`/api/v1/attachments/signed/`)');
+    expect(scalar(signed, 'rule')).toBe(`Host(\`${passerelle.host}\`) && ${signedPrefix}`);
+    expect(scalar(blockOf(signed, 'observability', 6), 'accessLogs')).toBe('false');
+    expect(scalar(blockOf(router, 'observability', 6), 'accessLogs')).toBeUndefined();
+  });
+
+  it('le repli signé passe devant celui de l’hôte, et jamais devant un routeur Docker de la passerelle', () => {
+    const priority = Number(scalar(blockOf(ROUTERS, passerelle.signedRouter, 4), 'priority'));
+
+    expect(priority).toBe(2);
+    expect(priority).toBeGreaterThan(Number(scalar(router, 'priority')));
+    expect(priority).toBeLessThan(`Host(\`${passerelle.host}\`)`.length);
+  });
+
+  it('le repli signé répond comme celui de l’hôte : HTTPS, le même service sans serveur, le même intergiciel CORS', () => {
+    const signed = blockOf(ROUTERS, passerelle.signedRouter, 4);
+
+    expect(listUnder(signed, 'entryPoints')).toEqual(['websecure']);
+    expect(scalar(blockOf(signed, 'tls', 6), 'certResolver')).toBe('letsencrypt');
+    expect(scalar(signed, 'service')).toBe('gateway-unavailable');
+    expect(listUnder(signed, 'middlewares')).toEqual([passerelle.middleware]);
   });
 
   it('la passerelle saine reste SEULE juge du CORS : aucun de ses routeurs Docker ne porte un intergiciel CORS de Traefik', () => {

@@ -128,9 +128,10 @@ http:
         accessControlAllowCredentials: true
         addVaryHeader: true
 
-  # #18920 — les routeurs de REPLI de la passerelle : même hôte, priorité 1 (le
-  # routeur Docker de la passerelle, de priorité la longueur de sa règle, gagne
-  # dès qu'il existe), et un service SANS serveur — 503 « no available server »,
+  # #18920 — les routeurs de REPLI de la passerelle : même hôte, priorité 1 (2
+  # pour le repli des adresses signées, plus bas ; le routeur Docker de la
+  # passerelle, de priorité la longueur de sa règle, gagne dès qu'il existe), et
+  # un service SANS serveur — 503 « no available server »,
   # jamais une passerelle démarrante ou malade servie en contournant son
   # healthcheck. Application : staging d'abord (son routeur seul, puis
   # `curl -i -H 'Origin: https://staging.meeshy.me' https://gate.staging.meeshy.me/api/v1/health`
@@ -157,6 +158,39 @@ http:
       middlewares:
         - "gateway-unavailable-cors-staging"
       service: gateway-unavailable
+
+    # #9600 — les adresses SIGNÉES ont leur repli propre, hors du journal d'accès.
+    # Le jeton vit dans le CHEMIN (`/api/v1/attachments/signed/<jeton>`) et suffit
+    # à lire le fichier : passerelle saine, son routeur Docker `*-signed-files` ne
+    # journalise pas ; passerelle absente, il disparaît avec elle, et le repli de
+    # l'hôte ci-dessus écrivait chaque jeton demandé pendant la panne. Priorité 2 :
+    # devant le repli de l'hôte (1), sous tout routeur Docker de la passerelle (la
+    # longueur de sa règle). Garde : gateway-unavailable-cors-18920.test.ts.
+    gateway-signed-files-unavailable:
+      rule: "Host(`gate.meeshy.me`) && PathPrefix(`/api/v1/attachments/signed/`)"
+      priority: 2
+      entryPoints:
+        - "websecure"
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - "gateway-unavailable-cors-prod"
+      service: gateway-unavailable
+      observability:
+        accessLogs: false
+
+    gateway-staging-signed-files-unavailable:
+      rule: "Host(`gate.staging.meeshy.me`) && PathPrefix(`/api/v1/attachments/signed/`)"
+      priority: 2
+      entryPoints:
+        - "websecure"
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - "gateway-unavailable-cors-staging"
+      service: gateway-unavailable
+      observability:
+        accessLogs: false
 
   services:
     gateway-unavailable:
