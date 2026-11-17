@@ -25,9 +25,10 @@ class MeeshyKitColorTest {
     @Test
     fun `decaler la teinte de moins 30 degres tourne le rouge vers le magenta et un gris ne bouge pas`() {
         val shifted = MeeshyKitColor.hueShifted(Color.Red, -30.0)
-        assertThat(shifted.red).isWithin(1e-4f).of(1f)
-        assertThat(shifted.green).isWithin(1e-4f).of(0f)
-        assertThat(shifted.blue).isWithin(1e-4f).of(0.5f)
+        val eightBitStep = 1f / 255f
+        assertThat(shifted.red).isWithin(eightBitStep).of(1f)
+        assertThat(shifted.green).isWithin(eightBitStep).of(0f)
+        assertThat(shifted.blue).isWithin(eightBitStep).of(0.5f)
         val grey = Color(0.4f, 0.4f, 0.4f)
         assertThat(MeeshyKitColor.hueShifted(grey, 90.0)).isEqualTo(grey)
     }
