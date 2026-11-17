@@ -180,6 +180,15 @@ final class EndToEndLinkEmbedLawTests: XCTestCase {
         XCTAssertFalse(file.path.hasPrefix(documents.path), "Documents/ est sauvegardé : une adresse lue y partait")
     }
 
+    func test_theLaunch_removesTheCopyLeftInDocuments_beforeAnyCardIsMounted() throws {
+        var app = URL(fileURLWithPath: #filePath)
+        for _ in 0..<5 { app.deleteLastPathComponent() }
+        let launch = try String(contentsOf: app.appendingPathComponent("Meeshy/MeeshyApp.swift"), encoding: .utf8)
+
+        XCTAssertTrue(launch.contains("LinkPreviewStore.removeLegacyBackedUpCache("),
+                      "le lancement efface l'ancien cache : le magasin, paresseux, ne naît qu'à la première carte (R-6)")
+    }
+
     func test_linkPreviewCache_removesTheCopyLeftInDocuments() throws {
         let documents = FileManager.default.temporaryDirectory
             .appendingPathComponent("EndToEndLinkEmbedLawTests-\(UUID().uuidString)", isDirectory: true)
