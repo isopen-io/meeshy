@@ -152,6 +152,7 @@ struct ProfileUnavailableView: View {
     @Environment(\.profileUnavailableExits) private var exits
     @ResolvedThemePalette private var theme
     @State private var scannerShown = false
+    @State private var suggestion: UserSearchResult?
 
     var body: some View {
         let plan = ProfileUnavailableExit.resolve(canSearch: exits?.search != nil, canScan: exits?.scanner != nil)
@@ -174,15 +175,43 @@ struct ProfileUnavailableView: View {
                                  label: ProfileStatesCopy.requestedAddressLabel(link.displayText))
                         .padding(.horizontal, MeeshySpacing.xl)
                 }
+                if let suggestion { suggested(suggestion) }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.backgroundPrimary)
+        .task(id: requestedUsername) { await findSuggestion() }
         .sheet(isPresented: $scannerShown) {
             if let scanner = exits?.scanner {
                 scanner({ onBack() })
             }
         }
+    }
+
+    /// « Tu cherchais peut-être » : la personne au pseudo voisin, qui ouvre sa fiche une fois celle-ci fermée.
+    private func suggested(_ person: UserSearchResult) -> some View {
+        let name = person.displayName ?? person.username
+        return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            MeeshySectionHeader(title: ProfileStatesCopy.didYouMean, form: .overline)
+            MeeshyPersonRow(title: name, subtitle: "@\(person.username)", showsDivider: false,
+                            onPress: {
+                                exits?.openSuggestion?(person)
+                                onBack()
+                            },
+                            avatar: {
+                                MeeshyAvatar(name: name, context: .userListItem,
+                                             accentColor: DynamicColorGenerator.colorForName(person.username),
+                                             avatarURL: person.avatar, ring: person.avatarRing)
+                            })
+        }
+        .padding(.horizontal, MeeshySpacing.xl)
+        .accessibilityIdentifier("profile.unavailable.suggestion")
+    }
+
+    private func findSuggestion() async {
+        guard let requestedUsername, let suggest = exits?.suggest, exits?.openSuggestion != nil else { return }
+        let found = await suggest(requestedUsername)
+        suggestion = ProfileUnavailableSuggestion.pick(requested: requestedUsername, among: found)
     }
 
     private func action(_ exit: ProfileUnavailableExit) -> MeeshyStateBlockAction {
@@ -252,6 +281,10 @@ enum ProfileStatesCopy {
 
     static var unavailableTitle: String {
         String(localized: "profile.state.unavailable.title", defaultValue: "Personne ici", bundle: .module)
+    }
+
+    static var didYouMean: String {
+        String(localized: "profile.state.unavailable.didYouMean", defaultValue: "Tu cherchais peut-être", bundle: .module)
     }
 
     static var requestedAddress: String {

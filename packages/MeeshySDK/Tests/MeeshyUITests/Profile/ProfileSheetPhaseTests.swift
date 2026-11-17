@@ -171,3 +171,39 @@ final class ProfileTalkReachTests: XCTestCase {
         XCTAssertFalse(ProfileTalkReach.isOffline(.shown(fallback: nil)))
     }
 }
+
+/// #18873 — planche `Etat-Introuvable` : « Tu cherchais peut-être » propose un pseudo voisin de l'adresse demandée,
+/// jamais celui-là même — introuvable et privé se confondent (loi 9), la suggestion ne doit pas trahir qu'il existe.
+final class ProfileUnavailableSuggestionTests: XCTestCase {
+
+    private func person(_ username: String, id: String? = nil) -> UserSearchResult {
+        UserSearchResult(id: id ?? username, username: username, displayName: username.capitalized)
+    }
+
+    func test_pick_unPseudoAUneFauteDeFrappe_estPropose() {
+        let picked = ProfileUnavailableSuggestion.pick(requested: "leo.marcheti",
+                                                       among: [person("leo.marchetti"), person("sofia.b")])
+        XCTAssertEqual(picked?.username, "leo.marchetti")
+    }
+
+    func test_pick_lePseudoDemandeLuiMeme_nEstJamaisPropose() {
+        let picked = ProfileUnavailableSuggestion.pick(requested: "Leo.M", among: [person("leo.m"), person("leo.mm")])
+        XCTAssertEqual(picked?.username, "leo.mm", "l'adresse demandée se tait, même servie par la recherche")
+    }
+
+    func test_pick_leTropLointain_nEstPasPropose() {
+        XCTAssertNil(ProfileUnavailableSuggestion.pick(requested: "leo.m", among: [person("aissa"), person("rui.costa")]))
+    }
+
+    func test_pick_lePlusProche_gagne_puisLOrdreDeLaRecherche() {
+        let picked = ProfileUnavailableSuggestion.pick(requested: "leom",
+                                                       among: [person("leo.mx"), person("leo.m"), person("le.om")])
+        XCTAssertEqual(picked?.username, "leo.m")
+        let tie = ProfileUnavailableSuggestion.pick(requested: "abcd", among: [person("abce"), person("abcf")])
+        XCTAssertEqual(tie?.username, "abce")
+    }
+
+    func test_pick_sansAdresseDemandee_rien() {
+        XCTAssertNil(ProfileUnavailableSuggestion.pick(requested: "", among: [person("a")]))
+    }
+}

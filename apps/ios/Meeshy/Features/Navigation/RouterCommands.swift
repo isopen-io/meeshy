@@ -116,7 +116,15 @@ struct MeeshyRouterInjection: ViewModifier {
             .environment(\.meeshyRouter, router)
             .environment(\.profileUnavailableExits, ProfileUnavailableExits(
                 search: { [commands = router.commands] in commands.armSearch() },
-                scanner: { onOpened in ProfileSlot.view(.scanner, userId: "", displayName: "", onOpened: onOpened) }
+                scanner: { onOpened in ProfileSlot.view(.scanner, userId: "", displayName: "", onOpened: onOpened) },
+                suggest: { query in
+                    (try? await UserService.shared.searchUsers(query: query, limit: 5, offset: 0)) ?? []
+                },
+                openSuggestion: { [commands = router.commands] person in
+                    commands.openProfileSheet(ProfileSheetUser(userId: person.id, username: person.username,
+                                                               displayName: person.displayName, avatarURL: person.avatar,
+                                                               profileDecor: person.profileDecor))
+                }
             ))
     }
 }
