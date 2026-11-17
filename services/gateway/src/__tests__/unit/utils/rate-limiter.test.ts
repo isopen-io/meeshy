@@ -63,6 +63,9 @@ class MockPipeline {
     if (this.mockRedis.shouldFailPipeline) {
       return null;
     }
+    if (this.mockRedis.commandReplyError) {
+      return this.commands.map(() => [this.mockRedis.commandReplyError, null]);
+    }
 
     const key = this.commands[0]?.args[0] as string;
     const currentCount = this.mockRedis.incrementAndGetCount(key);
@@ -78,6 +81,7 @@ class MockPipeline {
 class MockRedis {
   private counters = new Map<string, { count: number; expiresAt: number }>();
   public shouldFailPipeline = false;
+  public commandReplyError: Error | null = null;
   public shouldFailPexpire = false;
   public shouldFailDel = false;
   public pexpireCalled = false;
@@ -489,6 +493,18 @@ describe('RateLimiter', () => {
       // Should not throw - error is caught and logged
       await middleware(request, reply);
 
+      expect(rateLimiterLogger.error).toHaveBeenCalled();
+    });
+
+    // Audit du delta de #19080, D3 — un Redis joignable qui répond une erreur
+    // PAR COMMANDE (LOADING, READONLY, OOM) ne fait pas lever `exec()` : le
+    // compte lu était `undefined`, jugé « sous le plafond ». C'est une panne du
+    // magasin, et `consume` le dit (`null`), comme pour une connexion perdue.
+    it('une erreur rendue par commande est une panne du magasin, jamais un compte sous le plafond', async () => {
+      mockRedis.commandReplyError = Object.assign(new Error('LOADING Redis is loading the dataset in memory'), { name: 'ReplyError' });
+      const limiter = new RateLimiter({ max: 1, windowMs: 60000, keyPrefix: 'redis-reply-error' }, mockRedis as any);
+
+      await expect(limiter.consume('user:a', 1)).resolves.toBeNull();
       expect(rateLimiterLogger.error).toHaveBeenCalled();
     });
 
