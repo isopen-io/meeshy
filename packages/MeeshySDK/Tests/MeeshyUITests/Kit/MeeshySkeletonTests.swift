@@ -35,7 +35,8 @@ struct MeeshySkeletonTests {
     func sheen_measures() throws {
         let measures = try #require(try KitAtomVectors.load(Self.file)["mesures"] as? [String: Double])
         #expect(MeeshySkeletonRecipe.sheenDuration == measures["reflet"])
-        #expect(MeeshySkeletonRecipe.sheenDelayMilliseconds == Int(try #require(measures["delaiMs"])))
+        let delay = try #require(measures["delaiMs"])
+        #expect(MeeshySkeletonRecipe.sheenDelayMilliseconds == Int(delay))
         #expect(MeeshySkeletonRecipe.sheenBandFraction == measures["bande"])
         #expect(MeeshySkeletonRecipe.sheenAngleDegrees == measures["angle"])
     }

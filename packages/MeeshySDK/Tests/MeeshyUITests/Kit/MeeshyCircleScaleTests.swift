@@ -61,7 +61,8 @@ struct MeeshyCircleScaleTests {
         #expect(recipe.ringStroke == measures["traitAnneau"])
         #expect(recipe.litRingStroke == measures["traitAllume"])
         #expect(recipe.ringGap == measures["ecartAnneaux"])
-        #expect(recipe.pressedScale == measures["pressedScale"])
+        #expect(Self.recipe(isPressed: true).pressedScale == measures["pressedScale"])
+        #expect(recipe.pressedScale == 1)
         #expect(Self.recipe(isEnabled: false).opacity == measures["disabledOpacity"])
         #expect(recipe.opacity == 1)
     }

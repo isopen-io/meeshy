@@ -77,11 +77,13 @@ struct MeeshyLockedRowTests {
         }
     }
 
-    @Test("sous mouvement réduit : fondu de 160 ms, aucun tiret animé")
+    @Test("sous mouvement réduit : fondu de 160 ms, aucun tiret animé ; seule l'ouverture anime les tirets")
     func recipe_reducedMotion() {
-        #expect(Self.recipe(reduceMotion: true).unlockFadeMilliseconds == 160)
-        #expect(Self.recipe(reduceMotion: true).animatesDash == false)
-        #expect(Self.recipe(reduceMotion: false).animatesDash == false)
+        #expect(Self.recipe(isUnlocking: true, reduceMotion: true).unlockFadeMilliseconds == 160)
+        #expect(!Self.recipe(isUnlocking: true, reduceMotion: true).animatesDash)
+        #expect(Self.recipe(isUnlocking: true, reduceMotion: false).animatesDash)
+        #expect(!Self.recipe(isUnlocking: false, reduceMotion: false).animatesDash)
+        #expect(Self.recipe(reduceMotion: false).unlockFadeMilliseconds > 160)
     }
 
     @Test("le nom dit : « Présence, verrouillé, dès Ami » ; ouvert : « Présence, déverrouillé »")
@@ -118,9 +120,10 @@ struct MeeshyLockedRowTests {
                                isPressable: Bool = false,
                                isPressed: Bool = false,
                                isEnabled: Bool = true,
+                               isUnlocking: Bool = false,
                                reduceMotion: Bool = false) -> MeeshyLockedRowRecipe {
         MeeshyLockedRowRecipe.resolve(form: form, hasAction: hasAction, isPending: isPending, isDone: isDone,
                                       isOpen: isOpen, isPressable: isPressable, isPressed: isPressed,
-                                      isEnabled: isEnabled, reduceMotion: reduceMotion)
+                                      isEnabled: isEnabled, isUnlocking: isUnlocking, reduceMotion: reduceMotion)
     }
 }

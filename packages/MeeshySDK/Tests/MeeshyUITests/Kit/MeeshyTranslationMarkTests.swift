@@ -24,8 +24,8 @@ struct MeeshyTranslationMarkTests {
     @Test("sans onToggle, en announce et en icon : jamais de bascule, quels que soient les paramètres")
     func toggle_neverPromisedWithoutAGesture() throws {
         for row in try KitAtomVectors.rows(Self.file, "bascule") {
-            let density = try #require(MeeshyTranslationMarkDensity(rawValue: try #require(row["densite"] as? String)))
-            let mode = try #require(MeeshyTranslationMarkMode(rawValue: try #require(row["mode"] as? String)))
+            let density = try #require(MeeshyTranslationMarkDensity(rawValue: kitString(row, "densite")))
+            let mode = try #require(MeeshyTranslationMarkMode(rawValue: kitString(row, "mode")))
             let recipe = Self.recipe(density: density, mode: mode, hasToggle: try #require(row["aBascule"] as? Bool))
             #expect(recipe.showsToggle == row["affichee"] as? Bool, "\(row)")
         }
@@ -34,7 +34,7 @@ struct MeeshyTranslationMarkTests {
     @Test("le glyphe seul n'écrit aucune mention ; line et legend la portent")
     func mention_followsTheDensity() throws {
         for row in try KitAtomVectors.rows(Self.file, "mention") {
-            let density = try #require(MeeshyTranslationMarkDensity(rawValue: try #require(row["densite"] as? String)))
+            let density = try #require(MeeshyTranslationMarkDensity(rawValue: kitString(row, "densite")))
             #expect(Self.recipe(density: density).showsMention == row["affichee"] as? Bool, "\(row)")
         }
     }
@@ -114,6 +114,10 @@ struct MeeshyTranslationMarkTests {
                 #expect(!source.contains(forbidden), "\(file) contient \(forbidden)")
             }
         }
+    }
+
+    private func kitString(_ row: [String: Any], _ key: String) -> String {
+        row[key] as? String ?? ""
     }
 
     private static func recipe(density: MeeshyTranslationMarkDensity = .line,
