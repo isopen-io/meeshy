@@ -248,6 +248,15 @@ describe('accepter un jeton (#19205)', () => {
     expect(await g.accepter(await jeton(g), EMETTEUR)).toEqual(REFUS);
   });
 
+  it('l\'émetteur qui lit son propre jeton (son autre appareil, son propre lien) ne le consomme pas : le lecteur l\'accepte ensuite', async () => {
+    const g = guichet();
+    const token = await jeton(g, ['vitrine']);
+    expect(await g.accepter(token, EMETTEUR)).toEqual(REFUS);
+    const accepted = await g.accepter(token);
+    expect(accepted.success).toBe(true);
+    expect(g.emissions).toHaveLength(1);
+  });
+
   it('une vitrine que la fiche publique refuse de servir : le refus générique, aucune demande', async () => {
     const g = guichet({ vitrineServie: false });
     expect(await g.accepter(await jeton(g))).toEqual(REFUS);
