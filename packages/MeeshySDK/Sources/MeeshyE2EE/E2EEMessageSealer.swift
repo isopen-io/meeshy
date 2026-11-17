@@ -25,6 +25,9 @@ public enum E2EESealError: Error, Equatable {
     /// L'annuaire a refusé la liste d'appareils plus de fois que Sesame ne le
     /// justifie : la liste change sous nos pieds, ou le serveur ment.
     case devicesMismatchUnresolved
+    /// Le correspondant servi est MOI, dans n'importe quelle casse (IOS-18) :
+    /// un tête-à-tête avec moi-même n'existe pas, rien ne part.
+    case peerIsSelf
 }
 
 /// Le chiffrement d'un message pour CHAQUE appareil de la conversation
@@ -93,6 +96,7 @@ public final class E2EEMessageSealer: E2EEMessageSealing, E2EESignalSealing {
     }
 
     private func sealInTurn(plaintext unpadded: Data, to peerUserId: String) async throws -> E2EESealedMessage {
+        guard !E2EEAccountId.same(peerUserId, local.userId) else { throw E2EESealError.peerIsSelf }
         let peerTargets = try await targets(of: peerUserId)
         guard !peerTargets.isEmpty else { throw E2EESealError.recipientHasNoDevice(userId: peerUserId) }
         let own = try await ownTargets()
@@ -160,7 +164,7 @@ public final class E2EEMessageSealer: E2EEMessageSealing, E2EESignalSealing {
     /// Les appareils actifs d'un utilisateur, chacun avec une session à jour.
     private func targets(of userId: String) async throws -> [Target] {
         let listed = try await directory.devices(userId: userId).devices
-            .filter { !(userId == local.userId && $0.deviceId == local.deviceId) }
+            .filter { !(E2EEAccountId.same(userId, local.userId) && $0.deviceId == local.deviceId) }
         return try await withSessions(userId: userId, listed)
     }
 

@@ -129,7 +129,8 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
         // s'ouvrira au rattrapage qui suit l'approbation (spec § 3.5). Sans
         // cela, ce que mon iPhone écrit entre les deux sens de l'appairage se
         // perdait sur le Mac. Le serveur la balaie au bout de 30 jours.
-        if sender.userId == local.userId, (try? approvals.approvedIdentity(of: sender.deviceId)) == .some(nil) {
+        let fromMyAccount = E2EEAccountId.same(sender.userId, local.userId)
+        if fromMyAccount, (try? approvals.approvedIdentity(of: sender.deviceId)) == .some(nil) {
             return .deferred(envelopeId: envelope.id)
         }
         do {
@@ -140,7 +141,7 @@ public final class E2EEEnvelopeOpener: E2EEEnvelopeOpening {
                 // pas l'épinglée annule la transaction (le ratchet n'avance pas) et
                 // l'enveloppe attend : c'est le cas d'une place reprise par une
                 // réinstallation que je n'ai pas encore réapprouvée.
-                if sender.userId == local.userId {
+                if fromMyAccount {
                     let pinned = try E2EEOwnDeviceApprovals.pinned(sender.deviceId, in: transaction)
                     guard let pinned, try transaction.load(.remoteIdentity, "\(sender.userId).\(sender.deviceId)") == pinned else {
                         throw E2EEOpenError.unapprovedOwnDevice

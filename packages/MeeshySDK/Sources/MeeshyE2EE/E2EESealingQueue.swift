@@ -28,7 +28,7 @@ final class E2EESealingQueue: Sendable {
     private let state = OSAllocatedUnfairLock(initialState: State())
 
     static func shared(for device: E2EELocalDevice) -> E2EESealingQueue {
-        let key = "\(device.userId.lowercased()).\(device.deviceId)"
+        let key = "\(E2EEAccountId.normalized(device.userId)).\(device.deviceId)"
         return queues.withLock { queues in
             if let existing = queues[key] { return existing }
             let created = E2EESealingQueue()
