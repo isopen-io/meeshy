@@ -79,6 +79,14 @@ describe('resolveInCommonParts — « En commun », chaque partie gardée par so
     expect(IN_COMMON_PARTS.map((part) => parts[part].state)).toEqual(['open', 'open', 'open']);
   });
 
+  it('aucune partie ne porte de bouclier des mineurs, de consentement ni d’action adressée', () => {
+    for (const level of ['COMMUNITY', 'ACQUAINTANCE', 'FRIEND'] as const) {
+      const adult = resolveInCommonParts(inputAt(level, { sharesCommunity: true }));
+      const facingMinor = resolveInCommonParts(inputAt(level, { sharesCommunity: true, targetMinor: 'minor', viewerMinor: 'adult' }));
+      expect(facingMinor).toEqual(adult);
+    }
+  });
+
   it('un ADMIN face à un utilisateur ordinaire n’a que son lien', () => {
     const parts = resolveInCommonParts(inputAt('PUBLIC', { viewerRole: 'BIGBOSS' }));
     expect(IN_COMMON_PARTS.map((part) => parts[part].state)).toEqual(['locked', 'locked', 'locked']);
