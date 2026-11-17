@@ -87,7 +87,7 @@ final class MyCommunities: ObservableObject {
     /// compte entrant se relit ensuite, cache-first.
     func follow(accountId: String?) {
         accountEpoch += 1
-        communities = []
+        show([])
         accountReload?.cancel()
         guard accountId != nil else {
             accountReload = nil
@@ -132,13 +132,13 @@ final class MyCommunities: ObservableObject {
     func add(_ community: APICommunity) async {
         await store().prependToExisting(community, for: Self.cacheKey)
         let added = community.toCommunity()
-        communities = [added] + communities.filter { $0.id != added.id }
+        show([added] + communities.filter { $0.id != added.id })
     }
 
     /// Quitter : la communauté sort de la bande, du cache, donc du partage.
     func remove(communityId: String) async {
         await store().update(for: Self.cacheKey) { $0.filter { $0.id != communityId } }
-        communities.removeAll { $0.id == communityId }
+        show(communities.filter { $0.id != communityId })
     }
 
     /// La réponse d'un compte quitté pendant l'aller-retour n'est ni publiée ni
@@ -158,7 +158,15 @@ final class MyCommunities: ObservableObject {
 
     private func publish(_ apiCommunities: [APICommunity], under epoch: Int) {
         guard epoch == accountEpoch else { return }
-        communities = apiCommunities.map { $0.toCommunity() }
+        show(apiCommunities.map { $0.toCommunity() })
+    }
+
+    /// La bande ne se repeint que si elle CHANGE : la revalidation d'un cache
+    /// périmé sert le plus souvent la liste déjà peinte, et chaque publication
+    /// relance la bande de la liste des conversations.
+    private func show(_ next: [MeeshyCommunity]) {
+        guard next != communities else { return }
+        communities = next
     }
 }
 

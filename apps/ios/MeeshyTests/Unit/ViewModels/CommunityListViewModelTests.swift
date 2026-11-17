@@ -246,6 +246,27 @@ final class MyCommunitiesTests: XCTestCase {
         XCTAssertEqual(cached, ["c3"])
     }
 
+    /// La revalidation d'un cache périmé sert le plus souvent la bande déjà
+    /// peinte : chaque publication relance la bande de la liste des conversations.
+    func test_refresh_servingTheSameStrip_doesNotRepublishIt() async throws {
+        let store = await CacheCoordinator.shared.communities
+        let service = MockCommunityService()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "c1", name: "Club c1")]))
+        let sut = MyCommunities(service: service, communityUpdates: Empty().eraseToAnyPublisher())
+        await sut.refresh()
+        var republished = 0
+        let watch = sut.$communities.dropFirst().sink { _ in republished += 1 }
+
+        await sut.refresh()
+        await sut.remove(communityId: "absente")
+
+        watch.cancel()
+        await store.invalidate(for: "list")
+        XCTAssertEqual(service.listCallCount, 2)
+        XCTAssertEqual(republished, 0, "une bande inchangée ne se republie pas")
+        XCTAssertEqual(sut.communities.map(\.id), ["c1"])
+    }
+
     // MARK: - La bande est celle du compte CONNECTÉ (#18935)
 
     /// La source vit le temps du processus et `@Published` rejoue sa valeur à la
