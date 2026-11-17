@@ -557,6 +557,7 @@ struct ProfileSheetEnvironment: ViewModifier {
             .environment(\.profileUnavailableExits, ProfileUnavailableExits(
                 scanner: { onOpened in ProfileSlot.view(.scanner, userId: "", displayName: "", onOpened: onOpened) }
             ))
+            .environment(\.profileSendSheet, ProfileSendHost.sheet)
             .environment(\.profileLoading, LiveProfileLoading())
             .environment(\.avatarListeningSource, ListeningCenter.shared.source)
     }

@@ -14,6 +14,7 @@ extension UserProfileSheet {
     var linksFace: some View {
         RelationLinksFace(link: ProfileLink(username: displayUser.username), name: displayUser.resolvedDisplayName,
                           addresses: loader.profile?.addresses?.items ?? [], tint: accentTint,
+                          sendRoute: profileSendRoute, sendSheet: sendSheet, onLeave: { dismiss() },
                           onCopy: { copyProfileLink($0) }, onShowVitrine: { face = .vitrine })
     }
 }
@@ -23,6 +24,9 @@ struct RelationLinksFace: View {
     let name: String
     let addresses: [ProfileAddress]
     let tint: Color
+    let sendRoute: ProfileSendRoute?
+    let sendSheet: ProfileSendSheet?
+    let onLeave: () -> Void
     let onCopy: (ProfileLink) -> Void
     let onShowVitrine: () -> Void
 
@@ -90,8 +94,10 @@ struct RelationLinksFace: View {
             actions(link)
         }
         .sheet(isPresented: $sharesProfile) {
-            ProfileActivitySheet(items: [link.url])
-                .presentationDetents([.medium, .large])
+            ProfileSendPresentation(route: sendRoute, host: sendSheet, exits: ProfileSendExits(
+                close: { sharesProfile = false },
+                closeProfile: { sharesProfile = false; onLeave() }
+            ))
         }
         .sheet(item: $showsCode) { mode in
             RelationLinksCodeSheet(link: link, name: name, tint: tint, mode: mode)

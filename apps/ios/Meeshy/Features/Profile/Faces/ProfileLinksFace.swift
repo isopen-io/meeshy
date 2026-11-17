@@ -121,6 +121,17 @@ struct ProfileLinksFace: View {
 enum ProfileLinksShare {
     static func card(of user: MeeshyUser, link: ProfileLink) -> ShareCard {
         ShareCard(kind: .profile, contentId: user.id, title: user.displayName ?? user.username,
-                  subtitle: "@\(link.username)", url: link.url, imageURL: user.avatar)
+                  subtitle: "@\(link.username)", url: link.url, imageURL: user.avatar, detail: bio(user.bio))
+    }
+
+    /// La carte d'un AUTRE, telle que la fiche la remet (#19442) : la même carte, sa bio sous son pseudo.
+    static func card(of request: ProfileSendRequest) -> ShareCard {
+        ShareCard(kind: .profile, contentId: request.userId, title: request.displayName,
+                  subtitle: "@\(request.username)", url: request.url, imageURL: request.avatarURL, detail: request.bio)
+    }
+
+    private static func bio(_ text: String?) -> String? {
+        let trimmed = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

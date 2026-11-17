@@ -322411,6 +322411,53 @@
         }
       }
     },
+    "share.sheet.content.profile": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا ما سيستلمه صديقك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das bekommt dein Freund"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Here’s what your friend will get"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esto es lo que recibirá tu amigo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voilà ce que ton ami recevra"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ecco cosa riceverà il tuo amico"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "É isso que seu amigo vai receber"
+          }
+        }
+      }
+    },
     "share.sheet.content.piece-of": {
       "extractionState": "manual",
       "localizations": {

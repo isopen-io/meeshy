@@ -799,6 +799,41 @@ final class ProfileLinksFaceTests: XCTestCase {
         XCTAssertEqual(card?.url?.absoluteString, "https://meeshy.me/@aissa")
         XCTAssertEqual(card?.subtitle, "@aissa")
     }
+
+    /// #19442 — la carte d'un AUTRE part par la même feuille d'envoi : son nom, son pseudo, son avatar, son adresse,
+    /// et sa bio lue sous le pseudo ; « Ce qui part » se lit du côté de l'ami.
+    func test_theirCard_carriesWhatTheFriendWillReceive() throws {
+        let url = try XCTUnwrap(URL(string: "https://meeshy.me/@leo.m"))
+        let request = ProfileSendRequest(userId: "u-leo", displayName: "Léo Marchetti", username: "leo.m",
+                                         avatarURL: "https://cdn/leo.jpg", bio: "Photographe de rue.", url: url)
+        let card = ProfileLinksShare.card(of: request)
+        XCTAssertEqual(card.kind, .profile)
+        XCTAssertEqual(card.contentId, "u-leo")
+        XCTAssertEqual(card.title, "Léo Marchetti")
+        XCTAssertEqual(card.subtitle, "@leo.m")
+        XCTAssertEqual(card.imageURL, "https://cdn/leo.jpg")
+        XCTAssertEqual(card.detail, "Photographe de rue.")
+        XCTAssertEqual(card.messageText, "https://meeshy.me/@leo.m")
+        XCTAssertFalse(card.mintsTrackedLink)
+    }
+
+    func test_cardZone_readsFromTheFriendsSide_forAProfileOnly() {
+        XCTAssertNotEqual(ShareSheetCopy.cardZone(.profile), ShareSheetCopy.contentZone)
+        XCTAssertEqual(ShareSheetCopy.cardZone(.post), ShareSheetCopy.contentZone)
+    }
+
+    func test_myCard_carriesMyBio_andABlankBioTravelsAsAbsent() {
+        let link = ProfileLink(username: "aissa")
+        let withBio = link.map { ProfileLinksShare.card(of: MeeshyUser(id: "u1", username: "aissa", bio: " Lyon "), link: $0) }
+        let blank = link.map { ProfileLinksShare.card(of: MeeshyUser(id: "u1", username: "aissa", bio: "  "), link: $0) }
+        XCTAssertEqual(withBio?.detail, "Lyon")
+        XCTAssertNil(blank?.detail)
+    }
+
+    func test_theirProfileSheets_receiveTheMeeshySendSheet() throws {
+        let app = try code("Meeshy/MeeshyApp.swift")
+        XCTAssertTrue(app.contains(".environment(\\.profileSendSheet, ProfileSendHost.sheet)"))
+    }
 }
 
 /// Le détail d'un lien de suivi (planche `Lien-Detail`, #18871) : ce que ses chiffres, ses parts et son graphique DISENT
