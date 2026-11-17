@@ -298,28 +298,59 @@ describe('la SYMÉTRIE des deux gestes se lit sur leurs deux verdicts (#4713)', 
  * les actifs) redevenait actif. La porte passe par `returningMemberRefusal` :
  * hors de la paire, le bannissement est levé, l'appartenance n'est pas rendue —
  * même issue que le refus d'une communauté privée (`liftBanOnly`).
+ *
+ * Audit du delta (D1) : ce bloc tourne sur un double qui HONORE le `select` et
+ * ÉVALUE le `where`. Un double qui rendait la ligne entière gardait vert un
+ * `select` privé de `encryptionEnabledAt`. La paire RÉDUITE à un membre (B
+ * banni après l'activation, C, l'ancien tiers, avant) est le cas où seule la
+ * date tient la règle.
  */
 describe('leverBannissementDeParticipant — un tête-à-tête chiffré de bout en bout reste à deux (#16188)', () => {
   const ACTIVATION = new Date('2026-11-10T00:00:00.000Z');
   const BANNI_AVANT = new Date('2026-11-01T00:00:00.000Z');
   const BANNI_APRES = new Date('2026-11-12T00:00:00.000Z');
+  const PAIR_USER_ID = '507f1f77bcf86cd799439055';
 
-  const prismaE2ee = (banniLe: Date, actifs: readonly string[]) => {
-    const prisma = fabriquerPrisma({
-      cible: { ...CIBLE_ACTIVE, isActive: false, bannedAt: banniLe, leftAt: banniLe },
+  type Select = { readonly [key: string]: boolean | { readonly select: Select } };
+  type Ligne = Record<string, unknown>;
+
+  const projetee = (ligne: Ligne, select: Select | undefined): Ligne =>
+    select
+      ? Object.fromEntries(Object.entries(select).flatMap(([cle, voulu]) => {
+          if (voulu === false) return [];
+          if (voulu === true) return [[cle, ligne[cle]]];
+          return [[cle, ligne[cle] === null || ligne[cle] === undefined ? ligne[cle] : projetee(ligne[cle] as Ligne, voulu.select)]];
+        }))
+      : { ...ligne };
+
+  const satisfait = (ligne: Ligne, where: Ligne): boolean =>
+    Object.entries(where).every(([cle, valeur]) => ligne[cle] === valeur);
+
+  const ligne = (id: string, userId: string, banniLe: Date | null, role = 'member'): Ligne => ({
+    id, conversationId: CONV_ID, userId, role, isActive: banniLe === null, leftAt: banniLe, bannedAt: banniLe,
+    displayName: userId.slice(-4), shareLinkId: null, anonymousSession: null, language: 'fr',
+  });
+
+  /** Un double de `participant` qui n'en rend que ce que le `select` demande, sur des lignes qu'il ÉVALUE. */
+  const prismaE2ee = (lignes: Ligne[]) => {
+    const conversation = { communityId: null, type: 'direct', encryptionMode: 'e2ee', encryptionEnabledAt: ACTIVATION };
+    const prisma = fabriquerPrisma();
+    prisma.participant.findFirst = jest.fn<any>(async ({ where, select }: { where: Ligne; select?: Select }) => {
+      const trouvee = lignes.find((candidate) => satisfait(candidate, where));
+      return trouvee ? projetee({ ...trouvee, conversation }, select) : null;
     });
-    prisma.participant.findFirst = jest.fn<any>()
-      .mockResolvedValueOnce({
-        id: 'part-acteur', role: 'moderator',
-        conversation: { communityId: null, type: 'direct', encryptionMode: 'e2ee', encryptionEnabledAt: ACTIVATION },
-      })
-      .mockResolvedValueOnce({ ...CIBLE_ACTIVE, isActive: false, bannedAt: banniLe, leftAt: banniLe });
-    prisma.participant.findMany = jest.fn<any>().mockResolvedValue(actifs.map((userId) => ({ id: `part-${userId}`, userId })));
+    prisma.participant.findMany = jest.fn<any>(async ({ where, select }: { where: Ligne; select?: Select }) =>
+      lignes.filter((candidate) => satisfait(candidate, where)).map((trouvee) => projetee(trouvee, select)));
+    prisma.participant.update = jest.fn<any>(async ({ where, data }: { where: { id: string }; data: Ligne }) =>
+      Object.assign(lignes.find((candidate) => candidate.id === where.id)!, data));
     return prisma;
   };
 
+  const actifs = (lignes: readonly Ligne[]) => lignes.filter((candidate) => candidate.isActive).map((candidate) => candidate.userId);
+
   it('un tiers banni avant l’activation : le bannissement est levé, l’appartenance n’est pas rendue', async () => {
-    const prisma = prismaE2ee(BANNI_AVANT, [ACTEUR_ID, 'autre-membre-de-la-paire']);
+    const lignes = [ligne('part-acteur', ACTEUR_ID, null, 'moderator'), ligne('part-paire', PAIR_USER_ID, null), ligne(CIBLE_PART_ID, CIBLE_USER_ID, BANNI_AVANT)];
+    const prisma = prismaE2ee(lignes);
     const socket = fabriquerSocket();
 
     const verdict = await leverBannissementDeParticipant(demande(prisma, socket.passerelle));
@@ -327,10 +358,23 @@ describe('leverBannissementDeParticipant — un tête-à-tête chiffré de bout 
     expect(verdict.genre).toBe('ok');
     expect(prisma.participant.update).toHaveBeenCalledWith({ where: { id: CIBLE_PART_ID }, data: { bannedAt: null } });
     expect(socket.rejointes).toEqual([]);
+    expect(actifs(lignes)).toEqual([ACTEUR_ID, PAIR_USER_ID]);
+  });
+
+  it('paire réduite à un membre : l’ancien tiers, banni AVANT l’activation, ne prend pas la place de celui banni APRÈS', async () => {
+    const lignes = [ligne('part-acteur', ACTEUR_ID, null, 'moderator'), ligne('part-paire', PAIR_USER_ID, BANNI_APRES), ligne(CIBLE_PART_ID, CIBLE_USER_ID, BANNI_AVANT)];
+    const prisma = prismaE2ee(lignes);
+
+    const verdict = await leverBannissementDeParticipant(demande(prisma, fabriquerSocket().passerelle));
+
+    expect(verdict.genre).toBe('ok');
+    expect(prisma.participant.update).toHaveBeenCalledWith({ where: { id: CIBLE_PART_ID }, data: { bannedAt: null } });
+    expect(actifs(lignes)).toEqual([ACTEUR_ID]);
   });
 
   it('un membre de la paire banni après l’activation retrouve sa place (contrôle)', async () => {
-    const prisma = prismaE2ee(BANNI_APRES, [ACTEUR_ID]);
+    const lignes = [ligne('part-acteur', ACTEUR_ID, null, 'moderator'), ligne(CIBLE_PART_ID, CIBLE_USER_ID, BANNI_APRES)];
+    const prisma = prismaE2ee(lignes);
 
     await leverBannissementDeParticipant(demande(prisma, fabriquerSocket().passerelle));
 
@@ -338,5 +382,6 @@ describe('leverBannissementDeParticipant — un tête-à-tête chiffré de bout 
       where: { id: CIBLE_PART_ID },
       data: { bannedAt: null, isActive: true, leftAt: null },
     });
+    expect(actifs(lignes)).toEqual([ACTEUR_ID, CIBLE_USER_ID]);
   });
 });

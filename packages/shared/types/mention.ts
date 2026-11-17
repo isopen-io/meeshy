@@ -97,45 +97,6 @@ export interface MentionValidationResult {
 }
 
 /**
- * Requête pour obtenir des suggestions de mentions
- */
-export interface MentionSuggestionsRequest {
-  /** Le contexte de la mention : une conversation, ou un post (story, réel et mood compris). */
-  readonly contextId?: string;
-  readonly contextType?: 'conversation' | 'post';
-  /** @deprecated forme historique, équivalente à `contextId` + `contextType: 'conversation'`. */
-  readonly conversationId?: string;
-  readonly query?: string;
-}
-
-/**
- * Réponse API pour les suggestions de mentions
- */
-export interface MentionSuggestionsResponse {
-  readonly success: boolean;
-  readonly data?: readonly MentionSuggestion[];
-  readonly error?: string;
-}
-
-/**
- * Réponse API pour les mentions d'un message
- */
-export interface GetMessageMentionsResponse {
-  readonly success: boolean;
-  readonly data?: readonly MentionData[];
-  readonly error?: string;
-}
-
-/**
- * Réponse API pour les mentions récentes d'un utilisateur
- */
-export interface GetUserMentionsResponse {
-  readonly success: boolean;
-  readonly data?: readonly RecentMention[];
-  readonly error?: string;
-}
-
-/**
  * Événement Socket.IO pour une nouvelle mention
  */
 export interface MentionCreatedEvent {
@@ -148,56 +109,6 @@ export interface MentionCreatedEvent {
   readonly messagePreview: string;
   readonly conversationTitle: string | null;
   readonly timestamp: Date;
-}
-
-/**
- * Payload pour créer une notification de mention
- */
-export interface CreateMentionNotificationPayload {
-  readonly mentionedUserId: string;
-  readonly senderId: string;
-  readonly senderUsername: string;
-  readonly senderAvatar: string | null;
-  readonly messageContent: string;
-  readonly conversationId: string;
-  readonly conversationTitle: string | null;
-  readonly messageId: string;
-  readonly isMemberOfConversation: boolean;
-}
-
-/**
- * Métadonnées de mention dans le contexte d'un message
- */
-export interface MessageMentionContext {
-  readonly mentionedUserIds: readonly string[];
-  readonly mentionedUsernames: readonly string[];
-  readonly hasMentions: boolean;
-  readonly mentionCount: number;
-}
-
-/**
- * Options pour le hook useMentionAutocomplete
- */
-export interface UseMentionAutocompleteOptions {
-  readonly conversationId: string;
-  readonly onMentionSelected?: (username: string) => void;
-  readonly maxSuggestions?: number;
-}
-
-/**
- * Retour du hook useMentionAutocomplete
- */
-export interface UseMentionAutocompleteReturn {
-  readonly suggestions: readonly MentionSuggestion[];
-  readonly isLoading: boolean;
-  readonly error: string | null;
-  readonly showSuggestions: boolean;
-  readonly selectedIndex: number;
-  readonly fetchSuggestions: (query: string) => Promise<void>;
-  readonly selectSuggestion: (index: number) => void;
-  readonly selectNext: () => void;
-  readonly selectPrevious: () => void;
-  readonly closeSuggestions: () => void;
 }
 
 /**
