@@ -9,13 +9,17 @@ import MeeshySDK
 
 extension UserProfileSheet {
 
-    /// La Vitrine de l'autre (loi 1) : qui il est, puis ce que les anciens onglets portaient — ce que nous avons en
-    /// commun et ses publications (loi 11). Les opérations sont sur la face Actions.
+    /// La Vitrine de l'autre (loi 1) : qui il est, « Avec lui » (K32, vers la face Actions), « En direct » dès Proche,
+    /// sa voix, son jeu, ses chiffres, puis ce que les anciens onglets portaient — ce que nous avons en commun et ses
+    /// publications (loi 11). Planche `Autre-Vitrine` (#19416).
     @ViewBuilder
     var vitrineFace: some View {
         VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
             aboutSection
+            withThemSection
+            liveSection
             voiceSection
+            gameSectionCard
             statsSection
             commonSection
             publicationsSection
@@ -90,7 +94,10 @@ extension UserProfileSheet {
                     if hasChips {
                         HStack(spacing: MeeshySpacing.sm) {
                             if let tz = displayUser.timezone {
-                                infoChip(icon: "clock.fill", text: tz)
+                                TimelineView(.everyMinute) { context in
+                                    infoChip(icon: "clock.fill", text: ProfileVitrineCopy.localTime(
+                                        timezone: tz, name: displayUser.resolvedDisplayName, now: context.date))
+                                }
                             }
                             if let country = displayUser.registrationCountry {
                                 let countryName = CountryFlag.name(for: country) ?? country

@@ -521,13 +521,17 @@ struct SystemThemeDetector<Content: View>: View {
 // MARK: - Profile sheet environment
 
 struct ProfileSheetEnvironment: ViewModifier {
-    /// Le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche : ce que SA visibilité autorise,
-    /// rien sinon. Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
+    /// Le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche, et « Son jeu » dans sa Vitrine : ce que SA
+    /// visibilité autorise, rien sinon. « En direct » dès Proche (#19416). Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
     /// injection, toutes les feuilles de profil la reçoivent.
     func body(content: Content) -> some View {
         content
-            .environment(\.profileGameSection, ProfileGameSection { userId, displayName in
-                ProfileSlot.view(.banner, userId: userId, displayName: displayName)
+            .environment(\.profileGameSection, ProfileGameSection(
+                build: { userId, displayName in ProfileSlot.view(.banner, userId: userId, displayName: displayName) },
+                card: { userId, tint in ProfileSlot.view(.gameCard, userId: userId, displayName: "", tint: tint) }
+            ))
+            .environment(\.profileLiveSection, ProfileLiveSection { request in
+                ProfileSlot.view(.live, userId: request.userId, displayName: request.displayName, liveRequest: request)
             })
             .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, linked in
                 ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked)
@@ -558,13 +562,15 @@ struct ProfileSheetEnvironment: ViewModifier {
 /// place de « Connectés » (#13940), la pilule du cercle commun sous le nom (#18870). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
 /// membre à l'autre, et le niveau du précédent ne doit jamais se peindre sous le nom du suivant.
 enum ProfileSlot {
-    case banner, relation, pill, locationMap, whereTheyAre, scanner
+    case banner, relation, pill, locationMap, whereTheyAre, scanner, gameCard, live
 
     static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false),
                      mapRequest: ProfileLocationMapRequest? = nil, openMap: (() -> Void)? = nil,
-                     onOpened: (() -> Void)? = nil) -> AnyView {
+                     onOpened: (() -> Void)? = nil, tint: Color = .clear,
+                     liveRequest: ProfileLiveRequest? = nil) -> AnyView {
         AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked,
-                                   mapRequest: mapRequest, openMap: openMap, onOpened: onOpened))
+                                   mapRequest: mapRequest, openMap: openMap, onOpened: onOpened, tint: tint,
+                                   liveRequest: liveRequest))
     }
 }
 
@@ -576,6 +582,8 @@ private struct ProfileSlotContent: View {
     let mapRequest: ProfileLocationMapRequest?
     let openMap: (() -> Void)?
     let onOpened: (() -> Void)?
+    let tint: Color
+    let liveRequest: ProfileLiveRequest?
 
     var body: some View {
         switch slot {
@@ -595,6 +603,14 @@ private struct ProfileSlotContent: View {
             ProfileWhereCard(userId: userId, displayName: displayName, openMap: openMap ?? {})
         case .scanner:
             ProfileQRScannerSheet(onOpened: onOpened ?? {})
+        case .gameCard:
+            GameProfileBoardSource(userId: userId, tint: tint)
+                .id(userId)
+        case .live:
+            if let liveRequest {
+                ProfileLiveSource(request: liveRequest)
+                    .id(userId)
+            }
         }
     }
 }

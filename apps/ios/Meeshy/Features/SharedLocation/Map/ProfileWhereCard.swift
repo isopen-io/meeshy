@@ -16,7 +16,6 @@ struct ProfileWhereCard: View {
     @StateObject private var places = LocationPlaceNamer()
     @StateObject private var circle: ProfileCircleViewModel
     @ObservedObject private var sharing = SharedLocationSharingHolder.center()
-    @State private var viewport: LocationMapViewport?
     @State private var sharesMine = false
 
     init(userId: String, displayName: String, openMap: @escaping () -> Void) {
@@ -68,7 +67,7 @@ struct ProfileWhereCard: View {
         return MeeshyGroupCard(
             layout: .preview, tint: tint,
             accessory: { EmptyView() },
-            media: { miniature(pin) },
+            media: { ProfileWhereMiniature(pin: pin, onTap: openMap) },
             emblem: { EmptyView() },
             content: {
                 VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
@@ -103,32 +102,6 @@ struct ProfileWhereCard: View {
         )
     }
 
-    /// La miniature : le lieu servi et son flou, sans geste (la carte s'ouvre par « Voir sur la carte » ou d'un toucher).
-    private func miniature(_ pin: SharedLocationPin) -> some View {
-        let spot: LocationMapSpot = (latitude: pin.latitude, longitude: pin.longitude, radiusMeters: pin.radiusMeters)
-        let focus = LocationMapRegion.fitting([spot], margin: 2.6).map {
-            LocationMapFocus(region: $0, token: Self.token(of: pin), animated: false)
-        }
-        return ZStack {
-            LocationMapCanvas(focus: focus, onViewport: { viewport = $0 })
-            LocationMapPinsLayer(viewport: viewport, pins: [pin], selectedId: pin.id)
-        }
-        .allowsHitTesting(false)
-        .frame(height: 140)
-        .clipped()
-        .overlay { Color.clear.contentShape(Rectangle()).onTapGesture(perform: openMap) }
-        .accessibilityHidden(true)
-    }
-
-    /// La miniature se recadre quand la position servie bouge, jamais à chaque image.
-    private static func token(of pin: SharedLocationPin) -> Int {
-        var hasher = Hasher()
-        hasher.combine((pin.latitude * 10_000).rounded())
-        hasher.combine((pin.longitude * 10_000).rounded())
-        hasher.combine(pin.radiusMeters)
-        return hasher.finalize()
-    }
-
     // MARK: - Ma position
 
     private var showsShareRow: Bool {
@@ -145,5 +118,44 @@ struct ProfileWhereCard: View {
                             tint: LocationMapTint.color(for: pin?.circle), action: { sharesMine = true })
                 .accessibilityIdentifier("profile.where.shareMine")
         }
+    }
+}
+
+/// La miniature du lieu SERVI (K36 sur son fond de carte) : le lieu et son flou, sans geste sur la carte elle-même —
+/// la carte s'ouvre d'un toucher quand l'hôte le demande. Partagée par « Où il est » et « En direct » (#19416).
+struct ProfileWhereMiniature: View {
+    let pin: SharedLocationPin
+    var height: CGFloat = 140
+    var onTap: (() -> Void)?
+
+    @State private var viewport: LocationMapViewport?
+
+    var body: some View {
+        let spot: LocationMapSpot = (latitude: pin.latitude, longitude: pin.longitude, radiusMeters: pin.radiusMeters)
+        let focus = LocationMapRegion.fitting([spot], margin: 2.6).map {
+            LocationMapFocus(region: $0, token: Self.token(of: pin), animated: false)
+        }
+        return ZStack {
+            LocationMapCanvas(focus: focus, onViewport: { viewport = $0 })
+            LocationMapPinsLayer(viewport: viewport, pins: [pin], selectedId: pin.id)
+        }
+        .allowsHitTesting(false)
+        .frame(height: height)
+        .clipped()
+        .overlay {
+            if let onTap {
+                Color.clear.contentShape(Rectangle()).onTapGesture(perform: onTap)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// La miniature se recadre quand la position servie bouge, jamais à chaque image.
+    static func token(of pin: SharedLocationPin) -> Int {
+        var hasher = Hasher()
+        hasher.combine((pin.latitude * 10_000).rounded())
+        hasher.combine((pin.longitude * 10_000).rounded())
+        hasher.combine(pin.radiusMeters)
+        return hasher.finalize()
     }
 }
