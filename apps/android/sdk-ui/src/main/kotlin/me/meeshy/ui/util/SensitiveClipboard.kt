@@ -11,19 +11,8 @@ import android.os.PersistableBundle
 import me.meeshy.sdk.model.paste.ExpiringClipboardPolicy
 
 /**
- * Règle pure de l'effacement du presse-papiers sensible (miroir de `ExpiringClipboard`
- * iOS : 30 s). On n'efface que si le presse-papiers porte toujours CE QUE NOUS Y AVONS
- * ÉCRIT : un contenu copié depuis par l'utilisateur n'est jamais détruit.
- */
-public object SensitiveClipboardPolicy {
-    public const val CLEAR_DELAY_MS: Long = ExpiringClipboardPolicy.LIFETIME_MS
-
-    public fun shouldClear(written: String, current: String?): Boolean = current == written
-}
-
-/**
  * Écrit un secret (clé 2FA, codes de secours) marqué sensible — masqué de l'aperçu du
- * presse-papiers par le système (API 33+) — puis l'efface après [SensitiveClipboardPolicy.CLEAR_DELAY_MS].
+ * presse-papiers par le système (API 33+) — puis l'efface après [ExpiringClipboardPolicy.LIFETIME_MS].
  */
 public class SensitiveClipboard(context: Context) {
     private val appContext = context.applicationContext
