@@ -189,7 +189,7 @@ export type HttpRequest = {
    * plusieurs requêtes (téléverser, puis envoyer, puis publier) ne se termine
    * jamais sous un autre compte : si l'identité courante n'est plus celle-ci
    * au moment d'ÉMETTRE, rien ne part et l'appel rend
-   * {@link IDENTITY_CHANGED}. Posée par {@link boundToIdentity}.
+   * {@link IDENTITY_CHANGED}. Posée par `boundToIdentity` (`owned-deps.ts`).
    */
   readonly expectedIdentity?: string | null;
 };
@@ -393,7 +393,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
 
   async function attempt<T>(req: HttpRequest, mayReplay: boolean): Promise<ApiResult<T>> {
     if (req.expectedIdentity !== undefined && options.identity !== undefined && options.identity() !== req.expectedIdentity) {
-      return { ok: false, status: 0, error: 'Le compte a changé pendant l’opération', code: IDENTITY_CHANGED };
+      return { ok: false, status: 0, error: IDENTITY_CHANGED, code: IDENTITY_CHANGED };
     }
     const url = `${options.base}${req.path}`;
     const locale = options.deviceLocale?.() ?? null;
@@ -516,16 +516,4 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
   const transport = (({ method, path, body }) => request({ method, path, body })) as HttpTransport;
   transport.request = request;
   return transport;
-}
-
-/**
- * LE TRANSPORT D'UNE OPÉRATION (audit #19352, X1) — chaque requête qu'il émet
- * porte l'identité qui a lancé l'opération, et n'est émise que si elle est
- * encore la courante. Une feuille d'envoi lancée par Ada dont un autre onglet
- * passe l'appareil à Bob ne publie rien sous le jeton de Bob : ses étapes
- * restantes repassent en file, et reprennent quand Ada revient.
- */
-export function boundToIdentity(transport: HttpTransport, identity: string | null): HttpTransport {
-  const request = <T,>(req: HttpRequest): Promise<ApiResult<T>> => transport.request<T>({ ...req, expectedIdentity: identity });
-  return Object.assign(({ method, path, body }: HttpRequest) => request({ method, path, body }), { request }) as HttpTransport;
 }

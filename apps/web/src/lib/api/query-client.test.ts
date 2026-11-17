@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { forgetAccountCaches } from './account-caches';
+import { forgetAccountCaches } from './account-end';
 import { ApiError } from './client';
 import { isMediaAbsent, noteMediaAbsent, resetAbsentMedia } from './media-absent';
 import { apiConfig } from './config';

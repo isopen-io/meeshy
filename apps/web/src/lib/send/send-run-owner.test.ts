@@ -1,8 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
-import { createAccountCacheShelf, setDeviceFollower } from '@/lib/api/account-caches';
+import { createAccountCacheShelf } from '@/lib/api/account-caches';
+import { setDeviceFollower } from '@/lib/api/account-end';
 import { credentialFromSession } from '@/lib/api/client';
-import { boundToIdentity, createHttpTransport, type ApiResult } from '@/lib/api/http';
+import { createHttpTransport, type ApiResult } from '@/lib/api/http';
+import { boundToIdentity } from '@/lib/api/owned-deps';
 import { createSessionStore, sessionIdentityKey, type SessionStorage, type SessionUser } from '@/lib/api/session';
 import { followDeviceSession, watchDeviceSession } from '@/lib/api/session-follow';
 
@@ -93,7 +95,8 @@ describe('un envoi en plusieurs requêtes reste au compte qui l’a lancé (audi
     });
     await run.start();
 
-    expect(tabB.getState().session.status === 'authenticated' ? tabB.getState().session.user.id : null).toBe('u-bob');
+    const after = tabB.getState().session;
+    expect(after.status === 'authenticated' ? after.user.id : null).toBe('u-bob');
     expect(sent).toEqual(sent.filter((request) => request.auth === 'Bearer jwt-ada'));
     expect(run.getState().statuses).toEqual({ famille: { state: 'queued' }, fil: { state: 'queued' } });
   });

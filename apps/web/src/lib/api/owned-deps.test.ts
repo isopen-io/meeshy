@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { ownedApiDeps, ownedPostMediaUploadDeps } from './deps';
+import { ownedApiDeps, ownedPostMediaUploadDeps } from './owned-deps';
 import { IDENTITY_CHANGED } from './http';
 import { sessionStore } from './session';
 

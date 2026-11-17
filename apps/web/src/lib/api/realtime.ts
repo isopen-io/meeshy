@@ -12,7 +12,8 @@ import { href } from '@/routes/route-table';
 import { outboxStore } from '@/lib/send/outbox-store';
 import { safeLocalStorage } from '@/lib/storage';
 
-import { createAccountCacheShelf, endRevokedSession } from './account-caches';
+import { createAccountCacheShelf } from './account-caches';
+import { endRevokedSession } from './account-end';
 import { retireDeletedAccountLater } from './account-deleted';
 import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';

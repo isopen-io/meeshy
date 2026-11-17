@@ -1,4 +1,5 @@
-import { setDeviceFollower, type AccountCacheShelf } from './account-caches';
+import { type AccountCacheShelf } from './account-caches';
+import { setDeviceFollower } from './account-end';
 import { heldAccountOf, heldSessionKey, SESSION_STORAGE_KEY, type SessionState, type SessionStoreApi } from './session';
 
 /**

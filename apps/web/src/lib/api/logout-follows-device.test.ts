@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { endRevokedSession, setDeviceFollower } from './account-caches';
+import { endRevokedSession, setDeviceFollower } from './account-end';
 
 import { createAuthClient } from './auth';
 import type { ApiResult, HttpRequest } from './http';

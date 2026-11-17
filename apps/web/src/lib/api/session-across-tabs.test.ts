@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
-import { ACCOUNT_CACHE_PREFIX, createAccountCacheShelf, endRevokedSession, forgetAccountCaches, setDeviceFollower } from './account-caches';
+import { ACCOUNT_CACHE_PREFIX, createAccountCacheShelf } from './account-caches';
+import { endRevokedSession, forgetAccountCaches, setDeviceFollower } from './account-end';
 import { watchDeliveryReceiptCredential, type DeliveryReceiptCredential } from '../notifications/delivery-receipt-credential';
 
 import { createAccountSwitcher, createAccountVault } from './accounts';

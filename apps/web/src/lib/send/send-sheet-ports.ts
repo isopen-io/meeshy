@@ -1,5 +1,5 @@
 import { forwardMessages } from '@/lib/api/forward';
-import { ownedApiDeps, ownedPostMediaUploadDeps } from '@/lib/api/deps';
+import { ownedApiDeps, ownedPostMediaUploadDeps } from '@/lib/api/owned-deps';
 import { createDirectConversation, createGroupConversation, type ConversationsDeps } from '@/lib/api/conversations';
 import { uploadAttachments, uploadShortfall } from '@/lib/api/attachments';
 import { newClientMessageId } from '@/lib/api/client-message-id';

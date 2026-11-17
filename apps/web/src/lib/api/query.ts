@@ -19,7 +19,8 @@ import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import type { PendingAttachment } from '@/lib/send/attachments';
 
-import { apiDeps, ownedApiDeps, ownedPostMediaUploadDeps } from './deps';
+import { apiDeps } from './deps';
+import { ownedApiDeps, ownedPostMediaUploadDeps } from './owned-deps';
 import { sendTransfer } from '@/lib/send/send-transfer-instance';
 import { feedQuery, refreshFeed } from './feed';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
