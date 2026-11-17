@@ -10,6 +10,9 @@ nonisolated enum MyAddressesCopy {
         let format = String(localized: "profile.addresses.summary", defaultValue: "%1$@ adresses · %2$@ clics", bundle: .main)
         return String(format: format, count.formatted(), clicks.formatted())
     }
+    static var emptyTitle: String {
+        String(localized: "profile.addresses.empty.title", defaultValue: "Ajoute ton site, ta musique, tes photos", bundle: .main)
+    }
     static var show: String {
         String(localized: "profile.addresses.show", defaultValue: "Afficher sur ma vitrine", bundle: .main)
     }

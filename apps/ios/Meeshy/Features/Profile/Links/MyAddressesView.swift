@@ -23,19 +23,24 @@ struct MyAddressesView: View {
 
     var body: some View {
         LinksPage(title: ProfileLinksCopy.addressesTitle, accent: accent) {
-            VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-                MeeshyNote(MyAddressesCopy.intro, lead: .systemImage("eye"))
-                if !store.addresses.isEmpty {
-                    MeeshyNote(MyAddressesCopy.summary(count: store.addresses.count, clicks: store.totalClicks),
-                               lead: .systemImage("cursorarrow.click"), tint: accent)
+            ScrollViewReader { proxy in
+                VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
+                    MeeshyNote(MyAddressesCopy.intro, lead: .systemImage("eye"))
+                    if !store.addresses.isEmpty {
+                        MeeshyNote(MyAddressesCopy.summary(count: store.addresses.count, clicks: store.totalClicks),
+                                   lead: .systemImage("cursorarrow.click"), tint: accent)
+                    }
+                    list(scrollToForm: {
+                        withAnimation(.easeInOut) { proxy.scrollTo(Self.formAnchor, anchor: .top) }
+                    })
+                    MyAddressForm(store: store, accent: accent)
+                        .id(Self.formAnchor)
+                    MeeshyNote(MyAddressesCopy.leaving, kind: .security, lead: .systemImage("checkmark.shield"))
                 }
-                list
-                MyAddressForm(store: store, accent: accent)
-                MeeshyNote(MyAddressesCopy.leaving, kind: .security, lead: .systemImage("checkmark.shield"))
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.sm)
+                .padding(.bottom, 40)
             }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.top, MeeshySpacing.sm)
-            .padding(.bottom, 40)
         }
         .task { await store.load() }
         .refreshable { await store.refresh() }
@@ -62,8 +67,10 @@ struct MyAddressesView: View {
         }
     }
 
+    private static let formAnchor = "profile.addresses.form.anchor"
+
     @ViewBuilder
-    private var list: some View {
+    private func list(scrollToForm: @escaping () -> Void) -> some View {
         switch (store.phase, store.addresses.isEmpty) {
         case (.loading, true):
             ForEach(0..<2, id: \.self) { _ in MeeshySkeleton(shape: .card(aspect: 3, radius: Double(MeeshyRadius.lg))) }
@@ -73,8 +80,15 @@ struct MyAddressesView: View {
                                                              perform: { Task { await store.refresh() } }),
                              art: .none, size: .compact, tint: accent)
         case (_, true):
-            MeeshyStateBlock(kind: .empty, title: ProfileLinksCopy.addressesEmpty, art: .ghost(.ticket, count: 2),
-                             size: .compact, tint: accent)
+            MeeshyStateBlock(
+                kind: .empty,
+                title: MyAddressesCopy.emptyTitle,
+                primary: MeeshyStateBlockAction(title: MyAddressesCopy.addTitle, systemImage: "plus", perform: scrollToForm),
+                art: .glyph,
+                tint: accent
+            ) {
+                MyAddressesEmptyTiles(accent: accent)
+            }
         default:
             MeeshyReorderList(
                 label: MyAddressesCopy.listLabel,
@@ -94,6 +108,34 @@ struct MyAddressesView: View {
                              onRemove: { removing = address })
             }
         }
+    }
+}
+
+/// Le vide de « Mes adresses » (planche `Etat-Vide` vue 2) : trois tuiles fantômes — Site, Musique, Photos — qui disent
+/// ce qu'une adresse peut être. Muettes pour le lecteur d'écran : le titre du bloc le dit.
+struct MyAddressesEmptyTiles: View {
+    let accent: Color
+    private static let glyphs: [ProfileAddressGlyph] = [.site, .music, .photos]
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            ForEach(Self.glyphs, id: \.self) { glyph in
+                VStack(spacing: MeeshySpacing.xs) {
+                    Image(systemName: ProfileLinksCopy.glyph(of: glyph))
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
+                        .foregroundStyle(accent)
+                    Text(ProfileLinksCopy.glyphName(glyph))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, minHeight: 72)
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+                    .strokeBorder(Color.secondary.opacity(MeeshyOpacity.light),
+                                  style: StrokeStyle(lineWidth: MeeshyBorder.emphasis, dash: [4, 3])))
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 
