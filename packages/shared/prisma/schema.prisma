@@ -2293,6 +2293,10 @@ model RelationFeatureSetting {
   /// Non nul = `ownerId` a coupé les invitations « regarder ou écouter ensemble » de `otherId`
   /// (#17023) : préférence de réception, active par défaut ; la séance déjà rejointe continue.
   togetherBlockedAt     DateTime?
+  /// Non nul = `ownerId` ne veut plus RECEVOIR la position continue de `otherId` (#19454) :
+  /// préférence de réception, active par défaut ; ni son point sur ma carte, ni l'alerte de
+  /// proximité de la paire ne m'arrivent. Ne touche pas au consentement de `otherId`.
+  bloodLocationMutedAt  DateTime?
   consentedAt           DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt

@@ -15,6 +15,10 @@
  * un compte n'évalue que {@link PROXIMITY_EVALUATIONS_PER_HOUR} paires par heure. Cadence et compteur
  * sont stricts : une panne n'évalue rien.
  *
+ * Un lecteur qui a coupé la position continue de l'autre (#19454, `bloodLocationMute`) ne reçoit plus
+ * l'alerte de cette paire ; l'autre la reçoit toujours, et rien ne lui dit la coupure. Une paire coupée
+ * dans les deux sens n'est même pas évaluée.
+ *
  * Le consentement est relu en base à CHAQUE enregistrement (`relationConsent`), jamais en cache : un
  * retrait coupe l'alerte suivante. La loi d'accès (`location.proximity`, niveau, blocage, âge, équipe)
  * est celle de `pairAccessAmong`, dans les deux sens.
@@ -31,6 +35,7 @@ import { comptesAuMoins } from '../friendship';
 import { pairAccessAmong } from '../relations/pairAccess';
 import { relationConsentGrantedAmong, relationConsentGrantedBy } from '../relations/relationConsent';
 import { teamPeerCandidates } from '../relations/teamPeers';
+import { bloodLocationMutedBy, bloodLocationMutedFor } from './bloodLocationMute';
 import { openPoint } from './bloodLocationSeal';
 import type { BloodLocationDeps } from './bloodLocationTypes';
 
@@ -146,7 +151,13 @@ export async function alertBloodProximity(
   const candidates = [...new Set([...linked.map((account) => account.id), ...team])].filter((id) => id !== ownerId && deps.enabledFor(id));
   const visible = await unhiddenCandidates(deps, ownerId, candidates, ghostedByOwner);
   if (visible.length === 0) return;
-  const allowed = await mutuallyAllowed(deps, ownerId, visible);
+  const mutual = await mutuallyAllowed(deps, ownerId, visible);
+  if (mutual.length === 0) return;
+  const [mutedByOwner, mutedOwner] = await Promise.all([
+    bloodLocationMutedBy(deps.prisma, ownerId, mutual),
+    bloodLocationMutedFor(deps.prisma, ownerId, mutual),
+  ]);
+  const allowed = mutual.filter((id) => !(mutedByOwner.has(id) && mutedOwner.has(id)));
   if (allowed.length === 0) return;
   const radii = await radiusByCandidate(deps, ownerId, allowed);
   const evaluated: { readonly otherId: string; readonly other: Point }[] = [];
@@ -163,7 +174,7 @@ export async function alertBloodProximity(
     if (meters > (radii.get(otherId) ?? BLOOD_PROXIMITY_DEFAULT_RADIUS_METERS)) continue;
     if (!(await claimed(deps, pairKeyOf(ownerId, otherId), RELATION_THRESHOLDS.proximity.cooldownHours * 3600))) continue;
     const distance = stepOf(meters);
-    deps.io?.to(ROOMS.user(otherId)).emit(SERVER_EVENTS.BLOOD_PROXIMITY, { userId: ownerId, distanceMeters: distance });
-    deps.io?.to(ROOMS.user(ownerId)).emit(SERVER_EVENTS.BLOOD_PROXIMITY, { userId: otherId, distanceMeters: distance });
+    if (!mutedOwner.has(otherId)) deps.io?.to(ROOMS.user(otherId)).emit(SERVER_EVENTS.BLOOD_PROXIMITY, { userId: ownerId, distanceMeters: distance });
+    if (!mutedByOwner.has(otherId)) deps.io?.to(ROOMS.user(ownerId)).emit(SERVER_EVENTS.BLOOD_PROXIMITY, { userId: otherId, distanceMeters: distance });
   }
 }
