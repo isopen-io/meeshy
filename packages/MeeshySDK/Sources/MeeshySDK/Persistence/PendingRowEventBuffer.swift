@@ -29,12 +29,15 @@ typealias PendingReactionChange = @Sendable ([MeeshyReaction]) -> [MeeshyReactio
 
 /// Ce qui attend une ligne, dans l'ordre où cela se rejoue : la
 /// modification, les réactions, les pièces retirées, puis la suppression, qui l'emporte.
+/// Les traductions se jugent en dernier, sur la ligne que tout cela a laissée
+/// (`MessageEnrichmentLaw`, #18934).
 struct PendingRowEvents: Sendable {
     let rememberedAt: Date
     var edit: PendingEdit?
     var reactions: [PendingReactionChange] = []
     var attachmentRemovals: [PendingAttachmentRemoval] = []
     var tombstone: PendingTombstone?
+    var translations: [TranslationRecord] = []
 }
 
 /// Mémoire des événements arrivés avant leur message, bornée en NOMBRE (le plus

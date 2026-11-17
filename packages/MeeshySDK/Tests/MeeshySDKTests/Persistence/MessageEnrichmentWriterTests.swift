@@ -143,4 +143,53 @@ final class MessageEnrichmentWriterTests: XCTestCase {
             XCTAssertTrue(try actor.translations(for: Self.messageId).isEmpty, "expired=\(expired) : les traductions aussi")
         }
     }
+
+    // MARK: - Une traduction arrivée AVANT sa ligne
+
+    /// `message:new` passe par le flux d'écriture, `message:translation` s'écrit
+    /// tout de suite : la traduction trouve la table sans sa ligne. Gravée
+    /// orpheline, elle restait en clair sous une ligne qui arrivait déjà ouverte
+    /// (sur un autre appareil du lecteur) ou chiffrée de bout en bout.
+    func test_save_beforeItsRow_isNotKeptUnderARowThatArrivesWithoutClearContent() async throws {
+        let arrivals: [(String, (inout MessageRecord) -> Void)] = [
+            ("vue unique déjà ouverte", { $0.viewOnceOpenedAt = Date() }),
+            ("chiffrée de bout en bout", { $0.isEncrypted = true; $0.encryptionMode = E2EEWire.mode }),
+        ]
+        for (label, arrival) in arrivals {
+            let actor = try makeActor()
+
+            try await MessageEnrichmentWriter.save([Self.translation], into: actor)
+            try await insertVocal(into: actor, protect: arrival)
+            await actor.replayPendingRowEvents(for: [Self.messageId])
+
+            XCTAssertTrue(try actor.translations(for: Self.messageId).isEmpty, "\(label) : aucune traduction orpheline en clair")
+        }
+    }
+
+    /// Le Prisme d'un message ordinaire n'y perd rien : la traduction attend sa
+    /// ligne, puis s'y écrit.
+    func test_save_beforeItsRow_waitsForAnOrdinaryRowThenIsWritten() async throws {
+        let actor = try makeActor()
+
+        try await MessageEnrichmentWriter.save([Self.translation], into: actor)
+        let beforeTheRow = try actor.translations(for: Self.messageId)
+        try await insertVocal(into: actor)
+        await actor.replayPendingRowEvents(for: [Self.messageId])
+
+        XCTAssertTrue(beforeTheRow.isEmpty, "rien ne se grave sans sa ligne")
+        XCTAssertEqual(try actor.translations(for: Self.messageId).map(\.translatedContent), ["Meet you at the station"])
+    }
+
+    /// Une suppression arrivée elle aussi avant la ligne se rejoue d'abord : la
+    /// traduction se juge sur la pierre tombale.
+    func test_save_beforeItsRow_isNotKeptWhenTheDeletionAlsoArrivedFirst() async throws {
+        let actor = try makeActor()
+
+        try await MessageEnrichmentWriter.save([Self.translation], into: actor)
+        try await actor.markDeleted(localId: Self.messageId, deletedAt: Date())
+        try await insertVocal(into: actor)
+        await actor.replayPendingRowEvents(for: [Self.messageId])
+
+        XCTAssertTrue(try actor.translations(for: Self.messageId).isEmpty)
+    }
 }

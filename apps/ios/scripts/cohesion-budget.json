@@ -317,7 +317,7 @@
     "Meeshy::View": 1642,
     "MeeshySDK::AuthManager": 1890,
     "MeeshySDK::ConversationSyncEngine": 2855,
-    "MeeshySDK::MessagePersistenceActor": 2296,
+    "MeeshySDK::MessagePersistenceActor": 2294,
     "MeeshySDK::MessageSocketManager": 1906,
     "MeeshySDK::OfflineQueue": 2957,
     "MeeshyUI::StickerPickerView": 1612,

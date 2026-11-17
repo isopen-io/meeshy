@@ -56,8 +56,17 @@ public struct AttachmentEnrichment: Sendable, Equatable {
 /// éphémère échu. Le REST suit la même loi (`APIMessageUpsert.persistTranslations`).
 public enum MessageEnrichmentWriter {
 
+    /// Ce que la ligne d'un message permet d'un enrichissement : le garder, le retenir, ou, la ligne n'étant pas
+    /// encore là, l'attendre.
+    enum Verdict: Equatable {
+        case kept
+        case withheld
+        case awaitingRow
+    }
+
+    /// Une pièce s'enrichit dans sa ligne : sans ligne, rien ne s'écrit, et le REST la rapportera enrichie.
     public static func apply(_ enrichment: AttachmentEnrichment, into persistence: MessagePersistenceActor) async throws {
-        guard try await keepsEnrichments(of: enrichment.messageId, on: persistence) else { return }
+        guard try await verdict(on: enrichment.messageId, in: persistence) == .kept else { return }
         try await persistence.applyAttachmentEnrichment(
             messageId: enrichment.messageId,
             attachmentId: enrichment.attachmentId,
@@ -68,9 +77,31 @@ public enum MessageEnrichmentWriter {
 
     public static func save(_ translations: [TranslationData], into persistence: MessagePersistenceActor) async throws {
         let receivedAt = Date()
-        for translation in translations {
-            guard try await keepsEnrichments(of: translation.messageId, on: persistence) else { continue }
-            try await persistence.saveTranslation(record(of: translation, receivedAt: receivedAt))
+        try await keep(translations.map { record(of: $0, receivedAt: receivedAt) }, on: persistence)
+    }
+
+    /// Une traduction se juge sur sa ligne. Arrivée AVANT elle — `message:new` encore dans le flux d'écriture —, elle
+    /// l'attend et se juge à son arrivée (`replay`) : gravée orpheline, elle restait en clair sous une ligne qui
+    /// naissait chiffrée de bout en bout, déjà ouverte ou supprimée, et qu'aucun effacement ne visait plus.
+    static func keep(_ records: [TranslationRecord], on persistence: isolated MessagePersistenceActor) throws {
+        for record in records {
+            switch try verdict(on: record.messageLocalId, in: persistence) {
+            case .kept:
+                try persistence.saveTranslation(record)
+            case .withheld:
+                continue
+            case .awaitingRow:
+                persistence.rememberPendingRowEvent(record.messageLocalId) { $0.translations.append(record) }
+            }
+        }
+    }
+
+    /// La ligne vient d'arriver, et ce qui la visait avant elle s'y est appliqué : chaque traduction qui l'attendait
+    /// se juge sur elle, une seule fois.
+    static func replay(_ records: [TranslationRecord], on persistence: isolated MessagePersistenceActor) throws {
+        for record in records {
+            guard try verdict(on: record.messageLocalId, in: persistence) == .kept else { continue }
+            try persistence.saveTranslation(record)
         }
     }
 
@@ -88,9 +119,10 @@ public enum MessageEnrichmentWriter {
         )
     }
 
-    static func keepsEnrichments(of messageId: String, on persistence: isolated MessagePersistenceActor) throws -> Bool {
-        try persistence.dbWriter.read { db in
-            try MessageEnrichmentLaw.row(of: messageId, in: db).map { MessageEnrichmentLaw.keepsEnrichments(of: $0) } ?? true
+    static func verdict(on messageId: String, in persistence: isolated MessagePersistenceActor) throws -> Verdict {
+        try persistence.dbWriter.read { db -> Verdict in
+            guard let row = try MessageEnrichmentLaw.row(of: messageId, in: db) else { return .awaitingRow }
+            return MessageEnrichmentLaw.keepsEnrichments(of: row) ? .kept : .withheld
         }
     }
 }
