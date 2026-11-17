@@ -2,14 +2,6 @@ package me.meeshy.sdk.model
 
 import kotlinx.serialization.Serializable
 
-/** Type of a conversation participant — port of ParticipantType (ParticipantModels.swift). */
-@Serializable
-enum class ParticipantType {
-    USER,
-    ANONYMOUS,
-    BOT,
-}
-
 /** Per-participant send permissions — port of ParticipantPermissions (ParticipantModels.swift). */
 @Serializable
 data class ParticipantPermissions(
@@ -66,21 +58,6 @@ data class ParticipantPermissions(
     }
 }
 
-/** Anonymous user profile — port of AnonymousProfile (ParticipantModels.swift). */
-@Serializable
-data class AnonymousProfile(
-    val firstName: String = "",
-    val lastName: String = "",
-    val username: String = "",
-    val email: String? = null,
-    val birthday: String? = null,
-)
-
-@Serializable
-data class AnonymousSessionResponse(
-    val profile: AnonymousProfile,
-)
-
 /** A paginated conversation participant — port of PaginatedParticipant (ParticipantModels.swift). */
 @Serializable
 data class PaginatedParticipant(
@@ -110,30 +87,4 @@ data class PaginatedParticipantsPagination(
     val nextCursor: String? = null,
     val hasMore: Boolean = false,
     val totalCount: Int? = null,
-)
-
-/**
- * Full conversation participant embedded in conversation responses —
- * port of APIParticipant (ParticipantModels.swift). Named distinctly from
- * the lightweight [ApiParticipant] in Conversation.kt.
- */
-@Serializable
-data class ApiConversationParticipant(
-    val id: String,
-    val conversationId: String? = null,
-    val type: ParticipantType? = null,
-    val userId: String? = null,
-    val displayName: String? = null,
-    val avatar: String? = null,
-    val role: String? = null,
-    val conversationRole: String? = null,
-    val language: String? = null,
-    val permissions: ParticipantPermissions? = null,
-    val isActive: Boolean? = null,
-    val isOnline: Boolean? = null,
-    val joinedAt: String? = null,
-    val leftAt: String? = null,
-    val bannedAt: String? = null,
-    val nickname: String? = null,
-    val lastActiveAt: String? = null,
 )

@@ -1,16 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="profile_change_avatar">Change photo</string>
     <string name="profile_change_banner">Change cover photo</string>
     <string name="profile_image_error_empty">That file is empty. Pick another photo.</string>
     <string name="profile_image_error_type">Only images can be used here.</string>
     <string name="profile_image_error_too_large">That image is too large. Pick a smaller one.</string>
     <string name="profile_image_error_upload">Upload failed. Check your connection and try again.</string>
-    <string name="profile_member_since">Member since %1$s</string>
-    <string name="profile_last_seen">Last seen %1$s</string>
     <string name="profile_completion">Profile %1$d%% complete</string>
-    <string name="profile_detail_regional_language">Secondary language</string>
-    <string name="profile_detail_timezone">Time zone</string>
     <string name="profile_stat_member_days">Days as member</string>
     <string name="profile_achievements_title">Achievements</string>
     <string name="profile_achievements_unlocked">%1$d of %2$d unlocked</string>

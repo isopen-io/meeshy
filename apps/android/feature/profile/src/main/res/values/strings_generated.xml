@@ -14,7 +14,6 @@
     <string name="profile_action_send_message">Send a message</string>
     <string name="profile_activity_title">Activity</string>
     <string name="profile_avatar_edit">Edit profile photo</string>
-    <string name="profile_back">Back</string>
     <string name="profile_bio_label">Bio</string>
     <string name="profile_bio_placeholder">Tell us about yourself...</string>
     <string name="profile_blocked_by_me">You have blocked this user</string>
@@ -36,10 +35,7 @@
     <string name="profile_decor_shop">More in the shop</string>
     <string name="profile_decor_subtitle">Visible to everyone on your profile</string>
     <string name="profile_decor_title">Ring and banner</string>
-    <string name="profile_detail_country">Country</string>
-    <string name="profile_detail_system_language">Primary language</string>
     <string name="profile_display_name_label">Display name</string>
-    <string name="profile_e2ee">End-to-end encrypted</string>
     <string name="profile_e2ee_enabled">End-to-end encryption enabled</string>
     <string name="profile_edit">Edit</string>
     <string name="profile_email">Email</string>
@@ -51,7 +47,6 @@
     <string name="profile_language_none">None</string>
     <string name="profile_language_primary">Primary language</string>
     <string name="profile_language_regional">Regional language</string>
-    <string name="profile_language_unset">Not set</string>
     <string name="profile_last_name_label">Last name</string>
     <string name="profile_loadFailed_message">This profile couldn\'t be loaded.</string>
     <string name="profile_name_min_characters">At least %1$d characters.</string>
@@ -104,7 +99,6 @@
     <string name="profile_toast_unblock_failed">Unable to unblock</string>
     <string name="profile_toast_user_blocked">User blocked</string>
     <string name="profile_toast_user_unblocked">User unblocked</string>
-    <string name="profile_unknown">Unknown</string>
     <string name="profile_username">Username</string>
     <string name="profile_verified">Verified</string>
     <string name="profile_view_posts">Posts</string>
