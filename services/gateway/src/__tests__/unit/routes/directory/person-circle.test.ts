@@ -26,6 +26,7 @@ jest.mock('../../../../routes/users/presence-gate', () => ({
 }));
 
 import { directoryPersonRoutes } from '../../../../routes/directory/person';
+import { clearPrivacyPreferencesCache } from '../../../../services/preferences/privacy-cache';
 
 const CIBLE = '507f1f77bcf86cd799439011';
 const LECTEUR = '507f1f77bcf86cd799439022';
@@ -41,14 +42,32 @@ const lien = (parLecteur: string, parCible: string) => ({
   transitions: [],
 });
 
-function prismaDouble(row: ReturnType<typeof lien> | null) {
+type Cible = {
+  readonly privacy?: Record<string, boolean>;
+  readonly deactivatedAt?: Date | null;
+  readonly birthDate?: Date | null;
+  readonly lecteurBloqueCible?: boolean;
+};
+
+function prismaDouble(row: ReturnType<typeof lien> | null, cible: Cible = {}) {
   return {
+    userPreferences: {
+      findMany: jest.fn<any>(async () => (cible.privacy ? [{ userId: CIBLE, privacy: cible.privacy }] : [])),
+    },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
     user: {
       findMany: jest.fn<any>(async (args: any) =>
-        (args?.where?.blockedUserIds ? [] : args?.where?.id?.in ?? []).map((id: string) => ({ id, role: 'USER', birthDate: null, isActive: true, deletedAt: null, deactivatedAt: null })),
+        (args?.where?.blockedUserIds ? [] : args?.where?.id?.in ?? []).map((id: string) => ({
+          id,
+          role: 'USER',
+          birthDate: id === CIBLE ? cible.birthDate ?? null : null,
+          isActive: true,
+          deletedAt: null,
+          deactivatedAt: id === CIBLE ? cible.deactivatedAt ?? null : null,
+        })),
       ),
       findFirst: jest.fn<any>(async (args?: any) =>
-        args?.where?.blockedUserIds
+        args?.where?.blockedUserIds || args?.where?.OR
           ? null
           : {
               id: CIBLE,
@@ -56,14 +75,14 @@ function prismaDouble(row: ReturnType<typeof lien> | null) {
               role: 'USER',
               isOnline: true,
               lastActiveAt: new Date(),
-              deactivatedAt: null,
+              deactivatedAt: cible.deactivatedAt ?? null,
               createdAt: new Date('2025-01-01T00:00:00Z'),
               registrationCountry: 'FR',
               timezone: 'Europe/Paris',
               voiceModel: null,
             },
       ),
-      findUnique: jest.fn<any>(async () => ({ blockedUserIds: [], createdAt: new Date('2025-01-01') })),
+      findUnique: jest.fn<any>(async () => ({ blockedUserIds: cible.lecteurBloqueCible ? [CIBLE] : [], createdAt: new Date('2025-01-01') })),
     },
     userRelation: { findUnique: jest.fn<any>(async () => row), findMany: jest.fn<any>(async () => (row ? [row] : [])) },
     friendRequest: { findFirst: jest.fn<any>(async () => null), findMany: jest.fn<any>(async () => []), count: jest.fn<any>(async () => 0) },
@@ -74,9 +93,10 @@ function prismaDouble(row: ReturnType<typeof lien> | null) {
   };
 }
 
-async function monter(viewerId: string | null, row: ReturnType<typeof lien> | null): Promise<FastifyInstance> {
+async function monter(viewerId: string | null, row: ReturnType<typeof lien> | null, cible: Cible = {}): Promise<FastifyInstance> {
+  clearPrivacyPreferencesCache();
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', prismaDouble(row) as never);
+  app.decorate('prisma', prismaDouble(row, cible) as never);
   (app as unknown as { redis?: unknown }).redis = undefined;
   app.addHook('onRequest', async (req: any) => {
     req.authContext = viewerId
@@ -223,6 +243,106 @@ describe('?as=<cercle> — « Voir comme », réservé au propriétaire', () => 
   it('un cercle inconnu est refusé (400)', async () => {
     const app = await monter(CIBLE, null);
     expect((await lire(app, '?as=TOUT')).statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+describe('pays et fuseau suivent la présence SERVIE — préférences et désactivation de la cible (#18861, audit)', () => {
+  it('Proche, la cible a caché sa présence : ni fuseau ni pays, à côté d une présence masquée', async () => {
+    const app = await monter(LECTEUR, lien('CLOSE', 'CLOSE'), { privacy: { showOnlineStatus: false, showLastSeen: false } });
+    const data = (await lire(app, '?expand=presence')).json().data as Charge;
+    expect(data.isOnline ?? null).toBeNull();
+    expect('timezone' in data).toBe(false);
+    expect('registrationCountry' in data).toBe(false);
+    await app.close();
+  });
+
+  it('Proche, la cible a caché sa dernière vue seulement : le pays part, l heure locale non', async () => {
+    const app = await monter(LECTEUR, lien('CLOSE', 'CLOSE'), { privacy: { showLastSeen: false } });
+    const data = (await lire(app, '')).json().data as Charge;
+    expect(data.registrationCountry).toBe('FR');
+    expect('timezone' in data).toBe(false);
+    await app.close();
+  });
+
+  it('Proche, compte désactivé : ni fuseau ni pays', async () => {
+    const app = await monter(LECTEUR, lien('CLOSE', 'CLOSE'), { deactivatedAt: new Date('2026-11-01T00:00:00Z') });
+    const data = (await lire(app, '')).json().data as Charge;
+    expect('timezone' in data).toBe(false);
+    expect('registrationCountry' in data).toBe(false);
+    await app.close();
+  });
+
+  it('Proche, rien de caché : pays et fuseau partent (témoin de non-régression)', async () => {
+    const app = await monter(LECTEUR, lien('CLOSE', 'CLOSE'), { privacy: { showOnlineStatus: true, showLastSeen: true } });
+    const data = (await lire(app, '')).json().data as Charge;
+    expect(data.registrationCountry).toBe('FR');
+    expect(data.timezone).toBe('Europe/Paris');
+    await app.close();
+  });
+});
+
+const MINEURE = new Date(Date.now() - 15 * 365 * 24 * 3600 * 1000);
+
+describe('« Voir comme » rend ce qu un VRAI lecteur du cercle reçoit — préférences, âge et rôle du propriétaire (#18861, audit)', () => {
+  it('dernière vue cachée, vu comme Proche : ni heure locale ni dernière vue', async () => {
+    const app = await monter(CIBLE, null, { privacy: { showLastSeen: false } });
+    const data = (await lire(app, '?as=CLOSE&expand=presence,circle')).json().data as Charge;
+    expect('timezone' in data).toBe(false);
+    expect(data.lastActiveAt ?? null).toBeNull();
+    expect(data.registrationCountry).toBe('FR');
+    await app.close();
+  });
+
+  it('présence cachée, vu comme Proche : ni « en ligne » ni pays', async () => {
+    const app = await monter(CIBLE, null, { privacy: { showOnlineStatus: false } });
+    const data = (await lire(app, '?as=CLOSE&expand=presence,circle')).json().data as Charge;
+    expect(data.isOnline ?? null).toBeNull();
+    expect('registrationCountry' in data).toBe(false);
+    expect('timezone' in data).toBe(false);
+    await app.close();
+  });
+
+  it('propriétaire mineur déclaré, vu comme Connaissance : l appel se ferme comme pour un vrai lecteur', async () => {
+    const app = await monter(CIBLE, null, { birthDate: MINEURE });
+    const data = (await lire(app, '?as=ACQUAINTANCE&expand=circle')).json().data as Charge;
+    expect(data.circle.capabilities.ring.state).toBe('locked');
+    expect(data.circle.capabilities.messageRequest.state).toBe('open');
+    await app.close();
+  });
+
+  it('sans préférence, vu comme Proche : pays, fuseau, en ligne et dernière vue (non-régression)', async () => {
+    const app = await monter(CIBLE, null);
+    const data = (await lire(app, '?as=CLOSE&expand=presence,circle')).json().data as Charge;
+    expect(data.registrationCountry).toBe('FR');
+    expect(data.timezone).toBe('Europe/Paris');
+    expect(data.isOnline).toBe(true);
+    expect(data.lastActiveAt).toEqual(expect.any(String));
+    await app.close();
+  });
+});
+
+describe('?expand=circle vers une cible bloquée ou désactivée : aucun accord, tout fermé (#18861, audit)', () => {
+  const sansAccord = (circle: Charge) => {
+    expect('grantedByViewer' in circle).toBe(false);
+    expect('grantedByTarget' in circle).toBe(false);
+    expect('missing' in circle).toBe(false);
+    const etats = Object.entries(circle.capabilities as Record<string, Charge>).map(([cle, etat]) => [cle, etat.state]);
+    expect(etats.length).toBeGreaterThan(10);
+    expect(etats).toEqual(etats.map(([cle]) => [cle, 'locked']));
+  };
+
+  it('le lecteur a bloqué la cible : ni les accords ni ce qui manque, rien d ouvert', async () => {
+    const app = await monter(LECTEUR, lien('CLOSE', 'FRIEND'), { lecteurBloqueCible: true });
+    const data = (await lire(app, '?expand=circle')).json().data as Charge;
+    sansAccord(data.circle);
+    await app.close();
+  });
+
+  it('la cible est désactivée : ni les accords ni ce qui manque, rien d ouvert', async () => {
+    const app = await monter(LECTEUR, lien('BLOOD', 'BLOOD'), { deactivatedAt: new Date('2026-11-01T00:00:00Z') });
+    const data = (await lire(app, '?expand=circle')).json().data as Charge;
+    sansAccord(data.circle);
     await app.close();
   });
 });
