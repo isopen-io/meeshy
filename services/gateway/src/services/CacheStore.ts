@@ -6,6 +6,9 @@ import { guardedInterval } from '../utils/guarded-timer';
 
 const logger = enhancedLogger.child({ module: 'CacheStore' });
 
+const SET_IF_EQUALS_SCRIPT =
+  "if redis.call('GET', KEYS[1]) == ARGV[1] then redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3]) return 1 end return 0";
+
 interface MemoryCacheEntry {
   value: string;
   expiresAt: number;
@@ -17,6 +20,7 @@ export type CacheStore = {
   del(key: string): Promise<void>;
   keys(pattern: string): Promise<string[]>;
   setnx(key: string, value: string, ttlSeconds?: number): Promise<boolean>;
+  setIfEquals(key: string, expected: string, value: string, ttlSeconds: number): Promise<boolean>;
   expire(key: string, seconds: number): Promise<boolean>;
   publish(channel: string, message: string): Promise<number>;
   info(section?: string): Promise<string>;
@@ -201,6 +205,31 @@ export class RedisCacheStore implements CacheStore {
 
     const existing = this.getMemory(key);
     if (existing !== null) {
+      return false;
+    }
+    this.setMemory(key, value, ttlSeconds);
+    return true;
+  }
+
+  /**
+   * Remplace la valeur SEULEMENT si la clé porte encore `expected`, d'un seul
+   * coup (#19281) : un `get` suivi d'un `set` laisse passer un effacement entre
+   * les deux. Côté Redis, un script ; côté mémoire, aucune attente entre la
+   * comparaison et l'écriture. Une clé absente n'est jamais recréée.
+   */
+  async setIfEquals(key: string, expected: string, value: string, ttlSeconds: number): Promise<boolean> {
+    if (this.redis) {
+      try {
+        const written = await this.circuitBreaker.execute(
+          () => this.redis!.eval(SET_IF_EQUALS_SCRIPT, 1, key, expected, value, String(ttlSeconds))
+        );
+        return written === 1;
+      } catch {
+        // fall through to memory
+      }
+    }
+
+    if (this.getMemory(key) !== expected) {
       return false;
     }
     this.setMemory(key, value, ttlSeconds);

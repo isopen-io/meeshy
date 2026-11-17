@@ -25,6 +25,12 @@ jest.mock('../../../services/CacheStore', () => {
     set: jest.fn(async (key: string, value: string, ttl?: number) => {
       store.set(key, { value, expiresAt: Date.now() + (ttl || 3600) * 1000 });
     }),
+    setIfEquals: jest.fn(async (key: string, expected: string, value: string, ttl: number) => {
+      const entry = store.get(key);
+      if (!entry || entry.expiresAt <= Date.now() || entry.value !== expected) return false;
+      store.set(key, { value, expiresAt: Date.now() + ttl * 1000 });
+      return true;
+    }),
     del: jest.fn(async (key: string) => { store.delete(key); }),
     keys: jest.fn(async () => []),
     setnx: jest.fn(async () => true),
@@ -133,4 +139,71 @@ describe('AuthMiddleware — la lecture concurrente ne ressuscite pas une ligne 
 
     expect(ctx.registeredUser?.displayName).toBe('Alicia');
   });
+
+  it('un effacement qui tombe juste après la première opération de cache suivant la lecture ne laisse pas l’ancienne ligne en cache', async () => {
+    const { getCacheStore, __mockStoreMap } = require('../../../services/CacheStore');
+    const cache = getCacheStore();
+    let readDone = false;
+    let writerLanded = false;
+    const writerAfter = (name: 'get' | 'set' | 'setIfEquals') => {
+      const plain = cache[name].getMockImplementation();
+      cache[name].mockImplementation(async (...args: unknown[]) => {
+        const out = await plain(...args);
+        if (readDone && !writerLanded) {
+          writerLanded = true;
+          __mockStoreMap.delete(CACHE_KEY);
+        }
+        return out;
+      });
+      return () => cache[name].mockImplementation(plain);
+    };
+    const restore = (['get', 'set', 'setIfEquals'] as const).map(writerAfter);
+    const findUnique = jest.fn(async () => {
+      readDone = true;
+      return userRow();
+    });
+    const middleware = new AuthMiddleware(prismaReading(findUnique));
+
+    await middleware.createAuthContext(bearer());
+
+    restore.forEach((undo) => undo());
+    expect(writerLanded).toBe(true);
+    expect(await cache.get(CACHE_KEY)).toBeNull();
+  });
+
+  it('la réservation n’est pas du JSON : une passerelle d’avant #19281 la lit comme une absence, jamais comme un compte désactivé', async () => {
+    const { getCacheStore } = require('../../../services/CacheStore');
+    const cache = getCacheStore();
+    let reservation: string | null = null;
+    const findUnique = jest.fn(async () => {
+      reservation = await cache.get(CACHE_KEY);
+      return userRow();
+    });
+    const middleware = new AuthMiddleware(prismaReading(findUnique));
+
+    await middleware.createAuthContext(bearer());
+
+    expect(reservation).not.toBeNull();
+    expect(() => JSON.parse(reservation as unknown as string)).toThrow();
+  });
+
+  it('une réservation en place est lue comme une absence : la ligne est relue en base', async () => {
+    const { getCacheStore } = require('../../../services/CacheStore');
+    const cache = getCacheStore();
+    const findUnique = jest.fn(async () => userRow({ displayName: 'Alicia' }));
+    const middleware = new AuthMiddleware(prismaReading(findUnique));
+    let reservation: string | null = null;
+    findUnique.mockImplementationOnce(async () => {
+      reservation = await cache.get(CACHE_KEY);
+      return userRow({ displayName: 'Alicia' });
+    });
+    await middleware.createAuthContext(bearer());
+    await cache.set(CACHE_KEY, reservation as unknown as string, 10);
+
+    const ctx = await middleware.createAuthContext(bearer());
+
+    expect(findUnique).toHaveBeenCalledTimes(2);
+    expect(ctx.registeredUser?.displayName).toBe('Alicia');
+  });
 });
+
