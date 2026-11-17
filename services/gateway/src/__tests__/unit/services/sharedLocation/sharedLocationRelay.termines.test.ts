@@ -15,6 +15,9 @@ import {
   startSharedLocation,
   stopSharedLocation,
 } from '../../../../services/sharedLocation/sharedLocationRelay';
+import fastJson from 'fast-json-stringify';
+import { exportSharedLocationEnds } from '../../../../services/sharedLocation/sharedLocationEnds';
+import { relationsExportSchema } from '../../../../routes/me/export-relations';
 import { AMI, BLOQUEUR, CONNAISSANCE, demarrer, EMETTEUR, HEURE, monde, NON_CHOISI, PARIS, PROCHE, SANG, T0 } from '../../../helpers/shared-location-relay-world';
 
 const KEY = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
@@ -148,5 +151,30 @@ describe('la loi relue à chaque lecture, et le compte qui part', () => {
 
     expect(await sharedLocationEndedFor(m.deps, AMI)).toEqual([]);
     expect([...m.cache.entries.keys()].filter((key) => key.startsWith('shared-location-ends:'))).toEqual([]);
+  });
+});
+
+describe('l\'export RGPD de l\'émetteur — à qui ses partages récents ont servi sa position (#19202)', () => {
+  it('l\'émetteur exporte chaque personne servie, son échéance et sa précision ; un lecteur n\'exporte rien de l\'émetteur', async () => {
+    const m = monde();
+    await demarrer(m);
+    m.avancer(5 * MINUTE);
+    await stopSharedLocation(m.deps, EMETTEUR);
+
+    const export_ = await exportSharedLocationEnds(m.cache, EMETTEUR, T0 + 5 * MINUTE);
+    expect([...export_].sort((a, b) => a.userId.localeCompare(b.userId))).toEqual(
+      [
+        { userId: AMI, endsAt: iso(T0 + 5 * MINUTE), precision: 'exact' },
+        { userId: PROCHE, endsAt: iso(T0 + 5 * MINUTE), precision: 'neighborhood' },
+        { userId: SANG, endsAt: iso(T0 + 5 * MINUTE), precision: 'city' },
+      ].sort((a, b) => a.userId.localeCompare(b.userId)),
+    );
+    expect(await exportSharedLocationEnds(m.cache, AMI, T0 + 5 * MINUTE)).toEqual([]);
+  });
+
+  it('la section `relations` de l\'export déclare ces fins champ par champ', () => {
+    const serialize = fastJson(relationsExportSchema as unknown as Parameters<typeof fastJson>[0]);
+    const fin = { userId: AMI, endsAt: iso(T0), precision: 'exact' };
+    expect(JSON.parse(serialize({ sharedLocationEnds: [{ ...fin, latitude: 48.85 }] })).sharedLocationEnds).toEqual([fin]);
   });
 });
