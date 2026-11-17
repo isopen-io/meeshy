@@ -559,6 +559,10 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     /// autres. `nil` = un ancien serveur ne le sert pas : le profil se rend comme avant.
     public let profileDecor: ServedProfileDecor?
 
+    /// Les adresses que cette fiche me sert (#18863, face Liens #18871) ; `nil` = un ancien serveur, ou aucune ouverte
+    /// à mon cercle. Jamais une adresse que mon cercle n'ouvre : le serveur filtre, le client ne fait que montrer.
+    public let addresses: ServedProfileAddresses?
+
     public init(
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
@@ -584,7 +588,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         voiceSampleDurationMs: Int? = nil,
         voiceQuality: Double? = nil,
         activation: UserActivation? = nil,
-        profileDecor: ServedProfileDecor? = nil
+        profileDecor: ServedProfileDecor? = nil,
+        addresses: ServedProfileAddresses? = nil
     ) {
         self.id = id
         self.username = username
@@ -625,6 +630,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.voiceQuality = voiceQuality
         self.activation = activation
         self.profileDecor = profileDecor
+        self.addresses = addresses
     }
 
     /// Le même compte avec un autre décor de profil (équipement optimiste, événement socket).
@@ -656,7 +662,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
             activation: activation,
-            profileDecor: decor
+            profileDecor: decor,
+            addresses: addresses
         )
     }
 
@@ -703,7 +710,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
             activation: activation,
-            profileDecor: profileDecor
+            profileDecor: profileDecor,
+            addresses: addresses
         )
     }
 

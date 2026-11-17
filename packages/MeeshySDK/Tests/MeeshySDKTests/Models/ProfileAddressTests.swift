@@ -95,4 +95,62 @@ struct ProfileAddressTests {
         let sparse = try JSONSerialization.jsonObject(with: JSONEncoder().encode(partial)) as? [String: Any]
         #expect(sparse?.keys.sorted() == ["isShown"])
     }
+
+    // MARK: - Ce qu'une fiche me sert
+
+    @Test func aProfileCarriesTheAddressesItServesMe() throws {
+        let json = """
+        {"id":"u2","username":"leo.m","addresses":[
+          {"id":"a","title":"Portfolio","url":"https://leomarchetti.photo","glyph":"site","trackedPath":"/l/tok"}]}
+        """
+        let user = try JSONDecoder().decode(MeeshyUser.self, from: Data(json.utf8))
+        #expect(user.addresses?.items.map(\.title) == ["Portfolio"])
+        #expect(user.addresses?.items.first?.circle == nil)
+        #expect(user.addresses?.items.first?.trackedPath == "/l/tok")
+    }
+
+    @Test func anUnreadableAddressIsSkippedWithoutLosingTheProfile() throws {
+        let json = """
+        {"id":"u2","username":"leo.m","addresses":[{"title":"sans id"},
+          {"id":"b","title":"Tirages","url":"https://leomarchetti.photo/boutique","glyph":"shop"}]}
+        """
+        let user = try JSONDecoder().decode(MeeshyUser.self, from: Data(json.utf8))
+        #expect(user.username == "leo.m")
+        #expect(user.addresses?.items.map(\.id) == ["b"])
+    }
+
+    @Test func anOldServerOrAStrangeShapeServesNoAddress() throws {
+        let old = try JSONDecoder().decode(MeeshyUser.self, from: Data(#"{"id":"u2","username":"leo.m"}"#.utf8))
+        #expect(old.addresses == nil)
+        let strange = try JSONDecoder().decode(MeeshyUser.self, from: Data(#"{"id":"u2","username":"leo.m","addresses":{"x":1}}"#.utf8))
+        #expect(strange.addresses?.items.isEmpty == true)
+    }
+
+    @Test func servedAddressesSurviveTheProfileCache() throws {
+        let user = MeeshyUser(id: "u2", username: "leo.m",
+                              addresses: ServedProfileAddresses([ProfileAddress(id: "a", title: "Site", url: "https://a.io")]))
+        let again = try JSONDecoder().decode(MeeshyUser.self, from: JSONEncoder().encode(user))
+        #expect(again.addresses == user.addresses)
+    }
+
+    @Test func aProfileCopyKeepsItsAddresses() {
+        let served = ServedProfileAddresses([ProfileAddress(id: "a", title: "Site", url: "https://a.io")])
+        let user = MeeshyUser(id: "u2", username: "leo.m", addresses: served)
+        #expect(user.withProfileChanges(displayName: "Léo").addresses == served)
+        #expect(user.withProfileDecor(nil).addresses == served)
+    }
+
+    @Test func openingGoesThroughTheTrackingLinkWhenClicksAreCounted() {
+        let tracked = ProfileAddress(id: "a", title: "Site", url: "https://leomarchetti.photo", trackedPath: "/l/tok")
+        let direct = ProfileAddress(id: "b", title: "Site", url: "https://leomarchetti.photo/boutique")
+        #expect(tracked.opening(webOrigin: "https://meeshy.me")?.absoluteString == "https://meeshy.me/l/tok")
+        #expect(direct.opening(webOrigin: "https://meeshy.me")?.absoluteString == "https://leomarchetti.photo/boutique")
+        #expect(tracked.host == "leomarchetti.photo")
+    }
+
+    @Test func openingRefusesAnythingButTheWeb() {
+        let hostile = ProfileAddress(id: "x", title: "X", url: "javascript:alert(1)", trackedPath: "javascript:alert(1)")
+        #expect(hostile.opening(webOrigin: "https://meeshy.me") == nil)
+    }
 }
+

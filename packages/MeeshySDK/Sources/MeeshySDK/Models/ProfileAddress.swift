@@ -74,6 +74,22 @@ public struct ProfileAddress: Codable, Identifiable, Sendable, Equatable, CacheI
         try container.encodeIfPresent(trackedPath, forKey: .trackedPath)
     }
 
+    /// Où mène le geste d'ouvrir : par son lien de suivi quand elle compte ses clics (le clic se compte, la loi de
+    /// cercle se rejoue au serveur), sinon l'adresse elle-même. Jamais autre chose que du http(s).
+    public func opening(webOrigin: String) -> URL? {
+        if let trackedPath, trackedPath.hasPrefix("/l/"), let tracked = URL(string: webOrigin + trackedPath) {
+            return tracked
+        }
+        guard let direct = URL(string: url), let scheme = direct.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else { return nil }
+        return direct
+    }
+
+    /// Le site où l'on part, dit avant de quitter Meeshy.
+    public var host: String {
+        URL(string: url)?.host ?? displayURL
+    }
+
     /// L'adresse telle qu'on la lit, en chasse fixe : sans schéma ni barre finale.
     public var displayURL: String {
         var text = url
@@ -170,5 +186,41 @@ public enum ProfileAddressRules {
               let last = labels.last, String(last).range(of: "^[a-z][a-z0-9-]*$", options: .regularExpression) != nil,
               host != "localhost" else { return false }
         return !internalSuffixes.contains { host.hasSuffix($0) }
+    }
+}
+
+/// Les adresses qu'une fiche SERT à son lecteur (#18863) : seulement celles que son cercle ouvre, dans l'ordre du
+/// propriétaire, sans rang ni clics — le cercle ne part qu'au propriétaire. Lues avec indulgence : une entrée
+/// illisible se saute, et une forme inattendue vaut « aucune », jamais la perte du profil entier.
+public struct ServedProfileAddresses: Codable, Sendable, Equatable {
+    public let items: [ProfileAddress]
+
+    public init(_ items: [ProfileAddress]) {
+        self.items = items
+    }
+
+    private struct Skipped: Decodable {
+        init(from decoder: Decoder) throws {}
+    }
+
+    public init(from decoder: Decoder) throws {
+        guard var container = try? decoder.unkeyedContainer() else {
+            items = []
+            return
+        }
+        var read: [ProfileAddress] = []
+        while !container.isAtEnd {
+            if let address = try? container.decode(ProfileAddress.self) {
+                read.append(address)
+            } else if (try? container.decode(Skipped.self)) == nil {
+                break
+            }
+        }
+        items = read
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(items)
     }
 }

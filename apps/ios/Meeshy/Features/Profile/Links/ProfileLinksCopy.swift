@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// Les mots de la face Liens (#18871) : mon lien de profil, sa carte, le partage sans contact, mes adresses et mes
 /// liens créés. Les cercles se nomment par `CircleLevelNames`.
@@ -53,18 +54,7 @@ nonisolated enum ProfileLinksCopy {
             .joined(separator: ", ")
     }
 
-    static func glyph(of glyph: ProfileAddressGlyph) -> String {
-        switch glyph {
-        case .site: return "globe.europe.africa"
-        case .music: return "music.note"
-        case .photos: return "camera"
-        case .videos: return "film"
-        case .shop: return "storefront"
-        case .contact: return "envelope"
-        case .agenda: return "calendar"
-        case .favorite: return "heart"
-        }
-    }
+    static func glyph(of glyph: ProfileAddressGlyph) -> String { glyph.systemImage }
 
     static func glyphName(_ glyph: ProfileAddressGlyph) -> String {
         switch glyph {

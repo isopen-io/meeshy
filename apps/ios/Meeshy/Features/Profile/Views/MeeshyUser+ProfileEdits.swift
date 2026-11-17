@@ -64,7 +64,8 @@ extension MeeshyUser {
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
             activation: activation,
-            profileDecor: profileDecor
+            profileDecor: profileDecor,
+            addresses: addresses
         )
     }
 }
