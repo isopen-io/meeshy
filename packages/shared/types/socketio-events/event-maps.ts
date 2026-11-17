@@ -178,10 +178,12 @@ import type {
 } from './friend-request.js';
 import type { LinkMessageNewEventData } from './link.js';
 import type {
+  RelationLevelLoweredEventData,
   RelationLevelRaisedEventData,
   RelationRitualCompletedEventData,
   RelationRitualProgressEventData,
   RelationRitualStartedEventData,
+  UserBlockedByMeEventData,
 } from './relation.js';
 import type { BringRingEventData, BringStoppedEventData } from '../bring.js';
 import type {
@@ -405,6 +407,9 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED]: (data: FriendRequestAcceptedEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_REJECTED]: (data: FriendRequestRejectedEventData) => void;
   [SERVER_EVENTS.RELATION_LEVEL_RAISED]: (data: RelationLevelRaisedEventData) => void;
+  [SERVER_EVENTS.RELATION_LEVEL_LOWERED]: (data: RelationLevelLoweredEventData) => void;
+  [SERVER_EVENTS.USER_BLOCKED_BY_ME]: (data: UserBlockedByMeEventData) => void;
+  [SERVER_EVENTS.USER_UNBLOCKED_BY_ME]: (data: UserBlockedByMeEventData) => void;
   [SERVER_EVENTS.RELATION_RITUAL_STARTED]: (data: RelationRitualStartedEventData) => void;
   [SERVER_EVENTS.RELATION_RITUAL_PROGRESS]: (data: RelationRitualProgressEventData) => void;
   [SERVER_EVENTS.RELATION_RITUAL_COMPLETED]: (data: RelationRitualCompletedEventData) => void;

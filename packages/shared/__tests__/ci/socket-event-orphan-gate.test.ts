@@ -54,6 +54,9 @@ const SANS_LECTEUR: ReadonlyMap<string, string> = new Map([
   ['call:translation-requested', 'ni émis ni lu — dette de contrat.'],
   ['e2ee:verification', 'ÉMIS — `E2EEDeviceVerificationRelay` vers la room de la génération destinataire (#19156). Les lecteurs sont les lots clients de la confirmation par code (iOS lot 4, Android lot 5, web lot 6, spec 2026-11-17 § 10) ; `GET /e2ee/devices/self/verifications` relit sans la socket.'],
   ['e2ee:own-device-enrolled', 'ÉMIS — `own-device-announcements.ts` à chaque enrôlement d\'une génération neuve ou de retour (#19156). Lecteurs : lots clients 4, 5 et 6 ; le rapprochement par `GET /e2ee/devices` ne dépend pas de l\'événement.'],
+  ['relation:level-lowered', "ÉMIS — `emitRelationLevelLowered` (`socketio/relationEvents.ts`) vers la SEULE room de l'acteur après `POST /relations/:userId/level` (#19366). Lecteurs : les clients du profil (#18857) ; d'ici là chacun relit `GET /relations/:userId`."],
+  ['user:blocked-by-me', "ÉMIS — `emitBlockedByMe` vers la SEULE room de l'acteur après `PUT /directory/blocks/:id` et son alias (#19366). Lecteurs : les clients du profil (#18857) ; d'ici là chacun relit `GET /directory/blocks`."],
+  ['user:unblocked-by-me', "ÉMIS — `emitBlockedByMe` vers la SEULE room de l'acteur après `DELETE /directory/blocks/:id` et son alias (#19366). Lecteurs : les clients du profil (#18857)."],
   ['e2ee:own-device-retired', 'ÉMIS — `own-device-announcements.ts` au retrait d\'une génération (#19156). Lecteurs : lots clients 4, 5 et 6.'],
 ]);
 
