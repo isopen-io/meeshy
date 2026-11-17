@@ -20,7 +20,9 @@ class CommunityMemberEventsTest {
     )
 
     private fun change(userId: String = "u3", role: MemberRole? = MemberRole.MEMBER, memberCount: Int = 3, communityId: String = "c1") =
-        CommunityMemberChange(communityId, userId, memberCount, role)
+        CommunityMemberChange(kindOf(role), communityId, userId, memberCount, role)
+
+    private fun kindOf(role: MemberRole?) = if (role == null) CommunityMemberChange.Kind.LEFT else CommunityMemberChange.Kind.JOINED
 
     @Test
     fun `la charge member-joined se decode cle par cle`() {
@@ -50,7 +52,9 @@ class CommunityMemberEventsTest {
             CommunityMemberRoleUpdatedEvent.serializer(),
             """{"communityId":"c1","userId":"u2","role":"admin","memberCount":2,"at":"2026-11-17T12:00:00.000Z"}""",
         )
-        assertThat(decoded.change).isEqualTo(change(userId = "u2", role = MemberRole.ADMIN, memberCount = 2))
+        assertThat(decoded.change).isEqualTo(
+            change(userId = "u2", role = MemberRole.ADMIN, memberCount = 2).copy(kind = CommunityMemberChange.Kind.ROLE_UPDATED),
+        )
     }
 
     @Test

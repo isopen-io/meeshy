@@ -17,7 +17,7 @@ data class CommunityMemberJoinedEvent(
     val at: String? = null,
 ) {
     val change: CommunityMemberChange?
-        get() = CommunityMemberChange.of(communityId, userId, memberCount, CommunityMemberChange.roleOf(role) ?: return null)
+        get() = CommunityMemberChange.roleOf(role)?.let { CommunityMemberChange.of(CommunityMemberChange.Kind.JOINED, communityId, userId, memberCount, it) }
 }
 
 /** `community:member-left` — miroir de `CommunityMemberLeftEventData` (`reason` : `left` | `removed`). */
@@ -30,7 +30,7 @@ data class CommunityMemberLeftEvent(
     val at: String? = null,
 ) {
     val change: CommunityMemberChange?
-        get() = CommunityMemberChange.of(communityId, userId, memberCount, role = null)
+        get() = CommunityMemberChange.of(CommunityMemberChange.Kind.LEFT, communityId, userId, memberCount, role = null)
 }
 
 /** `community:member-role-updated` — miroir de `CommunityMemberRoleUpdatedEventData`. */
@@ -43,7 +43,7 @@ data class CommunityMemberRoleUpdatedEvent(
     val at: String? = null,
 ) {
     val change: CommunityMemberChange?
-        get() = CommunityMemberChange.of(communityId, userId, memberCount, CommunityMemberChange.roleOf(role) ?: return null)
+        get() = CommunityMemberChange.roleOf(role)?.let { CommunityMemberChange.of(CommunityMemberChange.Kind.ROLE_UPDATED, communityId, userId, memberCount, it) }
 }
 
 /**
@@ -53,23 +53,27 @@ data class CommunityMemberRoleUpdatedEvent(
  * personne, à l'effectif négatif ou au rôle inconnu ne se lit pas.
  */
 data class CommunityMemberChange(
+    val kind: Kind,
     val communityId: String,
     val userId: String,
     val memberCount: Int,
     val role: MemberRole?,
 ) {
-    val hasLeft: Boolean get() = role == null
+    /** Le geste : une entrée, un départ (d'elle-même ou retirée), un rôle changé. */
+    enum class Kind { JOINED, LEFT, ROLE_UPDATED }
+
+    val hasLeft: Boolean get() = kind == Kind.LEFT
 
     companion object {
         private val ROLES = listOf(MemberRole.ADMIN, MemberRole.MODERATOR, MemberRole.MEMBER)
 
         fun roleOf(raw: String): MemberRole? = ROLES.firstOrNull { it.wireValue == raw }
 
-        fun of(communityId: String, userId: String, memberCount: Int, role: MemberRole?): CommunityMemberChange? =
+        fun of(kind: Kind, communityId: String, userId: String, memberCount: Int, role: MemberRole?): CommunityMemberChange? =
             if (communityId.isEmpty() || userId.isEmpty() || memberCount < 0) {
                 null
             } else {
-                CommunityMemberChange(communityId, userId, memberCount, role)
+                CommunityMemberChange(kind, communityId, userId, memberCount, role)
             }
     }
 }
