@@ -77,7 +77,7 @@ function makePrisma() {
 
 async function patch(payload: Record<string, unknown>) {
   const prisma = makePrisma();
-  const app = Fastify({ logger: false, ajv: { customOptions: { strict: 'log', keywords: ['example'] } } });
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: 'log' as const, keywords: ['example'] } } });
   app.decorate('prisma', prisma as any);
   app.decorate('authenticate', async (req: FastifyRequest) => {
     (req as any).authContext = { isAuthenticated: true, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER', username: 'alice' } };
