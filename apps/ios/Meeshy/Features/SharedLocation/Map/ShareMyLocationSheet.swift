@@ -23,6 +23,11 @@ struct ShareMyLocationSheet: View {
     @State private var duration: SharedLocationShareDuration = .oneHour
     @State private var precision: SharedLocationPrecision = .city
     @State private var openNoteID: String?
+    /// La position m'est refusée par le téléphone (planche `Etat-Erreur` vue 5) : le bloc d'état remplace le formulaire
+    /// jusqu'au retour dans l'app, où le formulaire revient pour un nouvel essai.
+    @State private var locationDenied = false
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
     private var theme: ThemeManager { ThemeManager.shared }
@@ -39,6 +44,8 @@ struct ShareMyLocationSheet: View {
                 header
                 if let sharing = activeShare {
                     activeSection(sharing)
+                } else if locationDenied {
+                    deniedState
                 } else {
                     durationSection
                     precisionSection
@@ -49,6 +56,24 @@ struct ShareMyLocationSheet: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .adaptiveOnChange(of: scenePhase) { _, phase in
+            if phase == .active { locationDenied = false }
+        }
+    }
+
+    private var deniedState: some View {
+        MeeshyStateBlock(
+            kind: .denied,
+            title: ShareMyLocationCopy.deniedTitle,
+            message: ShareMyLocationCopy.deniedMessage,
+            primary: MeeshyStateBlockAction(title: ShareMyLocationCopy.openSettings, systemImage: "gearshape") {
+                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                openURL(url)
+            },
+            art: .none,
+            systemImage: "location.slash"
+        )
+        .accessibilityIdentifier("sharedLocation.share.denied")
     }
 
     // MARK: - En-tête
@@ -201,6 +226,10 @@ struct ShareMyLocationSheet: View {
         let targets = recipients.filter { chosen.contains($0.userId) }
         for target in targets {
             if let problem = await center.share(with: target.userId, precision: precision, duration: duration) {
+                guard problem != .locationDenied else {
+                    locationDenied = true
+                    return
+                }
                 FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
                 return
             }
@@ -231,6 +260,15 @@ enum ShareMyLocationCopy {
     static var hoursUnit: String { String(localized: "locationMap.share.hours", defaultValue: "heures", bundle: .main) }
     static var untilStopped: String { String(localized: "locationMap.share.untilStopped", defaultValue: "Jusqu'à ce que j'arrête", bundle: .main) }
     static var bloodOnly: String { String(localized: "locationMap.share.bloodOnly", defaultValue: "Sang seulement", bundle: .main) }
+    static var deniedTitle: String {
+        String(localized: "locationMap.share.denied.title", defaultValue: "Meeshy n'a pas accès à ta position", bundle: .main)
+    }
+    static var deniedMessage: String {
+        String(localized: "locationMap.share.denied.message", defaultValue: "Tu peux l'autoriser dans les réglages de ton téléphone.", bundle: .main)
+    }
+    static var openSettings: String {
+        String(localized: "locationMap.share.denied.settings", defaultValue: "Ouvrir les réglages", bundle: .main)
+    }
     static var precisionTitle: String { String(localized: "locationMap.share.precision", defaultValue: "Précision", bundle: .main) }
     static var city: String { String(localized: "locationMap.share.city", defaultValue: "Ville", bundle: .main) }
     static var neighborhood: String { String(localized: "locationMap.share.neighborhood", defaultValue: "Quartier", bundle: .main) }
