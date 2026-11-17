@@ -107,13 +107,7 @@ jest.mock('../../../utils/response', () => ({
   sendNotFound: (...args: any[]) => mockSendNotFound(...args),
   sendInternalError: (...args: any[]) => mockSendInternalError(...args),
 }));
-// #19049 — la route revalide par `sendWithValidator` (validateur fort ou
-// `live-receipts`) : le double PROLONGE le vrai module plutôt que de le
-// remplacer, sans quoi `computeETag` manquerait au validateur de la fenêtre.
-jest.mock('../../../utils/etag', () => ({
-  ...(jest.requireActual('../../../utils/etag') as object),
-  sendWithValidator: (...args: any[]) => mockSendWithValidator(...args),
-}));
+jest.mock('../../../utils/etag', () => ({ ...(jest.requireActual('../../../utils/etag') as object), sendWithValidator: (...args: any[]) => mockSendWithValidator(...args) }));
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
   ...(jest.requireActual('@meeshy/shared/utils/conversation-helpers') as object),
   resolveUserLanguage: (...args: any[]) => mockResolveUserLanguage(...args),
