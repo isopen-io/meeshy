@@ -11,25 +11,38 @@
  */
 
 /**
- * Jusqu'où le curseur de lecture peut avancer sans franchir un message non lu.
+ * Jusqu'où un curseur peut avancer sans franchir un message qui n'a pas la
+ * propriété qu'il affirme.
  *
- * Renvoie le dernier identifiant du plus long préfixe **contigu** de messages
- * lus, ou `null` si le tout premier message ne l'est pas. S'arrêter au premier
- * trou est ce qui rend le compteur de non-lus honnête : un participant qui
- * saute au bas d'une conversation n'a pas lu ce qu'il a survolé, et le curseur
- * ne doit pas franchir cet intervalle.
+ * Renvoie le dernier identifiant du plus long préfixe **contigu** des messages
+ * PROUVÉS, ou `null` si le tout premier ne l'est pas. S'arrêter au premier trou
+ * est ce qui rend le curseur honnête : il est un INDEX RAPIDE sur un préfixe,
+ * donc il ne doit affirmer que ce qu'il a vérifié.
+ *
+ * **Les DEUX curseurs l'emploient, et pour la même raison** — le nom ne dit
+ * donc plus « read » (#18731) :
+ *
+ * | curseur | ce qui PROUVE | ce qu'un saut déclarerait à tort |
+ * |---|---|---|
+ * | `lastReadAt` | `MessageStatusEntry.readAt` figé | lu ce qu'on a survolé (ouvrir à 200 non-lus) |
+ * | `lastDeliveredAt` | `MessageStatusEntry.deliveredAt` figé | remis ce que le plafond de la file a évincé |
+ *
+ * La seconde ligne est celle de #18731 : la file évince au plafond de 500 des
+ * messages que le drain ne voit JAMAIS, donc le trou qu'ils laissent est
+ * ANTÉRIEUR au dernier message livré — et aucune BORNE, si juste soit-elle, ne
+ * peut l'exclure. Seule la contiguïté le peut.
  *
  * @param orderedMessageIds identifiants triés du plus ancien au plus récent
- * @param readIds identifiants porteurs d'un `readAt` figé
+ * @param provenIds identifiants porteurs de la date figée que le curseur suit
  */
-export function computeContiguousReadPrefix(
+export function computeContiguousPrefix(
   orderedMessageIds: readonly string[],
-  readIds: ReadonlySet<string>
+  provenIds: ReadonlySet<string>
 ): string | null {
   let lastContiguous: string | null = null;
 
   for (const messageId of orderedMessageIds) {
-    if (!readIds.has(messageId)) break;
+    if (!provenIds.has(messageId)) break;
     lastContiguous = messageId;
   }
 

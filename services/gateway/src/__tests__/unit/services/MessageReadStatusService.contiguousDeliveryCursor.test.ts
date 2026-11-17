@@ -65,6 +65,9 @@ const M1_AT = new Date('2026-10-01T10:00:00.000Z');
 /** M2 — réellement remis par le drain. */
 const M2 = '507f1f77bcf86cd79943901b';
 const M2_AT = new Date('2026-10-01T10:05:00.000Z');
+/** M3 — remis par un drain ultérieur, APRÈS le trou laissé par M2. */
+const M3 = '507f1f77bcf86cd79943901c';
+const M3_AT = new Date('2026-10-01T10:10:00.000Z');
 
 /** La position d'où part la fenêtre de balayage, telle que Prisma l'a reçue. */
 const scanLowerBound = (): unknown => {
@@ -77,6 +80,19 @@ const scanLowerBound = (): unknown => {
 const scanCall = () =>
   mockPrisma.message.findMany.mock.calls.find(
     ([args]: [any]) => args?.orderBy?.createdAt === 'asc'
+  )?.[0];
+
+/**
+ * La requête qui lit la PREUVE — les entrées figées du balayage.
+ *
+ * On l'assert sur la REQUÊTE et pas sur le rendu : un double rend ce qu'on lui
+ * dit quel que soit le `where`, si bien qu'un témoin de verdict reste VERT sur
+ * un balayage qui aurait cessé d'exiger la preuve. C'est la règle du dépôt sur
+ * les projections, portée ici à un filtre.
+ */
+const provenEntriesCall = () =>
+  mockPrisma.messageStatusEntry.findMany.mock.calls.find(
+    ([args]: [any]) => args?.where?.deliveredAt !== undefined
   )?.[0];
 
 /**
@@ -261,7 +277,28 @@ describe('Le curseur de livraison ne franchit plus un trou ANTÉRIEUR (#18731)',
     expect(persistedDeliveryCursor().lastDeliveredMessageId).toBeNull();
   });
 
-  it('borne le balayage et en exclut les messages du lecteur lui-même', async () => {
+  it('avance jusqu’au DERNIER message CONTIGU, jamais jusqu’au plus récent rapporté', async () => {
+    // Le cas qu'une mutation a découvert : avec un préfixe VIDE, `if (target)`
+    // porte à lui seul tout le verdict, et `messageId: target` pouvait être
+    // remplacé par `messageId` sans qu'un témoin tombe. Ici le préfixe est
+    // PARTIEL — M1 prouvé, M2 non, M3 rapporté — et c'est la seule forme où la
+    // CIBLE se distingue du plus récent.
+    arrange({
+      window: [
+        { id: M1, createdAt: M1_AT },
+        { id: M2, createdAt: M2_AT },
+        { id: M3, createdAt: M3_AT },
+      ],
+      frozen: [M1, M3],
+    });
+    const service = new MessageReadStatusService(mockPrisma as any);
+
+    await service.markMessagesAsReceived(READER, CONVERSATION, M3, { messageIds: [M3] });
+
+    expect(persistedDeliveryCursor().lastDeliveredMessageId).toBe(M1);
+  });
+
+  it('borne le balayage, en exclut les messages du lecteur, et EXIGE la preuve figée', async () => {
     arrange({ window: [{ id: M2, createdAt: M2_AT }], frozen: [M2] });
     const service = new MessageReadStatusService(mockPrisma as any);
 
@@ -272,10 +309,22 @@ describe('Le curseur de livraison ne franchit plus un trou ANTÉRIEUR (#18731)',
     expect(call.where.senderId).toEqual({ not: READER });
     expect(call.where.deletedAt).toBeNull();
     expect(call.where.conversationId).toBe(CONVERSATION);
+
+    // La PREUVE est la date figée, et rien d'autre : sans ce filtre, une entrée
+    // créée par la moitié LECTURE du gel (`deliveredAt: null` explicite)
+    // compterait comme une livraison, et le curseur franchirait le trou par la
+    // porte même qu'on vient de fermer.
+    const proof = provenEntriesCall();
+    expect(proof.where.deliveredAt).toEqual({ not: null });
+    expect(proof.where.participantId).toBe(READER);
+    expect(proof.where.messageId.in).toEqual([M2]);
   });
 
   it('un balayage ILLISIBLE laisse le curseur en place sans faire échouer le gel', async () => {
-    arrange({ window: [{ id: M2, createdAt: M2_AT }], frozen: [M2] });
+    // `frozen: []` — M2 n'a pas encore d'entrée, donc le gel en grave bien UNE.
+    // Avec `frozen: [M2]` le gel serait write-once et rendrait 0, et le témoin
+    // attesterait la fixture au lieu du fail-closed qu'il vise.
+    arrange({ window: [{ id: M2, createdAt: M2_AT }], frozen: [] });
     const service = new MessageReadStatusService(mockPrisma as any);
     mockPrisma.message.findMany.mockImplementation(async (args: any) => {
       if (args?.orderBy?.createdAt === 'asc') throw new Error('scan down');
