@@ -9,6 +9,7 @@ import {
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { getPresenceVisibilityService, type PresenceViewer } from '../../services/PresenceVisibilityService';
+import { withPresenceGatedFields, type GatedColumns } from '../../services/relations/profileCircleView';
 
 type ProfilePresenceAuthContext =
   | {
@@ -112,14 +113,14 @@ export function presenceFor(
  * anonyme/non authentifié (viewer `null`) masqué.
  */
 export async function gateProfilePresence<
-  T extends { id: string; isOnline: boolean | null; lastActiveAt: Date | null; deactivatedAt?: Date | null },
+  T extends { id: string; isOnline: boolean | null; lastActiveAt: Date | null; deactivatedAt?: Date | null } & GatedColumns,
 >(fastify: FastifyInstance, request: FastifyRequest, profile: T) {
   const authContext = (request as FastifyRequest & { authContext?: ProfilePresenceAuthContext }).authContext;
   const visibility = await getPresenceVisibilityService(fastify.prisma).resolveForTarget(
     viewerFromAuthContext(authContext),
     { id: profile.id, deactivatedAt: profile.deactivatedAt ?? null },
   );
-  return applyPresenceVisibility(profile, visibility);
+  return applyPresenceVisibility(withPresenceGatedFields(profile, visibility), visibility);
 }
 
 let optionalAuthMiddleware: ReturnType<typeof createUnifiedAuthMiddleware> | null = null;

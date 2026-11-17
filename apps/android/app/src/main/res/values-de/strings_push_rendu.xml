@@ -9,4 +9,5 @@
     <string name="push_placeholder_ephemeral">Flüchtige Nachricht</string>
     <string name="push_placeholder_hidden">Ausgeblendete Nachricht</string>
     <string name="push_placeholder_encrypted">Verschlüsselte Nachricht</string>
+    <string name="push_placeholder_locked">Gesperrte Unterhaltung</string>
 </resources>
