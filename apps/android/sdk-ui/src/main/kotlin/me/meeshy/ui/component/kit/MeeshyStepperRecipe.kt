@@ -41,6 +41,21 @@ public object MeeshyStepperRule {
     /** Le pas grandit avec la valeur : le dernier palier atteint gagne. */
     public fun step(forValue: Int, base: Int, ladder: List<MeeshyStepperRung>): Int =
         max(ladder.filter { it.from <= forValue }.maxByOrNull { it.from }?.step ?: base, 1)
+
+    /**
+     * Les crans intermédiaires que la plage annonce au lecteur d'écran : un par pas de base. Une échelle de pas n'a pas de
+     * cran régulier : la plage est alors annoncée continue (0), le réglage avançant quand même d'un pas de la loi.
+     */
+    public fun notches(range: IntRange, base: Int, ladder: List<MeeshyStepperRung>): Int =
+        if (ladder.isNotEmpty() || range.last <= range.first) 0 else max((range.last - range.first) / max(base, 1) - 1, 0)
+
+    /** Le sens d'un réglage demandé par le lecteur d'écran : +1, -1, ou 0 si la cible est la valeur (ou n'est pas un nombre). */
+    public fun direction(value: Int, target: Float): Int = when {
+        !target.isFinite() -> 0
+        target > value -> 1
+        target < value -> -1
+        else -> 0
+    }
 }
 
 /** Une transition de [MeeshyStepperHoldLaw] : le nouvel état, et s'il faut avancer d'un pas. */

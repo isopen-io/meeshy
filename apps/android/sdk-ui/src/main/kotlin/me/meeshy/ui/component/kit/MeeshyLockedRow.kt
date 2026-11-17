@@ -20,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import me.meeshy.ui.R
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.accessibility.decorative
@@ -54,9 +56,9 @@ import me.meeshy.ui.theme.MeeshyTheme
  * n'a jamais pu être rendu sous un voile.
  *
  * L'état fermé est écrit et dit (« Présence, verrouillé, dès Ami »), jamais seulement atténué. [isUnlocking] joue l'ouverture
- * UNE fois (fondu de 280 ms, 160 sous mouvement réduit) ; quand l'hôte ne dit plus ni [isOpen] ni [isUnlocking], elle se
- * referme. L'envoi de la demande reste à l'hôte : [MeeshyLockedRowAction.isPending] et `isDone` lui sont remis, jamais
- * gardés. Jumeau iOS : `MeeshyLockedRow`.
+ * UNE fois par demande (fondu de 280 ms, 160 sous mouvement réduit), puis prévient l'hôte par [onUnlocked] ; quand l'hôte
+ * ne dit plus ni [isOpen] ni [isUnlocking], elle se referme, et une demande reposée se rejoue. L'envoi de la demande reste à
+ * l'hôte : [MeeshyLockedRowAction.isPending] et `isDone` lui sont remis, jamais gardés. Jumeau iOS : `MeeshyLockedRow`.
  */
 @Composable
 @Suppress("LongParameterList", "LongMethod")
@@ -71,12 +73,21 @@ public fun MeeshyLockedRow(
     action: MeeshyLockedRowAction? = null,
     tint: Color? = null,
     enabled: Boolean = true,
+    onUnlocked: (() -> Unit)? = null,
     onPress: (() -> Unit)? = null,
 ) {
     val reduce = LocalReduceMotion.current
     var hasPlayed by remember { mutableStateOf(false) }
+    val currentUnlocked by rememberUpdatedState(onUnlocked)
     LaunchedEffect(isUnlocking) {
-        if (MeeshyLockedRowRecipe.unlockStep(isUnlocking, hasPlayed) == MeeshyLockedRowUnlockStep.Play) hasPlayed = true
+        if (!isUnlocking) {
+            hasPlayed = false
+            return@LaunchedEffect
+        }
+        if (MeeshyLockedRowRecipe.unlockStep(isUnlocking, hasPlayed) != MeeshyLockedRowUnlockStep.Play) return@LaunchedEffect
+        hasPlayed = true
+        delay(MeeshyLockedRowRecipe.unlockFadeMillis(reduce).toLong())
+        currentUnlocked?.invoke()
     }
     val shownOpen = MeeshyLockedRowRecipe.shownOpen(isOpen, isUnlocking, hasPlayed)
     val interaction = remember { MutableInteractionSource() }

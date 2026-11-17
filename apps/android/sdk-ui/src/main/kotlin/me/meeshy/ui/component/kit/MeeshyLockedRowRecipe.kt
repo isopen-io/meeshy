@@ -77,10 +77,14 @@ public object MeeshyLockedRowRecipe {
             actionIsActive = hasAction && !isPending && !isDone,
             isButton = isButton,
             pressedScale = if (isButton && isPressed) PRESSED_SCALE else 1f,
-            unlockFadeMillis = if (reduceMotion) MeeshyMotionRecipe.REDUCED_FADE_MILLIS else UNLOCK_FADE_MILLIS,
+            unlockFadeMillis = unlockFadeMillis(reduceMotion),
             animatesDash = isUnlocking && !reduceMotion,
         )
     }
+
+    /** Le fondu de l'ouverture : 280 ms, 160 sous mouvement réduit. */
+    public fun unlockFadeMillis(reduceMotion: Boolean): Int =
+        if (reduceMotion) MeeshyMotionRecipe.REDUCED_FADE_MILLIS else UNLOCK_FADE_MILLIS
 
     private fun cornerRadius(form: MeeshyLockedRowForm): Float = when (form) {
         MeeshyLockedRowForm.Row -> 20f

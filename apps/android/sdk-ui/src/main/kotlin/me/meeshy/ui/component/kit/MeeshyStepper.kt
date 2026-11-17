@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -182,11 +184,13 @@ private fun StepperButtons(
                     value >= range.last -> "$spoken, $atMaximum"
                     else -> spoken
                 }
-                progressBarRangeInfo = ProgressBarRangeInfo(value.toFloat(), range.first.toFloat()..range.last.toFloat())
+                progressBarRangeInfo = ProgressBarRangeInfo(
+                    value.toFloat(), range.first.toFloat()..range.last.toFloat(), MeeshyStepperRule.notches(range, step, stepLadder),
+                )
                 customActions = listOf(decrement, increment)
                 setProgress { target ->
-                    val wanted = target.toInt().coerceIn(range.first, range.last)
-                    if (enabled && wanted != value) currentChange.value(wanted)
+                    val delta = MeeshyStepperRule.direction(currentValue.value, target)
+                    if (enabled && delta != 0) advance(delta)
                     enabled
                 }
                 if (!enabled) disabled()
@@ -255,45 +259,17 @@ private fun StepperDisc(
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
                     if (!enabled) return@awaitEachGesture
-                    var law = MeeshyStepperHoldLaw()
-                    val started = law.press(currentActive.value())
-                    law = started.law
+                    val started = MeeshyStepperHoldLaw().press(currentActive.value())
                     if (!started.fires) {
                         if (waitForUpOrCancellation() != null) currentStep.value()
                         return@awaitEachGesture
                     }
                     pressed = true
-                    var tick = 0
-                    while (true) {
-                        var released = false
-                        var cancelled = false
-                        val settled = if (repeatsOnHold) {
-                            withTimeoutOrNull(MeeshyStepperRecipe.holdDelayMillis(tick).toLong()) {
-                                if (waitForUpOrCancellation() == null) cancelled = true else released = true
-                                true
-                            }
-                        } else {
-                            if (waitForUpOrCancellation() == null) cancelled = true else released = true
-                            true
-                        }
-                        if (cancelled) {
-                            law = law.cancel()
-                            break
-                        }
-                        if (released) {
-                            val up = law.release(currentActive.value())
-                            if (up.fires) currentStep.value()
-                            break
-                        }
-                        if (settled == null) {
-                            val beat = law.repeatTick(currentActive.value())
-                            law = beat.law
-                            if (!beat.fires) break
-                            currentStep.value()
-                            tick++
-                        }
+                    try {
+                        holdCadence(started.law, repeatsOnHold, currentActive, currentStep)
+                    } finally {
+                        pressed = false
                     }
-                    pressed = false
                 }
             },
         contentAlignment = Alignment.Center,
@@ -306,3 +282,37 @@ private fun StepperDisc(
         }
     }
 }
+
+/**
+ * La cadence d'un appui tenu, selon [MeeshyStepperHoldLaw] : un toucher avance au relâcher ; tenu, la cadence avance seule
+ * et accélère ; un geste annulé ou un bouton éteint arrête tout, sans pas fantôme.
+ */
+private suspend fun AwaitPointerEventScope.holdCadence(
+    pressedLaw: MeeshyStepperHoldLaw,
+    repeatsOnHold: Boolean,
+    isActive: State<() -> Boolean>,
+    onStep: State<() -> Unit>,
+) {
+    var law = pressedLaw
+    var tick = 0
+    while (true) {
+        val wait = MeeshyStepperRecipe.holdDelayMillis(tick).toLong()
+        val up = if (repeatsOnHold) {
+            withTimeoutOrNull(wait) { StepperLift(waitForUpOrCancellation() != null) }
+        } else {
+            StepperLift(waitForUpOrCancellation() != null)
+        }
+        if (up != null) {
+            if (up.released && law.release(isActive.value()).fires) onStep.value()
+            return
+        }
+        val beat = law.repeatTick(isActive.value())
+        law = beat.law
+        if (!beat.fires) return
+        onStep.value()
+        tick++
+    }
+}
+
+/** Le doigt s'est levé ([released]) ou le geste a été annulé. */
+private class StepperLift(val released: Boolean)

@@ -171,4 +171,20 @@ class MeeshyStepperTest {
         assertThat(MeeshyStepperRecipe.spokenValue(null, 1, "Quartier", Locale.FRANCE)).isEqualTo("Quartier")
         assertThat(MeeshyStepperRecipe.spokenValue("", 50, null, Locale.US)).isEqualTo("50")
     }
+
+    @Test
+    fun `la plage compte un cran par pas de base et se dit continue sous une echelle de pas`() {
+        assertThat(MeeshyStepperRule.notches(0..10, 1, emptyList())).isEqualTo(9)
+        assertThat(MeeshyStepperRule.notches(0..10, 2, emptyList())).isEqualTo(4)
+        assertThat(MeeshyStepperRule.notches(0..100, 1, listOf(MeeshyStepperRung(20, 10)))).isEqualTo(0)
+        assertThat(MeeshyStepperRule.notches(5..5, 1, emptyList())).isEqualTo(0)
+    }
+
+    @Test
+    fun `un reglage demande va dans le sens de la cible et une cible non finie ne bouge rien`() {
+        assertThat(MeeshyStepperRule.direction(20, 25f)).isEqualTo(1)
+        assertThat(MeeshyStepperRule.direction(20, 19.5f)).isEqualTo(-1)
+        assertThat(MeeshyStepperRule.direction(20, 20f)).isEqualTo(0)
+        assertThat(MeeshyStepperRule.direction(20, Float.NaN)).isEqualTo(0)
+    }
 }

@@ -104,7 +104,7 @@ public fun MeeshyWavePlayer(
         WaveDisc(values, accent, label, isPlaying, enabled, onToggle)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             WaveBars(
-                samples, shown, values, accent, durationSeconds,
+                samples, shown, values, accent, durationSeconds, label,
                 onFraction = { scrubFraction = it },
                 onSeek = onSeek, onScrubbingChange = onScrubbingChange,
             )
@@ -164,6 +164,7 @@ private fun WaveBars(
     values: MeeshyWavePlayerValues,
     accent: Color,
     durationSeconds: Double,
+    label: String,
     onFraction: (Double?) -> Unit,
     onSeek: ((Double) -> Unit)?,
     onScrubbingChange: ((Boolean) -> Unit)?,
@@ -182,6 +183,7 @@ private fun WaveBars(
             .fillMaxWidth()
             .height(values.waveHeightDp.dp.coerceAtLeast(values.scrubZoneHeightDp.dp))
             .semantics {
+                contentDescription = label
                 stateDescription = position
                 progressBarRangeInfo = ProgressBarRangeInfo(shown.toFloat(), 0f..1f)
                 setProgress { target ->
@@ -194,7 +196,7 @@ private fun WaveBars(
                     }
                 }
             }
-            .pointerInput(Unit) {
+            .pointerInput(values.acceptsScrub) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     if (!currentValues.value.acceptsScrub || currentSeek.value == null) return@awaitEachGesture
@@ -202,34 +204,45 @@ private fun WaveBars(
                     fun fraction(x: Float) = MeeshyWaveBarsLaw.scrubFraction(x / density, widthDp, currentRtl.value)
                     down.consume()
                     var law = MeeshyWaveScrubLaw()
-                    var last = fraction(down.position.x)
-                    law.move(last).let { law = it.law; if (it.began) currentScrub.value?.invoke(true) }
-                    currentFraction.value(last)
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Main)
-                        val change = event.changes.firstOrNull { it.id == down.id }
-                        if (change == null) {
-                            val closed = law.cancel()
-                            if (closed.ended) currentScrub.value?.invoke(false)
-                            currentFraction.value(null)
-                            break
-                        }
-                        last = fraction(change.position.x)
-                        change.consume()
-                        if (!change.pressed) {
-                            val end = law.finish(last, accepts = currentValues.value.acceptsScrub)
-                            end.commit?.let { currentSeek.value?.invoke(it) }
-                            if (end.ended) currentScrub.value?.invoke(false)
-                            currentFraction.value(null)
-                            break
-                        }
-                        law.move(last).let { law = it.law }
+                    try {
+                        var last = fraction(down.position.x)
+                        law.move(last).let { law = it.law; if (it.began) currentScrub.value?.invoke(true) }
                         currentFraction.value(last)
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Main)
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            last = fraction(change.position.x)
+                            change.consume()
+                            if (!change.pressed) {
+                                val end = law.finish(last, accepts = currentValues.value.acceptsScrub)
+                                law = end.law
+                                end.commit?.let { currentSeek.value?.invoke(it) }
+                                if (end.ended) currentScrub.value?.invoke(false)
+                                currentFraction.value(null)
+                                break
+                            }
+                            law.move(last).let { law = it.law }
+                            currentFraction.value(last)
+                        }
+                    } finally {
+                        val closed = law.cancel()
+                        if (closed.ended) {
+                            currentScrub.value?.invoke(false)
+                            currentFraction.value(null)
+                        }
                     }
                 }
             },
     ) {
-        Canvas(Modifier.fillMaxWidth().height(values.waveHeightDp.dp).align(Alignment.Center).decorative()) {
+        val scrubScale = if (values.phaseState == MeeshyWavePlayerState.Scrubbing) values.scrubScale else 1f
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(values.waveHeightDp.dp)
+                .align(Alignment.Center)
+                .graphicsLayer { scaleY = scrubScale }
+                .decorative(),
+        ) {
             val widthDp = size.width / density
             val bars = MeeshyWaveBarsLaw.resample(samples, widthDp)
             val filled = MeeshyWaveBarsLaw.filledBars(bars.size, shown)
