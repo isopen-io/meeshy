@@ -266,9 +266,7 @@ function emit({ ids, output, constant, type, role }) {
 export const ${constant} = {
 ${extract(ids)}
 } as const;
-
-export type ${type} = keyof typeof ${constant};
-`,
+${type === undefined ? '' : `\nexport type ${type} = keyof typeof ${constant};\n`}`,
   );
   const bytes = Buffer.byteLength(readFileSync(output));
   console.log(`  ${ids.length} glyphes extraits → ${output.slice(HERE.length - 'scripts'.length)} · ${bytes} o de module`);
@@ -286,7 +284,6 @@ emit({
   ids: PROGRESSION,
   output: join(HERE, '../src/components/glyphs-progression.ts'),
   constant: 'PROGRESSION_GLYPHS',
-  type: 'ProgressionGlyphName',
   role: "LE JEU D'ECRAN de /me/progression (#5547) : charge avec sa route, jamais dans le socle.",
 });
 
@@ -360,7 +357,6 @@ emit({
   ids: THREAD_MENU,
   output: join(HERE, '../src/components/glyphs-thread-menu.ts'),
   constant: 'THREAD_MENU_GLYPHS',
-  type: 'ThreadMenuGlyphName',
   role: "LE JEU D'ECRAN du menu du message (#5814) : charge avec le chunk du fil, jamais dans le socle.",
 });
 
@@ -384,7 +380,6 @@ emit({
   ids: THREAD_IDENTITY,
   output: join(HERE, '../src/components/glyphs-thread-identity.ts'),
   constant: 'THREAD_IDENTITY_GLYPHS',
-  type: 'ThreadIdentityGlyphName',
   role: "LE JEU D'ECRAN de l'identite de rangee (#5935) : le masque du sans-compte (theatermasks.fill iOS) et le partage de la conversation (#10206), charge avec le chunk du fil, jamais dans le socle.",
 });
 
@@ -402,7 +397,6 @@ emit({
   ids: AUTH,
   output: join(HERE, '../src/components/glyphs-auth.ts'),
   constant: 'AUTH_GLYPHS',
-  type: 'AuthGlyphName',
   role: "LE JEU D'ECRAN des routes d'authentification (#5816) : charge avec elles, jamais dans le socle.",
 });
 
@@ -430,7 +424,6 @@ emit({
   ids: COMPOSER,
   output: join(HERE, '../src/components/glyphs-composer.ts'),
   constant: 'COMPOSER_GLYPHS',
-  type: 'ComposerGlyphName',
   role: "LE JEU D'ECRAN du tiroir du composeur (#5668) : charge avec le chunk composer-tray, jamais dans le socle.",
 });
 
@@ -449,7 +442,6 @@ emit({
   ids: MEDIA,
   output: join(HERE, '../src/components/glyphs-media.ts'),
   constant: 'MEDIA_GLYPHS',
-  type: 'MediaGlyphName',
   role: "LE JEU D'ECRAN des pieces jointes du fil (#5805) : charge avec attachment-blocks.tsx, jamais dans le socle.",
 });
 
@@ -468,7 +460,6 @@ emit({
   ids: MEDIA_TRANSPORT,
   output: join(HERE, '../src/components/glyphs-media-transport.ts'),
   constant: 'MEDIA_TRANSPORT_GLYPHS',
-  type: 'MediaTransportGlyphName',
   role: "LE JEU D'ECRAN de la barre de lecture de la visionneuse (#6359) : charge avec le chunk media-viewer, jamais dans le socle.",
 });
 
@@ -493,7 +484,6 @@ emit({
   ids: THREAD_STATES,
   output: join(HERE, '../src/components/glyphs-thread-states.ts'),
   constant: 'THREAD_STATES_GLYPHS',
-  type: 'ThreadStatesGlyphName',
   role: "LE JEU D'ECRAN des etats du message (#5936) : transfere, modifie, lieu, citation de story, appel video, avis d'arrivee — charge avec le chunk du fil, jamais dans le socle.",
 });
 
@@ -576,7 +566,6 @@ emit({
   ids: FEED,
   output: join(HERE, '../src/components/glyphs-feed.ts'),
   constant: 'FEED_GLYPHS',
-  type: 'FeedGlyphName',
   role: "LE JEU D'ECRAN du fil des publications (#5893) : les cinq statistiques de la carte de post, charge avec la route /feed, jamais dans le socle.",
 });
 
@@ -756,7 +745,6 @@ emit({
   ids: CALL_FEEDBACK,
   output: join(HERE, '../src/components/glyphs-call-feedback.ts'),
   constant: 'CALL_FEEDBACK_GLYPHS',
-  type: 'CallFeedbackGlyphName',
   role: "LE JEU de la note d'apres-appel (#8072) : charge avec sa carte, jamais dans le socle.",
 });
 
@@ -795,7 +783,6 @@ emit({
   ids: STARRED,
   output: join(HERE, '../src/components/glyphs-starred.ts'),
   constant: 'STARRED_GLYPHS',
-  type: 'StarredGlyphName',
   role: "LE JEU D'ECRAN des messages favoris (#7286) : charge avec la route /me/starred-messages, jamais dans le socle.",
 });
 
@@ -912,7 +899,6 @@ emit({
   ids: ['picture-in-picture', 'sliders-horizontal', 'arrow-down-right'],
   output: join(HERE, '../src/components/glyphs-call-devices.ts'),
   constant: 'CALL_DEVICES_GLYPHS',
-  type: 'CallDevicesGlyphName',
   role: "LE JEU DE LA BULLE, DE L'IMAGE DANS L'IMAGE ET DES PERIPHERIQUES (#8046), charge avec la couche d'appel, jamais dans le socle.",
 });
 
@@ -939,7 +925,6 @@ emit({
   ids: ['dots-three', 'speaker-high', 'squares-four', 'corners-out', 'corners-in', 'magic-wand', 'minus', 'plus', 'x', 'user-plus', 'smiley', 'user-minus', 'speaker-slash', 'aperture'],
   output: join(HERE, '../src/components/glyphs-call-view.ts'),
   constant: 'CALL_VIEW_GLYPHS',
-  type: 'CallViewGlyphName',
   role: "LA VUE D'APPEL « C ADAPTE » (#8391, #8392) : le (…) de la pilule, la sortie, la grille et le plein ecran, charge avec l'ecran d'appel, jamais dans le socle.",
 });
 
@@ -1050,7 +1035,6 @@ emit({
   ids: LENS_PREVIEW,
   output: join(HERE, '../src/components/glyphs-lens-preview.ts'),
   constant: 'LENS_PREVIEW_GLYPHS',
-  type: 'LensPreviewGlyphName',
   role: "LE JEU de la ligne d'apercu de la Lentille (#7547) : les icones du composeur partage que le socle ne porte pas.",
 });
 
@@ -1082,7 +1066,6 @@ emit({
   ids: ['globe', 'users-three'],
   output: join(HERE, '../src/components/glyphs-story-audience.ts'),
   constant: 'STORY_AUDIENCE_GLYPHS',
-  type: 'StoryAudienceGlyphName',
   role: "LE JEU DE LA PASTILLE D'AUDIENCE DU STUDIO (#7683) : les deux audiences choisissables que le socle ne porte pas, charge avec /stories/new et /posts/new.",
 });
 
@@ -1090,7 +1073,6 @@ emit({
   ids: ['user-minus', 'user-check'],
   output: join(HERE, '../src/components/glyphs-story-audience-people.ts'),
   constant: 'STORY_AUDIENCE_PEOPLE_GLYPHS',
-  type: 'StoryAudiencePeopleGlyphName',
   role: "LE JEU DE LA FEUILLE D'AUDIENCE (#7683) : les deux modes NOMINATIFS, charges avec la feuille a la demande, jamais avec le studio.",
 });
 
@@ -1108,7 +1090,6 @@ emit({
   ids: ['trash', 'pencil-simple'],
   output: join(HERE, '../src/components/glyphs-stories-mine.ts'),
   constant: 'STORIES_MINE_GLYPHS',
-  type: 'StoriesMineGlyphName',
   role: 'LE JEU DE « MES STORIES » (#6149) : les boutons Supprimer et Modifier (#9317) du listing, charges avec /stories/mine.',
 });
 
@@ -1124,8 +1105,14 @@ emit({
   ids: ['squares-four', 'palette', 'text-aa', 'arrow-elbow-down-right', 'sliders-horizontal', 'shuffle', 'bookmark-simple', 'export', 'frame-corners', 'images', 'list-checks'],
   output: join(HERE, '../src/components/glyphs-export-card.ts'),
   constant: 'EXPORT_CARD_GLYPHS',
-  type: 'ExportCardGlyphName',
   role: "LE JEU DU COMPOSER D'EXPORT EN IMAGE (#8667) : les onglets du plateau et les gestes de l'en-tete, charge avec la feuille d'export.",
+});
+
+emit({
+  ids: ['arrow-clockwise', 'share-network', 'copy', 'circle-dashed', 'article', 'film-strip', 'video-camera', 'users-three'],
+  output: join(HERE, '../src/components/glyphs-send-sheet.ts'),
+  constant: 'SEND_SHEET_GLYPHS',
+  role: "LE JEU DE LA FEUILLE D'ENVOI (#8884) : reessayer, plus d'options, copier le lien, les trois pastilles Publier (story, post, reel), la video et le groupe de l'apercu — charge avec la feuille a la demande, jamais dans le socle.",
 });
 
 /**
@@ -1235,6 +1222,5 @@ emit({
   ids: PACK_PREVIEW,
   output: join(HERE, '../src/components/glyphs-pack-preview.ts'),
   constant: 'PACK_PREVIEW_GLYPHS',
-  type: 'PackPreviewGlyphName',
   role: "LE JEU du plein ecran d'une decoration de la boutique (#16267) : zoom et element suivant, charge avec le plein ecran, jamais dans le socle.",
 });
