@@ -394,11 +394,7 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
-            conversationRepository.conversationsStream().collect { result ->
-                forward.onConversationsLoaded(result.windowOrNull())
-            }
-        }
+        forward.followConversationsWhileOpen { conversationRepository.conversationsStream() }
 
         viewModelScope.launch {
             combine(
