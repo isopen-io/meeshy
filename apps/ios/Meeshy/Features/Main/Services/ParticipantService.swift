@@ -112,9 +112,13 @@ actor ParticipantService {
         guard revalidations[conversationId] == nil else { return }
         revalidations[conversationId] = Task {
             let page = try? await self.loadFirstPage(for: conversationId, forceRefresh: true)
-            self.revalidations[conversationId] = nil
+            await self.forgetRevalidation(of: conversationId)
             return page
         }
+    }
+
+    private func forgetRevalidation(of conversationId: String) async {
+        revalidations[conversationId] = nil
     }
 
     // MARK: - Mutations
