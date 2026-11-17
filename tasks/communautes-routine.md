@@ -458,3 +458,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Cliquets partagés : Android sort de la famille « effectif d'une communauté » d'`ASYMETRIES` ; `SWEPT_EVENTS_AT_LAST_MEASURE` 131 → 134. `__tests__/ci/` 25 fichiers, 215 tests verts.
 - Gates locaux : `jvm-check -PjvmCheckModelOnly` (le mode complet bute sur `libsignal-client`, 403) : `CommunityMemberEventsTest` 12/12 et les suites `Community*` + `socket.*` de `core/model` vertes. `sdk-core` (Robolectric) ne se prouve que par `android.yml` : `CommunityMemberBindingTest` (4), `CommunityCacheRepositoryTest` (+6).
 - Prochain lot recommandé : #18767 (iOS lit l'effectif) dès que #18954 est fusionnée, puis la suppression d'une communauté (#16857).
+
+## 2026-11-17 — réveil 17:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #19266 (#18768, Android) et #18954 fusionnées. Lot : #18767 (iOS lit l'effectif) — en cours.
