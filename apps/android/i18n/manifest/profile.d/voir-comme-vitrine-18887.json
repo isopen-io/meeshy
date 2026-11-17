@@ -33,6 +33,54 @@
           "status": "android-only"
         },
         {
+          "androidName": "vitrine_cap_direct_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "vitrine_cap_message_request",
+          "status": "android-only"
+        },
+        {
+          "androidName": "vitrine_cap_ring",
+          "status": "android-only"
+        },
+        {
+          "androidName": "vitrine_cap_talkie",
+          "status": "android-only"
+        },
+        {
+          "androidName": "vitrine_cap_together",
+          "status": "android-only"
+        },
+        {
+          "androidName": "vitrine_cap_bring",
+          "status": "android-only"
+        },
+        {
+          "androidName": "vitrine_cap_listening_category",
+          "status": "android-only"
+        },
+        {
+          "androidName": "vitrine_cap_listening_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "vitrine_cap_location_temporary",
+          "status": "android-only"
+        },
+        {
+          "androidName": "vitrine_cap_location_proximity",
+          "status": "android-only"
+        },
+        {
+          "androidName": "vitrine_cap_battery_pull",
+          "status": "android-only"
+        },
+        {
+          "androidName": "vitrine_cap_unreachable",
+          "status": "android-only"
+        },
+        {
           "androidName": "vitrine_as_title",
           "status": "android-only"
         },
@@ -53,11 +101,7 @@
           "status": "android-only"
         },
         {
-          "androidName": "vitrine_as_locked_a11y",
-          "status": "android-only"
-        },
-        {
-          "androidName": "vitrine_as_nothing_open",
+          "androidName": "vitrine_as_nothing_hidden",
           "status": "android-only"
         }
       ]

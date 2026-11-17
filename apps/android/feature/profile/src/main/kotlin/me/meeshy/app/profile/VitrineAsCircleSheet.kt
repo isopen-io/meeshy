@@ -19,6 +19,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -26,7 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,7 +36,6 @@ import me.meeshy.sdk.model.relation.RelationLevel
 import me.meeshy.ui.component.circles.levelTitle
 import me.meeshy.ui.component.circles.tint
 import me.meeshy.ui.component.kit.MeeshyLockedRow
-import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -49,32 +49,40 @@ internal fun VitrineAsCircleSheet(onDismiss: () -> Unit) {
     var level by rememberSaveable { mutableStateOf(RelationLevel.PUBLIC) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 640.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = MeeshySpacing.xl)
-                .padding(bottom = MeeshySpacing.xxl),
-            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-        ) {
-            Text(
-                text = stringResource(R.string.vitrine_as_title),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = stringResource(R.string.vitrine_as_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
-            Column(modifier = Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-                VitrineAsCircle.levels.forEach { candidate ->
-                    VitrineLevelRow(candidate, selected = candidate == level, onSelect = { level = candidate })
-                }
+        VitrineAsCircleContent(level = level, onSelect = { level = it })
+    }
+}
+
+/** Le contenu de la feuille : le cercle choisi et la Vitrine qu'il voit. L'état vit chez l'hôte, qui le garde à la rotation. */
+@Composable
+internal fun VitrineAsCircleContent(level: RelationLevel, onSelect: (RelationLevel) -> Unit) {
+    val view = remember(level) { VitrineAsCircle.view(level) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 640.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = MeeshySpacing.xl)
+            .padding(bottom = MeeshySpacing.xxl),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+    ) {
+        Text(
+            text = stringResource(R.string.vitrine_as_title),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(
+            text = stringResource(R.string.vitrine_as_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
+        Column(modifier = Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+            VitrineAsCircle.levels.forEach { candidate ->
+                VitrineLevelRow(candidate, selected = candidate == level, onSelect = { onSelect(candidate) })
             }
-            VitrineViewBody(VitrineAsCircle.view(level))
         }
+        VitrineViewBody(view)
     }
 }
 
@@ -118,7 +126,7 @@ private fun VitrineViewBody(view: VitrineView) {
             view.locked.forEach { lock -> VitrineLockedRow(lock) }
         } else {
             Text(
-                text = stringResource(R.string.vitrine_as_nothing_open),
+                text = stringResource(R.string.vitrine_as_nothing_hidden),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MeeshyTheme.tokens.textSecondary,
             )
@@ -133,20 +141,16 @@ private fun SectionTitle(@StringRes titleRes: Int) {
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold,
         color = MeeshyTheme.tokens.textSecondary,
-        modifier = Modifier.padding(top = MeeshySpacing.sm),
+        modifier = Modifier.padding(top = MeeshySpacing.sm).semantics { heading() },
     )
 }
 
+/** La rangée du kit (K37) dit elle-même « titre, verrouillé, dès tel cercle » au lecteur d'écran : aucune annonce ajoutée ici. */
 @Composable
 private fun VitrineLockedRow(lock: VitrineLock) {
-    val title = stringResource(lock.capability.title)
-    val requirement = stringResource(R.string.vitrine_as_opens_from, levelTitle(lock.opensAt, null))
-    val description = stringResource(R.string.vitrine_as_locked_a11y, title, levelTitle(lock.opensAt, null))
     MeeshyLockedRow(
-        title = title,
-        requirement = requirement,
-        icon = MeeshyIcons.Lock,
+        title = stringResource(lock.capability.title),
+        requirement = stringResource(R.string.vitrine_as_opens_from, levelTitle(lock.opensAt, null)),
         tint = lock.opensAt.tint(),
-        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = description },
     )
 }

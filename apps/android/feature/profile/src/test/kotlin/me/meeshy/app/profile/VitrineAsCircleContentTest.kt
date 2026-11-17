@@ -10,6 +10,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.google.common.truth.Truth.assertWithMessage
 import me.meeshy.feature.profile.R
 import me.meeshy.sdk.model.relation.RelationLevel
 import me.meeshy.ui.theme.MeeshyTheme
@@ -50,12 +51,11 @@ class VitrineAsCircleContentTest {
     fun `une rangée verrouillée est un seul arrêt du lecteur d'écran`() {
         content()
 
-        VitrineCapability.entries
-            .filter { it.feature in VitrineAsCircle.view(RelationLevel.PUBLIC).locked.map { lock -> lock.capability.feature } }
-            .forEach { capability ->
-                val title = context.getString(capability.title)
+        VitrineAsCircle.view(RelationLevel.PUBLIC).locked
+            .forEach { lock ->
+                val title = context.getString(lock.capability.title)
                 val stops = compose.onAllNodes(hasContentDescription("$title, ", substring = true)).fetchSemanticsNodes()
-                assert(stops.size == 1) { "« $title » : ${stops.size} arrêts du lecteur d'écran, un seul attendu" }
+                assertWithMessage("« $title » : arrêts du lecteur d'écran").that(stops).hasSize(1)
             }
     }
 
