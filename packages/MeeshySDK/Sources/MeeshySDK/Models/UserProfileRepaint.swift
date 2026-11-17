@@ -138,7 +138,9 @@ extension UserUpdatedEvent {
             id: request.id, senderId: request.senderId, receiverId: request.receiverId,
             message: request.message, status: request.status,
             sender: sender ?? request.sender, receiver: receiver ?? request.receiver,
-            respondedAt: request.respondedAt, createdAt: request.createdAt, updatedAt: request.updatedAt
+            respondedAt: request.respondedAt, createdAt: request.createdAt, updatedAt: request.updatedAt,
+            targetLevel: request.targetLevel, messageOriginalLanguage: request.messageOriginalLanguage,
+            messageTranslation: request.messageTranslation, messageTranslations: request.messageTranslations
         )
     }
 
@@ -250,7 +252,8 @@ extension MeeshyUser {
             city: city, cityCircle: cityCircle,
             profileAccentColor: profileAccentColor,
             lockedAddresses: lockedAddresses,
-            openCommunities: openCommunities
+            openCommunities: openCommunities,
+            acceptsFriendRequests: acceptsFriendRequests
         )
     }
 }

@@ -119,7 +119,7 @@ extension ProfileAcquaintanceSection {
                 readingLanguage: ProfileReadingLanguage.name(of: sheet.displayUser.systemLanguage, in: .current),
                 tint: sheet.accentTint,
                 offersCall: sheet.offersCall,
-                offersFriendRequest: sheet.connectionStatus == .none,
+                offersFriendRequest: sheet.requestStage.offersRequest,
                 model: model,
                 onSend: { Task { await model.send(to: userId, host: host) } },
                 onCall: { sheet.requestCall(isVideo: false) },

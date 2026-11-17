@@ -72,7 +72,8 @@ extension MeeshyUser {
             city: ProfileCity.normalized(city), cityCircle: circle?.rawValue,
             profileAccentColor: profileAccentColor,
             lockedAddresses: lockedAddresses,
-            openCommunities: openCommunities
+            openCommunities: openCommunities,
+            acceptsFriendRequests: acceptsFriendRequests
         )
     }
 

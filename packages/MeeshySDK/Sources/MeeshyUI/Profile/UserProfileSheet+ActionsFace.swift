@@ -109,7 +109,8 @@ extension UserProfileSheet {
 
     var requestStage: ProfileRequestStage {
         ProfileRequestStage.resolve(connection: connectionStatus, request: pendingRequest, justAccepted: justAccepted,
-                                    sendFailed: requestUnsent)
+                                    sendFailed: requestUnsent, prism: ReaderPrism.resolve(for: dependencies.currentUser()),
+                                    acceptsRequests: loader.profile?.acceptsFriendRequests)
     }
 
     @ViewBuilder
@@ -125,6 +126,11 @@ extension UserProfileSheet {
                     }
                     ProfileLockedCapabilities(level: .public, tint: accentTint)
                 }
+            }
+        case .closed:
+            ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
+                                linked: $relationLinked) {
+                ProfileClosedRequestCard(name: name)
             }
         case .sent(let sentAt):
             ProfileSentRequestCard(name: name, sentAt: sentAt, tint: accentTint,

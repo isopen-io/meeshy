@@ -578,6 +578,9 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public let lockedAddresses: ServedLockedAddresses?
     /// Ses communautés publiques, avec mon appartenance (#19444). `nil` = un ancien serveur : la section n'existe pas.
     public let openCommunities: ServedOpenCommunities?
+    /// `false` = la personne ferme les nouvelles demandes d'ami (#19460, servi par #19258) : la fiche le dit et éteint
+    /// « Demander à être amis ». `nil` = ouvert, ou un ancien serveur : la fiche se lit comme avant.
+    public let acceptsFriendRequests: Bool?
 
     public init(
         id: String, username: String, email: String? = nil,
@@ -610,7 +613,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         cityCircle: String? = nil,
         profileAccentColor: String? = nil,
         lockedAddresses: ServedLockedAddresses? = nil,
-        openCommunities: ServedOpenCommunities? = nil
+        openCommunities: ServedOpenCommunities? = nil,
+        acceptsFriendRequests: Bool? = nil
     ) {
         self.id = id
         self.username = username
@@ -657,6 +661,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.profileAccentColor = profileAccentColor
         self.lockedAddresses = lockedAddresses
         self.openCommunities = openCommunities
+        self.acceptsFriendRequests = acceptsFriendRequests
     }
 
     /// Le même compte avec un autre décor de profil (équipement optimiste, événement socket).
@@ -693,7 +698,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             city: city, cityCircle: cityCircle,
             profileAccentColor: profileAccentColor,
             lockedAddresses: lockedAddresses,
-            openCommunities: openCommunities
+            openCommunities: openCommunities,
+            acceptsFriendRequests: acceptsFriendRequests
         )
     }
 
@@ -745,7 +751,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             city: city, cityCircle: cityCircle,
             profileAccentColor: profileAccentColor,
             lockedAddresses: lockedAddresses,
-            openCommunities: openCommunities
+            openCommunities: openCommunities,
+            acceptsFriendRequests: acceptsFriendRequests
         )
     }
 

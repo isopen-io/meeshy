@@ -50,13 +50,17 @@ struct ProfileSentRequestCard: View {
     }
 }
 
-/// Étape 3 — « Sofia veut être ton ami·e », son mot dans une bulle, puis Accepter (le geste qui avance) et Refuser.
+/// Étape 3 — « Sofia veut être ton ami·e », son mot dans une bulle — servi dans ma langue par le Prisme, marqué K51
+/// « Traduit de l'arabe · Voir l'original » dès qu'une traduction est servie —, puis Accepter et Refuser.
 struct ProfileReceivedRequestCard: View {
     let name: String
-    let note: String?
+    let note: ProfileReceivedNote?
     let tint: Color
     let onAccept: () -> Void
     let onDecline: () -> Void
+
+    @Environment(\.locale) private var locale
+    @State private var isShowingOriginal = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
@@ -66,9 +70,7 @@ struct ProfileReceivedRequestCard: View {
                 lead: .systemImage("person.crop.circle.badge.questionmark"),
                 tint: tint
             )
-            if let note {
-                MeeshyNote(note, form: .band, lead: .systemImage("quote.bubble"), tint: tint)
-            }
+            if let note { noteBubble(note) }
             MeeshyButtonPair {
                 MeeshyButton(
                     String(localized: "profile.relation.request.accept", defaultValue: "Accepter", bundle: .module),
@@ -80,6 +82,55 @@ struct ProfileReceivedRequestCard: View {
                     systemImage: "xmark", kind: .outline, width: .fill, action: onDecline
                 )
             }
+        }
+    }
+
+    private func noteBubble(_ note: ProfileReceivedNote) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            MeeshyNote(note.text(showingOriginal: isShowingOriginal), form: .band, lead: .systemImage("quote.bubble"),
+                       tint: tint)
+            if let translation = note.translation {
+                MeeshyTranslationMark(
+                    sourceLanguageName: TranslationLanguagePhrase.phrase(code: translation.originalLanguage, role: .source,
+                                                                         locale: locale),
+                    originalLanguageName: TranslationLanguagePhrase.phrase(code: translation.originalLanguage,
+                                                                           role: .original, locale: locale),
+                    isShowingOriginal: isShowingOriginal,
+                    onToggle: { isShowingOriginal.toggle() },
+                    tint: tint
+                )
+                .accessibilityIdentifier("profile.relation.request.received.translationMark")
+            }
+        }
+    }
+}
+
+/// Étape 5 — la personne ferme les nouvelles demandes (#19460) : « Sofia n'accepte pas de nouvelles demandes · Tu peux
+/// toujours lui écrire », sur une note verrouillée, et « Demander à être amis » éteint, sa raison dite sous lui.
+struct ProfileClosedRequestCard: View {
+    let name: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            MeeshyNote(
+                String(localized: "profile.relation.request.closed.title",
+                       defaultValue: "\(name) n'accepte pas de nouvelles demandes", bundle: .module),
+                form: .band,
+                lead: .systemImage("lock"),
+                detail: String(localized: "profile.relation.request.closed.detail",
+                               defaultValue: "Tu peux toujours lui écrire.", bundle: .module)
+            )
+            MeeshyButton(
+                String(localized: "profile.relation.request.send", defaultValue: "Demander à être amis", bundle: .module),
+                systemImage: "person.badge.plus",
+                kind: .outline,
+                width: .fill,
+                disabledReason: String(localized: "profile.relation.request.closed.reason",
+                                       defaultValue: "Demandes fermées", bundle: .module),
+                action: {}
+            )
+            .disabled(true)
+            .accessibilityIdentifier("profile.relation.request.closed.send")
         }
     }
 }
