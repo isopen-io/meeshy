@@ -14,8 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerializationException
 import me.meeshy.core.e2ee.wire.E2eeJson
 import me.meeshy.core.e2ee.wire.E2eeServedEnvelope
 import me.meeshy.sdk.model.socket.SocketEventNames
@@ -54,7 +54,7 @@ internal class EndToEndEnvelopeBinding @Inject constructor(
         val userId = session.currentUserId ?: return
         val queue = Channel<suspend () -> Unit>(Channel.UNLIMITED).also { work = it }
         jobs = listOf(
-            scope.launch { for (task in queue) runGuarded(task) },
+            scope.drainGuarded(queue),
             scope.launch { socket.connected.collect { enqueue { runtime.catchUp(userId) } } },
         )
         enqueue { runtime.prepare(userId) }
@@ -73,13 +73,14 @@ internal class EndToEndEnvelopeBinding @Inject constructor(
         jobs = emptyList()
     }
 
+    /** Une enveloppe poussée qui ne se lit pas, ou dont l'émetteur est hors format (#18973), s'écarte : le rattrapage la jugera. */
     private fun route(): SocketInboundRoute = SocketInboundRoute.raw(SocketEventNames.E2EE_ENVELOPE) { raw ->
         val envelope = try {
-            E2eeJson.decodeFromString(E2eeServedEnvelope.serializer(), raw.toString())
-        } catch (_: SerializationException) {
-            Timber.w("e2ee:envelope undecodable")
-            return@raw
+            E2eeServedEnvelope.decodeOrNull(E2eeJson.parseToJsonElement(raw.toString()))
         } catch (_: IllegalArgumentException) {
+            null
+        }
+        if (envelope == null) {
             Timber.w("e2ee:envelope undecodable")
             return@raw
         }
@@ -90,13 +91,20 @@ internal class EndToEndEnvelopeBinding @Inject constructor(
     private fun enqueue(task: suspend () -> Unit) {
         work?.trySend(task)
     }
+}
 
-    private suspend fun runGuarded(task: suspend () -> Unit) {
+/**
+ * La file de travail de la session : un travail qui échoue n'arrête jamais les suivants (#18970) — une `Error` levée sous
+ * libsignal ou par le coffre tuerait sinon la coroutine de la file, sans gestionnaire, et le processus avec elle, à chaque
+ * nouvelle enveloppe du même pair.
+ */
+internal fun CoroutineScope.drainGuarded(queue: ReceiveChannel<suspend () -> Unit>): Job = launch {
+    for (task in queue) {
         try {
             task()
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (failure: Exception) {
+        } catch (failure: Throwable) {
             Timber.w("e2ee session work failed: %s", failure.javaClass.simpleName)
         }
     }

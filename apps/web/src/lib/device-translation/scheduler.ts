@@ -83,7 +83,10 @@ export function createDeviceTranslationScheduler(params: {
     }
     try {
       const result = await translator.translate(job.text, { source: job.source, target: job.target });
-      await cache.write(job.key, result);
+      /* Un clair que le serveur ne lit pas (`shareable` faux : bout en bout,
+         mode inconnu) se traduit ici et n'en sort pas — ni vers les autres
+         membres, ni vers IndexedDB (#18991). */
+      await cache.write(job.key, result, { durable: job.origin.shareable });
       deliver({ messageId: job.messageId, source: job.source, target: job.target, ...result }, job.origin);
     } catch {
       return;

@@ -94,6 +94,12 @@ const mockReferralCodeFns = {
 
 jest.mock('../../../../routes/users/referral-code', () => mockReferralCodeFns);
 
+const mockMeAddressFns = {
+  meAddressRoutes: jest.fn<any>().mockResolvedValue(undefined),
+};
+
+jest.mock('../../../../routes/users/me-addresses', () => mockMeAddressFns);
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { userRoutes } from '../../../../routes/users/index';
@@ -114,6 +120,7 @@ describe('userRoutes — registers all route handler groups', () => {
     expect(mockProfileFns.updateUsername).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByUsername).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.userShortAddressAlias).toHaveBeenCalledWith(mockFastify);
+    expect(mockMeAddressFns.meAddressRoutes).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserById).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByEmail).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByIdDedicated).toHaveBeenCalledWith(mockFastify);
