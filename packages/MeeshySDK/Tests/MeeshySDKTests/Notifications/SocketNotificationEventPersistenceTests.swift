@@ -56,6 +56,22 @@ final class SocketNotificationEventPersistenceTests: XCTestCase {
         XCTAssertEqual(api.subtitle, "a commenté votre réel")
     }
 
+    /// Revue N9 (#19104, ios-notifs-3) — la ligne rangée par le socket dit la date de publication du contenu lié et
+    /// son expiration, comme celle que la relecture REST posera.
+    func test_toAPINotification_carriesTheLinkedContentDates() throws {
+        let event = try makeEvent("""
+        {
+            "id": "n7", "userId": "u1", "type": "story_reaction", "content": "a réagi à votre story",
+            "context": { "postId": "p1", "postCreatedAt": "2026-11-01T08:00:00.000Z", "postExpiresAt": "2026-11-02T08:00:00.000Z" }
+        }
+        """)
+
+        let api = event.toAPINotification(createdAt: "2026-11-01T09:00:00.000Z")
+
+        XCTAssertEqual(api.context?.postCreatedAt, "2026-11-01T08:00:00.000Z")
+        XCTAssertEqual(api.context?.postExpiresAt, "2026-11-02T08:00:00.000Z")
+    }
+
     func test_toAPINotification_isReadDefaultsToFalseWhenAbsent() throws {
         let event = try makeEvent("""
         { "id": "n2", "userId": "u1", "type": "friend_request", "content": "x" }

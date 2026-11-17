@@ -317,15 +317,11 @@ extension NotificationToastManager {
     /// `notificationMarkedRead`. Le compteur n'est pas touché :
     /// `notification:counts` le recale (#19104).
     func applyFriendRequestRead(_ friendRequestId: String) {
-        Task { [weak self] in
-            let cached = await CacheCoordinator.shared.notifications.loadIgnoringExpiry(for: "all")
-            let ids = (cached?.items ?? [])
-                .filter { !$0.isRead && $0.context?.friendRequestId == friendRequestId }
-                .map(\.id)
+        friendRequestNotificationsRead.send(friendRequestId)
+        Task {
             await CacheCoordinator.shared.notifications.update(for: "all") { items in
                 NotificationCachePatch.markingRead(items, friendRequestId: friendRequestId)
             }
-            ids.forEach { self?.notificationMarkedRead.send($0) }
         }
     }
 

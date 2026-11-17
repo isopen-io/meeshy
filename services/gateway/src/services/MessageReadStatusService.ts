@@ -723,7 +723,16 @@ export class MessageReadStatusService {
       const frozenCount = await this.freezeMessageStatus({
         participantId,
         conversationId,
-        since: prevDeliveredAt,
+        // #19261 — la POSITION, pas l'horloge. La plage se compare à
+        // `createdAt` ; `lastDeliveredAt` est l'heure à laquelle un accusé a
+        // été TRAITÉ. L'invariant tient en mode fenêtre pur (la borne haute
+        // d'un ack devient la borne basse du suivant) et se ROMPT après un
+        // préfixe PARTIEL du périmètre exact, qui fige un sous-ensemble en
+        // poussant quand même l'horloge : la plage suivante partait alors
+        // APRÈS le trou et ne le gravait jamais. S'ancrer sur la position
+        // élargit la fenêtre, donc ne peut que graver PLUS — et le gel est
+        // write-once, donc ré-ouvrir un intervalle déjà gravé n'écrit rien.
+        since: prevDeliveredPosition,
         at: now,
         field: "deliveredAt",
       });
@@ -838,21 +847,34 @@ export class MessageReadStatusService {
       // fenêtre du gel. Une erreur ici ne doit pas faire échouer le marquage
       // (on retombe sur `null` = gel depuis l'origine, lui-même résilient).
       let prevReadAt: Date | null = null;
-      let prevDeliveredAt: Date | null = null;
+      // #19261 — la POSITION du curseur de livraison, et ELLE SEULE. Même
+      // raison qu'en tête de `markMessagesAsReceived` : la plage du gel se
+      // compare à `createdAt`, donc elle s'ancre sur une position.
+      //
+      // `prevDeliveredAt` — l'horloge — a été RETIRÉ de cette portée plutôt que
+      // laissé inutilisé : le mauvais ancrage n'y est plus seulement interdit,
+      // il n'est plus DISPONIBLE. C'est strictement plus fort qu'un témoin, et
+      // `tsc` l'a exigé (TS6133) dans le même mouvement.
+      let prevDeliveredPosition: Date | null = null;
       let cursorExists = false;
       try {
         const prevCursor = await this.prisma.conversationReadCursor.findUnique({
           where: {
             conversation_participant_cursor: { participantId, conversationId },
           },
-          select: { lastReadAt: true, lastDeliveredAt: true },
+          select: {
+            lastReadAt: true,
+            lastDeliveredAt: true,
+            lastDeliveredMessageCreatedAt: true,
+          },
         });
         prevReadAt = prevCursor?.lastReadAt ?? null;
-        prevDeliveredAt = prevCursor?.lastDeliveredAt ?? null;
+        prevDeliveredPosition =
+          prevCursor?.lastDeliveredMessageCreatedAt ?? prevCursor?.lastDeliveredAt ?? null;
         cursorExists = prevCursor != null;
       } catch {
         prevReadAt = null;
-        prevDeliveredAt = null;
+        prevDeliveredPosition = null;
       }
 
       // Out-of-order read receipt (e.g. a second, staler device catching up
@@ -1053,7 +1075,11 @@ export class MessageReadStatusService {
         await this.freezeMessageStatus({
           participantId,
           conversationId,
-          since: prevDeliveredAt,
+          // #19261 — la POSITION, comme le mode fenêtre ci-dessus. Cette
+          // cascade est la JUMELLE de ce site, et une règle qu'il faut retaper
+          // à chaque endroit est une règle qu'un endroit finira par ne pas
+          // avoir : les deux sont reprises dans le même lot.
+          since: prevDeliveredPosition,
           at: now,
           field: "deliveredAt",
         });
