@@ -252,6 +252,98 @@ export class Opened {
 if (Symbol.dispose) Opened.prototype[Symbol.dispose] = Opened.prototype.free;
 
 /**
+ * L'en-tête d'un premier message (`PreKeySignalMessage`), lu SANS le déchiffrer.
+ */
+export class PreKeyMessageInfo {
+    static __wrap(ptr) {
+        const obj = Object.create(PreKeyMessageInfo.prototype);
+        obj.__wbg_ptr = ptr;
+        PreKeyMessageInfoFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        PreKeyMessageInfoFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_prekeymessageinfo_free(ptr, 0);
+    }
+    /**
+     * @returns {Uint8Array}
+     */
+    get identityKey() {
+        const ret = wasm.__wbg_get_prekeymessageinfo_identityKey(this.__wbg_ptr);
+        var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+        return v1;
+    }
+    /**
+     * @returns {number | undefined}
+     */
+    get kyberPreKeyId() {
+        const ret = wasm.__wbg_get_prekeymessageinfo_kyberPreKeyId(this.__wbg_ptr);
+        return ret === Number.MAX_SAFE_INTEGER ? undefined : ret;
+    }
+    /**
+     * @returns {number | undefined}
+     */
+    get preKeyId() {
+        const ret = wasm.__wbg_get_prekeymessageinfo_preKeyId(this.__wbg_ptr);
+        return ret === Number.MAX_SAFE_INTEGER ? undefined : ret;
+    }
+    /**
+     * @returns {number}
+     */
+    get registrationId() {
+        const ret = wasm.__wbg_get_prekeymessageinfo_registrationId(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @returns {number}
+     */
+    get signedPreKeyId() {
+        const ret = wasm.__wbg_get_prekeymessageinfo_signedPreKeyId(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+    /**
+     * @param {Uint8Array | number[]} arg0
+     */
+    set identityKey(arg0) {
+        const ptr0 = passArray8ToWasm0(arg0, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        wasm.__wbg_set_prekeymessageinfo_identityKey(this.__wbg_ptr, ptr0, len0);
+    }
+    /**
+     * @param {number | null} [arg0]
+     */
+    set kyberPreKeyId(arg0) {
+        wasm.__wbg_set_prekeymessageinfo_kyberPreKeyId(this.__wbg_ptr, isLikeNone(arg0) ? Number.MAX_SAFE_INTEGER : (arg0) >>> 0);
+    }
+    /**
+     * @param {number | null} [arg0]
+     */
+    set preKeyId(arg0) {
+        wasm.__wbg_set_prekeymessageinfo_preKeyId(this.__wbg_ptr, isLikeNone(arg0) ? Number.MAX_SAFE_INTEGER : (arg0) >>> 0);
+    }
+    /**
+     * @param {number} arg0
+     */
+    set registrationId(arg0) {
+        wasm.__wbg_set_prekeymessageinfo_registrationId(this.__wbg_ptr, arg0);
+    }
+    /**
+     * @param {number} arg0
+     */
+    set signedPreKeyId(arg0) {
+        wasm.__wbg_set_prekeymessageinfo_signedPreKeyId(this.__wbg_ptr, arg0);
+    }
+}
+if (Symbol.dispose) PreKeyMessageInfo.prototype[Symbol.dispose] = PreKeyMessageInfo.prototype.free;
+
+/**
  * Le magasin ÉPHÉMÈRE d'un appareil, rempli par l'appelant pour UNE opération.
  */
 export class ProtocolStore {
@@ -297,6 +389,13 @@ export class ProtocolStore {
      * présente de nouveau (`mark_kyber_pre_key_used`). Sans elle, un magasin
      * éphémère accepterait le rejeu d'un premier message sur une pré-clé Kyber
      * de dernier recours, vers son expéditeur comme vers une autre adresse.
+     *
+     * IDEMPOTENTE (#18994) : `mark_kyber_pre_key_used` ne rend `InvalidMessage`
+     * que pour une clé DÉJÀ présente (`storage/inmem.rs`). Un doublon persisté
+     * — deux onglets, une reprise après crash — rendait le magasin
+     * inconstructible pour TOUTE opération : le navigateur ne déchiffrait plus
+     * rien. Ce refus-là est ignoré ICI, à l'injection, et seulement ici : le
+     * rejeu d'un premier message reste refusé au déchiffrement.
      * @param {number} kyber_pre_key_id
      * @param {number} signed_pre_key_id
      * @param {Uint8Array | number[]} base_key
@@ -675,19 +774,120 @@ export function libsignalVersion() {
         wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
     }
 }
+
+/**
+ * Les pré-clés qu'un premier message engage, la génération et la clé
+ * d'identité de son expéditeur (#18992) : l'ouvreur ne charge du coffre que
+ * les pré-clés utiles, et confronte l'expéditeur avant tout déchiffrement.
+ * @param {Uint8Array | number[]} body
+ * @returns {PreKeyMessageInfo}
+ */
+export function preKeyMessageInfo(body) {
+    const ptr0 = passArray8ToWasm0(body, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.preKeyMessageInfo(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return PreKeyMessageInfo.__wrap(ret[0]);
+}
+
+/**
+ * La `registrationId` du pair qu'une session vise (#18992) — lue dans
+ * l'ENREGISTREMENT, seule source de vérité : une session dont la génération
+ * diffère de l'annuaire se jette et se rouvre (Sesame), et l'enveloppe
+ * s'adresse à cette génération.
+ * @param {Uint8Array | number[]} session
+ * @returns {number}
+ */
+export function sessionRemoteRegistrationId(session) {
+    const ptr0 = passArray8ToWasm0(session, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.sessionRemoteRegistrationId(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0] >>> 0;
+}
+
+/**
+ * La signature XEdDSA d'un message ARBITRAIRE par la clé d'identité de
+ * l'appareil (#18992) — la preuve de liaison que `POST /e2ee/devices` exige
+ * (`deviceBindingMessage`, `packages/shared/types/e2ee-directory.ts`), que
+ * l'iPhone produit par `privateKey.generateSignature` et que la passerelle
+ * vérifie par `PublicKey.verify`. XEdDSA est aléatoire : deux signatures du
+ * même message diffèrent, et toutes deux se vérifient.
+ * @param {Uint8Array | number[]} identity_key_pair
+ * @param {Uint8Array | number[]} message
+ * @returns {Uint8Array}
+ */
+export function signWithIdentity(identity_key_pair, message) {
+    let ptr0, len0, ptr1, len1;
+    try {
+        ptr0 = passArray8ToWasm0(identity_key_pair, wasm.__wbindgen_malloc);
+        len0 = WASM_VECTOR_LEN;
+        ptr1 = passArray8ToWasm0(message, wasm.__wbindgen_malloc);
+        len1 = WASM_VECTOR_LEN;
+    } catch (e) {
+        if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+        if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+        throw e;
+    }
+    const ret = wasm.signWithIdentity(ptr0, len0, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * La vérification d'une signature XEdDSA par une clé d'identité publique
+ * (33 octets) — `false` pour une signature fausse, une erreur pour une clé
+ * qui ne se décode pas.
+ * @param {Uint8Array | number[]} identity_key
+ * @param {Uint8Array | number[]} message
+ * @param {Uint8Array | number[]} signature
+ * @returns {boolean}
+ */
+export function verifyWithIdentity(identity_key, message, signature) {
+    let ptr0, len0, ptr1, len1, ptr2, len2;
+    try {
+        ptr0 = passArray8ToWasm0(identity_key, wasm.__wbindgen_malloc);
+        len0 = WASM_VECTOR_LEN;
+        ptr1 = passArray8ToWasm0(message, wasm.__wbindgen_malloc);
+        len1 = WASM_VECTOR_LEN;
+        ptr2 = passArray8ToWasm0(signature, wasm.__wbindgen_malloc);
+        len2 = WASM_VECTOR_LEN;
+    } catch (e) {
+        if (ptr2) { wasm.__wbindgen_free(ptr2, len2 * 1, 1); }
+        if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+        if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+        throw e;
+    }
+    const ret = wasm.verifyWithIdentity(ptr0, len0, ptr1, len1, ptr2, len2);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0] !== 0;
+}
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
-        __wbg_Error_208446807d0d1e30: function(arg0, arg1) {
-            const ret = Error(getStringFromWasm0(arg0, arg1));
-            return ret;
-        },
         __wbg___wbindgen_throw_4c88d8bf264fd984: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
         __wbg_getRandomValues_5d8c030b527203a6: function() { return handleError(function (arg0, arg1) {
             globalThis.crypto.getRandomValues(getArrayU8FromWasm0(arg0, arg1));
         }, arguments); },
+        __wbg_new_dc53efb841186258: function(arg0, arg1) {
+            const ret = new Error(getStringFromWasm0(arg0, arg1));
+            return ret;
+        },
+        __wbg_set_code_c89185db9fc0bace: function(arg0, arg1, arg2) {
+            arg0.code = getStringFromWasm0(arg1, arg2);
+        },
         __wbindgen_init_externref_table: function() {
             const table = wasm.__wbindgen_externrefs;
             table.set(0, undefined);
@@ -712,6 +912,9 @@ const GeneratedPreKeyFinalization = (typeof FinalizationRegistry === 'undefined'
 const OpenedFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_opened_free(ptr, 1));
+const PreKeyMessageInfoFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_prekeymessageinfo_free(ptr, 1));
 const ProtocolStoreFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_protocolstore_free(ptr, 1));

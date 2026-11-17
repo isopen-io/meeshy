@@ -451,7 +451,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       const { token } = request.params as { token: string };
-      const resolved = await trackingLinkService.resolveTarget(token);
+      const viewerId = isRegisteredUser(request.authContext) ? request.authContext.registeredUser!.id : undefined;
+      const resolved = await trackingLinkService.resolveTarget(token, viewerId);
       if (!resolved) {
         return sendNotFound(reply, 'Lien introuvable');
       }

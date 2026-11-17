@@ -89,6 +89,10 @@ function base() {
     friendRequest: table([]),
     // Les adresses d'amis d'un réseau tiers (#17117) : aucune conversation externe ouverte.
     externalConversationPeer: table([]),
+    // Les adresses de fiche (#18863) : un compte qui n'en a publié aucune.
+    profileAddress: table([]),
+    trackingLink: table([]),
+    trackingLinkClick: table([]),
     conversationShareLink: table([]),
     userContact,
     contactJoinNotice,

@@ -2880,6 +2880,399 @@
         "correctAt": 1,
         "bytesUsed": 3
       }
+    },
+    {
+      "name": "carre-avec-rejet",
+      "of": "ios-nouveau-android-approuve",
+      "role": "répondeur",
+      "bit1": [
+        0,
+        1
+      ],
+      "bit2": [
+        3,
+        5
+      ],
+      "streamHex": "fcff07f3fd15fe2af0fb9b",
+      "expected": {
+        "alternatives": {
+          "0": 45,
+          "1": 47,
+          "3": 30,
+          "5": 24
+        },
+        "permutation": 11,
+        "order": [
+          1,
+          3,
+          2,
+          0
+        ],
+        "displayed": [
+          {
+            "indexes": [
+              45,
+              47,
+              1,
+              8,
+              23,
+              45,
+              63
+            ],
+            "emoji": [
+              "✂️",
+              "🔑",
+              "🐱",
+              "🐼",
+              "🍌",
+              "✂️",
+              "📌"
+            ],
+            "names": {
+              "fr": [
+                "Ciseaux",
+                "Clé",
+                "Chat",
+                "Panda",
+                "Banane",
+                "Ciseaux",
+                "Punaise"
+              ],
+              "en": [
+                "Scissors",
+                "Key",
+                "Cat",
+                "Panda",
+                "Banana",
+                "Scissors",
+                "Pin"
+              ],
+              "es": [
+                "Tijeras",
+                "Llave",
+                "Gato",
+                "Panda",
+                "Plátano",
+                "Tijeras",
+                "Alfiler"
+              ],
+              "de": [
+                "Schere",
+                "Schlüssel",
+                "Katze",
+                "Panda",
+                "Banane",
+                "Schere",
+                "Stecknadel"
+              ],
+              "it": [
+                "Forbici",
+                "Chiave",
+                "Gatto",
+                "Panda",
+                "Banana",
+                "Forbici",
+                "Puntina"
+              ],
+              "pt-BR": [
+                "Tesoura",
+                "Chave",
+                "Gato",
+                "Panda",
+                "Banana",
+                "Tesoura",
+                "Alfinete"
+              ],
+              "ar": [
+                "مِقَصّ",
+                "مِفتَاح",
+                "هِرَّة",
+                "باندَا",
+                "مَوزَة",
+                "مِقَصّ",
+                "دَبُّوس"
+              ]
+            },
+            "decimal": [
+              6854,
+              1289,
+              4951
+            ]
+          },
+          {
+            "indexes": [
+              45,
+              47,
+              1,
+              30,
+              23,
+              24,
+              63
+            ],
+            "emoji": [
+              "✂️",
+              "🔑",
+              "🐱",
+              "😀",
+              "🍌",
+              "🍎",
+              "📌"
+            ],
+            "names": {
+              "fr": [
+                "Ciseaux",
+                "Clé",
+                "Chat",
+                "Sourire",
+                "Banane",
+                "Pomme",
+                "Punaise"
+              ],
+              "en": [
+                "Scissors",
+                "Key",
+                "Cat",
+                "Smiley",
+                "Banana",
+                "Apple",
+                "Pin"
+              ],
+              "es": [
+                "Tijeras",
+                "Llave",
+                "Gato",
+                "Emoticono",
+                "Plátano",
+                "Manzana",
+                "Alfiler"
+              ],
+              "de": [
+                "Schere",
+                "Schlüssel",
+                "Katze",
+                "Lächeln",
+                "Banane",
+                "Apfel",
+                "Stecknadel"
+              ],
+              "it": [
+                "Forbici",
+                "Chiave",
+                "Gatto",
+                "Faccina sorridente",
+                "Banana",
+                "Mela",
+                "Puntina"
+              ],
+              "pt-BR": [
+                "Tesoura",
+                "Chave",
+                "Gato",
+                "Sorriso",
+                "Banana",
+                "Maçã",
+                "Alfinete"
+              ],
+              "ar": [
+                "مِقَصّ",
+                "مِفتَاح",
+                "هِرَّة",
+                "اِبتِسَامَة",
+                "مَوزَة",
+                "تُفَّاحَة",
+                "دَبُّوس"
+              ]
+            },
+            "decimal": [
+              6854,
+              1377,
+              4783
+            ]
+          },
+          {
+            "indexes": [
+              37,
+              56,
+              1,
+              30,
+              23,
+              24,
+              63
+            ],
+            "emoji": [
+              "☂️",
+              "⚽",
+              "🐱",
+              "😀",
+              "🍌",
+              "🍎",
+              "📌"
+            ],
+            "names": {
+              "fr": [
+                "Parapluie",
+                "Ballon",
+                "Chat",
+                "Sourire",
+                "Banane",
+                "Pomme",
+                "Punaise"
+              ],
+              "en": [
+                "Umbrella",
+                "Ball",
+                "Cat",
+                "Smiley",
+                "Banana",
+                "Apple",
+                "Pin"
+              ],
+              "es": [
+                "Paraguas",
+                "Bola",
+                "Gato",
+                "Emoticono",
+                "Plátano",
+                "Manzana",
+                "Alfiler"
+              ],
+              "de": [
+                "Regenschirm",
+                "Ball",
+                "Katze",
+                "Lächeln",
+                "Banane",
+                "Apfel",
+                "Stecknadel"
+              ],
+              "it": [
+                "Ombrello",
+                "Palla",
+                "Gatto",
+                "Faccina sorridente",
+                "Banana",
+                "Mela",
+                "Puntina"
+              ],
+              "pt-BR": [
+                "Guarda-chuva",
+                "Bola",
+                "Gato",
+                "Sorriso",
+                "Banana",
+                "Maçã",
+                "Alfinete"
+              ],
+              "ar": [
+                "مِظَلَّة",
+                "كُرَة",
+                "هِرَّة",
+                "اِبتِسَامَة",
+                "مَوزَة",
+                "تُفَّاحَة",
+                "دَبُّوس"
+              ]
+            },
+            "decimal": [
+              5848,
+              1377,
+              4783
+            ]
+          },
+          {
+            "indexes": [
+              37,
+              56,
+              1,
+              8,
+              23,
+              45,
+              63
+            ],
+            "emoji": [
+              "☂️",
+              "⚽",
+              "🐱",
+              "🐼",
+              "🍌",
+              "✂️",
+              "📌"
+            ],
+            "names": {
+              "fr": [
+                "Parapluie",
+                "Ballon",
+                "Chat",
+                "Panda",
+                "Banane",
+                "Ciseaux",
+                "Punaise"
+              ],
+              "en": [
+                "Umbrella",
+                "Ball",
+                "Cat",
+                "Panda",
+                "Banana",
+                "Scissors",
+                "Pin"
+              ],
+              "es": [
+                "Paraguas",
+                "Bola",
+                "Gato",
+                "Panda",
+                "Plátano",
+                "Tijeras",
+                "Alfiler"
+              ],
+              "de": [
+                "Regenschirm",
+                "Ball",
+                "Katze",
+                "Panda",
+                "Banane",
+                "Schere",
+                "Stecknadel"
+              ],
+              "it": [
+                "Ombrello",
+                "Palla",
+                "Gatto",
+                "Panda",
+                "Banana",
+                "Forbici",
+                "Puntina"
+              ],
+              "pt-BR": [
+                "Guarda-chuva",
+                "Bola",
+                "Gato",
+                "Panda",
+                "Banana",
+                "Tesoura",
+                "Alfinete"
+              ],
+              "ar": [
+                "مِظَلَّة",
+                "كُرَة",
+                "هِرَّة",
+                "باندَا",
+                "مَوزَة",
+                "مِقَصّ",
+                "دَبُّوس"
+              ]
+            },
+            "decimal": [
+              5848,
+              1289,
+              4951
+            ]
+          }
+        ],
+        "correctAt": 3,
+        "bytesUsed": 11
+      }
     }
   ]
 }
