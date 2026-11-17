@@ -1,14 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createAccountVault } from './accounts';
+import { endRevokedSession, setDeviceFollower } from './account-end';
+
 import { createAuthClient } from './auth';
 import type { ApiResult, HttpRequest } from './http';
 import { createSessionStore, heldAccountOf, type SessionStorage, type SessionUser } from './session';
+import { followDeviceSession } from './session-follow';
 
 const NOW = Date.UTC(2026, 10, 17, 12, 0, 0);
 const ADA: SessionUser = { id: 'u-ada', username: 'ada' };
 const BOB: SessionUser = { id: 'u-bob', username: 'bob' };
-const CAROL: SessionUser = { id: 'u-carol', username: 'carol' };
 
 function fakeStorage(): SessionStorage {
   const raw = new Map<string, string>();
@@ -28,20 +29,32 @@ describe('se déconnecter d’un compte que l’appareil ne tient plus rend l’
     expect(adaTab.getState().session.status).toBe('authenticated');
   });
 
-  test('… sinon, se connecter depuis l’écran de connexion qui suit pose Carol par-dessus Bob, dont le jeton quitte l’appareil sans être rangé', async () => {
+  test('… et le jeton de Bob reste sur l’appareil : aucun écran de connexion ne vient poser un autre compte par-dessus', async () => {
     const storage = fakeStorage();
-    const vault = createAccountVault({ storage, now: () => NOW });
     const adaTab = createSessionStore({ storage, now: () => NOW });
     adaTab.getState().establish({ user: ADA, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 3600 });
-    const bobTab = createSessionStore({ storage, now: () => NOW });
-    bobTab.getState().establish({ user: BOB, token: 'jwt-bob', sessionToken: 'sess-bob', expiresIn: 3600 });
-    vault.noteActive(BOB);
+    createSessionStore({ storage, now: () => NOW }).getState().establish({ user: BOB, token: 'jwt-bob', sessionToken: 'sess-bob', expiresIn: 3600 });
 
     await createAuthClient({ transport: okTransport, store: adaTab }).logout();
-    adaTab.getState().establish({ user: CAROL, token: 'jwt-carol', sessionToken: 'sess-carol', expiresIn: 3600 });
 
     const device = heldAccountOf(createSessionStore({ storage, now: () => NOW }).getState().deviceSession());
-    const bobKept = vault.list().find((a) => a.user.id === BOB.id)?.session?.token ?? null;
-    expect(device?.user.id === BOB.id || bobKept === 'jwt-bob').toBe(true);
+    expect(device?.token).toBe('jwt-bob');
+    expect(heldAccountOf(adaTab.getState().session)?.token).toBe('jwt-bob');
+  });
+
+  test('la fin d’accès d’un invité de lien rend aussi l’onglet au compte que l’appareil tient', () => {
+    setDeviceFollower(followDeviceSession);
+    try {
+      const storage = fakeStorage();
+      const guestTab = createSessionStore({ storage, now: () => NOW });
+      guestTab.getState().establishGuest({ sessionToken: 'anon-1', guest: { participantId: null, nickname: 'visiteur', conversationId: 'c-9', link: 'lnk', mayWrite: true } });
+      createSessionStore({ storage, now: () => NOW }).getState().establish({ user: BOB, token: 'jwt-bob', sessionToken: 'sess-bob', expiresIn: 3600 });
+
+      endRevokedSession(guestTab, { storage, cacheStorage: { keys: async () => [], delete: async () => true }, publications: { clear: async () => undefined } });
+
+      expect(heldAccountOf(guestTab.getState().session)?.token).toBe('jwt-bob');
+    } finally {
+      setDeviceFollower(null);
+    }
   });
 });

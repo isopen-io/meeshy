@@ -38,6 +38,14 @@ struct PendingRowEvents: Sendable {
     var attachmentRemovals: [PendingAttachmentRemoval] = []
     var tombstone: PendingTombstone?
     var translations: [TranslationRecord] = []
+
+    /// Une modification rend caduques les traductions tamponnées : elles
+    /// traduisaient l'ancien texte, et rejouées elles doubleraient le nouveau
+    /// d'un faux (audit #19352).
+    mutating func keep(_ edit: PendingEdit) {
+        self.edit = edit
+        translations = []
+    }
 }
 
 /// Mémoire des événements arrivés avant leur message, bornée en NOMBRE (le plus

@@ -521,6 +521,10 @@ export function createAuthClient({ transport, store, linkSecrets = browserLinkDe
       held !== null && device !== null && device.user.id === held.user.id && heldSessionKey(device) !== heldSessionKey(held) ? device : null;
 
     state.clearSession({ device: other !== null });
+    /* L'appareil tient un AUTRE compte (audit #19352, N4) : l'onglet le tient
+       aussitôt, au lieu d'ouvrir l'écran de connexion — dont une connexion
+       poserait un troisième compte par-dessus celui-là sans le ranger. */
+    if (held !== null && device !== null && device.user.id !== held.user.id) store.setState({ session: device });
 
     // Un transport qui rejette NE réauthentifie PAS (§ doctrine ci-dessus) :
     // le wipe local a déjà eu lieu, et c'est la direction d'erreur qui ne

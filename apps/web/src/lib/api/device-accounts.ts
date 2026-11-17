@@ -5,7 +5,7 @@ import { unsentComments } from '../comments/unsent-comments';
 import { draftStore } from '../send/draft-store';
 import { safeLocalStorage } from '../storage';
 
-import { forgetAccountCaches } from './account-caches';
+import { forgetAccountCaches } from './account-end';
 import { createAccountSwitcher, createAccountVault, forgettingLocalData, purgeAccountLocalData } from './accounts';
 import { logout } from './auth';
 import { httpTransport } from './client';

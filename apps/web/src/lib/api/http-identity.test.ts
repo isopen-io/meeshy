@@ -83,7 +83,7 @@ describe('une requête en vol de A ne se résout pas sous B', () => {
     expect(unauthorized).toBe(0);
   });
 
-  test('même compte, l’onglet a repris entre-temps la session que l’appareil tient ⇒ le 401 du jeton quitté ne la ferme pas (#19132)', async () => {
+  test('même compte, l’onglet a repris entre-temps la session que l’appareil tient ⇒ le 401 du jeton quitté ne la ferme pas, la requête repart sous le jeton suivi (#19132, audit #19352)', async () => {
     const session: Session = { identity: 'u:a', credential: { kind: 'registered', token: 'jwt-a-ancien' } };
     const { impl, release } = deferredFetch({ status: 401, body: { success: false, error: 'Invalid JWT token' } });
     let unauthorized = 0;
@@ -93,10 +93,14 @@ describe('une requête en vol de A ne se résout pas sous B', () => {
 
     session.credential = { kind: 'registered', token: 'jwt-a-recent' };
     release();
+    const replayed = await settles(request);
+    expect(replayed).toBe(false);
+    expect(unauthorized).toBe(0);
 
+    release();
     const result = await request;
     expect(result.ok).toBe(false);
-    expect(unauthorized).toBe(0);
+    expect(unauthorized).toBe(1);
   });
 
   test('le 401 de l’identité COURANTE la déconnecte toujours', async () => {

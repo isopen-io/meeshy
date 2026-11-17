@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { endRevokedSession } from './account-caches';
+import { endRevokedSession } from './account-end';
 import { createSessionStore, heldAccountOf, sessionIdentityKey, type GuestIdentity, type SessionStorage } from './session';
 
 /**
