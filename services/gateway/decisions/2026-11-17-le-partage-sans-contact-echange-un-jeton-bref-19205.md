@@ -1,6 +1,8 @@
-# Le partage sans contact échange un jeton bref, signé, à usage unique (2026-11-17, #19205)
+## Le partage sans contact échange un jeton bref, signé, à usage unique (2026-11-17, #19205)
 
-## Contexte
+**Statut** : Accepté (lot serveur de #19205, planche du profil #18857), derrière `CONTACT_EXCHANGE_ENABLED` éteint.
+
+### Contexte
 
 La planche du profil (#18857, `Sans-Contact.dc.html`, `Carte-Profil.dc.html`) propose de
 rapprocher deux téléphones (NFC, QR en repli, QR seul sur le web) : « rien ne part tant que tu
@@ -8,7 +10,7 @@ n'as pas choisi », chacun coche ce qu'il donne — sa vitrine (ce que voit le P
 d'ami —, le numéro reste verrouillé « Proches seulement », puis « Sofia a reçu ta vitrine ».
 La seule voie existante était l'adresse publique `/@:username`, sans intention ni accusé.
 
-## Décision
+### Décision
 
 - `POST /api/v1/me/contact-exchange` `{ offers: ('vitrine' | 'friendRequest')[] }` rend
   `{ token, expiresAt, offers, locked: ['phone'] }`. Le jeton
@@ -34,14 +36,14 @@ La seule voie existante était l'adresse publique `/@:username`, sans intention 
   site) : éteintes, les deux routes répondent comme des routes absentes. Le drapeau s'allume
   après la revue `auditeur-adversarial` exigée par l'issue (jeton, rejeu, énumération).
 
-## Données personnelles
+### Données personnelles
 
 Rien de nouveau n'est persisté au-delà de deux minutes : l'association aléa → émetteur et la prise
 expirent seules ; la demande d'ami créée a déjà sa purge et son export. Aucune section d'export
 n'est ajoutée ; un compte purgé entre l'émission et l'acceptation n'est plus utilisable, et le jeton
 est refusé.
 
-## Ce qui reste
+### Ce qui reste
 
 - La découverte réciproque « Sofia Benali est là » AVANT le choix (étape 2 de la planche) est une
   poignée de main NFC entre appareils ; le serveur n'y intervient pas dans ce lot.
