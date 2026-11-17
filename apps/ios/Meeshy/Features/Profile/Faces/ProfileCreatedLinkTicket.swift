@@ -56,10 +56,18 @@ struct ProfileCreatedLinkTicket: View {
     /// et le geste qui le relance — il ouvre le détail, où la limite et l'interrupteur se règlent.
     private func consequence(of stoppage: LinksFaceStoppage) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.sm) {
-            Text(ProfileLinksCopy.stoppageConsequence(stoppage))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundStyle(ThemeManager.shared.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                Text(ProfileLinksCopy.stoppageConsequence(stoppage))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundStyle(ThemeManager.shared.textSecondary)
+                if let kept = ticket.keptFigure() {
+                    Text(ProfileLinksCopy.kept(kept, locale: locale))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                        .foregroundStyle(ThemeManager.shared.textMuted)
+                        .accessibilityIdentifier("profile.links.kept")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             if let relaunch = Self.relaunchTitle(stoppage, family: ticket.family) {
                 MeeshyButton(relaunch, systemImage: stoppage == .full ? "plus" : "power", kind: .outline, size: .s36,
                              tint: Self.tint(of: ticket.family), action: { open() })

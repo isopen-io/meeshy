@@ -147,6 +147,22 @@ nonisolated enum ProfileLinksCopy {
         }
     }
 
+    /// Ce qu'un lien en pause garde (planche `Etat-Erreur` vue 4) : « Ses 412 clics sont gardés. »
+    static func kept(_ figure: LinksFaceFigure, locale: Locale) -> String {
+        let format: String
+        switch figure {
+        case .arrivals:
+            format = String(localized: "profile.links.kept.arrivals", defaultValue: "Ses %@ arrivées sont gardées.", bundle: .main)
+        case .clicks:
+            format = String(localized: "profile.links.kept.clicks", defaultValue: "Ses %@ clics sont gardés.", bundle: .main)
+        case .members:
+            format = String(localized: "profile.links.kept.members", defaultValue: "Ses %@ membres restent.", bundle: .main)
+        case .referrals:
+            format = String(localized: "profile.links.kept.referrals", defaultValue: "Ses %@ filleuls sont gardés.", bundle: .main)
+        }
+        return String(format: format, figure.value.formatted(.number.locale(locale)))
+    }
+
     static var stoppedTitle: String {
         String(localized: "profile.links.stopped", defaultValue: "À l'arrêt", bundle: .main)
     }

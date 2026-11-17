@@ -110,6 +110,22 @@ struct LinksFaceSummaryTests {
         #expect(ticket.stoppage(now: now) == .paused)
     }
 
+    @Test func aPausedLinkKeepsWhatItCountedAndSaysIt() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let paused = LinksFaceSummary.ticket(share: share(uses: 23, cap: 50, active: false))
+        #expect(paused.keptFigure(now: now) == .arrivals(23, cap: 50))
+    }
+
+    @Test func nothingIsSaidKeptWhenThePausedLinkCountedNothingOrStillServes() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let emptyPaused = LinksFaceSummary.ticket(share: share(uses: 0, cap: 50, active: false))
+        let serving = LinksFaceSummary.ticket(share: share(uses: 23, cap: 50))
+        let expired = LinksFaceSummary.ticket(share: share(uses: 23, cap: 50, expiresAt: Date(timeIntervalSince1970: 10)))
+        #expect(emptyPaused.keptFigure(now: now) == nil)
+        #expect(serving.keptFigure(now: now) == nil)
+        #expect(expired.keptFigure(now: now) == nil)
+    }
+
     @Test func anExpiredLinkIsExpiredBeforeBeingFull() {
         let now = Date(timeIntervalSince1970: 1_000)
         let ticket = LinksFaceSummary.ticket(share: share(uses: 50, cap: 50, expiresAt: Date(timeIntervalSince1970: 10)))

@@ -884,6 +884,15 @@ final class TrackingLinkInsightsTests: XCTestCase {
         XCTAssertNil(ProfileCreatedLinkTicket.relaunchTitle(.paused, family: .referral))
     }
 
+    func test_pausedLink_saysWhatItKeeps_inTheWordsOfItsFigure() throws {
+        let french = Locale(identifier: "fr_FR")
+        XCTAssertEqual(ProfileLinksCopy.kept(.clicks(412), locale: french), String(format: String(localized: "profile.links.kept.clicks", defaultValue: "Ses %@ clics sont gardés.", bundle: .main), "412"))
+        XCTAssertNotEqual(ProfileLinksCopy.kept(.members(3), locale: french), ProfileLinksCopy.kept(.clicks(3), locale: french), "chaque chiffre se dit avec ce qu'il compte")
+        let ticket = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileCreatedLinkTicket.swift"))
+        XCTAssertTrue(ticket.contains("if let kept = ticket.keptFigure()"), "le compte gardé suit la conséquence de la pause")
+        XCTAssertTrue(ticket.contains("ProfileLinksCopy.kept(kept, locale: locale)"))
+    }
+
     func test_createdLinks_putTheStoppedOnesUnderTheirOwnHeader() throws {
         let face = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileLinksFaceSections.swift"))
         XCTAssertTrue(face.contains("tickets(model.summary.serving(model.visibleTickets))"), "ceux qui servent d'abord")

@@ -66,6 +66,13 @@ public struct LinksFaceTicket: Sendable, Equatable, Identifiable {
         if let expiresAt, expiresAt <= now { return .expired }
         return figure.fill == 1 ? .full : nil
     }
+
+    /// Ce qu'un lien en pause a compté et garde (planche `Etat-Erreur` vue 4, « Ses 412 clics sont gardés ») : le
+    /// chiffre du billet quand le lien est en pause et a compté quelque chose, sinon `nil`.
+    public func keptFigure(now: Date = Date()) -> LinksFaceFigure? {
+        guard stoppage(now: now) == .paused, figure.value > 0 else { return nil }
+        return figure
+    }
 }
 
 /// Le filtre de « Liens créés » : tous, ou une famille.
