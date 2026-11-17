@@ -622,6 +622,9 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
               email: true,
               phoneNumber: true,
               bio: true,
+              // #18862 — la ville déclarée et le cercle qui la lit.
+              city: true,
+              cityCircle: true,
               avatar: true,
               banner: true,
               systemLanguage: true,

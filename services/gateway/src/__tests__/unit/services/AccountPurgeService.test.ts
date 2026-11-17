@@ -535,6 +535,14 @@ describe('anonymizeUserIdentity', () => {
     });
   });
 
+  it('efface la ville déclarée et le cercle qui la lit (#18862) : un compte supprimé ne dit plus où il vit', async () => {
+    const prisma = fakeUserPrisma();
+    await anonymizeUserIdentity(prisma, USER_ID);
+
+    const [{ data }] = (prisma.user.updateMany as jest.Mock<any>).mock.calls[0] as [{ data: any }];
+    expect(data).toMatchObject({ city: null, cityCircle: null });
+  });
+
   it('retire le contour d’avatar et la bannière de design ÉQUIPÉS (#10632) : un compte supprimé ne garde aucun décor de profil', async () => {
     const prisma = fakeUserPrisma();
     await anonymizeUserIdentity(prisma, USER_ID);
