@@ -174,7 +174,7 @@ MediaCacheManager.shared    // Disk caching
 La bulle de message est decomposee sous `Meeshy/Features/Main/Views/Bubble/`. Le god object historique a ete elimine — `ThemedMessageBubble.swift` est un orchestrateur fin (~265 lignes) qui :
 1. Construit un `BubbleContent` (value model immuable) depuis le `Message` + contexte de traduction.
 2. Dispatche sur `content.kind` (`.deleted` / `.viewOnceSealed` / `.viewOnceOpened` / `.standard`) vers `BubbleDeletedView`, `BubbleViewOnceSealedView` (la puce `(1) · …`, #7618/#7579), ou `BubbleStandardLayout`.
-3. Possede les `@StateObject` de cycle de vie (`BubbleEphemeralController`, `BubbleBlurRevealController`) et les `@State` de presentation (sheets, fullscreen) — passes aux sous-vues comme `@ObservedObject`/`@Binding`.
+3. Possede le `@StateObject` de cycle de vie `BubbleBlurRevealController` (l'expiration ephemere vit dans `ConversationViewModel+EphemeralExpiry`) et les `@State` de presentation (sheets, fullscreen) — passes aux sous-vues comme `@ObservedObject`/`@Binding`.
 
 `BubbleStandardLayout` est l'orchestrateur du chemin standard. Il lit `content.text`, `content.attachments`, `content.reply`, `content.translation`, `content.reactions` via des `if let`/`switch` qui early-exit. Une bulle "Salut" n'instancie que le texte + meta-row : pas de quoted-reply, pas de panneau de traduction, pas de grille visuelle.
 
@@ -1636,7 +1636,7 @@ Le SDK Swift est dans `packages/MeeshySDK/` avec son propre `CLAUDE.md` et `deci
 ### REGLE CRITIQUE : Models et elements SDK
 **Toute modification de models, types, structs, enums ou elements lies au SDK DOIT se faire dans `packages/MeeshySDK/`**, jamais directement dans `apps/ios/`. L'app iOS consomme le SDK comme dependance — elle ne doit pas redefinir ou dupliquer les types du SDK.
 
-- Models API (`APIConversation`, `APIMessage`, `APIReaction`, etc.) → `packages/MeeshySDK/Sources/MeeshySDK/Models/`
+- Models API (`APIConversation`, `APIMessage`, etc.) → `packages/MeeshySDK/Sources/MeeshySDK/Models/`
 - Models domain (`MeeshyConversation`, `MeeshyMessage`, etc.) → `packages/MeeshySDK/Sources/MeeshySDK/Models/`
 - Extensions de conversion (`.toConversation()`, `.toMessage()`) → `packages/MeeshySDK/Sources/MeeshySDK/Models/`
 - Networking (`APIClient`, `APIResponse`, etc.) → `packages/MeeshySDK/Sources/MeeshySDK/Networking/`
@@ -1647,7 +1647,7 @@ L'app iOS (`apps/ios/`) ne contient que :
 - Les Views/ecrans de l'app
 - Les models purement locaux a l'app (ex: `SearchResultItem`, etats UI)
 - La navigation, le theming, et la configuration app
-- **L'orchestration UX produit** : View wrappers qui cascadent cache → downloader → policy, Views qui encodent des décisions Meeshy ("quand auto-DL", "comment cascader fallbacks"). Exemples : `VideoAvailabilityResolver`, `AttachmentDownloader`, `VideoMediaView`. Ces composants APPELLENT les services SDK mais ENCODENT des règles produit — donc app, pas SDK.
+- **L'orchestration UX produit** : View wrappers qui cascadent cache → downloader → policy, Views qui encodent des décisions Meeshy ("quand auto-DL", "comment cascader fallbacks"). Exemples : `VideoAvailabilityResolver`, `AttachmentDownloader`. Ces composants APPELLENT les services SDK mais ENCODENT des règles produit — donc app, pas SDK.
 
 ### Corollaire : ne PAS mettre dans le SDK
 Avant de migrer un composant vers le SDK, appliquer le **test du grain** (cf. `packages/MeeshySDK/CLAUDE.md` § REGLE CRITIQUE — SDK Purity) :
