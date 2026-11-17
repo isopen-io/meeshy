@@ -120,6 +120,14 @@ describe('les actions de la notification d’appel', () => {
     expect(await consumeCallAnswerConfirmation({ callId: 'call-1', now: Date.now(), indexedDB: worker.idb as unknown as IDBFactory })).toBe(true);
   });
 
+  test('Répondre, aucun onglet ouvert : une IndexedDB qui tarde ne retient pas l’ouverture de l’onglet au-delà de la fenêtre du clic (#18907)', async () => {
+    const worker = mount({ indexedDBStalls: true });
+    void worker.dispatch('notificationclick', click({ type: 'call', callId: 'call-1', conversationId: 'conv-1' }, 'answer'));
+    /* Firefox n'autorise `openWindow` qu'environ une seconde après le clic : la confirmation ne doit jamais coûter l'onglet. */
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(worker.opened).toEqual([`/c/conv-1?${CALL_ANSWER_PARAM}=call-1`]);
+  });
+
   test('Répondre, onglet déjà ouvert : rien n’est posé, le message du worker suffit', async () => {
     const worker = mount({ clients: [windowClient('hidden')] });
     await worker.dispatch('notificationclick', click({ type: 'call', callId: 'call-1', conversationId: 'conv-1' }, 'answer'));
