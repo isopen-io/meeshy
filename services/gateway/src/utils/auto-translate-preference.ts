@@ -109,11 +109,12 @@ export function mergeAutoTranslatePreference(
  * besoin de l'instance Fastify, que ce module n'a pas — et ne doit pas avoir.
  *
  * Lire-fusionner-écrire n'est PAS atomique : deux écritures concurrentes sur
- * deux clés DIFFÉRENTES du même document peuvent en perdre une. Ce n'est pas
- * une classe nouvelle — les quatre verbes de `PATCH/PUT /me/preferences/{cat}`
- * ont exactement cette forme — et la refermer se ferait pour les sept
- * catégories à la fois, pas pour cette clé seule. Dit ici pour que le prochain
- * lecteur n'ait pas à l'instruire une seconde fois.
+ * deux clés DIFFÉRENTES du même document peuvent en perdre une. Le `PATCH` des
+ * catégories JSON fusionne désormais DANS la base
+ * (`routes/me/preferences/preference-atomic-merge`, #18910) ; cet écrivain-ci
+ * garde la lecture-puis-écriture, et une bascule de `application` faite au
+ * même instant par `PATCH /me/preferences` peut encore s'y perdre. Dit ici
+ * pour que le prochain lecteur n'ait pas à l'instruire une seconde fois.
  */
 export async function writeAutoTranslateEnabled(
   prisma: AutoTranslatePreferenceStore,

@@ -129,4 +129,20 @@ describe('PATCH /me/preferences — deux bascules rapprochées', () => {
     expect(store.rowOf(USER_ID)?.application).toMatchObject({ theme: 'dark', fontSize: 'large' });
     await app.close();
   });
+
+  it('par l’adresse de catégorie (PATCH /me/preferences/notification, Android) : les deux bascules survivent', async () => {
+    const store = makeUserPreferencesStore({ rows: { [USER_ID]: { notification: { pushEnabled: true } } }, readLatencyMs: 40 });
+    const app = await buildApp(store);
+    const patchAlias = (body: object) => app.inject({ method: 'PATCH', url: '/me/preferences/notification', payload: body });
+
+    const [first, second] = await Promise.all([
+      patchAlias({ soundEnabled: false }),
+      patchAlias({ gameEnabled: false }),
+    ]);
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    expect(storedNotification(store)).toMatchObject({ pushEnabled: true, soundEnabled: false, gameEnabled: false });
+    await app.close();
+  });
 });
