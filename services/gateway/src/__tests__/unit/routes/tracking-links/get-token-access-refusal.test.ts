@@ -179,3 +179,20 @@ describe('GET /tracking-links/:token — le lien d’une ADRESSE de fiche est in
     expect(JSON.stringify(corps)).not.toContain('example.com');
   });
 });
+
+describe('les portes de gestion du lien d’une ADRESSE le disent introuvable à tout autre que son propriétaire (#19196)', () => {
+  it.each([
+    ['PATCH', `/tracking-links/${TOKEN}/deactivate`, undefined],
+    ['DELETE', `/tracking-links/${TOKEN}`, undefined],
+    ['PATCH', `/tracking-links/${TOKEN}`, { name: 'x' }],
+  ] as const)('%s %s : 404, jamais 403', async (method, url, payload) => {
+    const prisma = { ...prismaAutreUtilisateur(), trackingLink: { findUnique: jest.fn(async () => LIEN_ADRESSE) } };
+    const app = await monter(prisma);
+    try {
+      const reponse = await app.inject({ method, url, headers: JETON_VIVANT_AUTRE_UTILISATEUR, ...(payload ? { payload } : {}) });
+      expect(reponse.statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
+});

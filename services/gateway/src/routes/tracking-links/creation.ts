@@ -709,7 +709,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
 
-      if (!trackingLink) {
+      if (!trackingLink || isForeignAddressLink(trackingLink, request.authContext)) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
@@ -788,7 +788,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
 
-      if (!trackingLink) {
+      if (!trackingLink || isForeignAddressLink(trackingLink, request.authContext)) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
@@ -913,7 +913,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
 
-      if (!trackingLink) {
+      if (!trackingLink || isForeignAddressLink(trackingLink, request.authContext)) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
