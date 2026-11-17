@@ -175,7 +175,7 @@ describe('A revient : son cache est servi à l’instant', () => {
     expect(storage.raw.get('meeshy.query-cache') ?? '').toContain('liste de A');
   });
 
-  test('un cache rangé sous une AUTRE version (ou une autre API) n’est pas réhydraté', () => {
+  test('un cache rangé sous un AUTRE schéma (ou une autre API) n’est pas réhydraté', () => {
     const storage = fakeStorage();
     const { session, client } = appWith(storage, 'a');
     client.setQueryData(['conversations'], [{ id: 'c-a' }]);
@@ -185,8 +185,8 @@ describe('A revient : son cache est servi à l’instant', () => {
     signIn(other, 'b');
     const upgraded = createAppQueryClient({
       storage,
-      buster: `9.9.9:${busterOf('b')}`,
-      busterOf: (id) => `9.9.9:${busterOf(id)}`,
+      buster: `schema-4:${busterOf('b')}`,
+      busterOf: (id) => `schema-4:${busterOf(id)}`,
       session: other,
     });
     signIn(other, 'a');
@@ -330,15 +330,18 @@ describe('l’étagère est bornée et se vide à la fin d’un compte', () => {
     expect(journal.read('b', 'call-b')).toEqual([{ at: 2, kind: 'phase', phase: 'connected' }]);
   });
 
-  test('la mise à jour de l’application jette AUSSI l’étagère', () => {
+  test('une nouvelle version de l’application garde AUSSI l’étagère : le compte qui revient retrouve son cache (#18923)', () => {
     const storage = fakeStorage();
     const { session, client } = appWith(storage, 'a');
-    client.setQueryData(['conversations'], [{ id: 'c-a', title: 'secret de A' }]);
+    client.setQueryData(['conversations'], [{ id: 'c-a', title: 'liste de A' }]);
     signIn(session, 'b');
 
-    client.discardPersisted();
+    const reloaded = createSessionStore({ storage: fakeStorage() });
+    signIn(reloaded, 'b');
+    const nextVersion = createAppQueryClient({ storage, buster: busterOf('b'), busterOf, session: reloaded });
+    signIn(reloaded, 'a');
 
-    expect([...storage.raw.keys()].filter((key) => key.startsWith('meeshy.query-cache'))).toEqual([]);
+    expect(nextVersion.getQueryData(['conversations'])).toEqual([{ id: 'c-a', title: 'liste de A' }]);
   });
 
   test('un invité quitté n’est jamais rangé', () => {

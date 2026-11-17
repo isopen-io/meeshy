@@ -21,16 +21,22 @@ import { SW_UPDATE_AVAILABLE_EVENT } from './event';
  *     l'ÉVÉNEMENT est l'API, c'est la bannière qui écoute ;
  *  3. vérifications : au démarrage, au retour au premier plan, et au battement
  *     horaire (`service-worker-registration.ts:217-223`) ;
- *  4. au clic : purge des caches POSSÉDÉS, purge du cache de requêtes persisté,
- *     `postMessage({ type: 'SKIP_WAITING' })` au worker en attente, puis UN
- *     rechargement au `controllerchange` — et un rechargement quand même si
- *     quelque chose échoue.
+ *  4. au clic : purge des caches POSSÉDÉS, `postMessage({ type: 'SKIP_WAITING' })`
+ *     au worker en attente, puis UN rechargement au `controllerchange` — et un
+ *     rechargement quand même si quelque chose échoue.
  *
  * LA SESSION N'EST JAMAIS TOUCHÉE. `meeshy.session` (et les préférences, les
  * brouillons, le schéma, la langue d'interface) vivent dans le `localStorage`,
  * que ce module ne lit pas : la purge nomme ce qu'elle efface — deux seaux du
- * service worker, le namespace du legacy, une clé de cache de requêtes — plutôt
- * que d'effacer largement puis de restaurer ce qu'elle regrette.
+ * service worker et le namespace du legacy — plutôt que d'effacer largement
+ * puis de restaurer ce qu'elle regrette.
+ *
+ * LE CACHE DE REQUÊTES DU LECTEUR SURVIT À LA VERSION (#18923, qui révise
+ * #6936). Il était jeté au clic : le premier démarrage de chaque version
+ * peignait des squelettes partout, puis relisait la liste page après page. Il
+ * est désormais RANGÉ juste avant de partir, et la version neuve le relit au
+ * premier pixel ; seul un changement de forme le purge, par `CACHE_SCHEMA`
+ * (`query-client.ts`), tenu par `persisted-shapes.test.ts`.
  *
  * TROIS ÉCARTS ASSUMÉS avec le legacy, chacun pour un défaut mesuré chez lui :
  *
@@ -127,7 +133,8 @@ export type AppUpdateEnvironment = {
   readonly document: VisibilityHost;
   readonly caches: CacheStorageLike | undefined;
   readonly reload: () => void;
-  readonly discardPersistedCache: () => void;
+  /** Range le cache de requêtes maintenant : la version neuve le relira. */
+  readonly persistQueryCache: () => void;
   readonly setInterval: (handler: () => void, ms: number) => void;
   readonly setTimeout: (handler: () => void, ms: number) => void;
   readonly onError: (error: unknown) => void;
@@ -169,25 +176,13 @@ export function createAppUpdateController(env: AppUpdateEnvironment): AppUpdateC
   let registration: RegistrationLike | null = null;
   /** La page repart-elle ? Un seul rechargement, quel que soit le signal qui l'ordonne. */
   let leaving = false;
-  let discarded = false;
 
-  /**
-   * Le cache de requêtes de la version qui s'en va, jeté UNE fois — appelé au
-   * clic (avec la purge des seaux) et sur le `controllerchange` d'un autre
-   * onglet. Il ferme la porte que `query-client.ts` laisse ouverte : sa
-   * persistance est câblée sur `pagehide` et `visibilitychange`, tous deux
-   * déclenchés PAR le rechargement.
-   */
-  const discardPersisted = (): void => {
-    if (discarded) return;
-    discarded = true;
-    env.discardPersistedCache();
-  };
-
+  /** Le cache de requêtes est rangé juste avant de partir — au clic comme sur
+   * le `controllerchange` d'un autre onglet : la version neuve le relit. */
   const leave = (): void => {
     if (leaving) return;
     leaving = true;
-    discardPersisted();
+    env.persistQueryCache();
     env.reload();
   };
 
@@ -294,7 +289,6 @@ export function createAppUpdateController(env: AppUpdateEnvironment): AppUpdateC
 
     async applyUpdate(target: RegistrationLike): Promise<void> {
       await purgeOwnedCacheStorage(env.caches);
-      discardPersisted();
 
       const waiting = target.waiting;
       if (waiting === null) {
@@ -327,7 +321,7 @@ export function browserAppUpdateEnvironment(): AppUpdateEnvironment {
     document,
     caches: 'caches' in globalThis ? (globalThis.caches as unknown as CacheStorageLike) : undefined,
     reload: () => window.location.reload(),
-    discardPersistedCache: () => appQueryClient.discardPersisted(),
+    persistQueryCache: () => appQueryClient.persist(),
     setInterval: (handler, ms) => {
       window.setInterval(handler, ms);
     },
