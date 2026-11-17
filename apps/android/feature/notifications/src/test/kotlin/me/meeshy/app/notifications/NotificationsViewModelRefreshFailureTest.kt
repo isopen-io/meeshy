@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.NotificationState
 import me.meeshy.sdk.model.UnreadCountResponse
 import me.meeshy.sdk.net.api.NotificationApi
+import me.meeshy.sdk.notification.NotificationConsumptionEvents
 import me.meeshy.sdk.notification.NotificationRepository
 import org.junit.After
 import org.junit.Before
@@ -54,7 +55,7 @@ class NotificationsViewModelRefreshFailureTest {
     private fun viewModel(api: NotificationApi): NotificationsViewModel {
         val performer: NotificationQuickActionPerformer = mockk(relaxed = true)
         every { performer.friendIds() } returns emptySet()
-        return NotificationsViewModel(NotificationRepository(api), performer)
+        return NotificationsViewModel(NotificationRepository(api), performer, NotificationConsumptionEvents())
     }
 
     @Test

@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.NotificationCategoryFeed
 import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.sdk.model.NotificationQuickAction
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.notification.NotificationConsumptionEvents
 import me.meeshy.sdk.notification.NotificationRepository
 import javax.inject.Inject
 
@@ -76,6 +77,7 @@ sealed interface NotificationsEvent {
 class NotificationsViewModel @Inject constructor(
     private val notificationRepository: NotificationRepository,
     private val quickActionPerformer: NotificationQuickActionPerformer,
+    private val consumption: NotificationConsumptionEvents,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NotificationsUiState(friendIds = quickActionPerformer.friendIds()))

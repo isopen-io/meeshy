@@ -24,6 +24,7 @@ import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.sdk.model.NotificationQuickAction
 import me.meeshy.sdk.model.NotificationState
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.notification.NotificationConsumptionEvents
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.notification.NotificationScopePage
 import org.junit.After
@@ -40,6 +41,7 @@ import org.junit.Test
 class NotificationsViewModelTest {
 
     private val dispatcher = UnconfinedTestDispatcher()
+    private val events = NotificationConsumptionEvents()
 
     @Before
     fun setUp() {
@@ -90,7 +92,7 @@ class NotificationsViewModelTest {
     fun `projects a fresh cache result into state`() = runTest {
         val notifications = MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
         val repo = repository(notifications)
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         notifications.emit(CacheResult.Fresh(listOf(notification("1"), notification("2")), ageMillis = 0))
 
@@ -103,7 +105,7 @@ class NotificationsViewModelTest {
     fun `l'ecran ne relit rien de lui-meme tant que personne ne tire pour rafraichir`() = runTest {
         val notifications = MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
         val repo = repository(notifications)
-        NotificationsViewModel(repo, performer())
+        NotificationsViewModel(repo, performer(), events)
 
         notifications.emit(CacheResult.Fresh(listOf(notification("1")), ageMillis = 0))
         advanceUntilIdle()
@@ -115,7 +117,7 @@ class NotificationsViewModelTest {
     fun `an empty cache result shows the loading skeleton`() = runTest {
         val notifications = MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
         val repo = repository(notifications)
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         notifications.emit(CacheResult.Empty)
 
@@ -127,7 +129,7 @@ class NotificationsViewModelTest {
     fun `a stale cache result paints immediately while syncing continues`() = runTest {
         val notifications = MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
         val repo = repository(notifications)
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         notifications.emit(CacheResult.Stale(listOf(notification("1")), ageMillis = 999_999))
 
@@ -139,7 +141,7 @@ class NotificationsViewModelTest {
     @Test
     fun `a sync error surfaces the error message`() = runTest {
         val repo = repository()
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         capturedOnSyncError?.invoke(RuntimeException("Server error"))
 
@@ -151,7 +153,7 @@ class NotificationsViewModelTest {
     fun `unread count reflects the repository stream`() = runTest {
         val unreadCount = MutableStateFlow(0)
         val repo = repository(unreadCount = unreadCount)
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         unreadCount.value = 3
 
@@ -161,7 +163,7 @@ class NotificationsViewModelTest {
     @Test
     fun `load forces a repository refresh`() = runTest {
         val repo = repository()
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.load()
 
@@ -171,7 +173,7 @@ class NotificationsViewModelTest {
     @Test
     fun `markAsRead delegates to the repository`() = runTest {
         val repo = repository()
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.markAsRead("n1")
 
@@ -181,7 +183,7 @@ class NotificationsViewModelTest {
     @Test
     fun `markAllRead delegates to the repository`() = runTest {
         val repo = repository()
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.markAllRead()
 
@@ -191,7 +193,7 @@ class NotificationsViewModelTest {
     @Test
     fun `deleteNotification delegates to the repository`() = runTest {
         val repo = repository()
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.deleteNotification("n1")
 
@@ -213,7 +215,7 @@ class NotificationsViewModelTest {
         val hasMore = MutableStateFlow(true)
         val repo = repository(hasMore = hasMore)
         coEvery { repo.loadMore() } returns NetworkResult.Success(Unit)
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.loadMore()
 
@@ -224,7 +226,7 @@ class NotificationsViewModelTest {
     fun `loadMore is inert when the repository reports no further page`() = runTest {
         val hasMore = MutableStateFlow(false)
         val repo = repository(hasMore = hasMore)
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.loadMore()
 
@@ -237,7 +239,7 @@ class NotificationsViewModelTest {
         val repo = repository(hasMore = hasMore)
         val pending = CompletableDeferred<NetworkResult<Unit>>()
         coEvery { repo.loadMore() } coAnswers { pending.await() }
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.loadMore()
         vm.loadMore()
@@ -256,7 +258,7 @@ class NotificationsViewModelTest {
 
     private fun vmWith(vararg rows: ApiNotification): NotificationsViewModel {
         val notifications = MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
-        val vm = NotificationsViewModel(repository(notifications), performer())
+        val vm = NotificationsViewModel(repository(notifications), performer(), events)
         notifications.tryEmit(CacheResult.Fresh(rows.toList(), ageMillis = 0))
         return vm
     }
@@ -321,7 +323,7 @@ class NotificationsViewModelTest {
     @Test
     fun `selecting a category asks the gateway for that category's own page`() = runTest {
         val repo = repository()
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.selectCategory(NotificationFilterCategory.MESSAGES)
 
@@ -335,7 +337,7 @@ class NotificationsViewModelTest {
         val repo = repository()
         coEvery { repo.listScopePage(any(), any(), any(), any()) } returns
             NetworkResult.Success(page(listOf(typed("old", "new_message"))))
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.selectCategory(NotificationFilterCategory.MESSAGES)
 
@@ -347,7 +349,7 @@ class NotificationsViewModelTest {
         val repo = repository()
         coEvery { repo.listScopePage(any(), any(), any(), any()) } returns
             NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "boom"))
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.selectCategory(NotificationFilterCategory.MESSAGES)
 
@@ -362,7 +364,7 @@ class NotificationsViewModelTest {
         coEvery { repo.listScopePage(scope, null, 0, any()) } returns NetworkResult.Success(page(full, true, "cur-1"))
         coEvery { repo.listScopePage(scope, "cur-1", any(), any()) } returns
             NetworkResult.Success(page(listOf(typed("m31", "new_message")), false, null))
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.selectCategory(NotificationFilterCategory.MESSAGES)
         vm.loadMore()
@@ -379,7 +381,7 @@ class NotificationsViewModelTest {
         val messages = NotificationFilterCategory.MESSAGES.scope()
         coEvery { repo.listScopePage(messages, null, 0, any()) } returns
             NetworkResult.Success(page(listOf(typed("m1", "new_message")), true, "cur-m"))
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.selectCategory(NotificationFilterCategory.MESSAGES)
         vm.selectCategory(NotificationFilterCategory.CALLS)
@@ -391,7 +393,7 @@ class NotificationsViewModelTest {
     @Test
     fun `the unread chip asks the gateway for unreadOnly`() = runTest {
         val repo = repository()
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.selectCategory(NotificationFilterCategory.UNREAD)
 
@@ -403,7 +405,7 @@ class NotificationsViewModelTest {
         val hasMore = MutableStateFlow(true)
         val repo = repository(hasMore = hasMore)
         coEvery { repo.loadMore() } returns NetworkResult.Success(Unit)
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.selectCategory(NotificationFilterCategory.MESSAGES)
         vm.selectCategory(NotificationFilterCategory.ALL)
@@ -415,7 +417,7 @@ class NotificationsViewModelTest {
     @Test
     fun `a sync error on an empty cache raises the error state and drops the skeleton`() = runTest {
         val repo = repository()
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         capturedOnSyncError?.invoke(RuntimeException("offline"))
 
@@ -427,7 +429,7 @@ class NotificationsViewModelTest {
     fun `a failed markAsRead announces itself once`() = runTest {
         val repo = repository()
         coEvery { repo.markAsRead("n1") } returns NetworkResult.Failure(me.meeshy.sdk.net.ApiError(message = "x"))
-        val vm = NotificationsViewModel(repo, performer())
+        val vm = NotificationsViewModel(repo, performer(), events)
 
         vm.markAsRead("n1")
 
@@ -440,7 +442,7 @@ class NotificationsViewModelTest {
         val performer = performer()
         coEvery { performer.perform(any()) } returns QuickActionOutcome.Failed
         val repo = repository()
-        val vm = NotificationsViewModel(repo, performer)
+        val vm = NotificationsViewModel(repo, performer, events)
 
         vm.performQuickAction(typed("n1", "contact_joined"), NotificationQuickAction.Connect("u1"))
 
@@ -454,7 +456,7 @@ class NotificationsViewModelTest {
     fun `connect stays sent once the request left`() = runTest {
         val performer = performer()
         coEvery { performer.perform(any()) } returns QuickActionOutcome.Connected
-        val vm = NotificationsViewModel(repository(), performer)
+        val vm = NotificationsViewModel(repository(), performer, events)
 
         vm.performQuickAction(typed("n1", "contact_joined"), NotificationQuickAction.Connect("u1"))
 
@@ -465,7 +467,7 @@ class NotificationsViewModelTest {
     fun `write opens the direct conversation`() = runTest {
         val performer = performer()
         coEvery { performer.perform(any()) } returns QuickActionOutcome.OpenConversation("c9")
-        val vm = NotificationsViewModel(repository(), performer)
+        val vm = NotificationsViewModel(repository(), performer, events)
 
         vm.performQuickAction(typed("n1", "contact_joined"), NotificationQuickAction.Write("u1"))
 
@@ -477,7 +479,7 @@ class NotificationsViewModelTest {
         val performer = performer()
         val answer = CompletableDeferred<QuickActionOutcome>()
         coEvery { performer.perform(any()) } coAnswers { answer.await() }
-        val vm = NotificationsViewModel(repository(), performer)
+        val vm = NotificationsViewModel(repository(), performer, events)
 
         vm.performQuickAction(typed("n1", "contact_joined"), NotificationQuickAction.Write("u1"))
         vm.performQuickAction(typed("n1", "contact_joined"), NotificationQuickAction.Write("u1"))
@@ -491,7 +493,7 @@ class NotificationsViewModelTest {
 
     private fun categoryVm(repo: NotificationRepository, vararg served: ApiNotification): NotificationsViewModel {
         coEvery { repo.listScopePage(any(), any(), any(), any()) } returns NetworkResult.Success(page(served.toList()))
-        return NotificationsViewModel(repo, performer())
+        return NotificationsViewModel(repo, performer(), events)
     }
 
     @Test
