@@ -875,6 +875,31 @@ final class TrackingLinkInsightsTests: XCTestCase {
         XCTAssertFalse(accepted.isActive)
     }
 
+    func test_stoppedLink_offersTheGestureItsDetailKnows_andNoneWhenExpired() {
+        XCTAssertEqual(ProfileCreatedLinkTicket.relaunchTitle(.full, family: .share), ProfileLinksCopy.raiseLimit)
+        XCTAssertEqual(ProfileCreatedLinkTicket.relaunchTitle(.paused, family: .share), ProfileLinksCopy.turnBackOn)
+        XCTAssertEqual(ProfileCreatedLinkTicket.relaunchTitle(.paused, family: .tracking), ProfileLinksCopy.turnBackOn)
+        XCTAssertNil(ProfileCreatedLinkTicket.relaunchTitle(.expired, family: .share), "un lien expiré ne se relance pas d'un geste")
+        XCTAssertNil(ProfileCreatedLinkTicket.relaunchTitle(.full, family: .tracking), "un lien de suivi n'a pas de limite")
+        XCTAssertNil(ProfileCreatedLinkTicket.relaunchTitle(.paused, family: .referral))
+    }
+
+    func test_createdLinks_putTheStoppedOnesUnderTheirOwnHeader() throws {
+        let face = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileLinksFaceSections.swift"))
+        XCTAssertTrue(face.contains("tickets(model.summary.serving(model.visibleTickets))"), "ceux qui servent d'abord")
+        XCTAssertTrue(face.contains("stoppedSection(model.summary.stopped(model.visibleTickets))"), "« À l'arrêt » dessous")
+        XCTAssertTrue(face.contains("MeeshySectionHeader(title: ProfileLinksCopy.stoppedTitle, count: stopped.count"))
+    }
+
+    func test_contactlessUnavailable_isAStateBlock_thenTheQRInstead_withShowMyQR() throws {
+        let card = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Links/ProfileCardView.swift"))
+        XCTAssertTrue(card.contains("MeeshyStateBlock(kind: .denied, title: ProfileLinksCopy.contactlessUnavailable"),
+                      "« Ce téléphone ne sait pas faire ça » est un bloc d'état K38")
+        XCTAssertTrue(card.contains("MeeshySectionHeader(title: ProfileLinksCopy.instead"), "« À la place »")
+        XCTAssertTrue(card.contains("action: { mode = .qr }"), "« Montrer mon QR » passe au QR")
+        XCTAssertTrue(card.contains("scannerShown = true"), "scanner celui de l'autre reste possible")
+    }
+
     func test_trackingDetail_isMadeOfTheKit() throws {
         let detail = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Links/Views/TrackingLinkDetailView.swift"))
         for piece in ["MeeshyTicket(", "MeeshyCodeCard(", "MeeshyLabeledAction(", "MeeshyFigureBand(", "MeeshyChart(",

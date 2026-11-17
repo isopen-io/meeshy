@@ -195,14 +195,23 @@ nonisolated enum ProfileLinksCopy {
         String(localized: "profile.card.qrShows", defaultValue: "Ce QR montre ma vitrine publique", bundle: .main)
     }
     static var qrLabel: String { String(localized: "profile.card.qrLabel", defaultValue: "QR de mon profil", bundle: .main) }
-    static var showThisQR: String {
-        String(localized: "profile.contactless.show", defaultValue: "Montre ce QR", bundle: .main)
-    }
     static var orScan: String {
         String(localized: "profile.contactless.orScan", defaultValue: "Ou scanne le sien", bundle: .main)
     }
-    static var noChip: String {
-        String(localized: "profile.contactless.noChip", defaultValue: "Sur iPhone, la puce n'échange pas de profil : le QR fait le même geste.", bundle: .main)
+    static var contactlessUnavailable: String {
+        String(localized: "profile.contactless.unavailable", defaultValue: "Ce téléphone ne sait pas faire ça", bundle: .main)
+    }
+    static var qrDoesTheSame: String {
+        String(localized: "profile.contactless.qrDoesTheSame", defaultValue: "Ton QR fait la même chose.", bundle: .main)
+    }
+    static var instead: String {
+        String(localized: "profile.contactless.instead", defaultValue: "À la place", bundle: .main)
+    }
+    static var anyCamera: String {
+        String(localized: "profile.contactless.anyCamera", defaultValue: "À scanner avec n'importe quel appareil photo.", bundle: .main)
+    }
+    static var showMyQR: String {
+        String(localized: "profile.contactless.showMyQR", defaultValue: "Montrer mon QR", bundle: .main)
     }
 
     // MARK: - Le lecteur de QR

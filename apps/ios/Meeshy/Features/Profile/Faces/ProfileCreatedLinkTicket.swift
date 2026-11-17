@@ -60,7 +60,7 @@ struct ProfileCreatedLinkTicket: View {
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundStyle(ThemeManager.shared.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if let relaunch = relaunchTitle(stoppage) {
+            if let relaunch = Self.relaunchTitle(stoppage, family: ticket.family) {
                 MeeshyButton(relaunch, systemImage: stoppage == .full ? "plus" : "power", kind: .outline, size: .s36,
                              tint: Self.tint(of: ticket.family), action: { open() })
             }
@@ -68,9 +68,10 @@ struct ProfileCreatedLinkTicket: View {
         .padding(.horizontal, MeeshySpacing.xs)
     }
 
-    /// Le geste qui relance un lien arrêté, quand l'app a de quoi le faire depuis son détail.
-    private func relaunchTitle(_ stoppage: LinksFaceStoppage) -> String? {
-        switch (stoppage, destination) {
+    /// Le geste qui relance un lien arrêté, quand son détail sait le faire : la limite d'un lien de partage plein,
+    /// l'interrupteur d'un lien de partage ou de suivi en pause. Un lien expiré ne se relance pas d'un geste.
+    static func relaunchTitle(_ stoppage: LinksFaceStoppage, family: LinksFaceFamily) -> String? {
+        switch (stoppage, family) {
         case (.full, .share): return ProfileLinksCopy.raiseLimit
         case (.paused, .share), (.paused, .tracking): return ProfileLinksCopy.turnBackOn
         default: return nil

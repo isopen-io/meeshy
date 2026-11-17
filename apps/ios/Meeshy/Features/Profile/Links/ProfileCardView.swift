@@ -131,14 +131,23 @@ struct ProfileCardView: View {
 
     // MARK: - Sans contact
 
+    /// Le sans contact indisponible (planche `Etat-Erreur` vue 6) : le téléphone le dit en bloc d'état (K38), et « À la
+    /// place » montre le QR qui fait le même geste, avec « Montrer mon QR » qui passe au QR plein écran.
     private var contactlessContent: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-            MeeshyNote(ProfileLinksCopy.noChip, form: .band, lead: .systemImage("wave.3.right"), tint: accent)
-            MeeshySectionHeader(title: ProfileLinksCopy.showThisQR)
+            MeeshyStateBlock(kind: .denied, title: ProfileLinksCopy.contactlessUnavailable,
+                             message: ProfileLinksCopy.qrDoesTheSame, art: .glyph, size: .compact, tint: accent,
+                             systemImage: "wave.3.right")
+                .accessibilityIdentifier("profile.card.contactless.unavailable")
+            MeeshySectionHeader(title: ProfileLinksCopy.instead, form: .overline)
             codeCard(size: .compact)
                 .frame(maxWidth: .infinity)
+            MeeshyNote(ProfileLinksCopy.anyCamera, lead: .systemImage("camera"))
+            MeeshyButton(ProfileLinksCopy.showMyQR, systemImage: "qrcode", kind: .primary, width: .fill, tint: accent,
+                         action: { mode = .qr })
+                .accessibilityIdentifier("profile.card.contactless.showQR")
             MeeshySectionHeader(title: ProfileLinksCopy.orScan)
-            MeeshyButton(ProfileLinksCopy.scan, systemImage: "qrcode.viewfinder", kind: .primary, width: .fill,
+            MeeshyButton(ProfileLinksCopy.scan, systemImage: "qrcode.viewfinder", kind: .outline, width: .fill,
                          tint: accent, action: { scannerShown = true })
         }
     }
