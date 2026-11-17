@@ -66,3 +66,53 @@ final class CacheCoordinatorCommunityUpdatesTests: XCTestCase {
         XCTAssertEqual(names, ["Ancien"])
     }
 }
+
+/// `community:member-*` (#18767) réécrivent l'effectif PERSISTÉ, et le rôle du
+/// lecteur quand le geste le concerne.
+final class CacheCoordinatorCommunityMemberChangesTests: XCTestCase {
+
+    private func makeSUT() throws -> (CacheCoordinator, MockMessageSocket) {
+        let db = try DatabaseQueue(configuration: Configuration())
+        try AppDatabase.runMigrations(on: db)
+        let socket = MockMessageSocket()
+        return (CacheCoordinator(messageSocket: socket, socialSocket: MockSocialSocket(), db: db), socket)
+    }
+
+    private func row(id: String) -> APICommunity {
+        APICommunity(
+            id: id, identifier: "mshy_\(id)", name: id, description: nil, avatar: nil, banner: nil,
+            isPrivate: false, createdBy: "u-creator", createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000), creator: nil, members: nil, _count: nil,
+            memberCount: 3, conversationCount: 1, currentUserRole: "member"
+        )
+    }
+
+    func test_memberJoined_rewritesTheCachedCountAndOnlyIt() async throws {
+        let (cache, socket) = try makeSUT()
+        await cache.start()
+        try await cache.communities.save([row(id: "c1"), row(id: "c2")], for: "list")
+
+        socket.communityMemberChanged.send(CommunityMemberChange(communityId: "c1", userId: "u-third", memberCount: 4, role: .member)!)
+
+        let deadline = Date().addingTimeInterval(2)
+        var rows: [APICommunity] = []
+        while Date() < deadline {
+            rows = await cache.communities.load(for: "list").snapshot() ?? []
+            if rows.first(where: { $0.id == "c1" })?.memberCount == 4 { break }
+            try? await Task.sleep(nanoseconds: 15_000_000)
+        }
+        XCTAssertEqual(rows.first(where: { $0.id == "c1" })?.memberCount, 4)
+        XCTAssertEqual(rows.first(where: { $0.id == "c1" })?.currentUserRole, "member", "un tiers ne déplace pas le rôle du lecteur")
+        XCTAssertEqual(rows.first(where: { $0.id == "c2" })?.memberCount, 3)
+    }
+
+    func test_unknownCommunity_leavesTheCacheIntact() async throws {
+        let (cache, _) = try makeSUT()
+        try await cache.communities.save([row(id: "c1")], for: "list")
+
+        await cache.applyCommunityMemberChange(CommunityMemberChange(communityId: "ghost", userId: "u", memberCount: 9, role: nil)!)
+
+        let counts = await cache.communities.load(for: "list").snapshot()?.map(\.memberCount)
+        XCTAssertEqual(counts, [3])
+    }
+}

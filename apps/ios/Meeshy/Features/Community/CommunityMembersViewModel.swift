@@ -25,15 +25,29 @@ final class CommunityMembersViewModel: ObservableObject, CommunityMembersModelin
     private let service: CommunityServiceProviding
     private let currentUserId: @MainActor () -> String
     private let log = MeeshyLog.logger(.ui)
+    private var liveMembers: AnyCancellable?
+    private let memberLane = OrderedEventLane()
 
+    /// `memberChanges` : `community:member-*` (#18767) — la charge ne nomme la
+    /// personne que par son identifiant ; la liste ouverte se RELIT, et la
+    /// relecture repasse par les gardes de la passerelle (présence, blocage).
     init(
         communityId: String,
         service: CommunityServiceProviding = CommunityService.shared,
-        currentUserId: @escaping @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" }
+        currentUserId: @escaping @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" },
+        memberChanges: AnyPublisher<CommunityMemberChange, Never> = CommunityMemberChannel.live
     ) {
         self.communityId = communityId
         self.service = service
         self.currentUserId = currentUserId
+        self.liveMembers = memberChanges
+            .relay(through: memberLane) { [weak self] change in await self?.apply(change) }
+    }
+
+    /// Une liste jamais chargée ne se charge pas sur un événement : l'écran le fera.
+    func apply(_ change: CommunityMemberChange) async {
+        guard change.communityId == communityId, hasLoaded else { return }
+        await refresh()
     }
 
     func loadIfNeeded() async {
