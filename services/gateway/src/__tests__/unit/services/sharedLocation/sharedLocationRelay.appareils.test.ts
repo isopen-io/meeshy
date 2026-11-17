@@ -33,6 +33,7 @@ describe('mon partage, tel que la passerelle le sert à mes appareils', () => {
         { userId: SANG, precision: 'city', expiresAt: iso(T0 + HEURE / 2) },
       ].sort((a, b) => a.userId.localeCompare(b.userId)),
       expiresAt: iso(T0 + HEURE),
+      shareBattery: false,
     });
   });
 

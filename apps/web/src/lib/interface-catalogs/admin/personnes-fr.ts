@@ -155,6 +155,7 @@ const f = {
   'admin.people.pref.notification.contactActivityEnabled': 'Retour d’un contact sur Meeshy',
   'admin.people.pref.notification.deviceBatteryEnabled': 'Batterie faible d’un proche',
   'admin.people.pref.notification.deviceUnreachableEnabled': 'Téléphone injoignable de mes Proches',
+  'admin.people.pref.notification.locationShareEnabled': 'Partages de position de mes proches',
   'admin.people.pref.notification.gameEnabled': 'Notification du jeu Meeshy',
   'admin.people.pref.notification.gamePhotoEnabled': 'Moments à immortaliser (push du jeu)',
   'admin.people.pref.notification.bringEnabled': 'Recevoir des Bring (son forcé)',

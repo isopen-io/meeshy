@@ -131,6 +131,8 @@ model User {
   city                      String?
   /// Cercle (RelationLevel) à partir duquel la ville se lit ; null = la personne seule.
   cityCircle                String?
+  /// Couleur d'accent de la vitrine (#19201) : une teinte de PROFILE_ACCENT_HEXES ; null = accent calculé.
+  profileAccentColor        String?
   /// Adresses personnelles publiées sur la fiche (#18863).
   profileAddresses          ProfileAddress[]
   email                     String   @unique
@@ -2217,6 +2219,31 @@ model PairInteractionDay {
   @@index([userHighId, day])
 }
 
+/// LES VISITES DE MON LIEN DE PROFIL, par jour UTC (#19206, chantier #18857).
+///
+/// Une ligne par propriétaire et par jour : `visits` compte les ouvertures de sa fiche par
+/// `/@pseudo` (redirigé vers `/directory/people/:handle`), `/u/:username` ou
+/// `/directory/people/:handle`. AGRÉGAT seulement : aucune IP, aucun identifiant de visiteur,
+/// aucune ville. Ni le propriétaire ni un robot d'aperçu ne comptent ; le dédoublonnage se fait
+/// en Redis par fenêtre de trente minutes, sous une empreinte HMAC du jour qui ne se garde pas.
+///
+/// Incrément ATOMIQUE sans lecture (`increment`), reprise en incrément sur `P2002`. Seul le
+/// propriétaire lit (`GET /users/me/profile-link/stats`) ; purgée avec le compte, exportée.
+///
+/// Expiration : `expiresAt` porte un index TTL (`expireAfterSeconds: 0`) posé par
+/// `migrations/2026-11-17-profile-link-visit-day-indexes.mongodb.js`, hors `db push`.
+/// Conservation 40 jours (`PROFILE_LINK_VISIT_RETENTION_DAYS`).
+model ProfileLinkVisitDay {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  /// Minuit UTC du jour compté.
+  day       DateTime
+  visits    Int      @default(0)
+  expiresAt DateTime
+
+  @@unique([userId, day])
+}
+
 /// Les CONSENTEMENTS d'une personne envers UNE AUTRE, écrits au rituel du Sang
 /// (#13933, cercles de proximité, RG-09). Une ligne par couple ORIENTÉ (`ownerId`
 /// règle, `otherId` en bénéficie) : la loi d'accès dit le PLAFOND de ce que le niveau
@@ -2611,12 +2638,27 @@ model EmailInvitation {
   email            String
   affiliateTokenId String   @db.ObjectId
   sentAt           DateTime @default(now())
+  /// Relances envoyées (#19207) : une par 72 h, trois au plus (`invitationResendWindow`).
+  /// Absent sur les lignes d'avant le lot, lu comme zéro.
+  resendCount      Int?     @default(0)
+  lastResentAt     DateTime?
 
   sender         User           @relation("EmailInvitationSender", fields: [senderId], references: [id])
   affiliateToken AffiliateToken @relation(fields: [affiliateTokenId], references: [id])
 
   @@index([senderId])
   @@index([email])
+}
+
+/// Une adresse qui ne veut plus d'invitation (#19207). Le serveur n'en garde qu'une
+/// empreinte HMAC à clé secrète (`READER_KEY_HMAC_SECRET`, domaine `invitation-opt-out:`),
+/// jamais l'adresse : comme pour le carnet d'adresses (#9225), un non-inscrit n'est pas
+/// gardé en clair. Écrite par le lien « Ne plus recevoir d'invitation » de l'e-mail,
+/// lue par l'envoi et la relance, qui la refusent.
+model EmailInvitationOptOut {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  emailHash String   @unique
+  createdAt DateTime @default(now())
 }
 
 /// Lien de tracking pour compter les clics sur les liens partagés

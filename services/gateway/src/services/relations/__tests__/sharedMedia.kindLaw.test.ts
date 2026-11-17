@@ -21,7 +21,7 @@
  * @jest-environment node
  */
 
-import { kindWhere, sharedMediaKindOf, SHARED_MEDIA_KINDS } from '../sharedMedia';
+import { kindWhere, sharedMediaKindOf, SHARED_ATTACHMENT_KINDS } from '../sharedMedia';
 
 /**
  * Le prédicat MongoDB, joué en mémoire sur la forme des clauses que ce module
@@ -76,7 +76,7 @@ describe('les deux moitiés de la loi des genres s’accordent (#19285)', () => 
 
   it.each(PIECES)('$label : aucun AUTRE genre ne l’apparie — les quatre sont disjoints', ({ doc }) => {
     const kind = sharedMediaKindOf(doc.mimeType);
-    const autres = SHARED_MEDIA_KINDS.filter((k) => k !== kind).filter((k) => matches(kindWhere(k), doc));
+    const autres = SHARED_ATTACHMENT_KINDS.filter((k) => k !== kind).filter((k) => matches(kindWhere(k), doc));
     expect(autres).toEqual([]);
   });
 
@@ -95,7 +95,7 @@ describe('les deux moitiés de la loi des genres s’accordent (#19285)', () => 
 
   it('mimeType ABSENT : elle n’est apparue dans AUCUN autre genre', () => {
     const absente = {};
-    const genres = SHARED_MEDIA_KINDS.filter((k) => matches(kindWhere(k), absente));
+    const genres = SHARED_ATTACHMENT_KINDS.filter((k) => matches(kindWhere(k), absente));
 
     // Exactement un genre, et c'est `file`. Avant #19285 la liste était VIDE —
     // la pièce n'existait pour aucun filtre.

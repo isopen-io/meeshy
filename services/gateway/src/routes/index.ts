@@ -159,6 +159,7 @@ import { directoryPresenceRoutes } from './directory/presence';
 import { directoryBlocksRoutes } from './directory/blocks';
 import { directoryFriendRequestsRoutes } from './directory/friend-requests';
 import { relationsRoutes } from './relations';
+import contactExchangeRoutes from './contact-exchange';
 import { directoryContactsRoutes } from './directory/contacts';
 import { relationsLevelRoutes } from './relations/level';
 import { bringRoutes } from './bring';
@@ -411,6 +412,8 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'bring', prefix: `${API_PREFIX}/bring`, module: bringRoutes },
   // Le talkie réveillé (#17142) : la voix gardée, lisible sans socket, et le jeton PushToTalk.
   { name: 'talkie', prefix: API_PREFIX, module: talkieRoutes },
+  // Le partage sans contact (#19205) : jeton bref NFC/QR, derrière CONTACT_EXCHANGE_ENABLED.
+  { name: 'contact-exchange', prefix: API_PREFIX, module: contactExchangeRoutes },
   // La carte de visite partagée (#8101) — vCard → profils publics. Montage
   // AUTONOME ; même seau de débit que l'annuaire inversé (`profile-lookups`).
   { name: 'contacts-resolve', prefix: `${API_PREFIX}/contacts`, module: contactsResolveRoutes },
