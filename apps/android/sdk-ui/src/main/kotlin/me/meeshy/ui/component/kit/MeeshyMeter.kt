@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,7 +73,8 @@ private fun meterBase(kind: MeeshyMeterKind, tint: Color?): Color {
  * barre sans valeur. Elle dit sa valeur deux fois : à l'œil (titre, texte de valeur, légendes de bord), à la voix par
  * [spokenValue] (« 23 sur 50 ») ou à défaut le pourcentage. Pleine, elle prend [fullKind] si l'hôte en donne un.
  *
- * Total nul ou négatif : rien n'est rendu. L'entrée se joue une fois (jamais en mouvement réduit), [entryIndex] la décale de
+ * Périmée, elle perd sa couleur (et son opacité tombe) ; le dégradé et le passage de la barre sans valeur partent du bord de
+ * début, à droite en arabe. Total nul ou négatif : rien n'est rendu. L'entrée se joue une fois (jamais en mouvement réduit), [entryIndex] la décale de
  * 100 ms par rangée. Aucune cible : une jauge ne se touche pas. L'hôte passe deux nombres et des mots déjà traduits.
  * Jumeau iOS : `MeeshyMeter`.
  */
@@ -120,12 +123,14 @@ public fun MeeshyMeter(
     val percent = remember(locales) { NumberFormat.getPercentInstance(locales[0]) }
     val spoken = MeeshyMeterRecipe.spokenValue(spokenValue, target) { percent.format(it.toDouble()) }
     val trackColor = MeeshyTheme.tokens.controlFill
-    val fillBrush = if (tintEnd != null) Brush.horizontalGradient(listOf(base, tintEnd)) else Brush.horizontalGradient(listOf(base, base))
+    val gradient = if (tintEnd == null) listOf(base, base) else if (values.fillsFromEnd) listOf(tintEnd, base) else listOf(base, tintEnd)
+    val fillBrush = Brush.horizontalGradient(gradient)
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .alpha(values.opacity)
+            .meeshySaturation(values.saturation)
             .semantics(mergeDescendants = true) {
                 contentDescription = if (values.isIndeterminate) label else "$label, $spoken"
                 progressBarRangeInfo = if (values.isIndeterminate) ProgressBarRangeInfo.Indeterminate else ProgressBarRangeInfo(target, 0f..1f)
@@ -145,7 +150,7 @@ public fun MeeshyMeter(
             leading?.invoke()
             Box(Modifier.weight(1f).decorative()) {
                 when {
-                    values.isIndeterminate -> IndeterminateTrack(values, base, trackColor, reduce)
+                    values.isIndeterminate -> IndeterminateTrack(values, base, trackColor, reduce, isRtl)
                     values.segmentCount > 0 -> SteppedTrack(values, base, trackColor)
                     else -> ContinuousTrack(values, fillBrush, trackColor)
                 }
@@ -210,16 +215,16 @@ private fun SteppedTrack(values: MeeshyMeterValues, base: Color, trackColor: Col
 }
 
 @Composable
-private fun IndeterminateTrack(values: MeeshyMeterValues, base: Color, trackColor: Color, reduce: Boolean) {
-    val pass = if (reduce) {
-        0.5f
+private fun IndeterminateTrack(values: MeeshyMeterValues, base: Color, trackColor: Color, reduce: Boolean, isRtl: Boolean) {
+    val pass: State<Float> = if (reduce) {
+        remember { mutableFloatStateOf(0.5f) }
     } else {
         rememberInfiniteTransition(label = "meter-pass").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
             animationSpec = infiniteRepeatable(tween(MeeshyMeterRecipe.PASS_MILLIS, easing = LinearEasing), RepeatMode.Restart),
             label = "meter-pass-progress",
-        ).value
+        )
     }
     Box(
         Modifier
@@ -230,7 +235,7 @@ private fun IndeterminateTrack(values: MeeshyMeterValues, base: Color, trackColo
             .drawWithContent {
                 drawContent()
                 val segment = size.width * INDETERMINATE_SEGMENT
-                val x = (size.width + segment) * pass - segment
+                val x = MeeshyMeterRecipe.passStart(pass.value, size.width, segment, isRtl)
                 drawRoundRect(base, Offset(x, 0f), Size(segment, size.height), CornerRadius(size.height / 2f))
             },
     )

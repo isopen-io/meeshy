@@ -43,15 +43,26 @@ public data class MeeshyKeyLegendItem(
 /** La loi pure de la touche : le glyphe, la phrase dite, et la promesse « le raccourci marche ici, maintenant ». */
 public object MeeshyKeyHintRule {
 
-    public fun glyphs(keys: List<MeeshyKey>, platform: MeeshyKeyPlatform): List<String> = keys.map { glyph(it, platform) }
+    /** Les glyphes, dans l'ordre de frappe, qui ne s'inverse jamais ; en lecture de droite à gauche, gauche et droite s'échangent. */
+    public fun glyphs(keys: List<MeeshyKey>, platform: MeeshyKeyPlatform, isRightToLeft: Boolean = false): List<String> =
+        keys.map { glyph(effective(it, isRightToLeft), platform) }
 
-    /** « raccourci : Command M » : le préfixe vient de l'hôte (traduit), les noms de la loi (anglais par défaut). */
+    /** « raccourci : Command M » : le préfixe vient de l'hôte (traduit), les noms de la loi (anglais par défaut). La voix nomme la touche montrée. */
     public fun spoken(
         keys: List<MeeshyKey>,
         platform: MeeshyKeyPlatform,
         prefix: String,
         name: (MeeshyKey, MeeshyKeyPlatform) -> String = { key, platform -> defaultName(key, platform) },
-    ): String = "$prefix : " + keys.joinToString(" ") { name(it, platform) }
+        isRightToLeft: Boolean = false,
+    ): String = "$prefix : " + keys.joinToString(" ") { name(effective(it, isRightToLeft), platform) }
+
+    /** La touche que l'on montre : en lecture de droite à gauche, la flèche gauche devient la droite et l'inverse ; haut et bas, jamais. */
+    public fun effective(key: MeeshyKey, isRightToLeft: Boolean): MeeshyKey = when {
+        !isRightToLeft -> key
+        key == MeeshyKey.Left -> MeeshyKey.Right
+        key == MeeshyKey.Right -> MeeshyKey.Left
+        else -> key
+    }
 
     /** Une touche affichée est une promesse : clavier matériel présent ET commande active. */
     public fun isShown(hasKeyboard: Boolean, isEnabled: Boolean): Boolean = hasKeyboard && isEnabled
@@ -124,6 +135,8 @@ public object MeeshyKeyHintRecipe {
     public const val PRESS_MILLIS: Int = 120
     public const val MAX_KEYS: Int = 3
     private const val PRESS_OFFSET_DP: Float = 1.5f
+    private const val RADIUS_DP: Int = 8
+    private const val COMPACT_RADIUS_DP: Int = 6
 
     @Suppress("LongParameterList")
     public fun resolve(
@@ -140,7 +153,7 @@ public object MeeshyKeyHintRecipe {
             isRendered = keys.isNotEmpty() && MeeshyKeyHintRule.isShown(hasKeyboard, isEnabled),
             keyCount = keys.size.coerceAtMost(MAX_KEYS),
             sizeDp = if (compact) 20 else 26,
-            cornerRadiusDp = 8,
+            cornerRadiusDp = if (compact) COMPACT_RADIUS_DP else RADIUS_DP,
             paddingDp = 6,
             gapDp = if (compact) 3 else 4,
             textSp = if (compact) 10.5f else 12.5f,

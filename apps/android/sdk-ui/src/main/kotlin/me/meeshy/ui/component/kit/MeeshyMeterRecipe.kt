@@ -37,6 +37,7 @@ public data class MeeshyMeterValues(
     val minFillDp: Int,
     val opacity: Float,
     val isDesaturated: Boolean,
+    val saturation: Float,
     val segmentCount: Int,
     val segmentGapDp: Int,
     val filledSegments: Int,
@@ -80,6 +81,7 @@ public object MeeshyMeterRecipe {
                 else -> 1f
             },
             isDesaturated = isStale,
+            saturation = if (isStale) 0f else 1f,
             segmentCount = count,
             segmentGapDp = if (stepped != null) STEP_GAP_DP else 0,
             filledSegments = if (stepped != null) floor(bounded * count + FILL_EPSILON).toInt().coerceIn(0, count) else 0,
@@ -87,6 +89,15 @@ public object MeeshyMeterRecipe {
             fillsFromEnd = isRtl,
             isIndeterminate = form == MeeshyMeterForm.Indeterminate,
         )
+    }
+
+    /**
+     * Le bord gauche du passage de la barre sans valeur, pour un avancement [pass] de 0 à 1 : il entre par le bord de début et
+     * sort par le bord de fin, donc de droite à gauche en arabe.
+     */
+    public fun passStart(pass: Float, width: Float, segment: Float, isRtl: Boolean): Float {
+        val travelled = (width + segment) * pass
+        return if (isRtl) width - travelled else travelled - segment
     }
 
     /** L'entrée ne se joue que si la jauge n'a jamais été vue avec cette valeur ; jamais en mouvement réduit. */

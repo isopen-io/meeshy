@@ -20,12 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.ui.R
@@ -85,7 +87,8 @@ private fun keyNames(): (MeeshyKey, MeeshyKeyPlatform) -> String {
  * **La touche de raccourci** (K55) : une touche ou une combinaison de touches accolées, toujours le même carré-arrondi en chasse
  * fixe. Elle montre la touche, elle n'écoute pas le clavier : [isPressed] est passé par l'hôte (120 ms) quand il reconnaît le
  * raccourci. Sans clavier matériel ([hasKeyboard] faux), commande éteinte ([enabled] faux) ou sans touche, rien n'est rendu et aucune place n'est réservée. Le
- * modificateur `Primary` s'écrit Ctrl sur Android ; la voix dit « raccourci : Control M » dans la langue de l'app.
+ * modificateur `Primary` s'écrit Ctrl sur Android ; la voix dit « raccourci : Control M » dans la langue de l'app. Une
+ * combinaison se lit dans l'ordre de frappe, de gauche à droite même en arabe, où les flèches gauche et droite s'échangent.
  * Jumeau iOS : `MeeshyKeyHint`.
  */
 @Composable
@@ -107,7 +110,8 @@ public fun MeeshyKeyHint(
     if (!values.isRendered) return
     val shown = keys.take(values.keyCount)
     val names = keyNames()
-    val spoken = MeeshyKeyHintRule.spoken(shown, platform, spokenPrefix, names)
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val spoken = MeeshyKeyHintRule.spoken(shown, platform, spokenPrefix, names, isRightToLeft = isRtl)
     val tokens = MeeshyTheme.tokens
     val restFill = when (surface) {
         MeeshyKeyHintSurface.OnAccent -> MeeshyPalette.White.copy(alpha = 0.22f)
@@ -120,10 +124,10 @@ public fun MeeshyKeyHint(
         modifier = modifier
             .offset(y = values.pressedOffsetDp.dp)
             .clearAndSetSemantics { contentDescription = spoken },
-        horizontalArrangement = Arrangement.spacedBy(values.gapDp.dp),
+        horizontalArrangement = Arrangement.Absolute.spacedBy(values.gapDp.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MeeshyKeyHintRule.glyphs(shown, platform).forEach { glyph ->
+        MeeshyKeyHintRule.glyphs(shown, platform, isRightToLeft = isRtl).forEach { glyph ->
             KeyCap(glyph, values, fill, ink)
         }
     }
