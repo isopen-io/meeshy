@@ -8,7 +8,7 @@ import Foundation
 /// d'avant sans oublier les cartes ; le retour au premier plan repousse.
 ///
 /// Chaque mutation rend la luminosité à appliquer, ou `nil` quand rien ne change.
-struct MeeshyBrightnessLedger: Equatable, Sendable {
+nonisolated struct MeeshyBrightnessLedger: Equatable, Sendable {
     static let boosted: Double = 1
 
     private(set) var holders: Set<UUID> = []

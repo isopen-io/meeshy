@@ -63,13 +63,25 @@ extension NotificationToastManager {
     // Interne (pas private) : point d'entrée des tests pour dérouler le
     // pipeline complet dedup → persist → prefs → toast/haptique.
     func handleNewNotification(_ event: SocketNotificationEvent) {
+        let isRewrite = takeRecentRevocation(event.id)
+
+        // Une notification ARRIVÉE LUE — réécrite après une édition déjà lue,
+        // ou lue ailleurs avant son émission — entre dans l'historique à son
+        // rang sans rien rejouer : ni lecture (conversation ouverte comprise,
+        // un POST de plus pour une ligne déjà lue), ni compte, ni bannière, ni
+        // haptique, ni révélation (#19104).
+        if event.resolvedIsRead == true {
+            placeQuietly(event, isRead: true)
+            return
+        }
+
         // Muting logic: suppress the in-app toast if the user is already
         // viewing the relevant content. Le contenu étant consommé en direct,
         // la notification ne doit pas rester non lue : on la marque lue côté
         // serveur (qui ré-émet `notification:counts`). On NE l'incrémente pas
         // localement (on sort avant `incrementInAppNotificationUnread`).
         if let convId = event.conversationId, isConversationOpen(convId) || convId == activeConversationId {
-            markConsumedOnArrival(event)
+            markConsumedOnArrival(event, isRewrite: isRewrite)
             return
         }
 
@@ -98,12 +110,12 @@ extension NotificationToastManager {
             self?.recentNotificationIds.remove(event.id)
         }
 
-        // Une notification ARRIVÉE LUE — réécrite après une édition déjà lue,
-        // ou lue ailleurs avant son émission — entre dans l'historique à son
-        // rang, sans rien rejouer : ni compte, ni bannière, ni haptique, ni
-        // révélation (#19104).
-        if event.resolvedIsRead == true {
-            persistArrivedRead(event)
+        // Une RÉÉCRITURE d'une notification NON LUE (édition d'un message pas
+        // encore lu) reprend son rang comme on l'a laissée : la suppression ne
+        // l'a pas décomptée, son retour ne compte donc pas, et rien ne sonne une
+        // seconde fois — ni bannière, ni haptique (#19104).
+        if isRewrite {
+            placeQuietly(event, isRead: false)
             return
         }
 
@@ -136,9 +148,9 @@ extension NotificationToastManager {
     /// cloche), mais lue, et on la marque lue côté serveur — qui ré-émet
     /// `notification:counts`, recalant cloche et badge. On sort avant
     /// `incrementInAppNotificationUnread` : rien n'est en attente.
-    private func markConsumedOnArrival(_ event: SocketNotificationEvent) {
+    private func markConsumedOnArrival(_ event: SocketNotificationEvent, isRewrite: Bool) {
         let notificationId = event.id
-        persistToCache(event, isRead: true)
+        persistToCache(event, isRead: true, isRewrite: isRewrite)
         // #7000 — ce chemin marque lu SANS avoir incrémenté : on sort avant
         // `incrementInAppNotificationUnread`. L'écho `notification:read` que
         // le gateway renvoie derrière décrémentait pourtant, retirant du
@@ -157,27 +169,51 @@ extension NotificationToastManager {
     /// single-item `.fresh` cache would suppress the next authoritative REST
     /// refresh. De-duplicated by id, so an APN + socket double-delivery (already
     /// guarded above) or a later REST refresh never doubles the row.
-    private func persistToCache(_ event: SocketNotificationEvent, isRead: Bool = false) {
+    private func persistToCache(_ event: SocketNotificationEvent, isRead: Bool = false, isRewrite: Bool = false) {
         let createdAtStr = WireDate.string(from: Date())
         let base = event.toAPINotification(createdAt: createdAtStr)
         let apiNotification = isRead ? base.withReadState(true) : base
         Task {
-            await CacheCoordinator.shared.notifications.prependToExisting(apiNotification, for: "all")
+            if isRewrite {
+                await CacheCoordinator.shared.notifications.update(for: "all") { items in
+                    NotificationCachePatch.upsertingByCreatedAt(items, apiNotification)
+                }
+            } else {
+                await CacheCoordinator.shared.notifications.prependToExisting(apiNotification, for: "all")
+            }
         }
     }
 
-    /// La forme durable d'une notification arrivée LUE : rangée à sa date dans
-    /// le cache (jamais en tête — une réécriture garde son rang), remplaçant la
-    /// ligne du même id si elle y est encore. Strict no-op sur un cache jamais
-    /// peuplé (`update(for:)` n'invente rien).
-    private func persistArrivedRead(_ event: SocketNotificationEvent) {
-        let row = event.toAPINotification(createdAt: WireDate.string(from: Date())).withReadState(true)
+    /// Une notification qui entre SANS BRUIT (arrivée lue, ou réécrite) :
+    /// rangée à sa date dans le cache — jamais en tête, une réécriture garde son
+    /// rang — en remplaçant la ligne du même id si elle y est encore, puis remise
+    /// avec sa ligne à la cloche montée. Strict no-op sur un cache jamais peuplé
+    /// (`update(for:)` n'invente rien).
+    private func placeQuietly(_ event: SocketNotificationEvent, isRead: Bool) {
+        let base = event.toAPINotification(createdAt: WireDate.string(from: Date()))
+        let row = isRead ? base.withReadState(true) : base
         Task {
             await CacheCoordinator.shared.notifications.update(for: "all") { items in
                 NotificationCachePatch.upsertingByCreatedAt(items, row)
             }
         }
-        notificationArrivedRead.send(event.id)
+        notificationArrivedQuietly.send(row)
+    }
+
+    /// La fenêtre où un `new` du même id qu'un `deleted` est une RÉÉCRITURE :
+    /// la passerelle annonce une édition par les deux, à la suite
+    /// (`announceNotificationsReproduced`). Même fenêtre que le web.
+    static let rewriteWindow: TimeInterval = 5
+
+    /// Interne : point d'entrée des tests.
+    func takeRecentRevocation(_ id: String, now: Date = Date()) -> Bool {
+        guard let revokedAt = recentRevocations.removeValue(forKey: id) else { return false }
+        return now.timeIntervalSince(revokedAt) <= Self.rewriteWindow
+    }
+
+    private func recordRevocation(_ id: String, now: Date = Date()) {
+        recentRevocations = recentRevocations.filter { now.timeIntervalSince($0.value) <= Self.rewriteWindow }
+        recentRevocations[id] = now
     }
 
     private func updateFriendshipCacheIfNeeded(_ event: SocketNotificationEvent) {
@@ -212,6 +248,7 @@ extension NotificationToastManager {
         // mémoire anti-doublon de 2 s ne doit pas la prendre pour un second
         // envoi du même événement — la ligne disparaîtrait de la cloche (#19104).
         recentNotificationIds.remove(event.notificationId)
+        recordRevocation(event.notificationId)
         applyRevocationLocally(event.notificationId)
     }
 

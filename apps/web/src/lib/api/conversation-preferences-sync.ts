@@ -6,13 +6,14 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 import type { ConversationOverride, ConversationStoreState, OverrideKey } from '@/lib/conversation-store';
 import type { SocketClient } from '@/lib/net/socket';
 
-import { patchConversation, patchConversationDetail } from './conversations';
+import { conversationQueryKey, findCachedConversation, patchConversation, patchConversationDetail } from './conversations';
 import { APP_PREFERENCES_QUERY_KEY } from './me-keys';
 import { messagesQueryKey } from './messages';
 import type { MessagesInfiniteData } from './messages-pages';
 import { requestFullThreadRead } from './messages-revalidation';
 import { supersedeRowGestures, type RowGestureQueue } from './row-gestures';
 import { preferenceEntryOf } from './preferences';
+import { preferencesVersionOf } from './preferences-version';
 import type { Conversation } from './types';
 
 /**
@@ -27,12 +28,17 @@ import type { Conversation } from './types';
  * de la liste jusqu'à sa relecture, un historique vidé restait dans le fil
  * ouvert, et un réglage d'application attendait sa fenêtre de trente minutes.
  *
- * - **Portée conversation** — l'instantané COMPLET et versionné : les huit
- *   champs que la ligne SERVIE déclare (`ROW_FIELDS`) se posent sur la ligne
- *   et la fiche du fil, sous la garde de `version` (mémoire de la connexion).
- *   Rien d'autre n'y entre : `mentionsOnly`, `orderInCategory`, `readingMode`
- *   ne sont pas déclarés par la ligne, une relecture REST les effacerait
- *   aussitôt. Une remise à zéro (`reset`) sert les défauts du serveur.
+ * - **Portée conversation** — l'instantané COMPLET et versionné : les onze
+ *   champs que la ligne SERVIE déclare (`ROW_FIELDS` ; `mentionsOnly`,
+ *   `orderInCategory` et `clearHistoryBefore` depuis #18925) se posent sur la
+ *   ligne et la fiche du fil, avec la `version` de la diffusion. Rien d'autre
+ *   n'y entre : `readingMode` n'est pas déclaré par la ligne, une relecture
+ *   REST l'effacerait aussitôt. Une remise à zéro (`reset`) sert les défauts
+ *   du serveur.
+ * - **La version arbitre** (#18925, `preferences-version.ts`) : une diffusion
+ *   dont la version n'excède pas la plus récente connue — celle d'une
+ *   diffusion déjà reçue sur cette connexion, ou celle que la ligne et la
+ *   fiche en cache portent (relecture REST, cache réhydraté) — est ignorée.
  * - **Les overrides de rangée** (`conversation-store.ts`) : un override ÉGAL à
  *   la valeur servie est retiré — le serveur reprend la main, et un geste
  *   ultérieur fait ailleurs pourra se voir. Un override CONTRAIRE reste : c'est
@@ -54,12 +60,15 @@ const recordOf = (value: unknown): Payload | null => (typeof value === 'object' 
 const isBoolean = (value: unknown): boolean => typeof value === 'boolean';
 const isTextOrNull = (value: unknown): value is string | null => value === null || typeof value === 'string';
 const isTags = (value: unknown): boolean => Array.isArray(value) && value.every((tag) => typeof tag === 'string');
+const isOrderOrNull = (value: unknown): boolean => value === null || (typeof value === 'number' && Number.isFinite(value));
 
 /** `CONVERSATION_PREFERENCES_DEFAULTS` (passerelle) : ce qu'une remise à zéro sert. */
 const SERVED_DEFAULTS: Payload = {
   isPinned: false,
   isMuted: false,
+  mentionsOnly: false,
   isArchived: false,
+  orderInCategory: null,
   tags: [],
   categoryId: null,
   customName: null,
@@ -75,6 +84,9 @@ const ROW_FIELDS: ReadonlyArray<readonly [string, (value: unknown) => boolean]> 
   ['isPinned', isBoolean],
   ['isMuted', isBoolean],
   ['isArchived', isBoolean],
+  ['mentionsOnly', isBoolean],
+  ['orderInCategory', isOrderOrNull],
+  ['clearHistoryBefore', isTextOrNull],
   ['tags', isTags],
   ['categoryId', isTextOrNull],
   ['customName', isTextOrNull],
@@ -127,6 +139,13 @@ export function createPreferencesSync(params: {
 }) {
   const { queryClient, conversations } = params;
   const versions = new Map<string, number>();
+  /** La version la plus récente connue : une diffusion de cette connexion, ou ce que la ligne et la fiche en cache portent. */
+  const knownVersion = (conversationId: string): number =>
+    Math.max(
+      versions.get(conversationId) ?? 0,
+      preferencesVersionOf(findCachedConversation(queryClient, conversationId)) ?? 0,
+      preferencesVersionOf(queryClient.getQueryData<Conversation>(conversationQueryKey(conversationId))) ?? 0,
+    );
 
   const applyHistoryClear = (conversationId: string, served: Payload): void => {
     const cutoff = typeof served['clearHistoryBefore'] === 'string' ? Date.parse(served['clearHistoryBefore']) : Number.NaN;
@@ -147,13 +166,14 @@ export function createPreferencesSync(params: {
     if (typeof conversationId !== 'string' || conversationId === '') return;
     const version = payload['version'];
     if (typeof version === 'number') {
-      if (version <= (versions.get(conversationId) ?? 0)) return;
+      if (version <= knownVersion(conversationId)) return;
       versions.set(conversationId, version);
     }
     const served = payload['reset'] === true ? SERVED_DEFAULTS : recordOf(payload['preferences']);
     if (served === null) return;
     const fields = rowFieldsOf(served);
-    if (Object.keys(fields).length > 0) patchBoth(queryClient, conversationId, (conversation) => withPreferenceFields(conversation, fields));
+    const row = typeof version === 'number' ? { ...fields, version } : fields;
+    if (Object.keys(row).length > 0) patchBoth(queryClient, conversationId, (conversation) => withPreferenceFields(conversation, row));
     const settled = confirmedOverrides(conversations.getState().overrides[conversationId], fields);
     if (settled.length > 0) conversations.getState().clearOverride(conversationId, settled);
     const queue = params.gestures?.() ?? null;

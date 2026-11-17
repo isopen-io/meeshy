@@ -345,7 +345,8 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // (`getUnreadCount`) est parti, entier, dans `unreadCountOfParticipant.ts`
   // (déclaré ci-dessous) — ce fichier hors budget ne pouvait plus grandir pour
   // y écarter les avis de capture. Aucune lecture n'a disparu.
-  'MessageReadStatusService.ts': { kind: 'applies', reads: 3, applications: 0 },
+  // 3 → 4 (#18731) : le balayage de contiguïté de la LIVRAISON n'applique PAS le masquage — décision motivée dans `decisions/2026-11-17-le-curseur-de-livraison-est-le-prefixe-contigu-de-la-remise-18731.md`.
+  'MessageReadStatusService.ts': { kind: 'applies', reads: 4, applications: 0 },
   // #9630 — le compteur unitaire : le `count` sous `applyPersonalHistoryHiding`
   // (masquage personnel ET avis de capture non adressés à ce lecteur), plus la
   // lecture des CANDIDATS avis de la fenêtre (identité et marque, aucun contenu)
