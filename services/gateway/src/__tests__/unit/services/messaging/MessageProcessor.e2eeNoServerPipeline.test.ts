@@ -185,20 +185,63 @@ describe('conversation e2ee — aucune pièce en clair n’est admise', () => {
     expect(prisma.message.create).not.toHaveBeenCalled();
   });
 
-  it('admet un transfert chiffré dont la source ne porte aucune pièce', async () => {
+  // #13113 (GWX-01) — un transfert SERVEUR range un lien vers une source que le
+  // serveur lit, et la liste en sert le clair dans le fil chiffré : même
+  // chiffré, même sans pièce, il est refusé. Un transfert vers un fil chiffré se
+  // rechiffre comme un texte, dans le contenu (`E2EEContent`).
+  it('refuse un transfert chiffré dont la source ne porte aucune pièce, sans relire la source', async () => {
     const { prisma, processor } = harness(E2EE, []);
 
-    await processor.saveMessage({ ...send, ...sealed, forwardedFromId: SOURCE_ID, forwardImposes: null });
+    await expect(processor.saveMessage({ ...send, ...sealed, forwardedFromId: SOURCE_ID, forwardImposes: null }))
+      .rejects.toMatchObject({ code: E2EE_PLAINTEXT_REFUSED });
+
+    expect(prisma.message.create).not.toHaveBeenCalled();
+    expect(prisma.messageAttachment.findMany).not.toHaveBeenCalled();
+  });
+
+  it('refuse un transfert dont l’admission ne recopie rien (sélection vide)', async () => {
+    const { prisma, processor } = harness(E2EE, [{ id: 'src-att' }]);
+
+    await expect(processor.saveMessage({ ...send, ...sealed, forwardedFromId: SOURCE_ID, forwardImposes: null, forwardCopySelection: [] }))
+      .rejects.toMatchObject({ code: E2EE_PLAINTEXT_REFUSED });
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('conversation e2ee — aucun champ voisin en clair (#13113)', () => {
+  const STICKER = { templateId: 'bubble', slots: { line1: 'sentinelle-secrete-42' } };
+  const CITED_PIECE = { messageId: SOURCE_ID, attachmentId: 'src-att', kind: 'image' };
+
+  it.each([
+    ['un sticker seul', { sticker: STICKER }, /sticker/],
+    ['un sticker à côté d’un chiffré', { ...sealed, sticker: STICKER }, /sticker/],
+    ['une pièce citée à côté d’un chiffré', { ...sealed, attachmentReplyTo: CITED_PIECE }, /pièce citée/],
+    ['une conversation de provenance de transfert', { ...sealed, forwardedFromConversationId: SOURCE_ID }, /transfert/],
+    ['un transfert sans chiffré', { forwardedFromId: SOURCE_ID, forwardImposes: null }, /transfert/],
+  ])('refuse %s, avant toute écriture, et dit lequel', async (_label, extra, reason) => {
+    const { prisma, processor } = harness(E2EE);
+
+    const refusal = processor.saveMessage({ ...send, ...extra } as Parameters<typeof processor.saveMessage>[0]);
+
+    await expect(refusal).rejects.toMatchObject({ code: E2EE_PLAINTEXT_REFUSED });
+    await expect(refusal).rejects.toThrow(reason);
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('un sticker NUL n’est pas un sticker : le message chiffré passe', async () => {
+    const { prisma, processor } = harness(E2EE);
+
+    await processor.saveMessage({ ...send, ...sealed, sticker: null, attachmentReplyTo: null });
 
     expect(prisma.message.create).toHaveBeenCalledTimes(1);
   });
 
-  it('admet un transfert dont l’admission ne recopie rien (sélection vide)', async () => {
-    const { prisma, processor } = harness(E2EE, [{ id: 'src-att' }]);
+  it('hors bout en bout, le sticker et la pièce citée s’écrivent toujours (non-régression)', async () => {
+    const { prisma, processor } = harness(CLEAR);
 
-    await processor.saveMessage({ ...send, ...sealed, forwardedFromId: SOURCE_ID, forwardImposes: null, forwardCopySelection: [] });
+    await processor.saveMessage({ ...send, content: 'hello', sticker: STICKER });
 
-    expect(prisma.message.create).toHaveBeenCalledTimes(1);
+    expect(prisma.message.create.mock.calls[0][0].data.metadata?.sticker?.slots?.line1).toBe('sentinelle-secrete-42');
   });
 });
 
