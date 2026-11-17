@@ -34,6 +34,7 @@ import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import me.meeshy.sdk.model.ConversationReorderItem
 import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
 import me.meeshy.sdk.model.withMemberCount
+import me.meeshy.sdk.model.conversationlist.ConversationLiveFacet
 import me.meeshy.sdk.model.conversationlist.RecentlyCreatedMerge
 import me.meeshy.sdk.model.conversationlist.UnreadReconciliation
 import me.meeshy.sdk.model.conversationlist.UnreadRow
@@ -77,8 +78,8 @@ class ConversationRepository @Inject constructor(
     private val fence: AccountFence? = null,
     presenceSink: ServedPresenceSink = ServedPresenceSink.None,
     syncDelta: SyncDeltaFetching = SyncDeltaFetching.None,
-    /** #18926 — shared with the live patcher: what the realtime writes during a sweep survives its page. */
-    liveJournal: ConversationLiveJournal = ConversationLiveJournal(),
+    /** #18926 — shared with every live writer, read gestures included: what it writes during a sweep survives its page. */
+    private val liveJournal: ConversationLiveJournal = ConversationLiveJournal(),
 ) {
     /** conversationId → instant this client created it ([RecentlyCreatedMerge]); guarded by itself. */
     private val recentlyCreated = mutableMapOf<String, Long>()
@@ -250,6 +251,7 @@ class ConversationRepository @Inject constructor(
                 )
             }
             if (updated.isNotEmpty()) conversationDao.upsertAll(updated)
+            updated.forEach { liveJournal.record(it.id, UNREAD_FACET) }
             updated.size
         }
     }
@@ -699,6 +701,7 @@ class ConversationRepository @Inject constructor(
                         ),
                     ),
                 )
+                liveJournal.record(id, UNREAD_FACET)
                 true
             }
         }?.also { if (it) readLocallySignal.tryEmit(id) } ?: false
@@ -783,6 +786,7 @@ class ConversationRepository @Inject constructor(
                     ),
                 ),
             )
+            liveJournal.record(id, UNREAD_FACET)
             true
         }
         if (!updated) return false
@@ -984,6 +988,9 @@ class ConversationRepository @Inject constructor(
     companion object {
         /** Le préfixe d'une conversation créée sur cet appareil et pas encore connue du serveur. */
         private const val PENDING_PREFIX: String = "pending_"
+
+        /** #18926 — a badge written on this device during a list sweep: the page built before keeps it. */
+        private val UNREAD_FACET: Set<ConversationLiveFacet> = setOf(ConversationLiveFacet.UNREAD)
 
         /** [ApiError.code] of a call that never reached the server (airplane mode, DNS, timeout). */
         private const val OFFLINE_ERROR_CODE: String = "NETWORK"

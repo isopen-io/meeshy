@@ -8,6 +8,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
+import me.meeshy.sdk.session.AccountTicket
 
 /**
  * #19115 — ONE revalidation at a time per thread, in its own job.
@@ -19,17 +20,21 @@ import kotlinx.coroutines.currentCoroutineContext
  * while it waits (the next emission) leaves it running — the next one joins the same flight. Its failure reaches every
  * caller that awaits it; once settled, the next call starts a new flight.
  *
- * The flight keeps the context of the caller that started it (dispatcher, account ticket) minus its job.
+ * The flight keeps the context of the caller that started it (dispatcher, account ticket) minus its job, and is keyed by
+ * that ticket too: a caller of another account — both members of the thread — or of a new session never joins a flight
+ * whose writes its fence would refuse; it starts its own.
  */
 internal class ThreadRevalidations {
-    private val flights = ConcurrentHashMap<String, Deferred<Unit>>()
+    private val flights = ConcurrentHashMap<Key, Deferred<Unit>>()
 
-    suspend fun join(conversationId: String, work: suspend () -> Unit) {
+    data class Key(val conversationId: String, val ticket: AccountTicket?)
+
+    suspend fun join(key: Key, work: suspend () -> Unit) {
         val context = currentCoroutineContext().minusKey(Job)
         val fresh = CoroutineScope(context + SupervisorJob()).async(start = CoroutineStart.LAZY) { work() }
-        val flight = flights.putIfAbsent(conversationId, fresh) ?: fresh
+        val flight = flights.putIfAbsent(key, fresh) ?: fresh
         if (flight === fresh) {
-            fresh.invokeOnCompletion { flights.remove(conversationId, fresh) }
+            fresh.invokeOnCompletion { flights.remove(key, fresh) }
             fresh.start()
         } else {
             fresh.cancel()

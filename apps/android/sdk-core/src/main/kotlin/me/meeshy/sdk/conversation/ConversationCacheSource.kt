@@ -39,7 +39,7 @@ import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.model.sync.PageFetchPlan
 import me.meeshy.sdk.model.conversationlist.ConversationLiveFacet
 import me.meeshy.sdk.model.conversationlist.ConversationLiveFacets
-import me.meeshy.sdk.model.sync.SharedPass
+import me.meeshy.sdk.model.sync.KeyedSharedPass
 import me.meeshy.sdk.model.sync.SyncOwnership
 import me.meeshy.sdk.sync.SyncAccountProvider
 import me.meeshy.sdk.sync.SyncCheckpointStore
@@ -93,11 +93,12 @@ internal class ConversationCacheSource(
 ) : SwrCacheSource<List<ApiConversation>> {
 
     /**
-     * #18927 — ONE sweep at a time: foreground, prewarm, the stream's collectors and an explicit refresh join the sweep in
-     * flight instead of starting the same reads again; a catch-up ([catchUp]) queues exactly one more, started after it.
-     * The sweep runs in its own job: a waiter the stream cancels leaves it to finish.
+     * #18927 — ONE sweep at a time per account ticket: foreground, prewarm, the stream's collectors and an explicit refresh
+     * join the sweep in flight instead of starting the same reads again; a catch-up ([catchUp]) queues exactly one more,
+     * started after it. The sweep runs in its own job: a waiter the stream cancels leaves it to finish. A caller of another
+     * account, or of a new session, never joins a sweep its fence would refuse to land: it starts its own.
      */
-    private val passes = SharedPass(::revalidateOnce)
+    private val passes = KeyedSharedPass(::revalidateOnce)
 
     /** The account whose cached e2ee rows were already folded into [endToEnd] (rows cached before #12956). */
     private var seededAccount: String? = null
@@ -351,10 +352,10 @@ internal class ConversationCacheSource(
      * full-sweep threshold, where "nothing new" must not be conflated with
      * "exhaustively confirmed current".
      */
-    override suspend fun revalidate() = passes.join()
+    override suspend fun revalidate() = passes.join(sweepKey())
 
     /** #18927 — events were missed (a reconnection): a sweep that STARTS after this call, never the one already flying. */
-    suspend fun catchUp() = passes.catchUp()
+    suspend fun catchUp() = passes.catchUp(sweepKey())
 
     /**
      * #18927 — the stream's entry. It judges a snapshot whose rows and sync instant come from two queries, so the write of
@@ -363,17 +364,21 @@ internal class ConversationCacheSource(
      */
     suspend fun revalidateFromStream(freshness: StreamFreshness) {
         if (freshness.isFresh(syncMetaDao.lastSyncedAt(RESOURCE_KEY))) return
-        passes.join()
+        passes.join(sweepKey())
     }
 
+    private suspend fun sweepKey() = SweepKey(fence?.currentTicket(), accountProvider.activeAccountId())
+
+    /** The lane of a sweep (#18927): the account ticket its writes are fenced by, and the account whose lock it takes. */
+    private data class SweepKey(val ticket: AccountTicket?, val account: String?)
+
     /** One sweep. The account lock is released only by the sweep that took it (#18927). */
-    private suspend fun revalidateOnce() {
-        val ticket = fence?.currentTicket()
-        val account = accountProvider.activeAccountId()
+    private suspend fun revalidateOnce(key: SweepKey) {
+        val account = key.account
         val claimed = account != null && ownership.claim(account).claimed
         val flight = journal?.open()
         try {
-            revalidateOwned(account, ticket, flight)
+            revalidateOwned(account, key.ticket, flight)
         } finally {
             flight?.let { journal?.close(it) }
             if (claimed && account != null) ownership.release(account)
@@ -393,7 +398,7 @@ internal class ConversationCacheSource(
         val requestScope = updatedSince ?: FULL_SWEEP_ETAG_SCOPE
         val ifNoneMatch = currentEtag?.takeIf { currentEtagScope == requestScope }
 
-        if (useDelta && revalidateViaSync(account, ticket, watermark!!, now, currentEtag, currentEtagScope)) return
+        if (useDelta && revalidateViaSync(account, ticket, watermark!!, now, currentEtag, currentEtagScope, flight)) return
 
         val outcome = sweepPages(updatedSince, ifNoneMatch)
 
@@ -442,6 +447,7 @@ internal class ConversationCacheSource(
         now: Long,
         currentEtag: String?,
         currentEtagScope: String?,
+        flight: Long?,
     ): Boolean {
         if (conversationDao.allIds().isEmpty()) return false
         val since = Instant.ofEpochMilli(watermark).toString()
@@ -461,7 +467,7 @@ internal class ConversationCacheSource(
             }
             is SyncDeltaOutcome.Delta -> {
                 if (outcome.hasGap) return false
-                val merge = fence.commitOrWrite(ticket) { applySyncDelta(outcome) } ?: return true
+                val merge = fence.commitOrWrite(ticket) { applySyncDelta(outcome, flight) } ?: return true
                 val settled = outcome.complete && !merge.needsRichRefresh
                 if (!settled) return false
                 val checkpoint = outcome.checkpoint?.let(::isoToEpochMillisOrNull)
@@ -479,9 +485,10 @@ internal class ConversationCacheSource(
         }
     }
 
-    private suspend fun applySyncDelta(outcome: SyncDeltaOutcome.Delta): ConversationDeltaRules.Merge =
+    private suspend fun applySyncDelta(outcome: SyncDeltaOutcome.Delta, flight: Long?): ConversationDeltaRules.Merge =
         database.withTransaction {
             seedEndToEndFromCache()
+            val live = liveWrites(flight)
             val known = outcome.rows.mapNotNull { row ->
                 conversationDao.find(row.id)
                     ?.let { runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull() }
@@ -491,7 +498,7 @@ internal class ConversationCacheSource(
             val carried = merge.upserts.map { keepingEndToEnd(it) }
             confirmServedClear(carried)
             val now = clock.nowMillis()
-            conversationDao.upsertAll(carried.map { entityOf(it, now) })
+            conversationDao.upsertAll(carried.map { rankedLive(entityOf(it, now), live) })
             carried.forEach(searchIndex::indexConversation)
             merge.removedIds.chunked(DELETE_CHUNK_SIZE).forEach { conversationDao.deleteByIds(it) }
             applied.invalidatedMessageIds.forEach { database.clearThreadCache(it) }
@@ -557,14 +564,13 @@ internal class ConversationCacheSource(
         val watermarkToStore = receivedMax ?: currentWatermark
         database.withTransaction {
             seedEndToEndFromCache()
-            val moved = flight?.let { journal?.moved(it) }.orEmpty()
-            val locals = moved.keys.mapNotNull { conversationDao.find(it) }.associateBy { it.id }
-            val carried = conversations.map { keepingEndToEnd(carryingKnownPeers(keepingLive(it, moved, locals))) }
+            val live = liveWrites(flight)
+            val carried = conversations.map { keepingEndToEnd(carryingKnownPeers(keepingLive(it, live))) }
             confirmServedClear(carried)
-            val rows = carried.map { rankedLive(entityOf(it, now), moved, locals) }
+            val rows = carried.map { rankedLive(entityOf(it, now), live) }
             conversationDao.upsertAll(rows)
             carried.forEach(searchIndex::indexConversation)
-            if (prune) pruneMissing(rows.map { it.id } + moved.keys)
+            if (prune) pruneMissing(rows.map { it.id } + live.moved.keys)
             syncMetaDao.upsert(SyncMetaEntity(RESOURCE_KEY, now, watermarkToStore, etag, etagScope))
         }
     }
@@ -576,33 +582,36 @@ internal class ConversationCacheSource(
      * preview that went back (the last message deleted while away) goes back. A row written live during the flight is never
      * pruned by a page that predates it.
      */
-    private fun keepingLive(
-        served: ApiConversation,
-        moved: Map<String, Set<ConversationLiveFacet>>,
-        locals: Map<String, ConversationEntity>,
-    ): ApiConversation {
-        val facets = moved[served.id] ?: return served
-        val local = locals[served.id]
+    private fun keepingLive(served: ApiConversation, live: LiveWrites): ApiConversation {
+        val facets = live.moved[served.id] ?: return served
+        val local = live.locals[served.id]
             ?.let { runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull() }
             ?: return served
         return ConversationLiveFacets.keepLive(served, local, facets)
     }
 
     /**
-     * The rank a live preview or activity raised during the flight stays (#18926): the served row carries the instant it
-     * was built at, and the row would drop below where the realtime put it. Like the live patcher's own writes, a rank never
-     * goes down here.
+     * The rank a live preview or activity raised during the flight stays (#18926): the served row — a page, or a `/sync`
+     * line whose `updatedAt` ranks the row — carries the instant it was built at, and the row would drop below where the
+     * realtime put it. Like the live patcher's own writes, a rank never goes down here.
      */
-    private fun rankedLive(
-        row: ConversationEntity,
-        moved: Map<String, Set<ConversationLiveFacet>>,
-        locals: Map<String, ConversationEntity>,
-    ): ConversationEntity {
-        val facets = moved[row.id] ?: return row
+    private fun rankedLive(row: ConversationEntity, live: LiveWrites): ConversationEntity {
+        val facets = live.moved[row.id] ?: return row
         if (ConversationLiveFacet.PREVIEW !in facets && ConversationLiveFacet.ACTIVITY !in facets) return row
-        val local = locals[row.id] ?: return row
+        val local = live.locals[row.id] ?: return row
         return if (local.updatedAt > row.updatedAt) row.copy(updatedAt = local.updatedAt) else row
     }
+
+    /** #18926 — what the realtime wrote during the sweep's [flight], and the rows it left; read inside the sweep's transaction. */
+    private suspend fun liveWrites(flight: Long?): LiveWrites {
+        val moved = flight?.let { journal?.moved(it) }.orEmpty()
+        return LiveWrites(moved, moved.keys.mapNotNull { conversationDao.find(it) }.associateBy { it.id })
+    }
+
+    private class LiveWrites(
+        val moved: Map<String, Set<ConversationLiveFacet>>,
+        val locals: Map<String, ConversationEntity>,
+    )
 
     /**
      * Stores one conversation the app has just been handed outside a list sweep (a direct found

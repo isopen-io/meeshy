@@ -30,6 +30,10 @@ class SharedPass(private val work: suspend () -> Unit) {
 
     suspend fun catchUp() = await(catchUp = true)
 
+    /** No pass running nor queued: a [KeyedSharedPass] may drop this lane. */
+    val isIdle: Boolean
+        get() = synchronized(lock) { running?.isCompleted != false && queued?.isCompleted != false }
+
     private suspend fun await(catchUp: Boolean) {
         val context = currentCoroutineContext().minusKey(Job)
         val pass = synchronized(lock) {

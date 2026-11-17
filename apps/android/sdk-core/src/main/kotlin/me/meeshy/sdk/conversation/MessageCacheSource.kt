@@ -176,7 +176,7 @@ internal class MessageCacheSource(
 
     private suspend fun inFlight(work: suspend () -> Unit) {
         val flights = revalidations ?: return work()
-        flights.join(conversationId, work)
+        flights.join(ThreadRevalidations.Key(conversationId, fence?.currentTicket()), work)
     }
 
     private enum class Sweeping { TO_THE_WINDOW, SKIPPED }
