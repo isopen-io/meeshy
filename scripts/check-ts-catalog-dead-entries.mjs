@@ -70,14 +70,14 @@ const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
   // `GET /api/v1/l/:token` — atteinte par NAVIGATION DIRECTE du navigateur
   // (lien partagé), jamais par un appel `fetch` typé. Chemin `/l/${token}`
   // écrit à la main dans plusieurs sites de composition de lien partageable :
-  // `apps/web/lib/utils/link-parser.ts:116-117`,
-  // `apps/web/components/chat/message-with-links.tsx`.
+  // `legacy-web-final:apps/web/lib/utils/link-parser.ts:116-117`,
+  // `legacy-web-final:apps/web/components/chat/message-with-links.tsx`.
   'l.byToken',
   // `GET /api/v1/u/:username` — navigation directe via des liens `<Link
   // href={\`/u/${username}\`}>` écrits à la main dans des dizaines de sites
   // (profils, mentions), jamais via `API_ENDPOINTS.u.byUsername`. Exemples :
-  // `apps/web/components/common/bubble-message/MessageNameDate.tsx`,
-  // `apps/web/components/v2/MessageBubble.tsx`.
+  // `legacy-web-final:apps/web/components/common/bubble-message/MessageNameDate.tsx`,
+  // `legacy-web-final:apps/web/components/v2/MessageBubble.tsx`.
   'u.byUsername',
   // `PATCH`/`DELETE /api/v1/guest-sessions/me` — appelée en production par le
   // SDK iOS (`ShareLinkService` → `GuestSessionsEndpoint.me`), hors du périmètre

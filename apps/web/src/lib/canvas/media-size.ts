@@ -1,4 +1,4 @@
-import { effectiveMediaRatio, readMediaCrop, type MediaCropRect } from '@meeshy/shared/utils/media-crop';
+import { effectiveMediaRatio, type MediaCropRect } from '@meeshy/shared/utils/media-crop';
 
 /**
  * LA TAILLE D'UN MÉDIA POSÉ (#6901, D7) — miroir
@@ -41,16 +41,4 @@ export function placedMediaDesignSize(params: {
   const effective = effectiveMediaRatio(aspectRatio, crop ?? null);
   const base = baseMediaDesignSize(effective);
   return { width: base.width * scale, height: base.height * scale };
-}
-
-/** Lit `crop` et `scale` directement depuis le `payload` brut d'un objet, en
- * ARTICULATION avec `readMediaCrop` (site unique) — évite qu'un consommateur
- * du moteur recopie la lecture des quatre clés `cropX/Y/W/H`. */
-export function placedMediaDesignSizeFromPayload(params: {
-  readonly aspectRatio: number;
-  readonly payload: Record<string, unknown>;
-}): DesignSize {
-  const { aspectRatio, payload } = params;
-  const scale = typeof payload.scale === 'number' && payload.scale > 0 ? payload.scale : 1;
-  return placedMediaDesignSize({ aspectRatio, scale, crop: readMediaCrop(payload) });
 }

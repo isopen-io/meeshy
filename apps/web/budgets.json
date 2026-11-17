@@ -1,9 +1,9 @@
 {
-  "role": "Les PLAFONDS de la v4. Les valeurs MESUREES vivent dans budgets-measured.json — ce fichier-ci n'en porte aucune, exactement comme apps/web/budgets.json dont il reprend la discipline.",
+  "role": "Les PLAFONDS de poids de l'application web (gzip -9) : scripts/measure-weight.mjs MESURE le build et compare à ces plafonds ; aucune mesure n'est écrite ici.",
   "read_by": [
     "apps/web/scripts/measure-weight.mjs"
   ],
-  "note": "Le modele de cout a CHANGE entre la v3 et la v4, et c'est la seule raison pour laquelle ces plafonds ne sont pas ceux du § 8.3. La v3 sert un DOCUMENT par ecran : le lecteur paie ~8 Ko a chaque ecran, a chaque session. La v4 sert UNE application : le lecteur paie une fois, puis plus rien tant que le hash ne bouge pas (service worker, variante A). Un plafond exprime par ECRAN n'a donc pas de sujet ici — celui qui compte est la PREMIERE PEINTURE, payee une fois.",
+  "note": "L'application est servie en UNE fois : le lecteur paie la premiere peinture, puis plus rien tant que le hash ne bouge pas (service worker, variante A). Un plafond exprime par ECRAN n'a donc pas de sujet ici — celui qui compte est la PREMIERE PEINTURE, payee une fois. (Le legacy Next.js, retire le 2026-09-24 avec #7668, servait un DOCUMENT par ecran, ~8 Ko a chaque ecran et a chaque session.)",
   "first_paint": {
     "subject": "document + feuille + modules que le document reference lui-meme, gzip -9. Les chunks d'ecran charges a la demande n'y sont pas : c'est ce que le decoupage par route achete.",
     "kb": {

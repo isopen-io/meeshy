@@ -1,12 +1,14 @@
-# apps/web-v2 — POC : une application TypeScript unique, web + Android + iOS
+# apps/web — l'application web de Meeshy (web, PWA, coque Capacitor)
 
-> **Statut : PROTOTYPE À ARBITRER.** Rien ici n'est en production, rien ne
-> remplace `apps/web-v2`, `apps/android` ni `apps/ios`. Le POC répond à une
-> question et à une seule : *peut-on avoir une application unique en TypeScript,
-> stylée par Tailwind, qui reprenne l'interface iOS, reste installable en PWA,
-> s'empaquette pour les stores — et tienne le coût data d'une zone rurale ?*
+> **Statut : EN PRODUCTION.** `apps/web` sert meeshy.me depuis le 2026-09-15 et
+> est la seule application web du dépôt depuis le 2026-09-24 (#7668). Vite +
+> Preact (`preact/compat`) + Tailwind, interface reprise de l'app iOS
+> (`apps/ios`, `packages/MeeshySDK`). Décisions : `decisions.md` ; adresses
+> servies : `node scripts/route-inventory.mjs` ; gardes : `bun run gate` et
+> `.github/workflows/ci.yml`. Le journal ci-dessous est DATÉ : il raconte le POC
+> (2026-09-08) puis le chantier, et ne se tient pas à jour.
 
-## Ce qui a été mesuré
+## Journal des mesures (relevés datés, conservés pour l'histoire)
 
 Profil réseau : **Fast 3G** (188 743 bps, 562,5 ms de latence) — le même que
 `apps/web-v2/budgets.json`, pour que la comparaison v3/v4 ait un sens.
@@ -440,7 +442,7 @@ ATTENTE au lieu de s'activer en silence sous une page qui fait tourner l'ancien
 JavaScript. L'application inscrit son worker elle-même (`injectRegister: false`,
 donc plus de `registerSW.js`), vérifie au démarrage, au retour au premier plan et
 à l'heure, et annonce la version en attente par l'événement `sw-update-available`
-— le comportement et l'API du legacy (`apps/web/utils/service-worker.ts`).
+— le comportement et l'API du legacy (`legacy-web-final:apps/web/utils/service-worker.ts`).
 
 | pièce | rôle |
 |---|---|
@@ -578,17 +580,6 @@ maquettes web. Ce qui en découle et qu'on rate en regardant vite :
   verdict.
 - **La barre de recherche de la liste est EN BAS** : à portée du pouce.
 
-## Ce que le POC ne fait pas
-
-Réseau réel (fixtures figées), temps réel, en-tête repliable au défilement,
-gestes de balayage sur les lignes et les bulles, menu au appui long, rail de
-stories complet, listes virtualisées. Aucun n'était bloquant pour l'arbitrage du
-POC ; depuis la cible du 2026-09-08 (D-20, `targets/`), le menu d'appui long
-d'une bulle et les gestes de fil sont des écarts à combler, pas des options —
-sans eux une bulle n'a aucune action (`targets/bulle.md` § 9.3) ;
-la virtualisation, en revanche, est **obligatoire** avant toute mesure de
-fluidité sérieuse sur Android d'entrée de gamme.
-
 ## Les jetons — d'où viennent les valeurs (#5445)
 
 **Aucune valeur de couleur ou de géométrie iOS n'est écrite à la main ici.**
@@ -602,7 +593,7 @@ Deux gates, qui vérifient deux choses différentes :
 | gate | ce qu'il prouve |
 |---|---|
 | `bun run check:tokens` | le CSS généré n'a pas dérivé de ses sources Swift |
-| `bun run check:tokens-resolved` | **le navigateur peint bien ces valeurs-là**, dans les deux schémas |
+| `bun run check:tokens-resolved` | **le navigateur peint bien ces valeurs-là**, dans les deux schémas (sur `vite preview` ; joué par AUCUNE chaîne aujourd'hui) |
 
 Le second n'est pas redondant : entre le fichier généré et le pixel il y a un
 import, un `@theme inline`, la cascade et deux classes de schéma, et n'importe

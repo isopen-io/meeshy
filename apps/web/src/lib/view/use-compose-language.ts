@@ -12,7 +12,7 @@ import { defaultLanguageDetector, type LanguageDetector } from '@/lib/send/langu
 
 /**
  * LA PASTILLE DIT CE QUI PARTIRA (#5828, § Étape 3) — miroir du COUPLE
- * `TextAnalyzer` + `ComposerLanguageResolver` (`packages/MeeshyUI/.../TextAnalyzer.swift`,
+ * `TextAnalyzer` + `ComposerLanguageResolver` (`packages/MeeshySDK/Sources/MeeshyUI/Utilities/TextAnalyzer.swift`,
  * `ComposerModels.swift:143-171`) : debounce, plancher de confiance, verrou à
  * dix mots, choix manuel qui gagne, et surtout une langue COURANTE qui ne
  * redescend JAMAIS d'elle-même au rang 1 du lecteur (§ `ComposeSticky`).

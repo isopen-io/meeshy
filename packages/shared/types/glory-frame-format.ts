@@ -35,15 +35,12 @@ export type GloryFrameFont = (typeof GLORY_FRAME_FONTS)[number];
 
 /** Les modes de fusion qu'une passe de `grade` peut déclarer, posée SUR la photo dans la fenêtre. */
 export const GLORY_FRAME_BLENDS = ['normal', 'screen', 'multiply'] as const;
-export type GloryFrameBlend = (typeof GLORY_FRAME_BLENDS)[number];
 
 /** Les deux rangs de l'avant-plan : sous les oiseaux, au-dessus d'eux. */
 export const GLORY_FRAME_FRONT_RANKS = ['under-birds', 'over-birds'] as const;
-export type GloryFrameFrontRank = (typeof GLORY_FRAME_FRONT_RANKS)[number];
 
 /** Les deux variantes d'une plaque dessinée : sans message, avec message (sa hauteur change). */
 export const GLORY_FRAME_PLATE_VARIANTS = ['plain', 'message'] as const;
-export type GloryFramePlateVariant = (typeof GLORY_FRAME_PLATE_VARIANTS)[number];
 
 /** Les noms de mise en page des oiseaux ; `selfie` n'est jamais celle par défaut (choisie exprès, H-3). */
 export const GLORY_FRAME_BIRD_LAYOUTS = ['pied', 'perches', 'cotes', 'ruban', 'duo', 'libre', 'selfie'] as const;
@@ -226,14 +223,12 @@ export const GloryFrameFormatSchema = formatObject.check(z.refine(sameStackLayer
  * main diverge de ce que `zod/mini` infère (nullables, tuples) — une seule source, lue pareil dans les deux modes.
  */
 export type GloryFrameBox = z.infer<typeof box>;
-export type GloryFrameColor = string;
 export type GloryFramePaint = z.infer<typeof paint>;
 export type GloryFrameFilter = z.infer<typeof filter>;
 export type GloryFrameStroke = z.infer<typeof stroke>;
 export type GloryFrameTextEffect = z.infer<typeof effect>;
 export type GloryFrameTextSlot = z.infer<typeof textSlot>;
 export type GloryFrameLayer = z.infer<typeof layer>;
-export type GloryFrameGradeLayer = z.infer<typeof gradeLayer>;
 export type GloryFrameBirdAnchor = z.infer<typeof anchor>;
 export type GloryFrameBirds = z.infer<typeof birds>;
 export type GloryFrameLayoutVerdict = z.infer<typeof layoutVerdict>;

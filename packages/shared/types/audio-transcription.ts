@@ -85,24 +85,6 @@ export interface MessageAudioTranscription {
 }
 
 /**
- * DTO pour créer une transcription
- */
-export interface CreateMessageAudioTranscriptionDTO {
-  readonly attachmentId: string;
-  readonly messageId: string;
-  readonly transcribedText: string;
-  readonly language: string;
-  readonly confidence: number;
-  readonly source: TranscriptionSourceType;
-  readonly segments?: readonly TranscriptionSegment[];
-  readonly audioDurationMs: number;
-  readonly model?: string;
-  readonly speakerCount?: number;
-  readonly primarySpeakerId?: string;
-  readonly speakerAnalysis?: SpeakerDiarizationAnalysis;
-}
-
-/**
  * Réponse de transcription
  */
 export interface TranscriptionResponse {
@@ -169,42 +151,6 @@ export interface MessageTranslatedAudio {
   readonly ttsModel: TTSModel;
 
   readonly createdAt: Date;
-}
-
-/**
- * DTO pour créer un audio traduit
- */
-export interface CreateMessageTranslatedAudioDTO {
-  readonly attachmentId: string;
-  readonly messageId: string;
-  readonly targetLanguage: string;
-  readonly translatedText: string;
-  readonly audioPath: string;
-  readonly audioUrl: string;
-  readonly durationMs: number;
-  readonly format?: AudioFormat;
-  readonly voiceCloned?: boolean;
-  readonly voiceQuality: number;
-  readonly voiceModelId?: string;
-  readonly ttsModel?: TTSModel;
-}
-
-/**
- * Réponse d'audio traduit
- */
-export interface TranslatedAudioResponse {
-  readonly success: boolean;
-  readonly data?: MessageTranslatedAudio;
-  readonly error?: string;
-}
-
-/**
- * Collection d'audios traduits pour un message
- */
-export interface MessageTranslatedAudios {
-  readonly messageId: string;
-  readonly attachmentId: string;
-  readonly translations: Record<string, MessageTranslatedAudio>;
 }
 
 // =====================================================
@@ -329,46 +275,6 @@ export interface UserVoiceModel {
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly lastUsedAt?: Date;
-}
-
-/**
- * DTO pour créer un modèle de voix
- */
-export interface CreateUserVoiceModelDTO {
-  readonly userId: string;
-  readonly profileId?: string;
-  readonly embedding?: Uint8Array;
-  readonly embeddingModel?: EmbeddingModel;
-  readonly embeddingDimension?: number;
-  readonly embeddingPath?: string;
-  readonly audioCount: number;
-  readonly totalDurationMs: number;
-  readonly qualityScore: number;
-  readonly voiceCharacteristics?: VoiceCharacteristics;
-}
-
-/**
- * DTO pour mettre à jour un modèle de voix
- */
-export interface UpdateUserVoiceModelDTO {
-  readonly embedding?: Uint8Array;
-  readonly embeddingPath?: string;
-  readonly audioCount?: number;
-  readonly totalDurationMs?: number;
-  readonly qualityScore?: number;
-  readonly version?: number;
-  readonly voiceCharacteristics?: VoiceCharacteristics;
-  readonly isActive?: boolean;
-  readonly deactivatedReason?: string;
-}
-
-/**
- * Réponse de modèle de voix
- */
-export interface UserVoiceModelResponse {
-  readonly success: boolean;
-  readonly data?: UserVoiceModel;
-  readonly error?: string;
 }
 
 /**

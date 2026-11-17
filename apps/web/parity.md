@@ -1,9 +1,9 @@
-# Inventaire de parité — ce que la v4 doit servir avant que le legacy s'éteigne
+# Inventaire de parité de la bascule (CLOS — conservé pour l'histoire)
 
-> **Source** : `node scripts/route-inventory.mjs` (et `--json`). Ce tableau est
-> une PROJECTION de ce script ; le jour où il rend une route absente d'ici,
-> c'est ce document qui a tort. Issue : #5492. Lot : #5491.
-> Relevé du **2026-09-09**.
+> **CLOS le 2026-09-24 (#7668)** : le legacy a quitté le dépôt et `apps/web` sert meeshy.me.
+> Ce document raconte l'inventaire de la bascule tel qu'il était le **2026-09-09** (#5492,
+> lot #5491) ; il ne se tient plus à jour. La surface servie AUJOURD'HUI se mesure :
+> `node scripts/route-inventory.mjs` (et `--json`).
 
 ## Ce que la mesure a rendu, et qui change le cadrage de #5492
 

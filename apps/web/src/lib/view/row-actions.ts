@@ -45,14 +45,6 @@ export type RowActionId =
  * suppression a son chemin (`requestDeparture`). */
 export type RowFlagActionId = Extract<RowActionId, 'pin' | 'mute' | 'read' | 'archive'>;
 
-/** Les entrées qui ne basculent pas un drapeau (#10593) : elles ouvrent une
- * fiche, une fenêtre ou une confirmation, que l'écran de la liste porte. */
-export type RowIntentActionId = Extract<RowActionId, 'details' | 'rename' | 'block'>;
-
-/** Les entrées que les RÔLES ouvrent (#11211) : la ligne les route elle-même
- * (la fiche, le départ, l'administration), sans passer par l'écran. */
-export type RowRoleActionId = Extract<RowActionId, 'invite' | 'manageMembers' | 'adminOpen' | 'leave' | 'obsolete'>;
-
 export const isRowFlagAction = (id: RowActionId): id is RowFlagActionId => id === 'pin' || id === 'mute' || id === 'read' || id === 'archive';
 
 /**

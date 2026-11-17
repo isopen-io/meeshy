@@ -223,11 +223,6 @@ export interface GetMessagesResponse<TMessage = unknown> extends ApiResponse<Get
 export interface GetConversationsResponse<TConversation = unknown> extends ApiResponse<readonly TConversation[]> {}
 
 /**
- * Response for a specific conversation
- */
-export interface GetConversationResponse<TConversation = unknown> extends ApiResponse<TConversation> {}
-
-/**
  * Response for creating a conversation
  */
 export interface CreateConversationResponse<TConversation = unknown> extends ApiResponse<TConversation> {}
@@ -251,16 +246,6 @@ export interface ApiConfig {
   readonly headers: Readonly<Record<string, string>>;
   readonly retries?: number;
   readonly retryDelay?: number;
-}
-
-/**
- * Options for API requests
- */
-export interface ApiRequestOptions {
-  readonly signal?: AbortSignal;
-  readonly timeout?: number;
-  readonly retries?: number;
-  readonly headers?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -308,11 +293,6 @@ export interface TranslationResponse extends ApiResponse<TranslationResponseData
 export interface StatsResponseData {
   readonly stats: ConversationStats;
 }
-
-/**
- * Response for statistics
- */
-export interface StatsResponse extends ApiResponse<StatsResponseData> {}
 
 /**
  * Type guard to check if a response is successful

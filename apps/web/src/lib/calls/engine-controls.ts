@@ -161,5 +161,3 @@ export function createEngineControls(deps: EngineControlsDeps) {
 
   return { invite, muteParticipant, react, receive, reset };
 }
-
-export type EngineControls = ReturnType<typeof createEngineControls>;

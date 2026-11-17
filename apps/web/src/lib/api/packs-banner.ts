@@ -1,8 +1,7 @@
 import * as packsEndpoints from '@meeshy/shared/api/endpoints/packs';
 
-import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
-import { loadCatalogueOf, loadDetailOf, loadInstalledOf, setInstalledOf, type PackDeps, type PackPort } from './packs';
+import { loadCatalogueOf, loadInstalledOf, type PackDeps, type PackPort } from './packs';
 import { decodeDesignPackSummary, type DesignPackSummary } from '@/lib/profile-decor/pack-summary';
 
 /**
@@ -29,8 +28,3 @@ export const bannerPackPort: PackPort<BannerPackSummary, BannerPackSummary, Bann
 export const loadBannerCatalogue = (deps: PackDeps): Promise<ApiResult<readonly BannerPackSummary[]>> => loadCatalogueOf(bannerPackPort, deps);
 
 export const loadInstalledBannerPacks = (deps: PackDeps): Promise<ApiResult<readonly BannerPackSummary[]>> => loadInstalledOf(bannerPackPort, deps);
-
-export const loadBannerPack = (deps: PackDeps, slug: string): Promise<ApiResult<BannerPackSummary>> => loadDetailOf(bannerPackPort, deps, slug);
-
-export const setBannerPackInstalled = (deps: ConversationsDeps, slug: string, installed: boolean): Promise<ApiResult<BannerPackSummary>> =>
-  setInstalledOf(bannerPackPort, deps, slug, installed);
