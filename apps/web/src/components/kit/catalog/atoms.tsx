@@ -8,10 +8,11 @@ import { MeeshyMedallion, MeeshyMedallionRow } from '../meeshy-medallion';
 import { MeeshyMeter } from '../meeshy-meter';
 import { MEESHY_MOTION_TOKENS, meeshyMotionRecipe } from '../meeshy-motion';
 import { MeeshyNote } from '../meeshy-note';
+import { CONTENTS_B, MEESHY_KIT_ATOMS_B } from './atoms-b';
 
 /**
- * LES ATOMES DU PROFIL AU CATALOGUE (#18874, chantier #18857) — K26, K40, K41, K42, K45,
- * K46, K55. Ils ne sont PAS dans `MeeshyKitCatalog.entries` : cette liste est égale, clé
+ * LES ATOMES DU PROFIL AU CATALOGUE (#18874, #18875, chantier #18857) — K26, K33, K35, K37,
+ * K38 (atome `MeeshySkeleton`), K40, K41, K42, K45, K46, K51, K53, K55. Ils ne sont PAS dans `MeeshyKitCatalog.entries` : cette liste est égale, clé
  * pour clé, au registre `.claude/workflows/meeshy-kit-planche.lots.json`, qui n'a pas encore
  * ces numéros (un fichier de la chaîne outillage, pas du web). Ils vivent ici, à part, et
  * `MeeshyKitCatalog.atoms` / `atomContent` les rendent ; leur entrée dans le registre, avec
@@ -178,6 +179,9 @@ const contentK55 = (state: MeeshyKitCatalogState): ReactNode => {
   );
 };
 
+const keyNumber = (atom: MeeshyKitAtom): number => Number(atom.entry.key.slice(1));
+
+/** Les atomes, dans l'ordre des numéros de la planche : la première série (#18874) et la seconde (#18875). */
 export const MEESHY_KIT_ATOMS: readonly MeeshyKitAtom[] = [
   { entry: entryK26, file: 'meeshy-motion.ts' },
   { entry: entryK40, file: 'meeshy-button.tsx' },
@@ -186,7 +190,8 @@ export const MEESHY_KIT_ATOMS: readonly MeeshyKitAtom[] = [
   { entry: entryK45, file: 'meeshy-medallion.tsx' },
   { entry: entryK46, file: 'meeshy-note.tsx' },
   { entry: entryK55, file: 'meeshy-key-hint.tsx' },
-];
+  ...MEESHY_KIT_ATOMS_B,
+].sort((a, b) => keyNumber(a) - keyNumber(b));
 
 const CONTENTS: Readonly<Record<string, (state: MeeshyKitCatalogState) => ReactNode>> = {
   K26: contentK26,
@@ -196,6 +201,7 @@ const CONTENTS: Readonly<Record<string, (state: MeeshyKitCatalogState) => ReactN
   K45: contentK45,
   K46: contentK46,
   K55: contentK55,
+  ...CONTENTS_B,
 };
 
 export const atomEntries: readonly MeeshyKitCatalogEntry[] = MEESHY_KIT_ATOMS.map((atom) => atom.entry);

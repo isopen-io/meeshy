@@ -112,7 +112,7 @@ describe('MeeshyWavePlayer — le composant', () => {
   const props = { label: 'Voix de Léo', samples: SAMPLES, duration: 9, words: WORDS } as const;
 
   test('deux éléments : le disque, nommé « Lire Voix de Léo », et l’onde réglable', () => {
-    const container = mount(<MeeshyWavePlayer {...props} progress={0} isPlaying={false} onToggle={() => {}} />);
+    const container = mount(<MeeshyWavePlayer {...props} progress={0} isPlaying={false} onToggle={() => {}} onScrub={() => {}} />);
     expect(disc(container).getAttribute('aria-label')).toBe('Lire, Voix de Léo');
     expect(disc(container).tagName).toBe('BUTTON');
     const zone = wave(container);
