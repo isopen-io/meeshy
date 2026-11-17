@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
 import { ACCOUNT_CACHE_PREFIX, createAccountCacheShelf, endRevokedSession, forgetAccountCaches, setDeviceFollower } from './account-caches';
+import { watchDeliveryReceiptCredential, type DeliveryReceiptCredential } from '../notifications/delivery-receipt-credential';
+
 import { createAuthClient } from './auth';
 import type { ApiResult, HttpRequest } from './http';
 import { createAppQueryClient, type StorageLike } from './query-client';
@@ -527,5 +529,72 @@ describe('W2 — se déconnecter dans l’onglet resté sur l’ancienne session
 
     expect(sent).toEqual([{ Authorization: 'Bearer jwt-ada', 'X-Session-Token': 'sess-ada' }]);
     expect(tokenOf(reloaded(storage))).toBe('jwt-bob');
+  });
+});
+
+/**
+ * LE CRÉDENTIAL DU SERVICE WORKER EST CELUI DE L'APPAREIL (W5). L'entrée
+ * IndexedDB `meeshy-push` est UNE pour l'origine ; chaque onglet la
+ * réécrivait depuis SA session : l'onglet resté sur T1 y remettait T1 à la
+ * moindre édition de profil (et `null` à son 401), et les accusés de remise du
+ * worker partaient avec un jeton révoqué, ou plus du tout.
+ */
+describe('W5 — le crédential du service worker est celui que l’appareil tient (#19132)', () => {
+  function sharedCredential() {
+    const shared: { value: DeliveryReceiptCredential | null } = { value: null };
+    return { shared, write: async (read: () => DeliveryReceiptCredential) => void (shared.value = read()) };
+  }
+
+  test('l’onglet au jeton ancien qui édite son profil ne réécrit pas son jeton par-dessus le récent', () => {
+    const storage = fakeStorage();
+    const { staleTab, freshTab } = staleTabThenFreshLogin(storage);
+    const { shared, write } = sharedCredential();
+    watchDeliveryReceiptCredential({ sessionStore: staleTab, write });
+    watchDeliveryReceiptCredential({ sessionStore: freshTab, write });
+
+    staleTab.getState().updateUser({ systemLanguage: 'en' });
+
+    expect(shared.value?.credential).toEqual({ kind: 'registered', token: 'jwt-recent' });
+  });
+
+  test('le 401 de l’onglet au jeton ancien ne retire pas le crédential de l’onglet récent', () => {
+    const storage = fakeStorage();
+    const { staleTab, freshTab } = staleTabThenFreshLogin(storage);
+    const { shared, write } = sharedCredential();
+    watchDeliveryReceiptCredential({ sessionStore: freshTab, write });
+    watchDeliveryReceiptCredential({ sessionStore: staleTab, write });
+    freshTab.getState().updateUser({ displayName: 'Ada L.' });
+
+    endRevokedSession(staleTab, { storage, cacheStorage: noReaderCaches, publications: { clear: async () => undefined } });
+
+    expect(shared.value?.credential).toEqual({ kind: 'registered', token: 'jwt-recent' });
+  });
+
+  test('il est relu au moment où il s’écrit : une écriture retardée porte la session que l’appareil tient alors', () => {
+    const storage = fakeStorage();
+    const tab = openTab(storage);
+    tab.getState().establish({ user: ADA, token: 'jwt-ancien', sessionToken: 'sess-ancienne', expiresIn: 3600 });
+    const pending: Array<() => DeliveryReceiptCredential> = [];
+    watchDeliveryReceiptCredential({ sessionStore: tab, write: async (read) => void pending.push(read) });
+
+    openTab(storage).getState().establish({ user: ADA, token: 'jwt-recent', sessionToken: 'sess-recente', expiresIn: 7200 });
+
+    expect(pending[0]?.().credential).toEqual({ kind: 'registered', token: 'jwt-recent' });
+  });
+
+  test('l’appareil déconnecté ne laisse aucun crédential au worker, même à l’onglet qui ne l’a pas encore suivi', () => {
+    const storage = fakeStorage();
+    const tabA = openTab(storage);
+    tabA.getState().establish({ user: ADA, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 3600 });
+    const tabB = openTab(storage);
+    tabB.getState().restoreSession();
+    const { shared, write } = sharedCredential();
+    watchDeliveryReceiptCredential({ sessionStore: tabA, write });
+    watchDeliveryReceiptCredential({ sessionStore: tabB, write });
+
+    tabA.getState().clearSession();
+    tabB.getState().updateUser({ displayName: 'Ada L.' });
+
+    expect(shared.value?.credential).toBeNull();
   });
 });
