@@ -11,6 +11,7 @@ import { createLiveGesture, writeLive, type LiveGesture } from './live-cache-jou
 import { mediaHubConversationKey } from './media-hub-cache';
 import { findCachedThreadMessage, messagesQueryKey, patchThreadMessages } from './messages';
 import type { MessagesPage, MessagesPageParam } from './messages-pages';
+import { requestFullThreadRead } from './messages-revalidation';
 import type { Conversation, Message } from './types';
 
 /**
@@ -322,6 +323,7 @@ export async function performDeleteForMe(params: DeleteParams & { readonly rowEx
      reviennent DÉPLIÉES, jamais sous la sortie qui les a repliées (#12634). */
   if (deleted < messages.length) {
     rowExit.unfold(ids);
+    requestFullThreadRead(queryClient, conversationId);
     void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId) });
   }
   return { deleted, failed: messages.length - deleted, offline: false };

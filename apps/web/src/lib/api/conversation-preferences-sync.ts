@@ -10,6 +10,7 @@ import { patchConversation, patchConversationDetail } from './conversations';
 import { APP_PREFERENCES_QUERY_KEY } from './me-keys';
 import { messagesQueryKey } from './messages';
 import type { MessagesInfiniteData } from './messages-pages';
+import { requestFullThreadRead } from './messages-revalidation';
 import { preferenceEntryOf } from './preferences';
 import type { Conversation } from './types';
 
@@ -127,6 +128,8 @@ export function createPreferencesSync(params: {
   const applyHistoryClear = (conversationId: string, served: Payload): void => {
     const cutoff = typeof served['clearHistoryBefore'] === 'string' ? Date.parse(served['clearHistoryBefore']) : Number.NaN;
     if (Number.isNaN(cutoff) || !threadHoldsMessageBefore(queryClient, conversationId, cutoff)) return;
+    /* TOUT le fil se relit (#18918) : ce qui précède la date vit dans les pages anciennes, qu'une revalidation recollée garderait. */
+    requestFullThreadRead(queryClient, conversationId);
     void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId), exact: true });
   };
 

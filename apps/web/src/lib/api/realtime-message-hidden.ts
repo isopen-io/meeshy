@@ -6,6 +6,7 @@ import { rowExitStore } from '@/lib/view/row-exit-motion';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { hideRowsForReader } from './delete-message';
 import { messagesQueryKey } from './messages';
+import { requestFullThreadRead } from './messages-revalidation';
 
 /**
  * LE PUITS DE `message:hidden-for-me` (#10587) — un message masqué « pour moi »
@@ -56,6 +57,8 @@ export function isMessageRestoredForMeEvent(payload: unknown): payload is Messag
 export function applyMessageRestoredForMe(queryClient: QueryClient, data: MessageRestoredForMeEventData, viewerId: string): void {
   if (viewerId === '' || data.userId !== viewerId) return;
   for (const conversationId of new Set(data.messages.map((ref) => ref.conversationId))) {
+    /* Un message restauré peut vivre dans une page ancienne : TOUT le fil se relit (#18918). */
+    requestFullThreadRead(queryClient, conversationId);
     void queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId), exact: true });
   }
 }

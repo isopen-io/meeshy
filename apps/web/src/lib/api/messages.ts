@@ -12,6 +12,7 @@ import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import { nextMessagesCursor, pageOfMessages, threadWindowOf } from './messages-pages';
+import { cachedOlderThreadPage, firstThreadPage } from './messages-revalidation';
 import type { MessagesInfiniteData, MessagesPage, MessagesPageParam } from './messages-pages';
 import type { Message } from './types';
 import { seedMineFromPage, snapshotMine } from './reactions-mine';
@@ -159,17 +160,17 @@ export async function requestMessageRows(
  * la MÊME absence que `nextCursor` d'un fil épuisé.
  */
 export function messagesInfiniteOptions(deps: ConversationsDeps, conversationId: string) {
+  const load = async (before: MessagesPageParam, signal: AbortSignal | undefined): Promise<MessagesPage> =>
+    unwrap(await loadMessages({ ...deps, conversationId, ...(before != null ? { before } : {}), ...(signal !== undefined ? { signal } : {}) }));
+  const cachedOf = (client: QueryClient | undefined) => client?.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
   return {
     queryKey: messagesQueryKey(conversationId),
-    queryFn: async ({ pageParam, signal }: { readonly pageParam?: MessagesPageParam; readonly signal?: AbortSignal }) =>
-      unwrap(
-        await loadMessages({
-          ...deps,
-          conversationId,
-          ...(pageParam != null ? { before: pageParam } : {}),
-          ...(signal !== undefined ? { signal } : {}),
-        }),
-      ),
+    /* LA PAGE 1 SEULE à la relecture d'un fil déjà chargé, recollée au présent
+       tenu, les pages anciennes reprises du cache (#18918, `messages-revalidation.ts`). */
+    queryFn: async ({ pageParam, signal, client }: { readonly pageParam?: MessagesPageParam; readonly signal?: AbortSignal; readonly client?: QueryClient }) => {
+      if (pageParam == null) return firstThreadPage({ client, conversationId, cached: cachedOf(client), served: await load(undefined, signal) });
+      return cachedOlderThreadPage({ client, conversationId, cached: cachedOf(client), cursor: pageParam }) ?? load(pageParam, signal);
+    },
     initialPageParam: undefined as MessagesPageParam,
     getNextPageParam: nextMessagesCursor,
   };
