@@ -199,7 +199,7 @@ describe('Un post public se déplie en carte : titre, texte, image', () => {
     const { reponse, html } = await deplier();
     expect(reponse.statusCode).toBe(200);
     expect(reponse.headers['content-type']).toContain('text/html');
-    expect(meta(html, 'og:title')).toBe('Post de Amani Diallo');
+    expect(meta(html, 'og:title')).toBe('Publication de Amani Diallo');
     expect(meta(html, 'og:description')).toBe('Coucher de soleil sur la Petite Côte.');
     expect(meta(html, 'og:url')).toBe(`${ORIGIN}/post/${POST_ID}`);
     expect(meta(html, 'og:image')).toBe(`${API}/api/v1/attachments/file/${encodeURIComponent('2026/11/66f0c0ffee0000000000aaaa/plage_1080w.webp')}`);
@@ -259,7 +259,7 @@ describe('Chaque type de contenu a son titre', () => {
 
   it('sans nom affiché, nomme le pseudo', async () => {
     const { html } = await deplier({ ligne: contenu({ author: auteur({ displayName: null }) }) });
-    expect(meta(html, 'og:title')).toBe('Post de @amani');
+    expect(meta(html, 'og:title')).toBe('Publication de @amani');
   });
 });
 
@@ -405,7 +405,7 @@ describe('Une republication publique d’un original public', () => {
       author: auteur({ username: 'bintou', displayName: 'Bintou' }),
     };
     const { html } = await deplier({ ligne: contenu({ content: null, media: [], repostOfId: ORIGINAL_ID, repostOf: original }) });
-    expect(meta(html, 'og:title')).toBe('Post de Amani Diallo');
+    expect(meta(html, 'og:title')).toBe('Publication de Amani Diallo');
     expect(meta(html, 'og:description')).toBe('Le texte de l’original.');
     expect(meta(html, 'og:image')).toContain('original_thumb.jpg');
   });
@@ -425,7 +425,7 @@ describe('Le lien SUIVI que frappe la feuille de partage se déplie en carte du 
       ligne: contenu(),
       suivi: suivi({ targetType: 'EXTERNAL', targetId: null, originalUrl: `${ORIGIN}/feeds/post/${POST_ID}` }),
     });
-    expect(meta(html, 'og:title')).toBe('Post de Amani Diallo');
+    expect(meta(html, 'og:title')).toBe('Publication de Amani Diallo');
   });
 
   it.each([

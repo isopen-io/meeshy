@@ -58,7 +58,7 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     personOnMeeshy: (person) => `${person} sur Meeshy`,
     openProfile: 'Ouvrir la fiche',
     contentBy: {
-      POST: (author) => `Post de ${author}`,
+      POST: (author) => `Publication de ${author}`,
       REEL: (author) => `Réel de ${author}`,
       STORY: (author) => `Story de ${author}`,
       STATUS: (author) => `Humeur de ${author}`,
@@ -130,7 +130,7 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     personOnMeeshy: (person) => `${person} no Meeshy`,
     openProfile: 'Abrir o perfil',
     contentBy: {
-      POST: (author) => `Post de ${author}`,
+      POST: (author) => `Publicação de ${author}`,
       REEL: (author) => `Reel de ${author}`,
       STORY: (author) => `Story de ${author}`,
       STATUS: (author) => `Humor de ${author}`,
@@ -202,9 +202,9 @@ export const UNFURL_COPY: Readonly<Record<UnfurlLanguage, UnfurlCopy>> = {
     personOnMeeshy: (person) => `${person} على Meeshy`,
     openProfile: 'افتح الملف الشخصي',
     contentBy: {
-      POST: (author) => `منشور من ${author}`,
-      REEL: (author) => `ريل من ${author}`,
-      STORY: (author) => `قصة من ${author}`,
+      POST: (author) => `منشور ${author}`,
+      REEL: (author) => `ريل ${author}`,
+      STORY: (author) => `قصة ${author}`,
       STATUS: (author) => `مزاج ${author}`,
     },
     contentPromise: 'شاهده على Meeshy بلغتك.',
