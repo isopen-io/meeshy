@@ -25,7 +25,7 @@ class BigTextEnricher @Inject constructor() : NotificationEnricher {
 
 /**
  * STYLE : one tray group per conversation / post (setGroup) and the app-icon badge
- * (setNumber). The group summary itself is posted by [PushSummaryNotifier].
+ * (setNumber : the messages THIS banner groups, never the global unread total). The group summary itself is posted by [PushSummaryNotifier].
  */
 class GroupAndBadgeEnricher @Inject constructor() : NotificationEnricher {
     override val phase: EnrichmentPhase = EnrichmentPhase.STYLE

@@ -54,6 +54,15 @@ class PushPayloadTest {
     }
 
     @Test
+    fun `une charge reproduite qui remplace sa propre identite est une correction`() {
+        assertThat(decode("notificationId" to "n1", "reproduced" to "true", "replacesNotificationId" to "n1").isCorrection).isTrue()
+        assertThat(decode("notificationId" to "n1", "reproduced" to "true", "replacesNotificationId" to "n0").isCorrection).isFalse()
+        assertThat(decode("notificationId" to "n1", "replacesNotificationId" to "n1").isCorrection).isFalse()
+        assertThat(decode("notificationId" to "n1", "reproduced" to "false", "replacesNotificationId" to "n1").isCorrection).isFalse()
+        assertThat(decode("notificationId" to "n1").isCorrection).isFalse()
+    }
+
+    @Test
     fun `les booleens recus en chaines sont decodes`() {
         assertThat(decode("isVideo" to "true").isVideo).isTrue()
         assertThat(decode("isVideo" to "TRUE").isVideo).isTrue()

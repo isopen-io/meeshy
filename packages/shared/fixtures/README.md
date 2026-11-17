@@ -36,3 +36,14 @@ Lus par les 3 plateformes : shared/web (Jest, import direct), iOS (XCTest, resso
 ## `author-ink.vectors.json` (#17879)
 
 - La règle de lisibilité de la couleur d'auteur (`utils/author-ink.ts`, `legibleTint`) : `ink` (l'encre de chaque schéma), `backgrounds` (les 8 fonds mesurés par schéma : surface, carte, trois arrêts du fil, trois arrêts sous la lueur), `aa` (4,5), `step` (0,04) et `vectors` = `{ scheme, tint, expected }` pour la palette entière × les deux schémas (**78 couples**). **Générés** en exécutant la loi TS sur les fonds du web (`apps/web/src/lib/view/author-ink.ts`). Rejoués par `__tests__/author-ink.test.ts` (et son contrôle de contraste indépendant), par le web (`author-ink.test.ts`, qui rougit si un fond bouge), puis par les miroirs iOS (`AuthorInkSharedVectorTests`, loi `AuthorInk`, #17865) et Android (`AuthorInkSharedVectorsTest` dans `:sdk-core`, loi `AuthorInk`, #17876), qui lisent ce fichier par chemin relatif : la loi TS ne peut pas bouger sans qu'un des trois miroirs rougisse.
+
+## `e2ee-content/` et `e2ee-signal/` (#18940)
+
+- Ce que libsignal chiffre dans une conversation `e2ee`, à l'octet près : le contenu d'un message (`E2EEContent` v1,
+  `content.vectors.json`), les signaux (`E2EESignal` v1, `../e2ee-signal/signal.vectors.json`) et le remplissage par espaces
+  (`padding.vectors.json`). Chaque cas donne l'objet, ses octets canoniques (base64 standard avec remplissage) et le clair
+  rempli ; des cas de VERDICT (version future, auteur absent ou partiel, JSON tronqué, conversation étrangère…) donnent
+  l'issue de l'ouverture. Les `canonicalJson` sont **écrits à la main** d'après ce que l'iPhone écrit
+  (`E2EEContent.swift`, `E2EESignal.swift`), jamais générés par la loi TS (`types/e2ee-content.ts`). Rejoués par
+  `__tests__/e2ee-content.test.ts` ; iOS et Android les rejouent par chemin relatif (mode d'emploi :
+  `e2ee-content/README.md`).

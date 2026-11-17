@@ -534,7 +534,7 @@ struct MessageOverlayMenu: View {
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { measuredPreviewHeight = $0 }
             // Le flou levé dans l'aperçu (#18856) ne sort pas par une capture.
-            .captureShield(message.holdsBlur)
+            .captureShield(message.exitOffer.capture.shieldsCapture())
         }
         // Le cadre défile, ou l'aperçu porte une zone de lecture (#11339) :
         // sinon, une image que les touchers traversent jusqu'au voile.

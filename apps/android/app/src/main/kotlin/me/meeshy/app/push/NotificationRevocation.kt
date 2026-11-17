@@ -117,10 +117,14 @@ object ConversationIndexedNotifications {
  * commentaire ou une mention s'écraseraient mutuellement avec le message
  * courant. Un `notificationId` absent (charge d'un gateway antérieur) retombe
  * sur `0`, comme avant.
+ *
+ * Un message ÉPHÉMÈRE ([of] avec `ephemeral`) a sa propre bannière : son délai (`setTimeoutAfter`) retire la bannière
+ * ENTIÈRE, et sous l'index de la conversation elle emportait avec elle les messages ordinaires non lus qu'elle
+ * regroupait. La révocation serveur l'atteint toujours, car elle annule aussi par `notificationId`.
  */
 object MessageNotificationId {
-    fun of(type: String?, conversationId: String?, notificationId: String?): Int =
-        forConversation(type, conversationId) ?: forNotification(notificationId)
+    fun of(type: String?, conversationId: String?, notificationId: String?, ephemeral: Boolean = false): Int =
+        if (ephemeral) forNotification(notificationId) else forConversation(type, conversationId) ?: forNotification(notificationId)
 
     /** `null` quand ce type n'indexe PAS sa bannière par conversation. */
     fun forConversation(type: String?, conversationId: String?): Int? = conversationId

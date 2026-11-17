@@ -157,6 +157,8 @@ describe('MessagingService.handleMessage — envoi libsignal par appareil (#3706
       trackingLink: { updateMany: jest.fn() },
       messageAttachment: { findMany: jest.fn().mockResolvedValue([]) },
       user: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      // GW-05 (#18906) — la ligne et ses enveloppes s'écrivent dans UNE transaction.
+      $transaction: jest.fn(async (run: (tx: unknown) => Promise<unknown>) => run(mockPrisma)),
     };
 
     service = new MessagingService(
@@ -361,7 +363,10 @@ describe('MessagingService.handleMessage — envoi libsignal par appareil (#3706
     });
   });
 
-  it('défait le message si ses enveloppes ne peuvent pas être rangées', async () => {
+  // GW-05 (#18906) — la ligne s'écrit DANS la transaction de ses enveloppes :
+  // leur échec rejette la transaction (MongoDB l'abandonne, la ligne avec), et
+  // aucune suppression de rattrapage, qui pouvait échouer à son tour, n'existe plus.
+  it('défait le message si ses enveloppes ne peuvent pas être rangées : la transaction qui l’écrit est rejetée', async () => {
     conversationIn(E2EE);
     mockPrisma.messageEnvelope = { ...store.prisma.messageEnvelope, createMany: jest.fn().mockRejectedValue(new Error('panne')) };
     service = new MessagingService(mockPrisma as unknown as PrismaClient, { handleNewMessage: mockHandleNewMessage } as any, {} as any);
@@ -369,6 +374,9 @@ describe('MessagingService.handleMessage — envoi libsignal par appareil (#3706
     const response = await service.handleMessage(relaySend(), senderParticipantId);
 
     expect(response.success).toBe(false);
-    expect(mockPrisma.message.delete).toHaveBeenCalledWith({ where: { id: messageId } });
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    await expect(mockPrisma.$transaction.mock.results[0].value).rejects.toThrow('panne');
+    expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.message.delete).not.toHaveBeenCalled();
   });
 });
