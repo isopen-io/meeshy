@@ -66,6 +66,9 @@ export function currentDeviceLocale(): string | null {
  * sont pas (le client TUS, `post-media-upload.ts`). */
 export const currentCredential = (): Credential | null => credentialFromSession(sessionStore.getState().session);
 
+/** QUI parle à cet instant — la clé que le transport relit au départ et à l'arrivée de chaque requête (#8674). */
+export const currentIdentity = (): string | null => sessionIdentityKey(sessionStore.getState().session);
+
 /**
  * LE JETON DU PROPRIÉTAIRE D'UNE ATTENTE (#9743, `owner-session.ts`) — la
  * session lue en UN instantané, ou, sur fixtures (ni session ni réseau : ce
@@ -90,7 +93,7 @@ export const httpTransport: HttpTransport = withEmailGate(
   createHttpTransport({
     base: apiConfig.base,
     credential: currentCredential,
-    identity: () => sessionIdentityKey(sessionStore.getState().session),
+    identity: currentIdentity,
     deviceLocale: currentDeviceLocale,
     onUnauthorized: () => endRevokedSession(sessionStore),
     onAccountDeleted: retireDeletedAccountLater,

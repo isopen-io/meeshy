@@ -1,5 +1,5 @@
 import { forwardMessages } from '@/lib/api/forward';
-import { apiDeps, postMediaUploadDeps } from '@/lib/api/deps';
+import { ownedApiDeps, ownedPostMediaUploadDeps } from '@/lib/api/deps';
 import { createDirectConversation, createGroupConversation, type ConversationsDeps } from '@/lib/api/conversations';
 import { uploadAttachments, uploadShortfall } from '@/lib/api/attachments';
 import { newClientMessageId } from '@/lib/api/client-message-id';
@@ -117,9 +117,10 @@ async function downloadFile(
   }
 }
 
+/** Les ports d'UN envoi, liés au compte qui parle à leur création (audit #19352, X1) : construits pour le compte qui lance l'envoi, ou pour celui qui le reprend. */
 export function createSendSheetPorts(params: SendSheetPortsParams): SendSheetPorts {
-  const deps = params.deps ?? apiDeps;
-  const mediaDeps = params.media ?? postMediaUploadDeps;
+  const deps = params.deps ?? ownedApiDeps();
+  const mediaDeps = params.media ?? ownedPostMediaUploadDeps();
   const fetchImpl = params.fetchImpl ?? fetch;
   const prepare = params.prepare ?? browserImagePreparer;
 

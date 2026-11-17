@@ -3,7 +3,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 
 import { conversationStore } from '@/lib/conversation-store';
 import { discardSend, type DiscardOutcome } from '@/lib/send/discard-send';
-import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
+import { performSend, retrySend, type Draft, type SendDeps } from '@/lib/send/perform-send';
 import { outboxStore } from '@/lib/send/outbox-store';
 import { notePublicationParticipation } from '@/lib/view/publication-participation';
 import type { RowFlagActionId } from '@/lib/view/row-actions';
@@ -19,7 +19,7 @@ import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import type { PendingAttachment } from '@/lib/send/attachments';
 
-import { apiDeps } from './deps';
+import { apiDeps, ownedApiDeps, ownedPostMediaUploadDeps } from './deps';
 import { sendTransfer } from '@/lib/send/send-transfer-instance';
 import { feedQuery, refreshFeed } from './feed';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
@@ -457,6 +457,15 @@ export function rowAction(conversationId: string, action: RowFlagActionId): void
  * `apiConfig.source`, `./deps.ts`). `online` est REÇU — ce module n'appelle
  * pas `useOnline()` (un hook), c'est `use-send.ts` qui le fournit.
  */
+/** Un envoi du fil téléverse puis envoie : ses requêtes restent au compte qui l'a lancé (audit #19352, X1). */
+const ownedSendDeps = (online: boolean): SendDeps => ({
+  ...ownedApiDeps(),
+  queryClient: appQueryClient,
+  outbox: outboxStore,
+  online,
+  transfer: { ...sendTransfer, media: ownedPostMediaUploadDeps() },
+});
+
 export function sendAction(params: {
   readonly conversationId: string;
   readonly draft: Draft;
@@ -470,7 +479,7 @@ export function sendAction(params: {
     draft,
     viewerId,
     ...(sender === undefined ? {} : { sender }),
-    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online, transfer: sendTransfer },
+    deps: ownedSendDeps(online),
   });
 }
 
@@ -483,7 +492,7 @@ export function retrySendAction(params: {
   return retrySend({
     conversationId,
     clientMessageId,
-    deps: { ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online, transfer: sendTransfer },
+    deps: ownedSendDeps(online),
   });
 }
 

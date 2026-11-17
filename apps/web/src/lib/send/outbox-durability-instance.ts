@@ -1,4 +1,4 @@
-import { apiDeps } from '@/lib/api/deps';
+import { apiDeps, ownedApiDeps, ownedPostMediaUploadDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
@@ -22,7 +22,7 @@ export const outboxDurability: OutboxDurability = createOutboxDurability({
   outbox: outboxStore,
   records: idbDeviceRecords(),
   activeViewer,
-  deps: () => ({ ...apiDeps, queryClient: appQueryClient, outbox: outboxStore, online: isOnline(), transfer: sendTransfer }),
+  deps: () => ({ ...ownedApiDeps(), queryClient: appQueryClient, outbox: outboxStore, online: isOnline(), transfer: { ...sendTransfer, media: ownedPostMediaUploadDeps() } }),
 });
 
 let started = false;

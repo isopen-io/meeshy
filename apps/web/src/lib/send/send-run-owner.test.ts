@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { createAccountCacheShelf, setDeviceFollower } from '@/lib/api/account-caches';
 import { credentialFromSession } from '@/lib/api/client';
-import { createHttpTransport, type ApiResult } from '@/lib/api/http';
+import { boundToIdentity, createHttpTransport, type ApiResult } from '@/lib/api/http';
 import { createSessionStore, sessionIdentityKey, type SessionStorage, type SessionUser } from '@/lib/api/session';
 import { followDeviceSession, watchDeviceSession } from '@/lib/api/session-follow';
 
@@ -45,13 +45,15 @@ describe('un envoi en plusieurs requêtes reste au compte qui l’a lancé (audi
       const data = url.endsWith('/attachments') ? { attachmentIds: ['att-1'] } : { id: 'x-1' };
       return new Response(JSON.stringify({ success: true, data }), { status: 200 });
     }) as unknown as typeof fetch;
-    const transport = createHttpTransport({
+    const session = createHttpTransport({
       base: 'https://gate.test',
       credential: () => credentialFromSession(tabB.getState().session),
       identity: () => sessionIdentityKey(tabB.getState().session),
       fetchImpl,
       timeoutMs: 0,
     });
+    /* Les ports d'un envoi parlent au nom du compte qui le lance (`createSendSheetPorts`). */
+    const transport = boundToIdentity(session, sessionIdentityKey(tabB.getState().session));
     const unused = async (): Promise<ApiResult<never>> => ({ ok: false, status: 0, error: 'non utilisé' });
 
     /* Le téléchargement du média (ou la préparation de la photo) prend un tour de boucle :
@@ -83,14 +85,16 @@ describe('un envoi en plusieurs requêtes reste au compte qui l’a lancé (audi
       { key: 'fil', target: { kind: 'publish', as: 'POST' }, steps: [{ kind: 'publish-text', format: 'POST', content: 'Le texte d’Ada' }] },
     ];
 
-    await createSendRun({
+    const run = createSendRun({
       entries,
       payload: { kind: 'media', url: 'https://cdn.test/photo.jpg', mime: 'image/jpeg', name: 'photo.jpg', preview: { kind: 'image' } },
       language: 'fr',
       ports,
-    }).start();
+    });
+    await run.start();
 
     expect(tabB.getState().session.status === 'authenticated' ? tabB.getState().session.user.id : null).toBe('u-bob');
     expect(sent).toEqual(sent.filter((request) => request.auth === 'Bearer jwt-ada'));
+    expect(run.getState().statuses).toEqual({ famille: { state: 'queued' }, fil: { state: 'queued' } });
   });
 });
