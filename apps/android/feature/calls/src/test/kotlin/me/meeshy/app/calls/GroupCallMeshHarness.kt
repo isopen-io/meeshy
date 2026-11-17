@@ -97,8 +97,8 @@ internal class Harness(
         primaryVideoCeiling = { ceilings += it },
     )
 
-    fun bind(scope: CoroutineScope, isOutgoing: Boolean, self: String = "m") = mesh.bind(
-        scope, CALL, self, isOutgoing, primaryUserId = "", iceServers = emptyList(), sendsAudio = true, sendsVideo = false,
+    fun bind(scope: CoroutineScope, isOutgoing: Boolean, self: String = "m", primary: String = "") = mesh.bind(
+        scope, CALL, self, isOutgoing, primaryUserId = primary, iceServers = emptyList(), sendsAudio = true, sendsVideo = false,
         conversationId = CONVERSATION,
     )
 

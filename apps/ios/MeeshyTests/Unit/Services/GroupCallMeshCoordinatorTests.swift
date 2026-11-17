@@ -268,10 +268,38 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         XCTAssertTrue(factory.links.isEmpty)
     }
 
-    func test_consume_directCall_neverTakesTheSignal() {
+    func test_consume_directCall_primaryOffer_staysWithCallManager() {
         let (sut, _, _, _, _) = makeSUT(markGroup: false)
 
+        XCTAssertFalse(sut.consume(signal: signal("offer", from: "b"), callId: "call1"))
+        XCTAssertFalse(sut.isGroupConversation("group1"))
+    }
+
+    func test_consume_directCall_answerFromAThirdParty_provesNothing() {
+        let (sut, _, _, _, _) = makeSUT(markGroup: false)
+
+        XCTAssertFalse(sut.consume(signal: signal("answer", from: "guest"), callId: "call1"))
+        XCTAssertFalse(sut.isGroupConversation("group1"))
+    }
+
+    /// #19238 — un appel direct n'a qu'un pair qui m'offre : l'offre d'un AUTRE
+    /// membre du même appel prouve qu'il est de groupe, et part au maillage.
+    func test_consume_offerFromAThirdPartyInUnmarkedCall_infersGroupAndGoesToTheMesh() async {
+        let (sut, _, factory, _, _) = makeSUT(markGroup: false)
+
+        XCTAssertTrue(sut.consume(signal: signal("offer", from: "guest"), callId: "call1"))
+        await settle()
+
+        XCTAssertTrue(sut.isGroupConversation("group1"))
+        XCTAssertEqual(factory.link(to: "guest")?.received.map(\.kind), [.offer])
+    }
+
+    func test_consume_offerWithoutDesignatedPrimary_provesNothing() {
+        let (sut, host, _, _, _) = makeSUT(markGroup: false)
+        host.groupPrimaryUserId = nil
+
         XCTAssertFalse(sut.consume(signal: signal("offer", from: "guest"), callId: "call1"))
+        XCTAssertFalse(sut.isGroupConversation("group1"))
     }
 
     func test_consume_answerWithoutLink_isSwallowedWithoutCreatingOne() async {
@@ -764,5 +792,39 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         sut.handleIncomingCall(offer)
 
         XCTAssertFalse(sut.isGroupConversation("dm1"))
+    }
+
+    // MARK: - #19238 — l'invité réveillé par push VoIP reçoit une offre par membre présent
+
+    private func voipInviteeReceivesOneOfferPerMember(markedByThePush: Bool) async -> (sut: GroupCallMeshCoordinator, factory: MockGroupPeerLinkFactory, takenByCallManager: [String]) {
+        let (sut, host, factory, _, _) = makeSUT(engaged: false, markGroup: false)
+        host.groupPrimaryUserId = "a"
+        if markedByThePush { sut.markGroupConversation("group1", title: nil) }
+
+        let takenByCallManager = ["a", "b", "c"].filter { !sut.consume(signal: signal("offer", from: $0), callId: "call1") }
+        host.isGroupCallEngaged = true
+        sut.syncWithHost()
+        await settle()
+        return (sut, factory, takenByCallManager)
+    }
+
+    func test_voipInvitee_markedByThePush_answersTheInviterAsPrimaryAndEveryOtherMemberThroughTheMesh() async {
+        let (sut, factory, takenByCallManager) = await voipInviteeReceivesOneOfferPerMember(markedByThePush: true)
+
+        XCTAssertEqual(takenByCallManager, ["a"])
+        XCTAssertEqual(factory.link(to: "b")?.received.map(\.kind), [.offer])
+        XCTAssertEqual(factory.link(to: "c")?.received.map(\.kind), [.offer])
+        XCTAssertNil(factory.link(to: "a"))
+        XCTAssertEqual(Set(sut.roster.members.map(\.userId)), ["a", "b", "c"])
+    }
+
+    func test_voipInvitee_pushFromAnOlderGateway_stillReachesEveryMemberThroughTheMesh() async {
+        let (sut, factory, takenByCallManager) = await voipInviteeReceivesOneOfferPerMember(markedByThePush: false)
+
+        XCTAssertEqual(takenByCallManager, ["a"])
+        XCTAssertTrue(sut.isGroupConversation("group1"))
+        XCTAssertEqual(factory.link(to: "b")?.received.map(\.kind), [.offer])
+        XCTAssertEqual(factory.link(to: "c")?.received.map(\.kind), [.offer])
+        XCTAssertNil(factory.link(to: "a"))
     }
 }

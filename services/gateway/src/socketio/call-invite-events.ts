@@ -99,6 +99,9 @@ export function callInviteDependencies(input: {
           isVideo: ring.event.type === 'video',
           calleeUserIds: [ring.inviteeUserId],
           foregroundUserIds,
+          conversationType: ring.event.conversationType ?? 'direct',
+          isGroup: true,
+          invitedByUserId: ring.inviterUserId,
         }
       );
     },
