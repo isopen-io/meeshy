@@ -222,9 +222,11 @@ export type SessionStoreState = {
    * Finit la session de CET onglet. L'entrée de l'appareil ne part avec elle
    * que si elle porte ENCORE cette session (#19132) : un autre onglet l'a
    * peut-être remplacée par une session plus récente, qu'un 401 ici ne
-   * concerne pas.
+   * concerne pas. `device` : l'entrée part quoi qu'elle porte — la
+   * déconnexion qui vient de fermer AUSSI, côté serveur, la session que
+   * l'appareil tenait.
    */
-  clearSession(): void;
+  clearSession(options?: { readonly device?: boolean }): void;
   /**
    * REJOINDRE EN ANONYME (#8816). Sous un compte, l'identité anonyme est
    * TENUE à côté de lui — une par conversation, persistée sous le compte qui
@@ -628,8 +630,8 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
     },
     deviceSession,
     holdsDeviceSession: () => holdsDevice(get().session),
-    clearSession: () => {
-      if (holdsDevice(get().session)) purge(storage);
+    clearSession: (options) => {
+      if (options?.device === true || holdsDevice(get().session)) purge(storage);
       set({ session: { status: 'anonymous' } });
     },
     adoptAnonymous: ({ sessionToken, guest }) => {

@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
 import { ACCOUNT_CACHE_PREFIX, createAccountCacheShelf, endRevokedSession, forgetAccountCaches, setDeviceFollower } from './account-caches';
+import { createAuthClient } from './auth';
+import type { ApiResult, HttpRequest } from './http';
 import { createAppQueryClient, type StorageLike } from './query-client';
 import { createSessionStore, heldAccountOf, type SessionState, type SessionStorage, type SessionStoreApi, type SessionUser } from './session';
 import { endRevokedSessionWithReason, followDeviceSession, watchDeviceSession } from './session-follow';
@@ -462,5 +464,68 @@ describe('W1 — le suivi de l’appareil est branché dans l’application (#19
   test('la révocation reçue par la socket est jugée sur la session qu’elle vise, jamais fermée après coup sans regarder', () => {
     expect(source).toContain('void endRevokedSessionWithReason({');
     expect(source).not.toContain('.finally(() => endRevokedSession(sessionStore))');
+  });
+});
+
+/**
+ * SE DÉCONNECTER, C'EST DÉCONNECTER LE COMPTE DE L'APPAREIL (W2). Dans l'onglet
+ * resté sur l'ancienne session, la déconnexion fermait T1 côté serveur puis
+ * purgeait l'entrée qui portait T2 : l'onglet A restait connecté en mémoire,
+ * et T2 restait ouverte côté serveur sans que rien sur l'appareil ne la
+ * tienne. Le témoin d'attaque de l'audit exigeait que T2 survive au
+ * rechargement ; le correctif du constat la ferme AUSSI, côté serveur, et son
+ * entrée part : rien de ce compte ne reste ouvert, ni ici ni là-bas.
+ */
+describe('W2 — se déconnecter dans l’onglet resté sur l’ancienne session déconnecte le compte de l’appareil (#19132)', () => {
+  function recordingTransport() {
+    const sent: Array<Readonly<Record<string, string>> | undefined> = [];
+    return {
+      sent,
+      transport: {
+        request: async <T>(request: HttpRequest): Promise<ApiResult<T>> => {
+          sent.push(request.headers);
+          return { ok: true, status: 200, data: { message: 'ok' } as T };
+        },
+      },
+    };
+  }
+
+  test('la session ancienne ET la session récente du compte sont fermées côté serveur, et aucune ne reste sur l’appareil', async () => {
+    const storage = fakeStorage();
+    const { staleTab } = staleTabThenFreshLogin(storage);
+    const { sent, transport } = recordingTransport();
+
+    await createAuthClient({ transport, store: staleTab }).logout();
+
+    expect(sent).toEqual([
+      { Authorization: 'Bearer jwt-ancien', 'X-Session-Token': 'sess-ancienne' },
+      { Authorization: 'Bearer jwt-recent', 'X-Session-Token': 'sess-recente' },
+    ]);
+    expect(reloaded(storage).status).toBe('anonymous');
+  });
+
+  test('l’onglet A, qui tenait la session récente, quitte le compte avec l’appareil', async () => {
+    const storage = fakeStorage();
+    const { staleTab, freshTab } = staleTabThenFreshLogin(storage);
+    const windowA = fakeWindow();
+    watchDeviceSession(freshTab, { target: windowA, shelf: createAccountCacheShelf(storage) });
+
+    await createAuthClient({ transport: recordingTransport().transport, store: staleTab }).logout();
+    windowA.dispatch('storage', SESSION_CHANGED);
+
+    expect(freshTab.getState().session.status).toBe('anonymous');
+  });
+
+  test('un AUTRE compte ouvert ailleurs n’est ni fermé ni effacé : on ne se déconnecte que du compte qu’on voit', async () => {
+    const storage = fakeStorage();
+    const adaTab = openTab(storage);
+    adaTab.getState().establish({ user: ADA, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 3600 });
+    openTab(storage).getState().establish({ user: BOB, token: 'jwt-bob', sessionToken: 'sess-bob', expiresIn: 3600 });
+    const { sent, transport } = recordingTransport();
+
+    await createAuthClient({ transport, store: adaTab }).logout();
+
+    expect(sent).toEqual([{ Authorization: 'Bearer jwt-ada', 'X-Session-Token': 'sess-ada' }]);
+    expect(tokenOf(reloaded(storage))).toBe('jwt-bob');
   });
 });
