@@ -162,6 +162,33 @@ struct KitAtomsLifecycleTests {
         #expect(source.contains(".monospaced"))
     }
 
+    // MARK: - Le bouton éteint, et seulement lui, dit sa raison ; un maintien éteint ne s'arme pas
+
+    @Test("la raison d'un bouton éteint ne se dit pas tant qu'il est allumé")
+    @MainActor
+    func button_hintOnlyWhenDisabled() {
+        #expect(MeeshyButtonWords.hint(disabledReason: "Choisis un nom", isEnabled: false) == "Choisis un nom")
+        #expect(MeeshyButtonWords.hint(disabledReason: "Choisis un nom", isEnabled: true) == nil)
+    }
+
+    @Test("le maintien au lecteur d'écran : éteint, il ne s'arme pas ; armé, il se relâche toujours")
+    func button_holdToggleRespectsEnabled() {
+        var law = MeeshyButtonHoldLaw()
+        #expect(law.toggle(isEnabled: false) == nil)
+        #expect(!law.isHeld)
+        #expect(law.toggle(isEnabled: true) == true)
+        #expect(law.toggle(isEnabled: false) == false)
+        #expect(!law.isHeld)
+    }
+
+    @Test("la vue passe par la bascule et par la raison bornée à l'état éteint")
+    func button_viewUsesTheLaws() throws {
+        let source = try KitAtomVectors.code("MeeshyButton.swift")
+        #expect(source.contains("holdLaw.toggle(isEnabled: isEnabled)"))
+        #expect(!source.contains("hint(disabledReason: disabledReason)),"))
+        #expect(source.contains("hint(disabledReason: disabledReason, isEnabled: isEnabled)"))
+    }
+
     private static func badge(shape: MeeshyBadgeShape = .capsule,
                               isMultiline: Bool = false,
                               isCode: Bool = false) -> MeeshyBadgeRecipe {
