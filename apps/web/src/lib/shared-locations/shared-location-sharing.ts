@@ -286,10 +286,19 @@ export function createSharedLocationSharingCenter({
       if (!isLive() || !rosterOps.hasRecipients(current) || rosterOps.hasPendingWithdrawals(current) || !shouldSendSharedLocation(fix, now(), lastSent)) return;
       lastSent = { fix, at: now() };
       const verdict = await emitter.update(fix);
-      if (isLive() && verdict.kind === 'refused' && verdict.outcome === 'not-sharing') wipe();
+      if (isLive() && verdict.kind === 'refused' && verdict.outcome === 'not-sharing') await wipeUnlessChangedElsewhere(current);
     } finally {
       gate.leave();
     }
+  };
+
+  /* « Pas de partage » répond à la liste d'AVANT l'envoi : un autre onglet a pu en démarrer une depuis, qu'on ne vide pas (#18431). */
+  const wipeUnlessChangedElsewhere = async (sentWith: SharedLocationRoster): Promise<void> => {
+    await acrossTabs(async () => {
+      if (!isLive()) return;
+      reread();
+      if (rosterOps.equals(roster(), sentWith)) wipe();
+    });
   };
 
   const startFollowing = (): void => {

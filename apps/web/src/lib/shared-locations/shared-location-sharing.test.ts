@@ -525,4 +525,34 @@ describe('un « Arrêter » hors ligne part au retour du réseau (#18388, iso #1
     expect(await sharing).toBeNull();
     expect(tabB.starts.at(-1)?.recipients).toEqual([{ userId: AUTRE, precision: 'city' }]);
   });
+
+  test('#18431 audit : un « pas de partage » reçu en retard n’efface pas la liste qu’un autre onglet vient de démarrer', async () => {
+    const memory = new Map<string, string>();
+    const acrossTabs = makeAcrossTabs();
+    const tabB = makeWorld({ memory, acrossTabs });
+    await tabB.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    const tabA = makeWorld({ memory, acrossTabs });
+    const late = deferred<SharedLocationVerdict>();
+    tabB.updateQueue.push(() => late.promise);
+    tabB.clock.now += 10 * 60_000;
+    tabB.source.listener?.({ latitude: 48.9, longitude: 2.4 });
+    await flush();
+    expect(tabB.updates).toHaveLength(1);
+    expect(await tabA.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 })).toBeNull();
+    late.resolve({ kind: 'refused', outcome: 'not-sharing' });
+    await flush();
+    expect(rosterOps.entry(tabB.stored(), AUTRE)).not.toBeNull();
+    expect(tabB.center.entry(AUTRE)).not.toBeNull();
+  });
+
+  test('un « pas de partage » sans changement ailleurs vide toujours la liste', async () => {
+    const world = makeWorld({ acrossTabs: makeAcrossTabs() });
+    await world.center.share({ userId: AMI, precision: 'city', durationMinutes: 60 });
+    world.updateQueue.push(async () => ({ kind: 'refused', outcome: 'not-sharing' }));
+    world.clock.now += 10 * 60_000;
+    world.source.listener?.({ latitude: 48.9, longitude: 2.4 });
+    await flush();
+    expect(world.center.entry(AMI)).toBeNull();
+    expect(world.stored()).toEqual(EMPTY_ROSTER);
+  });
 });
