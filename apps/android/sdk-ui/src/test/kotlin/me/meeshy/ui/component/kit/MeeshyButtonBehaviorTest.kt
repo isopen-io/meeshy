@@ -66,6 +66,23 @@ class MeeshyButtonBehaviorTest {
     }
 
     @Test
+    fun `un maintien tenu au lecteur d'ecran se relache quand le bouton s'eteint`() {
+        val reports = mutableListOf<Boolean>()
+        var enabled by mutableStateOf(true)
+        compose.setContent {
+            MeeshyTheme(darkTheme = false) {
+                MeeshyButton("Parler", onClick = {}, shape = MeeshyButtonShape.Hold, enabled = enabled, onHoldChange = { reports += it })
+            }
+        }
+
+        compose.onNodeWithContentDescription("Parler").performSemanticsAction(SemanticsActions.OnClick)
+        enabled = false
+        compose.waitForIdle()
+
+        assertThat(reports).containsExactly(true, false).inOrder()
+    }
+
+    @Test
     fun `un maintien eteint n'offre aucune action au lecteur d'ecran`() {
         val reports = mutableListOf<Boolean>()
         compose.setContent {

@@ -107,4 +107,18 @@ class MeeshyMeterTest {
         assertThat(MeeshyMeterRecipe.spokenValue("23 sur 50", fraction = 0.46f)).isEqualTo("23 sur 50")
         assertThat(MeeshyMeterRecipe.spokenValue(null, fraction = 0.46f)).isEqualTo("46%")
     }
+
+    @Test
+    fun `perimee elle perd toute sa couleur, vivante elle la garde`() {
+        assertThat(resolve(isStale = true).saturation).isEqualTo(0f)
+        assertThat(resolve().saturation).isEqualTo(1f)
+    }
+
+    @Test
+    fun `la barre sans valeur passe du bord de debut au bord de fin, en arabe de droite a gauche`() {
+        assertThat(MeeshyMeterRecipe.passStart(pass = 0f, width = 100f, segment = 30f, isRtl = false)).isEqualTo(-30f)
+        assertThat(MeeshyMeterRecipe.passStart(pass = 1f, width = 100f, segment = 30f, isRtl = false)).isEqualTo(100f)
+        assertThat(MeeshyMeterRecipe.passStart(pass = 0f, width = 100f, segment = 30f, isRtl = true)).isEqualTo(100f)
+        assertThat(MeeshyMeterRecipe.passStart(pass = 1f, width = 100f, segment = 30f, isRtl = true)).isEqualTo(-30f)
+    }
 }

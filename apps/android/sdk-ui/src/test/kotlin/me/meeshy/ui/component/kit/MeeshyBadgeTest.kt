@@ -136,4 +136,10 @@ class MeeshyBadgeTest {
         assertThat(resolve(content = MeeshyBadgeContentShape.Digit).horizontalPaddingDp).isEqualTo(0)
         assertThat(resolve(content = MeeshyBadgeContentShape.Digit, isMultiLine = true).horizontalPaddingDp).isEqualTo(8)
     }
+
+    @Test
+    fun `perimee elle passe a 40 pour cent de saturation, comme iOS, vivante elle garde sa couleur`() {
+        assertThat(resolve(isStale = true).saturation).isEqualTo(0.4f)
+        assertThat(resolve().saturation).isEqualTo(1f)
+    }
 }

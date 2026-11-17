@@ -121,4 +121,28 @@ class MeeshyKeyHintTest {
         assertThat(MeeshyKeyHintRule.hasHardwareKeyboard(keyboard = noKeys, hardKeyboardHidden = hiddenNo)).isFalse()
         assertThat(MeeshyKeyHintRule.hasHardwareKeyboard(keyboard = twelveKey, hardKeyboardHidden = hiddenNo)).isFalse()
     }
+
+    @Test
+    fun `en lecture de droite a gauche les fleches gauche et droite s'echangent, haut et bas jamais, et l'ordre de frappe reste`() {
+        val keys = listOf(MeeshyKey.Shift, MeeshyKey.Left, MeeshyKey.Up)
+        assertThat(MeeshyKeyHintRule.glyphs(keys, MeeshyKeyPlatform.Other, isRightToLeft = true)).containsExactly("Shift", "→", "↑").inOrder()
+        assertThat(MeeshyKeyHintRule.glyphs(listOf(MeeshyKey.Right, MeeshyKey.Down), MeeshyKeyPlatform.Other, isRightToLeft = true))
+            .containsExactly("←", "↓").inOrder()
+        assertThat(MeeshyKeyHintRule.glyphs(keys, MeeshyKeyPlatform.Other)).containsExactly("Shift", "←", "↑").inOrder()
+    }
+
+    @Test
+    fun `la voix nomme la fleche que la touche montre`() {
+        assertThat(MeeshyKeyHintRule.spoken(listOf(MeeshyKey.Left), MeeshyKeyPlatform.Other, prefix = "raccourci", isRightToLeft = true))
+            .isEqualTo("raccourci : Right")
+        assertThat(MeeshyKeyHintRule.spoken(listOf(MeeshyKey.Left), MeeshyKeyPlatform.Other, prefix = "raccourci")).isEqualTo("raccourci : Left")
+    }
+
+    @Test
+    fun `la touche compacte a le rayon 6 de la fiche, la reguliere le rayon 8`() {
+        val compact = MeeshyKeyHintRecipe.resolve(cmdM, MeeshyKeyHintContext.Free, MeeshyKeyHintSize.Compact, hasKeyboard = true, isPressed = false, reduceMotion = false)
+        val regular = MeeshyKeyHintRecipe.resolve(cmdM, MeeshyKeyHintContext.Free, MeeshyKeyHintSize.Regular, hasKeyboard = true, isPressed = false, reduceMotion = false)
+        assertThat(compact.cornerRadiusDp).isEqualTo(6)
+        assertThat(regular.cornerRadiusDp).isEqualTo(8)
+    }
 }
