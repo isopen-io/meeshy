@@ -113,7 +113,7 @@ final class PublishChainCensusTests: XCTestCase {
     /// **`allowSoundExtraction` a QUITTÉ cette liste à son tour (#3996).** Il y
     /// était entré pour la raison inverse de `mediaAlt` — non pas « perdu en
     /// route » mais « aucune porte ne l'écrit sur cette voie »
-    /// (`SoundExtractionToggle` ne vit que dans l'atelier). La voie durable le
+    /// (la bascule ne vivait que dans l'atelier). La voie durable le
     /// porte désormais de bout en bout, elle aussi — `ComposerDocumentDraft
     /// .allowSoundExtraction` → `PublishIntent.document` →
     /// `enqueuePostMedia` → `CreatePostPayload.allowSoundExtraction` →
