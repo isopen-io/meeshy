@@ -7,8 +7,6 @@
  */
 import type { NotificationLanguage } from './notification-strings.js';
 
-export type ReportResolvedOutcome = 'resolved' | 'rejected' | 'dismissed';
-
 type ReportResolvedStrings = {
   readonly title: string;
   readonly actionTaken: string;

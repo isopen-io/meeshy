@@ -98,42 +98,6 @@ export interface ReactionUpdateEvent {
   readonly timestamp: Date;
 }
 
-/**
- * Réponse API pour l'ajout d'une réaction
- */
-export interface AddReactionResponse {
-  readonly success: boolean;
-  readonly data?: ReactionData;
-  readonly error?: string;
-}
-
-/**
- * Réponse API pour la suppression d'une réaction
- */
-export interface RemoveReactionResponse {
-  readonly success: boolean;
-  readonly message?: string;
-  readonly error?: string;
-}
-
-/**
- * Réponse API pour récupérer les réactions d'un message
- */
-export interface GetReactionsResponse {
-  readonly success: boolean;
-  readonly data?: ReactionSync;
-  readonly error?: string;
-}
-
-/**
- * Réponse API pour récupérer les réactions d'un utilisateur
- */
-export interface GetUserReactionsResponse {
-  readonly success: boolean;
-  readonly data?: ReactionData[];
-  readonly error?: string;
-}
-
 // `UseMessageReactionsOptions` / `UseMessageReactionsReturn` ont été retirées
 // avec le hook web qu'elles nommaient (`apps/web/hooks/use-message-reactions.ts`,
 // supprimé au cycle 68). Elles n'avaient AUCUN lecteur, pas même lui : il
@@ -210,8 +174,3 @@ export const POPULAR_EMOJIS = [
   '👏', // Clap
   '🚀', // Rocket
 ] as const;
-
-/**
- * Type pour les emojis populaires
- */
-export type PopularEmoji = typeof POPULAR_EMOJIS[number];

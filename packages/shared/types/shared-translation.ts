@@ -167,7 +167,6 @@ export const sharedTranslationsQuerySchema = z.object({
     .transform(commaList)
     .pipe(z.array(language).min(1).max(SHARED_TRANSLATION_LIMITS.languagesMaxCount)),
 });
-export type SharedTranslationsQuery = z.infer<typeof sharedTranslationsQuerySchema>;
 
 /**
  * Une traduction partagée telle que la passerelle la sert (lecture REST) et la
