@@ -13,37 +13,42 @@ private struct QRShareImage: Identifiable {
     let image: UIImage
 }
 
+/// Le détail d'un lien de suivi (planche `Lien-Detail`, #18871) : le billet héros et son QR, les gestes, les chiffres,
+/// le graphique des clics, d'où ils viennent, avec quoi, et les derniers clics. Fait du kit : rien n'y est redessiné.
 struct TrackingLinkDetailView: View {
     let link: TrackingLink
 
-    private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    @StateObject private var viewModel: TrackingDetailViewModel
-    @State private var copiedFeedback = false
+    @StateObject var viewModel: TrackingDetailViewModel
+    @State var period: TrackingInsightsPeriod = .month
+    @State var selectedDay: String?
     @State private var showDeleteConfirm = false
     @State private var qrShareImage: QRShareImage?
+    @State private var sharedLink: ShareableLink?
     @Environment(\.dismiss) private var dismiss
 
     init(link: TrackingLink) {
         self.link = link
-        _viewModel = StateObject(wrappedValue: TrackingDetailViewModel(token: link.token))
+        _viewModel = StateObject(wrappedValue: TrackingDetailViewModel(token: link.token, isActive: link.isActive))
     }
 
     var body: some View {
         LinksPage(title: link.displayName, accent: MeeshyColors.trackingAccent) {
             VStack(spacing: MeeshySpacing.xl) {
-                headerCard.padding(.horizontal, MeeshySpacing.lg)
-                actionsBar.padding(.horizontal, MeeshySpacing.lg)
-                mainStatsSection.padding(.horizontal, MeeshySpacing.lg)
-                if !viewModel.clicks.isEmpty {
-                    geoBreakdown.padding(.horizontal, MeeshySpacing.lg)
-                    deviceBreakdown.padding(.horizontal, MeeshySpacing.lg)
-                    clicksTimeline.padding(.horizontal, MeeshySpacing.lg)
-                }
-                utmInfoSection.padding(.horizontal, MeeshySpacing.lg)
+                heroTicket
+                activeRow
+                figuresBand
+                clicksChart
+                originsSection
+                meansSection
+                recentClicksSection
+                utmInfoSection
+                deleteButton
             }
+            .padding(.horizontal, MeeshySpacing.lg)
             .padding(.top, MeeshySpacing.lg).padding(.bottom, 60)
+            .sheet(item: $sharedLink) { shared in
+                ShareSheet(activityItems: shared.activityItems)
+            }
         }
         .task { await viewModel.load() }
         .confirmationDialog(String(localized: "tracking.link.detail.confirmDelete", defaultValue: "Supprimer ce lien ?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
@@ -55,320 +60,71 @@ struct TrackingLinkDetailView: View {
         }
     }
 
-    // MARK: - Header card
+    // MARK: - Le billet héros
 
-    private var headerCard: some View {
-        VStack(spacing: MeeshySpacing.smPlus) {
-            ZStack {
-                Circle().fill((link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.neutral500).opacity(MeeshyOpacity.light))
-                    .frame(width: 60, height: 60)
-                Image(systemName: "chart.bar.fill").font(.title2)
-                    .foregroundColor(link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.neutral500)
-            }
-            .accessibilityHidden(true)
-            Text(link.displayName).font(.headline.weight(.bold)).foregroundStyle(theme.textPrimary)
-            Text(link.shortUrl).font(.system(.caption, design: .monospaced))
-                .foregroundStyle(theme.textSecondary).lineLimit(1)
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                if let c = link.campaign { utmTag(c, color: MeeshyColors.trackingAccent) }
-                if let s = link.source { utmTag(s, color: MeeshyColors.brandPrimary) }
-                if let m = link.medium { utmTag(m, color: MeeshyColors.indigo300) }
-            }
-        }
-        .padding(MeeshySpacing.xl).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl).fill(theme.surfaceGradient(tint: MeeshyColors.trackingAccentHex))
-            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xl)
-                .stroke(MeeshyColors.trackingAccent.opacity(MeeshyOpacity.light), lineWidth: 1)))
-        .accessibilityElement(children: .combine)
-        .accessibilityValue(link.isActive
-            ? String(localized: "common.active", defaultValue: "Actif", bundle: .main)
-            : String(localized: "common.inactive", defaultValue: "Inactif", bundle: .main))
+    private var heroTicket: some View {
+        MeeshyTicket(
+            title: link.displayName,
+            code: link.shortUrl,
+            tint: MeeshyColors.trackingAccent,
+            systemImage: "cursorarrow.click",
+            size: .hero,
+            isFlipped: false,
+            isSelected: false,
+            isDragging: false,
+            label: "\(link.displayName), \(link.shortUrl)",
+            statusLabel: viewModel.isActive ? TrackingDetailCopy.active : TrackingDetailCopy.inactive,
+            onPress: nil,
+            stub: { heroActions },
+            leading: { EmptyView() },
+            trailing: {
+                MeeshyCodeCard(payload: URL(string: link.shortUrl)?.absoluteString, label: TrackingDetailCopy.enlargeQR,
+                               tint: MeeshyColors.trackingAccent, style: .plain, size: .mini, tilt: .none,
+                               boostsBrightness: false, onPress: { generateQRAndShare() })
+            },
+            status: { EmptyView() },
+            back: { EmptyView() }
+        )
+        .accessibilityIdentifier("tracking.detail.hero")
     }
 
-    private func utmTag(_ value: String, color: Color) -> some View {
-        Text(value).font(.caption2.weight(.medium))
-            .foregroundStyle(color)
-            .padding(.horizontal, MeeshySpacing.sm).padding(.vertical, MeeshySpacing.xxs)
-            .background(Capsule().fill(color.opacity(MeeshyOpacity.light)))
-    }
-
-    // MARK: - Actions bar
-
-    private var actionsBar: some View {
-        HStack(spacing: MeeshySpacing.smPlus) {
-            detailActionButton(String(localized: "tracking.link.detail.copy", defaultValue: "Copier", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
-                               color: copiedFeedback ? MeeshyColors.success : MeeshyColors.trackingAccent) {
-                LinksClipboard.copy(link.shortUrl, confirmation: .inline,
-                                    message: String(localized: "tracking.link.detail.a11y.copied", defaultValue: "Lien copié", bundle: .main))
-                withAnimation { copiedFeedback = true }
-            }
-            shareActionButton
-            detailActionButton(String(localized: "tracking.link.detail.qr", defaultValue: "QR code", bundle: .main), icon: "qrcode", color: MeeshyColors.brandPrimary) {
-                generateQRAndShare()
-            }
-            detailActionButton(String(localized: "tracking.link.detail.delete", defaultValue: "Supprimer", bundle: .main), icon: "trash", color: MeeshyColors.error) {
-                showDeleteConfirm = true
-            }
-        }
-        .settling($copiedFeedback, to: false, after: .seconds(2), animation: .default)
-    }
-
-    private func detailActionButton(_ label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            actionButtonLabel(label, icon: icon, color: color)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
-
-    // Native ShareLink for the tracking URL — replaces a hand-rolled
-    // UIActivityViewController + top-VC walk. iPad popover anchoring is
-    // handled by the system, matching the app's dominant share idiom.
-    private var shareActionButton: some View {
-        let label = String(localized: "tracking.link.detail.share", defaultValue: "Partager", bundle: .main)
-        return Group {
-            if let url = URL(string: link.shortUrl) {
-                ShareLink(item: url) {
-                    actionButtonLabel(label, icon: "square.and.arrow.up", color: MeeshyColors.trackingAccent)
-                }
-            } else {
-                ShareLink(item: link.shortUrl) {
-                    actionButtonLabel(label, icon: "square.and.arrow.up", color: MeeshyColors.trackingAccent)
-                }
-            }
+    private var heroActions: some View {
+        MeeshyActionGrid(columns: .fixed(3)) {
+            MeeshyLabeledAction(title: TrackingDetailCopy.copy, systemImage: "doc.on.doc", tint: MeeshyColors.trackingAccent,
+                                hint: link.shortUrl, action: {
+                LinksClipboard.copy(link.shortUrl, confirmation: .inline, message: TrackingDetailCopy.copied)
+            })
+            MeeshyLabeledAction(title: TrackingDetailCopy.qr, systemImage: "qrcode", tint: MeeshyColors.trackingAccent,
+                                action: { generateQRAndShare() })
+            MeeshyLabeledAction(title: TrackingDetailCopy.share, systemImage: "square.and.arrow.up",
+                                tint: MeeshyColors.trackingAccent, action: {
+                sharedLink = URL(string: link.shortUrl).map { ShareableLink(url: $0) }
+            })
+            .disabled(URL(string: link.shortUrl) == nil)
         }
     }
 
-    private func actionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
-        VStack(spacing: MeeshySpacing.xs) {
-            MeeshyGlassButtonFace(systemImage: icon, size: .s44, glyphTint: color)
-                .accessibilityHidden(true)
-            Text(label).font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium)).foregroundStyle(theme.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
+    // MARK: - Actif
+
+    /// L'interrupteur répond au toucher ; le serveur confirme ensuite, et l'état revient s'il refuse.
+    private var activeRow: some View {
+        MeeshyToggleRow(TrackingDetailCopy.active,
+                        subtitle: viewModel.isActive ? nil : TrackingDetailCopy.inactiveHint,
+                        accessory: .toggle(isOn: viewModel.isActive),
+                        tint: MeeshyColors.trackingAccent,
+                        action: { Task { await viewModel.setActive(!viewModel.isActive) } })
+            .accessibilityIdentifier("tracking.detail.active")
     }
 
-    // MARK: - Main stats
+    // MARK: - Supprimer
 
-    private var mainStatsSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            sectionTitle(String(localized: "tracking.link.detail.stats.title", defaultValue: "STATISTIQUES", bundle: .main))
-            HStack(spacing: MeeshySpacing.md) {
-                bigStatCard("\(link.totalClicks)", label: String(localized: "tracking.link.detail.stats.totalClicks", defaultValue: "Total des clics", bundle: .main), icon: "cursorarrow.click", color: MeeshyColors.trackingAccentHex)
-                bigStatCard("\(link.uniqueClicks)", label: String(localized: "tracking.link.detail.stats.uniqueClicks", defaultValue: "Clics uniques", bundle: .main), icon: "person.fill", color: MeeshyColors.brandPrimaryHex)
-            }
-            if let last = link.lastClickedAt {
-                HStack {
-                    Image(systemName: "clock").foregroundStyle(theme.textMuted)
-                        .accessibilityHidden(true)
-                    Text(String(localized: "tracking.link.detail.lastClick", defaultValue: "Dernier clic : \(last.formatted(date: .abbreviated, time: .shortened))", bundle: .main))
-                        .font(.footnote).foregroundColor(theme.textMuted)
-                }
-                .padding(.horizontal, MeeshySpacing.xs)
-            }
-        }
+    private var deleteButton: some View {
+        MeeshyButton(TrackingDetailCopy.deleteLink, systemImage: "trash", kind: .outline, width: .fill,
+                     isDestructive: true, action: { showDeleteConfirm = true })
+            .accessibilityIdentifier("tracking.detail.delete")
     }
 
-    private func bigStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            Image(systemName: icon).font(.title2).foregroundStyle(Color(hex: color))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(value).font(.title2.weight(.bold)).foregroundStyle(theme.textPrimary)
-                Text(label).font(.caption).foregroundStyle(theme.textSecondary)
-            }
-            Spacer()
-        }
-        .padding(MeeshySpacing.mdPlus).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.surfaceGradient(tint: color))
-            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(Color(hex: color).opacity(MeeshyOpacity.light), lineWidth: 1)))
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - Geo breakdown
-
-    private var geoBreakdown: some View {
-        breakdownCard(title: String(localized: "tracking.link.detail.countries", defaultValue: "PAYS", bundle: .main), icon: "globe", color: MeeshyColors.indigo300, items: viewModel.topCountries)
-    }
-
-    // MARK: - Device breakdown
-
-    private var deviceBreakdown: some View {
-        VStack(spacing: MeeshySpacing.md) {
-            breakdownCard(title: String(localized: "tracking.link.detail.devices", defaultValue: "APPAREILS", bundle: .main), icon: "iphone", color: MeeshyColors.brandPrimary, items: viewModel.topDevices)
-            breakdownCard(title: String(localized: "tracking.link.detail.browsers", defaultValue: "NAVIGATEURS", bundle: .main), icon: "safari.fill", color: MeeshyColors.success, items: viewModel.topBrowsers)
-        }
-    }
-
-    private func breakdownCard(title: String, icon: String, color: Color, items: [(String, Int)]) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            HStack {
-                Image(systemName: icon).font(.footnote).foregroundStyle(color)
-                    .accessibilityHidden(true)
-                sectionTitle(title)
-            }
-            if items.isEmpty {
-                Text(String(localized: "tracking.link.detail.noData", defaultValue: "Aucune donnée", bundle: .main)).font(.footnote).foregroundStyle(theme.textMuted)
-                    .frame(maxWidth: .infinity, alignment: .center).padding(.vertical, MeeshySpacing.sm)
-            } else {
-                VStack(spacing: MeeshySpacing.sm) {
-                    ForEach(items.prefix(5), id: \.0) { item in
-                        breakdownRow(item.0, count: item.1, total: link.totalClicks, color: color)
-                    }
-                }
-            }
-        }
-        .padding(MeeshySpacing.lg)
-        .background(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-            .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint))
-            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg).stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: 1)))
-    }
-
-    private func breakdownRow(_ label: String, count: Int, total: Int, color: Color) -> some View {
-        let pct = total > 0 ? CGFloat(count) / CGFloat(total) : 0
-        return HStack(spacing: MeeshySpacing.sm) {
-            Text(label).font(.footnote).foregroundStyle(theme.textPrimary).frame(width: 80, alignment: .leading)
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(color.opacity(MeeshyOpacity.light)).frame(height: 8)
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(color.opacity(MeeshyOpacity.heavy))
-                        .frame(width: geo.size.width * pct, height: 8)
-                }
-            }
-            .frame(height: 8)
-            Text("\(count)").font(.caption.weight(.semibold)).foregroundStyle(theme.textSecondary)
-                .frame(width: 30, alignment: .trailing)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - Timeline des clics
-
-    private var clicksTimeline: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            HStack {
-                Image(systemName: "list.bullet.clipboard").font(.footnote)
-                    .foregroundColor(MeeshyColors.trackingAccent)
-                    .accessibilityHidden(true)
-                sectionTitle(String(localized: "tracking.link.detail.recentClicks", defaultValue: "DERNIERS CLICS", bundle: .main))
-                Spacer()
-                if viewModel.isLoadingMore { ProgressView().scaleEffect(0.7) }
-            }
-            VStack(spacing: 0) {
-                ForEach(Array(viewModel.clicks.prefix(20).enumerated()), id: \.element.id) { idx, click in
-                    clickRow(click)
-                    if idx < min(viewModel.clicks.count, 20) - 1 {
-                        Divider().padding(.leading, 52)
-                    }
-                }
-            }
-            .background(RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint)))
-        }
-    }
-
-    private func clickRow(_ click: TrackingLinkClick) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            ZStack {
-                Circle().fill(deviceColor(click.device).opacity(MeeshyOpacity.light)).frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
-                Image(systemName: deviceIcon(click.device)).font(.subheadline)
-                    .foregroundColor(deviceColor(click.device))
-            }
-            .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    if let country = click.country { Text(countryFlag(country)).font(.callout) }
-                    Text(click.city ?? click.country ?? String(localized: "tracking.link.detail.unknown", defaultValue: "Inconnu", bundle: .main))
-                        .font(.footnote.weight(.medium)).foregroundColor(theme.textPrimary)
-                    if let social = click.socialSource {
-                        Text("· \(social)").font(.caption).foregroundColor(MeeshyColors.trackingAccent)
-                    }
-                }
-                HStack(spacing: MeeshySpacing.xs) {
-                    if let browser = click.browser {
-                        Text(browser).font(.caption2).foregroundStyle(theme.textMuted)
-                    }
-                    if let os = click.os {
-                        Text("· \(os)").font(.caption2).foregroundStyle(theme.textMuted)
-                    }
-                }
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: MeeshySpacing.xxs) {
-                Text(click.clickedAt.formatted(.relative(presentation: .named)))
-                    .font(.caption2).foregroundColor(theme.textMuted)
-                Circle().fill(click.redirectStatus == "confirmed" ? MeeshyColors.success : MeeshyColors.error)
-                    .frame(width: 6, height: 6)
-                    .accessibilityLabel(click.redirectStatus == "confirmed"
-                        ? String(localized: "tracking.link.detail.a11y.redirectConfirmed", defaultValue: "Redirection confirmée", bundle: .main)
-                        : String(localized: "tracking.link.detail.a11y.redirectFailed", defaultValue: "Redirection échouée", bundle: .main))
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.md).padding(.vertical, MeeshySpacing.smPlus)
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - UTM info
-
-    private var utmInfoSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            sectionTitle(String(localized: "tracking.link.detail.utm.title", defaultValue: "CONFIGURATION UTM", bundle: .main))
-            VStack(spacing: 0) {
-                if let c = link.campaign { infoRow("Campaign", value: c) }
-                if link.campaign != nil && link.source != nil { Divider().padding(.leading, MeeshySpacing.lg) }
-                if let s = link.source { infoRow("Source", value: s) }
-                if link.source != nil && link.medium != nil { Divider().padding(.leading, MeeshySpacing.lg) }
-                if let m = link.medium { infoRow("Medium", value: m) }
-                Divider().padding(.leading, MeeshySpacing.lg)
-                infoRow(String(localized: "tracking.link.detail.destinationUrl", defaultValue: "URL de destination", bundle: .main), value: link.originalUrl)
-                Divider().padding(.leading, MeeshySpacing.lg)
-                infoRow(String(localized: "tracking.link.detail.createdAt", defaultValue: "Créé le", bundle: .main), value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
-            }
-            .background(RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint)))
-        }
-    }
-
-    // MARK: - Helpers
-
-    private func sectionTitle(_ text: String) -> some View {
-        Text(text).font(.caption.weight(.semibold)).foregroundColor(theme.textSecondary).kerning(0.8)
-            .accessibilityAddTraits(.isHeader)
-    }
-
-    private func infoRow(_ label: String, value: String) -> some View {
-        HStack {
-            Text(label).font(.footnote).foregroundStyle(theme.textSecondary)
-            Spacer()
-            Text(value).font(.footnote.weight(.medium)).foregroundStyle(theme.textPrimary).lineLimit(1)
-        }
-        .padding(.horizontal, MeeshySpacing.lg).padding(.vertical, MeeshySpacing.md)
-        .accessibilityElement(children: .combine)
-    }
-
-    private func deviceIcon(_ device: String?) -> String {
-        switch device?.lowercased() {
-        case "mobile", "phone": return "iphone"
-        case "tablet": return "ipad"
-        case "desktop": return "desktopcomputer"
-        default: return "globe"
-        }
-    }
-
-    private func deviceColor(_ device: String?) -> Color {
-        switch device?.lowercased() {
-        case "mobile", "phone": return MeeshyColors.trackingAccent
-        case "tablet": return MeeshyColors.brandPrimary
-        case "desktop": return MeeshyColors.indigo300
-        default: return MeeshyColors.neutral500
-        }
-    }
-
-    private func countryFlag(_ countryCode: String) -> String {
-        let base: UInt32 = 127397
-        return countryCode.uppercased().unicodeScalars
-            .compactMap { Unicode.Scalar(base + $0.value) }.map { String($0) }.joined()
-    }
+    // MARK: - QR
 
     private static let qrContext = CIContext()
 
@@ -409,34 +165,45 @@ class TrackingDetailViewModel: ObservableObject {
     nonisolated deinit {}
     @Published var clicks: [TrackingLinkClick] = []
     @Published var isLoadingMore = false
+    @Published private(set) var isActive: Bool
+    @Published private(set) var insights = TrackingLinkInsights(samples: [])
 
     let token: String
+    private let setActiveRemote: @Sendable (String, Bool) async throws -> Void
 
-    init(token: String) { self.token = token }
+    init(token: String,
+         isActive: Bool = true,
+         setActiveRemote: @escaping @Sendable (String, Bool) async throws -> Void = { token, isActive in
+             try await TrackingLinkService.shared.setActive(token: token, isActive: isActive)
+         }) {
+        self.token = token
+        self.isActive = isActive
+        self.setActiveRemote = setActiveRemote
+    }
 
     func load() async {
         isLoadingMore = true
         defer { isLoadingMore = false }
         if let detail = try? await TrackingLinkService.shared.fetchClicks(token: token) {
             clicks = detail.clicks
+            insights = TrackingLinkInsights(samples: detail.clicks.map { TrackingClickSample(click: $0) })
         }
     }
 
-    var topCountries: [(String, Int)] {
-        Dictionary(grouping: clicks.compactMap(\.country), by: { $0 })
-            .map { ($0.key, $0.value.count) }
-            .sorted { $0.1 > $1.1 }
+    /// Optimiste : l'état change tout de suite, et revient si le serveur refuse — en le disant.
+    func setActive(_ newValue: Bool) async {
+        let previous = isActive
+        guard previous != newValue else { return }
+        isActive = newValue
+        do {
+            try await setActiveRemote(token, newValue)
+        } catch {
+            isActive = previous
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(ShareLinkDetailCopy.actionFailed)
+        }
     }
 
-    var topDevices: [(String, Int)] {
-        Dictionary(grouping: clicks.compactMap(\.device), by: { $0 })
-            .map { ($0.key, $0.value.count) }
-            .sorted { $0.1 > $1.1 }
-    }
-
-    var topBrowsers: [(String, Int)] {
-        Dictionary(grouping: clicks.compactMap(\.browser), by: { $0 })
-            .map { ($0.key, $0.value.count) }
-            .sorted { $0.1 > $1.1 }
-    }
+    /// Avant le premier chargement, la vue montre un squelette — jamais quand des clics sont déjà là.
+    var isFirstLoad: Bool { isLoadingMore && clicks.isEmpty }
 }

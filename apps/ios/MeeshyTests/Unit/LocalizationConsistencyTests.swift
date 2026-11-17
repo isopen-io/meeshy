@@ -197,6 +197,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift",  // 30
         "apps/ios/Meeshy/Features/Settings/Views/AboutView.swift",  // 28
         "apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView.swift",  // 24
+        // #18871 — le détail d'un lien de suivi passé au kit : ses mots ont quitté la vue pour leur table.
+        "apps/ios/Meeshy/Features/Links/Views/TrackingLinkDetailView+Copy.swift",
         "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22
         // #13864 — la surface document est partie ; « Texte du post » la remplace au socle.
         "apps/ios/Meeshy/Features/Composer/ComposerPostTextPill.swift",

@@ -459,7 +459,7 @@ const REFERENCE_LITERAL_COLOR_COUNT = 168;
 // relaie l'accent de la fiche sous son nom de règle (`accentColor`). Valeur MESURÉE le 2026-11-15 sur un EXPORT de la
 // tête de dev (`git archive origin/dev …`), pas sur l'arbre local : celui-ci portait la suppression non poussée de
 // `TextEditFloatingBubbles.swift` (3 appels, lot composer #18638) et mesurait 461 — ce lot abaissera la référence.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 420;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 418;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

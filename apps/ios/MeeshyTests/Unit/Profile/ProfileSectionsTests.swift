@@ -767,3 +767,107 @@ final class ProfileLinksFaceTests: XCTestCase {
         XCTAssertEqual(card?.subtitle, "@aissa")
     }
 }
+
+/// Le détail d'un lien de suivi (planche `Lien-Detail`, #18871) : ce que ses chiffres, ses parts et son graphique DISENT
+/// des clics reçus, et l'interrupteur « Actif » qui répond tout de suite puis revient si le serveur refuse.
+@MainActor
+final class TrackingLinkInsightsTests: XCTestCase {
+
+    private static let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        return calendar
+    }()
+
+    private static let now = Date(timeIntervalSince1970: 1_763_380_800)
+
+    private func daysAgo(_ days: Int) -> Date {
+        Self.now.addingTimeInterval(-Double(days) * 86_400)
+    }
+
+    private func sample(country: String? = nil, device: String? = nil, source: String? = nil,
+                        daysAgo days: Int = 0) -> TrackingClickSample {
+        TrackingClickSample(country: country, device: device, source: source, clickedAt: daysAgo(days))
+    }
+
+    func test_countries_rankTheirSharesOverTheClicksThatKnowTheirCountry() {
+        let insights = TrackingLinkInsights(samples: [
+            sample(country: "SN"), sample(country: "SN"), sample(country: "SN"), sample(country: "FR"), sample()
+        ])
+        XCTAssertEqual(insights.countryCount, 2)
+        XCTAssertEqual(insights.countries(), [TrackingShare(key: "SN", count: 3, percent: 75),
+                                              TrackingShare(key: "FR", count: 1, percent: 25)])
+    }
+
+    func test_countries_showFourAtMost_theLargestFirst() {
+        let codes = ["SN", "SN", "FR", "FR", "FR", "CI", "PT", "BE"]
+        let insights = TrackingLinkInsights(samples: codes.map { sample(country: $0) })
+        let shown = insights.countries()
+        XCTAssertEqual(insights.countryCount, 5)
+        XCTAssertEqual(shown.map(\.key), ["FR", "SN", "BE", "CI"])
+    }
+
+    func test_devices_groupIntoPhoneComputerTabletAndOther() {
+        let insights = TrackingLinkInsights(samples: [
+            sample(device: "mobile"), sample(device: "phone"), sample(device: "desktop"), sample()
+        ])
+        XCTAssertEqual(insights.devices, [TrackingShare(key: TrackingDeviceFamily.phone.rawValue, count: 2, percent: 50),
+                                          TrackingShare(key: TrackingDeviceFamily.desktop.rawValue, count: 1, percent: 25),
+                                          TrackingShare(key: TrackingDeviceFamily.other.rawValue, count: 1, percent: 25)])
+    }
+
+    func test_sources_countAClickWithoutSourceAsDirect() {
+        let insights = TrackingLinkInsights(samples: [
+            sample(source: "Instagram"), sample(source: "Instagram"), sample(), sample(source: "  ")
+        ])
+        XCTAssertEqual(insights.sources, [TrackingShare(key: "Instagram", count: 2, percent: 50),
+                                          TrackingShare(key: TrackingLinkInsights.directSource, count: 2, percent: 50)])
+    }
+
+    func test_days_overAWeek_countEachOfTheSevenLastDays_andDropOlderClicks() {
+        let insights = TrackingLinkInsights(samples: [
+            sample(daysAgo: 0), sample(daysAgo: 0), sample(daysAgo: 1), sample(daysAgo: 10)
+        ])
+        let days = insights.days(period: .week, now: Self.now, calendar: Self.calendar)
+        XCTAssertEqual(days.count, 7)
+        XCTAssertEqual(days.last?.count, 2)
+        XCTAssertEqual(days.dropLast().last?.count, 1)
+        XCTAssertEqual(days.map(\.count).reduce(0, +), 3)
+        XCTAssertEqual(days.last?.day, Self.calendar.startOfDay(for: Self.now))
+    }
+
+    func test_days_overEverything_startAtTheFirstClick() {
+        let insights = TrackingLinkInsights(samples: [sample(daysAgo: 10), sample(daysAgo: 3), sample(daysAgo: 0)])
+        let days = insights.days(period: .all, now: Self.now, calendar: Self.calendar)
+        XCTAssertEqual(days.count, 11)
+        XCTAssertEqual(days.first?.count, 1)
+        XCTAssertEqual(days.map(\.count).reduce(0, +), 3)
+    }
+
+    func test_days_overEverything_withoutAnyClick_areEmpty() {
+        XCTAssertEqual(TrackingLinkInsights(samples: []).days(period: .all, now: Self.now, calendar: Self.calendar), [])
+    }
+
+    func test_activeSwitch_answersAtOnce_andComesBackWhenTheServerRefuses() async {
+        struct Refused: Error {}
+        let refused = TrackingDetailViewModel(token: "t", isActive: true,
+                                              setActiveRemote: { _, _ in throw Refused() })
+        await refused.setActive(false)
+        XCTAssertTrue(refused.isActive, "le serveur a refusé : l'interrupteur revient")
+
+        let accepted = TrackingDetailViewModel(token: "t", isActive: true, setActiveRemote: { _, _ in })
+        await accepted.setActive(false)
+        XCTAssertFalse(accepted.isActive)
+    }
+
+    func test_trackingDetail_isMadeOfTheKit() throws {
+        let detail = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Links/Views/TrackingLinkDetailView.swift"))
+        for piece in ["MeeshyTicket(", "MeeshyCodeCard(", "MeeshyLabeledAction(", "MeeshyFigureBand(", "MeeshyChart(",
+                      "MeeshyShareBar(", "MeeshySegmented("] {
+            XCTAssertTrue(detail.contains(piece), "\(piece) : le détail d'un lien est fait du kit")
+        }
+        for drawn in ["RoundedRectangle(", "GeometryReader", "Capsule("] {
+            XCTAssertFalse(detail.contains(drawn), "\(drawn) : aucun composant redessiné sur place")
+        }
+    }
+}
