@@ -132,7 +132,7 @@ async function viewerMayRead(deps: BloodLocationDeps, viewerId: string, ownerId:
  * de l'observateur prend l'heure de cette lecture au lieu d'en ajouter une — un observateur qui lit
  * en boucle ne gonfle pas le journal (au plus seuil + 1 lignes par jour).
  */
-async function noteConsultation(deps: BloodLocationDeps, observedId: string, observerId: string): Promise<void> {
+export async function noteConsultation(deps: BloodLocationDeps, observedId: string, observerId: string): Promise<void> {
   const now = deps.now();
   const stamp = { consultedAt: new Date(now), expiresAt: new Date(now + HISTORY_MS) };
   const ofPair = { observedId, observerId };

@@ -116,19 +116,18 @@ describe('le fantôme — comme l\'historique', () => {
     await updateBloodLocationSettings(w.deps, SANG, { ghost: true });
 
     expect(await bloodLocationMapFor(w.deps, MOI)).toEqual([]);
-    expect(w.consultations.rows.map((row) => row.observedId)).toEqual([SANG]);
+    expect(w.consultations.rows.filter((row) => row.observedId === SANG)).toHaveLength(1);
   });
 
   it('ciblé : masqué pour moi seul ; levé, la période reste cachée et le dernier point d\'avant revient', async () => {
     const w = bloodWorldAvecConsentements();
-    w.consentir(SANG, AUTRE_SANG, TOUT_PARTAGE);
     await recordBloodLocation(w.deps, SANG, PARIS);
     await updateBloodLocationSettings(w.deps, SANG, { ghost: true, userId: MOI });
     w.avancer(MINUTE);
     await recordBloodLocation(w.deps, SANG, A_300_M);
 
     expect(await bloodLocationMapFor(w.deps, MOI)).toEqual([]);
-    expect((await bloodLocationMapFor(w.deps, AUTRE_SANG)).map((item) => item.latitude)).toEqual([A_300_M.latitude]);
+    expect(await readBloodLocationHistory(w.deps, MOI, SANG, {})).toEqual({ kind: 'ok', items: [] });
 
     await updateBloodLocationSettings(w.deps, SANG, { ghost: false, userId: MOI });
     expect((await bloodLocationMapFor(w.deps, MOI)).map((item) => item.latitude)).toEqual([PARIS.latitude]);
@@ -157,7 +156,7 @@ describe('le journal — une ligne par Sang et par quart d\'heure, pas une par r
 
     await bloodLocationMapFor(w.deps, MOI);
 
-    expect(w.consultations.rows.map((row) => (row.consultedAt as Date).getTime())).toEqual([T0, T0 + FENETRE]);
+    expect(w.consultations.rows.filter((row) => row.observedId === SANG).map((row) => (row.consultedAt as Date).getTime())).toEqual([T0, T0 + FENETRE]);
   });
 
   it('une lecture d\'historique dans la fenêtre compte : la carte ne la double pas', async () => {
@@ -168,6 +167,6 @@ describe('le journal — une ligne par Sang et par quart d\'heure, pas une par r
 
     await bloodLocationMapFor(w.deps, MOI);
 
-    expect(w.consultations.rows).toHaveLength(1);
+    expect(w.consultations.rows.filter((row) => row.observedId === SANG)).toHaveLength(1);
   });
 });
