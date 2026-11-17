@@ -150,6 +150,27 @@ describe('MeeshyCircleScale — le composant', () => {
   });
 });
 
+describe('MeeshyCircleScale — revue : le clavier et la voix', () => {
+  test('une flèche coche le rang voisin ET y porte le focus, comme tout groupe radio', () => {
+    let current = 3;
+    const container = mount(<MeeshyCircleScale levels={LEVELS} current={current} onSelect={(rank) => (current = rank)} />);
+    const radios = () => [...container.querySelectorAll<HTMLElement>('[role="radio"]')];
+    act(() => radios()[3]?.focus());
+    act(() => {
+      radios()[3]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    expect(current).toBe(4);
+    expect(document.activeElement).toBe(radios()[4] ?? null);
+  });
+
+  test('pilule touchable : le bouton n’est pas enfoui sous une image, il porte le nom dit', () => {
+    const container = mount(<MeeshyCircleScale levels={LEVELS} current={3} form="pill" onSelect={() => {}} />);
+    const button = container.querySelector('button');
+    expect(button?.closest('[role="img"]')).toBeNull();
+    expect(button?.getAttribute('aria-label')).toBe('Ami, 4 / 6');
+  });
+});
+
 describe('MeeshyCircleScale — pureté', () => {
   test('aucun type du domaine, aucun singleton, aucune couleur par niveau, aucune intensité hors recette', () => {
     const component = readFileSync(fileURLToPath(new URL('./meeshy-circle-scale.tsx', import.meta.url)), 'utf8');

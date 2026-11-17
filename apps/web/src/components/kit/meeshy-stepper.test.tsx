@@ -281,6 +281,54 @@ describe('MeeshyStepper — jalons', () => {
   });
 });
 
+describe('MeeshyStepper — revue : le clavier du contrat', () => {
+  const props = { label: 'Nombre d’entrées', range: { min: 1, max: 50 }, decrementLabel: 'Moins d’entrées', incrementLabel: 'Plus d’entrées' } as const;
+  const key = (node: Element | null, value: string) =>
+    act(() => {
+      node?.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true, cancelable: true }));
+    });
+
+  test('boutons : flèches pour un pas, Page pour dix, Début et Fin pour les bornes', () => {
+    const changes: number[] = [];
+    const container = mount(<MeeshyStepper {...props} value={20} onChange={(value) => changes.push(value)} />);
+    const plus = container.querySelector('[data-kit-stepper-plus]');
+    for (const value of ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']) key(plus, value);
+    expect(changes).toEqual([21, 19, 30, 10, 1, 50]);
+  });
+
+  test('boutons : une touche à la butée ne change rien et dit la borne', () => {
+    const changes: number[] = [];
+    const container = mount(<MeeshyStepper {...props} value={50} maximumLabel="maximum atteint" onChange={(value) => changes.push(value)} />);
+    key(container.querySelector('[data-kit-stepper-plus]'), 'End');
+    key(container.querySelector('[data-kit-stepper-plus]'), 'ArrowUp');
+    expect(changes).toEqual([]);
+    expect(container.querySelector('[role="status"]')?.textContent).toContain('maximum atteint');
+  });
+
+  test('piste : la flèche porte le focus sur l’arrêt choisi', () => {
+    let value = 0;
+    const container = mount(<MeeshyStepper kind="track" label="Précision" value={value} stops={STOPS} onChange={(index) => (value = index)} />);
+    const radios = () => [...container.querySelectorAll<HTMLElement>('[role="radio"]')];
+    act(() => radios()[0]?.focus());
+    key(radios()[0] ?? null, 'ArrowRight');
+    expect(value).toBe(1);
+    expect(document.activeElement).toBe(radios()[1] ?? null);
+  });
+
+  test('piste : une valeur hors des arrêts laisse le premier joignable au clavier', () => {
+    const container = mount(<MeeshyStepper kind="track" label="Précision" value={-1} stops={STOPS} onChange={() => {}} />);
+    expect([...container.querySelectorAll('[role="radio"]')].map((radio) => radio.getAttribute('tabindex'))).toEqual(['0', '-1', '-1']);
+  });
+
+  test('l’appui long ne sélectionne ni n’ouvre de menu sur un écran tactile', () => {
+    const css = readFileSync(fileURLToPath(new URL('../../styles/kit-stepper.css', import.meta.url)), 'utf8');
+    const rule = css.match(/\.kit-stepper__button\s*\{[^}]*\}/)?.[0] ?? '';
+    expect(rule).toMatch(/user-select:\s*none/);
+    expect(rule).toMatch(/-webkit-touch-callout:\s*none/);
+    expect(rule).toMatch(/touch-action:\s*manipulation/);
+  });
+});
+
 describe('MeeshyStepper — pureté', () => {
   test('aucun type du domaine, aucun singleton, aucun verre dessiné, aucune valeur hors recette', () => {
     const component = readFileSync(fileURLToPath(new URL('./meeshy-stepper.tsx', import.meta.url)), 'utf8');

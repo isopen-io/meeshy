@@ -58,7 +58,7 @@ describe('MeeshyTranslationMark — le composant', () => {
     expect(container.textContent).toContain('Traduit de l’italien');
     const button = container.querySelector<HTMLButtonElement>('button');
     expect(button?.textContent).toBe('Voir l’original');
-    expect(button?.getAttribute('aria-pressed')).toBe('false');
+    expect(button?.hasAttribute('aria-pressed')).toBe(false);
     expect(container.querySelector('[data-kit-translation-glyph]')?.getAttribute('aria-hidden')).toBe('true');
     expect(container.querySelector('[data-kit-translation-dot]')?.getAttribute('aria-hidden')).toBe('true');
   });
@@ -76,7 +76,7 @@ describe('MeeshyTranslationMark — le composant', () => {
     render(<MeeshyTranslationMark sourceLanguageName="de l’italien" originalLanguageName="en italien" isShowingOriginal onToggle={() => {}} words={WORDS} />);
     expect(container.textContent).toContain('Original en italien');
     expect(container.querySelector('button')?.textContent).toBe('Voir la traduction');
-    expect(container.querySelector('button')?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('button')?.hasAttribute('aria-pressed')).toBe(false);
   });
 
   test('sans onToggle : un texte, aucun bouton, aucune halte de clavier, aucun point', () => {
@@ -137,5 +137,14 @@ describe('MeeshyTranslationMark — pureté', () => {
       const text = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8');
       expect(text).not.toMatch(/@meeshy\/shared|@\/stores|@\/lib\/api|resolvePrism|resolveUserLanguage|backdrop-filter|box-shadow/);
     }
+  });
+});
+
+describe('MeeshyTranslationMark — revue : une bascule dont le libellé change ne se dit pas « enfoncée »', () => {
+  test('légende touchable : nommée par le verbe, sans aria-pressed qui contredirait le libellé', () => {
+    const container = mount(<MeeshyTranslationMark density="legend" caption={<span>Le tram 28</span>} isShowingOriginal onToggle={() => {}} words={WORDS} />);
+    const legend = container.querySelector('button[data-kit-translation-legend]');
+    expect(legend?.getAttribute('aria-label')).toBe('Voir la traduction');
+    expect(legend?.hasAttribute('aria-pressed')).toBe(false);
   });
 });

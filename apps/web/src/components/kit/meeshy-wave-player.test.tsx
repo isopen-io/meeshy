@@ -249,6 +249,39 @@ describe('MeeshyWavePlayer — le composant', () => {
   });
 });
 
+describe('MeeshyWavePlayer — revue : le glissement se voit et se termine', () => {
+  const props = { label: 'Voix de Léo', samples: SAMPLES, duration: 8, words: WORDS } as const;
+  const grab = (zone: HTMLElement) => {
+    zone.getBoundingClientRect = () => ({ left: 0, width: 200, top: 0, right: 200, bottom: 44, height: 44, x: 0, y: 0, toJSON: () => ({}) });
+    zone.setPointerCapture = () => {};
+    return (type: string, clientX: number) =>
+      act(() => {
+        zone.dispatchEvent(Object.assign(new PointerEvent(type, { bubbles: true, pointerId: 1 }), { clientX }));
+      });
+  };
+
+  test('doigt posé : le remplissage, le repère et le temps visé suivent le doigt, pas le progress reçu', () => {
+    const container = mount(<MeeshyWavePlayer {...props} progress={0.1} isPlaying={false} onToggle={() => {}} onScrub={() => {}} />);
+    const fire = grab(wave(container));
+    fire('pointerdown', 20);
+    fire('pointermove', 150);
+    const bars = [...container.querySelectorAll('[data-kit-wave-bar]')];
+    expect(bars.filter((bar) => bar.hasAttribute('data-played')).length).toBe(Math.round(bars.length * 0.75));
+    const marker = container.querySelector<HTMLElement>('[data-kit-wave-marker]');
+    expect(marker?.style.insetInlineStart).toBe('75%');
+    expect(marker?.textContent).toBe('0:06');
+    expect(wave(container).getAttribute('aria-valuenow')).toBe('6');
+  });
+
+  test('la rangée qui disparaît en plein glissement dit à l’hôte que le doigt est levé', () => {
+    const states: boolean[] = [];
+    const container = mount(<MeeshyWavePlayer {...props} progress={0.1} isPlaying onToggle={() => {}} onScrub={() => {}} onScrubbingChange={(value) => states.push(value)} />);
+    grab(wave(container))('pointerdown', 20);
+    render(<div />);
+    expect(states).toEqual([true, false]);
+  });
+});
+
 describe('MeeshyWaveBars — l’onde seule', () => {
   test('rend des barres, jamais de disque ni de durée', () => {
     const container = mount(<MeeshyWaveBars samples={SAMPLES} progress={0.5} isLive={false} />);
