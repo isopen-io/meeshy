@@ -38,8 +38,8 @@ describe('MeeshyCodeCard — la recette en valeurs', () => {
     expect(meeshyCodeCardRecipe({ size: 72, style: 'plain' })).toMatchObject({ plateRadius: 14, plateMargin: 6 });
   });
 
-  test('pastille de 25 % du côté (56 pour 220), absente sous 120 ; légende absente en miniature', () => {
-    expect(meeshyCodeCardRecipe({ size: 220 }).centerSize).toBe(55);
+  test('pastille de 25 % du côté, en nombre pair (56 pour 220), absente sous 120 ; légende absente en miniature', () => {
+    expect(meeshyCodeCardRecipe({ size: 220 }).centerSize).toBe(56);
     expect(meeshyCodeCardRecipe({ size: 72 }).showsCenter).toBe(false);
     expect(meeshyCodeCardRecipe({ size: 160 }).showsCenter).toBe(true);
     expect(meeshyCodeCardRecipe({ size: 72 }).showsCaption).toBe(false);

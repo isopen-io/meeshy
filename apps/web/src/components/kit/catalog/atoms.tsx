@@ -9,9 +9,10 @@ import { MeeshyMeter } from '../meeshy-meter';
 import { MEESHY_MOTION_TOKENS, meeshyMotionRecipe } from '../meeshy-motion';
 import { MeeshyNote } from '../meeshy-note';
 import { CONTENTS_B, MEESHY_KIT_ATOMS_B } from './atoms-b';
+import { CONTENTS_C, MEESHY_KIT_ASSEMBLIES_A } from './atoms-c';
 
 /**
- * LES ATOMES DU PROFIL AU CATALOGUE (#18874, #18875, chantier #18857) — K26, K33, K35, K37,
+ * LES ATOMES DU PROFIL AU CATALOGUE (#18874, #18875, chantier #18857 ; les assemblages sont dans `atoms-c.tsx`) — K26, K33, K35, K37,
  * K38 (atome `MeeshySkeleton`), K40, K41, K42, K45, K46, K51, K53, K55. Ils ne sont PAS dans `MeeshyKitCatalog.entries` : cette liste est égale, clé
  * pour clé, au registre `.claude/workflows/meeshy-kit-planche.lots.json`, qui n'a pas encore
  * ces numéros (un fichier de la chaîne outillage, pas du web). Ils vivent ici, à part, et
@@ -191,6 +192,7 @@ export const MEESHY_KIT_ATOMS: readonly MeeshyKitAtom[] = [
   { entry: entryK46, file: 'meeshy-note.tsx' },
   { entry: entryK55, file: 'meeshy-key-hint.tsx' },
   ...MEESHY_KIT_ATOMS_B,
+  ...MEESHY_KIT_ASSEMBLIES_A,
 ].sort((a, b) => keyNumber(a) - keyNumber(b));
 
 const CONTENTS: Readonly<Record<string, (state: MeeshyKitCatalogState) => ReactNode>> = {
@@ -202,6 +204,7 @@ const CONTENTS: Readonly<Record<string, (state: MeeshyKitCatalogState) => ReactN
   K46: contentK46,
   K55: contentK55,
   ...CONTENTS_B,
+  ...CONTENTS_C,
 };
 
 export const atomEntries: readonly MeeshyKitCatalogEntry[] = MEESHY_KIT_ATOMS.map((atom) => atom.entry);

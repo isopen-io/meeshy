@@ -1,0 +1,269 @@
+/* LE BILLET (K30, #18876) — UNE forme : carte de rayon 22, deux encoches découpées par un
+   masque (le fond de l'hôte passe au travers), un pointillé de coupe. Seules la transformation
+   et l'opacité s'animent : pressé, soulevé, retourné. Aucune ombre au repos (le billet est
+   posé) ; aucun verre dessiné ici (K01/K02 pour les boutons du talon). Chaque valeur
+   chiffrée vient de `meeshy-ticket-recipe.ts` (`--kit-ticket-*`). */
+@layer components {
+  .kit-ticket {
+    position: relative;
+    box-sizing: border-box;
+    inline-size: var(--kit-ticket-width, 100%);
+    min-inline-size: 0;
+    color: var(--color-ios-ink);
+    perspective: 1200px;
+    transform: translateY(calc(-1 * var(--kit-ticket-lift))) scale(var(--kit-ticket-scale)) rotate(var(--kit-ticket-tilt));
+    transition: transform var(--motion-morph-duration) var(--motion-morph);
+  }
+
+  .kit-ticket__faces {
+    position: relative;
+    display: grid;
+    transform-style: preserve-3d;
+    transition: transform var(--motion-flip-duration) var(--motion-flip);
+  }
+
+  .kit-ticket[data-flipped][data-flip='rotate'] .kit-ticket__faces {
+    transform: rotateY(180deg);
+  }
+
+  .kit-ticket__face {
+    position: relative;
+    grid-area: 1 / 1;
+    display: grid;
+    grid-template-rows: var(--kit-ticket-cut) auto;
+    box-sizing: border-box;
+    min-inline-size: 0;
+    border: 1px solid var(--color-ios-hairline);
+    border-radius: var(--kit-ticket-radius);
+    background-color: var(--color-ios-card);
+    mask-image: var(--kit-ticket-mask);
+    mask-composite: intersect;
+    -webkit-mask-image: var(--kit-ticket-mask);
+    -webkit-mask-composite: source-in;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  .kit-ticket[data-fill='field'] .kit-ticket__face {
+    background-color: var(--color-ios-fill);
+  }
+
+  .kit-ticket[data-fill='none'] .kit-ticket__face {
+    background-color: transparent;
+  }
+
+  .kit-ticket[data-border-style='dashed'] .kit-ticket__face {
+    border-style: dashed;
+  }
+
+  .kit-ticket[data-selected] .kit-ticket__face {
+    border: var(--kit-ticket-rule) solid var(--accent, var(--color-ios-brand));
+  }
+
+  .kit-ticket__back {
+    transform: rotateY(180deg);
+    padding: 16px;
+    grid-template-rows: auto;
+  }
+
+  .kit-ticket[data-flip='crossfade'] .kit-ticket__back {
+    transform: none;
+    opacity: 0;
+    transition: opacity var(--motion-reduced-duration) var(--motion-reduced);
+  }
+
+  .kit-ticket[data-flip='crossfade'][data-flipped] .kit-ticket__back {
+    opacity: 1;
+  }
+
+  .kit-ticket[data-flip='crossfade'][data-flipped] .kit-ticket__front {
+    opacity: 0;
+  }
+
+  .kit-ticket__hit {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--kit-ticket-radius);
+    background: none;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .kit-ticket__hit:focus-visible {
+    outline: 2px solid var(--accent, var(--color-ios-brand));
+    outline-offset: 2px;
+  }
+
+  .kit-ticket__body {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    pointer-events: none;
+  }
+
+  .kit-ticket__leading,
+  .kit-ticket__trailing,
+  .kit-ticket__stub {
+    position: relative;
+    z-index: 1;
+    pointer-events: auto;
+  }
+
+  .kit-ticket__trailing {
+    position: absolute;
+    inset-block-start: 14px;
+    inset-inline-end: 16px;
+    min-inline-size: 44px;
+    min-block-size: 44px;
+  }
+
+  .kit-ticket__badge {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--kit-ticket-badge);
+    block-size: var(--kit-ticket-badge);
+    border-radius: var(--ios-radius-full);
+    background-color: var(--kit-ticket-badge-fill);
+    color: var(--kit-ticket-badge-ink);
+  }
+
+  .kit-ticket__badge[data-off] {
+    opacity: 0.4;
+  }
+
+  .kit-ticket__text {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 2px;
+    min-inline-size: 0;
+  }
+
+  .kit-ticket__title {
+    overflow: hidden;
+    font-size: var(--kit-ticket-title);
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kit-ticket[data-size='hero'] .kit-ticket__title {
+    color: var(--color-ios-ink-2);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .kit-ticket__code {
+    overflow: hidden;
+    color: var(--color-ios-ink-2);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--kit-ticket-code);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    unicode-bidi: isolate;
+  }
+
+  .kit-ticket[data-size='hero'] .kit-ticket__code {
+    color: var(--color-ios-ink);
+    font-weight: 700;
+  }
+
+  .kit-ticket[data-code-tinted] .kit-ticket__code {
+    color: var(--kit-ticket-badge-fill);
+  }
+
+  .kit-ticket[data-struck] .kit-ticket__title,
+  .kit-ticket[data-struck] .kit-ticket__code {
+    color: var(--color-error);
+    text-decoration: line-through;
+  }
+
+  .kit-ticket__state {
+    color: var(--color-ios-ink-2);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .kit-ticket__figure {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .kit-ticket__figure-value {
+    font-size: 1.375rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .kit-ticket__figure-caption {
+    color: var(--color-ios-ink-2);
+    font-size: 0.75rem;
+  }
+
+  .kit-ticket__check {
+    position: absolute;
+    inset-block-start: 14px;
+    inset-inline-end: 16px;
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    border-radius: var(--ios-radius-full);
+    background-color: var(--accent, var(--color-ios-brand));
+    color: var(--color-ios-on-brand);
+  }
+
+  .kit-ticket__cut {
+    position: absolute;
+    inset-inline: var(--kit-ticket-dash-margin);
+    inset-block-start: var(--kit-ticket-cut);
+    block-size: 0;
+    border-block-start: var(--kit-ticket-dash) dashed var(--color-ios-hairline);
+    pointer-events: none;
+  }
+
+  .kit-ticket__stub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-around;
+    gap: 8px;
+    padding: 10px 16px;
+  }
+
+  .kit-ticket[data-size='mini'] .kit-ticket__face {
+    grid-template-rows: auto;
+  }
+
+  .kit-ticket[data-size='mini'] .kit-ticket__body {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .kit-ticket[data-size='mini'] .kit-ticket__cut {
+    display: none;
+  }
+
+  @media (hover: hover) {
+    .kit-ticket:hover:not([data-pressed], [data-dragging]) {
+      --kit-ticket-lift: 0.25rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .kit-ticket,
+    .kit-ticket__faces {
+      transition: none;
+    }
+  }
+}

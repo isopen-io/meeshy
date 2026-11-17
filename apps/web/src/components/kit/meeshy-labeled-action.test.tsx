@@ -173,7 +173,7 @@ describe('MeeshyActionGrid', () => {
     const band = container.querySelector('[data-kit-action-danger]') as HTMLElement;
     expect(band.querySelectorAll('[data-kit-action]').length).toBe(1);
     expect(band.querySelector('[data-kit-action]')?.getAttribute('data-size')).toBe('56');
-    expect(container.querySelector('[data-kit-action-danger]')).toBe(container.lastElementChild);
+    expect(container.querySelector('[data-kit-action-danger]')).toBe(container.firstElementChild?.lastElementChild);
   });
 
   test('au clavier, les flèches suivent la grille et Tab en sort', () => {

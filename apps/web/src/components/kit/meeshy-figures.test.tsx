@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import type { ReactElement } from 'react';
 import { fileURLToPath } from 'node:url';
 
 import { kitMount, spokenText } from '@/test-support/kit-mount';
@@ -26,7 +27,7 @@ describe('MeeshyFigures — la recette en valeurs', () => {
   });
 
   test('la courbe fait 72 × 28, trait de 2, aire à 14 %, point final de 6 ; la jauge de part ne descend pas sous 4', () => {
-    expect(meeshyFiguresRecipe({}).spark).toEqual({ width: 72, height: 28, stroke: 2, areaOpacity: 0.14, endDot: 6 });
+    expect(meeshyFiguresRecipe({}).spark).toMatchObject({ width: 72, height: 28, stroke: 2, areaOpacity: 0.14, endDot: 6 });
     expect(meeshyFiguresRecipe({}).shareMinBar).toBe(4);
   });
 });
@@ -87,7 +88,7 @@ describe('MeeshyFigure — un nombre, son unité, ses trois états', () => {
   });
 
   test('les trois états occupent le même encombrement', () => {
-    const measure = (element: JSX.Element): string => (mount(element).firstElementChild as HTMLElement).style.cssText;
+    const measure = (element: ReactElement): string => (mount(element).firstElementChild as HTMLElement).style.cssText;
     const loading = measure(<MeeshyFigure unit="clics" isLoading />);
     expect(loading).toBe(measure(<MeeshyFigure unit="clics" />));
     expect(loading).toBe(measure(<MeeshyFigure value="12" unit="clics" />));

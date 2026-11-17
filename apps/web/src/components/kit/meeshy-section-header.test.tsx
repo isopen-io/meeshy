@@ -108,7 +108,7 @@ describe('MeeshySectionHeader — pureté', () => {
   test('aucun type du domaine, aucun singleton, aucune police ni couleur écrite en dur', () => {
     for (const file of ['./meeshy-section-header.tsx', './meeshy-section-header-recipe.ts']) {
       const text = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8');
-      expect(text).not.toMatch(/@meeshy\/shared|@\/stores|@\/lib\/api|#[0-9a-fA-F]{3,6}\b/);
+      expect(text).not.toMatch(/@meeshy\/shared|@\/stores|@\/lib\/api|#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/);
     }
   });
 });

@@ -9,16 +9,25 @@ import { MeeshyKitCatalog } from './catalog';
 const { mount } = kitMount();
 
 describe('les atomes du profil au catalogue du kit', () => {
-  test('treize entrées, dans l’ordre des numéros de la planche, chacune avec ses états', () => {
+  test('vingt-deux entrées, dans l’ordre des numéros de la planche, chacune avec ses états', () => {
     expect(MeeshyKitCatalog.atoms.map((entry) => `${entry.key} ${entry.name}`)).toEqual([
       'K26 MeeshyMotion',
+      'K27 MeeshyLivingBanner',
+      'K28 MeeshyCollapsingHero',
+      'K30 MeeshyTicket',
+      'K31 MeeshyCodeCard',
+      'K32 MeeshyLabeledAction',
       'K33 MeeshyCircleScale',
+      'K34 MeeshyFigures',
       'K35 MeeshyWavePlayer',
       'K37 MeeshyLockedRow',
       'K38 MeeshySkeleton',
+      'K39 MeeshyPersonRow',
       'K40 MeeshyButton',
       'K41 MeeshyBadge',
       'K42 MeeshyMeter',
+      'K43 MeeshyGroupCard',
+      'K44 MeeshySectionHeader',
       'K45 MeeshyMedallion',
       'K46 MeeshyNote',
       'K51 MeeshyTranslationMark',
