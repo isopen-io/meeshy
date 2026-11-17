@@ -17,6 +17,8 @@ public object ApiRoutesE2Ee {
     public const val DEVICES_BY_DEVICE_ID: String = "e2ee/devices/{deviceId}"
     public const val DEVICES_BY_DEVICE_ID_KEYS: String = "e2ee/devices/{deviceId}/keys"
     public const val DEVICES_SELF_PREKEY_COUNT: String = "e2ee/devices/self/prekey-count"
+    public const val DEVICES_SELF_VERIFICATIONS: String = "e2ee/devices/self/verifications"
+    public const val DEVICES_SELF_VERIFICATIONS_ACK: String = "e2ee/devices/self/verifications/ack"
     public const val ENVELOPES: String = "e2ee/envelopes"
     public const val ENVELOPES_ACK: String = "e2ee/envelopes/ack"
     public const val KEYS_BY_USER_ID: String = "e2ee/keys/{userId}"

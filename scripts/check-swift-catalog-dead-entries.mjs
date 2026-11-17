@@ -598,6 +598,10 @@ const PENDING_CLIENT_ENTRIES = {
   'MeEndpoint.locationConsultations': { issue: 13937, reason: 'GET /me/location/consultations — qui a consulté ma position' },
   'MeEndpoint.locationBloodSettings': { issue: 13937, reason: 'PUT /me/location/blood-settings — fantôme et rayon de proximité' },
   'RelationsEndpoint.byUserIdLocationHistory': { issue: 13937, reason: 'GET /relations/:userId/location/history — l’historique d’un Sang' },
+  // Le relais de la confirmation d'un appareil par code (#19156, spec 2026-11-17 § 5.2) : la passerelle le sert avant
+  // le SDK et l'app iOS (§ 10, lots 3 et 4), portés par #18906.
+  'E2EeEndpoint.devicesSelfVerifications': { issue: 18906, reason: 'POST|GET /e2ee/devices/self/verifications — déposer et relire les messages de comparaison, appelés par le SDK iOS de la confirmation par code' },
+  'E2EeEndpoint.devicesSelfVerificationsAck': { issue: 18906, reason: 'POST /e2ee/devices/self/verifications/ack — accuser les messages de comparaison lus, même lot iOS' },
 };
 
 const BASELINE_DEAD_ENTRIES = 328;
