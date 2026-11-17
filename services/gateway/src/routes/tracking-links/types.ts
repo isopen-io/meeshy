@@ -35,6 +35,14 @@ export const createTrackingLinkSchema = z.object({
   customToken: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}[a-zA-Z0-9]$/, 'Le token doit contenir 2-50 caractères alphanumériques et ne peut pas commencer ou finir par un tiret').optional()
 });
 
+/** Le nom et les UTM qu'un `PATCH` peut changer (#19412) ; `null` les efface. */
+export const updateTrackingLinkLabelsSchema = z.object({
+  name: z.string().max(32).nullable().optional(),
+  campaign: z.string().max(100).nullable().optional(),
+  source: z.string().max(100).nullable().optional(),
+  medium: z.string().max(100).nullable().optional()
+});
+
 export const recordClickSchema = z.object({
   ipAddress: z.string().max(45).optional(),
   country: z.string().max(10).optional(),

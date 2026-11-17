@@ -835,3 +835,54 @@ describe('TrackingLinkService.isTokenAvailable', () => {
     expect(await sut.isTokenAvailable('TAKEN')).toBe(false);
   });
 });
+
+// ─── #19412 : le détail d'un lien — lieux, pays distincts, nom et UTM ─────────
+
+describe('TrackingLinkService — le détail complet d\'un lien (#19412)', () => {
+  const lieuxFacet = {
+    country: [{ _id: 'SN', n: 7 }, { _id: 'FR', n: 1 }],
+    place: [
+      { _id: { country: 'SN', city: 'Dakar' }, n: 7 },
+      { _id: { country: 'FR', city: 'Lyon' }, n: 1 },
+    ],
+  };
+
+  it('sert countryCount et clicksByPlace, la ville isolée repliée dans son pays', async () => {
+    const stats = await new TrackingLinkService(
+      makePrisma({ findUniqueResult: makeLink(), clickFacet: lieuxFacet }) as any
+    ).getTrackingLinkStats('ABC123');
+
+    expect(stats.countryCount).toBe(2);
+    expect(stats.clicksByPlace).toEqual([
+      { country: 'SN', city: 'Dakar', count: 7 },
+      { country: 'FR', city: null, count: 1 },
+    ]);
+  });
+
+  it("ne sert aucune ville pour le lien d'une adresse de fiche (#19175)", async () => {
+    const stats = await new TrackingLinkService(
+      makePrisma({ findUniqueResult: makeLink({ addressId: '507f1f77bcf86cd799439077' }), clickFacet: lieuxFacet }) as any
+    ).getTrackingLinkStats('ABC123');
+
+    expect(stats.clicksByPlace).toEqual([
+      { country: 'SN', city: null, count: 7 },
+      { country: 'FR', city: null, count: 1 },
+    ]);
+  });
+
+  it('écrit le nom et les UTM fournis, et rien de ce qui est omis', async () => {
+    const prisma = makePrisma({ findUniqueResult: makeLink() });
+
+    await new TrackingLinkService(prisma as any).updateTrackingLink({
+      token: 'ABC123',
+      name: 'Vitrine',
+      campaign: 'hiver',
+      medium: null,
+    });
+
+    expect(prisma.trackingLink.update).toHaveBeenCalledWith({
+      where: { token: 'ABC123' },
+      data: { name: 'Vitrine', campaign: 'hiver', medium: null },
+    });
+  });
+});

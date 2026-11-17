@@ -15,7 +15,6 @@ import {
   requireAnalyticsPermission
 } from '../../middleware/admin-permissions.middleware';
 import {
-  trackingLinkSchema,
   errorResponseSchema,
   validationErrorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
@@ -27,6 +26,7 @@ import {
   detectDevice
 } from './types';
 import {
+  publicTrackingLinkSchema,
   trackingLinkStatsResponseSchema,
   trackingLinkUserClicksResponseSchema,
   trackingLinkAdminAllResponseSchema,
@@ -236,7 +236,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
               properties: {
                 originalUrl: { type: 'string', description: 'Original destination URL' },
                 clickId: { type: 'string', description: 'ID of the recorded click' },
-                trackingLink: trackingLinkSchema
+                trackingLink: publicTrackingLinkSchema
               }
             }
           }

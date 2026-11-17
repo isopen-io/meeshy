@@ -21,8 +21,12 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import {
   createTrackingLinkSchema,
-  enrichTrackingLink
+  enrichTrackingLink,
+  updateTrackingLinkLabelsSchema
 } from './types';
+
+/** Un libellé fourni est nettoyé ; `null` (effacer) et l'absence passent tels quels. */
+const propre = (v: string | null | undefined) => (v ? SecuritySanitizer.sanitizeText(v) : v);
 import { refuserAccesConversation, verdictAccesConversation, type MessagesDeRefusDAcces } from '../conversations/utils/access-control';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { validatePagination } from '../../utils/pagination';
@@ -380,11 +384,12 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Sans propriétaire, la ligne se lit par tous : elle sert la forme jugée (#10871).
+      // Sans propriétaire, la ligne se lit par tous : elle sert la forme jugée (#10871), sans sa cible (#19412).
+      const { targetId: _cible, ...sansCible } = trackingLink;
       return sendSuccess(reply, {
         trackingLink: trackingLink.createdBy
           ? trackingLink
-          : { ...trackingLink, originalUrl: servedTrackingLinkTarget(trackingLink.originalUrl) }
+          : { ...sansCible, originalUrl: servedTrackingLinkTarget(trackingLink.originalUrl) }
       });
 
     } catch (error) {
@@ -845,6 +850,10 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
             type: 'boolean',
             description: 'Whether the link is active'
           },
+          name: { type: 'string', maxLength: 32, nullable: true, description: 'Link display name (null clears it)' },
+          campaign: { type: 'string', maxLength: 100, nullable: true, description: 'UTM campaign (null clears it)' },
+          source: { type: 'string', maxLength: 100, nullable: true, description: 'UTM source (null clears it)' },
+          medium: { type: 'string', maxLength: 100, nullable: true, description: 'UTM medium (null clears it)' },
           newToken: {
             type: 'string',
             pattern: '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}[a-zA-Z0-9]$',
@@ -904,6 +913,10 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         isActive?: boolean;
         newToken?: string;
       };
+      const libelles = updateTrackingLinkLabelsSchema.safeParse(body ?? {});
+      if (!libelles.success) {
+        return sendBadRequest(reply, 'Nom (32 caractères) ou UTM (100 caractères) invalide');
+      }
 
       if (!isRegisteredUser(request.authContext)) {
         return sendForbidden(reply, 'Utilisateur enregistré requis');
@@ -946,7 +959,11 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         originalUrl: body.originalUrl,
         expiresAt: body.expiresAt === null ? null : (body.expiresAt ? new Date(body.expiresAt) : undefined),
         isActive: body.isActive,
-        newToken: body.newToken
+        newToken: body.newToken,
+        name: propre(libelles.data.name),
+        campaign: propre(libelles.data.campaign),
+        source: propre(libelles.data.source),
+        medium: propre(libelles.data.medium)
       });
 
       return sendSuccess(reply, { trackingLink: enrichTrackingLink(updatedLink) }, { message: 'Lien mis à jour avec succès' });

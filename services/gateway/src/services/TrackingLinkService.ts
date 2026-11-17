@@ -9,6 +9,7 @@ import type { LinkVisitor, LinkVisitRecorder } from '../routes/links/utils/link-
 import {
   clickStatsPipeline,
   foldClickStatsFacet,
+  type ClickPlace,
   type ClickStatsFacet,
 } from './trackingLinkClickAggregation';
 
@@ -533,6 +534,8 @@ export class TrackingLinkService {
     clicksByDate: { [date: string]: number };
     topReferrers: { referrer: string; count: number }[];
     confirmedClicks: number;
+    countryCount: number;
+    clicksByPlace: ClickPlace[];
   }> {
     const trackingLink = await this.getTrackingLinkByToken(token);
 
@@ -552,7 +555,8 @@ export class TrackingLinkService {
       }),
     })) as unknown as ReadonlyArray<ClickStatsFacet>;
 
-    const agrege = foldClickStatsFacet(facet);
+    // Le lien d'une adresse de fiche peut n'avoir qu'un lecteur : aucune ville (#19175).
+    const agrege = foldClickStatsFacet(facet, { citiesServed: !trackingLink.addressId });
 
     // Source unique = le compteur STOCKÉ (incrémenté à l'écriture), pour que tous
     // les endpoints renvoient le MÊME nombre. Le recalcul max(IPs, fingerprints)
@@ -583,7 +587,9 @@ export class TrackingLinkService {
       clicksByHour: agrege.clicksByHour,
       clicksBySocialSource: agrege.clicksBySocialSource,
       clicksByDate: agrege.clicksByDate,
-      topReferrers: [...agrege.topReferrers]
+      topReferrers: [...agrege.topReferrers],
+      countryCount: agrege.countryCount,
+      clicksByPlace: [...agrege.clicksByPlace]
     };
   }
 
@@ -941,7 +947,10 @@ export class TrackingLinkService {
   async updateTrackingLink(params: {
     token: string;
     originalUrl?: string;
-    name?: string;
+    name?: string | null;
+    campaign?: string | null;
+    source?: string | null;
+    medium?: string | null;
     expiresAt?: Date | null;
     isActive?: boolean;
     newToken?: string;
@@ -956,31 +965,20 @@ export class TrackingLinkService {
       throw new TrackingTargetCarriesEmailSecretError();
     }
 
-    // Si un nouveau token est fourni, vérifier qu'il n'existe pas déjà
-    if (params.newToken && params.newToken !== params.token) {
-      const existingWithNewToken = await this.tokenExists(params.newToken);
-      if (existingWithNewToken) {
-        throw new Error('Token already exists');
-      }
+    const renamed = Boolean(params.newToken && params.newToken !== params.token);
+    if (renamed && await this.tokenExists(params.newToken!)) {
+      throw new Error('Token already exists');
     }
 
-    // Mettre à jour le lien
-    const updateData: any = {};
-
-    if (params.originalUrl !== undefined) {
-      updateData.originalUrl = params.originalUrl;
-    }
-    if (params.name !== undefined) updateData.name = params.name;
-    if (params.expiresAt !== undefined) {
-      updateData.expiresAt = params.expiresAt;
-    }
-    if (params.isActive !== undefined) {
-      updateData.isActive = params.isActive;
-    }
-    if (params.newToken && params.newToken !== params.token) {
-      updateData.token = params.newToken;
-      updateData.shortUrl = `/l/${params.newToken}`;
-    }
+    // Seuls les champs FOURNIS s'écrivent ; `null` efface un nom ou un UTM (#19412).
+    const fournis = {
+      originalUrl: params.originalUrl, name: params.name, campaign: params.campaign, source: params.source,
+      medium: params.medium, expiresAt: params.expiresAt, isActive: params.isActive,
+    };
+    const updateData = {
+      ...Object.fromEntries(Object.entries(fournis).filter(([, v]) => v !== undefined)),
+      ...(renamed ? { token: params.newToken, shortUrl: `/l/${params.newToken}` } : {}),
+    };
 
     const updatedLink = await this.prisma.trackingLink.update({
       where: { token: params.token },

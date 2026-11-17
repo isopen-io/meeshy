@@ -33,7 +33,15 @@ export interface TrackingLink {
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly lastClickedAt?: Date; // Date du dernier clic
+  readonly targetType?: TrackingTargetType; // Ce que le lien vise (#19412)
+  readonly targetId?: string | null; // L'élément visé, nul pour une adresse externe
+  readonly addressId?: string | null; // L'adresse de fiche qu'il suit (#18863)
 }
+
+/**
+ * Ce qu'un lien de suivi vise — miroir de l'enum Prisma `TrackingTargetType`.
+ */
+export type TrackingTargetType = 'POST' | 'REEL' | 'STORY' | 'STATUS' | 'CONVERSATION' | 'PROFILE' | 'EXTERNAL';
 
 /**
  * Clic sur un lien de tracking
@@ -130,6 +138,16 @@ export interface TopReferrer {
 }
 
 /**
+ * Un lieu de visiteurs (#19412) : agrégat seul. Une ville sous le plancher de
+ * k-anonymat se replie dans son pays (`city: null`).
+ */
+export interface TrackingLinkClickPlace {
+  readonly country: string; // ISO 3166-1 alpha-2
+  readonly city: string | null;
+  readonly count: number;
+}
+
+/**
  * Données de réponse pour les statistiques d'un lien de tracking
  */
 export interface TrackingLinkStatsResponseData {
@@ -146,6 +164,8 @@ export interface TrackingLinkStatsResponseData {
   readonly clicksByDate: Readonly<Record<string, number>>;
   readonly topReferrers: readonly TopReferrer[];
   readonly confirmedClicks: number;
+  readonly countryCount?: number;
+  readonly clicksByPlace?: readonly TrackingLinkClickPlace[];
 }
 
 // ============================================================================
