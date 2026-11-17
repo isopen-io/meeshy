@@ -83,6 +83,19 @@ struct MeeshySegmentedTests {
         #expect(MeeshySegmentedOption(id: 0, title: "N", accessibilityLabel: "Normal").spokenName == "Normal")
     }
 
+    @Test("le glyphe de tête : plein pour le courant, contour au repos ; sans glyphe, le texte seul")
+    func glyph_filledForTheCurrentOnly() {
+        let faces = MeeshySegmentedOption(id: 1, title: "Vitrine", systemImage: "person.crop.square",
+                                          currentSystemImage: "person.crop.square.fill")
+        #expect(faces.glyph(isCurrent: true) == "person.crop.square.fill")
+        #expect(faces.glyph(isCurrent: false) == "person.crop.square")
+        let outlineOnly = MeeshySegmentedOption(id: 2, title: "Liens", systemImage: "link")
+        #expect(outlineOnly.glyph(isCurrent: true) == "link")
+        let textOnly = MeeshySegmentedOption(id: 3, title: "Actions")
+        #expect(textOnly.glyph(isCurrent: true) == nil)
+        #expect(textOnly.glyph(isCurrent: false) == nil)
+    }
+
     static func vectors(_ key: String) throws -> [[String: Any]] {
         let url = repositoryRoot.appendingPathComponent("docs/product/kit/K03-MeeshySegmented.vectors.json")
         let data = try Data(contentsOf: url)

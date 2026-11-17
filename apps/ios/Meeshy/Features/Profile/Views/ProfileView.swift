@@ -46,6 +46,12 @@ struct ProfileView: View {
     @State private var bannerImageForEditor: UIImage?
     @State private var isUploadingBanner = false
     @State private var scrollRelay = ScrollOffsetRelay()
+    /// Les trois faces (#18869) : la face montrée, et les portes que la Vitrine et la face Actions ouvrent.
+    @State private var face: ProfileFace = .vitrine
+    @State private var seenAsShown = false
+    @State private var shareShown = false
+    @State private var securityShown = false
+    @State private var logoutAsked = false
     /// #10093 — la bannière ou la photo ouverte en plein écran (son URL).
     @State private var fullscreenImage: IdentifiedString?
     /// La vignette touchée et son plein écran sont liés : la photo s'agrandit depuis l'endroit touché (iOS 18+).
@@ -78,11 +84,18 @@ struct ProfileView: View {
                 Spacer()
             }
 
+            faceSelector
+
             if let errorMessage {
                 errorBanner(errorMessage)
             }
         }
         .background(InteractivePopEnabler())
+        .modifier(ProfileFacesPresentations(
+            user: user, authManager: authManager,
+            seenAsShown: $seenAsShown, shareShown: $shareShown, securityShown: $securityShown,
+            logoutAsked: $logoutAsked, onLogout: { logout() }
+        ))
         .sheet(item: $securityFocus) { focus in
             SecurityView(focus: focus).environmentObject(authManager).closesForConversationOpening(.sheet)
         }
@@ -239,32 +252,13 @@ struct ProfileView: View {
                     SkeletonProfileHeader()
                         .transition(.opacity)
                 } else {
-                    bannerAndAvatarSection
-                    ProfileCirclesSection(summary: circles.summary, hasServedLinks: circles.hasServedLinks,
-                                          accentHex: accentColor, onOpen: open)
-                    ProfileIdentitySection(
-                        isEditing: isEditing, firstName: $firstName, lastName: $lastName,
-                        displayName: $displayName, bio: $bio, username: user?.username, accentColor: accentColor
-                    )
-                    ProfileContactSection(
-                        email: user?.email, isEmailVerified: user?.emailVerifiedAt != nil,
-                        phoneNumber: user?.phoneNumber, isPhoneVerified: user?.phoneVerifiedAt != nil,
-                        accentHex: accentColor, onOpenSecurity: { securityFocus = $0 }
-                    )
-                    languagesSection
-                    activitySection
-                    // Partager ma batterie, pour tous (#14147) : la coupure globale, côté émetteur, dans MON profil.
-                    BatterySharingSettingsSection(accentColor: accentColor)
-                    // Prévenir mes Proches si mon téléphone est injoignable (#18737) : la coupure globale, le fantôme.
-                    PhoneReachabilitySharingSettingsSection(accentColor: accentColor)
-                    if ProfilePackShortcuts.isShown(viewerId: authManager.currentUser?.id, profileUserId: user?.id) {
-                        ProfileSavedContentRows(accentHex: accentColor, onOpen: open)
-                    }
+                    faceContent
                 }
-                Spacer().frame(height: MeeshySpacing.xxxl + 8)
+                Spacer().frame(height: MeeshySpacing.xxxl + 8 + (showsFaceSelector ? Self.faceSelectorRoom : 0))
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.top, 0)
+            .meeshyAnimation(MeeshyAnimation.springDefault, value: face)
         }
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
@@ -273,6 +267,85 @@ struct ProfileView: View {
 
     private func open(_ door: ProfileDoor) {
         door.open(with: router)
+    }
+
+    // MARK: - Les trois faces (#18869)
+
+    /// La place que le sélecteur de faces occupe en bas : le contenu défile jusqu'au-dessus de lui.
+    private static let faceSelectorRoom: CGFloat = 72
+
+    private var showsFaceSelector: Bool {
+        user != nil && ProfileFace.showsSelector(isEditing: isEditing)
+    }
+
+    @ViewBuilder
+    private var faceSelector: some View {
+        if showsFaceSelector {
+            VStack {
+                Spacer()
+                ProfileFaceSelector(face: $face, canShare: ProfileLink(username: user?.username) != nil,
+                                    onShare: { shareShown = true })
+            }
+            .meeshyTransition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    @ViewBuilder
+    private var faceContent: some View {
+        switch ProfileFace.shown(face, isEditing: isEditing) {
+        case .vitrine:
+            vitrineFace
+        case .links:
+            ProfileLinksFace(profileLink: ProfileLink(username: user?.username), accentColor: accentColor,
+                             onOpen: { router.push($0) })
+        case .actions:
+            ProfileActionsFace(user: user, stats: stats, accentColor: accentColor,
+                               canShare: ProfileLink(username: user?.username) != nil,
+                               onAction: { perform($0) }, prefs: UserPreferencesManager.shared)
+        }
+    }
+
+    /// La Vitrine : qui je suis. Mon contact ne s'y lit qu'en édition (planche `Moi-Edition`) ; hors édition, la face
+    /// Actions mène à la Sécurité, qui dit ce qui reste à vérifier.
+    @ViewBuilder
+    private var vitrineFace: some View {
+        bannerAndAvatarSection
+        ProfileCirclesSection(summary: circles.summary, hasServedLinks: circles.hasServedLinks,
+                              accentHex: accentColor, onOpen: open)
+        ProfileIdentitySection(
+            isEditing: isEditing, firstName: $firstName, lastName: $lastName,
+            displayName: $displayName, bio: $bio, username: user?.username, accentColor: accentColor
+        )
+        if isEditing {
+            ProfileContactSection(
+                email: user?.email, isEmailVerified: user?.emailVerifiedAt != nil,
+                phoneNumber: user?.phoneNumber, isPhoneVerified: user?.phoneVerifiedAt != nil,
+                accentHex: accentColor, onOpenSecurity: { securityFocus = $0 }
+            )
+        }
+        languagesSection
+        activitySection
+    }
+
+    private func perform(_ action: ProfileFaceAction) {
+        switch action {
+        case .share: shareShown = true
+        case .seenAs: seenAsShown = true
+        case .edit:
+            face = .vitrine
+            setEditing(true)
+        case .stats: router.push(.userStats)
+        case .legend: router.push(.progression)
+        case .security: securityShown = true
+        case .settings: router.push(.settings)
+        case .logout: logoutAsked = true
+        case .door(let door): open(door)
+        }
+    }
+
+    /// La session et les données locales partent, le compte reste listé : comme depuis les Réglages (#8286).
+    private func logout() {
+        Task { await authManager.logout(forgettingAccount: false) }
     }
 
     // MARK: - Banner & Avatar Section
@@ -381,6 +454,11 @@ struct ProfileView: View {
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundStyle(theme.textMuted)
             }
+
+            MeeshyButton(VitrineSeenAsCopy.viewedByMe, systemImage: "eye", kind: .glass, size: .s36,
+                         tint: Color(hex: accentColor), action: { seenAsShown = true })
+                .accessibilityHint(VitrineSeenAsCopy.viewedByHint)
+                .padding(.top, MeeshySpacing.xs)
         }
         .padding(.top, MeeshySpacing.sm)
     }

@@ -2,15 +2,27 @@ import SwiftUI
 
 /// Une option du choix : `id` porte la valeur, `title` le texte affiché,
 /// `accessibilityLabel` remplace le titre quand celui-ci est une abréviation.
+/// `systemImage` pose un glyphe de tête (évolution K03 du profil, #18869) ;
+/// `currentSystemImage` en est la variante pleine, portée par le courant.
 public nonisolated struct MeeshySegmentedOption<ID: Hashable & Sendable>: Sendable, Identifiable, Equatable {
     public let id: ID
     public let title: String
     public let accessibilityLabel: String?
+    public let systemImage: String?
+    public let currentSystemImage: String?
 
-    public init(id: ID, title: String, accessibilityLabel: String? = nil) {
+    public init(id: ID, title: String, accessibilityLabel: String? = nil,
+                systemImage: String? = nil, currentSystemImage: String? = nil) {
         self.id = id
         self.title = title
         self.accessibilityLabel = accessibilityLabel
+        self.systemImage = systemImage
+        self.currentSystemImage = currentSystemImage
+    }
+
+    /// Le glyphe peint : plein pour le courant quand il existe, contour sinon ; `nil` sans glyphe.
+    public func glyph(isCurrent: Bool) -> String? {
+        isCurrent ? (currentSystemImage ?? systemImage) : systemImage
     }
 
     /// Le nom que lit l'accessibilité : l'étiquette quand elle existe, le titre sinon.
@@ -132,6 +144,7 @@ public struct MeeshySegmented<ID: Hashable & Sendable>: View {
         } label: {
             MeeshySegmentFace(
                 title: option.title,
+                glyph: option.glyph(isCurrent: isCurrent),
                 ink: isCurrent ? palette.currentInk : palette.restInk,
                 pill: isCurrent ? palette.pill : nil,
                 pillSpace: pillSpace
@@ -172,16 +185,24 @@ public struct MeeshySegmented<ID: Hashable & Sendable>: View {
 /// option seule dépasse la piste (grande police) : jamais tronqué, jamais débordant.
 private struct MeeshySegmentFace: View, Equatable {
     let title: String
+    let glyph: String?
     let ink: Color
     let pill: Color?
     let pillSpace: Namespace.ID
 
     static func == (lhs: MeeshySegmentFace, rhs: MeeshySegmentFace) -> Bool {
-        lhs.title == rhs.title && lhs.ink == rhs.ink && lhs.pill == rhs.pill
+        lhs.title == rhs.title && lhs.glyph == rhs.glyph && lhs.ink == rhs.ink && lhs.pill == rhs.pill
     }
 
     var body: some View {
-        Text(title)
+        HStack(spacing: MeeshySpacing.xs) {
+            if let glyph {
+                Image(systemName: glyph)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .accessibilityHidden(true)
+            }
+            Text(title)
+        }
             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
             .foregroundStyle(ink)
             .multilineTextAlignment(.center)
