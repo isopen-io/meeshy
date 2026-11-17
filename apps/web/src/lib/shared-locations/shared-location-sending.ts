@@ -21,7 +21,8 @@ export type SharedLocationRecipient = { readonly userId: string; readonly precis
 export type SharedLocationStartPayload = {
   readonly recipients: readonly SharedLocationRecipient[];
   readonly durationMinutes: SharedLocationDurationMinutes;
-  readonly position: SharedLocationFix;
+  /** Absente : liste seule (#19284), la passerelle reprend la position du partage en cours. */
+  readonly position?: SharedLocationFix;
 };
 
 /** Ce que l'interface dit d'un envoi qui n'a pas abouti. `unconfirmed` : l'accusé n'est pas revenu, la passerelle a PU prendre l'envoi. */
