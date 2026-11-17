@@ -542,6 +542,11 @@ extension VoIPPushManager {
     /// Test-only accessor on the parked token (G4c retry policy).
     var debug_pendingTokenToRegister: String? { pendingTokenToRegister }
 
+    /// Test-only: le jeton que PushKit tient actuellement.
+    func debug_setVoIPToken(_ token: String?) {
+        voipToken = token
+    }
+
     /// Test-only driver for the private backend registration flow.
     func debug_registerTokenWithBackend(_ token: String) async {
         await registerTokenWithBackend(token)
