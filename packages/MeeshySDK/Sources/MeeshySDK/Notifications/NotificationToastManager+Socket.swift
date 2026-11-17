@@ -98,6 +98,15 @@ extension NotificationToastManager {
             self?.recentNotificationIds.remove(event.id)
         }
 
+        // Une notification ARRIVÉE LUE — réécrite après une édition déjà lue,
+        // ou lue ailleurs avant son émission — entre dans l'historique à son
+        // rang, sans rien rejouer : ni compte, ni bannière, ni haptique, ni
+        // révélation (#19104).
+        if event.resolvedIsRead == true {
+            persistArrivedRead(event)
+            return
+        }
+
         // Durably persist the notification into the local cache so the bell list
         // shows it after a cold start / offline reopen — the toast is ephemeral.
         persistToCache(event)
@@ -157,6 +166,20 @@ extension NotificationToastManager {
         }
     }
 
+    /// La forme durable d'une notification arrivée LUE : rangée à sa date dans
+    /// le cache (jamais en tête — une réécriture garde son rang), remplaçant la
+    /// ligne du même id si elle y est encore. Strict no-op sur un cache jamais
+    /// peuplé (`update(for:)` n'invente rien).
+    private func persistArrivedRead(_ event: SocketNotificationEvent) {
+        let row = event.toAPINotification(createdAt: WireDate.string(from: Date())).withReadState(true)
+        Task {
+            await CacheCoordinator.shared.notifications.update(for: "all") { items in
+                NotificationCachePatch.upsertingByCreatedAt(items, row)
+            }
+        }
+        notificationArrivedRead.send(event.id)
+    }
+
     private func updateFriendshipCacheIfNeeded(_ event: SocketNotificationEvent) {
         let cacheChanged: Bool
         switch event.notificationType {
@@ -185,6 +208,10 @@ extension NotificationToastManager {
     }
 
     func handleNotificationDeleted(_ event: NotificationDeletedEvent) {
+        // Une RÉÉCRITURE (édition) suit la suppression sous le même id : la
+        // mémoire anti-doublon de 2 s ne doit pas la prendre pour un second
+        // envoi du même événement — la ligne disparaîtrait de la cloche (#19104).
+        recentNotificationIds.remove(event.notificationId)
         applyRevocationLocally(event.notificationId)
     }
 
@@ -206,6 +233,10 @@ extension NotificationToastManager {
             logger.error("notification:deleted-bulk ignoré — portée inconnue (kind: \(event.scope.kind))")
             return
         }
+        // Annoncée SANS condition : la cloche montée peut tenir des lignes lues
+        // de pages que le cache ne contient pas — les ids relevés ci-dessous ne
+        // les nommeraient jamais (#19104).
+        readNotificationsPurged.send(())
         Task { [weak self] in
             let cached = await CacheCoordinator.shared.notifications.loadIgnoringExpiry(for: "all")
             let purgedIds = (cached?.items ?? []).filter { $0.isRead }.map(\.id)
@@ -213,7 +244,10 @@ extension NotificationToastManager {
             await CacheCoordinator.shared.notifications.update(for: "all") { items in
                 NotificationBulkScopeMapping.removingRead(items)
             }
-            purgedIds.forEach { self?.notificationWasDeleted.send($0) }
+            purgedIds.forEach { id in
+                self?.dismissToastIfShowing(id)
+                self?.notificationWasDeleted.send(id)
+            }
         }
     }
 }

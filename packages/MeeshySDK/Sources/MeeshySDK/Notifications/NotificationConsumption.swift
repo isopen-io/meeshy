@@ -299,12 +299,34 @@ extension NotificationToastManager {
     /// Interne (pas `private`) : point d'entrée des tests, faute de mock
     /// Socket.IO.
     func handleNotificationReadBulk(_ event: NotificationReadBulkEvent) {
+        if let friendRequestId = NotificationBulkScopeMapping.friendRequestId(from: event.scope) {
+            applyFriendRequestRead(friendRequestId)
+            return
+        }
         guard let scope = NotificationBulkScopeMapping.readScope(from: event.scope) else {
             consumptionLogger.error("notification:read-bulk ignoré — portée non traduisible (kind: \(event.scope.kind))")
             return
         }
         applyReadToCache(scope)
         republishRead(scope)
+    }
+
+    /// Répondre à une demande d'ami (ici ou sur un autre appareil) consomme sa
+    /// notification : les lignes non lues qui la nomment passent lues dans le
+    /// cache, puis chacune est republiée à la cloche montée par
+    /// `notificationMarkedRead`. Le compteur n'est pas touché :
+    /// `notification:counts` le recale (#19104).
+    func applyFriendRequestRead(_ friendRequestId: String) {
+        Task { [weak self] in
+            let cached = await CacheCoordinator.shared.notifications.loadIgnoringExpiry(for: "all")
+            let ids = (cached?.items ?? [])
+                .filter { !$0.isRead && $0.context?.friendRequestId == friendRequestId }
+                .map(\.id)
+            await CacheCoordinator.shared.notifications.update(for: "all") { items in
+                NotificationCachePatch.markingRead(items, friendRequestId: friendRequestId)
+            }
+            ids.forEach { self?.notificationMarkedRead.send($0) }
+        }
     }
 
     /// Republication vers les vues MONTÉES : le patch cache ci-dessus est
