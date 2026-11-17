@@ -5,12 +5,15 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.conversation.ConversationRefreshSignal
 import me.meeshy.sdk.conversation.MessageEntityFactory
+import me.meeshy.sdk.lock.ConversationLockStore
+import me.meeshy.sdk.lock.InMemoryConversationLockStore
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.push.PushPayload
@@ -25,7 +28,10 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class PushPrefetchRepositoryTest {
 
-    private class Setup(signedIn: Boolean = true) {
+    private class Setup(
+        signedIn: Boolean = true,
+        locks: ConversationLockStore = InMemoryConversationLockStore(),
+    ) {
         val database: MeeshyDatabase = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(), MeeshyDatabase::class.java,
         ).allowMainThreadQueries().build()
@@ -46,6 +52,7 @@ class PushPrefetchRepositoryTest {
             conversationApi = conversationApi,
             posts = PushPostPrefetcher { prefetchedPosts += it },
             tokenStore = tokens,
+            lockStore = locks,
         )
 
         fun serve(message: ApiMessage) {
@@ -119,5 +126,28 @@ class PushPrefetchRepositoryTest {
         s.repository.prefetch(push("new_message").copy(conversationEncryptionMode = "e2ee"))
 
         assertThat(s.database.messageDao().find("m1")).isNull()
+    }
+
+    @Test
+    fun `the message of a locked conversation is neither fetched nor written, and delivery is still acknowledged`() = runTest {
+        val locks = InMemoryConversationLockStore().also { it.setLock("c1", "1234") }
+        val s = Setup(locks = locks).also { it.serve(message("mon code est 4471")) }
+
+        s.repository.prefetch(push("new_message"))
+
+        assertThat(s.database.messageDao().find("m1")).isNull()
+        coVerify(exactly = 0) { s.messageApi.listAround(any(), any(), any()) }
+        coVerify { s.conversationApi.markReceived("c1") }
+    }
+
+    @Test
+    fun `an unreadable lock writes nothing rather than risk a locked message`() = runTest {
+        val broken = mockk<ConversationLockStore> { every { isLocked(any()) } throws IllegalStateException("keystore") }
+        val s = Setup(locks = broken).also { it.serve(message("mon code est 4471")) }
+
+        s.repository.prefetch(push("new_message"))
+
+        assertThat(s.database.messageDao().find("m1")).isNull()
+        coVerify(exactly = 0) { s.messageApi.listAround(any(), any(), any()) }
     }
 }

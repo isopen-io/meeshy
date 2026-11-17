@@ -3,6 +3,7 @@ package me.meeshy.app.push
 import android.content.Context
 import androidx.annotation.StringRes
 import me.meeshy.app.R
+import me.meeshy.sdk.model.push.PushConversationLockSeal
 
 /**
  * Le substitut localisé d'un message PROTÉGÉ (`notificationLocKey` : vue unique, éphémère, masqué, chiffré). Le texte
@@ -17,6 +18,7 @@ object PushProtectedPlaceholder {
         "notification.ephemeral_message" -> R.string.push_placeholder_ephemeral
         "notification.hidden_message" -> R.string.push_placeholder_hidden
         "notification.encrypted_message" -> R.string.push_placeholder_encrypted
+        PushConversationLockSeal.LOCKED_LOC_KEY -> R.string.push_placeholder_locked
         else -> R.string.push_placeholder_hidden
     }
 
