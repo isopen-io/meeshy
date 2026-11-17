@@ -401,38 +401,44 @@ class NotificationRepository @Inject constructor(
      * so the next scroll simply retries.
      */
     suspend fun loadMore(): NetworkResult<Unit> {
-        val current = _notificationsCache.value ?: return NetworkResult.Success(Unit)
-        if (!_hasMore.value) return NetworkResult.Success(Unit)
         // Le CURSEUR gagne (#4901) : l'ancre servie est relayée verbatim, et la
         // tranche est insensible aux insertions en tête. Le RANG ne reste que
         // face à un gateway antérieur — et SANS dédoublonnage : l'union par
         // curseur est propre par construction, et au rang le doublon est le
         // SIGNAL (le `filterNot` d'avant supprimait la ligne perdue avec lui).
-        val ancre = _nextCursor.value
-        val opened = epoch
+        val asked = synchronized(flightLock) {
+            val current = _notificationsCache.value ?: return NetworkResult.Success(Unit)
+            if (!_hasMore.value) return NetworkResult.Success(Unit)
+            NextPage(epoch, _nextCursor.value, current.size)
+        }
         return when (
             val result = pagedApiCall {
-                notificationApi.list(if (ancre === null) current.size else null, PAGE_SIZE, null, ancre)
+                notificationApi.list(if (asked.cursor === null) asked.listSize else null, PAGE_SIZE, null, asked.cursor)
             }
         ) {
             is NetworkResult.Success -> {
-                appendPage(opened, result.data.data, result.data.pagination)
+                appendPage(asked, result.data.data, result.data.pagination)
                 NetworkResult.Success(Unit)
             }
             is NetworkResult.Failure -> result
         }
     }
 
+    /** Where a next page was asked from: the account generation ([epoch]), and the end of the list — cursor, or by rank its length. */
+    private class NextPage(val epoch: Long, val cursor: String?, val listSize: Int)
+
     /**
      * #18915 — the next page lands at the tail of the LIVE list, in [flightLock]'s section: never on the snapshot read
-     * before its request, which would erase what arrived, was read or was deleted meanwhile. The next page of the
-     * account that left ([clear] since its request, [opened] being the account generation it was asked under) continues
-     * a list that is gone: it lands nothing.
+     * before its request, which would erase what arrived, was read or was deleted meanwhile. It lands only while the
+     * live list still ends where it was [asked]: the account that left ([clear] since), or a list a re-read replaced
+     * meanwhile (another cursor — by rank, another length), makes it continue a list that is gone, and laid at the tail
+     * of the new one it would leave a hole. It lands nothing then: the next scroll asks from the new end.
      */
-    private fun appendPage(opened: Long, items: List<ApiNotification>, pagination: Pagination?) {
+    private fun appendPage(asked: NextPage, items: List<ApiNotification>, pagination: Pagination?) {
         synchronized(flightLock) {
             val live = _notificationsCache.value ?: return
-            if (opened != epoch) return
+            if (asked.epoch != epoch || asked.cursor != _nextCursor.value) return
+            if (asked.cursor === null && asked.listSize != live.size) return
             _notificationsCache.value = live + items
             _hasMore.value = pagination?.hasMore ?: false
             _nextCursor.value = pagination?.nextCursor

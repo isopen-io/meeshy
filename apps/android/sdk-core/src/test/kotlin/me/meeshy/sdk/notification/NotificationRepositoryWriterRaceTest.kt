@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.NotificationCachePatch
 import me.meeshy.sdk.model.NotificationState
 import me.meeshy.sdk.model.Pagination
+import me.meeshy.sdk.model.UnreadCountResponse
 import me.meeshy.sdk.net.api.NotificationApi
 import org.junit.Test
 
@@ -106,6 +107,65 @@ class NotificationRepositoryWriterRaceTest {
 
         assertThat(repo.cachedItems(NotificationScope.All).orEmpty().map { it.id }).containsExactly("b1")
         assertThat(repo.hasMoreStream.value).isTrue()
+    }
+
+    /**
+     * A re-read replaced the list while the next page was in flight: that page continued a list that is gone. Laid at
+     * the tail of the new one, it left a hole (n3, n4) until the following re-read. It lands nothing: the next scroll
+     * asks from the new list's end.
+     */
+    @Test
+    fun `a next page asked before a re-read replaced the list leaves no hole in it`() = runTest {
+        val asked = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val api: NotificationApi = mockk(relaxed = true) {
+            coEvery { list(any(), any(), any(), "after-n4") } coAnswers {
+                asked.complete(Unit)
+                release.await()
+                ApiResponse(success = true, data = listOf(row("n5"), row("n6")), pagination = Pagination(hasMore = true, nextCursor = "after-n6"))
+            }
+            coEvery { list(0, any(), null, null) } returns
+                ApiResponse(success = true, data = listOf(row("n1"), row("n2")), pagination = Pagination(hasMore = true, nextCursor = "after-n2"))
+            coEvery { unreadCount() } returns UnreadCountResponse(success = true, count = 0)
+        }
+        val repo = NotificationRepository(api)
+        repo.replaceAll(items = listOf(row("n1"), row("n2"), row("n3"), row("n4")), hasMore = true, nextCursor = "after-n4")
+
+        val paging = async { repo.loadMore() }
+        asked.await()
+        repo.refresh()
+        release.complete(Unit)
+        paging.await()
+
+        assertThat(repo.cachedItems(NotificationScope.All).orEmpty().map { it.id }).containsExactly("n1", "n2").inOrder()
+        assertThat(repo.hasMoreStream.value).isTrue()
+    }
+
+    /** The same hole by rank (a gateway that serves no cursor): the page continued a list four rows long. */
+    @Test
+    fun `by rank, a next page asked before a re-read replaced the list leaves no hole in it`() = runTest {
+        val asked = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val api: NotificationApi = mockk(relaxed = true) {
+            coEvery { list(4, any(), any(), null) } coAnswers {
+                asked.complete(Unit)
+                release.await()
+                ApiResponse(success = true, data = listOf(row("n5"), row("n6")), pagination = Pagination(hasMore = true))
+            }
+            coEvery { list(0, any(), null, null) } returns
+                ApiResponse(success = true, data = listOf(row("n1"), row("n2")), pagination = Pagination(hasMore = true))
+            coEvery { unreadCount() } returns UnreadCountResponse(success = true, count = 0)
+        }
+        val repo = NotificationRepository(api)
+        repo.replaceAll(items = listOf(row("n1"), row("n2"), row("n3"), row("n4")), hasMore = true)
+
+        val paging = async { repo.loadMore() }
+        asked.await()
+        repo.refresh()
+        release.complete(Unit)
+        paging.await()
+
+        assertThat(repo.cachedItems(NotificationScope.All).orEmpty().map { it.id }).containsExactly("n1", "n2").inOrder()
     }
 
     private companion object {
