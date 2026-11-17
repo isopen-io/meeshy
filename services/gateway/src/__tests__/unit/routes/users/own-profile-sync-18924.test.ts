@@ -79,6 +79,7 @@ const aliceRow = (overrides: Record<string, unknown> = {}) => ({
   banner: null,
   bio: '',
   city: 'Lyon',
+  profileAccentColor: '#FF2E63',
   systemLanguage: 'fr',
   regionalLanguage: null,
   customDestinationLanguage: null,
@@ -217,7 +218,7 @@ async function buildApp(params: {
 }
 
 describe('#18924 — la charge PROPRE de mon profil : l’instantané de ce que mes appareils affichent, rien d’autre', () => {
-  it('les langues, le nom, la photo, la bannière et l’instant de l’écriture — ni e-mail, ni téléphone, ni présence', () => {
+  it('les langues, le nom, la photo, la bannière, l’accent et l’instant de l’écriture — ni e-mail, ni téléphone, ni présence', () => {
     const payload = ownProfileUpdatedPayload(aliceRow({ systemLanguage: 'en', regionalLanguage: 'es' }));
 
     expect(payload).toEqual({
@@ -233,9 +234,14 @@ describe('#18924 — la charge PROPRE de mon profil : l’instantané de ce que 
         username: 'alice',
         avatar: null,
         banner: null,
+        profileAccentColor: '#FF2E63',
       },
     });
     expect(profileUpdatedEventDataSchema.parse(payload)).toEqual(payload);
+  });
+
+  it('un accent stocké hors de la liste fermée part `null` (automatique), jamais tel quel (#19201)', () => {
+    expect(ownProfileUpdatedPayload(aliceRow({ profileAccentColor: '#123456' }))?.profile.profileAccentColor).toBeNull();
   });
 
   it('une ligne sans instant d’écriture ne se compose pas : on n’invente pas l’instant sur lequel les clients arbitrent', () => {

@@ -118,6 +118,8 @@ function prismaDouble() {
     emailInvitation: {
       create: jest.fn(async () => ({ id: 'email-invitation-id' })),
     },
+    // #19207 — l'envoi lit d'abord si l'adresse s'est désinscrite.
+    emailInvitationOptOut: { findUnique: jest.fn(async () => null) },
   };
 }
 

@@ -13,10 +13,14 @@ import Foundation
 
 public enum InvitationsEndpoint: MeeshyEndpoint, Sendable {
     case email
+    case emailByIdResend(id: String)
+    case emailOptOut
 
     public var path: String {
         switch self {
         case .email: return "/api/v1/invitations/email"
+        case .emailByIdResend(let id): return "/api/v1/invitations/email/\(id)/resend"
+        case .emailOptOut: return "/api/v1/invitations/email/opt-out"
         }
     }
 }
