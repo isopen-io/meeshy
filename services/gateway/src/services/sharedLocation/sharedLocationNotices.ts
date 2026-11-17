@@ -53,6 +53,12 @@ async function peopleById(prisma: SharedLocationNoticesDb, ids: readonly string[
   return new Map(rows.map((row) => [row.id, row]));
 }
 
+/** La durée en heures pleines (« Pendant 8 h »), sinon en minutes (« Pendant 10 min »). */
+const startedBody = (lang: string, minutes: number): string =>
+  minutes % 60 === 0
+    ? notificationString(lang, 'location.startedBody', { count: minutes / 60 })
+    : notificationString(lang, 'location.startedBodyMinutes', { count: minutes });
+
 /** Un avis ou une demande qui échoue n'arrête jamais les autres. */
 const quietly = async (send: () => Promise<unknown>): Promise<boolean> => {
   try {
@@ -88,7 +94,7 @@ export function sharedLocationNoticesOf(params: {
             priority: 'normal',
             lang,
             title: `${nameOf(emitter)} ${notificationString(lang, 'location.startedAction')}`,
-            content: notificationString(lang, 'location.startedBody', { count: Math.round(notice.durationMinutes / 60) }),
+            content: startedBody(lang, notice.durationMinutes),
             actor: actorOf(emitter),
             context: {},
             metadata,

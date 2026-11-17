@@ -47,7 +47,8 @@ type Params = {
   /**
    * L'accord de batterie des partages de position en cours (#19204) : pour chaque émetteur
    * (minuscules), les lecteurs (minuscules) à qui son partage l'accorde. Il vaut consentement de
-   * l'émetteur pour `device.battery` seulement — la loi reste le plafond, la coupure globale ferme.
+   * l'émetteur pour `device.battery` seulement — la loi reste le plafond, la coupure globale ferme,
+   * et le fantôme global (#19203), qui met le partage en pause, met sa batterie en pause aussi.
    */
   readonly sharedGrants?: ReadonlyMap<string, ReadonlySet<string>>;
 };
@@ -58,7 +59,7 @@ const readerOf = (params: Params, otherId: string): string => (params.subjectIs 
 async function accountsOf(prisma: BatteryDb, ids: readonly string[]) {
   const rows = await prisma.user.findMany({
     where: { id: { in: [...new Set(ids)] } },
-    select: { id: true, batterySharingDisabledAt: true, ...ACCOUNT_STATE_SELECT },
+    select: { id: true, batterySharingDisabledAt: true, locationGhostAt: true, ...ACCOUNT_STATE_SELECT },
   });
   return new Map(rows.map((row) => [row.id, row]));
 }
@@ -110,8 +111,9 @@ export async function batteryAccessAmong(prisma: BatteryDb, params: Params): Pro
     subjectIs: params.subjectIs,
     now: params.now,
     consentOf: (id) => {
-      const globallyDisabled = Boolean(accounts.get(emitterOf(scoped, id))?.batterySharingDisabledAt);
-      if (!globallyDisabled && grantedBySharedLocation(scoped, feature, id)) return 'granted';
+      const emitter = accounts.get(emitterOf(scoped, id));
+      const globallyDisabled = Boolean(emitter?.batterySharingDisabledAt);
+      if (!globallyDisabled && emitter?.locationGhostAt == null && grantedBySharedLocation(scoped, feature, id)) return 'granted';
       return resolveEmitterConsent({ feature, stored: stored.get(id), effectiveLevel: levelOf(id), globallyDisabled });
     },
   });

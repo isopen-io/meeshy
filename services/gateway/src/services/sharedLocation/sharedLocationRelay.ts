@@ -434,7 +434,7 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     await drainRetiring(deps, emitterId, after.served);
     if ((await currentSharedLocationSession(deps.cache, emitterId)) === state.sessionId) {
       await noteServedEnds(deps, emitterId, state, after.served);
-      if (parsed.data.notifyRecipients === true) await notifyNewcomers(deps, emitterId, { state, previous, served: after.served, durationMinutes: parsed.data.durationMinutes });
+      if (parsed.data.notifyRecipients === true) await notifyNewcomers(deps, emitterId, { state, previous, served: after.served });
       await refreshBatteryOf(deps, emitterId, [previous, state]);
       return ack;
     }
@@ -524,18 +524,23 @@ async function noteServedEnds(deps: SharedLocationRelayDeps, emitterId: string, 
 
 /**
  * Prévient (#19204) chaque destinataire SERVI qui n'était pas un destinataire vivant du partage
- * remplacé : remplacer pour ajouter une personne ne réveille pas les autres. Jamais bloquant.
+ * remplacé : remplacer pour ajouter une personne ne réveille pas les autres. La durée annoncée est
+ * celle du lecteur — son échéance propre quand elle précède le terme. Jamais bloquant.
  */
 async function notifyNewcomers(
   deps: SharedLocationRelayDeps,
   emitterId: string,
-  params: { readonly state: SharedLocationState; readonly previous: SharedLocationState | null; readonly served: readonly string[]; readonly durationMinutes: number },
+  params: { readonly state: SharedLocationState; readonly previous: SharedLocationState | null; readonly served: readonly string[] },
 ): Promise<void> {
   if (!deps.notifyStarted) return;
-  const before = new Set((params.previous ? liveRecipients(params.previous, deps.now()) : []).map((recipient) => recipient.userId.toLowerCase()));
+  const now = deps.now();
+  const before = new Set((params.previous ? liveRecipients(params.previous, now) : []).map((recipient) => recipient.userId.toLowerCase()));
   const notices = params.served
     .filter((readerId) => !before.has(readerId.toLowerCase()))
-    .map((readerId) => ({ emitterId, readerId, durationMinutes: params.durationMinutes, expiresAt: deadlineOf(params.state, readerId) }));
+    .map((readerId) => {
+      const expiresAt = deadlineOf(params.state, readerId);
+      return { emitterId, readerId, durationMinutes: Math.max(1, Math.ceil((Date.parse(expiresAt) - now) / 60_000)), expiresAt };
+    });
   if (notices.length === 0) return;
   await deps.notifyStarted(notices).catch(() => undefined);
 }
