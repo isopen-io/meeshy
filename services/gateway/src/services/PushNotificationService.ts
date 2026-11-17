@@ -23,6 +23,7 @@ import {
 import { applyUserPreferences, isCallPushDataType } from './push-delivery-preferences';
 import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
 import { apnsThreadIdOf } from './notifications/push-thread';
+import { isBadgeSyncPush } from './notifications/badgeSyncPush';
 import { sendViaPushToTalk, type PushToTalkTokenRecord } from './talkie/pushToTalkApns';
 import {
   APNS_PERMANENT_REASONS,
@@ -469,8 +470,10 @@ export class PushNotificationService {
       // client rende sa notification d'appel dans la langue résolue de
       // l'utilisateur (Prisme).
       const isCallPush = isCallPushDataType(payload.data?.type);
+      const isBadgeOnly = isBadgeSyncPush(payload);
       const dataOnly =
         payload.silent === true ||
+        isBadgeOnly ||
         ((tokenRecord.platform === 'android' || tokenRecord.platform === 'web') && isCallPush) ||
         (tokenRecord.platform === 'android' && payload.dataOnlyOnAndroid === true);
 
@@ -493,7 +496,14 @@ export class PushNotificationService {
           };
 
       // Platform-specific options
-      if (tokenRecord.platform === 'ios' && payload.silent === true) {
+      if (tokenRecord.platform === 'ios' && isBadgeOnly) {
+        // #18910 — la pastille seule : `aps = { badge }`, ni alert ni son ni mutable-content ni
+        // content-available ; `alert` + priorité 5 en en-têtes, remplaçable par `collapse-id`.
+        message.apns = {
+          headers: { 'apns-push-type': 'alert', 'apns-priority': '5' },
+          payload: { aps: { badge: payload.badge } },
+        };
+      } else if (tokenRecord.platform === 'ios' && payload.silent === true) {
         // Background pur, miroir exact du chemin APNs direct : `content-available`
         // seul, sans alert ni mutable-content (Apple rejette la combinaison),
         // `apns-push-type: background` + priorité 5 en en-têtes.
@@ -675,7 +685,13 @@ export class PushNotificationService {
       const notification = new apn.Notification();
 
       const isSilent = payload.silent === true && !isVoIP;
-      if (isSilent) {
+      const isBadgeOnly = isBadgeSyncPush(payload);
+      if (isBadgeOnly) {
+        // #18910 — `aps = { badge }` seul : ni alert, ni son (une pastille ne montre rien).
+        notification.alert = undefined as never;
+        notification.sound = undefined as never;
+        notification.badge = payload.badge as number;
+      } else if (isSilent) {
         // Explicitly strip every user-visible field — a background push that
         // carries an alert/sound/badge is rejected or displayed by APNs.
         notification.alert = undefined as never;
@@ -707,6 +723,9 @@ export class PushNotificationService {
       if (isVoIP) {
         notification.pushType = 'voip';
         notification.priority = 10; // Immediate delivery for calls
+      } else if (isBadgeOnly) {
+        notification.pushType = 'alert';
+        notification.priority = 5;
       } else if (isSilent) {
         // Apple requires `apns-push-type: background` + priority 5 for pure
         // content-available pushes; priority 10 on a background push is
@@ -740,7 +759,7 @@ export class PushNotificationService {
       // mutable-content routes ALERT pushes through the Notification Service
       // Extension; it has no meaning on a background push (Apple rejects the
       // combination), so only set it on visible notifications.
-      if (!isSilent) {
+      if (!isSilent && !isBadgeOnly) {
         notification.mutableContent = true;
       }
 
@@ -753,7 +772,7 @@ export class PushNotificationService {
       // (`PushDeliveryReceiptService.ack`). Without this, an offline recipient
       // never triggers `mark-as-received` and the sender's checkmark stays at
       // ✓ until the recipient manually foregrounds the app.
-      if (!isVoIP) {
+      if (!isVoIP && !isBadgeOnly) {
         notification.contentAvailable = true;
       }
 

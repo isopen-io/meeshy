@@ -57,6 +57,7 @@ import { filterMutedRecipients } from './mutedRecipients';
 import { computeConversationUnreadBadge } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
 import { retractNotificationRows } from './retractNotificationRows';
+import { BadgeSyncCoalescer, pushedBannersReadSince, sendBadgeSyncToIos } from './readElsewhereSync';
 import { sendNotificationRevocationPushes } from './notificationRevocationPush';
 import { actorSubjectReplacementPushField, pushReachedADevice, reproducedPushData, staleBannerOf } from './reproducedNotificationPush';
 import { reproducedPushAudience } from './reproducedPushAudience';
@@ -3013,6 +3014,7 @@ export class NotificationService {
     }
 
     try {
+      const readAt = new Date().toISOString();
       const result = await (this.prisma as unknown as {
         $runCommandRaw: (cmd: Record<string, unknown>) => Promise<{ nModified?: number }>;
       }).$runCommandRaw({
@@ -3023,7 +3025,7 @@ export class NotificationService {
             isRead: false,
             [`context.${contextKey}`]: contextValue,
           },
-          u: { $set: { isRead: true, readAt: { $date: new Date().toISOString() } } },
+          u: { $set: { isRead: true, readAt: { $date: readAt } } },
           multi: true,
         }],
       });
@@ -3037,6 +3039,7 @@ export class NotificationService {
         this.announceReadBulk(userId, { kind: 'context', contextKey, contextValue });
         // Rafraîchir les compteurs côté client (cloche + badge) en temps réel.
         this.emitCountsUpdate(userId).catch(() => {});
+        if (contextKey === 'conversationId') await this.settleDevicesAfterRead(userId, contextValue, readAt);
       }
 
       return count;
@@ -3049,6 +3052,22 @@ export class NotificationService {
       });
       return 0;
     }
+  }
+
+  private readonly badgeSync = new BadgeSyncCoalescer();
+
+  /**
+   * #18910 — une conversation lue défait aussi ce que le TÉLÉPHONE affiche : les bannières lues dont un push est
+   * parti sont révoquées (Android n'a pas de pastille sans bannière), et l'iPhone reçoit un push « badge seul »
+   * avec le total recalculé, coalescé par compte (`BadgeSyncCoalescer`).
+   */
+  private async settleDevicesAfterRead(userId: string, conversationId: string, since: string): Promise<void> {
+    this.revokeDeliveredPushes(await pushedBannersReadSince(this.prisma, { userId, conversationId, since }));
+    if (!this.badgeSync.claim(userId)) return;
+    this.queueDeviceWork(async () => {
+      this.badgeSync.release(userId);
+      await sendBadgeSyncToIos({ prisma: this.prisma, pushService: this.pushService, userId });
+    });
   }
 
   /**

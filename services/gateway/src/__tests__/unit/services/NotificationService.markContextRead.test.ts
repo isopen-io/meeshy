@@ -64,7 +64,8 @@ describe('NotificationService — marquage par contexte en 1 requête (iter 35 F
 
       expect(prisma.notification.findMany).not.toHaveBeenCalled();
       expect(prisma.notification.updateMany).not.toHaveBeenCalled();
-      expect(prisma.$runCommandRaw).toHaveBeenCalledTimes(1);
+      // UN SEUL update (#18910 : la lecture des bannières à révoquer est un `find` borné, après l'écriture).
+      expect(prisma.$runCommandRaw.mock.calls.filter(([command]: [Record<string, unknown>]) => 'update' in command)).toHaveLength(1);
       expect(prisma.$runCommandRaw).toHaveBeenCalledWith({
         update: 'Notification',
         updates: [{
