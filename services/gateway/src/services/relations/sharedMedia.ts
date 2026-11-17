@@ -30,7 +30,12 @@ import {
   messageProtectionWhereExclusion,
 } from '../attachments/protectedAttachmentFilter';
 
-export const SHARED_MEDIA_KINDS = ['image', 'video', 'audio', 'file'] as const;
+/** Les types d'une PIÈCE JOINTE ; les liens (`sharedLinks.ts`) se lisent dans le texte des messages. */
+export const SHARED_ATTACHMENT_KINDS = ['image', 'video', 'audio', 'file'] as const;
+export type SharedAttachmentKind = (typeof SHARED_ATTACHMENT_KINDS)[number];
+
+/** Les onglets de la planche, dans son ordre : Photos · Vidéos · Audio · Liens · Fichiers. */
+export const SHARED_MEDIA_KINDS = ['image', 'video', 'audio', 'link', 'file'] as const;
 export type SharedMediaKind = (typeof SHARED_MEDIA_KINDS)[number];
 
 export const isSharedMediaKind = (value: unknown): value is SharedMediaKind =>
@@ -40,18 +45,18 @@ export const SHARED_MEDIA_COUNT_SCAN = 1000;
 const MEMBERSHIP_LIMIT = 5000;
 const E2EE_MODE = 'e2ee';
 
-const MIME_PREFIX: Readonly<Record<Exclude<SharedMediaKind, 'file'>, string>> = {
+const MIME_PREFIX: Readonly<Record<Exclude<SharedAttachmentKind, 'file'>, string>> = {
   image: 'image/',
   video: 'video/',
   audio: 'audio/',
 };
 
-export const sharedMediaKindOf = (mimeType: string): SharedMediaKind => {
+export const sharedMediaKindOf = (mimeType: string): SharedAttachmentKind => {
   const found = (Object.keys(MIME_PREFIX) as Array<keyof typeof MIME_PREFIX>).find((kind) => mimeType.startsWith(MIME_PREFIX[kind]));
   return found ?? 'file';
 };
 
-const KIND_WHERE: Readonly<Record<SharedMediaKind, Record<string, unknown>>> = {
+const KIND_WHERE: Readonly<Record<SharedAttachmentKind, Record<string, unknown>>> = {
   image: { mimeType: { startsWith: 'image/' } },
   video: { mimeType: { startsWith: 'video/' } },
   audio: { mimeType: { startsWith: 'audio/' } },
@@ -60,7 +65,7 @@ const KIND_WHERE: Readonly<Record<SharedMediaKind, Record<string, unknown>>> = {
   },
 };
 
-const kindWhere = (kind: SharedMediaKind | undefined): Record<string, unknown> => (kind ? KIND_WHERE[kind] : {});
+const kindWhere = (kind: SharedAttachmentKind | undefined): Record<string, unknown> => (kind ? KIND_WHERE[kind] : {});
 
 const SHARED_MEDIA_SELECT = {
   id: true,
@@ -122,7 +127,7 @@ type SharedMediaCountRow = Pick<SharedMediaRow, 'messageId' | 'mimeType' | 'isEn
 
 export type SharedMediaItem = {
   readonly id: string;
-  readonly kind: SharedMediaKind;
+  readonly kind: SharedAttachmentKind;
   readonly messageId: string | null;
   readonly conversationId: string;
   readonly originalName: string;
@@ -145,7 +150,7 @@ export type SharedMediaPage = {
   readonly pagination: { readonly limit: number; readonly hasMore: boolean; readonly nextCursor: string | null };
 };
 
-const emptyCounts = (): Record<SharedMediaKind, number> => ({ image: 0, video: 0, audio: 0, file: 0 });
+const emptyCounts = (): Record<SharedMediaKind, number> => ({ image: 0, video: 0, audio: 0, link: 0, file: 0 });
 
 const emptyPage = (limit: number): SharedMediaPage => ({
   counts: emptyCounts(),
@@ -155,7 +160,9 @@ const emptyPage = (limit: number): SharedMediaPage => ({
 });
 
 /** Les conversations lisibles par le lecteur ET où la cible est active, hors bout en bout. */
-async function sharedScope(prisma: PrismaClient, viewerId: string, targetId: string) {
+export type SharedScope = { readonly conversationIds: readonly string[]; readonly historyFloor: Record<string, unknown> };
+
+export async function sharedScope(prisma: PrismaClient, viewerId: string, targetId: string): Promise<SharedScope | null> {
   const mine = await prisma.participant.findMany({
     where: { userId: viewerId, isActive: true },
     select: { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
@@ -184,12 +191,20 @@ async function sharedScope(prisma: PrismaClient, viewerId: string, targetId: str
   return { conversationIds, historyFloor: historyFloorClause(conversationIds, floors) };
 }
 
-const hiddenByReader = (row: SharedMediaCountRow, hiding: ReadonlyMap<string, PersonalHistoryHiding>): boolean => {
-  const own = row.message ? hiding.get(row.message.conversationId) : undefined;
-  if (!own || !row.message) return false;
-  if (row.messageId && own.hiddenMessageIds.includes(row.messageId)) return true;
-  return own.clearHistoryBefore !== null && row.message.createdAt < own.clearHistoryBefore;
+/** Le masquage personnel du lecteur (supprimer pour moi, effacer l'historique). */
+export const hiddenFromReader = (
+  hiding: ReadonlyMap<string, PersonalHistoryHiding>,
+  message: { readonly id: string | null; readonly conversationId: string; readonly createdAt: Date },
+): boolean => {
+  const own = hiding.get(message.conversationId);
+  if (!own) return false;
+  if (message.id && own.hiddenMessageIds.includes(message.id)) return true;
+  return own.clearHistoryBefore !== null && message.createdAt < own.clearHistoryBefore;
 };
+
+const hiddenByReader = (row: SharedMediaCountRow, hiding: ReadonlyMap<string, PersonalHistoryHiding>): boolean =>
+  row.message !== null &&
+  hiddenFromReader(hiding, { id: row.messageId, conversationId: row.message.conversationId, createdAt: row.message.createdAt });
 
 const servable = (row: SharedMediaCountRow, hiding: ReadonlyMap<string, PersonalHistoryHiding>): boolean =>
   row.message !== null && !row.isEncrypted && !isProtectedAttachmentRow(row) && !hiddenByReader(row, hiding);
@@ -215,21 +230,22 @@ const itemOf = (row: SharedMediaRow): SharedMediaItem => ({
 export async function sharedMedia(
   prisma: PrismaClient,
   params: {
+    readonly scope?: SharedScope | null;
     readonly viewerId: string;
     readonly targetId: string;
-    readonly kind?: SharedMediaKind;
+    readonly kind?: SharedAttachmentKind;
     readonly cursor?: string;
     readonly limit: number;
   },
 ): Promise<SharedMediaPage> {
-  const scope = await sharedScope(prisma, params.viewerId, params.targetId);
+  const scope = params.scope === undefined ? await sharedScope(prisma, params.viewerId, params.targetId) : params.scope;
   if (!scope) return emptyPage(params.limit);
 
   const baseWhere = {
     isViewOnce: false,
     isBlurred: false,
     message: {
-      conversationId: { in: scope.conversationIds },
+      conversationId: { in: [...scope.conversationIds] },
       deletedAt: null,
       ...scope.historyFloor,
       ...messageProtectionWhereExclusion(),
@@ -253,7 +269,7 @@ export async function sharedMedia(
       orderBy: { createdAt: 'desc' },
       take: SHARED_MEDIA_COUNT_SCAN,
     }) as unknown as Promise<SharedMediaCountRow[]>,
-    loadPersonalHistoryHidingByConversation(prisma, { userId: params.viewerId, conversationIds: scope.conversationIds }),
+    loadPersonalHistoryHidingByConversation(prisma, { userId: params.viewerId, conversationIds: [...scope.conversationIds] }),
   ]);
 
   const counts = window
