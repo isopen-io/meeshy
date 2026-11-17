@@ -562,9 +562,11 @@ export function registerConversationDetailRoute(
       const charge: Record<string, unknown> = { ...conversationData };
       if (gatedParticipants !== undefined) charge.participants = membersServedToViewer(gatedParticipants, authRequest.authContext);
       if (sertTitre) charge.title = displayTitle;
+      // `readingMode` ne sort pas d'ici (sa surface est `GET /user-preferences/conversations/:id`) ;
+      // `clearHistoryBefore` sort depuis #18925, comme sur la ligne de liste : même lecteur, même enveloppe.
       if (sertPreferences) {
         charge.userPreferences = ((rawPreferences ?? []) as ReadonlyArray<Record<string, unknown>>).map(
-          ({ clearHistoryBefore: _clear, readingMode: _mode, ...served }) => served
+          ({ readingMode: _mode, ...served }) => served
         );
       }
       if (sertEffectif) {
