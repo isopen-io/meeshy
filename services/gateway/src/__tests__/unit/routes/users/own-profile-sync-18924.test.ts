@@ -23,7 +23,7 @@ import type { AddressInfo } from 'net';
 import { Server as SocketIOServer } from 'socket.io';
 import { io as connect, type Socket as ClientSocket } from 'socket.io-client';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import { profileUpdatedEventDataSchema, type ProfileUpdatedEventData } from '@meeshy/shared/types/own-profile-sync';
+import { OWN_PROFILE_FIELDS, profileUpdatedEventDataSchema, type ProfileUpdatedEventData } from '@meeshy/shared/types/own-profile-sync';
 
 jest.mock('../../../../utils/logger', () => ({
   ...(jest.requireActual('../../../../utils/logger') as object),
@@ -59,7 +59,7 @@ jest.mock('../../../../routes/auth/types', () => ({
 }));
 
 import { updateUserAvatar, updateUserBanner, updateUserProfile, updateUsername } from '../../../../routes/users/profile';
-import { ownProfileUpdatedPayload } from '../../../../routes/users/own-profile-sync';
+import { ownProfileSnapshotChanged, ownProfileUpdatedPayload } from '../../../../routes/users/own-profile-sync';
 
 const ALICE = '507f1f77bcf86cd799439011';
 const BOB = '507f1f77bcf86cd799439022';
@@ -217,6 +217,24 @@ describe('#18924 — la charge PROPRE de mon profil : l’instantané de ce que 
   });
 });
 
+describe('#18924 — « a changé » : la ligne écrite comparée à la ligne lue AVANT l’écriture, sur les neuf champs de l’instantané', () => {
+  it.each(OWN_PROFILE_FIELDS.map((field) => [field]))('un %s différent est un changement', (field) => {
+    expect(ownProfileSnapshotChanged(aliceRow(), aliceRow({ [field]: 'autre-valeur' }))).toBe(true);
+  });
+
+  it('les neuf champs identiques ne sont pas un changement, quoi que la ligne porte d’autre — et un champ absent vaut null', () => {
+    const { regionalLanguage: _absent, ...withoutRegional } = aliceRow();
+
+    expect(ownProfileSnapshotChanged(aliceRow(), aliceRow({ bio: 'Nouvelle bio', city: 'Paris', updatedAt: new Date() }))).toBe(false);
+    expect(ownProfileSnapshotChanged(withoutRegional, aliceRow())).toBe(false);
+  });
+
+  it('sans ligne lue avant l’écriture, rien ne prouve un changement : rien ne part', () => {
+    expect(ownProfileSnapshotChanged(null, aliceRow())).toBe(false);
+    expect(ownProfileSnapshotChanged(undefined, aliceRow())).toBe(false);
+  });
+});
+
 describe('#18924 — PATCH /users/me : une AUTRE socket du compte reçoit le changement, un partenaire jamais', () => {
   it('changer sa langue atteint l’autre appareil, avec le Prisme entier', async () => {
     const { io, clients } = await liveSockets([ALICE, ALICE, BOB]);
@@ -294,6 +312,56 @@ describe('#18924 — PATCH /users/me : une AUTRE socket du compte reçoit le cha
     const res = await app.inject({ method: 'PATCH', url: '/users/me', payload: { systemLanguage: 'en' } });
 
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('#18924 — PATCH /users/me ne diffuse que ce qui a CHANGÉ : la ligne lue avant l’écriture fait foi', () => {
+  it('le corps de l’iOS publié — prénom, nom et nom affiché renvoyés INCHANGÉS, et une bio — ne diffuse rien', async () => {
+    const { io, clients } = await liveSockets([ALICE, ALICE]);
+    const [, aliceOther] = clients;
+    const aliceReceived = recordProfileUpdates(aliceOther!);
+    const { app } = await buildApp({ route: updateUserProfile, served: aliceRow({ bio: 'Nouvelle bio' }), io });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { firstName: 'Alice', lastName: 'Cooper', displayName: 'Alice Cooper', bio: 'Nouvelle bio' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    await settle(150);
+    expect(aliceReceived()).toEqual([]);
+    await app.close();
+  });
+
+  it('une langue réécrite à l’identique ne diffuse rien', async () => {
+    const { io, clients } = await liveSockets([ALICE, ALICE]);
+    const [, aliceOther] = clients;
+    const aliceReceived = recordProfileUpdates(aliceOther!);
+    const { app } = await buildApp({ route: updateUserProfile, served: aliceRow(), io });
+
+    const res = await app.inject({ method: 'PATCH', url: '/users/me', payload: { systemLanguage: 'fr' } });
+
+    expect(res.statusCode).toBe(200);
+    await settle(150);
+    expect(aliceReceived()).toEqual([]);
+    await app.close();
+  });
+
+  it('des noms renvoyés inchangés n’éteignent pas une langue qui change : l’instantané part', async () => {
+    const { io, clients } = await liveSockets([ALICE, ALICE]);
+    const [, aliceOther] = clients;
+    const { app } = await buildApp({ route: updateUserProfile, served: aliceRow({ systemLanguage: 'en' }), io });
+    const received = nextProfileUpdate(aliceOther!);
+
+    await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { firstName: 'Alice', lastName: 'Cooper', displayName: 'Alice Cooper', systemLanguage: 'en' },
+    });
+
+    expect((await received).profile).toMatchObject({ systemLanguage: 'en', displayName: 'Alice Cooper' });
     await app.close();
   });
 });

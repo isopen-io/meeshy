@@ -42,7 +42,7 @@ import { refreshParticipantNameSnapshots } from '../../services/participantNameS
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
-import { announceOwnProfileUpdated } from './own-profile-sync';
+import { announceOwnProfileUpdated, OWN_PROFILE_SELECT, ownProfileSnapshotChanged } from './own-profile-sync';
 
 /**
  * Le seuil d'une bio qui « compte » (#8959) : le MÊME que l'anneau de
@@ -188,18 +188,21 @@ export async function updateUserProfile(fastify: FastifyInstance) {
 
       // UNE lecture de la ligne avant l'écriture, ouverte seulement quand un
       // champ du corps en a besoin : un NOM (la borne de #13825 ne juge que les
-      // noms CHANGÉS, il faut donc la valeur stockée) ou un des cinq champs du
+      // noms CHANGÉS, il faut donc la valeur stockée), un des cinq champs du
       // taux de complétion (#3688 — displayName, bio ici ; avatar a sa propre
-      // route). Les langues seules n'ouvrent aucune requête.
+      // route) ou une LANGUE (#18924 — `profile:updated` ne part que si
+      // l'écriture CHANGE l'instantané, comparé à cette ligne). Un corps qui ne
+      // touche ni nom, ni bio, ni langue n'ouvre aucune requête.
       const touchesName = body.firstName !== undefined || body.lastName !== undefined || body.displayName !== undefined;
+      const touchesLanguage =
+        body.systemLanguage !== undefined ||
+        body.regionalLanguage !== undefined ||
+        body.customDestinationLanguage !== undefined;
       const touchesCompletion = body.displayName !== undefined || body.bio !== undefined;
-      const current = touchesName || touchesCompletion
+      const current = touchesName || touchesLanguage || touchesCompletion
         ? await fastify.prisma.user.findUnique({
             where: { id: userId },
-            select: {
-              firstName: true, lastName: true, displayName: true,
-              avatar: true, bio: true, phoneNumber: true, email: true,
-            },
+            select: { ...OWN_PROFILE_SELECT, bio: true, phoneNumber: true, email: true },
           })
         : null;
 
@@ -313,11 +316,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // B3 (5.3) — un changement de langue doit rafraîchir le snapshot
       // `resolvedLanguages` des sockets connectés du user, sinon SOCKET_LANG_FILTER
       // continue de filtrer sur l'ancienne langue jusqu'à reconnexion. Best-effort.
-      const langChanged =
-        body.systemLanguage !== undefined ||
-        body.regionalLanguage !== undefined ||
-        body.customDestinationLanguage !== undefined;
-      if (langChanged) {
+      if (touchesLanguage) {
         // #9708 — les langues cibles des conversations de ce compte changent.
         announceConversationLanguageChange({ kind: 'reader-languages', userId: userId! });
         fastify.socketIOHandler?.getManager?.()?.refreshUserResolvedLanguages(userId!, {
@@ -339,11 +338,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // client appliquer SON résolveur (`getUserDisplayName` web,
       // `APIConversationUser.name` iOS) au lieu d'en fabriquer une quatrième
       // copie côté serveur.
-      const nameChanged =
-        body.firstName !== undefined ||
-        body.lastName !== undefined ||
-        body.displayName !== undefined;
-      if (nameChanged) {
+      if (touchesName) {
         const publicChanges = {
           displayName: updatedUser.displayName,
           firstName: updatedUser.firstName,
@@ -364,9 +359,11 @@ export async function updateUserProfile(fastify: FastifyInstance) {
 
       // #18924 — MES autres appareils : la charge PROPRE (langues comprises), sur
       // `user:<moi>` seulement. Les partenaires ont `user:updated` ci-dessus, et sa
-      // charge publique ; une écriture qui ne touche aucun champ de l'instantané
-      // (bio, ville, réglages) ne diffuse rien.
-      if (langChanged || nameChanged) {
+      // charge publique. Seule une écriture qui CHANGE l'instantané diffuse — la
+      // ligne écrite comparée à la ligne lue avant elle : une bio, une ville, un
+      // réglage, ou des noms renvoyés à l'identique par l'iOS publié ne diffusent
+      // rien.
+      if (ownProfileSnapshotChanged(current, updatedUser)) {
         announceOwnProfileUpdated(fastify, updatedUser);
       }
 
