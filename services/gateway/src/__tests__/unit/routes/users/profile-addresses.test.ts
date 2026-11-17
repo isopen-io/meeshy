@@ -237,14 +237,14 @@ describe('lecture, modification, ordre et suppression : toujours les siennes', (
     expect(linkUpdates).toContainEqual({ token: 'tokA', isActive: true });
   });
 
-  it('activer le compteur crée un lien ; le couper désactive et détache', async () => {
+  it('activer le compteur crée un lien ; le couper l’efface et détache', async () => {
     rows = [adresse({ id: 'a' })];
     const app = await monter();
     const on = await app.inject({ method: 'PATCH', url: '/api/v1/users/me/addresses/a', payload: { countClicks: true } });
     expect(on.json().data.trackedPath).toBe('/l/tok1');
     const off = await app.inject({ method: 'PATCH', url: '/api/v1/users/me/addresses/a', payload: { countClicks: false } });
     expect('trackedPath' in off.json().data).toBe(false);
-    expect(linkUpdates).toContainEqual({ token: 'tok1', isActive: false });
+    expect(links.tok1).toBeUndefined();
     expect(rows[0].trackingToken).toBeNull();
   });
 
@@ -258,13 +258,13 @@ describe('lecture, modification, ordre et suppression : toujours les siennes', (
     expect(linkUpdates).toHaveLength(0);
   });
 
-  it('supprime la sienne et désactive son lien de suivi', async () => {
+  it('supprime la sienne et efface son lien de suivi', async () => {
     rows = [adresse({ id: 'a', trackingToken: 'tokA' })];
     const app = await monter();
     const res = await app.inject({ method: 'DELETE', url: '/api/v1/users/me/addresses/a' });
     expect(res.statusCode).toBe(200);
     expect(rows).toHaveLength(0);
-    expect(linkUpdates).toContainEqual({ token: 'tokA', isActive: false });
+    expect(links.tokA).toBeUndefined();
   });
 
   it('réordonne : la liste d’ids doit être exactement l’ensemble de ses adresses', async () => {

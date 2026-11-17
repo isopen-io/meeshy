@@ -34,9 +34,32 @@ export async function ownedAddressLinks(
 export const leadsTo = (link: AddressLink | undefined, url: string): link is AddressLink => link?.target === url;
 
 /**
+ * Efface les liens de suivi d'adresses de ce propriétaire : le `TrackingLink` (URL, titre) et les
+ * clics de ses lecteurs (IP, agent, ville). Un jeton repris par un autre compte n'est pas touché.
+ * C'est le SEUL sort d'un lien dont l'adresse part ou cesse de compter : un lien seulement
+ * désactivé garderait l'URL au-delà de la purge du compte, qui ne le retrouverait plus.
+ */
+export async function eraseAddressLinks(
+  prisma: Pick<PrismaClient, 'trackingLink' | 'trackingLinkClick'>,
+  ownerId: string,
+  tokens: ReadonlyArray<string>,
+): Promise<void> {
+  if (tokens.length === 0) return;
+  const links = await prisma.trackingLink.findMany({
+    where: { token: { in: [...tokens] }, createdBy: ownerId },
+    select: { id: true },
+    take: tokens.length,
+  });
+  const ids = links.map((link) => link.id);
+  if (ids.length === 0) return;
+  await prisma.trackingLinkClick.deleteMany({ where: { trackingLinkId: { in: ids } } });
+  await prisma.trackingLink.deleteMany({ where: { id: { in: ids } } });
+}
+
+/**
  * Purge d'un compte supprimé (`purgeAccountIsolatedData`) : ses adresses partent, et avec elles
- * TOUTE copie de leur URL — le `TrackingLink` (URL, titre, propriétaire) et les clics de ses
- * lecteurs (IP, agent, ville). Seuls les liens de SES adresses sont visés : ses autres liens
+ * TOUTE copie de leur URL. Les liens des adresses déjà retirées sont partis avec elles
+ * (`eraseAddressLinks`) ; seuls les liens de SES adresses sont visés : ses autres liens
  * (messages, posts) relèvent de leurs propres chemins.
  */
 export async function eraseProfileAddressesOf(
@@ -44,19 +67,7 @@ export async function eraseProfileAddressesOf(
   userId: string,
 ): Promise<number> {
   const rows = await prisma.profileAddress.findMany({ where: { userId }, select: { trackingToken: true } });
-  const tokens = rows.flatMap((row) => (row.trackingToken ? [row.trackingToken] : []));
-  if (tokens.length > 0) {
-    const links = await prisma.trackingLink.findMany({
-      where: { token: { in: tokens }, createdBy: userId },
-      select: { id: true },
-      take: tokens.length,
-    });
-    const ids = links.map((link) => link.id);
-    if (ids.length > 0) {
-      await prisma.trackingLinkClick.deleteMany({ where: { trackingLinkId: { in: ids } } });
-      await prisma.trackingLink.deleteMany({ where: { id: { in: ids } } });
-    }
-  }
+  await eraseAddressLinks(prisma, userId, rows.flatMap((row) => (row.trackingToken ? [row.trackingToken] : [])));
   const { count } = await prisma.profileAddress.deleteMany({ where: { userId } });
   return count;
 }

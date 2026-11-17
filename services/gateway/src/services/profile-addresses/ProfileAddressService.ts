@@ -2,8 +2,9 @@
  * Les adresses personnelles d'une fiche (#18863) : écriture du propriétaire, lecture avec clics.
  *
  * Le compteur n'a pas de modèle propre : une adresse « qui compte » désigne un `TrackingLink`
- * (`/l/<token>`, le MÊME que « Mes liens »). Une adresse masquée ou supprimée DÉSACTIVE son lien :
- * hors audience, elle n'est ni servie ni comptée. Aucune règle de lecture par cercle ici — elle
+ * (`/l/<token>`, le MÊME que « Mes liens »). Une adresse masquée DÉSACTIVE son lien : hors
+ * audience, elle n'est ni servie ni comptée. Une adresse supprimée, ou qui cesse de compter,
+ * EFFACE son lien et ses clics : rien de son URL ne survit à elle, ni à la purge du compte. Aucune règle de lecture par cercle ici — elle
  * vit dans `@meeshy/shared/utils/profile-addresses`.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -17,7 +18,7 @@ import {
 } from '@meeshy/shared/utils/profile-addresses';
 import { TrackingTargetCarriesEmailSecretError } from '../tracking-link-target';
 import { TrackingLinkService } from '../TrackingLinkService';
-import { leadsTo, ownedAddressLinks, type AddressLink } from './address-links';
+import { eraseAddressLinks, leadsTo, ownedAddressLinks, type AddressLink } from './address-links';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'ProfileAddressService' });
@@ -111,10 +112,6 @@ export class ProfileAddressService {
     return link ? { token: row.trackingToken, link } : null;
   }
 
-  private async ownedToken(userId: string, row: Row): Promise<string | null> {
-    return (await this.ownedLink(userId, row))?.token ?? null;
-  }
-
   private async viewsOf(userId: string, rows: ReadonlyArray<Row>): Promise<OwnerAddress[]> {
     const links = await this.linksOf(userId, rows);
     return rows.map((row) => toOwner(row, links));
@@ -177,7 +174,7 @@ export class ProfileAddressService {
     const owned = await this.ownedLink(userId, current);
     const token = owned?.token ?? null;
     if (countClicks === false) {
-      if (token) await this.setLinkActive(token, false);
+      if (token) await eraseAddressLinks(this.prisma, userId, [token]);
       return null;
     }
     if (!token) {
@@ -194,8 +191,7 @@ export class ProfileAddressService {
   async remove(userId: string, id: string): Promise<Outcome<null>> {
     const current = (await this.prisma.profileAddress.findFirst({ where: { id, userId } })) as Row | null;
     if (!current) return refuse(404, 'ADDRESS_NOT_FOUND', 'Address not found');
-    const token = await this.ownedToken(userId, current);
-    if (token) await this.setLinkActive(token, false);
+    if (current.trackingToken) await eraseAddressLinks(this.prisma, userId, [current.trackingToken]);
     await this.prisma.profileAddress.delete({ where: { id } });
     return ok(null);
   }
