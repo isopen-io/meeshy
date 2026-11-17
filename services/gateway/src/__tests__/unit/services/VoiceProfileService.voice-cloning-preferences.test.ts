@@ -50,7 +50,17 @@ const mockPrisma = {
   userPreferences: {
     findUnique: jest.fn() as jest.Mock<any>,
     upsert: jest.fn() as jest.Mock<any>
-  }
+  },
+  $runCommandRaw: jest.fn() as jest.Mock<any>
+};
+
+// #18910 — la colonne `audio` VIVANTE : l'écriture se fusionne dans la base (pipeline `$mergeObjects`), jamais
+// relue puis réécrite entière.
+let liveAudio: Record<string, unknown> = {};
+const applyAtomicMerge = async (command: any) => {
+  const [defaults, , submitted] = command.updates[0].u[0].$set.audio.$mergeObjects;
+  liveAudio = { ...defaults.$literal, ...liveAudio, ...submitted.$literal };
+  return { n: 1, nModified: 1 };
 };
 
 const mockBroadcastToUser = jest.fn();
@@ -124,8 +134,10 @@ describe('VoiceProfileService — persistance des réglages de clonage vocal (#3
     mockZmqClient = new MockZMQClient();
     mockPrisma.user.findUnique.mockResolvedValue(createMockUser());
     mockPrisma.userVoiceModel.create.mockResolvedValue(createMockVoiceModel());
-    mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
-    mockPrisma.userPreferences.upsert.mockResolvedValue({ userId: 'user-123', audio: {} });
+    liveAudio = {};
+    mockPrisma.userPreferences.findUnique.mockImplementation(async () => ({ id: 'pref-1' }));
+    mockPrisma.userPreferences.upsert.mockResolvedValue({ id: 'pref-1' });
+    mockPrisma.$runCommandRaw.mockImplementation(applyAtomicMerge);
     service = new VoiceProfileService(mockPrisma as any, mockZmqClient as any, { log: {} } as any);
   });
 
@@ -144,27 +156,12 @@ describe('VoiceProfileService — persistance des réglages de clonage vocal (#3
     });
 
     expect(result.success).toBe(true);
-    expect(mockPrisma.userPreferences.upsert).toHaveBeenCalledWith({
-      where: { userId: 'user-123' },
-      create: {
-        userId: 'user-123',
-        audio: {
-          voiceCloningExaggeration: 0.7,
-          voiceCloningCfgWeight: 0.3,
-          voiceCloningTemperature: 1.4,
-          voiceCloningTopP: 0.95,
-          voiceCloningQualityPreset: 'high_quality'
-        }
-      },
-      update: {
-        audio: {
-          voiceCloningExaggeration: 0.7,
-          voiceCloningCfgWeight: 0.3,
-          voiceCloningTemperature: 1.4,
-          voiceCloningTopP: 0.95,
-          voiceCloningQualityPreset: 'high_quality'
-        }
-      }
+    expect(liveAudio).toEqual({
+      voiceCloningExaggeration: 0.7,
+      voiceCloningCfgWeight: 0.3,
+      voiceCloningTemperature: 1.4,
+      voiceCloningTopP: 0.95,
+      voiceCloningQualityPreset: 'high_quality'
     });
   });
 
@@ -176,8 +173,7 @@ describe('VoiceProfileService — persistance des réglages de clonage vocal (#3
       voiceCloningTopP: 2
     });
 
-    const upsertCall = (mockPrisma.userPreferences.upsert as jest.Mock).mock.calls[0][0] as any;
-    expect(upsertCall.update.audio).toEqual({
+    expect(liveAudio).toEqual({
       voiceCloningExaggeration: 1,
       voiceCloningCfgWeight: 0,
       voiceCloningTemperature: 0.1,
@@ -194,14 +190,11 @@ describe('VoiceProfileService — persistance des réglages de clonage vocal (#3
   });
 
   it('superpose les nouveaux réglages sur le document audio existant sans écraser les autres clés', async () => {
-    mockPrisma.userPreferences.findUnique.mockResolvedValue({
-      audio: { ttsEnabled: false, voiceCloningQualityPreset: 'fast' }
-    });
+    liveAudio = { ttsEnabled: false, voiceCloningQualityPreset: 'fast' };
 
     await registerWithCloningSettings({ voiceCloningQualityPreset: 'high_quality' });
 
-    const upsertCall = (mockPrisma.userPreferences.upsert as jest.Mock).mock.calls[0][0] as any;
-    expect(upsertCall.update.audio).toEqual({
+    expect(liveAudio).toEqual({
       ttsEnabled: false,
       voiceCloningQualityPreset: 'high_quality'
     });

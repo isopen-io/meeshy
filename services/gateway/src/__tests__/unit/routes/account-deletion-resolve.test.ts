@@ -73,6 +73,7 @@ function buildApp(etat: EtatDemande | null) {
       updateMany: jest.fn(async (a: unknown) => { ecritures.push({ userAnonymize: a }); return { count: 1 }; }),
     },
     userSession: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
+    pushToken: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     userVoiceModel: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     userRelation: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     pairInteractionDay: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
@@ -235,6 +236,7 @@ describe('POST … /resolve — les effets', () => {
 
     expect(res.statusCode).toBe(200);
     expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(prisma.pushToken.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     // #10492 — les liens du compte sont LUS, leurs invités révoqués, puis supprimés.
     expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith({ where: { createdBy: USER_ID }, select: { id: true } });
