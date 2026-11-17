@@ -319,6 +319,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
         await AuthServerLogout.run(token: token, using: authService)
     }
 
+    /// #18911 (ios-systeme-1) — la sortie de session d'un compte qu'on QUITTE :
+    /// les jetons push de l'installation partent d'abord, la session se ferme
+    /// ensuite. Distinct de `performServerLogoutWithRetries`, qui referme une
+    /// session que l'appareil n'a jamais adoptée (preuve par lien refusée) et
+    /// n'a donc aucun jeton à retirer — voire retirerait ceux du compte ouvert.
+    func endServerSession(token: String) async {
+        await AuthServerLogout.run(
+            token: token,
+            using: authService,
+            unregisteringPushDevice: PushDeviceIdentity.current(keychain: keychain).deviceId
+        )
+    }
+
     // MARK: - Remove Saved Account
 
     public func removeSavedAccount(userId: String) {

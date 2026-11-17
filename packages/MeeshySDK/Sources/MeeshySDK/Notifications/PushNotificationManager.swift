@@ -257,9 +257,11 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     /// deviceToken (en mémoire + Keychain). NE touche PAS `isAuthorized` —
     /// c'est la permission système iOS, device-level, persistante. La toucher
     /// au logout provoquerait un re-prompt utilisateur qu'iOS rate-limit.
-    /// Le binding user↔token côté gateway est désinscrit via
-    /// `unregisterDeviceToken()` (POST /auth/logout). Câblée depuis
-    /// `AuthManager.logout()`.
+    /// Le binding user↔token côté gateway n'est PAS retiré ici : c'est
+    /// `AuthManager.endServerSession(token:)` qui envoie `DELETE
+    /// /users/register-device-token {deviceId}` sous le jeton du compte sortant,
+    /// avant `POST /auth/logout` (#18911, ios-systeme-1). Câblée depuis
+    /// `AuthManager.leaveActiveSession`.
     public func resetSession() {
         pendingNotificationPayload = nil
         deviceToken = nil
