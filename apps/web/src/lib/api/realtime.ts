@@ -12,7 +12,7 @@ import { href } from '@/routes/route-table';
 import { outboxStore } from '@/lib/send/outbox-store';
 import { safeLocalStorage } from '@/lib/storage';
 
-import { createAccountCacheShelf, endRevokedSession, setDeviceFollower } from './account-caches';
+import { createAccountCacheShelf, endRevokedSession } from './account-caches';
 import { retireDeletedAccountLater } from './account-deleted';
 import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';
@@ -42,7 +42,7 @@ import { relaunchConversationList } from './realtime-thread-catch-up';
 import { appProfileActionDeps } from './profile-action-deps';
 import { followServedProfile } from './served-profile-session';
 import { sessionStore } from './session';
-import { endRevokedSessionWithReason, followDeviceSession, watchDeviceSession } from './session-follow';
+import { bindDeviceFollow, endRevokedSessionWithReason } from './session-follow';
 import { createRealtimeConnection, type RealtimeConnection } from './socket';
 import { typingStore } from './typing-store';
 import { resolveViewer } from './viewer';
@@ -253,8 +253,7 @@ followServedProfile(appProfileActionDeps());
    change de compte ou se déconnecte écrit `meeshy.session` : celui-ci le suit
    au lieu de le contredire (`session-follow.ts`) — et une session refusée que
    l'appareil ne tient plus le suit aussi (`account-caches.ts`). */
-setDeviceFollower(followDeviceSession);
-watchDeviceSession(sessionStore, { shelf: createAccountCacheShelf(safeLocalStorage()) });
+bindDeviceFollow(sessionStore, { shelf: createAccountCacheShelf(safeLocalStorage()) });
 /* LE CLIENT SE DÉCLARE (#9611) — appris après la première peinture, publié
    pour le flux de connexion (`auth.ts`) ; la socket le relit elle-même. */
 void import('@/lib/net/client-session').then(({ publishClientDeclaration }) => publishClientDeclaration()).catch(() => undefined);

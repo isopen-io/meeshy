@@ -1,4 +1,4 @@
-import type { AccountCacheShelf } from './account-caches';
+import { setDeviceFollower, type AccountCacheShelf } from './account-caches';
 import { heldAccountOf, heldSessionKey, SESSION_STORAGE_KEY, type SessionState, type SessionStoreApi } from './session';
 
 /**
@@ -39,8 +39,12 @@ function followedSession(current: SessionState, device: SessionState): SessionSt
  * ne revient sur l'appareil par lui.
  */
 export function followDeviceSession(store: SessionStoreApi, shelf: AccountCacheShelf): void {
-  const current = store.getState().session;
-  const next = followedSession(current, store.getState().deviceSession());
+  const state = store.getState();
+  const current = state.session;
+  const device = state.deviceSession();
+  /* Une entrée que l'appareil a refusé d'écrire n'a jamais quitté l'onglet (Q1) : rien à suivre. */
+  if (device.status === 'anonymous' && state.holdsDeviceSession()) return;
+  const next = followedSession(current, device);
   if (JSON.stringify(next) === JSON.stringify(current)) return;
   const leaving = current.status === 'authenticated' ? current.user.id : null;
   const shelvedElsewhere = leaving !== null && shelf.list().includes(leaving);
@@ -76,6 +80,23 @@ export function watchDeviceSession(
   };
 }
 
+/**
+ * LE SUIVI BRANCHÉ EN UN GESTE (#19132, audit #19352) — enregistré pour les
+ * sessions refusées AVANT de suivre l'appareil : un refus reçu pendant la pose
+ * trouve déjà qui le fait converger. Rend de quoi tout débrancher.
+ */
+export function bindDeviceFollow(
+  store: SessionStoreApi,
+  options: { readonly shelf: AccountCacheShelf; readonly target?: DeviceSessionTarget },
+): () => void {
+  setDeviceFollower(followDeviceSession);
+  const unwatch = watchDeviceSession(store, options);
+  return () => {
+    unwatch();
+    setDeviceFollower(null);
+  };
+}
+
 export type SessionEndNotes = { note(reason: string): void };
 
 /**
@@ -102,9 +123,19 @@ export function endRevokedSessionWithReason(params: {
   }
   const refused = heldSessionKey(store.getState().session);
   const stillHeld = (): boolean => heldSessionKey(store.getState().session) === refused;
+  /* Le motif sert l'écran de connexion, et seulement lui (audit #19352, N1) :
+     l'onglet y arrive quand l'appareil ne tient aucun compte — que l'autre
+     onglet ait déjà fini la même session, ou que celui-ci soit passé anonyme
+     en le suivant pendant que le motif se chargeait. */
+  const endsOnSignIn = (): boolean => {
+    const state = store.getState();
+    const deviceHoldsNoAccount = heldAccountOf(state.deviceSession()) === null;
+    if (stillHeld()) return state.holdsDeviceSession() || deviceHoldsNoAccount;
+    return heldAccountOf(state.session) === null && deviceHoldsNoAccount;
+  };
   return load()
     .then((notes) => {
-      if (stillHeld() && store.getState().holdsDeviceSession()) notes.note(reason);
+      if (endsOnSignIn()) notes.note(reason);
     })
     .catch(() => undefined)
     .then(() => {

@@ -2,7 +2,7 @@ import { forgetCallJournal } from '../calls/call-network-journal-keys';
 import { SW_ACCOUNT_CACHE_NAMES } from '../sw-caches';
 import { safeLocalStorage, type SafeStorage } from '../storage';
 
-import type { SessionStoreApi } from './session';
+import { heldAccountOf, heldSessionKey, type SessionStoreApi } from './session';
 
 /**
  * L'ÉTAGÈRE DES CACHES DE COMPTE (#8674) — le cache de requêtes d'un compte
@@ -212,8 +212,9 @@ export function forgetAccountCaches({
  * QUI SUIT L'APPAREIL (#19132) — `session-follow.ts`, chargé avec le temps
  * réel après la première peinture, s'ENREGISTRE ici (motif `typing-emit.ts`) :
  * la première peinture n'en porte que ce port. Tant qu'il ne l'a pas fait, une
- * session refusée que l'appareil ne tient plus attend — la pose du suivi relit
- * l'appareil et la fait converger.
+ * session refusée que l'appareil ne tient plus finit sans rien effacer de ce
+ * que l'appareil tient (audit #19352, S2) — la pose du suivi relit l'appareil
+ * et la fait converger.
  */
 export type DeviceFollower = (store: SessionStoreApi, shelf: AccountCacheShelf) => void;
 
@@ -247,11 +248,18 @@ export function endRevokedSession(
     state.dropAnonymous(current.guest.conversationId);
     return;
   }
+  const follow = (): void => deviceFollower?.(store, createAccountCacheShelf(deps.storage ?? safeLocalStorage()));
   if (current.status === 'authenticated' && !state.holdsDeviceSession()) {
-    deviceFollower?.(store, createAccountCacheShelf(deps.storage ?? safeLocalStorage()));
-    return;
+    follow();
+    if (heldSessionKey(store.getState().session) !== heldSessionKey(current)) return;
   }
+  /* L'onglet tient toujours la session refusée — l'appareil tient un invité,
+     ou le suivi n'est pas encore posé (audit #19352, S2) : elle finit, sans
+     effacer une entrée qu'il ne tient pas, et ce que le compte laisse sur
+     l'appareil part si l'appareil ne le tient plus. Puis l'onglet suit le
+     compte que l'appareil tient, s'il en tient un (N4). */
   const userId = current.status === 'authenticated' ? current.user.id : null;
   state.clearSession();
-  if (userId !== null) forgetAccountCaches({ userId, ...deps });
+  if (userId !== null && heldAccountOf(state.deviceSession())?.user.id !== userId) forgetAccountCaches({ userId, ...deps });
+  follow();
 }

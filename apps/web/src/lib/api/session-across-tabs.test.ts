@@ -9,7 +9,7 @@ import { createAuthClient } from './auth';
 import type { ApiResult, HttpRequest } from './http';
 import { createAppQueryClient, type StorageLike } from './query-client';
 import { createSessionStore, heldAccountOf, type SessionState, type SessionStorage, type SessionStoreApi, type SessionUser } from './session';
-import { endRevokedSessionWithReason, followDeviceSession, watchDeviceSession } from './session-follow';
+import { bindDeviceFollow, endRevokedSessionWithReason, followDeviceSession, watchDeviceSession } from './session-follow';
 
 /**
  * DEUX ONGLETS, UN APPAREIL (#19132, audit adversarial a posteriori).
@@ -183,7 +183,7 @@ describe('W1 — le 401 de l’onglet resté sur l’ancien jeton ne ferme que s
 });
 
 describe('W1 — avant que le temps réel n’ait posé le suivi (#19132)', () => {
-  test('la session refusée que l’appareil ne tient plus attend, sans rien effacer ; la pose du suivi la fait converger', () => {
+  test('la session refusée que l’appareil ne tient plus finit, sans rien effacer de ce que l’appareil tient ; la pose du suivi la fait converger (audit #19352, S2)', () => {
     const storage = fakeStorage();
     const { staleTab } = staleTabThenFreshLogin(storage);
     const erased: string[] = [];
@@ -192,7 +192,7 @@ describe('W1 — avant que le temps réel n’ait posé le suivi (#19132)', () =
 
     expect(erased).toEqual([]);
     expect(tokenOf(reloaded(storage))).toBe('jwt-recent');
-    expect(tokenOf(staleTab.getState().session)).toBe('jwt-ancien');
+    expect(staleTab.getState().session.status).toBe('anonymous');
 
     watchDeviceSession(staleTab, { target: fakeWindow(), shelf: createAccountCacheShelf(storage) });
 
@@ -471,17 +471,34 @@ describe('W1 — la révocation reçue par la socket se juge sur la session qu�
 });
 
 /**
- * LE SUIVI EST BRANCHÉ. `realtime.ts` n'est importé par aucun témoin (ses
- * abonnements de module toucheraient les singletons de toute la suite) : on
- * lit sa source, motif `served-profile-session.test.ts`.
+ * LE SUIVI EST BRANCHÉ (audit #19352 : le témoin d'avant lisait le TEXTE de
+ * `realtime.ts`). `bindDeviceFollow` est jugé sur son effet ; `realtime.ts`,
+ * qu'aucun témoin n'importe (ses abonnements de module toucheraient les
+ * singletons de toute la suite), n'a plus qu'un appel à porter.
  */
 describe('W1 — le suivi de l’appareil est branché dans l’application (#19132)', () => {
   const source = readFileSync(new URL('./realtime.ts', import.meta.url), 'utf8');
 
-  test('realtime.ts pose le suivi sur la session de l’application, et l’enregistre pour les sessions refusées, en instructions de premier niveau', () => {
-    const lines = source.split('\n');
-    expect(lines).toContain('watchDeviceSession(sessionStore, { shelf: createAccountCacheShelf(safeLocalStorage()) });');
-    expect(lines).toContain('setDeviceFollower(followDeviceSession);');
+  test('une fois branché, une session refusée que l’appareil ne tient plus suit l’appareil, et débrancher rend la main', () => {
+    const storage = fakeStorage();
+    const tab = createSessionStore({ storage, now: () => NOW });
+    tab.getState().establish({ user: ADA, token: 'jwt-old', sessionToken: 'sess-old', expiresIn: 3600 });
+    const unbind = bindDeviceFollow(tab, { shelf: createAccountCacheShelf(storage), target: { addEventListener: () => undefined, removeEventListener: () => undefined } });
+    createSessionStore({ storage, now: () => NOW }).getState().establish({ user: ADA, token: 'jwt-new', sessionToken: 'sess-new', expiresIn: 3600 });
+
+    endRevokedSession(tab, { storage, cacheStorage: { keys: async () => [], delete: async () => true }, publications: { clear: async () => undefined } });
+    const followed = heldAccountOf(tab.getState().session)?.token;
+    unbind();
+    tab.getState().establish({ user: ADA, token: 'jwt-third', sessionToken: 'sess-third', expiresIn: 3600 });
+    createSessionStore({ storage, now: () => NOW }).getState().establish({ user: ADA, token: 'jwt-fourth', sessionToken: 'sess-fourth', expiresIn: 3600 });
+    endRevokedSession(tab, { storage, cacheStorage: { keys: async () => [], delete: async () => true }, publications: { clear: async () => undefined } });
+
+    expect(followed).toBe('jwt-new');
+    expect(tab.getState().session.status).toBe('anonymous');
+  });
+
+  test('realtime.ts branche le suivi sur la session de l’application, en instruction de premier niveau', () => {
+    expect(source.split('\n')).toContain('bindDeviceFollow(sessionStore, { shelf: createAccountCacheShelf(safeLocalStorage()) });');
   });
 
   test('la révocation reçue par la socket est jugée sur la session qu’elle vise, jamais fermée après coup sans regarder', () => {

@@ -435,12 +435,14 @@ function readPersisted(storage: SessionStorage): PersistedSession | 'absent' | '
   return isPersistedSession(parsed) ? parsed : 'corrupted';
 }
 
-function persist(storage: SessionStorage, session: PersistedSession): void {
+function persist(storage: SessionStorage, session: PersistedSession): boolean {
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify(session));
+    return true;
   } catch {
     /* Stockage refusé : la session tient pour l'onglet, sans se souvenir
      * (même doctrine que `scheme.ts#setScheme`). */
+    return false;
   }
 }
 
@@ -578,9 +580,23 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
    * récente. Une session ne réécrit ni n'efface l'entrée que si c'est la MÊME
    * session : mêmes jetons — et donc le même compte, qu'un jeton désigne.
    */
+  /**
+   * LA SESSION QUE L'APPAREIL A REFUSÉ D'ÉCRIRE (audit #19352, Q1) — stockage
+   * plein ou interdit : elle tient pour l'onglet, sans se souvenir. Tant que
+   * l'entrée reste absente, c'est elle que l'appareil « tient » pour cet
+   * onglet : le suivi ne la quitte pas, et son refus efface ce que le compte
+   * laisse sur l'appareil.
+   */
+  let unwritten: string | null = null;
+  const remember = (session: PersistedSession): void => {
+    unwritten = persist(storage, session) ? null : heldSessionKey(sessionOf(session));
+  };
+
   const holdsDevice = (session: SessionState): boolean => {
     const persisted = readPersisted(storage);
-    return heldSessionKey(session) === (typeof persisted === 'object' ? heldSessionKey(sessionOf(persisted)) : null);
+    const key = heldSessionKey(session);
+    if (persisted === 'absent' && key !== null && key === unwritten) return true;
+    return key === (typeof persisted === 'object' ? heldSessionKey(sessionOf(persisted)) : null);
   };
 
   /**
@@ -604,13 +620,13 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
     establish: ({ user, token, sessionToken, expiresIn }) => {
       const projected = pickSessionUser(user);
       const expiresAt = now() + expiresIn * 1000;
-      persist(storage, { user: projected, token, sessionToken, expiresAt });
+      remember({ user: projected, token, sessionToken, expiresAt });
       set({ session: { status: 'authenticated', user: projected, token, sessionToken, expiresAt } });
     },
     establishGuest: ({ sessionToken, guest }) => {
       const projected = pickGuest(guest);
       const expiresAt = now() + GUEST_SESSION_HOURS * 60 * 60 * 1000;
-      persist(storage, { kind: 'guest', sessionToken, guest: projected, expiresAt });
+      remember({ kind: 'guest', sessionToken, guest: projected, expiresAt });
       set({ session: { status: 'guest', sessionToken, guest: projected, expiresAt } });
     },
     beginTwoFactor: ({ user, twoFactorToken }) => {
