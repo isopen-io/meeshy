@@ -36,6 +36,8 @@ async function exporter(rows: unknown[], links: FakeLink[]) {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', {
     user: { findUnique: userFindUnique },
+    // Les visites du lien de profil (#19206) : aucune.
+    profileLinkVisitDay: { findMany: jest.fn<any>().mockResolvedValue([]) },
     trackingLink: {
       findMany: jest.fn<any>(async (a: any) => links
         .filter((l) => (a.where.token?.in === undefined || (a.where.token.in as string[]).includes(l.token))

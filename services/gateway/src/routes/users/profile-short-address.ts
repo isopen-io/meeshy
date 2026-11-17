@@ -27,6 +27,9 @@ const isPseudo = (value: string): boolean => value.length <= PSEUDO_MAX && PSEUD
  * Aucun écran d'app ne l'appelle (il lit `/directory/people/:handle`) : la route est retirée des
  * catalogues client (`packages/shared/api/ops-only-routes.ts`).
  *
+ * Elle ne compte AUCUNE visite (#19206) : la fiche compte à l'adresse où elle redirige, une
+ * fois — compter ici aussi doublerait chaque ouverture par l'adresse courte.
+ *
  * Le pseudo est validé AVANT d'être recopié dans l'adresse : sans cela, `/@//autre.site` ferait
  * de la route une redirection ouverte. Un pseudo qui n'en est pas un répond 404, comme un
  * profil introuvable.

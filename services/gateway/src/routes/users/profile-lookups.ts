@@ -25,6 +25,7 @@ import {
   servirProfilPublic,
 } from './public-profile';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { noteProfileLinkVisit } from '../../services/profile-link-visits/profileLinkVisits';
 
 /**
  * Le sursis des trois portes de profil (#4274, corrigé #4440).
@@ -211,6 +212,8 @@ export async function getUserByUsername(fastify: FastifyInstance) {
       // de fonctionner.
       const profil = await servirProfilPublic(fastify, request, reply, username, champs);
       if (!profil) return reply;
+      // #19206 : `/u/<pseudo>` est l'une des adresses publiques de la fiche, elle compte ses visites.
+      noteProfileLinkVisit(fastify, request, String(profil.id));
 
       return sendSuccess(reply, restrictFields(profil, champs, CLES_EPINGLEES_PROFIL));
 

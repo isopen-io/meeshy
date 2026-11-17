@@ -93,6 +93,8 @@ function base() {
     profileAddress: table([]),
     trackingLink: table([]),
     trackingLinkClick: table([]),
+    // Les visites du lien de profil (#19206) : aucune.
+    profileLinkVisitDay: table([]),
     conversationShareLink: table([]),
     userContact,
     contactJoinNotice,

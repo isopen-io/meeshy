@@ -164,7 +164,7 @@ describe('isPreviewRobot', () => {
 
 describe('lecture, export et purge — le propriétaire seul', () => {
   it('lit ses lignes depuis le début de la fenêtre et les résume', async () => {
-    const findMany = jest.fn(async () => [{ day: DAY, visits: 57 }, { day: new Date('2026-11-02T00:00:00.000Z'), visits: 3 }]);
+    const findMany = jest.fn(async (_args: unknown) => [{ day: DAY, visits: 57 }, { day: new Date('2026-11-02T00:00:00.000Z'), visits: 3 }]);
     const stats = await readProfileLinkVisitStats({ profileLinkVisitDay: { findMany } } as never, OWNER, AT);
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { userId: OWNER, day: { gte: new Date('2026-10-19T00:00:00.000Z') } },
@@ -174,14 +174,14 @@ describe('lecture, export et purge — le propriétaire seul', () => {
   });
 
   it("exporte toutes ses lignes, jour et nombre, rien d'autre", async () => {
-    const findMany = jest.fn(async () => [{ day: DAY, visits: 57 }]);
+    const findMany = jest.fn(async (_args: unknown) => [{ day: DAY, visits: 57 }]);
     const rows = await exportProfileLinkVisitsOf({ profileLinkVisitDay: { findMany } } as never, OWNER);
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: OWNER } }));
     expect(rows).toEqual([{ day: '2026-11-17', visits: 57 }]);
   });
 
   it('efface toutes ses lignes avec le compte', async () => {
-    const deleteMany = jest.fn(async () => ({ count: 4 }));
+    const deleteMany = jest.fn(async (_args: unknown) => ({ count: 4 }));
     expect(await eraseProfileLinkVisitsOf({ profileLinkVisitDay: { deleteMany } } as never, OWNER)).toBe(4);
     expect(deleteMany).toHaveBeenCalledWith({ where: { userId: OWNER } });
   });

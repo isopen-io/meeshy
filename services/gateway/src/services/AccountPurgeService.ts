@@ -17,6 +17,7 @@ import { eraseCallTelemetryOf } from './calls/callTelemetryPrivacy';
 import { eraseE2EEDataOfUser } from './e2ee/device-retirement';
 import { eraseExternalPeerHandlesOpenedBy } from './external-conversation/erase-external-peers';
 import { eraseProfileAddressesOf } from './profile-addresses/address-links';
+import { eraseProfileLinkVisitsOf } from './profile-link-visits/profileLinkVisits';
 import type { ShareLinkRevocationLive } from './cleanupExpiredData';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
@@ -59,6 +60,8 @@ export type AccountPurgeSummary = {
   /** Le numéro des amis d'un réseau tiers qu'il avait ouverts (#17117) : gardé pour lui seul, il ne sert plus personne. */
   readonly externalPeerHandlesDeleted: number;
   readonly profileAddressesDeleted: number;
+  /** L'agrégat des visites de son lien de profil, par jour (#19206). */
+  readonly profileLinkVisitDaysDeleted: number;
 };
 
 export type AccountPurgeOptions = {
@@ -139,7 +142,7 @@ export async function purgeAccountIsolatedData(
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
   if (!isValidObjectId(userId)) throw new Error('INVALID_USER_ID');
-  const [sessions, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles, profileAddresses] =
+  const [sessions, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles, profileAddresses, profileLinkVisitDays] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
       prisma.userVoiceModel.deleteMany({ where: { userId } }),
@@ -174,6 +177,8 @@ export async function purgeAccountIsolatedData(
       eraseExternalPeerHandlesOpenedBy(prisma, userId),
       // #18863 : ses adresses de fiche partent, et leurs liens de suivi se ferment.
       eraseProfileAddressesOf(prisma, userId),
+      // #19206 : l'agrégat des visites de son lien de profil.
+      eraseProfileLinkVisitsOf(prisma, userId),
       // #13937 : l'historique de position du Sang et le journal de ses consultations partent avec le compte.
       prisma.bloodLocationPoint.deleteMany({ where: { ownerId: userId } }),
       prisma.bloodLocationConsultation.deleteMany({ where: { OR: [{ observedId: userId }, { observerId: userId }] } }),
@@ -200,6 +205,7 @@ export async function purgeAccountIsolatedData(
     e2eeErased: e2ee,
     externalPeerHandlesDeleted: externalPeerHandles,
     profileAddressesDeleted: profileAddresses,
+    profileLinkVisitDaysDeleted: profileLinkVisitDays,
   };
 
   logger.info(
@@ -211,7 +217,7 @@ export async function purgeAccountIsolatedData(
       `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
       `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} packOwnerships=${packs.ownershipsDeleted} partnerProfiles=${packs.partnerProfilesDeleted} ` +
       `impressions=${readingTelemetry.impressions} engagements=${readingTelemetry.engagements} ` +
-      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry} externalPeerHandles=${externalPeerHandles} profileAddresses=${profileAddresses}`
+      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry} externalPeerHandles=${externalPeerHandles} profileAddresses=${profileAddresses} profileLinkVisitDays=${profileLinkVisitDays}`
   );
 
   return summary;
