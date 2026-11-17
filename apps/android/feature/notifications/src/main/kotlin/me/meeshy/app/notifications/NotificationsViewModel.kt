@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.NotificationCategoryFeed
 import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.sdk.model.NotificationQuickAction
+import me.meeshy.sdk.model.NotificationReadScope
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationConsumptionEvents
 import me.meeshy.sdk.notification.NotificationRepository
@@ -90,6 +91,7 @@ class NotificationsViewModel @Inject constructor(
         observeNotifications()
         observeUnreadCount()
         observeHasMore()
+        observeConsumption()
     }
 
     private fun observeNotifications() {
@@ -122,6 +124,38 @@ class NotificationsViewModel @Inject constructor(
             notificationRepository.hasMoreStream.collect { hasMore ->
                 _state.update { it.copy(hasMore = hasMore) }
             }
+        }
+    }
+
+    /**
+     * Les lignes qu'une catégorie ne tient que de la passerelle (plus anciennes que la première page) vivent dans la copie
+     * PROPRE de cet écran : ni le cache « all » ni ses patchs ne les voient. Un « lu » ou une suppression venus du socket,
+     * d'un autre appareil ou de l'ouverture d'une conversation s'y lisent par les canaux de consommation.
+     */
+    private fun observeConsumption() {
+        collecting(consumption.notificationMarkedRead) { readRows(NotificationReadScope.Single(it)) }
+        collecting(consumption.conversationNotificationsRead) { readRows(NotificationReadScope.Conversation(it)) }
+        collecting(consumption.postNotificationsRead) { readRows(NotificationReadScope.Post(it)) }
+        collecting(consumption.typeNotificationsRead) { readRows(NotificationReadScope.Types(it)) }
+        collecting(consumption.allNotificationsRead) { readRows(NotificationReadScope.All) }
+        collecting(consumption.notificationWasDeleted) { id ->
+            _state.update { it.copy(categoryRows = it.categoryRows.filterNot { row -> row.id == id }) }
+        }
+        // Le serveur a refusé : ce que le geste avait basculé hors du cache n'est pas connu d'ici, la page se relit.
+        collecting(consumption.notificationReadRolledBack) {
+            val category = _state.value.selectedCategory
+            if (category != NotificationFilterCategory.ALL) fetchCategory(category, append = false)
+        }
+    }
+
+    private fun <T> collecting(flow: Flow<T>, onEach: (T) -> Unit) {
+        viewModelScope.launch { flow.collect { onEach(it) } }
+    }
+
+    private fun readRows(scope: NotificationReadScope) {
+        _state.update { current ->
+            val ids = current.categoryRows.filter { !it.state.isRead && scope.matches(it) }.mapTo(HashSet()) { it.id }
+            if (ids.isEmpty()) current else current.copy(categoryRows = current.categoryRows.withRead(ids, isRead = true))
         }
     }
 
