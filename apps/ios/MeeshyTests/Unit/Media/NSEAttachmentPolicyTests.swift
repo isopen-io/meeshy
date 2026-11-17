@@ -293,9 +293,10 @@ final class NSEAttachmentPolicyTests: XCTestCase {
     /// Ce qui DÉCRIT le contenu : le texte et ses traductions, le chiffré, la
     /// pièce jointe, le détail (position, contact, invitation, lien, vignette),
     /// la réaction, le type de message, le motif d'un retrait, les libellés
-    /// d'action qui nomment le contenu. Et ce que l'iPhone ne lit pas : le
-    /// non-lu PAR conversation, que seul le registre Android indexe (#18910) —
-    /// sous PIN, il ne survit pas au scellé.
+    /// d'action qui nomment le contenu. Et le non-lu PAR conversation (#18910),
+    /// dont la bannière n'a pas besoin : l'app le lit au réveil silencieux, sur
+    /// la charge brute que le scellé ne touche pas — sous PIN, la bannière ne le
+    /// garde pas.
     private static let contentKeys: Set<String> = [
         "content", "originalLanguage", "translatedContent", "translatedLanguage", "encryptedContent",
         "conversationUnread",

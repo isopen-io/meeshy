@@ -34,7 +34,9 @@ public extension SocketNotificationEvent {
             communityId: context?.communityId,
             postId: context?.postId ?? metadata?.postId,
             commentId: context?.commentId ?? metadata?.commentId,
-            parentCommentId: context?.parentCommentId ?? metadata?.parentCommentId
+            parentCommentId: context?.parentCommentId ?? metadata?.parentCommentId,
+            postCreatedAt: context?.postCreatedAt,
+            postExpiresAt: context?.postExpiresAt
         )
 
         return APINotification(
