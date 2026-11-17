@@ -216,8 +216,8 @@ export function createFakeE2EEStore() {
     Conversation: new FakeCollection([], () => ({ encryptionMode: null, type: 'direct' })),
     PushToken: new FakeCollection(
       [['userId', 'token', 'type']],
-      () => ({ isActive: true, sessionId: null, deviceId: null, failedAttempts: 0 }),
-      () => ({ isActive: true, failedAttempts: 0 }),
+      () => ({ isActive: true, sessionId: null, deviceId: null, failedAttempts: 0, createdAt: new Date(), updatedAt: new Date() }),
+      () => ({ isActive: true, failedAttempts: 0, createdAt: new Date(), updatedAt: new Date() }),
     ),
   };
 

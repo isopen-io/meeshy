@@ -25,6 +25,7 @@ import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
 import { apnsThreadIdOf } from './notifications/push-thread';
 import { sendViaPushToTalk, type PushToTalkTokenRecord } from './talkie/pushToTalkApns';
 import { apnsReady, pushTransportConfigFromEnv, type PushTransports } from './push-transport-config';
+import { keepTokensOfLiveSessions } from './pushTokenSessions';
 
 const pushLogger = enhancedLogger.child({ module: 'PushNotificationService' });
 
@@ -383,13 +384,17 @@ export class PushNotificationService {
         bundleId: true,
         apnsEnvironment: true,
         appVersion: true,
+        sessionId: true,
       },
     });
+
+    // #9616 — un jeton dont la session est morte (révoquée, échue) ne part pas, même si son retrait a été manqué.
+    const liveTokens = await keepTokensOfLiveSessions(this.prisma, userId, activeTokens);
 
     // #10267 — un type neuf ne part que vers les appareils qui savent l'ouvrir (`push-type-routing.ts`). Un jeton
     // PushToTalk (#17142) n'est enregistré QUE par un client qui sait le traiter : il porte sa capacité.
     const pushType = effectivePayload.data?.type;
-    const tokens = activeTokens.filter((token) => token.type === 'pushtotalk' || tokenRoutesPushType(token, pushType));
+    const tokens = liveTokens.filter((token) => token.type === 'pushtotalk' || tokenRoutesPushType(token, pushType));
 
     if (tokens.length === 0) {
       pushLogger.debug('No active tokens found for user', { userId, pushType, excluded: activeTokens.length });

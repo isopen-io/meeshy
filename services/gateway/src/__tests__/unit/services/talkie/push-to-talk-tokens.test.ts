@@ -6,7 +6,7 @@
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
-import { retireOrphanPushToTalkTokens, retirePushToTalkTokensAfterSessionEnd } from '../../../../services/talkie/pushToTalkTokens';
+import { retireOrphanPushToTalkTokens, retirePushTokensAfterSessionEnd } from '../../../../services/pushTokenSessions';
 import { talkieWakeChannel } from '../../../../services/talkie/talkiePush';
 
 const NOW = new Date('2026-11-08T10:00:00Z');
@@ -18,11 +18,11 @@ type Session = { id: string; userId: string; sessionToken: string; isValid: bool
 function store(tokens: Token[], sessions: Session[]) {
   let rows = [...tokens];
   const matches = (t: Token, where: Record<string, any>) =>
-    (where.userId === undefined || (typeof where.userId === 'string' ? t.userId === where.userId : true))
-    && (where.type === undefined || (typeof where.type === 'string' ? t.type === where.type : where.type.in.includes(t.type)))
+    (where.userId === undefined || (typeof where.userId === 'string' ? t.userId === where.userId : where.userId.in.includes(t.userId)))
+    && (where.type === undefined || (typeof where.type === 'string' ? t.type === where.type : where.type.in ? where.type.in.includes(t.type) : t.type !== where.type.not))
     && (where.isActive === undefined || t.isActive === where.isActive)
     && (where.id === undefined || where.id.in.includes(t.id))
-    && (where.sessionId === undefined || where.sessionId.in.includes(t.sessionId));
+    && (where.sessionId === undefined || (typeof where.sessionId === 'string' ? t.sessionId === where.sessionId : where.sessionId.in.includes(t.sessionId)));
   return {
     get rows() { return rows; },
     prisma: {
@@ -32,6 +32,11 @@ function store(tokens: Token[], sessions: Session[]) {
           const before = rows.length;
           rows = rows.filter((t) => !matches(t, args.where));
           return { count: before - rows.length };
+        },
+        updateMany: async (args: { where: Record<string, any>; data: Partial<Token> }) => {
+          const touched = rows.filter((t) => matches(t, args.where));
+          touched.forEach((t) => Object.assign(t, args.data));
+          return { count: touched.length };
         },
       },
       userSession: {
@@ -49,21 +54,21 @@ const later = new Date(NOW.getTime() + 86_400_000);
 const ptt = (id: string, sessionId: string | null, userId = U): Token => ({ id, userId, type: 'pushtotalk', sessionId, isActive: true });
 
 describe('#17142 — le jeton PushToTalk suit sa session', () => {
-  it('la fermeture d’UNE session retire ses jetons PushToTalk, pas ceux d’une autre session ni les autres jetons', async () => {
-    const s = store([ptt('a', 's1'), ptt('b', 's2'), { ...ptt('c', 's1'), type: 'apns' }], [{ id: 's1', userId: U, sessionToken: 'h', isValid: false, expiresAt: later }]);
-    await retirePushToTalkTokensAfterSessionEnd(s.prisma as never, { sessionId: 's1' }, () => undefined);
+  it('la fermeture d’UNE session supprime ses jetons PushToTalk et désactive ses autres jetons (#9616), pas ceux d’une autre session', async () => {
+    const s = store([ptt('a', 's1'), ptt('b', 's2'), { ...ptt('c', 's1'), type: 'apns' }, { ...ptt('d', 's2'), type: 'apns' }], [{ id: 's1', userId: U, sessionToken: 'h', isValid: false, expiresAt: later }]);
+    await retirePushTokensAfterSessionEnd(s.prisma as never, { sessionId: 's1' }, () => undefined);
 
-    expect(s.rows.map((t) => t.id)).toEqual(['b', 'c']);
+    expect(s.rows.map((t) => `${t.id}:${t.isActive}`)).toEqual(['b:true', 'c:false', 'd:true']);
   });
 
   it('une déconnexion par jeton de session (condensat) retire aussi', async () => {
     const s = store([ptt('a', 's1')], [{ id: 's1', userId: U, sessionToken: 'hash-1', isValid: false, expiresAt: later }]);
-    await retirePushToTalkTokensAfterSessionEnd(s.prisma as never, { sessionToken: 'hash-1' }, () => undefined);
+    await retirePushTokensAfterSessionEnd(s.prisma as never, { sessionToken: 'hash-1' }, () => undefined);
 
     expect(s.rows).toEqual([]);
   });
 
-  it('« partout » / suppression du compte : chaque jeton dont la session n’est plus valide, ou sans session, part', async () => {
+  it('« partout » / suppression du compte : chaque jeton PushToTalk dont la session n’est plus valide, ou sans session, part', async () => {
     const s = store(
       [ptt('vivant', 's-ok'), ptt('ferme', 's-ko'), ptt('expire', 's-old'), ptt('orphelin', null), ptt('autre-compte', 's-ko', 'u-2')],
       [
@@ -79,8 +84,8 @@ describe('#17142 — le jeton PushToTalk suit sa session', () => {
 
   it('un retrait qui échoue ne fait jamais échouer la fermeture de session', async () => {
     const errors: unknown[] = [];
-    const broken = { pushToken: { deleteMany: async () => { throw new Error('mongo'); } }, userSession: { findMany: async () => [{ id: 's1', userId: U }] } };
-    await expect(retirePushToTalkTokensAfterSessionEnd(broken as never, { sessionId: 's1' }, (e) => errors.push(e))).resolves.toBeUndefined();
+    const broken = { pushToken: { findMany: async () => { throw new Error('mongo'); }, deleteMany: async () => { throw new Error('mongo'); } }, userSession: { findMany: async () => [{ id: 's1', userId: U }] } };
+    await expect(retirePushTokensAfterSessionEnd(broken as never, { sessionId: 's1' }, (e) => errors.push(e))).resolves.toBeUndefined();
     expect(errors).toHaveLength(1);
   });
 
