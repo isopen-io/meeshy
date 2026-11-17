@@ -20,7 +20,9 @@ import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.NotificationCategoryFeed
 import me.meeshy.sdk.model.NotificationFilterCategory
 import me.meeshy.sdk.model.NotificationQuickAction
+import me.meeshy.sdk.model.NotificationReadScope
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.notification.NotificationConsumptionEvents
 import me.meeshy.sdk.notification.NotificationRepository
 import javax.inject.Inject
 
@@ -76,6 +78,7 @@ sealed interface NotificationsEvent {
 class NotificationsViewModel @Inject constructor(
     private val notificationRepository: NotificationRepository,
     private val quickActionPerformer: NotificationQuickActionPerformer,
+    private val consumption: NotificationConsumptionEvents,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NotificationsUiState(friendIds = quickActionPerformer.friendIds()))
@@ -88,6 +91,7 @@ class NotificationsViewModel @Inject constructor(
         observeNotifications()
         observeUnreadCount()
         observeHasMore()
+        observeConsumption()
     }
 
     private fun observeNotifications() {
@@ -123,12 +127,47 @@ class NotificationsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Les lignes qu'une catégorie ne tient que de la passerelle (plus anciennes que la première page) vivent dans la copie
+     * PROPRE de cet écran : ni le cache « all » ni ses patchs ne les voient. Un « lu » ou une suppression venus du socket,
+     * d'un autre appareil ou de l'ouverture d'une conversation s'y lisent par les canaux de consommation.
+     */
+    private fun observeConsumption() {
+        collecting(consumption.notificationMarkedRead) { readRows(NotificationReadScope.Single(it)) }
+        collecting(consumption.conversationNotificationsRead) { readRows(NotificationReadScope.Conversation(it)) }
+        collecting(consumption.postNotificationsRead) { readRows(NotificationReadScope.Post(it)) }
+        collecting(consumption.typeNotificationsRead) { readRows(NotificationReadScope.Types(it)) }
+        collecting(consumption.allNotificationsRead) { readRows(NotificationReadScope.All) }
+        collecting(consumption.notificationWasDeleted) { id -> patchCategoryRows { rows -> rows.filterNot { it.id == id } } }
+        // Le serveur a refusé : ce que le geste avait basculé hors du cache n'est pas connu d'ici, la page se relit.
+        collecting(consumption.notificationReadRolledBack) {
+            val category = _state.value.selectedCategory
+            if (category != NotificationFilterCategory.ALL) fetchCategory(category, append = false)
+        }
+    }
+
+    private fun <T> collecting(flow: Flow<T>, onEach: (T) -> Unit) {
+        viewModelScope.launch { flow.collect { onEach(it) } }
+    }
+
+    private fun readRows(scope: NotificationReadScope) {
+        patchCategoryRows { rows ->
+            val ids = rows.filter { !it.state.isRead && scope.matches(it) }.mapTo(HashSet()) { it.id }
+            if (ids.isEmpty()) rows else rows.withRead(ids, isRead = true)
+        }
+    }
+
+    private fun patchCategoryRows(transform: (List<ApiNotification>) -> List<ApiNotification>) {
+        if (categoryJob?.isActive == true) inFlightPatches = inFlightPatches + transform
+        _state.update { it.copy(categoryRows = transform(it.categoryRows)) }
+    }
+
     /** Forces a revalidation regardless of freshness — the pull-to-refresh and « Réessayer » entry point. */
     fun load() {
         _state.update { it.copy(loadDidFail = false, isLoading = it.notifications.isEmpty()) }
         viewModelScope.launch {
             try {
-                notificationRepository.refresh()
+                notificationRepository.refresh()?.let { failure -> _state.update { it.failed(failure.message) } }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -141,12 +180,14 @@ class NotificationsViewModel @Inject constructor(
 
     /**
      * Tirer pour rafraîchir de marque : suspend jusqu'au retour du réseau, pour que l'indicateur reste armé
-     * pendant la revalidation. Un échec se relance au geste (haptique d'erreur) sans jamais effacer le cache affiché.
+     * pendant la revalidation. Un échec est LEVÉ une fois la catégorie relancée : le geste joue l'haptique d'erreur, et
+     * le cache affiché reste intact.
      */
     suspend fun pullRefresh() {
-        notificationRepository.refresh()
+        val failure = notificationRepository.refresh()
         val category = _state.value.selectedCategory
         if (category != NotificationFilterCategory.ALL) fetchCategory(category, append = false)
+        failure?.let { throw it }
     }
 
     /**
@@ -199,6 +240,13 @@ class NotificationsViewModel @Inject constructor(
 
     private var categoryJob: Job? = null
 
+    /**
+     * Les patchs reçus pendant le vol d'une page de catégorie : la page a été calculée AVANT eux, elle les rejoue en
+     * arrivant au lieu de remettre non lue la ligne lue ou de ressusciter la ligne supprimée. Idempotents, donc sûrs
+     * même quand le serveur les avait déjà vus.
+     */
+    private var inFlightPatches: List<(List<ApiNotification>) -> List<ApiNotification>> = emptyList()
+
     /** Le curseur et le « reste-t-il » PROPRES à chaque catégorie : revenir à une puce reprend où elle en était. */
     private val categoryPaging = HashMap<NotificationFilterCategory, CategoryPaging>()
 
@@ -211,6 +259,7 @@ class NotificationsViewModel @Inject constructor(
         val held = _state.value.categoryRows
         val cursor = if (append) paging?.nextCursor else null
         _state.update { it.copy(isCategoryLoading = !append && it.filteredNotifications.isEmpty(), isLoadingMore = append) }
+        inFlightPatches = emptyList()
         categoryJob = viewModelScope.launch {
             val result = try {
                 notificationRepository.listScopePage(scope = scope, cursor = cursor, offset = if (append) held.size else 0)
@@ -224,7 +273,7 @@ class NotificationsViewModel @Inject constructor(
             val rows = page?.let {
                 val known = if (append) _state.value.categoryRows else emptyList()
                 val knownIds = known.mapTo(HashSet()) { row -> row.id }
-                known + it.items.filter { row -> row.id !in knownIds }
+                inFlightPatches.fold(known + it.items.filter { row -> row.id !in knownIds }) { acc, patch -> patch(acc) }
             }
             if (page != null && rows != null) {
                 categoryPaging[category] = CategoryPaging(page.nextCursor, page.hasMore)
