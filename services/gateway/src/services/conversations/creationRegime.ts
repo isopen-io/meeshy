@@ -35,7 +35,7 @@ export type CreationRegimeRequest = {
   readonly conversationType: string;
 };
 
-export type CreationRegimeRefusal = 'plaintext-with-end-to-end' | 'end-to-end-restricted' | 'end-to-end-direct-only';
+export type CreationRegimeRefusal = 'plaintext-with-end-to-end' | 'end-to-end-restricted' | 'end-to-end-direct-only' | 'end-to-end-not-a-pair';
 
 export type CreationRegimeDecision =
   | { readonly kind: 'allowed'; readonly mode: CreationEncryptionMode }
@@ -54,6 +54,24 @@ export function decideCreationRegime(request: CreationRegimeRequest): CreationRe
     return { kind: 'refused', refusal: 'end-to-end-direct-only' };
   }
   return { kind: 'allowed', mode: request.requestedMode ?? IMPLICIT_CREATION_ENCRYPTION_MODE };
+}
+
+/**
+ * #12966 — la règle de la paire vaut à la NAISSANCE comme à l'activation : un
+ * tête-à-tête ne naît chiffré de bout en bout qu'entre son créateur et UN
+ * invité (audit de #19080, E1). Trois membres actifs, Sesame exige les
+ * appareils du troisième et aucun client ne les chiffre : chaque envoi de la
+ * paire échouerait à jamais ; le créateur seul n'a personne à qui écrire. Les
+ * modes que le serveur lit ne sont pas jugés ici.
+ */
+export function nascentPairRefusal(params: {
+  readonly conversationType: string;
+  readonly mode: CreationEncryptionMode;
+  readonly inviteeCount: number;
+}): CreationRegimeRefusal | null {
+  return params.conversationType === 'direct' && params.mode === 'e2ee' && params.inviteeCount !== 1
+    ? 'end-to-end-not-a-pair'
+    : null;
 }
 
 /**

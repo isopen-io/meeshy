@@ -370,9 +370,19 @@ export class E2EEDirectory {
     return device;
   }
 
-  async reserveBundles(params: { requesterUserId: string; targetUserId: string; deviceIds?: readonly number[] }): Promise<E2EEDeviceBundle[]> {
+  /**
+   * `spendOneTimeKeys` faux (budget de la cible épuisé, GW-01) : un bundle de
+   * DERNIER RECOURS, sans pré-clé unique consommée — jamais une pré-clé déjà réservée.
+   */
+  async reserveBundles(params: {
+    requesterUserId: string;
+    targetUserId: string;
+    deviceIds?: readonly number[];
+    spendOneTimeKeys?: boolean;
+  }): Promise<E2EEDeviceBundle[]> {
     const devices = await this.activeDevices(params.targetUserId, params.deviceIds);
-    return Promise.all(devices.map((device) => this.bundleOf(device, params.requesterUserId)));
+    const spend = params.spendOneTimeKeys ?? true;
+    return Promise.all(devices.map((device) => this.bundleOf(device, params.requesterUserId, spend)));
   }
 
   async listDevices(userId: string): Promise<{ deviceId: number; registrationId: number }[]> {
@@ -622,12 +632,11 @@ export class E2EEDirectory {
     return this.prisma.e2EEOneTimePreKey.findUnique({ where: { id }, select: { keyId: true, publicKey: true, signature: true } });
   }
 
-  private async bundleOf(device: ActiveDevice, requesterUserId: string): Promise<E2EEDeviceBundle> {
+  private async bundleOf(device: ActiveDevice, requesterUserId: string, spendOneTimeKeys: boolean): Promise<E2EEDeviceBundle> {
     const address = { userId: device.userId, deviceId: device.deviceId, registrationId: device.registrationId, requesterUserId };
-    const [ec, kyber] = await Promise.all([
-      this.reserveOneTimeKey({ ...address, kind: 'ec' }),
-      this.reserveOneTimeKey({ ...address, kind: 'kyber' }),
-    ]);
+    const [ec, kyber] = spendOneTimeKeys
+      ? await Promise.all([this.reserveOneTimeKey({ ...address, kind: 'ec' }), this.reserveOneTimeKey({ ...address, kind: 'kyber' })])
+      : [null, null];
     const kyberPreKey = kyber?.signature
       ? { keyId: kyber.keyId, publicKey: kyber.publicKey, signature: kyber.signature, lastResort: false }
       : { keyId: device.kyberLastResortId, publicKey: device.kyberLastResort, signature: device.kyberLastResortSignature, lastResort: true };
