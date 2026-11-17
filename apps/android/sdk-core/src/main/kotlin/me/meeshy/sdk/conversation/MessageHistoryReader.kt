@@ -3,6 +3,10 @@ package me.meeshy.sdk.conversation
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.commitOrWrite
 
+import androidx.room.withTransaction
+import me.meeshy.core.database.entity.SyncMetaEntity
+import me.meeshy.sdk.model.sync.ThreadContiguity
+
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,6 +20,7 @@ import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.net.NetworkResult
@@ -62,6 +67,9 @@ internal class MessageHistoryReader(
      */
     private val historyWindows = ConcurrentHashMap<String, MutableStateFlow<HistoryWindow>>()
 
+    /** #19115 — one revalidation at a time per thread, out of reach of the stream's cancellations. */
+    private val revalidations = ThreadRevalidations()
+
     private fun historyWindow(conversationId: String): MutableStateFlow<HistoryWindow> =
         historyWindows.getOrPut(conversationId) { MutableStateFlow(HistoryWindow.Recent(INITIAL_HISTORY_WINDOW)) }
 
@@ -77,7 +85,8 @@ internal class MessageHistoryReader(
         onSyncError: (Throwable) -> Unit = {},
     ): Flow<CacheResult<List<LocalMessage>>> {
         returnToPresent(conversationId)
-        return cacheFirstFlow(policy, cacheSource(conversationId), onRevalidateError = onSyncError)
+        val source = cacheSource(conversationId, StreamFreshness(STREAM_CLOCK, policy.freshForMillis))
+        return cacheFirstFlow(policy, source, STREAM_CLOCK, onRevalidateError = onSyncError)
     }
 
     /** #14670 — an anchored window gives way to the recent one: a new open, a send, « back to the present ». */
@@ -148,18 +157,24 @@ internal class MessageHistoryReader(
         return !reachedPresent
     }
 
+    /** Whether the thread SHOWS [messageId]: under a gap (#19114), a recent row below it is held but not shown. */
     private suspend fun isObserved(conversationId: String, messageId: String): Boolean =
         when (val window = historyWindow(conversationId).value) {
-            is HistoryWindow.Recent -> messageDao.recentForConversation(conversationId, window.size).any { it.id == messageId }
+            is HistoryWindow.Recent -> {
+                val gapTop = syncMetaDao.watermark(ThreadSyncKey.gapOf(conversationId))
+                messageDao.recentForConversation(conversationId, window.size).any { row ->
+                    row.id == messageId && (gapTop == null || row.sendState != null || row.createdAt >= gapTop)
+                }
+            }
             is HistoryWindow.Anchored -> messageDao.find(messageId)?.takeIf { it.conversationId == conversationId }
                 ?.let { it.createdAt >= window.fromMillis && it.createdAt <= (window.throughMillis ?: Long.MAX_VALUE) } == true
         }
 
     private fun ingestion() = MessageIngestPipeline(database, regime = regime, events = events, erasures = erasures)
 
-    /** Explicit refresh of a conversation's messages (pull / retry). Throws on failure. */
+    /** Explicit refresh of a conversation's messages (pull / retry): always reads, joining a flight in progress. Throws on failure. */
     suspend fun refresh(conversationId: String) {
-        cacheSource(conversationId).revalidate()
+        cacheSource(conversationId).refresh()
     }
 
     /**
@@ -240,13 +255,20 @@ internal class MessageHistoryReader(
      * cached server row (`before` cursor) and appends it to the Room cache.
      * The freshness watermark is untouched — history pages do not make the
      * newest page fresher. Returns whether more history remains.
+     *
+     * #19114 — while a gap lies under the recent window, the cursor is the oldest row of the segment ABOVE it (the gap's
+     * top), never the oldest of the newest rows held, which sits below the gap: the page fills the gap from its top, and
+     * the gap closes once a page reaches the contiguous history ([crossGap]).
      */
     suspend fun loadOlder(conversationId: String, pageSize: Int = OLDER_PAGE_SIZE): Boolean {
         val ticket = fence?.currentTicket()
         val window = historyWindow(conversationId).value
-        val cursor = when (window) {
-            is HistoryWindow.Recent -> messageDao.oldestSyncedAmongRecent(conversationId, window.size)
-            is HistoryWindow.Anchored -> messageDao.oldestSyncedSince(conversationId, window.fromMillis)
+        val gapTop = if (window is HistoryWindow.Recent) syncMetaDao.watermark(ThreadSyncKey.gapOf(conversationId)) else null
+        val cursor = when {
+            gapTop != null -> messageDao.oldestSyncedSince(conversationId, gapTop)
+            window is HistoryWindow.Recent -> messageDao.oldestSyncedAmongRecent(conversationId, window.size)
+            window is HistoryWindow.Anchored -> messageDao.oldestSyncedSince(conversationId, window.fromMillis)
+            else -> null
         } ?: return true
         val response = when (
             val result = rawApiCall { messageApi.list(conversationId, limit = pageSize, before = cursor.id) }
@@ -258,13 +280,36 @@ internal class MessageHistoryReader(
         if (!response.success || page == null) {
             throw MessageSyncException(response.error ?: response.message ?: "Unknown error")
         }
+        val hasMore = response.pagination?.hasMore ?: (page.size >= pageSize)
         val now = clock.nowMillis()
-        fence.commitOrWrite(ticket) { ingestion().ingest(page, now) } ?: return true
+        fence.commitOrWrite(ticket) {
+            ingestion().ingest(page, now)
+            if (gapTop != null) crossGap(conversationId, gapTop, cursor.createdAt, page, exhausted = !hasMore)
+            Unit
+        } ?: return true
         // #5189 — grow the observe window by exactly what was just paged in,
         // so these older rows (now cached) are not immediately hidden again
         // by messagesStream's bound. An anchored window lowers its older bound instead.
         if (page.isNotEmpty()) historyWindow(conversationId).update { it.grownBy(page) }
-        return response.pagination?.hasMore ?: (page.size >= pageSize)
+        return hasMore
+    }
+
+    /**
+     * #19114 — what a backward page read from the gap's top proves ([ThreadContiguity.afterOlderPage]): it lowers the top,
+     * or closes the gap up to its cursor once it reaches the contiguous history. It lands only on the gap it was read from:
+     * a revalidation that closed or reopened the gap meanwhile wrote what its own reads proved.
+     */
+    private suspend fun crossGap(conversationId: String, readTop: Long, cursorAt: Long, page: List<ApiMessage>, exhausted: Boolean) {
+        val key = ThreadSyncKey.of(conversationId)
+        val gapKey = ThreadSyncKey.gapOf(conversationId)
+        database.withTransaction {
+            if (syncMetaDao.watermark(gapKey) != readTop) return@withTransaction
+            val pageOldest = page.mapNotNull { isoToEpochMillisOrNull(it.createdAt) }.minOrNull()
+            val next = ThreadContiguity(syncMetaDao.watermark(key), readTop).afterOlderPage(cursorAt, pageOldest, exhausted)
+            syncMetaDao.setWatermark(key, next.watermark)
+            val top = next.gapTop
+            if (top == null) syncMetaDao.delete(gapKey) else syncMetaDao.upsert(SyncMetaEntity(gapKey, clock.nowMillis(), top))
+        }
     }
 
     private fun HistoryWindow.grownBy(page: List<ApiMessage>): HistoryWindow = when (this) {
@@ -273,7 +318,7 @@ internal class MessageHistoryReader(
             ?.let { oldest -> copy(fromMillis = minOf(fromMillis, oldest)) } ?: this
     }
 
-    private fun cacheSource(conversationId: String) = MessageCacheSource(
+    private fun cacheSource(conversationId: String, streamFreshness: StreamFreshness? = null) = MessageCacheSource(
         conversationId = conversationId,
         database = database,
         messageDao = messageDao,
@@ -287,9 +332,14 @@ internal class MessageHistoryReader(
         erasures = erasures,
         translations = translations,
         media = media,
+        revalidations = revalidations,
+        streamFreshness = streamFreshness,
     )
 
     companion object {
+        /** The stream reads the system clock, never the reader's (`cacheFirstFlow`'s default): its freshness check too. */
+        private val STREAM_CLOCK: CacheClock = SystemCacheClock
+
         const val OLDER_PAGE_SIZE = 30
 
         /**

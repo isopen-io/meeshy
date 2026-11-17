@@ -18,12 +18,14 @@ import me.meeshy.sdk.cache.purge.RoomCachePayloadStores
 import me.meeshy.sdk.model.mediacache.CacheDataKind
 import me.meeshy.sdk.model.mediacache.CacheDomain
 import me.meeshy.sdk.e2ee.EndToEndRegimeLedger
+import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CursorPagination
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessagePinChanged
 import me.meeshy.sdk.model.MessagesApiResponse
+import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.net.api.MessageApi
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Test
@@ -32,12 +34,14 @@ import org.robolectric.RobolectricTestRunner
 import retrofit2.Response
 
 /**
- * The gateway's two reads of a thread, over ONE server-side history [served] (mutable: a test changes the server
- * between two revalidations):
+ * The gateway's reads of a thread, over ONE server-side history [served] (mutable: a test changes the server between two
+ * revalidations), all in its TOTAL order `(createdAt desc, id desc)` (`messages-list.ts`):
  * - the recent window ([listConditional]): the newest [window] messages, newest first, with an `ETag` that is a pure
  *   function of the page's content — the SAME page answers 304 to the validator it was served with (`sendWithETag`,
  *   `services/gateway/src/routes/conversations/messages-list.ts`);
- * - the forward sweep ([listAfter], #5206): `createdAt > after`, ascending, `hasMore` measured by a `limit + 1` probe.
+ * - the forward sweep ([listAfter], #5206): `createdAt > after`, ascending, `hasMore` measured by a `limit + 1` probe;
+ * - backward paging ([list] with `before`): the `limit` messages ranked right after the anchor, `hasMore` if more remain;
+ * - the window centred on a message ([listWindowAround], #14670): half of `limit` on each side.
  * Every other route stays unanswered: a revalidation never needs it.
  */
 private class GatewayMessageHistory(
@@ -50,12 +54,14 @@ private class GatewayMessageHistory(
 
     private fun millisOf(message: ApiMessage): Long = Instant.parse(message.createdAt!!).toEpochMilli()
 
+    private val newestFirst: Comparator<ApiMessage> = compareByDescending<ApiMessage> { millisOf(it) }.thenByDescending { it.id }
+
     override suspend fun listConditional(
         conversationId: String,
         ifNoneMatch: String?,
     ): Response<ApiResponse<List<ApiMessage>>> {
         validators += ifNoneMatch
-        val envelope = ApiResponse(success = true, data = served.sortedByDescending { millisOf(it) }.take(window))
+        val envelope = ApiResponse(success = true, data = served.sortedWith(newestFirst).take(window))
         val etag = "\"${envelope.hashCode()}\""
         if (ifNoneMatch == etag) {
             notModified += 1
@@ -68,11 +74,31 @@ private class GatewayMessageHistory(
         listAfterCalls += after
         val afterMillis = Instant.parse(after).toEpochMilli()
         val appliedLimit = limit ?: 20
-        val matching = served.filter { millisOf(it) > afterMillis }.sortedBy { millisOf(it) }
+        val matching = served.filter { millisOf(it) > afterMillis }.sortedWith(newestFirst.reversed())
         return MessagesApiResponse(
             success = true,
             data = matching.take(appliedLimit),
             cursorPagination = CursorPagination(nextCursor = null, hasMore = matching.size > appliedLimit, limit = appliedLimit),
+        )
+    }
+
+    override suspend fun list(conversationId: String, offset: Int?, limit: Int?, before: String?): ApiResponse<List<ApiMessage>> {
+        val ordered = served.sortedWith(newestFirst)
+        val older = before?.let { id -> ordered.dropWhile { it.id != id }.drop(1) } ?: ordered
+        val appliedLimit = limit ?: 20
+        return ApiResponse(success = true, data = older.take(appliedLimit), pagination = Pagination(hasMore = older.size > appliedLimit))
+    }
+
+    override suspend fun listWindowAround(conversationId: String, messageId: String, limit: Int): MessagesApiResponse {
+        val ordered = served.sortedWith(newestFirst.reversed())
+        val at = ordered.indexOfFirst { it.id == messageId }
+        val from = (at - limit / 2).coerceAtLeast(0)
+        val through = (at + limit / 2).coerceAtMost(ordered.lastIndex)
+        return MessagesApiResponse(
+            success = true,
+            data = ordered.subList(from, through + 1),
+            cursorPagination = CursorPagination(hasMore = from > 0),
+            hasNewer = through < ordered.lastIndex,
         )
     }
 }
@@ -582,12 +608,213 @@ class MessageWindowRevalidationTest {
         assertThat(harness.database.syncMetaDao().etag(KEY)).isEqualTo(primed)
     }
 
+    // — the contiguity of the history held (#18929, #19114, #19115) and what a page may prune (#19046) —
+
+    private fun millis(iso: String): Long = Instant.parse(iso).toEpochMilli()
+
+    /** What the thread shows now, oldest first, read from a stream that finds it fresh (no revalidation). */
+    private suspend fun MessageRepository.shownIds(): List<String> = messagesStream(CONVERSATION).first().shownIds()
+
+    private suspend fun MessageCollaboratorHarness.gapTop(): Long? = database.syncMetaDao().watermark(GAP_KEY)
+
+    /**
+     * #18929 — a push prefetched P (minute 16) ahead of fifteen messages no push carried: P raised the newest row held
+     * above them, and a sweep started from it read nothing before it. The sweep starts from the contiguity watermark,
+     * which a pushed message never moves.
+     */
+    @Test
+    fun `fifteen unpushed messages before a prefetched push are read back, the sweep starting from the watermark`() =
+        runHarnessTest { harness ->
+            val start = message("m00", minute(0))
+            val gateway = GatewayMessageHistory(served = listOf(start), window = 5)
+            val repo = harness.repository(gateway)
+            repo.refresh(CONVERSATION)
+            val unpushed = (1..15).map { message("u%02d".format(it), minute(it)) }
+            val pushed = message("p", minute(16))
+            harness.seedSynced(pushed)
+            gateway.served = listOf(start) + unpushed + pushed
+
+            repo.refresh(CONVERSATION)
+
+            assertThat(gateway.listAfterCalls).containsExactly(minute(0))
+            assertThat(harness.ids()).containsExactlyElementsIn(gateway.served.map { it.id }).inOrder()
+        }
+
+    /** #19046 (F2) — the limit cut the lower id of two messages of the same millisecond: alive, it keeps its row. */
+    @Test
+    fun `a message of the same millisecond as the oldest served, cut by the limit, survives the page`() = runHarnessTest { harness ->
+        val sameMillis = T1
+        val served = listOf(message("aa01", sameMillis), message("aa02", sameMillis), message("aa03", T2))
+        harness.held(*served.toTypedArray())
+        val gateway = GatewayMessageHistory(served = served, window = 2)
+
+        harness.repository(gateway).refresh(CONVERSATION)
+
+        assertThat(harness.ids()).containsExactly("aa01", "aa02", "aa03")
+    }
+
+    /**
+     * #19046 (F3) — a row dated ahead (my bubble acknowledged with its device clock) raised the newest instant held: the
+     * page pruned everything up to it, a message the socket brought during its flight included. What a page may declare
+     * gone is decided by identity now: only rows held before it left.
+     */
+    @Test
+    fun `a row dated ahead does not make the page prune a message the socket brings during its flight`() = runHarnessTest { harness ->
+        harness.held(message("m1", T1), message("mine", T9, senderId = "me"))
+        val api = mockk<MessageApi> {
+            coEvery { listConditional(CONVERSATION, any()) } coAnswers {
+                MessageIngestPipeline(harness.database).ingest(listOf(message("m3", T3)), harness.clock.now)
+                page(message("mine", T2, senderId = "me"), message("m1", T1))
+            }
+        }
+
+        harness.repository(api).refresh(CONVERSATION)
+
+        assertThat(harness.database.messageDao().find("m3")).isNotNull()
+        assertThat(harness.database.messageDao().find("m1")).isNotNull()
+    }
+
+    /**
+     * #19046 (F12) — m2 arrived after the stored page, then was deleted elsewhere, its event missed: the window was the
+     * stored one again, the 304 kept m2, and its plaintext with it. No validator leaves while a row is held beyond the
+     * page it describes.
+     */
+    @Test
+    fun `a message that arrived after the stored page and was deleted elsewhere leaves the thread, its plaintext with it`() =
+        runHarnessTest { harness ->
+            val erasures = PlaintextErasureLedger(harness.database, harness.clock) { "me" }
+            val gateway = GatewayMessageHistory(served = listOf(sealed("m1", T1)))
+            val repo = harness.repository(gateway, erasures)
+            repo.refresh(CONVERSATION)
+            MessageIngestPipeline(harness.database).ingest(listOf(sealed("m2", T2)), harness.clock.now)
+
+            repo.refresh(CONVERSATION)
+
+            assertThat(gateway.validators.last()).isNull()
+            assertThat(harness.database.messageDao().find("m2")).isNull()
+            assertThat(erasures.pending("me", 100).flatMap { it.messageKeys("me") }).containsExactly("m2")
+        }
+
+    /**
+     * #19114 — 1 500 messages missed: the sweep stops at its ceiling (1 000), the window lands, and the gap between them
+     * is kept at the TOP edge of the thread — never an invisible jump — so scrolling up fills it, page after page, until
+     * every message reads in order.
+     */
+    @Test
+    fun `fifteen hundred missed messages all read in order scrolling up, the gap kept at the top edge of the thread`() =
+        runHarnessTest(startMillis = System.currentTimeMillis()) { harness ->
+            val start = message("m0000", second(0))
+            val gateway = GatewayMessageHistory(served = listOf(start), window = 20)
+            val repo = harness.repository(gateway)
+            repo.refresh(CONVERSATION)
+            val all = listOf(start) + (1..1_500).map { message("m%04d".format(it), second(it)) }
+            gateway.served = all
+
+            repo.refresh(CONVERSATION)
+
+            assertThat(gateway.listAfterCalls.first()).isEqualTo(second(0))
+            assertThat(harness.gapTop()).isEqualTo(millis(second(1_481)))
+            assertThat(repo.shownIds()).containsExactlyElementsIn(all.takeLast(20).map { it.id }).inOrder()
+
+            repeat(8) { repo.loadOlder(CONVERSATION) }
+            val halfway = repo.shownIds()
+            assertThat(halfway).containsExactlyElementsIn(all.map { it.id }.takeLast(halfway.size)).inOrder()
+
+            var more = true
+            var pages = 0
+            while (more && pages < 80) {
+                more = repo.loadOlder(CONVERSATION)
+                pages += 1
+            }
+
+            assertThat(harness.gapTop()).isNull()
+            assertThat(repo.shownIds()).containsExactlyElementsIn(all.map { it.id }).inOrder()
+        }
+
+    /**
+     * #19114 — « back to the present » after fifty missed messages: the window alone lands (#14670) and the thirty
+     * messages under it, missed, are not jumped over — the thread shows the window, and scrolling up reads them first.
+     */
+    @Test
+    fun `back to the present after fifty missed messages hides no gap in the thread`() =
+        runHarnessTest(startMillis = System.currentTimeMillis()) { harness ->
+            val history = (0 until 100).map { message("h%02d".format(it), minute(it)) }
+            val gateway = GatewayMessageHistory(served = history, window = 20)
+            val repo = harness.repository(gateway)
+            repo.refresh(CONVERSATION)
+            repo.loadAround(CONVERSATION, "h70")
+            val missed = (100 until 150).map { message("n%03d".format(it), minute(it)) }
+            gateway.served = history + missed
+            val everything = (history + missed).map { it.id }
+
+            repo.jumpToPresent(CONVERSATION)
+
+            assertThat(repo.shownIds()).containsExactlyElementsIn(everything.takeLast(20)).inOrder()
+            repo.loadOlder(CONVERSATION)
+            repo.loadOlder(CONVERSATION)
+            val shown = repo.shownIds()
+            assertThat(shown).containsExactlyElementsIn(everything.takeLast(shown.size)).inOrder()
+            assertThat(shown).containsAtLeastElementsIn(missed.map { it.id })
+            assertThat(harness.gapTop()).isNull()
+        }
+
+    /**
+     * #19115 — five messages the socket brings while a revalidation with a gap reads its sweep. Each Room write made the
+     * stream emit, which cancelled the revalidation inside `transformLatest` and restarted it from zero — and the restart
+     * swept from the newest socket message, above the gap, which stayed for good. It now runs once, out of reach of those
+     * emissions, from the contiguity watermark.
+     */
+    @Test
+    fun `five socket messages during a revalidation with a gap leave it to land in one pass, the gap filled`() =
+        runHarnessTest(startMillis = System.currentTimeMillis()) { harness ->
+            val start = message("m00", minute(0))
+            harness.held(start)
+            harness.database.syncMetaDao().upsert(SyncMetaEntity(KEY, harness.clock.now - THREE_MINUTES, millis(minute(0))))
+            val missed = (1..24).map { message("u%02d".format(it), minute(it)) }
+            val socket = (31..35).map { message("s%02d".format(it), minute(it)) }
+            val history = GatewayMessageHistory(served = listOf(start) + missed, window = 20)
+            var brought = false
+            val gateway = object : MessageApi by history {
+                override suspend fun listAfter(conversationId: String, after: String, limit: Int?): MessagesApiResponse {
+                    if (!brought) {
+                        brought = true
+                        socket.forEach { MessageIngestPipeline(harness.database).ingest(listOf(it), harness.clock.now) }
+                    }
+                    return history.listAfter(conversationId, after, limit)
+                }
+            }
+
+            val opened = harness.repository(gateway).messagesStream(CONVERSATION).first { it is CacheResult.Fresh }
+
+            assertThat(history.validators).hasSize(1)
+            assertThat(history.listAfterCalls).containsExactly(minute(0))
+            assertThat(opened.shownIds()).containsExactlyElementsIn((listOf(start) + missed + socket).map { it.id }).inOrder()
+        }
+
+    private fun sealed(id: String, at: String) = message(id, at, content = "[Encrypted]").copy(isEncrypted = true, encryptionMode = "e2ee")
+
+    private fun MessageCollaboratorHarness.repository(api: MessageApi, erasures: PlaintextErasureLedger) = MessageRepository(
+        api,
+        mockk(relaxed = true),
+        database,
+        database.messageDao(),
+        database.syncMetaDao(),
+        outbox,
+        clock,
+        regime = EndToEndRegimeKeeper(EndToEndRegimeLedger.None, database),
+        erasures = erasures,
+    )
+
+    /** A strictly increasing server instant, one second per message. */
+    private fun second(index: Int): String = Instant.ofEpochSecond(BASE_SECOND + index).toString()
+
     /** A strictly increasing server instant, one minute per message. */
     private fun minute(index: Int): String = Instant.ofEpochSecond(BASE_SECOND + index * 60L).toString()
 
     private companion object {
         const val CONVERSATION = "c1"
         const val KEY = "messages:$CONVERSATION"
+        const val GAP_KEY = "messages:$CONVERSATION:gap"
         const val BASE_SECOND = 1_780_000_000L
         const val THREE_MINUTES = 180_000L
         const val ONE_DAY = 86_400_000L
@@ -601,5 +828,6 @@ class MessageWindowRevalidationTest {
         const val T4 = "2026-06-01T13:00:00Z"
         const val T5 = "2026-06-01T14:00:00Z"
         const val T6 = "2026-06-01T15:00:00Z"
+        const val T9 = "2026-06-02T09:00:00Z"
     }
 }

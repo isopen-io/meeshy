@@ -21,6 +21,14 @@ public interface SyncMetaDao {
     @Query("SELECT contentWatermarkMillis FROM sync_meta WHERE resourceKey = :key")
     public suspend fun watermark(key: String): Long?
 
+    /** [SyncMetaEntity.contentWatermarkMillis] observed — `null` while the key is absent (#19114: a thread's gap). */
+    @Query("SELECT contentWatermarkMillis FROM sync_meta WHERE resourceKey = :key")
+    public fun observeWatermark(key: String): Flow<Long?>
+
+    /** Moves [SyncMetaEntity.contentWatermarkMillis] alone, freshness and validator untouched (#19114). */
+    @Query("UPDATE sync_meta SET contentWatermarkMillis = :watermark WHERE resourceKey = :key")
+    public suspend fun setWatermark(key: String, watermark: Long?)
+
     /** One-shot read of [SyncMetaEntity.etag] (#5188) — see its doc-comment. */
     @Query("SELECT etag FROM sync_meta WHERE resourceKey = :key")
     public suspend fun etag(key: String): String?

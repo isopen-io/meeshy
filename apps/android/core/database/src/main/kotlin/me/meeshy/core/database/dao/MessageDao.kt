@@ -227,16 +227,28 @@ public interface MessageDao {
      * not-yet-acked row's `createdAt` is CLIENT-assigned, never a value the
      * forward-watermark gap backfill (`GET .../messages?after=`) may safely
      * resume from — same exclusion [deleteMissingBetween] already applies.
-     * Read BEFORE a recent-window request, it is also the newest row that page
-     * may prune (#18915): a row written after it arrived while the page was in
-     * flight. `null` when the conversation has no synced messages yet — nothing
-     * held, so nothing to prune and no gap to fill.
+     * Read BEFORE a recent-window request: the sweep's start for a cache written
+     * before the contiguity watermark existed, and the bound beyond which no
+     * validator is sent (#19046 F12). What a page may prune is decided by
+     * identity ([syncedIds]), never by this instant (#19046 F3). `null` when the
+     * conversation has no synced messages yet.
      */
     @Query(
         "SELECT MAX(createdAt) FROM messages WHERE conversationId = :conversationId " +
             "AND sendState IS NULL",
     )
     public suspend fun newestSyncedCreatedAt(conversationId: String): Long?
+
+    /**
+     * #19046 (F3) — the keys of the server rows a conversation holds, read by a revalidation BEFORE its request: what its
+     * page may declare gone is decided by identity, never by comparing server instants.
+     */
+    @Query("SELECT id FROM messages WHERE conversationId = :conversationId AND sendState IS NULL")
+    public suspend fun syncedIds(conversationId: String): List<String>
+
+    /** #19046 — the server rows at or after [fromMillis]: what a recent-window page can cover, from its oldest message. */
+    @Query("SELECT * FROM messages WHERE conversationId = :conversationId AND sendState IS NULL AND createdAt >= :fromMillis")
+    public suspend fun syncedSince(conversationId: String, fromMillis: Long): List<MessageEntity>
 
     /**
      * #18915 — the versions of the [limit] newest rows of a conversation, optimistic bubbles included, read by a

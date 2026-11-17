@@ -10,6 +10,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.SyncMetaDao
@@ -21,6 +22,9 @@ import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.isoToEpochMillis
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.model.sync.RecentWindowPrune
+import me.meeshy.sdk.model.sync.ThreadContiguity
+import me.meeshy.sdk.model.sync.ThreadContiguity.Sweep
 import me.meeshy.sdk.net.ConditionalResult
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.MessageApi
@@ -37,6 +41,12 @@ internal class MessageSyncException(message: String) : Exception(message)
  *
  * Optimistic local rows (`sendState` non-null) ride along with server rows and
  * are reconciled by `clientMessageId` once the server list includes them.
+ *
+ * The thread's history held is CONTIGUOUS up to a watermark ([ThreadContiguity], #18929, #19114), kept in the
+ * `contentWatermarkMillis` of its key: only contiguous reads move it (the recent window and the forward sweep that joins
+ * it, a backward page that closes a gap), never a pushed message, a socket arrival or an acknowledged send. When a gap
+ * stays under the recent window, its top is kept under [ThreadSyncKey.gapOf], the thread shows only the segment above it,
+ * and backward paging starts there.
  */
 internal class MessageCacheSource(
     private val conversationId: String,
@@ -58,9 +68,14 @@ internal class MessageCacheSource(
     private val translations: TranslationLayer? = null,
     /** #16012 — mon envoi servi par la page avant son accusé : ses fichiers locaux suivent la ligne servie. */
     private val media: AcknowledgedBubbleMedia? = null,
+    /** #19115 — the thread's single revalidation flight; `null`: a revalidation runs in its caller's job. */
+    private val revalidations: ThreadRevalidations? = null,
+    /** #19115 — how the stream that drives [revalidate] judges freshness; `null`: [revalidate] always reads. */
+    private val streamFreshness: StreamFreshness? = null,
 ) : SwrCacheSource<List<LocalMessage>> {
 
     private val resourceKey = ThreadSyncKey.of(conversationId)
+    private val gapKey = ThreadSyncKey.gapOf(conversationId)
 
     /**
      * Every snapshot write goes through the field-level merge: local columns kept, nothing
@@ -79,6 +94,9 @@ internal class MessageCacheSource(
      * cached stays observable once the window covers it. `flatMapLatest`
      * re-subscribes [MessageDao.observeRecentForConversation] whenever the
      * window itself grows.
+     *
+     * #19114 — while a gap lies under the recent window, the rows below it stay out of what the thread shows: the gap is
+     * the top edge of the list, where backward paging fills it, never an invisible jump between two messages.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun observe(): Flow<List<LocalMessage>?> =
@@ -86,12 +104,14 @@ internal class MessageCacheSource(
             combine(
                 windowRows(window),
                 syncMetaDao.observe(resourceKey),
-            ) { rows, syncedAt ->
+                shownFrom(window),
+            ) { rows, syncedAt, gapTop ->
                 if (rows.isEmpty() && syncedAt == null) {
                     null
                 } else {
-                    translations?.ensureLoaded(rows.map { it.serverId ?: it.id })
-                    rows.asReversed().map { row -> row.toLocalMessage().let { translations?.project(it) ?: it } }
+                    val shown = rows.aboveGap(gapTop)
+                    translations?.ensureLoaded(shown.map { it.serverId ?: it.id })
+                    shown.asReversed().map { row -> row.toLocalMessage().let { translations?.project(it) ?: it } }
                 }
             }
         }
@@ -105,77 +125,110 @@ internal class MessageCacheSource(
         )
     }
 
+    /** The gap only bounds the recent window; an anchored one shows the island it was opened on. */
+    private fun shownFrom(window: HistoryWindow): Flow<Long?> = when (window) {
+        is HistoryWindow.Recent -> syncMetaDao.observeWatermark(gapKey)
+        is HistoryWindow.Anchored -> flowOf(null)
+    }
+
+    /** A local bubble carries a device instant, never comparable with the gap: it always shows. */
+    private fun List<MessageEntity>.aboveGap(gapTop: Long?): List<MessageEntity> =
+        if (gapTop == null) this else filter { it.sendState != null || it.createdAt >= gapTop }
+
     override fun lastSyncedAt(): Flow<Long?> = syncMetaDao.observe(resourceKey)
 
     /**
      * #18915 — every revalidation reads the RECENT WINDOW ([readWindow], conditional: a 304 without a body when
      * nothing changed). It is the only read that sees what happened to messages ALREADY held — an edit, a
      * deletion, a reaction, a pin, a read receipt missed while the socket was away — since `after=` only ever
-     * serves messages CREATED after the high-water mark: the forward-only revalidation of #5206 left them stale
-     * for good, reopening and pulling included.
+     * serves messages CREATED after its cursor.
      *
-     * The forward sweep (#5206, [readGap]) follows only when the page does not reach back to what was held — its
-     * oldest message is newer than the high-water mark — and reads the gap between the two. A message a push
-     * prefetched ahead of unpushed ones raises the high-water mark too: the window brings back what came before
-     * it (a hole wider than the window still waits for a contiguity watermark, never moved by a push).
+     * The forward sweep ([readGap]) follows only when the page does not reach back to the contiguous history: it starts
+     * from the CONTIGUITY watermark (#18929), never from the newest row held — a message a push prefetched ahead of
+     * unpushed ones, or one the socket brought during a revalidation, is above them and no sweep started from it reads
+     * them back. A sweep stopped at its ceiling (#19114) moves the watermark where it stopped and records the gap.
      *
-     * EVERY read comes first, then ONE write ([persist]: window, gap, prune, `sync_meta`). The thread revalidates
-     * inside the stream's `transformLatest`, and any Room write of this revalidation makes the stream emit — which
-     * cancels it. Written before the sweep, the window cancelled the very sweep it needed and made the thread
-     * fresh with its high-water mark above the gap, which then no revalidation nor backwards page ever filled.
-     * A failed read writes NOTHING and throws: the thread stays stale with its gap still ahead, and since nothing
-     * moved in Room the stream does not emit again — no reread loop.
+     * EVERY read comes first, then ONE write ([persist]: window, gap, prune, `sync_meta`). A failed read writes NOTHING
+     * and throws: the thread stays stale, and since nothing moved in Room the stream does not emit again — no reread loop.
+     * What the revalidation may prune and what it may overwrite are read BEFORE any request ([HeldBefore]).
      *
-     * The high-water mark is read BEFORE any request: the page prunes only what was held before it left
-     * ([prunableSpan]). So are the versions of the newest rows ([heldVersions]): a row another write moved
-     * during the flight (a reaction, a pin the socket brought) keeps them over the page built before. Every
-     * success writes `sync_meta` — a 304 as much as a page — so a revalidation that found nothing new still
-     * leaves the cache fresh, and the next Room write (a receipt, a translation) starts no new request.
+     * #19115 — the work runs in the thread's single flight ([ThreadRevalidations]): a stream emission (a socket arrival,
+     * a receipt, a translation) no longer cancels it and restarts it from zero, so it lands even in an active group. And
+     * since the flight is no longer cancelled by the stream, the stream must not start a second one for nothing: it judges
+     * a snapshot whose rows and sync instant come from two queries, so the write of a flight that just landed reaches it as
+     * new rows with the PREVIOUS instant — a transient Stale. Read again here ([streamFreshness]), the instant says the
+     * thread is fresh, and nothing starts.
      */
     override suspend fun revalidate() {
+        if (streamFreshness?.isFresh(syncMetaDao.lastSyncedAt(resourceKey)) == true) return
+        refresh()
+    }
+
+    /** The explicit refresh (pull, retry): always reads, joining the flight in progress. */
+    suspend fun refresh() = inFlight { revalidateNow(Sweeping.TO_THE_WINDOW) }
+
+    /**
+     * #14670 — « back to the present »: the recent window alone, whatever the cache's newest row, so the present is cached
+     * at once. When the window does not reach back to the contiguous history, the gap under it is recorded (#19114): the
+     * thread shows the window, backward paging fills the gap from there, and the next revalidation sweeps it.
+     */
+    suspend fun revalidatePresent() = inFlight { revalidateNow(Sweeping.SKIPPED) }
+
+    private suspend fun inFlight(work: suspend () -> Unit) {
+        val flights = revalidations ?: return work()
+        flights.join(conversationId, work)
+    }
+
+    private enum class Sweeping { TO_THE_WINDOW, SKIPPED }
+
+    private suspend fun revalidateNow(sweeping: Sweeping) {
         val ticket = fence?.currentTicket()
-        val heldUpTo = messageDao.newestSyncedCreatedAt(conversationId)
-        val heldBefore = heldVersions()
-        val window = readWindow(ticket) ?: return
-        val gap = readGap(window.messages, heldUpTo)
-        fence.commitOrWrite(ticket) { persist(window, gap, heldUpTo, heldBefore) }
+        val held = heldBefore()
+        val window = readWindow(ticket, held) ?: return
+        val gap = if (sweeping == Sweeping.SKIPPED) GapRead(emptyList(), Sweep.Skipped) else readGap(window.messages, held)
+        fence.commitOrWrite(ticket) { persist(window, gap, held) }
     }
 
     /**
-     * #14670 — « back to the present »: the recent window alone, whatever the cache's newest row. After a jump
-     * to an old message a gap sweep would walk from the cache's high-water mark and stop [MAX_AFTER_PAGES] pages
-     * later, still in the past: the window lands without one, so the present is cached at once. What lies between
-     * the window and the history held below it is NOT filled — neither by this revalidation, nor by backward
-     * paging, which starts from the oldest of the newest rows held ([MessageDao.oldestSyncedAmongRecent]) and so
-     * walks down through rows already held, past the hole. The thread keeps that hole, silently, until a
-     * contiguity watermark records where the held history stops being whole. The high-water mark is still read
-     * before the request: it bounds what the page may prune (#18915).
+     * What a revalidation reads BEFORE any request: nothing written during its flight may move it.
+     * - [ids]: the server rows held — the only ones its page may declare gone (#19046 F3, by identity);
+     * - [versions]: the newest rows' versions — a row another write moved during the flight keeps what the page may not
+     *   undo (#18915);
+     * - [upTo] and [contiguity]: where the sweep starts, and whether a validator may be sent (#19046 F12).
      */
-    suspend fun revalidatePresent() {
-        val ticket = fence?.currentTicket()
-        val heldUpTo = messageDao.newestSyncedCreatedAt(conversationId)
-        val heldBefore = heldVersions()
-        val window = readWindow(ticket) ?: return
-        fence.commitOrWrite(ticket) { persist(window, gap = emptyList(), heldUpTo = heldUpTo, heldBefore = heldBefore) }
-    }
+    private class HeldBefore(
+        val upTo: Long?,
+        val contiguity: ThreadContiguity,
+        val etag: String?,
+        val ids: Set<String>,
+        val versions: HeldRowVersions,
+    )
 
-    /** The versions of the newest rows, read BEFORE the request: what the page may not undo (#18915). */
-    private suspend fun heldVersions(): HeldRowVersions =
-        HeldRowVersions.of(messageDao.recentVersions(conversationId, HELD_VERSIONS), HELD_VERSIONS)
+    private suspend fun heldBefore(): HeldBefore = HeldBefore(
+        upTo = messageDao.newestSyncedCreatedAt(conversationId),
+        contiguity = ThreadContiguity(syncMetaDao.watermark(resourceKey), syncMetaDao.watermark(gapKey)),
+        etag = syncMetaDao.etag(resourceKey),
+        ids = messageDao.syncedIds(conversationId).toHashSet(),
+        versions = HeldRowVersions.of(messageDao.recentVersions(conversationId, HELD_VERSIONS), HELD_VERSIONS),
+    )
 
     /** The recent window as the server served it, and the validator to keep with it. */
     private class ServedWindow(val messages: List<ApiMessage>, val etag: String?)
 
+    /** The messages read beyond the window, and how far that read went. */
+    private class GapRead(val messages: List<ApiMessage>, val sweep: Sweep)
+
     /**
-     * The messages between [heldUpTo] and the window's oldest, read BEFORE anything is written (see [revalidate]).
-     * Empty when the window reaches back to what was held; throws when the sweep fails, so nothing is written and
-     * the gap stays ahead of the next revalidation. The failure reaches the thread's state: its text names no internal
-     * identifier — the thread shows its own localized notice, never this text.
+     * The messages between the contiguity watermark and the window's oldest, read BEFORE anything is written (see
+     * [revalidate]). Empty when the window reaches back to the contiguous history; throws when the sweep fails, so nothing is
+     * written and the gap stays ahead of the next revalidation. The failure reaches the thread's state: its text names no
+     * internal identifier — the thread shows its own localized notice, never this text.
      */
-    private suspend fun readGap(window: List<ApiMessage>, heldUpTo: Long?): List<ApiMessage> {
-        val oldestServed = window.minOfOrNull { isoToEpochMillis(it.createdAt) } ?: return emptyList()
-        val gapFrom = heldUpTo?.takeIf { it < oldestServed } ?: return emptyList()
-        return tryAfterSweep(Instant.ofEpochMilli(gapFrom).toString())
+    private suspend fun readGap(window: List<ApiMessage>, held: HeldBefore): GapRead {
+        val oldestServed = window.minOfOrNull { isoToEpochMillis(it.createdAt) } ?: return GapRead(emptyList(), Sweep.Complete)
+        val from = held.contiguity.sweepFrom(held.upTo)?.takeIf { it < oldestServed }
+            ?: return GapRead(emptyList(), Sweep.Complete)
+        return tryAfterSweep(Instant.ofEpochMilli(from).toString())
             ?: throw MessageSyncException("The messages missed before the recent window could not be read")
     }
 
@@ -184,22 +237,15 @@ internal class MessageCacheSource(
      * iterations, advancing [after] to the max `createdAt` seen on each page
      * (ascending order + `skip` pinned to 0 server-side means the `after`
      * value itself is the cursor — [MessageApi.listAfter]'s doc-comment).
-     * A sweep that hits its ceiling hands back what it read (#14670): it lands
-     * with the window, so the present is always cached. What lies beyond the
-     * ceiling — after the last message it read, up to the window's oldest, a
-     * gap of more than [MAX_AFTER_PAGES] × [AFTER_PAGE_SIZE] = 1 000 messages
-     * missed — is NOT recovered: the high-water mark is then above it, so no
-     * later revalidation sees it, and backward paging starts from the oldest
-     * of the newest rows held ([MessageDao.oldestSyncedAmongRecent]), so it
-     * walks down through the rows this sweep read, past the hole. The thread
-     * keeps that hole, silently, until a contiguity watermark records where
-     * the held history stops being whole. Returns `null` — never a partial,
-     * silently-trusted list —
-     * on ANY transport failure, a refused envelope (`success = false`), or a
-     * response whose `cursorPagination` (or its `hasMore`) is missing: none
-     * of those prove anything about what is actually missing.
+     * A sweep that hits its ceiling hands back what it read, as [Sweep.Ceiling] (#14670, #19114): it lands with the
+     * window, so the present is always cached, and the gap beyond what it read — more than [MAX_AFTER_PAGES] ×
+     * [AFTER_PAGE_SIZE] = 1 000 messages missed — is recorded, filled by backward paging and the next revalidations.
+     * A page that says more remain without a readable date to resume from proves no more than what was read: it counts
+     * as a ceiling. Returns `null` — never a partial, silently-trusted list — on ANY transport failure, a refused envelope
+     * (`success = false`), or a response whose `cursorPagination` (or its `hasMore`) is missing: none of those prove
+     * anything about what is actually missing.
      */
-    private suspend fun tryAfterSweep(initialAfter: String): List<ApiMessage>? {
+    private suspend fun tryAfterSweep(initialAfter: String): GapRead? {
         val collected = mutableListOf<ApiMessage>()
         var after = initialAfter
         repeat(MAX_AFTER_PAGES) {
@@ -210,16 +256,18 @@ internal class MessageCacheSource(
                     val rows = body.data
                     collected += rows
                     val hasMore = body.cursorPagination?.hasMore ?: return null
-                    if (!hasMore) return collected
+                    if (!hasMore) return GapRead(collected, Sweep.Complete)
                     val maxCreatedAt = rows.mapNotNull { isoToEpochMillisOrNull(it.createdAt) }.maxOrNull()
-                        ?: return collected
+                        ?: return GapRead(collected, Sweep.Ceiling(newestOf(collected)))
                     after = Instant.ofEpochMilli(maxCreatedAt).toString()
                 }
                 is NetworkResult.Failure -> return null
             }
         }
-        return collected
+        return GapRead(collected, Sweep.Ceiling(newestOf(collected)))
     }
+
+    private fun newestOf(messages: List<ApiMessage>): Long? = messages.mapNotNull { isoToEpochMillisOrNull(it.createdAt) }.maxOrNull()
 
     /**
      * #5188 — the recent-message window is a single, unvarying request shape
@@ -229,30 +277,29 @@ internal class MessageCacheSource(
      * entity.SyncMetaEntity.etag] is always the exact validator for the next
      * call — no request-key scoping needed. A 304 means "confirmed
      * unchanged": zero body decoded, zero Room writes, `lastSyncedAt`
-     * refreshed as any successful revalidation. A 304 arriving when no `ETag`
-     * was held is a server anomaly (RFC 7232 defines 304 only as an answer to
+     * refreshed as any successful revalidation, the contiguity kept. A 304 arriving when no `ETag`
+     * was sent is a server anomaly (RFC 7232 defines 304 only as an answer to
      * a conditional request) and throws, rather than being silently read as
      * "unchanged" or as an empty success.
+     *
+     * #19046 (F12) — the validator leaves only while nothing is held beyond the page it describes and no gap is open
+     * ([ThreadContiguity.mayRevalidateConditionally]): a row that arrived after that page and was then deleted, its event
+     * missed, left the window identical, and the 304 kept it — with its plaintext.
      *
      * Returns the page to write; `null` after a 304, whose only write —
      * `sync_meta`, the confirmation — is the last step of the revalidation.
      */
-    private suspend fun readWindow(ticket: AccountTicket?): ServedWindow? {
-        val currentEtag = syncMetaDao.etag(resourceKey)
-        return when (
-            val result = messageApi.listConditionalResult(
-                conversationId = conversationId,
-                ifNoneMatch = currentEtag,
-            )
-        ) {
+    private suspend fun readWindow(ticket: AccountTicket?, held: HeldBefore): ServedWindow? {
+        val validator = held.etag?.takeIf { held.contiguity.mayRevalidateConditionally(held.upTo) }
+        return when (val result = messageApi.listConditionalResult(conversationId = conversationId, ifNoneMatch = validator)) {
             is ConditionalResult.NotModified -> {
-                if (currentEtag == null) {
+                if (validator == null) {
                     throw MessageSyncException(
                         "Unexpected 304 for messages:$conversationId without If-None-Match sent",
                     )
                 }
                 fence.commitOrWrite(ticket) {
-                    syncMetaDao.upsert(SyncMetaEntity(resourceKey, clock.nowMillis(), null, currentEtag, null))
+                    syncMetaDao.upsert(SyncMetaEntity(resourceKey, clock.nowMillis(), held.contiguity.watermark, validator, null))
                 }
                 null
             }
@@ -263,58 +310,57 @@ internal class MessageCacheSource(
 
     /**
      * The ONE write of a revalidation: the window and its gap under the field-level merge (a message served by both
-     * keeps the gap's copy, read last), the prune of the held span the window covers, and `sync_meta` with the
-     * window's validator — the gap's rows are all newer than [heldUpTo], so they never widen the prune.
+     * keeps the gap's copy, read last), the prune of what the window declares gone ([prune]), the contiguity it proves,
+     * and `sync_meta` with the window's validator.
      *
      * The validator is kept only when the page describes every row it served. A row another write touched during the
-     * flight keeps its reactions and its pin over the page ([heldBefore]); when the page served other values for them,
-     * its validator would make every later revalidation of a quiet thread a 304, and the kept values would stay for
+     * flight keeps its reactions and its pin over the page ([HeldBefore.versions]); when the page served other values for
+     * them, its validator would make every later revalidation of a quiet thread a 304, and the kept values would stay for
      * good. It is dropped instead: the next revalidation reads the window again, without `If-None-Match` (#18915).
      */
-    private suspend fun persist(window: ServedWindow, gap: List<ApiMessage>, heldUpTo: Long?, heldBefore: HeldRowVersions) {
+    private suspend fun persist(window: ServedWindow, gap: GapRead, held: HeldBefore) {
         val now = clock.nowMillis()
-        val servedIds = window.messages.map { it.id }
-        val span = prunableSpan(window.messages, heldUpTo)
+        val contiguity = provedBy(window.messages, gap, held)
         val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
         database.withTransaction {
-            val merged = ingestion.mergeInTransaction(window.messages + gap, now, conversationId, settlements, heldBefore)
-            span?.let {
-                erasures?.recordRemovedRows(pruned(window.messages, it, servedIds))
-                messageDao.deleteMissingBetween(conversationId, it.first, it.last, servedIds)
-            }
-            syncMetaDao.upsert(SyncMetaEntity(resourceKey, now, null, window.etag.takeUnless { merged.disavowedServed }, null))
+            val merged = ingestion.mergeInTransaction(window.messages + gap.messages, now, conversationId, settlements, held.versions)
+            prune(window.messages, held.ids)
+            syncMetaDao.upsert(
+                SyncMetaEntity(resourceKey, now, contiguity.watermark, window.etag.takeUnless { merged.disavowedServed }, null),
+            )
+            if (contiguity.gapTop == null) syncMetaDao.delete(gapKey) else syncMetaDao.upsert(SyncMetaEntity(gapKey, now, contiguity.gapTop))
         }
         settlements?.forEach { media?.settle(it.previous, it.written) }
     }
 
-    /**
-     * #18915 — ce qu'une page de la fenêtre récente peut dire supprimé par son absence : les lignes serveur DÉTENUES
-     * avant la requête ([heldUpTo], lu avant tout réseau) que la page couvre — à partir de son plus ancien message, ou
-     * tout ce qui est détenu sous une page vide. Une ligne arrivée pendant le vol (socket, accusé de mon envoi, rejeu de
-     * la file) porte une horloge serveur postérieure à [heldUpTo] : elle n'est ni élaguée ni inscrite au coffre. Les
-     * deux bornes sont des horloges serveur : aucune dérive d'horloge locale. À froid, rien n'est détenu : `null`.
-     *
-     * Une date servie illisible (absente, mal formée) ne prouve rien de ce que la page couvre : elle vaudrait 0, et
-     * l'empan engloberait tout l'historique détenu, effacement du coffre compris. La page n'élague alors rien et
-     * n'inscrit rien (fail-closed) : `null`.
-     */
-    private fun prunableSpan(window: List<ApiMessage>, heldUpTo: Long?): LongRange? {
-        val through = heldUpTo ?: return null
-        val served = window.map { isoToEpochMillisOrNull(it.createdAt) ?: return null }
-        val from = served.minOrNull() ?: Long.MIN_VALUE
-        return (from..through).takeUnless { it.isEmpty() }
+    /** The contiguity the window and its sweep prove; a window with an unreadable date proves nothing, and moves nothing. */
+    private fun provedBy(window: List<ApiMessage>, gap: GapRead, held: HeldBefore): ThreadContiguity {
+        val instants = window.map { isoToEpochMillisOrNull(it.createdAt) ?: return held.contiguity }
+        val span = if (instants.isEmpty()) null else ThreadContiguity.Span(instants.min(), instants.max())
+        return held.contiguity.afterRevalidation(held.upTo, span, gap.sweep)
     }
 
     /**
-     * #14655 — les lignes serveur que l'élagage va retirer : celles du [span] détenu que la page ne sert plus, sous aucune
-     * de leurs clés (id, id serveur, `cid_`). Une bulle remplacée par sa jumelle serveur n'en est pas une. Le coffre étant
-     * la seule copie du clair d'un message chiffré, chaque ligne élaguée inscrit son effacement (#18915) : la même borne
-     * gouverne la ligne et son clair, si bien que le message supprimé le plus récent n'en laisse plus derrière lui.
+     * #18915, #19046 — what the recent window declares gone by its absence ([RecentWindowPrune]): the server rows held
+     * BEFORE the request (by identity — a row written during the flight, dated ahead or not, is unknown to the page), that
+     * rank above the page's cut in the gateway's total order `(createdAt desc, id desc)` — a row of the same millisecond as
+     * the oldest served, with a lower id, may be the one the limit cut, alive — and that the page serves under none of
+     * their keys. A served date that cannot be read proves nothing: nothing is pruned (fail-closed). The vault being the
+     * only copy of a sealed message's plaintext, each pruned row records its erasure (#14655): the same rule governs the
+     * row and its plaintext, so no deleted message leaves its plaintext behind, and no live one loses it.
      */
-    private suspend fun pruned(messages: List<ApiMessage>, span: LongRange, servedIds: List<String>): List<MessageEntity> {
-        val served = messages.flatMap { listOfNotNull(it.id, it.clientMessageId) }.toSet()
-        return messageDao.missingBetween(conversationId, span.first, span.last, servedIds)
-            .filter { row -> row.id !in served && row.serverId !in served }
+    private suspend fun prune(window: List<ApiMessage>, heldBefore: Set<String>) {
+        val served = window.map { RecentWindowPrune.Served(it.id, it.clientMessageId, isoToEpochMillisOrNull(it.createdAt)) }
+        val from = served.mapNotNull { it.createdAt }.minOrNull() ?: Long.MIN_VALUE
+        val candidates = messageDao.syncedSince(conversationId, from)
+        val gone = RecentWindowPrune.gone(
+            held = candidates.map { RecentWindowPrune.Held(it.id, it.serverId, it.createdAt) },
+            heldBefore = heldBefore,
+            page = served,
+        ).toHashSet()
+        if (gone.isEmpty()) return
+        erasures?.recordRemovedRows(candidates.filter { it.id in gone })
+        gone.chunked(DELETE_CHUNK).forEach { messageDao.deleteByIds(it) }
     }
 
     private companion object {
@@ -329,5 +375,8 @@ internal class MessageCacheSource(
          * gateway serves (20) and the held rows it may have deleted meanwhile, with room to spare.
          */
         const val HELD_VERSIONS = 50
+
+        /** Under SQLite's 999 bound variables (API 26-29). */
+        const val DELETE_CHUNK = 500
     }
 }

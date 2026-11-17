@@ -104,7 +104,7 @@ public class MessageRetentionPurger @Inject internal constructor(
         }
         DedicatedTranslationRows.drop(database, ids)
         keys.map { it.id }.chunked(CHUNK).forEach { messageDao.deleteByIds(it) }
-        keys.mapTo(HashSet()) { it.conversationId }.forEach { database.syncMetaDao().delete(ThreadSyncKey.of(it)) }
+        keys.mapTo(HashSet()) { it.conversationId }.forEach { database.forgetThreadSync(it) }
     }
 
     private companion object {
