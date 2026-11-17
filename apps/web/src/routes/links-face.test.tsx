@@ -1,25 +1,32 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { MyAddress } from '@/lib/api/my-addresses';
+import { loadLinkFamiliesCatalog } from '@/lib/i18n-link-families-catalog';
 
 import { LinkFamilyCard } from './link-families-parts';
 import { LinksAddresses } from './links-addresses';
 import { LinksProfileTicket } from './links-profile-ticket';
 
+beforeAll(async () => {
+  await loadLinkFamiliesCatalog('fr');
+});
+
 const noop = () => undefined;
 const address = (overrides: Partial<MyAddress> = {}): MyAddress => ({ id: 'a1', title: 'Site', url: 'https://aissandiaye.studio', glyph: 'site', position: 0, isShown: true, clicks: 0, ...overrides });
 
 describe('le billet du lien de profil', () => {
-  const html = renderToStaticMarkup(<LinksProfileTicket language="fr" username="aissa" onCopy={noop} onOpenCode={noop} onSend={noop} />);
+  const render = () => renderToStaticMarkup(<LinksProfileTicket language="fr" username="aissa" onCopy={noop} onOpenCode={noop} onSend={noop} />);
 
   test('il dit mon adresse canonique et porte son QR', () => {
+    const html = render();
     expect(html).toContain('meeshy.me/u/aissa');
     expect(html).toContain('data-kit-code-plate');
     expect(html).toMatch(/aria-label="[^"]*QR[^"]*"/);
   });
 
   test('copier, QR et envoyer sont des actions nommées', () => {
+    const html = render();
     expect(html).toContain('Copier');
     expect(html).toContain('Envoyer');
     expect(html).toMatch(/data-links-profile-action="code"/);
