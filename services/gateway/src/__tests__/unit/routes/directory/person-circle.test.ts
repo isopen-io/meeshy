@@ -55,6 +55,7 @@ function prismaDouble(row: ReturnType<typeof lien> | null, cible: Cible = {}) {
       findMany: jest.fn<any>(async () => (cible.privacy ? [{ userId: CIBLE, privacy: cible.privacy }] : [])),
     },
     userPreference: { findMany: jest.fn<any>(async () => []) },
+    profileAddress: { findMany: async () => [] },
     user: {
       findMany: jest.fn<any>(async (args: any) =>
         (args?.where?.blockedUserIds ? [] : args?.where?.id?.in ?? []).map((id: string) => ({

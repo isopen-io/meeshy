@@ -140,8 +140,20 @@
  * L'exclusion de la déshydratation de TanStack ne couvrait pas ce second
  * chemin. Son cache vit en mémoire (`api/shared-locations.ts`).
  */
+/**
+ * ## L'ANNUAIRE ET LES ENVELOPPES CHIFFRÉS EN SORTENT (#18987)
+ *
+ * `/e2ee/*` porte des bundles dont la pré-clé unique est RÉSERVÉE à chaque
+ * lecture, la liste des appareils actifs d'un compte et le rattrapage des
+ * enveloppes. Une copie rejouée sur une passerelle injoignable est donc
+ * FAUSSE par nature : une enveloppe scellée sur une pré-clé déjà réservée
+ * que le pair ne peut pas ouvrir, des 409 Sesame en boucle, des enveloppes
+ * déjà acquittées rouvertes. Rien de `/e2ee` ne se garde ;
+ * `public/sw-retired-caches.js` purge à l'activation ce qu'un worker
+ * précédent y a rangé.
+ */
 export const API_RESPONSE_CACHE_PATTERN =
-  /^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))(?!(?:v1\/)?attachments\/)(?!(?:v1\/)?static\/)(?!v1\/auth\/sessions(?:[/?#]|$))(?!v1\/world\/participants(?:[/?#]|$))(?!v1\/relations\/locations(?:[/?#]|$))/;
+  /^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))(?!(?:v1\/)?attachments\/)(?!(?:v1\/)?static\/)(?!v1\/auth\/sessions(?:[/?#]|$))(?!v1\/world\/participants(?:[/?#]|$))(?!v1\/relations\/locations(?:[/?#]|$))(?!v1\/e2ee(?:[/?#]|$))/;
 
 /**
  * LA ROUTE DE FLUX DES MÉDIAS — le COMPLÉMENT du motif ci-dessus sur `/api/`.
