@@ -64,6 +64,9 @@ public final class E2EEMessageSealer: E2EEMessageSealing, E2EESignalSealing {
     private let cipher: any E2EESessionCipherProviding
     private let directory: any E2EEDirectoryClientProviding
     private let approvals: any E2EEOwnDeviceApprovalProviding
+    /// UN scellement à la fois pour cet appareil, messages et signaux, frappe
+    /// comprise, mes appareils compris (IOS-08, #18946).
+    private let queue: E2EESealingQueue
 
     public init(
         local: E2EELocalDevice,
@@ -75,6 +78,7 @@ public final class E2EEMessageSealer: E2EEMessageSealing, E2EESignalSealing {
         self.cipher = cipher
         self.directory = directory
         self.approvals = approvals
+        self.queue = E2EESealingQueue.shared(for: local)
     }
 
     public func seal(_ content: E2EEContent, to peerUserId: String) async throws -> E2EESealedMessage {
@@ -83,8 +87,12 @@ public final class E2EEMessageSealer: E2EEMessageSealing, E2EESignalSealing {
 
     /// Le clair, rempli au palier (#13142), chiffré pour chaque appareil de la
     /// directe et de mes appareils approuvés : un message et un signal partent
-    /// par le même chemin, à la même taille.
+    /// par le même chemin, à la même taille, et par la même file.
     func seal(plaintext unpadded: Data, to peerUserId: String) async throws -> E2EESealedMessage {
+        try await queue.run { try await sealInTurn(plaintext: unpadded, to: peerUserId) }
+    }
+
+    private func sealInTurn(plaintext unpadded: Data, to peerUserId: String) async throws -> E2EESealedMessage {
         let peerTargets = try await targets(of: peerUserId)
         guard !peerTargets.isEmpty else { throw E2EESealError.recipientHasNoDevice(userId: peerUserId) }
         let own = try await ownTargets()
@@ -182,14 +190,28 @@ public final class E2EEMessageSealer: E2EEMessageSealing, E2EESignalSealing {
 
     /// Ouvre (PQXDH) la session de chaque appareil qui n'en a pas, ou dont la
     /// session vise une autre génération que celle de l'annuaire.
+    ///
+    /// Rien n'est effacé avant l'ouverture (IOS-08) : libsignal ARCHIVE
+    /// lui-même l'état courant (`process_prekey_bundle` → `replace_active_session`,
+    /// trois archives en 0.106), et ce sont ces archives qui ouvrent les
+    /// messages encore en vol. Seul un 409 `stale`/`extra` efface (`forget`).
+    /// Un bundle n'ouvre une session que s'il a été DEMANDÉ, pour la génération
+    /// LISTÉE (IOSX-06) : un bundle servi pour un autre appareil, ou pour une
+    /// autre génération, ne touche à rien — sans quoi une réponse fautive
+    /// remplaçait la session saine d'un autre appareil, ou rouvrait une session
+    /// (une pré-clé consommée) à chaque envoi.
     private func withSessions(userId: String, _ listed: [E2EEDeviceListing]) async throws -> [Target] {
         let toOpen = try listed.filter { device in
             try cipher.remoteRegistrationId(of: E2EEDeviceAddress(userId: userId, deviceId: device.deviceId)) != device.registrationId
         }
         if !toOpen.isEmpty {
+            let requested = Dictionary(toOpen.map { ($0.deviceId, $0.registrationId) }, uniquingKeysWith: { first, _ in first })
             let bundles = try await directory.bundles(userId: userId, deviceIds: toOpen.map(\.deviceId)).devices
-            try bundles.forEach { bundle in
-                try cipher.deleteSession(with: E2EEDeviceAddress(userId: userId, deviceId: bundle.deviceId))
+            try bundles.filter { requested[$0.deviceId] == $0.registrationId }.forEach { bundle in
+                // Revérifiée APRÈS l'attente : une session de cette génération
+                // ouverte entre-temps (un message reçu de cet appareil) reste.
+                let address = E2EEDeviceAddress(userId: userId, deviceId: bundle.deviceId)
+                guard try cipher.remoteRegistrationId(of: address) != bundle.registrationId else { return }
                 try cipher.startSession(with: bundle, of: userId)
             }
         }
