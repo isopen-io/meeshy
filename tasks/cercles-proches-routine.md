@@ -1323,3 +1323,12 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `packages/shared/__tests__/ci` 215 verts sur l'arbre fusionné avec `dev`.
 - Ce qui reste : iOS et Android (#19287), #18714 (points 1 et 2), #19288, #18351 (décision du porteur).
 - Prochain lot recommandé : #19287 (iOS puis Android, prouvés par leur CI).
+
+## 2026-11-17 — réveil de 23 h : mener la PR #19289 (liste seule) à la fusion
+
+- Reprise : deux PR cercles ouvertes. #19354 (icône de cercle, #17013) avait un commit poussé quatre minutes plus tôt
+  par une autre session : je lui cède. #19289 n'avait plus bougé depuis 21 h 23 et sa CI attendait des runners.
+- `origin/dev` (95ffb1dcc) fusionné à la main sans conflit (seuls le traducteur et un état d'agent d'appel bougeaient).
+  Gates rejoués sur l'arbre fusionné : passerelle `sharedLocation/` + porte socket 122 verts ; web
+  `src/lib/shared-locations/` 140 verts.
+- Prochain lot recommandé : #19287 (iOS puis Android de la liste seule), puis #18714 points 1 et 2, puis #19288.
