@@ -64,3 +64,16 @@ test('routeKey : insensible a l ordre des parametres', () => {
   const b = routeKey({ key: '/c/$c/m/$m', params: { m: 'y', c: 'x' } });
   expect(a).toBe(b);
 });
+
+test('un segment peut porter un préfixe littéral : /@$username prend le pseudo, jamais le @', () => {
+  const shortcut = compile('/@$username');
+  expect(match(shortcut, '/@aissa')).toEqual({ username: 'aissa' });
+  expect(match(shortcut, '/@aissa/')).toEqual({ username: 'aissa' });
+  expect(match(shortcut, '/aissa')).toBe(null);
+  expect(match(shortcut, '/@aissa/posts')).toBe(null);
+  expect(match(shortcut, '/@')).toBe(null);
+});
+
+test('le préfixe ne mord pas sur un motif ordinaire : /u/$username reste /u/$username', () => {
+  expect(match(compile('/u/$username'), '/u/@aissa')).toEqual({ username: '@aissa' });
+});

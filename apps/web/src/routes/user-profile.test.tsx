@@ -16,7 +16,7 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sendSheetStore } from '@/lib/send/send-sheet-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { UserProfileView } from './user-profile';
+import { UserProfileView, visitorSignInHref } from './user-profile';
 
 /**
  * **LE PROFIL PUBLIC, MONTÉ** (#7083) — ce que les témoins de port et de pièce
@@ -688,5 +688,23 @@ describe('Envoyer le profil', () => {
   test('un compte bloqué n’offre pas d’envoyer son profil', async () => {
     const blocked = await mount('yann.legoff');
     expect(blocked.querySelector('[data-profile-send]')).toBeNull();
+  });
+});
+
+/**
+ * **LE VISITEUR QUI SE CONNECTE DEPUIS UNE VITRINE Y REVIENT** (#18878) — la fiche est publique :
+ * « Se connecter » doit ramener à l'adresse qu'il lisait, `/u/…` comme `/@…`, et jamais ailleurs.
+ */
+describe('se connecter depuis une vitrine publique', () => {
+  const nextOf = (target: string) => new URL(target, 'http://localhost').searchParams.get('next');
+
+  test('la connexion ramène à l’adresse lue, courte ou longue, avec sa requête', () => {
+    expect(new URL(visitorSignInHref({ pathname: '/@aissa', search: '' }), 'http://localhost').pathname).toBe('/login');
+    expect(nextOf(visitorSignInHref({ pathname: '/@aissa', search: '' }))).toBe('/@aissa');
+    expect(nextOf(visitorSignInHref({ pathname: '/u/aissa', search: '?via=abc' }))).toBe('/u/aissa?via=abc');
+  });
+
+  test('une adresse qui sortirait du domaine ne part pas en `next`', () => {
+    expect(nextOf(visitorSignInHref({ pathname: '//evil.example', search: '' }))).toBeNull();
   });
 });

@@ -62,6 +62,7 @@ import {
   type PendingImages,
   type PrismRank,
 } from '@/routes/profile-sections';
+import { VitrineEntry } from '@/routes/profile-vitrine-entry';
 import { ProfilePostsPanel } from '@/routes/user-profile-posts';
 
 /**
@@ -98,6 +99,9 @@ const actionDeps = appProfileActionDeps;
 
 /* MON PARTAGE DE BATTERIE (#14147) ET MON TÉLÉPHONE INJOIGNABLE (#18737) : un seul chunk — les deux coupures pour tous, et ce que ce navigateur ne fait pas. */
 const MeDeviceSections = lazy(() => import('@/components/me-device-sections').then((m) => ({ default: m.MeDeviceSections })));
+
+/* « VOIR COMME » (#18878) — ma Vitrine telle que chaque cercle la voit : son propre chunk, chargé à l'ouverture de la feuille. */
+const VitrinePreviewSheet = lazy(() => import('@/routes/profile-vitrine-preview').then((m) => ({ default: m.VitrinePreviewSheet })));
 
 const FIELD_LABELS = {
   displayName: 'profile.display_name',
@@ -181,6 +185,9 @@ export default function ProfileScreen() {
   /* LE DÉCOR (#10632) — les entrées « Bannière » et « Contour » n'existent que si le serveur sert `profileDecor` ;
      leurs libellés et les noms des choix se chargent à la demande, une fois. */
   const [decorSide, setDecorSide] = useState<DecorSide | null>(null);
+  const [vitrineOpen, setVitrineOpen] = useState(false);
+  const openVitrine = useCallback(() => setVitrineOpen(true), []);
+  const closeVitrine = useCallback(() => setVitrineOpen(false), []);
   const [decorReady, setDecorReady] = useState(false);
   const [decorNames, setDecorNames] = useState<AppearanceNames | null>(null);
   const decorServed = profile?.profileDecor !== undefined;
@@ -331,6 +338,7 @@ export default function ProfileScreen() {
             />
           )}
           <StatsSection language={language} stats={statsQuery.data ?? null} />
+          {profile === undefined ? null : <VitrineEntry language={language} onOpen={openVitrine} />}
           <ProfileTabs language={language} tabs={MY_PROFILE_TABS} active={tab} onChange={selectTab} idBase={tabBase} badges={badges} />
           <ProfileTabPanel idBase={tabBase} tab={tab}>
             {tab === 'posts' ? (
@@ -409,6 +417,11 @@ export default function ProfileScreen() {
         />
       ))}
       {retouch.layer}
+      {vitrineOpen && profile !== undefined ? (
+        <Suspense fallback={null}>
+          <VitrinePreviewSheet language={language} profile={profile} onClose={closeVitrine} />
+        </Suspense>
+      ) : null}
       {decorSide === null || !decorReady ? null : (
         <ProfileDecorSheet
           side={decorSide}
