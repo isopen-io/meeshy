@@ -9,6 +9,8 @@
  * @module @meeshy/shared/types/api-schemas/user
  */
 
+import { RELATION_LEVELS } from '../relation.js';
+
 // =============================================================================
 // USER SCHEMAS
 // =============================================================================
@@ -352,6 +354,6 @@ export const updateUserRequestSchema = {
     autoTranslateEnabled: { type: 'boolean', description: 'Enable auto-translation' },
     voicePublic: { type: 'boolean', description: 'Expose the cloned voice sample on the public profile' },
     city: { type: 'string', maxLength: 80, nullable: true, description: 'Declared city (empty string or null clears it)' },
-    cityCircle: { type: 'string', enum: ['PUBLIC', 'COMMUNITY', 'ACQUAINTANCE', 'FRIEND', 'CLOSE', 'BLOOD'], nullable: true, description: 'Circle from which the city is readable (null = only the owner)' }
+    cityCircle: { type: 'string', enum: [...RELATION_LEVELS, null], nullable: true, description: 'Circle from which the city is readable (null = only the owner)' }
   }
 } as const;

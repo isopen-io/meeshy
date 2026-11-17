@@ -14,6 +14,7 @@ const VIEWER = '507f1f77bcf86cd7994390fe';
 const OWNER = '507f1f77bcf86cd799439011';
 let viewerLevel: string = 'PUBLIC';
 let viewerId: string | null = VIEWER;
+let relationReadFails = false;
 
 jest.mock('../../../../routes/users/presence-gate', () => ({
   viewerFromRequest: () => null,
@@ -29,7 +30,13 @@ jest.mock('../../../../routes/users/presence-gate', () => ({
 
 jest.mock('../../../../services/relations/profileCircleView', () => {
   const actual = jest.requireActual('../../../../services/relations/profileCircleView') as object;
-  return { ...actual, readProfileCircleView: async () => ({ level: viewerLevel }) };
+  return {
+    ...actual,
+    readProfileCircleView: async () => {
+      if (relationReadFails) throw new Error('relation store unavailable');
+      return { level: viewerLevel };
+    },
+  };
 });
 
 import { getUserById, getUserByUsername, userShortAddressAlias } from '../../../../routes/users/profile';
@@ -58,11 +65,11 @@ async function monter(row: Record<string, unknown>): Promise<FastifyInstance> {
 }
 
 describe('GET /@:username : l’adresse courte redirige vers l’adresse canonique', () => {
-  it('redirige vers /u/<pseudo> en conservant la requête, et /u/<pseudo> reste servi', async () => {
+  it('redirige vers /directory/people/<pseudo> (jamais vers l’alias /u/ déprécié) en conservant la requête, et /u/<pseudo> reste servi', async () => {
     const app = await monter(ligne());
     const res = await app.inject({ method: 'GET', url: `${PREFIXE}/@aissa?fields=username` });
     expect(res.statusCode).toBe(307);
-    expect(res.headers.location).toBe(`${PREFIXE}/u/aissa?fields=username`);
+    expect(res.headers.location).toBe(`${PREFIXE}/directory/people/aissa?fields=username`);
     const ancien = await app.inject({ method: 'GET', url: `${PREFIXE}/u/aissa` });
     expect(ancien.statusCode).toBe(200);
   });
@@ -73,6 +80,17 @@ describe('GET /@:username : l’adresse courte redirige vers l’adresse canoniq
     expect(mauvais.statusCode).toBe(404);
     const slash = await app.inject({ method: 'GET', url: `${PREFIXE}/@//evil.com` });
     expect(slash.statusCode).not.toBe(307);
+  });
+
+  it('suit la règle RÉELLE des pseudos : un pseudo qui commence par « _ » ou « - » est servi, un point ne l’est pas', async () => {
+    const app = await monter(ligne());
+    const souligne = await app.inject({ method: 'GET', url: `${PREFIXE}/@_aissa` });
+    expect(souligne.statusCode).toBe(307);
+    expect(souligne.headers.location).toBe(`${PREFIXE}/directory/people/_aissa`);
+    const tiret = await app.inject({ method: 'GET', url: `${PREFIXE}/@-aissa` });
+    expect(tiret.statusCode).toBe(307);
+    const point = await app.inject({ method: 'GET', url: `${PREFIXE}/@ai.ssa` });
+    expect(point.statusCode).toBe(404);
   });
 });
 
@@ -105,6 +123,19 @@ describe('la ville déclarée est servie selon le cercle choisi par son proprié
     expect(res.json().data.city).toBe('Dakar');
     expect(res.json().data.cityCircle).toBeNull();
     viewerId = VIEWER;
+  });
+
+  it('une lecture de relation qui échoue ferme la VILLE, jamais la fiche', async () => {
+    viewerLevel = 'BLOOD'; viewerId = VIEWER; relationReadFails = true;
+    try {
+      const app = await monter(ligne({ cityCircle: 'FRIEND' }));
+      const res = await app.inject({ method: 'GET', url: `${PREFIXE}/u/aissa` });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.username).toBe('aissa');
+      expect('city' in res.json().data).toBe(false);
+    } finally {
+      relationReadFails = false;
+    }
   });
 
   it('un cercle PUBLIC sert la ville sans lecture de relation', async () => {
