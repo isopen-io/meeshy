@@ -526,18 +526,44 @@ describe('une édition qui laisse la synthèse intacte (#18910)', () => {
     expect(reproduced).toBe(0);
   });
 
-  it('une traduction périmée dans le contexte est bien purgée, donc la ligne est réécrite et annoncée', async () => {
+  it('une traduction périmée dans le contexte est purgée en silence : la ligne est réécrite, rien n’est annoncé', async () => {
     findMany.mockResolvedValue([
       settledRow({ context: { conversationId: '507f1f77bcf86cd799439021', translatedContent: 'old', translatedLanguage: 'en' } }),
     ]);
 
-    const reproduced = await reproduceEditedMessageNotifications(
+    await reproduceEditedMessageNotifications(
       prisma, { messageId: MESSAGE_ID, content: 'nouveau texte' }, announcer
     );
 
-    expect(reproduced).toBe(1);
+    expect(update).toHaveBeenCalledTimes(1);
     expect(updatedData().context).not.toHaveProperty('translatedContent');
-    expect(announceNotificationsReproduced).toHaveBeenCalledTimes(1);
+    expect(announceNotificationsReproduced).not.toHaveBeenCalled();
+  });
+
+  it('la PREMIÈRE correction d’un vrai message (contexte pré-enregistré par l’éventail) purge le texte d’avant sans rien annoncer', async () => {
+    findMany.mockResolvedValue([
+      settledRow({
+        context: {
+          conversationId: '507f1f77bcf86cd799439021',
+          messageContent: 'Bonjuor à tous',
+          messageOriginalLanguage: 'fr',
+          translatedContent: 'Hello everyone',
+          translatedLanguage: 'en',
+          messageCreatedAt: '2026-11-17T10:00:00.000Z',
+          messageType: 'text',
+        },
+      }),
+    ]);
+
+    await reproduceEditedMessageNotifications(
+      prisma, { messageId: MESSAGE_ID, content: 'Bonjour à tous' }, announcer
+    );
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(updatedData().context).not.toHaveProperty('messageContent');
+    expect(updatedData().context).toMatchObject({ messageCreatedAt: '2026-11-17T10:00:00.000Z', messageType: 'text' });
+    expect(updatedData().content).toBe('Petit message texte');
+    expect(announceNotificationsReproduced).not.toHaveBeenCalled();
   });
 
   it('seules les lignes dont la synthèse change sont annoncées', async () => {
