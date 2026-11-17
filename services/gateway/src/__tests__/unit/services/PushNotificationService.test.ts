@@ -112,6 +112,8 @@ const mockPrisma = {
     update: jest.fn(),
     deleteMany: jest.fn(),
   },
+  // Un compte qui garde une session vivante : ses jetons hérités (sans `sessionId`) partent (#18910).
+  userSession: { findMany: jest.fn(async () => [{ id: 'live-session' }]) },
 };
 
 jest.mock('@meeshy/shared/prisma/client', () => ({

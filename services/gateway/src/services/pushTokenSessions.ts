@@ -14,9 +14,9 @@
  * 4. la porte du réveil PushToTalk retire au passage ceux dont la session a expiré (`talkieWakeChannel`).
  *
  * RÉTROCOMPATIBLE, aucune migration : une ligne sans `sessionId` (enregistrée avant le lien, ou par un
- * client qui n'envoie aucun `sid`) reste servie. Elle ne se retire que lorsqu'aucune session valide ne
- * reste au compte (révocation totale, réinitialisation du mot de passe) : une déconnexion d'UN appareil
- * ne coupe pas les autres. Un jeton PushToTalk, lui, est toujours né d'une session : sans elle, il part.
+ * client qui n'envoie aucun `sid`) reste servie tant que le compte garde une session valide. Elle ne se
+ * retire que lorsqu'aucune session valide ne reste au compte (révocation totale, réinitialisation du mot
+ * de passe), et l'envoi la retient dès cet instant : une déconnexion d'UN appareil ne coupe pas les autres. Un jeton PushToTalk, lui, est toujours né d'une session : sans elle, il part.
  *
  * Un PushToTalk se SUPPRIME (c'est un jeton de réveil sans autre usage) ; les autres types sont
  * DÉSACTIVÉS (`isActive: false`) : le client les réinscrit à chaque lancement, ce qui les réactive.
@@ -122,7 +122,9 @@ export async function retirePushTokensAfterSessionEnd(
 
 /**
  * Défense en profondeur de l'envoi : ne garde que les jetons dont la session vit (valide, non échue), plus ceux
- * qui n'en portent pas (héritage, rétrocompatibilité). Une lecture groupée, et aucune quand rien n'est lié.
+ * qui n'en portent pas (héritage, rétrocompatibilité) TANT QUE le compte garde une session vivante : un téléphone
+ * perdu avant le lien, jamais relancé, ne reçoit plus rien quand toutes les sessions du compte sont closes ou
+ * échues. Un jeton lié vivant suffit à le prouver ; sinon une lecture bornée (`take: 1`).
  * Une panne de la lecture PROPAGE : un contenu ne part jamais faute d'avoir pu vérifier qu'il en avait le droit.
  */
 export async function keepTokensOfLiveSessions<T extends { readonly sessionId?: string | null }>(
@@ -131,8 +133,8 @@ export async function keepTokensOfLiveSessions<T extends { readonly sessionId?: 
   tokens: readonly T[],
   now: Date = new Date(),
 ): Promise<T[]> {
-  const bound = sessionIdsOf(tokens);
-  if (bound.length === 0) return [...tokens];
-  const alive = await liveSessionIds(prisma, userId, bound, now);
-  return tokens.filter((token) => !token.sessionId || alive.has(token.sessionId));
+  const alive = await liveSessionIds(prisma, userId, sessionIdsOf(tokens), now);
+  const hasUnbound = tokens.some((token) => !token.sessionId);
+  const unboundMayGo = hasUnbound && (alive.size > 0 || (await hasLiveSession(prisma, userId, now)));
+  return tokens.filter((token) => (token.sessionId ? alive.has(token.sessionId) : unboundMayGo));
 }

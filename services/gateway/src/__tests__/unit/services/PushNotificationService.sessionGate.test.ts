@@ -133,8 +133,8 @@ describe('sendToUser ne part pas vers un jeton dont la session est morte', () =>
     mockApnsSend.mockResolvedValue({ sent: [{ device: 'x' }], failed: [] });
     mockPrisma.pushToken.update.mockResolvedValue({});
     mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
-    mockPrisma.userSession.findMany.mockImplementation(async (args: { where: { id: { in: string[] }; isValid: boolean; expiresAt: { gt: Date } } }) =>
-      sessions.filter((s) => args.where.id.in.includes(s.id) && s.isValid === args.where.isValid && s.expiresAt > args.where.expiresAt.gt).map((s) => ({ id: s.id })));
+    mockPrisma.userSession.findMany.mockImplementation(async (args: { where: { id?: { in: string[] }; isValid: boolean; expiresAt: { gt: Date } } }) =>
+      sessions.filter((s) => (!args.where.id || args.where.id.in.includes(s.id)) && s.isValid === args.where.isValid && s.expiresAt > args.where.expiresAt.gt).map((s) => ({ id: s.id })));
   });
 
   afterEach(() => { process.env = originalEnv; });
@@ -152,14 +152,35 @@ describe('sendToUser ne part pas vers un jeton dont la session est morte', () =>
     expect(mockFirebaseMessagingSend).toHaveBeenCalledTimes(1);
   });
 
-  it('rétrocompatibilité : un jeton sans session (hérité) part toujours, sans lecture de session', async () => {
+  it('rétrocompatibilité : un jeton sans session (hérité) part tant que le compte garde une session vivante', async () => {
     const svc = await service();
     mockPrisma.pushToken.findMany.mockResolvedValue([token('herite', null)]);
 
     const results = await svc.sendToUser({ userId: USER, payload: { title: 'Awa', body: 'Rendez-vous à 18h' } });
 
     expect(results).toEqual([expect.objectContaining({ success: true })]);
-    expect(mockPrisma.userSession.findMany).not.toHaveBeenCalled();
+  });
+
+  it('un jeton hérité ne part plus quand TOUTES les sessions du compte sont révoquées ou échues (téléphone perdu, jamais relancé)', async () => {
+    const svc = await service();
+    mockPrisma.userSession.findMany.mockResolvedValue([]);
+    mockPrisma.pushToken.findMany.mockResolvedValue([token('herite', null), token('echu', EXPIRED, 'fcm')]);
+
+    const results = await svc.sendToUser({ userId: USER, payload: { title: 'Awa', body: 'Rendez-vous à 18h' } });
+
+    expect(results).toEqual([]);
+    expect(mockApnsSend).not.toHaveBeenCalled();
+    expect(mockFirebaseMessagingSend).not.toHaveBeenCalled();
+  });
+
+  it('un jeton hérité à côté d’un jeton lié vivant part sans seconde lecture de session', async () => {
+    const svc = await service();
+    mockPrisma.pushToken.findMany.mockResolvedValue([token('herite', null), token('vivant', LIVE, 'fcm')]);
+
+    const results = await svc.sendToUser({ userId: USER, payload: { title: 'Awa', body: 'Rendez-vous à 18h' } });
+
+    expect(results).toHaveLength(2);
+    expect(mockPrisma.userSession.findMany).toHaveBeenCalledTimes(1);
   });
 
   it("la session est lue pour CE compte : une session d'un autre compte ne valide pas le jeton", async () => {

@@ -140,7 +140,7 @@ describe('serveur-transport — la panne du fournisseur n\'est pas la faute du j
     mockPrisma.pushToken.update.mockResolvedValue({});
     mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 2 });
     mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
-    mockPrisma.userSession.findMany.mockResolvedValue([]);
+    mockPrisma.userSession.findMany.mockResolvedValue([{ id: 'live-session' }]);
   });
 
   afterEach(() => { process.env = originalEnv; });
