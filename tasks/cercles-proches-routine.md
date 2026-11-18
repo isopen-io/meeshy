@@ -1415,17 +1415,28 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Lot suivant : voir les issues ouvertes du milestone des cercles (prochaine dimension non mûre de la liste seule :
   le cas « jusqu'à l'arrêt » côté passerelle).
 
-## 2026-11-18 — réveil de 13 h : un seul appareil publie la position (#18580, #18714)
+## 2026-11-18 — réveil de 11 h : un seul appareil publie la position (#18580, #18714)
 
 - Reprise : #19652 (liste seule iOS + Android) fusionnée, aucune PR de la routine ouverte, aucune branche vivante sur
   les centres de partage : lot réservé avant toute écriture (`claude/cercles-18580-un-seul-publie`).
 - Ce qui restait de #18580 et #18714 après la liste seule (#19284, #19287) : un appareil qui PUBLIAIT et relisait une
-  liste agrandie par un autre appareil l'adoptait sans céder ; les deux envoyaient leur position et la personne voyait
+  liste changée par un autre appareil l'adoptait sans céder ; les deux envoyaient leur position et la personne voyait
   le point sauter. Et iOS, au repli vers une passerelle d'avant la liste seule, pouvait faire surgir la demande de
   permission pour un simple retrait.
-- Livré, sur les trois clients : à la relecture du partage servi, une liste qui a GAGNÉ quelque chose (une personne de
-  plus, une autre précision, une échéance repoussée de plus de 5 min) fait céder l'appareil d'ici (marque « reçue »,
-  suivi coupé, aucun relevé ne part). Un retrait fait ailleurs passe par la liste seule et ne change pas qui publie ;
-  « Partager » d'ici en refait l'appareil qui publie. iOS : `silentFix()` au repli, jamais de demande de permission.
-  Les points 1 et 3 de #18714 sont tenus par la liste seule (une personne qui n'est plus servie est ignorée) et par
-  `silentFix` ; le point 2 par ce lot.
+- Première version (comparer la liste servie à la sienne : personne de plus, précision, échéance à 5 min près) jugée
+  BLOQUANTE par l'audit adversarial : l'échéance servie vient de l'horloge de la passerelle, la locale de l'appareil ;
+  un appareil en retard de plus de 5 min se taisait sur son propre partage, un accusé perdu ou une liste seule qui
+  abaisse la précision aussi — et plus personne ne publiait. Leçon : on ne compare jamais deux horloges pour décider
+  qui publie, on fait nommer l'événement par celui qui l'a vu.
+- Livré : la passerelle nomme le dernier démarrage AVEC position (`startedAt`, déjà dans l'état scellé, gardé par la
+  liste seule) dans l'accusé de `location:share-start` et dans `GET /relations/locations/mine` (clés additives).
+  Chaque client garde le `startedAt` de son accusé ; à la relecture, un autre démarrage servi le fait céder (marque
+  « reçue », suivi coupé, aucun relevé). Inconnu (relancement, accusé perdu) : le servi est pris pour le sien ; absent
+  (passerelle d'avant) : rien ne change. iOS : `silentFix()` au repli, jamais de demande de permission.
+- Reste ouvert (suivi) : un appareil relancé PENDANT qu'un autre a repris la publication prend le démarrage servi pour
+  le sien, et publie avec lui jusqu'au prochain « Partager » (persister `startedAt` avec la marque « reçue »).
+- Gates : passerelle `sharedLocation` + `relations` + `socketio` 1 380 verts, `tsc` vert ; web `shared-locations` +
+  `api` 174 verts, `tsc` vert ; jvm-check `:core:model` `*SharedLocation*` 61 verts ; gardes iOS (règles maison 42,
+  cohésion, inscription des tests) vertes ; `packages/shared/__tests__/ci` 214/215, le rouge
+  (`call:conversation-changed`, parité socket) vient du lot appels de `dev`, étranger aux cercles. Swift et `sdk-core`
+  se prouvent par la CI de la PR.
