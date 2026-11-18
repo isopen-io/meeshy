@@ -150,13 +150,31 @@ describe('l’écran d’appel', () => {
   });
 });
 
+describe('#19701 — une seule vignette, au-dessus de tout', () => {
+  test('elle entre dans la couche supérieure du navigateur (popover manuel), sans les marges ni la bordure par défaut d’un popover', () => {
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />);
+    const frame = tagOf(html, 'data-call-bubble="');
+    expect(frame).toContain('popover="manual"');
+    for (const reset of ['right:auto', 'bottom:auto', 'margin:0', 'padding:0', 'border:0']) expect(frame).toContain(reset);
+  });
+
+  test('en audio comme en vidéo, c’est la même vignette : seul ce qu’elle montre change', () => {
+    const audio = tagOf(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />), 'data-call-bubble="');
+    const video = tagOf(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', members: { 'u-a': peer({ cameraOn: true }) }, remoteStreams: { 'u-a': liveVideo } })} />), 'data-call-bubble="');
+    expect(audio).toContain('rounded-card');
+    expect(video).toContain('rounded-card');
+    expect(audio).not.toContain('rounded-full');
+    expect(video).not.toContain('rounded-full');
+  });
+});
+
 describe('la bulle ne déplace que son `translate` (#11314)', () => {
   test('ancrée en haut à gauche, posée par `translate`, avec la seule transition de `translate`', () => {
     const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />);
     expect(html).toContain('left:0');
     expect(html).toContain('top:0');
     expect(html).toContain('translate:');
-    expect(html).toContain('transition:translate 180ms ease-out');
+    expect(html).toContain('transition:translate 420ms cubic-bezier(0.22, 1, 0.36, 1)');
     expect(html).not.toMatch(/transition:[^;"]*(left|top|width|height)/);
   });
 });

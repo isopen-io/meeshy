@@ -315,7 +315,6 @@ final class CallReducedWiringTests: XCTestCase {
         let source = try code("CallBubbleView.swift")
         XCTAssertTrue(source.contains("CallReducedCaption(callManager: callManager, style: .glass)"))
         XCTAssertFalse(source.contains("isMenuRevealed"), "#19696 — plus de mini-menu : l'étiquette ne cède sa place à aucun bouton")
-        XCTAssertTrue(source.contains("value: isCircleRegion)"), "elle change de place en mouvement, jamais d'un coup")
     }
 
     func test_caption_glassIsTheSharedNameplate_andReadsTheHeaderNamesUnderTheClock() throws {

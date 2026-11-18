@@ -2,11 +2,12 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Bulle avatar circulaire — forme repliée de l'appel en cours, atteinte par
-/// swipe depuis `FloatingCallPillView`. Au palier cercle, c'est le disque rogné
-/// aimanté au bord (`CallEdgeDisk`, #18458). Déplaçable (drag libre, clipse au
-/// bord le plus proche), pinçable (4 paliers de taille cercle → small →
-/// medium → large, morphing continu — spec
+/// La vignette de l'appel réduit — forme repliée de l'appel en cours, atteinte par
+/// swipe depuis `FloatingCallPillView`. #19701 — UNE seule forme, la vignette
+/// rectangulaire, en audio (l'avatar) comme en vidéo (la vidéo de l'autre) ; plus
+/// de disque. Déplaçable (le doigt la porte image par image ; au lâcher, elle
+/// glisse selon l'élan puis se pose au bord le plus proche), pinçable (3 paliers
+/// small → medium → large, morphing continu — spec
 /// 2026-08-03-call-bubble-pip-resize-morph-design.md), tap → plein écran
 /// déployé depuis l'endroit où elle flotte (P18.4). #19696 — réduit, l'appel
 /// ne porte AUCUN bouton d'appel : la personne (sa vidéo, sinon son avatar) et
@@ -39,16 +40,6 @@ struct CallBubbleView: View {
         callManager.isVideoEnabled || callManager.isRemoteVideoEnabled
     }
 
-    private var presence: CallReducedPresence {
-        CallReducedPresence.resolve(
-            displayMode: callManager.displayMode,
-            isActive: callManager.callState.isActive,
-            isSystemPiPActive: callManager.isSystemPiPActive,
-            isInCallConversation: isInCallConversation,
-            isVideo: isVideo
-        )
-    }
-
     var body: some View {
         if CallReturnPoint.showsBubble(
             displayMode: callManager.displayMode,
@@ -70,20 +61,14 @@ struct CallBubbleView: View {
 
     // MARK: - Pinch progress
 
-    /// Progression continue (0...3, `.circle...large`) — ancrée sur le
+    /// Progression continue (0...2, `.small...large`) — ancrée sur le
     /// palier snappé au repos (`pinchScale == 1`), suit l'échelle du doigt en
     /// direct pendant un pinch actif.
     private var currentProgress: CGFloat {
         CallBubbleGestureResolver.progress(
-            startingTier: CallReducedPresence.effectiveTier(stored: callManager.bubbleSizeTier, presence: presence),
+            startingTier: callManager.bubbleSizeTier,
             scale: pinchScale
         )
-    }
-
-    /// Vrai tant que la forme est encore proche du cercle : le disque rogné
-    /// aimanté au bord (#18458) ; au-delà, la vignette rectangle.
-    private var isCircleRegion: Bool {
-        currentProgress < 0.5
     }
 
     // MARK: - Cluster (la personne et la durée, « Arrêter » pendant un partage)
@@ -92,7 +77,7 @@ struct CallBubbleView: View {
     private func bubbleCluster(in geometry: GeometryProxy) -> some View {
         let progress = currentProgress
         let size = CallBubbleGestureResolver.interpolatedSize(progress: progress)
-        let cornerRadius = CallBubbleGestureResolver.interpolatedCornerRadius(progress: progress)
+        let cornerRadius = CallBubbleGestureResolver.rectangleCornerRadius
 
         ZStack {
             shareStopSlot(size: size)
@@ -128,21 +113,13 @@ struct CallBubbleView: View {
         }
     }
 
-    /// #18458 — au palier cercle, l'appel réduit est le disque rogné aimanté au
-    /// bord : ses cercles disent la ligne, la durée continue dessus, le réseau
-    /// ne s'y montre que dégradé, et aucune étiquette ne vit sous lui. Aux
-    /// paliers rectangle, la vignette garde son badge et son étiquette « nom · durée » ;
-    /// aucun bouton (#19696).
-    @ViewBuilder
+    /// La vignette : la vidéo de l'autre, sinon son avatar (`CallParticipantVisual`), son badge
+    /// de réseau et l'étiquette « nom · durée » ; aucun bouton (#19696), aucun disque (#19701).
     private func participantVisual(size: CGSize, cornerRadius: CGFloat) -> some View {
-        if isCircleRegion {
-            CallEdgeDisk(callManager: callManager, edge: callManager.bubbleEdge, strength: signalStrength)
-        } else {
-            CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)
-                .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
-                .overlay(alignment: .topTrailing) { signalBadge }
-                .overlay(alignment: .bottom) { nameplate(frameWidth: size.width) }
-        }
+        CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)
+            .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
+            .overlay(alignment: .topTrailing) { signalBadge }
+            .overlay(alignment: .bottom) { nameplate(frameWidth: size.width) }
     }
 
     private func adjustTier(_ direction: AccessibilityAdjustmentDirection) {
@@ -166,22 +143,18 @@ struct CallBubbleView: View {
             .offset(x: 16, y: -16)
     }
 
-    /// P18.5 — l'étiquette de verre « nom · durée » : en bas à gauche du cadre aux paliers
-    /// rectangle (resserrée à sa largeur), sous le cercle au palier cercle (trop petit pour la
-    /// porter). Elle passe d'une place à l'autre en mouvement et ne prend aucun toucher.
+    /// P18.5 — l'étiquette de verre « nom · durée », en bas à gauche du cadre, resserrée à sa
+    /// largeur. Elle ne prend aucun toucher.
     private func nameplate(frameWidth: CGFloat) -> some View {
         CallReducedCaption(callManager: callManager, style: .glass)
             .minimumScaleFactor(0.75)
-            .fixedSize(horizontal: isCircleRegion, vertical: true)
-            .frame(width: isCircleRegion ? nil : max(frameWidth - 2 * MeeshySpacing.sm, 0), alignment: .leading)
-            .padding(.bottom, isCircleRegion ? 0 : MeeshySpacing.sm)
-            .offset(y: isCircleRegion ? nameplateBelowOffset : 0)
-            .animation(reduceMotion ? Animation.easeInOut(duration: 0.15) : Animation.spring(response: 0.3, dampingFraction: 0.85), value: isCircleRegion)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(width: max(frameWidth - 2 * MeeshySpacing.sm, 0), alignment: .leading)
+            .padding(.bottom, MeeshySpacing.sm)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
 
-    private let nameplateBelowOffset: CGFloat = 32
 
     private var touchReach: CGFloat {
         max(16, shareStopReach)
@@ -231,7 +204,6 @@ struct CallBubbleView: View {
 
     private func accessibilityTierLabel(for tier: CallBubbleSizeTier) -> String {
         switch tier {
-        case .circle: return String(localized: "call.bubble.size.circle", defaultValue: "Cercle", bundle: .main)
         case .small: return String(localized: "call.bubble.size.small", defaultValue: "Petit", bundle: .main)
         case .medium: return String(localized: "call.bubble.size.medium", defaultValue: "Moyen", bundle: .main)
         case .large: return String(localized: "call.bubble.size.large", defaultValue: "Grand", bundle: .main)
@@ -257,15 +229,9 @@ struct CallBubbleView: View {
         let margin = CallBubbleGestureResolver.bubbleEdgeMargin
         let halfWidth = size.width / 2
         let safeArea = geometry.safeAreaInsets
-        // #18458 — le disque du palier cercle est rogné par le bord.
-        let x: CGFloat
-        if isCircleRegion {
-            x = CallEdgeDiskLaw.centerX(edge: callManager.bubbleEdge, screenWidth: geometry.size.width, diameter: size.width)
-        } else {
-            x = callManager.bubbleEdge == .trailing
-                ? geometry.size.width - safeArea.trailing - margin - halfWidth
-                : safeArea.leading + margin + halfWidth
-        }
+        let x = callManager.bubbleEdge == .trailing
+            ? geometry.size.width - safeArea.trailing - margin - halfWidth
+            : safeArea.leading + margin + halfWidth
         let availableHeight = geometry.size.height - safeArea.top - safeArea.bottom
         let rawY = callManager.bubbleVerticalFraction * availableHeight
         let clampedY = CallBubbleGestureResolver.clampedVerticalPosition(
@@ -289,8 +255,12 @@ struct CallBubbleView: View {
             .onEnded { value in
                 let size = CallBubbleGestureResolver.interpolatedSize(progress: currentProgress)
                 let center = bubbleCenter(in: geometry, size: size)
-                let releasedX = center.x + value.translation.width
-                let releasedY = center.y + value.translation.height
+                // #19701 — l'élan du geste emporte la vignette au-delà du point de lâcher.
+                let glided = CallBubbleGestureResolver.glidedTranslation(
+                    translation: value.translation, predicted: value.predictedEndTranslation
+                )
+                let releasedX = center.x + glided.width
+                let releasedY = center.y + glided.height
                 let edge = CallBubbleGestureResolver.snappedEdge(centerX: releasedX, screenWidth: geometry.size.width)
 
                 let safeArea = geometry.safeAreaInsets
@@ -299,7 +269,11 @@ struct CallBubbleView: View {
                     releasedY - safeArea.top, availableHeight: availableHeight, bubbleRadius: size.height / 2
                 )
 
-                withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.75)) {
+                let glide = Animation.spring(
+                    response: CallBubbleGestureResolver.glideResponse,
+                    dampingFraction: CallBubbleGestureResolver.glideDamping
+                )
+                withAnimation(reduceMotion ? nil : glide) {
                     dragTranslation = .zero
                     callManager.bubbleEdge = edge
                     callManager.bubbleVerticalFraction = availableHeight > 0 ? clampedY / availableHeight : 0

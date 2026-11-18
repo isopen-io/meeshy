@@ -3,6 +3,7 @@
     <string name="call_status_reconnecting">Reconnecting (%1$d)…</string>
     <string name="call_pill_ongoing">Ongoing call with %1$s</string>
     <string name="call_pill_reopen">Return to call</string>
+    <string name="call_pill_collapse">Shrink to a thumbnail</string>
     <string name="call_history_outgoing">Outgoing call</string>
     <string name="call_quality_excellent">Excellent connection</string>
     <string name="call_quality_fair">Fair connection</string>
