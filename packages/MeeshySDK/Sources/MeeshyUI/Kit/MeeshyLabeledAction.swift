@@ -34,6 +34,7 @@ public struct MeeshyLabeledAction: View {
     @Environment(\.meeshyKeyPlatform) private var keyPlatform
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    @State private var isHovered = false
 
     public init(title: String,
                 systemImage: String,
@@ -89,6 +90,8 @@ public struct MeeshyLabeledAction: View {
             .buttonStyle(MeeshyLabeledActionStyle { isPressed in
                 column(recipe: recipe, isPressed: isPressed && recipe.isActionable, shownKeys: shownKeys)
             })
+            .meeshyPointerMagnet(in: RoundedRectangle(cornerRadius: MeeshyRadius.md), isActive: recipe.isActionable)
+            .onHover { hovering in isHovered = hovering }
             .meeshyKeyShortcut(shortcut)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label ?? title)
@@ -101,6 +104,7 @@ public struct MeeshyLabeledAction: View {
         let isDark = colorScheme == .dark
         return VStack(spacing: CGFloat(recipe.labelGap)) {
             disc(recipe: recipe, isPressed: isPressed)
+                .meeshyPointerLift(in: Circle(), tint: tint, isHovered: isHovered && recipe.isActionable)
             Text(title)
                 .font(MeeshyFont.relative(CGFloat(recipe.labelFontSize), weight: .semibold))
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
