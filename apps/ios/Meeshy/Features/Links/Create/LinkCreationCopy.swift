@@ -1,4 +1,5 @@
 import Foundation
+import MeeshyUI
 
 /// Les mots de la création d'un lien (planches `Lien-Creer` et `Lien-Suivi-Creer`), en un seul endroit.
 nonisolated enum LinkCreationCopy {
@@ -9,8 +10,11 @@ nonisolated enum LinkCreationCopy {
     static var ruleTheLink: String { String(localized: "links.create.tracking.step2", defaultValue: "Règle ton lien", bundle: .main) }
     static var nameLabel: String { String(localized: "links.create.tracking.name", defaultValue: "Nom", bundle: .main) }
     static var addressLabel: String { String(localized: "links.create.address", defaultValue: "Adresse", bundle: .main) }
-    static var addressCaption: String {
-        String(localized: "links.create.address.caption", defaultValue: "Laisse vide pour une adresse tirée au hasard", bundle: .main)
+    static var addressNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "links.create.address.question", defaultValue: "Faut-il choisir une adresse ?", bundle: .main),
+            text: String(localized: "links.create.address.note", defaultValue: "Laisse vide pour une adresse tirée au hasard.", bundle: .main)
+        )
     }
     static var addressInvalid: String {
         String(localized: "links.create.address.invalid", defaultValue: "De 5 à 50 lettres, chiffres ou tirets", bundle: .main)
@@ -19,19 +23,16 @@ nonisolated enum LinkCreationCopy {
     static var externalInvalid: String {
         String(localized: "links.create.tracking.external.invalid", defaultValue: "Cette adresse ne s'ouvre pas sur le web", bundle: .main)
     }
-    static var externalDetail: String {
-        String(localized: "links.create.tracking.external.detail", defaultValue: "Site, boutique, billetterie", bundle: .main)
-    }
     static var expires: String { String(localized: "links.create.expires", defaultValue: "Expire", bundle: .main) }
     static var countUnique: String {
         String(localized: "links.create.tracking.unique", defaultValue: "Compter les visiteurs uniques", bundle: .main)
     }
-    static var countUniqueDetail: String {
-        String(localized: "links.create.tracking.unique.detail", defaultValue: "Un retour ne compte qu'une fois", bundle: .main)
-    }
     static var utmTitle: String { String(localized: "links.create.tracking.utm", defaultValue: "Mesure (UTM)", bundle: .main) }
-    static var utmDetail: String {
-        String(localized: "links.create.tracking.utm.detail", defaultValue: "Pour savoir d'où viennent tes clics", bundle: .main)
+    static var utmNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "links.create.tracking.utm.question", defaultValue: "À quoi sert la mesure UTM ?", bundle: .main),
+            text: String(localized: "links.create.tracking.utm.note", defaultValue: "Pour savoir d'où viennent tes clics.", bundle: .main)
+        )
     }
     static var utmSource: String { String(localized: "links.create.tracking.utm.source", defaultValue: "Source", bundle: .main) }
     static var utmMedium: String { String(localized: "links.create.tracking.utm.medium", defaultValue: "Support", bundle: .main) }
@@ -50,9 +51,6 @@ nonisolated enum LinkCreationCopy {
 
     static var shareKind: String { String(localized: "links.create.share.kind", defaultValue: "Lien de partage", bundle: .main) }
     static var entries: String { String(localized: "links.create.share.entries", defaultValue: "Nombre d'entrées", bundle: .main) }
-    static var entriesDetail: String {
-        String(localized: "links.create.share.entries.detail", defaultValue: "Ensuite, le lien se ferme", bundle: .main)
-    }
     static var lessEntries: String { String(localized: "links.create.share.entries.less", defaultValue: "Moins d'entrées", bundle: .main) }
     static var moreEntries: String { String(localized: "links.create.share.entries.more", defaultValue: "Plus d'entrées", bundle: .main) }
     static var languages: String { String(localized: "links.create.share.languages", defaultValue: "Langues autorisées", bundle: .main) }

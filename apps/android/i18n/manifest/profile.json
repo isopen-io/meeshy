@@ -93,10 +93,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "profile.blocked.byMe",
           "androidName": "profile_blocked_by_me",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "ui",
@@ -187,10 +185,8 @@
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "share.links.copy.a11y",
           "androidName": "profile_share_copy",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "androidName": "profile_share_message",

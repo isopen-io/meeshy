@@ -301,6 +301,8 @@ export const SERVER_EVENTS = {
   ...CALL_RECORDING_SERVER_EVENTS,
   /** #8433 — une personne vient d'être invitée dans l'appel : diffusé aux participants. */
   CALL_PARTICIPANT_INVITED: 'call:participant-invited',
+  /** #19650 — l'appel a changé de conversation (groupe trouvé ou créé à la première invitation) : diffusé à la room de l'appel. */
+  CALL_CONVERSATION_CHANGED: 'call:conversation-changed',
   /** #8470 — la personne invitée a refusé : diffusé aux participants, sa puce « Sonne… » se résout. */
   CALL_INVITE_DECLINED: 'call:invite-declined',
   /** #8470 — la personne invitée n'a pas répondu dans la durée de la sonnerie d'un appel. */

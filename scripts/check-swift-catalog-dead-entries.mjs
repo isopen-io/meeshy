@@ -581,13 +581,7 @@ const PENDING_CLIENT_ENTRIES = {
   'UsersEndpoint.meHighlightsById': { issue: 19394, reason: 'PATCH · DELETE /users/me/highlights/:id (iOS)' },
   'UsersEndpoint.meHighlightsOrder': { issue: 19394, reason: 'PUT /users/me/highlights/order (iOS)' },
   // Le profil de la planche (#18857, PR serveur #19316) : le serveur sert avant le tour client iOS.
-  'ContactExchangeEndpoint.byTokenAccept': { issue: 19205, reason: 'POST /contact-exchange/:token/accept — accepter un partage sans contact (iOS)' },
-  'MeEndpoint.contactExchange': { issue: 19205, reason: 'POST /me/contact-exchange — émettre le jeton du partage sans contact (iOS)' },
   'MeEndpoint.liveActivityTokens': { issue: 19463, reason: 'POST /me/live-activity-tokens — l\'Activité en direct iOS close par la passerelle à la fin du partage' },
-  'MeEndpoint.locationGhost': { issue: 19203, reason: 'PUT /me/location/ghost — le fantôme global de position (iOS)' },
-  'RelationsEndpoint.byUserIdLocationRequest': { issue: 19204, reason: 'POST /relations/:userId/location/request — prolonger ou redemander un partage (iOS)' },
-  'UsersEndpoint.meProfileLinkStats': { issue: 19206, reason: 'GET /users/me/profile-link/stats — les visites de mon lien (iOS)' },
-  'InvitationsEndpoint.emailByIdResend': { issue: 19207, reason: 'POST /invitations/email/:id/resend — relancer une invitation (iOS)' },
   'InvitationsEndpoint.emailOptOut': { issue: 19321, reason: 'POST /invitations/email/opt-out — la page web de désinscription, pas un écran iOS (#19321)' },
   // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
   'ConversationsEndpoint.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (iOS)' },
@@ -617,7 +611,7 @@ const PENDING_CLIENT_ENTRIES = {
   'E2EeEndpoint.devicesSelfVerificationsAck': { issue: 18906, reason: 'POST /e2ee/devices/self/verifications/ack — accuser les messages de comparaison lus, même lot iOS' },
 };
 
-const BASELINE_DEAD_ENTRIES = 328;
+const BASELINE_DEAD_ENTRIES = 327;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

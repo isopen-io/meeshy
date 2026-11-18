@@ -32,9 +32,21 @@ public nonisolated enum MeeshyStateGhostTemplate: String, Sendable, Equatable, C
     case pin
 }
 
-/// L'image du bloc : un fantôme, le glyphe seul de l'hôte, ou rien.
+/// Une tuile fantôme LÉGENDÉE : ce qu'on pourrait poser là (« réel », « photo », « Site »), son glyphe et son mot.
+public nonisolated struct MeeshyStateGhostTile: Sendable, Equatable, Hashable {
+    public let systemImage: String
+    public let caption: String
+
+    public init(systemImage: String, caption: String) {
+        self.systemImage = systemImage
+        self.caption = caption
+    }
+}
+
+/// L'image du bloc : un fantôme, une rangée de tuiles fantômes légendées, le glyphe seul de l'hôte, ou rien.
 public nonisolated enum MeeshyStateArt: Sendable, Equatable {
     case ghost(MeeshyStateGhostTemplate, count: Int)
+    case ghostTiles([MeeshyStateGhostTile])
     case glyph
     case none
 }
@@ -171,6 +183,11 @@ public nonisolated struct MeeshyStateBlockRecipe: Sendable, Equatable {
     /// Les fantômes d'une image : de 1 à 4 silhouettes.
     public static func ghostCount(_ requested: Int) -> Int {
         min(max(requested, 1), maxGhostCount)
+    }
+
+    /// Les tuiles légendées montrées : au plus 4, dans l'ordre de l'hôte, sans légende vide.
+    public static func shownGhostTiles(_ tiles: [MeeshyStateGhostTile]) -> [MeeshyStateGhostTile] {
+        Array(tiles.filter { !$0.caption.isEmpty && !$0.systemImage.isEmpty }.prefix(maxGhostCount))
     }
 
     /// Le flottement du glyphe : un va-et-vient lent, arrêté sous mouvement réduit.

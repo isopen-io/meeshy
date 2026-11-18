@@ -38,4 +38,5 @@
     <string name="bubble_a11y_file">Archivo %1$s</string>
     <string name="bubble_a11y_pinned">Fijado</string>
     <string name="bubble_a11y_ephemeral">Mensaje autodestructivo</string>
+    <string name="skeleton_link_row_loading">Cargando un enlace</string>
 </resources>

@@ -70,6 +70,17 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertTrue(label.contains(blood), "un cercle vide se dit aussi : \(label)")
     }
 
+    func test_circlesPhase_paintsNoZeroBeforeAnythingIsServed_andOffersRetryAfterAFailure() {
+        XCTAssertEqual(ProfileCirclesSection.phase(hasServedLinks: false, loadState: .loading), .loading)
+        XCTAssertEqual(ProfileCirclesSection.phase(hasServedLinks: false, loadState: .idle), .loading)
+        XCTAssertEqual(ProfileCirclesSection.phase(hasServedLinks: false, loadState: .offline), .unavailable(offline: true))
+        XCTAssertEqual(ProfileCirclesSection.phase(hasServedLinks: false, loadState: .error("x")), .unavailable(offline: false))
+        XCTAssertEqual(ProfileCirclesSection.phase(hasServedLinks: true, loadState: .error("x")), .counts,
+                       "un échec ne retire jamais ce qui est servi")
+        let label = ProfileCirclesSection.accessibilityLabel(summary: .empty, isLoading: true)
+        XCTAssertFalse(label.contains("0"), "pendant le chargement, VoiceOver ne dit aucun zéro : \(label)")
+    }
+
     func test_emptyPhrase_beforeTheLinksAreServed_isAbsent() {
         XCTAssertNil(ProfileCirclesSection.emptyPhrase(for: .empty, hasServedLinks: false),
                      "cinq zéros pendant le chargement ne disent pas encore « aucun lien »")
@@ -429,6 +440,24 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertTrue(sample.acceptsScrub(loadedURL: "/v.m4a"))
     }
 
+    func test_voiceToggle_afterAFailedLoad_startsAgain_insteadOfResumingNothing() {
+        let sample = ProfileVoiceSample(url: "/v.m4a", isPublic: true, servedDuration: 9)
+        let failed = ProfileVoiceSample.loadedURL(currentUrl: "/v.m4a", hasPlayer: false, isLoading: false)
+        XCTAssertNil(failed, "un son demandé sans lecteur n'est pas chargé")
+        XCTAssertEqual(sample.toggle(loadedURL: failed), .start("/v.m4a"), "le toucher suivant relance l'échantillon")
+        XCTAssertFalse(sample.acceptsScrub(loadedURL: failed), "aucun glissement vers un lecteur absent")
+        let playing = ProfileVoiceSample.loadedURL(currentUrl: "/v.m4a", hasPlayer: true, isLoading: false)
+        XCTAssertEqual(sample.toggle(loadedURL: playing), .pauseOrResume)
+        let buffering = ProfileVoiceSample.loadedURL(currentUrl: "/v.m4a", hasPlayer: false, isLoading: true)
+        XCTAssertEqual(buffering, "/v.m4a", "un chargement en cours tient le son")
+    }
+
+    func test_voiceSection_saysAFailedLoad_andTheKitForgetsTheUrlItCouldNotLoad() throws {
+        let voice = try code("Meeshy/Features/Profile/Faces/ProfileVoiceSection.swift")
+        XCTAssertTrue(voice.contains("if player.loadFailed"), "l'échec se dit, le disque reste touchable")
+        XCTAssertFalse(voice.contains("toggle(loadedURL: player.currentUrl)"), "jamais l'URL seulement demandée")
+    }
+
     func test_voiceDuration_isTheServedOne_untilTheFileTellsItsOwn() {
         let sample = ProfileVoiceSample(url: "/v.m4a", isPublic: true, servedDuration: 9)
         XCTAssertEqual(sample.shownDuration(playerDuration: 0), 9)
@@ -440,7 +469,7 @@ final class ProfileSectionsTests: XCTestCase {
 
     func test_vitrine_mountsMyVoice_outOfEditing_andItsPlayerIsTheKitWavePlayer() throws {
         let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
-        XCTAssertTrue(profile.contains("if !isEditing, let voice = ProfileVoiceSample.make(user: user)"))
+        XCTAssertTrue(profile.contains("ProfileVoiceBlock.resolve(sample: sample, isEditing: isEditing)"))
         let voice = try code("Meeshy/Features/Profile/Faces/ProfileVoiceSection.swift")
         XCTAssertTrue(voice.contains("MeeshyWavePlayer("), "le lecteur est K35, aucun lecteur redessiné sur place")
         XCTAssertTrue(voice.contains("player.play(urlString: url)"), "le disque lit vraiment l'échantillon servi")
@@ -1007,16 +1036,68 @@ final class TrackingLinkInsightsTests: XCTestCase {
     }
 
     func test_pausedLink_ofShareOrTracking_isSwitchedBackOnFromItsTicket_theOthersOpenTheirDetail() throws {
-        XCTAssertTrue(ProfileCreatedLinkTicket.switchesInPlace(.paused, family: .share))
-        XCTAssertTrue(ProfileCreatedLinkTicket.switchesInPlace(.paused, family: .tracking))
-        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(.paused, family: .community), "aucun service ne rallume un lien de communauté")
-        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(.full, family: .share), "un lien plein se règle par sa limite")
-        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(.expired, family: .tracking))
+        func ticket(_ family: LinksFaceFamily, active: Bool, figure: LinksFaceFigure = .clicks(3),
+                    expiresAt: Date? = nil) -> LinksFaceTicket {
+            LinksFaceTicket(id: "t", family: family, title: "T", code: "c", copyValue: "c", figure: figure,
+                            isActive: active, expiresAt: expiresAt)
+        }
+        XCTAssertTrue(ProfileCreatedLinkTicket.switchesInPlace(ticket(.share, active: false)))
+        XCTAssertTrue(ProfileCreatedLinkTicket.switchesInPlace(ticket(.tracking, active: false)))
+        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(ticket(.community, active: false)), "aucun service ne rallume un lien de communauté")
+        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(ticket(.share, active: true, figure: .arrivals(5, cap: 5))), "un lien plein se règle par sa limite")
+        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(ticket(.tracking, active: true, expiresAt: .distantPast)))
+        let pausedAndExpired = ticket(.tracking, active: false, expiresAt: .distantPast)
+        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(pausedAndExpired), "rallumé, il ne mènerait toujours nulle part")
+        XCTAssertEqual(ProfileCreatedLinkTicket.lastingStoppage(pausedAndExpired), .expired, "c'est l'échéance qui se dit")
+        let pausedAndFull = ticket(.share, active: false, figure: .arrivals(5, cap: 5))
+        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(pausedAndFull))
+        XCTAssertEqual(ProfileCreatedLinkTicket.lastingStoppage(pausedAndFull), .full, "« Augmenter la limite » reste offert")
         let ticket = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileCreatedLinkTicket.swift"))
         XCTAssertTrue(ticket.contains("MeeshyToggleRow(ProfileLinksCopy.linkActive"), "« Lien actif » est la ligne à interrupteur du kit")
         XCTAssertTrue(ticket.contains("accessory: .toggle(isOn: false)"))
         XCTAssertTrue(ticket.contains("action: { onSwitch(true) }"))
     }
+
+    func test_pausedLink_saysWhatItKeeps_inTheWordsOfItsFigure() throws {
+        let french = Locale(identifier: "fr_FR")
+        XCTAssertEqual(ProfileLinksCopy.kept(.clicks(412), locale: french), String(format: String(localized: "profile.links.kept.clicks", defaultValue: "Ses %@ clics sont gardés.", bundle: .main), "412"))
+        XCTAssertNotEqual(ProfileLinksCopy.kept(.members(3), locale: french), ProfileLinksCopy.kept(.clicks(3), locale: french), "chaque chiffre se dit avec ce qu'il compte")
+        let ticket = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileCreatedLinkTicket.swift"))
+        XCTAssertTrue(ticket.contains("if let kept = ticket.keptFigure()"), "le compte gardé suit la conséquence de la pause")
+        XCTAssertTrue(ticket.contains("ProfileLinksCopy.kept(kept, locale: locale)"))
+    }
+
+    func test_createdLinks_putTheStoppedOnesUnderTheirOwnHeader() throws {
+        let face = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileLinksFaceSections.swift"))
+        XCTAssertTrue(face.contains("tickets(model.summary.serving(model.visibleTickets))"), "ceux qui servent d'abord")
+        XCTAssertTrue(face.contains("stoppedSection(model.summary.stopped(model.visibleTickets))"), "« À l'arrêt » dessous")
+        XCTAssertTrue(face.contains("MeeshySectionHeader(title: ProfileLinksCopy.stoppedTitle, count: stopped.count"))
+    }
+
+    func test_contactlessUnavailable_isAStateBlock_thenTheQRInstead_withShowMyQR() throws {
+        let card = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Links/ProfileCardView.swift"))
+        XCTAssertTrue(card.contains("MeeshyStateBlock(kind: .denied, title: ProfileLinksCopy.contactlessUnavailable"),
+                      "« Ce téléphone ne sait pas faire ça » est un bloc d'état K38")
+        XCTAssertTrue(card.contains("MeeshySectionHeader(title: ProfileLinksCopy.instead"), "« À la place »")
+        XCTAssertTrue(card.contains("action: { mode = .qr }"), "« Montrer mon QR » passe au QR")
+        XCTAssertTrue(card.contains("scannerShown = true"), "scanner celui de l'autre reste possible")
+    }
+
+    func test_trackingDetail_isMadeOfTheKit() throws {
+        let detail = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Links/Views/TrackingLinkDetailView.swift"))
+        for piece in ["MeeshyTicket(", "MeeshyCodeCard(", "MeeshyLabeledAction(", "MeeshyFigureBand(", "MeeshyChart(",
+                      "MeeshyShareBar(", "MeeshySegmented("] {
+            XCTAssertTrue(detail.contains(piece), "\(piece) : le détail d'un lien est fait du kit")
+        }
+        for drawn in ["RoundedRectangle(", "GeometryReader", "Capsule("] {
+            XCTAssertFalse(detail.contains(drawn), "\(drawn) : aucun composant redessiné sur place")
+        }
+    }
+}
+
+/// Les interrupteurs des billets créés vivent avec les autres témoins de la face Liens, qui portent leurs fabriques.
+@MainActor
+extension ProfileLinksFaceTests {
 
     func test_createdLinks_switchingAPausedShareLinkOn_appliesAtOnce_andSendsItsLinkId() async {
         let log = SwitchLog()
@@ -1073,41 +1154,5 @@ final class TrackingLinkInsightsTests: XCTestCase {
         XCTAssertEqual(model.trackingLink(id: "tracking:t1")?.isActive, true)
         let sent = await log.sent
         XCTAssertEqual(sent, ["dkr-nuit:true"])
-    }
-
-    func test_pausedLink_saysWhatItKeeps_inTheWordsOfItsFigure() throws {
-        let french = Locale(identifier: "fr_FR")
-        XCTAssertEqual(ProfileLinksCopy.kept(.clicks(412), locale: french), String(format: String(localized: "profile.links.kept.clicks", defaultValue: "Ses %@ clics sont gardés.", bundle: .main), "412"))
-        XCTAssertNotEqual(ProfileLinksCopy.kept(.members(3), locale: french), ProfileLinksCopy.kept(.clicks(3), locale: french), "chaque chiffre se dit avec ce qu'il compte")
-        let ticket = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileCreatedLinkTicket.swift"))
-        XCTAssertTrue(ticket.contains("if let kept = ticket.keptFigure()"), "le compte gardé suit la conséquence de la pause")
-        XCTAssertTrue(ticket.contains("ProfileLinksCopy.kept(kept, locale: locale)"))
-    }
-
-    func test_createdLinks_putTheStoppedOnesUnderTheirOwnHeader() throws {
-        let face = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileLinksFaceSections.swift"))
-        XCTAssertTrue(face.contains("tickets(model.summary.serving(model.visibleTickets))"), "ceux qui servent d'abord")
-        XCTAssertTrue(face.contains("stoppedSection(model.summary.stopped(model.visibleTickets))"), "« À l'arrêt » dessous")
-        XCTAssertTrue(face.contains("MeeshySectionHeader(title: ProfileLinksCopy.stoppedTitle, count: stopped.count"))
-    }
-
-    func test_contactlessUnavailable_isAStateBlock_thenTheQRInstead_withShowMyQR() throws {
-        let card = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Links/ProfileCardView.swift"))
-        XCTAssertTrue(card.contains("MeeshyStateBlock(kind: .denied, title: ProfileLinksCopy.contactlessUnavailable"),
-                      "« Ce téléphone ne sait pas faire ça » est un bloc d'état K38")
-        XCTAssertTrue(card.contains("MeeshySectionHeader(title: ProfileLinksCopy.instead"), "« À la place »")
-        XCTAssertTrue(card.contains("action: { mode = .qr }"), "« Montrer mon QR » passe au QR")
-        XCTAssertTrue(card.contains("scannerShown = true"), "scanner celui de l'autre reste possible")
-    }
-
-    func test_trackingDetail_isMadeOfTheKit() throws {
-        let detail = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Links/Views/TrackingLinkDetailView.swift"))
-        for piece in ["MeeshyTicket(", "MeeshyCodeCard(", "MeeshyLabeledAction(", "MeeshyFigureBand(", "MeeshyChart(",
-                      "MeeshyShareBar(", "MeeshySegmented("] {
-            XCTAssertTrue(detail.contains(piece), "\(piece) : le détail d'un lien est fait du kit")
-        }
-        for drawn in ["RoundedRectangle(", "GeometryReader", "Capsule("] {
-            XCTAssertFalse(detail.contains(drawn), "\(drawn) : aucun composant redessiné sur place")
-        }
     }
 }

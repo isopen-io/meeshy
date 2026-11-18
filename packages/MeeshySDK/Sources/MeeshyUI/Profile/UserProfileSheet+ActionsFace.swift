@@ -18,8 +18,10 @@ extension UserProfileSheet {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(ProfileActionsSection.order, id: \.self) { section in
                 actionsSection(section)
+                    .meeshyCascade(rank: ProfileActionsSection.order.firstIndex(of: section) ?? 0)
             }
         }
+        .meeshyCascadeFace()
         .padding(.horizontal, MeeshySpacing.xl)
         .task(id: pendingRequestId) { await loadPendingRequest() }
         .sheet(isPresented: $sharesProfile) {
@@ -46,12 +48,12 @@ extension UserProfileSheet {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: String(localized: "profile.relation.section.talk", defaultValue: "Parler", bundle: .module))
             MeeshyActionGrid {
-                labeledAction(.write, reach: talkReach(.write)) { openConversation() }
+                ProfileTalkAction(operation: .write, reach: talkReach(.write), badge: writeBadge, tint: accentTint) {
+                    openConversation()
+                }
                 if offersCall {
-                    labeledAction(.call, reach: talkReach(.call)) { requestCall(isVideo: false) }
-                        .disabled(talkReach(.call) == .needsNetwork)
-                    labeledAction(.video, reach: talkReach(.video)) { requestCall(isVideo: true) }
-                        .disabled(talkReach(.video) == .needsNetwork)
+                    ProfileTalkAction(operation: .call, reach: talkReach(.call), tint: accentTint) { requestCall(isVideo: false) }
+                    ProfileTalkAction(operation: .video, reach: talkReach(.video), tint: accentTint) { requestCall(isVideo: true) }
                 }
                 ProfileWhereSlot.of(self, .action)
             }
@@ -59,17 +61,9 @@ extension UserProfileSheet {
         }
     }
 
-    func labeledAction(_ operation: ProfileRelationAction, hint: String? = nil, reach: ProfileTalkReach = .available,
-                       action: @escaping () -> Void) -> some View {
-        MeeshyLabeledAction(
-            title: operation.title,
-            systemImage: operation.systemImage,
-            value: ProfileStatesCopy.reachMention(reach),
-            valueKind: reach == .queued ? .accent : .quiet,
-            tint: accentTint,
-            hint: hint,
-            action: action
-        )
+    /// La pastille d'« Écrire » (#19646) : rien sur ma fiche ni quand l'un de nous a bloqué l'autre.
+    var writeBadge: ProfileWriteBadge {
+        isCurrentUser || isInteractionDisabled ? .empty : writeUnread
     }
 
     /// Hors ligne (planche `Etat-HorsLigne`) : « Écrire » partira au retour du réseau, les appels l'attendent.
@@ -119,7 +113,7 @@ extension UserProfileSheet {
         switch requestStage {
         case .open, .unsent:
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
-                                linked: $relationLinked) {
+                                linked: $relationLinked, tint: accentTint) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     ProfileFriendRequestCard(tint: accentTint, unsent: requestStage == .unsent) { note in
                         Task { await sendConnectionRequest(message: note) }
@@ -129,7 +123,7 @@ extension UserProfileSheet {
             }
         case .closed:
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
-                                linked: $relationLinked) {
+                                linked: $relationLinked, tint: accentTint) {
                 ProfileClosedRequestCard(name: name)
             }
         case .sent(let sentAt):
@@ -150,10 +144,10 @@ extension UserProfileSheet {
             ProfileAcceptedRequestCard(name: name, isOnline: resolvedPresence == .online, tint: accentTint,
                                        onWrite: { openConversation() })
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
-                                linked: $relationLinked) { EmptyView() }
+                                linked: $relationLinked, tint: accentTint) { EmptyView() }
         case .connected:
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
-                                linked: $relationLinked) { ProfileConnectedBadge() }
+                                linked: $relationLinked, tint: accentTint) { ProfileConnectedBadge() }
         }
     }
 

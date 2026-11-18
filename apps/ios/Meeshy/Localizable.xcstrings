@@ -9544,7 +9544,7 @@
         }
       }
     },
-    "circles.proposal.accept.hint": {
+    "circles.proposal.accept.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -9638,7 +9638,7 @@
         }
       }
     },
-    "circles.proposal.decline.hint": {
+    "circles.proposal.decline.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -34888,49 +34888,96 @@
         }
       }
     },
-    "links.create.address.caption": {
+    "links.create.address.question": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اتركه فارغًا لعنوان عشوائي"
+            "value": "هل عليّ اختيار عنوان؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Leer lassen für eine zufällige Adresse"
+            "value": "Muss ich eine Adresse wählen?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Leave empty for a random address"
+            "value": "Do I have to choose an address?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Déjalo vacío para una dirección al azar"
+            "value": "¿Tengo que elegir una dirección?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Laisse vide pour une adresse tirée au hasard"
+            "value": "Faut-il choisir une adresse ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lascia vuoto per un indirizzo casuale"
+            "value": "Devo scegliere un indirizzo?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deixe vazio para um endereço aleatório"
+            "value": "Preciso escolher um endereço?"
+          }
+        }
+      }
+    },
+    "links.create.address.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اتركه فارغًا لعنوان عشوائي."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leer lassen für eine zufällige Adresse."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave empty for a random address."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déjalo vacío para una dirección al azar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laisse vide pour une adresse tirée au hasard."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lascia vuoto per un indirizzo casuale."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deixe vazio para um endereço aleatório."
           }
         }
       }
@@ -36157,53 +36204,6 @@
         }
       }
     },
-    "links.create.share.entries.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "بعدها يُغلق الرابط"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Danach schließt sich der Link"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Then the link closes"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Después, el enlace se cierra"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ensuite, le lien se ferme"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Poi il link si chiude"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Depois, o link se fecha"
-          }
-        }
-      }
-    },
     "links.create.share.entries.less": {
       "extractionState": "manual",
       "localizations": {
@@ -36909,53 +36909,6 @@
         }
       }
     },
-    "links.create.tracking.external.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "موقع، متجر، تذاكر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Website, Shop, Ticketverkauf"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Website, shop, ticketing"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Web, tienda, venta de entradas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Site, boutique, billetterie"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sito, negozio, biglietteria"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Site, loja, bilheteria"
-          }
-        }
-      }
-    },
     "links.create.tracking.external.invalid": {
       "extractionState": "manual",
       "localizations": {
@@ -37332,53 +37285,6 @@
         }
       }
     },
-    "links.create.tracking.unique.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "العودة تُحتسب مرة واحدة فقط"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein erneuter Besuch zählt nur einmal"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A return visit counts only once"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una visita repetida cuenta una sola vez"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un retour ne compte qu'une fois"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una visita di ritorno conta una sola volta"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Uma visita de retorno conta só uma vez"
-          }
-        }
-      }
-    },
     "links.create.tracking.utm": {
       "extractionState": "manual",
       "localizations": {
@@ -37473,49 +37379,96 @@
         }
       }
     },
-    "links.create.tracking.utm.detail": {
+    "links.create.tracking.utm.question": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لمعرفة مصدر نقراتك"
+            "value": "ما فائدة قياس UTM؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Um zu wissen, woher deine Klicks kommen"
+            "value": "Wozu dient die UTM-Messung?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "To know where your clicks come from"
+            "value": "What is UTM measurement for?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Para saber de dónde vienen tus clics"
+            "value": "¿Para qué sirve la medición UTM?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pour savoir d'où viennent tes clics"
+            "value": "À quoi sert la mesure UTM ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Per sapere da dove arrivano i tuoi clic"
+            "value": "A cosa serve la misurazione UTM?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Para saber de onde vêm seus cliques"
+            "value": "Para que serve a medição UTM?"
+          }
+        }
+      }
+    },
+    "links.create.tracking.utm.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لمعرفة مصدر نقراتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um zu wissen, woher deine Klicks kommen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To know where your clicks come from."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para saber de dónde vienen tus clics."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pour savoir d'où viennent tes clics."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Per sapere da dove arrivano i tuoi clic."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para saber de onde vêm seus cliques."
           }
         }
       }
@@ -48148,6 +48101,53 @@
         }
       }
     },
+    "profile.circles.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دوائري غير متاحة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Kreise sind nicht verfügbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "My circles are unavailable"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mis círculos no están disponibles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mes cercles sont indisponibles"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I miei cerchi non sono disponibili"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meus círculos estão indisponíveis"
+          }
+        }
+      }
+    },
     "profile.circles.invite": {
       "extractionState": "manual",
       "localizations": {
@@ -48195,7 +48195,54 @@
         }
       }
     },
-    "profile.circles.open.hint": {
+    "profile.circles.offline": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير متصل — ستعود دوائري مع الشبكة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline — Meine Kreise kommen mit dem Netz zurück"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline — My circles will return with the network"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin conexión — Mis círculos volverán con la red"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hors ligne — Mes cercles reviendront avec le réseau"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline — I miei cerchi torneranno con la rete"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline — Meus círculos voltarão com a rede"
+          }
+        }
+      }
+    },
+    "profile.circles.open.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -48622,7 +48669,7 @@
         }
       }
     },
-    "profile.contact.open.hint": {
+    "profile.contact.open.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -167408,7 +167455,7 @@
         }
       }
     },
-    "profile.decor.image.hint": {
+    "profile.decor.image.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -169004,53 +169051,6 @@
         }
       }
     },
-    "profile.stats.a11y.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يفتح الإحصاءات التفصيلية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Öffnet die detaillierte Statistik"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opens the detailed statistics"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abre las estadísticas detalladas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvre les statistiques détaillées"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apre le statistiche dettagliate"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abre as estatísticas detalhadas"
-          }
-        }
-      }
-    },
     "profile.stats.conversations": {
       "extractionState": "manual",
       "localizations": {
@@ -169376,6 +169376,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nome de usuário"
+          }
+        }
+      }
+    },
+    "profile.username.locked": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير قابل للتعديل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht änderbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not editable"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No editable"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non modifiable"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non modificabile"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não editável"
+          }
+        }
+      }
+    },
+    "profile.username.lockedNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يُعدَّل من هنا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hier nicht änderbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't be changed here"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se cambia aquí"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ne se modifie pas ici"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non si modifica qui"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não se altera aqui"
           }
         }
       }
@@ -208973,6 +209067,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Minha atividade"
+          }
+        }
+      }
+    },
+    "user.stats.refresh_failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تحديث نشاطي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Aktivität konnte nicht aktualisiert werden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "My activity couldn't be updated"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo actualizar mi actividad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mon activité n'a pas pu se mettre à jour"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile aggiornare la mia attività"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível atualizar minha atividade"
           }
         }
       }
@@ -353823,6 +353964,100 @@
         }
       }
     },
+    "profile.seenAs.cran.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ : %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "profile.seenAs.cran.a11y.contact": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@. %3$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@. %3$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@. %3$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@. %3$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ : %2$@. %3$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@. %3$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@. %3$@"
+          }
+        }
+      }
+    },
     "profile.seenAs.feature.audienceAcquaintances": {
       "extractionState": "manual",
       "localizations": {
@@ -355233,6 +355468,53 @@
         }
       }
     },
+    "profile.seenAs.publications.count": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld مرئية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld sichtbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld visible"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld visibles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld visibles"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld visibili"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld visíveis"
+          }
+        }
+      }
+    },
     "profile.seenAs.row.device": {
       "extractionState": "manual",
       "localizations": {
@@ -356122,6 +356404,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vídeo"
+          }
+        }
+      }
+    },
+    "profile.vitrine.voice.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تحميل صوتي. اضغط على الزر لإعادة المحاولة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Stimme konnte nicht geladen werden. Tippe auf die Taste, um es erneut zu versuchen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't load my voice. Tap the button to try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo cargar mi voz. Toca el botón para reintentar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de charger ma voix. Touche le bouton pour réessayer."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile caricare la mia voce. Tocca il pulsante per riprovare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível carregar minha voz. Toque no botão para tentar de novo."
           }
         }
       }
@@ -357720,53 +358049,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sua solicitação para %@ não foi enviada"
-          }
-        }
-      }
-    },
-    "circles.ours.raiseFailed.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لم يُرسل شيء. عاد الزر كما كان."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Es wurde nichts gesendet. Die Schaltfläche ist wieder wie vorher."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nothing was sent. The button is back as it was."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se envió nada. El botón volvió a como estaba."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rien n'a été envoyé. Le bouton est revenu comme avant."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Non è stato inviato nulla. Il pulsante è tornato com'era."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nada foi enviado. O botão voltou ao que era."
           }
         }
       }
@@ -368550,53 +368832,6 @@
         }
       }
     },
-    "profile.contactless.gift.friendRequest.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يُجيبونك متى شاؤوا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Antwort kommt, wann sie will"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "They answer whenever they like"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Te responden cuando quieran"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "On te répond quand on veut"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ti rispondono quando vogliono"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Respondem quando quiserem"
-          }
-        }
-      }
-    },
     "profile.contactless.gift.phone": {
       "extractionState": "manual",
       "localizations": {
@@ -368644,49 +368879,96 @@
         }
       }
     },
-    "profile.contactless.gift.phone.detail": {
+    "profile.contactless.gift.phone.question": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المقرّبون فقط"
+            "value": "لماذا رقمي مقفل؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nur Vertraute"
+            "value": "Warum ist meine Nummer gesperrt?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Close ones only"
+            "value": "Why is my number locked?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo allegados"
+            "value": "¿Por qué mi número está bloqueado?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Proches seulement"
+            "value": "Pourquoi mon numéro est-il verrouillé ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo persone vicine"
+            "value": "Perché il mio numero è bloccato?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Só pessoas próximas"
+            "value": "Por que meu número está bloqueado?"
+          }
+        }
+      }
+    },
+    "profile.contactless.gift.phone.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رقمك لا يُعطى إلا للمقرّبين."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Nummer geht nur an deine Vertrauten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your number only goes to your close ones."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu número solo se da a tus allegados."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ton numéro ne se donne qu'à tes Proches."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo numero va solo alle persone vicine."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu número só vai para pessoas próximas."
           }
         }
       }
@@ -368734,53 +369016,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Minha vitrine"
-          }
-        }
-      }
-    },
-    "profile.contactless.gift.vitrine.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ما يراه العموم"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Was die Öffentlichkeit sieht"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "What the Public sees"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lo que ve el Público"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce que voit le Public"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ciò che vede il Pubblico"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O que o Público vê"
           }
         }
       }
@@ -369255,53 +369490,6 @@
         }
       }
     },
-    "profile.card.qrShows.showcase.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ما يراه الجميع منك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Was alle von dir sehen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "What everyone sees of you"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lo que todos ven de ti"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce que tout le monde voit de toi"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ciò che tutti vedono di te"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O que todo mundo vê de você"
-          }
-        }
-      }
-    },
     "profile.card.qrShows.invitation": {
       "extractionState": "manual",
       "localizations": {
@@ -369349,49 +369537,96 @@
         }
       }
     },
-    "profile.card.qrShows.invitation.detail": {
+    "profile.card.qrShows.invitation.question": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المسح يرسل طلب صداقة"
+            "value": "ماذا يفعل رمز QR للدعوة؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scannen sendet eine Freundschaftsanfrage"
+            "value": "Was bewirkt der Einladungs-QR-Code?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scanning sends a friend request"
+            "value": "What does the invitation QR code do?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escanear envía una solicitud de amistad"
+            "value": "¿Qué hace el QR de invitación?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scanner envoie une demande d'amis"
+            "value": "Que fait le QR d'invitation ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scansionare invia una richiesta di amicizia"
+            "value": "Cosa fa il QR d'invito?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escanear envia um pedido de amizade"
+            "value": "O que faz o QR de convite?"
+          }
+        }
+      }
+    },
+    "profile.card.qrShows.invitation.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المسح يرسل طلب صداقة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scannen sendet eine Freundschaftsanfrage."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanning sends a friend request."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escanear envía una solicitud de amistad."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanner envoie une demande d'amis."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scansionare invia una richiesta di amicizia."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escanear envia um pedido de amizade."
           }
         }
       }
@@ -373532,53 +373767,6 @@
         }
       }
     },
-    "profile.vitrine.voice.publicToggle.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يمكن للجميع الاستماع إليها في واجهتك."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jeder kann sie in deinem Schaufenster anhören."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Anyone can listen to it on your showcase."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cualquiera puede escucharla en tu escaparate."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tout le monde peut l'écouter sur ta vitrine."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chiunque può ascoltarlo nella tua vetrina."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Qualquer pessoa pode ouvi-la na sua vitrine."
-          }
-        }
-      }
-    },
     "profile.vitrine.voice.rerecord": {
       "extractionState": "manual",
       "localizations": {
@@ -374660,7 +374848,7 @@
         }
       }
     },
-    "profile.edit.decor.hint": {
+    "profile.edit.decor.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -374891,6 +375079,476 @@
           "stringUnit": {
             "state": "translated",
             "value": "Colocar o norte para cima"
+          }
+        }
+      }
+    },
+    "profile.sendContent.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إرسال محتوى إليه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inhalt senden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send them something"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviarle un contenido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lui envoyer un contenu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inviagli un contenuto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar um conteúdo"
+          }
+        }
+      }
+    },
+    "profile.sendContent.send": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إرسال إلى %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An %@ senden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send to %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar a %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyer à %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invia a %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar para %@"
+          }
+        }
+      }
+    },
+    "profile.legend.rank": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رتبة %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rang %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rank %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rango %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rang %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rango %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Patente %@"
+          }
+        }
+      }
+    },
+    "profile.activity.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ : %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "profile.legend.level_rank": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المستوى %1$@ · رتبة %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level %1$@ · Rang %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level %1$@ · rank %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nivel %1$@ · rango %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niveau %1$@ · rang %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Livello %1$@ · rango %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nível %1$@ · patente %2$@"
+          }
+        }
+      }
+    },
+    "profile.sendContent.kind.publication": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المنشورات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beiträge"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posts"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publicaciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publications"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Post"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publicações"
+          }
+        }
+      }
+    },
+    "profile.sendContent.kinds": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أي محتوى؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Welcher Inhalt?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Which content?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué contenido?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quel contenu ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quale contenuto?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qual conteúdo?"
+          }
+        }
+      }
+    },
+    "profile.sendContent.pick": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اختيار"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auswählen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elegir"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisir"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolher"
+          }
+        }
+      }
+    },
+    "profile.sendContent.pickFirst": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اختر محتوى أولًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle zuerst einen Inhalt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose some content first"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige primero un contenido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez d'abord un contenu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli prima un contenuto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolha um conteúdo primeiro"
+          }
+        }
+      }
+    },
+    "profile.legend.level": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المستوى %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nivel %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niveau %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Livello %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nível %@"
           }
         }
       }

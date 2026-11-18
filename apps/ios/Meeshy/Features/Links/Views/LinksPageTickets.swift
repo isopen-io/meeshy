@@ -82,6 +82,8 @@ struct LinksPageTicketList: View {
 
     @Environment(\.locale) private var locale
     @Environment(\.routerCommands) private var router
+    /// Le détail ouvert : porté ici, il survit au passage de son billet d'une section à l'autre.
+    @State private var opened: ProfileCreatedLinkDestination?
 
     var body: some View {
         let split = LinksPageLaw.split(tickets)
@@ -93,12 +95,14 @@ struct LinksPageTicketList: View {
                 ForEach(split.stopped) { row($0) }
             }
         }
+        .modifier(ProfileCreatedLinkDetailHost(opened: $opened))
     }
 
     private func row(_ ticket: LinksFaceTicket) -> some View {
         ProfileCreatedLinkTicket(ticket: ticket, accent: accent, locale: locale,
                                  destination: destination(ticket),
                                  onOpen: { route in router.push(route) },
+                                 onOpenDetail: { opened = $0 },
                                  onSwitch: { isActive in onSwitch(ticket, isActive) },
                                  footnote: footnote(ticket))
     }

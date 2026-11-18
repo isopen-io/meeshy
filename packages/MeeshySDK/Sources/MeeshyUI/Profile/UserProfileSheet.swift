@@ -103,6 +103,8 @@ public struct UserProfileSheet: View {
     @StateObject var acquaintance = ProfileAcquaintanceModel()
     @State private var internalConversations: [MeeshyConversation] = []
     @State private var internalIsLoadingConversations = false
+    /// Les non-lus de nos directes, lus dans le cache de la liste (#19646) ; aucune pastille tant qu'ils ne sont pas lus.
+    @State var writeUnread: ProfileWriteBadge = .empty
 
     public init(
         user: ProfileSheetUser,
@@ -246,6 +248,9 @@ public struct UserProfileSheet: View {
             await loadDataIfNeeded()
             await loadConversationsIfNeeded()
             await acquaintance.resolve(userId: resolvedUserId, host: dependencies.acquaintance)
+        }
+        .task(id: resolvedUserId) {
+            writeUnread = await ProfileWriteBadge.load(for: resolvedUserId, from: dependencies.directUnread)
         }
     }
 
