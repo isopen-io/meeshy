@@ -45,7 +45,7 @@ const activeCall = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
   ...overrides,
 });
 
-function harness(options: { readonly blob?: Blob; readonly uploaded?: string | null; readonly links?: readonly CallRecordingLinkResult[] } = {}) {
+function harness(options: { readonly blob?: Blob; readonly uploaded?: string | null; readonly links?: readonly CallRecordingLinkResult[]; readonly account?: () => string } = {}) {
   const calls = createCallStore();
   calls.setState({ call: activeCall() });
   const mixed: string[] = [];
@@ -56,6 +56,7 @@ function harness(options: { readonly blob?: Blob; readonly uploaded?: string | n
   const captured: Array<{ readonly stream: string; readonly kind: string }> = [];
   const clock = { now: 1_000 };
   const answers = [...(options.links ?? ['linked'])];
+  const sentBy: string[] = [];
   const start = createCallRecorder({
     calls,
     createMixer: () => ({
@@ -79,18 +80,25 @@ function harness(options: { readonly blob?: Blob; readonly uploaded?: string | n
         return options.blob ?? new Blob(['voix'], { type: 'audio/webm;codecs=opus' });
       },
     }),
-    upload: async (file, durationMs) => {
-      uploads.push({ name: file.name, type: file.type, durationMs });
-      return options.uploaded === undefined ? 'att-rec' : options.uploaded;
-    },
-    link: async (target, attachmentId) => {
-      links.push({ ...target, attachmentId });
-      return answers.shift() ?? 'failed';
+    io: () => {
+      const owner = options.account?.() ?? 'ada';
+      return {
+        upload: async (file, durationMs) => {
+          uploads.push({ name: file.name, type: file.type, durationMs });
+          sentBy.push(owner);
+          return options.uploaded === undefined ? 'att-rec' : options.uploaded;
+        },
+        link: async (target, attachmentId) => {
+          links.push({ ...target, attachmentId });
+          sentBy.push(owner);
+          return answers.shift() ?? 'failed';
+        },
+      };
     },
     now: () => clock.now,
     wait: async () => undefined,
   });
-  return { calls, start, mixed, uploads, links, log, clock, tiles, captured };
+  return { calls, start, mixed, uploads, links, log, clock, tiles, captured, sentBy };
 }
 
 describe('le mélange — la voix de chacun', () => {
@@ -184,6 +192,18 @@ const peer = (patch: Partial<CallMember> = {}): CallMember => ({
   capturing: false,
   link: 'connected',
   ...patch,
+});
+
+describe('le dépôt appartient au compte qui a lancé l’enregistrement (audit #19352, X1)', () => {
+  test('l’appareil passe à un autre compte pendant l’appel : le fichier et son rattachement partent au nom du premier', async () => {
+    let account = 'ada';
+    const h = harness({ account: () => account });
+    const handle = h.start({ callId: 'call-1', recordingId: 'rec-1', kind: 'audio' });
+    account = 'bob';
+
+    expect(await handle.stop()).toBe('saved');
+    expect(h.sentBy).toEqual(['ada', 'ada']);
+  });
 });
 
 describe('la vidéo — les tuiles visibles, composées, avec le mélange des voix (#8437)', () => {
