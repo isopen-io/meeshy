@@ -49,7 +49,8 @@ struct BloodLocationScreen: View {
                              isDragDismissEnabled: false, closeLabel: nil, surface: .dark, outside: .passesThrough) {
             ScrollView { BloodLocationSheet(model: model, displayName: displayName, tint: tint,
                                             isPlaying: $isPlaying, onShareMine: { sharesMine = true },
-                                            ownShare: ownShare, seenByCount: recipientIds.count) }
+                                            ownShare: ownShare, seenByCount: recipientIds.count,
+                                            onStoppedReceiving: { dismiss() }) }
         }
         .task {
             me = LocationMapOwnPosition.lastKnown()

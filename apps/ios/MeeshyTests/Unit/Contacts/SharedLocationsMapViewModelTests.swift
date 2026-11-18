@@ -317,10 +317,100 @@ final class BloodLocationModelTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
     private func makeSUT(_ service: FakeBloodLocation, account: String = "me", online: Bool = true,
-                         people: [CirclePerson] = []) -> BloodLocationModel {
+                         people: [CirclePerson] = [], relations: MockBringService = MockBringService()) -> BloodLocationModel {
         let now = self.now
         return BloodLocationModel(userId: "mina", service: service, ghostStore: GhostMemory(), isOnline: { online },
-                                  now: { now }, account: account, people: FakeCirclePeople(people))
+                                  now: { now }, account: account, people: FakeCirclePeople(people), relations: relations)
+    }
+
+    // MARK: - Ne plus recevoir sa position continue (#19479, serveur #19454)
+
+    private func servedRelations(muted: Bool?) -> MockBringService {
+        let relations = MockBringService()
+        relations.settingsResult = .success(RelationPersonSettings(userId: "mina", bringBlocked: false, bloodLocationMuted: muted))
+        return relations
+    }
+
+    func test_stopReceiving_isOfferedOnlyWhenTheGatewayServesIt() async {
+        let served = makeSUT(FakeBloodLocation(), account: "mute-served", relations: servedRelations(muted: false))
+        let oldGateway = makeSUT(FakeBloodLocation(), account: "mute-old", relations: servedRelations(muted: nil))
+        let alreadyMuted = makeSUT(FakeBloodLocation(), account: "mute-done", relations: servedRelations(muted: true))
+        let unreadable = makeSUT(FakeBloodLocation(), account: "mute-failed")
+
+        await served.load()
+        await oldGateway.load()
+        await alreadyMuted.load()
+        await unreadable.load()
+
+        XCTAssertTrue(served.canStopReceiving)
+        XCTAssertFalse(oldGateway.canStopReceiving)
+        XCTAssertFalse(alreadyMuted.canStopReceiving)
+        XCTAssertFalse(unreadable.canStopReceiving)
+    }
+
+    func test_stopReceiving_writesOnlyTheReceptionOfThisBlood_andWithdrawsTheExit() async {
+        let relations = servedRelations(muted: false)
+        relations.setBlockedResult = .success(RelationPersonSettings(userId: "mina", bringBlocked: false, bloodLocationMuted: true))
+        let sut = makeSUT(FakeBloodLocation(), account: "mute-ok", relations: relations)
+        await sut.load()
+
+        let stopped = await sut.stopReceiving()
+
+        XCTAssertTrue(stopped)
+        XCTAssertEqual(relations.blockedSettings, [.bloodLocation])
+        XCTAssertEqual(relations.blockedWrites, [true])
+        XCTAssertFalse(sut.canStopReceiving)
+        XCTAssertFalse(sut.isStoppingReception)
+        XCTAssertNil(sut.notice)
+    }
+
+    func test_stopReceiving_refused_keepsTheExit_andSaysSo() async {
+        let relations = servedRelations(muted: false)
+        let sut = makeSUT(FakeBloodLocation(), account: "mute-refused", relations: relations)
+        await sut.load()
+
+        let stopped = await sut.stopReceiving()
+
+        XCTAssertFalse(stopped)
+        XCTAssertTrue(sut.canStopReceiving)
+        XCTAssertFalse(sut.isStoppingReception)
+        XCTAssertEqual(sut.notice, BloodLocationCopy.stopReceivingFailed)
+    }
+
+    func test_stopReceiving_notOffered_writesNothing() async {
+        let relations = servedRelations(muted: nil)
+        let sut = makeSUT(FakeBloodLocation(), account: "mute-none", relations: relations)
+        await sut.load()
+
+        let stopped = await sut.stopReceiving()
+
+        XCTAssertFalse(stopped)
+        XCTAssertTrue(relations.blockedWrites.isEmpty)
+    }
+
+    // MARK: - Sa batterie (planche Carte-Sang)
+
+    func test_batteryLine_saysTheLevelAndTheAgeOfTheReading() {
+        let measured = now.addingTimeInterval(-12 * 60)
+        let state = BatteryReaderState(userId: "mina", phase: .low, level: 71, charging: false, lowPower: false, measuredAt: measured)
+
+        let line = BloodBatteryLine.resolve(state, now: now)
+
+        XCTAssertEqual(line.title, BloodLocationCopy.battery(level: 71))
+        XCTAssertEqual(line.subtitle, RelativeTimeFormatter.longString(for: measured, now: now))
+        XCTAssertEqual(line.systemImage, BatteryAnnouncementWording.iconName(for: state))
+    }
+
+    func test_batteryLine_withoutAFreshReading_saysNoneAndShowsNoLevel() {
+        let stale = BatteryReaderState(userId: "mina", phase: .low, level: 71, charging: false, lowPower: false,
+                                       measuredAt: now.addingTimeInterval(-BatteryContract.stateTtl - 60))
+
+        let none = BloodBatteryLine.resolve(nil, now: now)
+        let expired = BloodBatteryLine.resolve(stale, now: now)
+
+        XCTAssertEqual(none.title, BloodLocationCopy.batteryUnknown)
+        XCTAssertEqual(none.subtitle, BloodLocationCopy.batteryNoReading)
+        XCTAssertEqual(expired, none)
     }
 
     func test_whoLookedAtMyPosition_isNamedByTheCircleDirectory() async {

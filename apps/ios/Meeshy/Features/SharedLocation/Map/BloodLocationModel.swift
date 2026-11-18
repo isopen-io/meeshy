@@ -28,6 +28,10 @@ final class BloodLocationModel: ObservableObject {
     @Published private(set) var consultations: BloodLocationConsultations?
     /// Les personnes qui ont lu ma position, nommées par l'annuaire des cercles ; absente ⇒ « Quelqu'un ».
     @Published private(set) var observers: [String: CirclePerson] = [:]
+    /// La passerelle sert « ne plus recevoir sa position continue » (#19454) et je la reçois encore.
+    @Published private(set) var canStopReceiving = false
+    @Published private(set) var isStoppingReception = false
+    @Published var notice: String?
 
     let userId: String
     /// La clé de la mémoire : le compte qui lit ET la personne lue — un autre compte ne voit jamais ce que le
@@ -39,6 +43,7 @@ final class BloodLocationModel: ObservableObject {
     private let now: () -> Date
     private let calendar: Calendar
     private let people: CirclePeopleResolving
+    private let relations: BringProviding
 
     private static var memory: [String: [BloodLocationPoint]] = [:]
 
@@ -48,7 +53,8 @@ final class BloodLocationModel: ObservableObject {
          ghostStore: BloodGhostStoring = UserDefaultsBloodGhostStore(), isOnline: @escaping () -> Bool = { NetworkMonitor.shared.isOnline },
          now: @escaping () -> Date = Date.init, calendar: Calendar = .current,
          account: String = AuthManager.shared.currentUser?.id ?? "",
-         people: CirclePeopleResolving = CirclePeopleDirectory.shared) {
+         people: CirclePeopleResolving = CirclePeopleDirectory.shared,
+         relations: BringProviding = BringService.shared) {
         self.userId = userId
         memoryKey = "\(account):\(userId)"
         self.service = service
@@ -57,6 +63,7 @@ final class BloodLocationModel: ObservableObject {
         self.now = now
         self.calendar = calendar
         self.people = people
+        self.relations = relations
         isGhost = ghostStore.isGhost
         if let cached = Self.memory[memoryKey] {
             points = cached
@@ -89,9 +96,9 @@ final class BloodLocationModel: ObservableObject {
             Self.memory[memoryKey] = history.points
             state = .loaded
         } catch {
-            guard points.isEmpty else { return }
-            state = .failed(offline: !isOnline())
+            if points.isEmpty { state = .failed(offline: !isOnline()) }
         }
+        await loadReception()
         consultations = try? await service.consultations()
         let observerIds = consultations?.byObserver.map(\.observerId) ?? []
         if !observerIds.isEmpty { observers = await people.people(for: observerIds) }
@@ -108,6 +115,27 @@ final class BloodLocationModel: ObservableObject {
             return
         }
         ghostStore.isGhost = ghost
+    }
+
+    /// La sortie n'existe que si la passerelle sert la préférence, et tant que je reçois encore cette position.
+    private func loadReception() async {
+        guard let served = try? await relations.personSettings(userId: userId) else { return }
+        canStopReceiving = served.isServed(.bloodLocation) && !served.isBlocked(.bloodLocation)
+    }
+
+    /// Ne plus recevoir la position continue de ce Sang, après confirmation : `true` quand la passerelle l'a posé, et
+    /// l'écran se ferme ; un refus garde la sortie et le dit. L'autre n'en est pas prévenu.
+    func stopReceiving() async -> Bool {
+        guard canStopReceiving, !isStoppingReception else { return false }
+        isStoppingReception = true
+        defer { isStoppingReception = false }
+        guard let served = try? await relations.setReceptionBlocked(.bloodLocation, userId: userId, blocked: true),
+              served.isBlocked(.bloodLocation) else {
+            notice = BloodLocationCopy.stopReceivingFailed
+            return false
+        }
+        canStopReceiving = false
+        return true
     }
 
 }

@@ -23,10 +23,11 @@ nonisolated enum CirclePersonSwitch: Equatable, Sendable {
         }
     }
 
-    /// Un abonnement absent de la réponse n'est pas servi : l'interrupteur n'existe pas.
+    /// Un abonnement, ou une préférence récente, absent de la réponse n'est pas servi : l'interrupteur n'existe pas.
     func isServed(in settings: RelationPersonSettings) -> Bool {
         switch self {
-        case .reception, .share: return true
+        case .reception(let setting): return settings.isServed(setting)
+        case .share: return true
         case .subscription(let subscription): return settings.isSubscribed(subscription) != nil
         }
     }

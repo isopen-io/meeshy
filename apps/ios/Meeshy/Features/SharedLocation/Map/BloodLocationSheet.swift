@@ -2,7 +2,8 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// La feuille basse de la position d'un Sang : trente jours en barres, la fenêtre, la lecture, puis ce qui me concerne.
+/// La feuille basse de la position d'un Sang : trente jours en barres, la fenêtre, la lecture, sa batterie, ce qui me
+/// concerne, puis la sortie « Ne plus recevoir sa position continue » quand la passerelle la sert.
 struct BloodLocationSheet: View {
     @ObservedObject var model: BloodLocationModel
     let displayName: String
@@ -12,8 +13,11 @@ struct BloodLocationSheet: View {
     /// Ma position part-elle vers ce Sang, et combien de personnes la voient ?
     var ownShare: LocationMapOwnShare = .notShared
     var seenByCount = 0
+    /// La réception est coupée : l'écran se ferme.
+    var onStoppedReceiving: () -> Void = {}
 
     @Environment(\.locale) private var locale
+    @State private var confirmsStop = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
@@ -34,10 +38,39 @@ struct BloodLocationSheet: View {
             case .loaded:
                 history
             }
+            BloodBatteryRow(userId: model.userId, displayName: displayName, tint: tint)
             mine
+            if model.canStopReceiving {
+                stopReceiving
+            }
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.bottom, MeeshySpacing.xl)
+        .adaptiveOnChange(of: model.notice) { _, new in
+            guard let new else { return }
+            FeedbackToastManager.shared.showError(new)
+            model.notice = nil
+        }
+    }
+
+    // MARK: - Ne plus recevoir sa position continue
+
+    private var stopReceiving: some View {
+        MeeshyButton(BloodLocationCopy.stopReceiving, systemImage: "location.slash", kind: .danger, width: .fill,
+                     isDestructive: true, isPending: model.isStoppingReception, action: { confirmsStop = true })
+            .accessibilityHint(BloodLocationCopy.stopReceivingHint(name: displayName))
+            .accessibilityIdentifier("bloodLocation.stopReceiving")
+            .confirmationDialog(BloodLocationCopy.stopReceivingTitle(name: displayName), isPresented: $confirmsStop,
+                                titleVisibility: .visible) {
+                Button(BloodLocationCopy.stopReceivingConfirm, role: .destructive) {
+                    Task {
+                        if await model.stopReceiving() { onStoppedReceiving() }
+                    }
+                }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+            } message: {
+                Text(BloodLocationCopy.stopReceivingBody(name: displayName))
+            }
     }
 
     // MARK: - L'historique
@@ -193,6 +226,29 @@ enum BloodLocationCopy {
             : String(format: String(localized: "bloodLocation.consultations.count", defaultValue: "%lld lecture(s) ces trente jours", bundle: .main), count)
     }
 
+    static func battery(level: Int) -> String {
+        String(format: String(localized: "bloodLocation.battery", defaultValue: "Sa batterie : %lld %%", bundle: .main), level)
+    }
+
+    static var batteryUnknown: String { String(localized: "bloodLocation.battery.unknown", defaultValue: "Sa batterie", bundle: .main) }
+    static var batteryNoReading: String { String(localized: "bloodLocation.battery.none", defaultValue: "Aucun relevé récent", bundle: .main) }
+    static var batteryPulled: String { String(localized: "bloodLocation.battery.pulled", defaultValue: "Demandé", bundle: .main) }
+    static var stopReceiving: String { String(localized: "bloodLocation.stopReceiving", defaultValue: "Ne plus recevoir sa position continue", bundle: .main) }
+    static var stopReceivingConfirm: String { String(localized: "bloodLocation.stopReceiving.confirm", defaultValue: "Ne plus recevoir", bundle: .main) }
+    static var stopReceivingFailed: String { String(localized: "bloodLocation.stopReceiving.failed", defaultValue: "Réglage non enregistré, réessaie", bundle: .main) }
+
+    static func stopReceivingTitle(name: String) -> String {
+        String(format: String(localized: "bloodLocation.stopReceiving.title", defaultValue: "Ne plus recevoir la position de %@ ?", bundle: .main), name)
+    }
+
+    static func stopReceivingBody(name: String) -> String {
+        String(format: String(localized: "bloodLocation.stopReceiving.body", defaultValue: "Sa position continue et ses alertes de proximité ne t'arriveront plus. %@ n'en est pas prévenu·e.", bundle: .main), name)
+    }
+
+    static func stopReceivingHint(name: String) -> String {
+        String(format: String(localized: "bloodLocation.stopReceiving.hint", defaultValue: "Demande une confirmation avant de couper la position de %@", bundle: .main), name)
+    }
+
     static func range(_ range: BloodHistoryRange) -> String {
         switch range {
         case .today: return String(localized: "bloodLocation.range.today", defaultValue: "Aujourd'hui", bundle: .main)
@@ -204,5 +260,82 @@ enum BloodLocationCopy {
 
     static func summary(range: BloodHistoryRange, distance: String) -> String {
         String(format: String(localized: "bloodLocation.summary", defaultValue: "%1$@, %2$@", bundle: .main), Self.range(range), distance)
+    }
+}
+
+/// La ligne « Sa batterie : 71 % · il y a 12 min » : un relevé frais dit son niveau et son âge ; sans relevé (hors
+/// épisode, ou expiré), aucun niveau n'est inventé.
+struct BloodBatteryLine: Equatable {
+    let title: String
+    let subtitle: String
+    let systemImage: String
+
+    static func resolve(_ state: BatteryReaderState?, now: Date) -> BloodBatteryLine {
+        guard let state, !state.isExpired(at: now) else {
+            return BloodBatteryLine(title: BloodLocationCopy.batteryUnknown, subtitle: BloodLocationCopy.batteryNoReading,
+                                    systemImage: "battery.50percent")
+        }
+        return BloodBatteryLine(title: BloodLocationCopy.battery(level: state.level),
+                                subtitle: RelativeTimeFormatter.longString(for: min(state.measuredAt, now), now: now),
+                                systemImage: BatteryAnnouncementWording.iconName(for: state))
+    }
+}
+
+/// Sa batterie sur la carte d'un Sang (planche Carte-Sang) : le relevé servi (cache d'abord, rien d'inventé), puis
+/// « Demander un relevé » — la même demande que sa fiche, limitée par la passerelle.
+struct BloodBatteryRow: View {
+    @StateObject private var viewModel: ProfileBatteryViewModel
+    let displayName: String
+    let tint: Color
+    @State private var state: BatteryReaderState?
+
+    init(userId: String, displayName: String, tint: Color) {
+        _viewModel = StateObject(wrappedValue: ProfileBatteryViewModel(
+            userId: userId,
+            service: BatteryService.shared,
+            consent: UserDefaultsBatteryConsentMemory.shared,
+            viewerId: { AuthManager.shared.currentUser?.id }
+        ))
+        self.displayName = displayName
+        self.tint = tint
+    }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let line = BloodBatteryLine.resolve(state, now: context.date)
+            HStack(spacing: 0) {
+                MeeshyToggleRowFace(content: MeeshyToggleRowContent(title: line.title, subtitle: line.subtitle, tint: tint),
+                                    leading: { MeeshyToggleRowSymbol(line.systemImage) },
+                                    titleAccessory: { MeeshyToggleRowNoSlot() },
+                                    trailing: { MeeshyToggleRowNoSlot() })
+                    .accessibilityElement(children: .combine)
+                pullButton
+                    .padding(.trailing, MeeshySpacing.lg)
+            }
+        }
+        .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
+        .task(id: viewModel.userId) {
+            state = nil
+            for await next in BatteryLiveState.stream(of: viewModel.userId).values {
+                state = next
+            }
+        }
+        .adaptiveOnChange(of: viewModel.notice) { _, new in
+            guard let new else { return }
+            FeedbackToastManager.shared.showError(new)
+            viewModel.notice = nil
+        }
+        .accessibilityIdentifier("bloodLocation.battery")
+    }
+
+    private var pullButton: some View {
+        let requested = viewModel.pullState == .requested
+        return MeeshyButton(requested ? BloodLocationCopy.batteryPulled : BatteryProfileWording.pullAction,
+                            systemImage: requested ? "checkmark" : "arrow.clockwise", kind: .glass, size: .s44,
+                            tint: tint, isPending: viewModel.pullState == .sending,
+                            action: { Task { await viewModel.requestReading() } })
+            .disabled(viewModel.pullState != .idle)
+            .accessibilityHint(BatteryProfileWording.pullHint(name: displayName))
+            .accessibilityIdentifier("battery.pull")
     }
 }

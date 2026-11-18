@@ -173,7 +173,8 @@ public enum BringSendOutcome: Sendable, Equatable {
 /// REFUSÉS par défaut (#16803). Un champ absent (serveur plus ancien) vaut sa valeur par défaut.
 ///
 /// Les ABONNEMENTS (#19433, serveur #19434) n'ont pas de défaut côté client : `nil` = le serveur ne les sert pas
-/// encore, et l'écran ne montre pas l'interrupteur — jamais un état inventé.
+/// encore, et l'écran ne montre pas l'interrupteur — jamais un état inventé. Il en va de même de
+/// `bloodLocationMuted` (#19479, serveur #19454) : ne plus recevoir la position continue d'un Sang.
 public struct RelationPersonSettings: Decodable, Sendable, Equatable {
     public let userId: String
     public let bringBlocked: Bool
@@ -182,19 +183,23 @@ public struct RelationPersonSettings: Decodable, Sendable, Equatable {
     public let listeningTitleShared: Bool
     /// Être prévenu des nouveautés de CETTE personne, en exception au cran par cercle (#14062) ; `nil` = non servi.
     public let newsNotify: Bool?
+    /// Ne plus recevoir la position continue de CE Sang ; `nil` = non servi, et la sortie n'existe pas.
+    public let bloodLocationMuted: Bool?
 
     public init(userId: String, bringBlocked: Bool, talkieBlocked: Bool = false,
-                listeningCategoryShared: Bool = false, listeningTitleShared: Bool = false, newsNotify: Bool? = nil) {
+                listeningCategoryShared: Bool = false, listeningTitleShared: Bool = false, newsNotify: Bool? = nil,
+                bloodLocationMuted: Bool? = nil) {
         self.userId = userId
         self.bringBlocked = bringBlocked
         self.talkieBlocked = talkieBlocked
         self.listeningCategoryShared = listeningCategoryShared
         self.listeningTitleShared = listeningTitleShared
         self.newsNotify = newsNotify
+        self.bloodLocationMuted = bloodLocationMuted
     }
 
     private enum CodingKeys: String, CodingKey {
-        case userId, bringBlocked, talkieBlocked, listeningCategoryShared, listeningTitleShared, newsNotify
+        case userId, bringBlocked, talkieBlocked, listeningCategoryShared, listeningTitleShared, newsNotify, bloodLocationMuted
     }
 
     public init(from decoder: Decoder) throws {
@@ -205,6 +210,7 @@ public struct RelationPersonSettings: Decodable, Sendable, Equatable {
         listeningCategoryShared = (try? c.decodeIfPresent(Bool.self, forKey: .listeningCategoryShared)) ?? false
         listeningTitleShared = (try? c.decodeIfPresent(Bool.self, forKey: .listeningTitleShared)) ?? false
         newsNotify = try? c.decodeIfPresent(Bool.self, forKey: .newsNotify)
+        bloodLocationMuted = try? c.decodeIfPresent(Bool.self, forKey: .bloodLocationMuted)
     }
 
     /// L'abonnement servi, ou `nil` quand le serveur ne le sert pas.
@@ -218,6 +224,15 @@ public struct RelationPersonSettings: Decodable, Sendable, Equatable {
         switch setting {
         case .bring: return bringBlocked
         case .talkie: return talkieBlocked
+        case .bloodLocation: return bloodLocationMuted ?? false
+        }
+    }
+
+    /// Le serveur sert-il cette préférence ? Bring et talkie, toujours ; la position d'un Sang, depuis #19454.
+    public func isServed(_ setting: RelationReceptionSetting) -> Bool {
+        switch setting {
+        case .bring, .talkie: return true
+        case .bloodLocation: return bloodLocationMuted != nil
         }
     }
 
@@ -248,6 +263,8 @@ public enum RelationSubscription: String, Sendable, Equatable, CaseIterable {
 public enum RelationReceptionSetting: String, Sendable, Equatable, CaseIterable {
     case bring = "bringBlocked"
     case talkie = "talkieBlocked"
+    /// Ne plus recevoir la position continue d'un Sang (#19479, serveur #19454) ; écrit seulement si servi.
+    case bloodLocation = "bloodLocationMuted"
 }
 
 /// Les instants ISO 8601 du contrat, avec ou sans millisecondes.
