@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import type { ApiFailure } from '@/lib/api/http';
+import { ownedUploadDeps } from '@/lib/api/owned-deps';
 import type { PostMediaUploadDeps } from '@/lib/api/post-media-upload';
 import { prepareImageForUpload, transcodeRefusedImage } from '@/lib/media/prepare-image-upload';
 import { sendWithFormatFallback } from '@/lib/media/refused-format-fallback';
@@ -67,6 +68,8 @@ export function useStudioUploads({
     abortRef.current[key]?.abort();
     const controller = new AbortController();
     abortRef.current[key] = controller;
+    /* La montée reste au compte qui pose le média (audit #19352, X1) : aucune tranche ne part sous un autre. */
+    const owned = ownedUploadDeps(upload);
     const pending: PendingUpload = Promise.all([import('@/lib/api/post-media-upload'), prepareImageForUpload(file)])
       .then(([{ uploadPostMedia }, prepared]) =>
         // Un HEIC refusé (415) par un ancien serveur repart converti, si le navigateur sait le lire (#13416).
@@ -74,7 +77,7 @@ export function useStudioUploads({
           prepared,
           (body) =>
             uploadPostMedia({
-              ...upload,
+              ...owned,
               file: body,
               uploadContext: 'story',
               signal: controller.signal,

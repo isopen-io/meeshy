@@ -1,4 +1,4 @@
-import { currentCredential, currentIdentity, httpTransport } from './client';
+import { currentIdentity, httpTransport } from './client';
 import type { ConversationsDeps } from './conversations';
 import { apiDeps, postMediaUploadDeps } from './deps';
 import { boundToIdentity } from './http';
@@ -17,7 +17,12 @@ export function ownedApiDeps(owner: string | null = currentIdentity()): Conversa
   return { ...apiDeps, transport: boundToIdentity(httpTransport, owner) };
 }
 
-export function ownedPostMediaUploadDeps(owner: string | null = currentIdentity()): PostMediaUploadDeps {
+/** Un téléversement par reprise est lui-même une opération en plusieurs requêtes : la création, puis chaque tranche. */
+export function ownedUploadDeps(deps: PostMediaUploadDeps, owner: string | null = currentIdentity()): PostMediaUploadDeps {
   const identityChanged = (): boolean => currentIdentity() !== owner;
-  return { ...postMediaUploadDeps, credential: () => (identityChanged() ? null : currentCredential()), identityChanged };
+  return { ...deps, credential: () => (identityChanged() ? null : deps.credential()), identityChanged };
+}
+
+export function ownedPostMediaUploadDeps(owner: string | null = currentIdentity()): PostMediaUploadDeps {
+  return ownedUploadDeps(postMediaUploadDeps, owner);
 }
