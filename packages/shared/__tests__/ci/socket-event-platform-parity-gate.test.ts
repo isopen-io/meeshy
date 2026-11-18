@@ -112,11 +112,11 @@ const ASYMETRIES: readonly {
     ],
   },
   {
-    absents: ['ios'],
+    absents: ['ios', 'android'],
     raison:
-      "l'effectif d'une communauté en temps réel (#18766) : la passerelle, le web et Android (#18768) le portent ; "
-      + 'iOS (#18767) le lira sur le modèle de `community:updated` — dette mesurée, son issue.',
-    events: ['community:member-joined', 'community:member-left', 'community:member-role-updated'],
+      "la disparition d'une communauté (#19590) : la passerelle et le web la portent ; iOS (#19591) et "
+      + 'Android (#19592) la liront sur le modèle de `community:updated` — dette mesurée, ses issues.',
+    events: ['community:deleted'],
   },
   {
     absents: ['web', 'ios'],

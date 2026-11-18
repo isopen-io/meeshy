@@ -83,8 +83,8 @@ function makeAudioService(overrides: Record<string, any> = {}) {
       status: 'completed',
     }),
     cancelJob: jest.fn<any>().mockResolvedValue({
-      jobId: 'job-123',
-      status: 'cancelled',
+      success: true,
+      message: 'Job cancelled',
     }),
     transcribeOnly: jest.fn<any>().mockResolvedValue({
       text: 'hello',

@@ -93,6 +93,8 @@ public protocol MessageSocketProviding: Sendable {
     var conversationObsoleted: PassthroughSubject<ConversationObsoletedEvent, Never> { get }
     /// `community:updated` (#18439) — l'identité d'une communauté, à jour chez ses membres.
     var communityUpdated: PassthroughSubject<CommunityUpdatedEvent, Never> { get }
+    /// `community:member-*` (#18767) — l'effectif d'une communauté, à jour chez ses membres.
+    var communityMemberChanged: PassthroughSubject<CommunityMemberChange, Never> { get }
     /// `conversation:deleted` — the conversation is gone server-side. Exposed on
     /// the protocol (not just the concrete manager) so the disk-cache writer can
     /// subscribe: routed only to the in-memory `ConversationStore`, a deletion
@@ -368,5 +370,10 @@ extension MessageSocketProviding {
     /// `community:updated` (#18439) vit dans son canal pour la même raison.
     public var communityUpdated: PassthroughSubject<CommunityUpdatedEvent, Never> {
         CommunityUpdateChannel.shared.updated
+    }
+
+    /// `community:member-*` (#18767) vit dans son canal pour la même raison.
+    public var communityMemberChanged: PassthroughSubject<CommunityMemberChange, Never> {
+        CommunityMemberChannel.shared.changed
     }
 }

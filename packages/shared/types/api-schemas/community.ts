@@ -29,6 +29,7 @@ export const communitySchema = {
     avatar: { type: 'string', nullable: true, description: 'Community avatar URL' },
     banner: { type: 'string', nullable: true, description: 'Community banner URL' },
     isPrivate: { type: 'boolean', description: 'Whether community is private' },
+    requiresJoinApproval: { type: 'boolean', nullable: true, description: 'Whether each entry waits for an admin or moderator to accept it (#19429); absent on older communities = direct entry' },
     isActive: { type: 'boolean', description: 'Whether community is active' },
     deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Deletion timestamp' },
     createdBy: { type: 'string', description: 'Creator user ID' },
@@ -81,6 +82,85 @@ export const communityMemberSchema = {
 } as const;
 
 /**
+ * La rangée d'un membre telle que la lisent ceux qui animent ou modèrent la
+ * communauté (#19429) : la porte d'entrée et le pays d'arrivée en plus. Le
+ * schéma COMMUN ne les déclare pas, donc toute autre réponse les retire à la
+ * sérialisation, même quand la lecture en base les rend (recherche, adhésion).
+ * Seules les routes réservées aux intendants servent celui-ci.
+ */
+export const communityStewardMemberSchema = {
+  ...communityMemberSchema,
+  description: 'Community membership, as read by the community admins and moderators',
+  properties: {
+    ...communityMemberSchema.properties,
+    joinedVia: {
+      type: 'string',
+      nullable: true,
+      enum: ['self', 'invited', 'link', null],
+      description: "How the member entered (#19429): by themself, invited or added, or through the community link. Served to the community's admins and moderators only; null otherwise and on older rows"
+    },
+    joinCountry: {
+      type: 'string',
+      nullable: true,
+      description: "Arrival country at entry, ISO 3166-1 alpha-2, never the city (#19429). Served to the community's admins and moderators only; null otherwise"
+    }
+  }
+} as const;
+
+/**
+ * Les entrées d'une communauté, comptées par la passerelle (#19429) — réservé
+ * à ses administrateurs et modérateurs.
+ */
+export const communityEntryStatsSchema = {
+  type: 'object',
+  description: 'Exact entry counts of a community (#19429)',
+  properties: {
+    last7: { type: 'number', description: 'Entries over the last 7 UTC calendar days, today included' },
+    last30: { type: 'number', description: 'Entries over the last 30 UTC calendar days, today included' },
+    series30: {
+      type: 'array',
+      description: 'One bucket per UTC day, oldest first, 30 buckets',
+      items: {
+        type: 'object',
+        properties: {
+          day: { type: 'string', description: 'UTC day, YYYY-MM-DD' },
+          count: { type: 'number', description: 'Entries that day' }
+        }
+      }
+    },
+    viaLink: { type: 'number', description: 'Active members who entered through the community link' }
+  }
+} as const;
+
+/**
+ * Une demande d'entrée en attente (#19429) — réservé aux administrateurs et
+ * modérateurs de la communauté.
+ */
+export const communityJoinRequestSchema = {
+  type: 'object',
+  description: 'Pending request to join a community that validates each entry (#19429)',
+  properties: {
+    id: { type: 'string', description: 'Request ID' },
+    communityId: { type: 'string', description: 'Community ID' },
+    userId: { type: 'string', description: 'Requester user ID' },
+    status: { type: 'string', enum: ['pending', 'accepted', 'rejected'], description: 'Request status' },
+    via: { type: 'string', nullable: true, enum: ['self', 'link', null], description: 'How the request arrived' },
+    country: { type: 'string', nullable: true, description: 'Requester country, ISO 3166-1 alpha-2, never the city' },
+    createdAt: { type: 'string', format: 'date-time', description: 'Request timestamp' },
+    user: {
+      type: 'object',
+      description: 'Requester public identity',
+      properties: {
+        id: { type: 'string' },
+        username: { type: 'string' },
+        displayName: { type: 'string', nullable: true },
+        avatar: { type: 'string', nullable: true }
+      }
+    }
+  }
+} as const;
+
+/**
  * Create community request schema
  */
 export const createCommunityRequestSchema = {
@@ -123,6 +203,7 @@ export const updateCommunityRequestSchema = {
     description: { type: 'string', maxLength: 500 },
     avatar: { type: 'string', minLength: 1, maxLength: 2048, description: 'Identity image reference (isProfileImageReference)' },
     banner: { type: 'string', minLength: 1, maxLength: 2048, description: 'Identity image reference (isProfileImageReference)' },
-    isPrivate: { type: 'boolean' }
+    isPrivate: { type: 'boolean' },
+    requiresJoinApproval: { type: 'boolean', description: 'Validate each entry: joining creates a request an admin or moderator accepts or rejects (#19429)' }
   }
 } as const;

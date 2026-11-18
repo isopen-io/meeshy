@@ -30,6 +30,7 @@ public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
     case nowPlaying
     case phoneReachability
     case root
+    case summary
 
     public var path: String {
         switch self {
@@ -51,6 +52,7 @@ public enum RelationsEndpoint: MeeshyEndpoint, Sendable {
         case .nowPlaying: return "/api/v1/relations/now-playing"
         case .phoneReachability: return "/api/v1/relations/phone-reachability"
         case .root: return "/api/v1/relations"
+        case .summary: return "/api/v1/relations/summary"
         }
     }
 }

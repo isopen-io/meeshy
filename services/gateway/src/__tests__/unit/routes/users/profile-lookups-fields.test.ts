@@ -84,7 +84,7 @@ const USERNAME = 'cible';
 
 function prismaProfil() {
   return {
-    profileAddress: { findMany: async () => [] },
+    profileAddress: { findMany: async () => [] }, communityMember: { findMany: async () => [] },
     user: {
       // La question du blocage (`where.blockedUserIds`) n'a pas de ligne :
       // personne n'a bloqué personne.

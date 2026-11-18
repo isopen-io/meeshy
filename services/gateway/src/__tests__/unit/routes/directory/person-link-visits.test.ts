@@ -45,6 +45,7 @@ function prismaDouble(opts: { cibleBloqueLecteur?: boolean } = {}) {
     userPreferences: { findMany: jest.fn<any>(async () => []) },
     userPreference: { findMany: jest.fn<any>(async () => []) },
     profileAddress: { findMany: async () => [] },
+    communityMember: { findMany: async () => [] },
     user: {
       findMany: jest.fn<any>(async (args: any) =>
         (args?.where?.id?.in ?? []).map((id: string) => ({ id, role: 'USER', birthDate: null, isActive: true, deletedAt: null, deactivatedAt: null })),

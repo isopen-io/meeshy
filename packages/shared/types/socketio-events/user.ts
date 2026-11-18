@@ -46,6 +46,20 @@ export interface UserUpdatedEventData {
   }>;
 }
 
+/**
+ * Payload de `USER_PROFILE_CHANGED` (#19384) — la fiche de `userId` a changé
+ * (bio, ville, langues, voix, décor, adresses). AUCUN contenu : chaque lecteur
+ * a sa propre fiche, découpée par son cercle, et la revalide par
+ * `GET /directory/people/:handle` avec `If-None-Match`. AUCUNE horloge non plus :
+ * le signal part à chaque geste silencieux du sujet, et une heure exacte dirait
+ * à quelle seconde il était actif — `If-None-Match` suffit à écarter un signal
+ * déjà lu. Audience : liés de niveau Connaissance ou plus et partenaires de
+ * conversations directes, hors blocage.
+ */
+export interface UserProfileChangedEventData {
+  readonly userId: string;
+}
+
 export interface UserPermissions {
   readonly canAccessAdmin: boolean;
   readonly canManageUsers: boolean;

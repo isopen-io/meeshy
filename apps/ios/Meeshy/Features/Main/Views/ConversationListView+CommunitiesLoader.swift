@@ -40,6 +40,8 @@ final class MyCommunities: ObservableObject {
     static let liveAccountSettled: @MainActor () async -> Void = {
         await CacheAccountBinder.shared.settled()
     }
+    /// Le lecteur connecté, lu à chaque événement.
+    static let liveReaderId: @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" }
 
     nonisolated deinit {}
 
@@ -55,6 +57,9 @@ final class MyCommunities: ObservableObject {
     private var accountEpoch = 0
     /// La relecture du compte entrant, retenue pour que les témoins l'attendent.
     private(set) var accountReload: Task<Void, Never>?
+    private var liveMembers: AnyCancellable?
+    private let memberLane = OrderedEventLane()
+    private let currentUserId: @MainActor () -> String
 
     /// `communityUpdates` : `community:updated` (#18439) repeint la bande d'une
     /// communauté renommée ailleurs, comme l'écran des communautés.
@@ -64,16 +69,38 @@ final class MyCommunities: ObservableObject {
         store: @escaping @MainActor () async -> GRDBCacheStore<String, APICommunity> = MyCommunities.liveStore,
         communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live,
         accountChanges: AnyPublisher<String?, Never> = MyCommunities.liveAccountChanges,
-        accountSettled: @escaping @MainActor () async -> Void = MyCommunities.liveAccountSettled
+        accountSettled: @escaping @MainActor () async -> Void = MyCommunities.liveAccountSettled,
+        memberChanges: AnyPublisher<CommunityMemberChange, Never> = CommunityMemberChannel.live,
+        currentUserId: @escaping @MainActor () -> String = MyCommunities.liveReaderId
     ) {
         self.service = service
         self.store = store
         self.accountSettled = accountSettled
+        self.currentUserId = currentUserId
         self.liveUpdates = communityUpdates
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.apply(event) }
         self.accountWatch = accountChanges
             .sink { [weak self] accountId in self?.follow(accountId: accountId) }
+        self.liveMembers = memberChanges
+            .relay(through: memberLane) { [weak self] change in await self?.apply(change) }
+    }
+
+    /// `community:member-*` (#18767) : l'effectif se recopie ; le lecteur
+    /// sorti d'ailleurs (autre appareil, retrait) perd la communauté de la
+    /// bande, du cache et donc du partage ; entré d'ailleurs, la bande se relit.
+    func apply(_ change: CommunityMemberChange) async {
+        if let index = communities.firstIndex(where: { $0.id == change.communityId }),
+           let updated = communities[index].applying(change) {
+            communities[index] = updated
+        }
+        guard change.concerns(readerId: currentUserId()) else { return }
+        let held = communities.contains { $0.id == change.communityId }
+        switch (change.role, held) {
+        case (nil, true): await remove(communityId: change.communityId)
+        case (.some, false): await refresh()
+        default: return
+        }
     }
 
     func apply(_ event: CommunityUpdatedEvent) {

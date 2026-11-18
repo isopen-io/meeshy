@@ -106,6 +106,11 @@ const mockInCommonFns = {
 
 jest.mock('../../../../routes/users/in-common', () => mockInCommonFns);
 
+const mockStoryHighlightFns = {
+  storyHighlightRoutes: jest.fn<any>().mockResolvedValue(undefined),
+};
+
+jest.mock('../../../../routes/users/story-highlights', () => mockStoryHighlightFns);
 const mockProfileLinkStatsFns = {
   profileLinkStatsRoutes: jest.fn<any>().mockResolvedValue(undefined),
 };
@@ -138,6 +143,7 @@ describe('userRoutes — registers all route handler groups', () => {
     expect(mockProfileFns.getUserByEmail).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByIdDedicated).toHaveBeenCalledWith(mockFastify);
     expect(mockInCommonFns.getUserInCommon).toHaveBeenCalledWith(mockFastify);
+    expect(mockStoryHighlightFns.storyHighlightRoutes).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByPhone).toHaveBeenCalledWith(mockFastify);
 
     // Contact change routes — surface unifiée (#4341) d'abord

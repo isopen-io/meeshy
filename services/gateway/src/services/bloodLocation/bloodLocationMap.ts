@@ -7,6 +7,8 @@
  * (`readBloodLocationHistory`) :
  *
  * - les candidats sont mes liens Sang et mes collègues de l'équipe (la loi les ouvre sans lien) ;
+ * - un Sang que le lecteur a coupé (#19454, `bloodLocationMutedBy`) n'est pas un candidat : ni
+ *   point, ni ligne au journal de l'émetteur ;
  * - le drapeau vaut pour les deux comptes : hors drapeau, le lecteur ne lit rien et un émetteur
  *   n'existe pas, sans journal ;
  * - la loi `location.history` (niveau, blocage, âge, équipe) et le consentement de l'émetteur,
@@ -25,6 +27,7 @@ import { comptesAuMoins } from '../friendship';
 import { pairAccessAmong } from '../relations/pairAccess';
 import { relationConsentGrantedBy } from '../relations/relationConsent';
 import { teamPeerCandidates } from '../relations/teamPeers';
+import { bloodLocationMutedBy } from './bloodLocationMute';
 import { openPoint } from './bloodLocationSeal';
 import { noteConsultation } from './bloodLocationService';
 import type { BloodLocationDeps } from './bloodLocationTypes';
@@ -112,7 +115,10 @@ export async function bloodLocationMapFor(deps: BloodLocationDeps, viewerId: str
   if (!deps.enabledFor(viewerId)) return [];
   const candidates = await candidatesOf(deps, viewerId);
   if (candidates.length === 0) return [];
-  const allowed = await allowedOwners(deps, viewerId, candidates);
+  const muted = await bloodLocationMutedBy(deps.prisma, viewerId, candidates);
+  const received = candidates.filter((id) => !muted.has(id));
+  if (received.length === 0) return [];
+  const allowed = await allowedOwners(deps, viewerId, received);
   const owners = [...allowed.keys()];
   if (owners.length === 0) return [];
   await noteMapConsultations(deps, owners, viewerId);

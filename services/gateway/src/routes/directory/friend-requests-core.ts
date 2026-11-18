@@ -1,3 +1,4 @@
+import { logWarn } from '../../utils/logger';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { withMutationVerdict } from '../../utils/withMutationLog';
@@ -12,6 +13,8 @@ import {
 } from '../../utils/cursor-pagination';
 import { parseRequestLevel } from '@meeshy/shared/types/relation';
 import { hasStandingRequest, judgeRelationRequest } from '../../services/relations/relationRequestGate';
+import { targetAcceptsRequests } from '../../services/relations/contactRequestsGate';
+import { CONTACT_REQUESTS_CLOSED } from '@meeshy/shared/utils/relation-request';
 import {
   INCLUDE_PARTIES,
   clauseHorsBlocage,
@@ -20,6 +23,8 @@ import {
   type Resultat,
 } from './friend-request-parties';
 import { trancherDemande } from './friend-request-answer';
+import { detectContentLanguage } from '../../utils/content-language';
+import { startFriendRequestMessageTranslation } from '../../services/friend-requests/FriendRequestMessageTranslationService';
 import { retirerDemande } from './friend-request-withdraw';
 
 export { INCLUDE_PARTIES, clauseHorsBlocage, filtreStatut, servirParties } from './friend-request-parties';
@@ -116,6 +121,12 @@ export async function envoyerDemande(
   const jugement = await judgeRelationRequest(fastify.prisma, {
     requesterId: emetteurId, otherId: receveurId, targetLevel: niveau, now: new Date(),
   });
+  // #19362 — « accepter les demandes de connexion » fermé retient une NOUVELLE
+  // demande (aucun lien d'au moins Connaissance) ; il prime sur le jugement de
+  // cran, si bien qu'une cible fermée se lit toujours par le même code.
+  if (!(await targetAcceptsRequests(fastify.prisma, { targetId: receveurId, currentLevel: jugement.currentLevel }))) {
+    return { refus: { code: 409, message: 'Cette personne n\'accepte pas de nouvelles demandes', codeMetier: CONTACT_REQUESTS_CLOSED } };
+  }
   if (jugement.allowed === false) {
     return { refus: { code: 409, message: 'Cette demande n\'est pas possible maintenant', codeMetier: jugement.code } };
   }
@@ -125,6 +136,11 @@ export async function envoyerDemande(
   // aval, et `emitFriendRequestNew` est un « c'est arrivé » qu'un client ne
   // peut pas appliquer deux fois sans dommage. Le 410 d'un résultat disparu
   // reste rendu par le `catch` de la route (`friend-requests.ts`).
+  // #19361 — la langue du mot est détectée ICI, dans l'écriture de la ligne :
+  // la réponse 201 et la première liste la portent déjà, la traduction suit.
+  const mot = params.message ? SecuritySanitizer.sanitizeText(params.message) : undefined;
+  const langueDuMot = mot && mot.trim() !== '' ? detectContentLanguage(mot) : undefined;
+
   const { result: demande, replayed } = await withMutationVerdict({
     request,
     fastify,
@@ -137,7 +153,8 @@ export async function envoyerDemande(
       data: {
         senderId: emetteurId,
         receiverId: receveurId,
-        message: params.message ? SecuritySanitizer.sanitizeText(params.message) : undefined,
+        message: mot,
+        messageOriginalLanguage: langueDuMot,
         targetLevel: niveau,
       },
       include: INCLUDE_PARTIES,
@@ -160,6 +177,15 @@ export async function envoyerDemande(
       friendRequestId: demande.id,
       senderId: emetteurId,
     });
+  }
+
+  if (mot && langueDuMot && !replayed) {
+    void startFriendRequestMessageTranslation(fastify)?.trigger({
+      friendRequestId: demande.id,
+      receiverId: receveurId,
+      message: mot,
+      sourceLanguage: langueDuMot,
+    }).catch((error: unknown) => logWarn(fastify.log, '[friend-requests] message translation trigger failed', error));
   }
 
   // La ligne ne sort JAMAIS brute : le destinataire d'une demande est, par

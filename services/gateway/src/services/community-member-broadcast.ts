@@ -16,6 +16,9 @@
  *  - une communauté désactivée ou disparue n'annonce rien ;
  *  - la charge ne nomme la personne que par son identifiant : ni profil, ni
  *    présence, ni coordonnées (`CommunityMember*EventData`) ;
+ *  - la porte « lien » d'une entrée ne part qu'au créateur, aux
+ *    administrateurs, aux modérateurs et à l'arrivant ; un membre simple lit
+ *    `self` (#19429, même règle que la liste des membres) ;
  *  - un envoi qui lève n'arrête pas les autres.
  *
  * Travail ASYNCHRONE, comme `community:updated` : les routes l'appellent par
@@ -36,6 +39,8 @@ import {
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { deferAfterResponse, type AfterResponse } from '../utils/after-response.js';
 import { broadcastToUser } from '../utils/socket-broadcast';
+import { announceCommunityLinkEntry } from './community-link-entry-announce';
+import { linkActivityRelayOf } from '../socketio/linkActivityEvents';
 
 const logger = enhancedLogger.child({ module: 'CommunityMemberBroadcast' });
 
@@ -98,6 +103,17 @@ function emissionFor(change: CommunityMemberChange, memberCount: number, at: str
   }
 }
 
+/**
+ * Ce qu'en lit un membre SIMPLE (#19429) : la porte « lien » ne part qu'à ceux
+ * qui animent ou modèrent — la règle de `GET /communities/:id/members`, qui
+ * masque `joinedVia` aux autres. Le membre simple lit une entrée « de soi-même ».
+ */
+function plainMemberEmission(change: CommunityMemberChange, memberCount: number, at: string): CommunityMemberEmission {
+  return change.kind === 'joined' && change.via === 'link'
+    ? emissionFor({ ...change, via: 'self' }, memberCount, at)
+    : emissionFor(change, memberCount, at);
+}
+
 export async function broadcastCommunityMemberChange(
   deps: CommunityMemberBroadcastDeps,
   change: CommunityMemberChange,
@@ -110,16 +126,22 @@ export async function broadcastCommunityMemberChange(
 
   const members = await deps.prisma.communityMember.findMany({
     where: { communityId: change.communityId, isActive: true },
-    select: { userId: true },
+    select: { userId: true, role: true },
   });
 
   const at = (deps.now ?? (() => new Date()))().toISOString();
   const emission = emissionFor(change, members.length, at);
+  const plain = plainMemberEmission(change, members.length, at);
+  const seesEntry = new Set([
+    community.createdBy,
+    change.userId,
+    ...members.filter((m) => m.role === 'admin' || m.role === 'moderator').map((m) => m.userId),
+  ]);
   const audience = [...new Set([...members.map((m) => m.userId), community.createdBy, change.userId])];
 
   const delivered = audience.map((userId) => {
     try {
-      deps.deliver(userId, emission);
+      deps.deliver(userId, seesEntry.has(userId) ? emission : plain);
       return 1;
     } catch (error) {
       logger.warn('community member emit failed', { communityId: change.communityId, event: emission.event, error });
@@ -163,4 +185,15 @@ export function scheduleCommunityMemberBroadcastFrom(fastify: FastifyInstance, c
     { prisma: fastify.prisma, deliver: (userId, emission) => deliverToUserRoom(fastify, userId, emission) },
     change,
   );
+  if (change.kind === 'joined' && change.via === 'link') {
+    deferAfterResponse(
+      () => announceCommunityLinkEntry({
+        prisma: fastify.prisma,
+        relay: linkActivityRelayOf(fastify),
+        communityId: change.communityId,
+        at: new Date(),
+      }),
+      'community-link-entry',
+    );
+  }
 }

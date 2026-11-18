@@ -34,6 +34,8 @@ const REVIEWED = [
   // #6379 — le fil d'une communauté lit par `postInclude` et sert chaque ligne par `withMentions(…, reader)`.
   'services/posts/communityFeed.ts',
   'services/posts/postIncludes.ts',
+  // #19394 — « À la une » lit ses stories par `postInclude` et sert chacune par `withMentions(hoistLocationDeep(post), reader)`.
+  'services/posts/storyHighlights.ts',
   // #14620 — la recherche de posts lit par `postInclude` et sert chaque ligne par `withMentions(…, reader)`.
   'services/search/globalPostSearch.ts',
 ];

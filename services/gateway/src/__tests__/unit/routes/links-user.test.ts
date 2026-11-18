@@ -59,7 +59,7 @@ const mockLink = {
   maxUses: 100,
   expiresAt: null,
   createdAt: new Date('2025-01-01'),
-  conversation: { id: 'conv-1', title: 'Test Chat', type: 'group', description: 'Desc' },
+  conversation: { id: 'conv-1', title: 'Test Chat', type: 'group', description: 'Desc', memberCount: 8 },
   creator: { id: OTHER_USER_ID, username: 'creator1', firstName: 'C', lastName: 'R', displayName: null, avatar: null },
   description: 'Un lien de test',
   maxConcurrentUsers: 10,
@@ -131,14 +131,14 @@ function membershipParticipant(role: string) {
 
 // ─── App factory ──────────────────────────────────────────────────────────────
 
-async function buildApp(authContext: any = { registeredUser: { id: USER_ID } }): Promise<FastifyInstance> {
+async function buildApp(authContext: any = { registeredUser: { id: USER_ID } }, prisma: unknown = makePrisma()): Promise<FastifyInstance> {
   mockAuthMiddleware.mockImplementation(async (req: any) => {
     (req as any).authContext = authContext;
   });
   mockIsRegisteredUser.mockImplementation((ctx: any) => ctx?.registeredUser !== undefined);
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', makePrisma() as any);
+  app.decorate('prisma', prisma as any);
   await registerUserRoutes(app);
   await app.ready();
   return app;
@@ -441,10 +441,36 @@ describe('GET /links — expand=conversation,creator', () => {
   it('avec expand=conversation,creator : les deux objets sont servis', async () => {
     const res = await app.inject({ method: 'GET', url: '/links?expand=conversation,creator' });
     const item = res.json().data[0];
-    expect(item.conversation).toEqual({ id: 'conv-1', title: 'Test Chat', type: 'group', description: 'Desc' });
+    expect(item.conversation).toEqual({ id: 'conv-1', title: 'Test Chat', type: 'group', description: 'Desc', memberCount: 8 });
     expect(item.creator).toEqual(
       expect.objectContaining({ id: OTHER_USER_ID, username: 'creator1' })
     );
+  });
+
+  // #19283 — « Mène à Studio · 8 membres » : l'effectif de la conversation
+  // cible part avec son expansion, compté par la colonne dénormalisée, jamais
+  // par une lecture de ses membres.
+  it('avec expand=conversation : l’effectif de la conversation est servi et chargé, sans lire ses membres', async () => {
+    const findMany = jest.fn<any>().mockResolvedValue([mockLink]);
+    const local = await buildApp({ registeredUser: { id: USER_ID, role: 'USER' } }, makePrisma({ conversationShareLink: { findMany } }));
+
+    const res = await local.inject({ method: 'GET', url: '/links?expand=conversation' });
+
+    expect(res.json().data[0].conversation.memberCount).toBe(8);
+    const select = (findMany.mock.calls[0]?.[0] as { select: { conversation: { select: Record<string, unknown> } } }).select;
+    expect(select.conversation.select).toEqual(expect.objectContaining({ memberCount: true }));
+    expect(select.conversation.select).not.toHaveProperty('participants');
+    await local.close();
+  });
+
+  it('un lien dont la conversation n’a pas d’effectif lu rend 0, jamais un champ absent', async () => {
+    const findMany = jest.fn<any>().mockResolvedValue([{ ...mockLink, conversation: { id: 'conv-1', title: 'T', type: 'group', description: null } }]);
+    const local = await buildApp({ registeredUser: { id: USER_ID, role: 'USER' } }, makePrisma({ conversationShareLink: { findMany } }));
+
+    const res = await local.inject({ method: 'GET', url: '/links?expand=conversation' });
+
+    expect(res.json().data[0].conversation.memberCount).toBe(0);
+    await local.close();
   });
 
   // Troisième volet d'`expand`, au-delà des deux nommés au critère 1 :

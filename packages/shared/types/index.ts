@@ -785,6 +785,8 @@ export * from './conversation-bridge.js';
 export * from './contact-card.js';
 export * from './relation.js';
 export * from './relation-level-response.js';
+export * from './relation-circles-summary.js';
+export * from './story-highlight.js';
 export * from './bring.js';
 export * from './talkie.js';
 // Les schémas zod de l'écoute et de la position partagée ne passent pas par le
@@ -845,6 +847,8 @@ export type {
   SharedLocationEndedEventData,
   SharedLocationSnapshot,
 } from './shared-location.js';
+// La fin d'un partage de position portée à l'appareil suspendu (#19463)
+export * from './shared-location-live-activity.js';
 
 // ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
 export * from './content-capture.js';

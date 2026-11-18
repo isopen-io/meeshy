@@ -49,6 +49,7 @@ import { allowedAttachmentKindsJsonSchema } from '@meeshy/shared/types/guest-att
 import { guestAttachmentKindsOf } from '../services/attachments/ContentSignature';
 import { extractUserAgent } from '../services/GeoIPService';
 import { clientDecodesLegacyCounts, isGuestViewer } from '../services/guests/guestMemberVisibility';
+import { linkActivityRelayOf } from '../socketio/linkActivityEvents';
 
 /**
  * Deux coutures injectables (#7794) : l'exécuteur post-réponse, pour qu'un
@@ -267,6 +268,7 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
         // l'éventail d'arrivée a un compte pour SUJET, et aucune arrivée de
         // cette route n'en a un. Y câbler l'émetteur serait du code mort.
         authContext: undefined,
+        linkActivity: linkActivityRelayOf(fastify),
         requestIp: resolveClientIp(request),
         requestUserAgent: extractUserAgent(request),
         profile: {

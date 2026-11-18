@@ -76,7 +76,6 @@ export const translationJobSchema = {
   type: 'object',
   properties: {
     jobId: { type: 'string', description: 'Unique job identifier' },
-    userId: { type: 'string', description: 'User who created the job' },
     status: {
       type: 'string',
       enum: ['pending', 'processing', 'completed', 'failed', 'cancelled'],

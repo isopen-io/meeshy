@@ -163,6 +163,51 @@ final class CommunityListViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.communities.map(\.name), ["Alpha"])
     }
+
+    // MARK: - community:member-* (#18767)
+
+    private func memberSUT(_ service: MockCommunityService) -> CommunityListViewModel {
+        CommunityListViewModel(
+            service: service, communityUpdates: Empty().eraseToAnyPublisher(),
+            memberChanges: Empty().eraseToAnyPublisher(), currentUserId: { "u-me" }
+        )
+    }
+
+    func test_memberChange_tiers_recopieLEffectifSansRelancerLeReseau() async {
+        let service = MockCommunityService()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "a"), CommunityStubs.community(id: "b", name: "Beta")]))
+        let sut = memberSUT(service)
+        await sut.refresh()
+
+        await sut.apply(CommunityStubs.memberChange(communityId: "a", userId: "u-other", memberCount: 21, role: .member))
+
+        XCTAssertEqual(sut.communities.map(\.memberCount), [21, 0])
+        XCTAssertEqual(service.listCallCount, 1)
+    }
+
+    func test_memberChange_lecteurSorti_relitLaListe() async {
+        let service = MockCommunityService()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "a"), CommunityStubs.community(id: "b")]))
+        let sut = memberSUT(service)
+        await sut.refresh()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "b")]))
+
+        await sut.apply(CommunityStubs.memberChange(communityId: "a", userId: "u-me", memberCount: 3, role: nil))
+
+        XCTAssertEqual(sut.communities.map(\.id), ["b"])
+        XCTAssertEqual(service.listCallCount, 2)
+    }
+
+    func test_memberChange_lecteurPromuDansUneCommunauteListee_neRelitPas() async {
+        let service = MockCommunityService()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "a")]))
+        let sut = memberSUT(service)
+        await sut.refresh()
+
+        await sut.apply(CommunityStubs.memberChange(communityId: "a", userId: "u-me", memberCount: 0, role: .admin))
+
+        XCTAssertEqual(service.listCallCount, 1)
+    }
 }
 
 /// « Mes communautés » (#18935) — la source que la bande Communautés observe :
@@ -338,5 +383,39 @@ final class MyCommunitiesTests: XCTestCase {
         XCTAssertEqual(afterTheLeavingAnswer, [], "la réponse du compte quitté ne se publie pas sous le suivant")
         XCTAssertEqual(sut.communities.map(\.id), ["c-of-B"], "le compte entrant relit sa propre bande")
         XCTAssertEqual(cached, ["c-of-B"], "le cache du compte entrant ne garde que sa liste")
+    }
+
+    // MARK: - community:member-* (#18767)
+
+    func test_memberChange_lecteurSortiAilleurs_quitteLaBandeEtLeCache() async throws {
+        let store = try await seed(["c1", "c2"])
+        let sut = MyCommunities(
+            service: MockCommunityService(), communityUpdates: Empty().eraseToAnyPublisher(),
+            memberChanges: Empty().eraseToAnyPublisher(), currentUserId: { "u-me" }
+        )
+        await sut.load()
+
+        await sut.apply(CommunityStubs.memberChange(communityId: "c1", userId: "u-me", memberCount: 2, role: nil))
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(sut.communities.map(\.id), ["c2"])
+        XCTAssertEqual(cached, ["c2"], "la feuille de partage ne la propose plus")
+    }
+
+    func test_memberChange_tiers_recopieLEffectifDeLaBande() async throws {
+        let store = try await seed(["c1"])
+        let service = MockCommunityService()
+        let sut = MyCommunities(
+            service: service, communityUpdates: Empty().eraseToAnyPublisher(),
+            memberChanges: Empty().eraseToAnyPublisher(), currentUserId: { "u-me" }
+        )
+        await sut.load()
+        await store.invalidate(for: "list")
+
+        await sut.apply(CommunityStubs.memberChange(communityId: "c1", userId: "u-other", memberCount: 6, role: .member))
+
+        XCTAssertEqual(sut.communities.map(\.memberCount), [6])
+        XCTAssertEqual(service.listCallCount, 0)
     }
 }

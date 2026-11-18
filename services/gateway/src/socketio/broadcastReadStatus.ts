@@ -1,4 +1,5 @@
 import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control';
+import { READ_FLOOR_SELECT, type ReadFloorCursor } from '../services/messaging/readFloor';
 import type { FastifyInstance } from 'fastify';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { ReadStatusUpdatedEventData, ReadStatusSummary } from '@meeshy/shared/types/socketio-events';
@@ -71,7 +72,7 @@ export interface ReadStatusBridgeBuilder {
     readonly candidates: readonly { readonly conversationId: string; readonly unreadCount: number }[];
     readonly cursorsByParticipant?: ReadonlyMap<
       string,
-      { readonly lastReadAt: Date | null; readonly lastReadMessageCreatedAt: Date | null }
+      ReadFloorCursor
     >;
   }): Promise<ReadonlyMap<string, { readonly bridge: ConversationBridge }>>;
 }
@@ -234,7 +235,7 @@ export async function broadcastReadStatus(
             // et non sur l'horloge murale. Le lire ici épargne à la passe de
             // rejouer cette requête, et l'ancre sur le MÊME instantané que le
             // compteur émis à côté.
-            select: { lastReadAt: true, lastReadMessageCreatedAt: true },
+            select: READ_FLOOR_SELECT,
           }),
           readStatusService.getUnreadCount(args.participantId, args.conversationId),
         ]).then(([cursor, unreadCount]) => ({
