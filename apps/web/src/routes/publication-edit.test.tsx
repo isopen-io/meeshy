@@ -6,6 +6,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import type { FeedPost } from '@/lib/api/feed-pages';
 import { postQueryKey } from '@/lib/api/publication-detail';
 import { appQueryClient } from '@/lib/api/query-client';
+import { sessionStore } from '@/lib/api/session';
 import { buildStoryCanvasEffectsPages } from '@/lib/stories/story-document';
 import { newTextLayer } from '@/lib/stories/studio-text';
 import { PublicationEditView } from '@/routes/publication-edit';
@@ -71,6 +72,21 @@ describe('PublicationEditView — /posts/:id/edit (#9317)', () => {
     await flush(() => publishButton(el) !== null);
     expect(el.querySelector('[data-story-studio]')).not.toBeNull();
     expect(publishButton(el)?.textContent).toBe('Enregistrer');
+  });
+
+  test('l’onglet change de compte : la modification de l’auteur quitte l’écran, l’autre compte ne la voit pas (audit #19352, X1)', async () => {
+    const post = cached(withScene('p-compte'));
+    const el = mountAt(post.id);
+    await flush(() => publishButton(el) !== null);
+    expect(publishButton(el)?.textContent).toBe('Enregistrer');
+
+    act(() => {
+      sessionStore.getState().establish({ user: { id: 'u-bob', username: 'bob' }, token: 'jwt-bob', sessionToken: 'sess-bob', expiresIn: 3600 });
+    });
+    cached(withScene('p-compte'));
+    await flush(() => publishButton(el) === null);
+
+    expect(publishButton(el)).toBeNull();
   });
 
   test('un post de TEXTE seul s’ouvre dans la feuille de texte', async () => {

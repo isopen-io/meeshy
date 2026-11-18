@@ -4,9 +4,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { TALKIE_CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events/talkie-event-names';
 
+import { currentIdentity } from '@/lib/api/client';
 import type { HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
 import { RELATION_LINKS_QUERY_KEY, type RelationLink } from '@/lib/api/relations';
+import { sessionStore } from '@/lib/api/session';
 import type { WatchRealtime } from '@/lib/api/watch-realtime';
 import { loadCirclesCatalog } from '@/lib/i18n-circles-catalog';
 import type { SocketClient } from '@/lib/net/socket';
@@ -209,6 +211,24 @@ describe('ProfileTalkieRow', () => {
     expect(notices).toEqual(['L’utilisateur n’est pas disponible pour un accès d’urgence. Un message sera créé et envoyé dans votre conversation la plus récente avec lui.']);
     expect(tones).toEqual([false]);
     expect(node.querySelector('[data-talkie-send]')).not.toBeNull();
+  });
+
+  test('la copie vocale porte le compte qui a APPUYÉ : ses requêtes parleront à son nom (audit #19352, X1)', async () => {
+    sessionStore.getState().establish({ user: { id: 'u-ada', username: 'ada' }, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 3600 });
+    appQueryClient.setQueryData(RELATION_LINKS_QUERY_KEY, [link('CLOSE')]);
+    const ada = currentIdentity();
+    try {
+      const { row, copies } = harness({ success: false, error: 'x', code: 'TALKIE_BLOCKED' });
+      const node = await mount(row);
+      await settle();
+      await press(node);
+      await release(node);
+
+      expect(ada).not.toBeNull();
+      expect(copies.map((copy) => copy.owner)).toEqual([ada]);
+    } finally {
+      sessionStore.getState().clearSession({ device: true });
+    }
   });
 
   test('le (i) s’ouvre au toucher et dit à qui le talkie est destiné', async () => {

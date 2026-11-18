@@ -6,8 +6,13 @@ import * as uploadsEndpoints from '@meeshy/shared/api/endpoints/uploads';
 import { currentCredential, currentIdentity } from '@/lib/api/client';
 import { createHttpTransport } from '@/lib/api/http';
 import { sessionStore } from '@/lib/api/session';
+import type { FeedPost } from '@/lib/api/feed-pages';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
-import { VIEWER_ID, flush, harness, image, mount, publishButton, registerStudioBench, selectFile, typeText } from '@/test-support/story-studio-bench';
+import { buildStoryCanvasEffectsPages } from '@/lib/stories/story-document';
+import { studioEditHydration } from '@/lib/stories/studio-edit';
+import { newTextLayer } from '@/lib/stories/studio-text';
+import type { StudioEdit } from '@/routes/use-studio-edit';
+import { VIEWER_ID, flush, harness, image, mount, mountEdit, publishButton, registerStudioBench, selectFile, typeText } from '@/test-support/story-studio-bench';
 
 /**
  * UNE PUBLICATION DU STUDIO SE TERMINE SOUS LE COMPTE QUI L'A LANCÉE (audit
@@ -97,5 +102,50 @@ describe('la montée refusée parce que le compte a changé laisse l’intention
     expect(sent.filter((request) => request.auth === 'Bearer jwt-bob')).toEqual([]);
     expect(sent.filter((request) => request.kind === 'post')).toEqual([]);
     expect((await deps.outbox!.load(VIEWER_ID))?.intent?.state).toBe('armed');
+  });
+});
+
+describe('l’enregistrement d’une publication rouverte reste au compte qui a touché Enregistrer (audit #19352, X1)', () => {
+  const served = (): FeedPost => ({
+    id: 'p-1',
+    type: 'POST',
+    createdAt: '2026-10-01T10:00:00.000Z',
+    content: 'Le corps',
+    originalLanguage: 'fr',
+    author: { id: VIEWER_ID },
+    storyEffects: buildStoryCanvasEffectsPages(
+      [{ id: '1', texts: [{ ...newTextLayer({ id: 'text-1', language: 'fr' }), text: 'Une' }], background: { source: { postMediaId: 'pm-1', fileUrl: '2026/10/u/pm-1.jpg' }, mediaType: 'image' as const } }],
+      null,
+    ),
+    media: [{ id: 'pm-1', fileUrl: '2026/10/u/pm-1.jpg', mimeType: 'image/jpeg' }],
+  });
+  const editOf = (journal: string[]): StudioEdit => {
+    const hydration = studioEditHydration({ post: served(), viewerId: VIEWER_ID, resolveUrl: (url) => `https://cdn.test/${url}`, language: 'fr' });
+    if (hydration.kind !== 'studio') throw new Error(hydration.reason);
+    return { draft: hydration.draft, origin: hydration.origin, onSaved: () => journal.push('saved'), onCancel: () => journal.push('cancel') };
+  };
+
+  test('l’appareil passe à Bob pendant la dernière tranche : le PUT ne part pas sous Bob, et rien n’est dit en échec', async () => {
+    const { sent, held, deps } = bench();
+    const journal: string[] = [];
+    const el = mountEdit(deps, editOf(journal));
+    await flush(() => publishButton(el) !== null);
+    selectFile(el, 'visual', image());
+    await flush(() => held.length === 1);
+
+    act(() => publishButton(el)!.click());
+    await flush();
+    act(() => {
+      sessionStore.getState().establish(BOB);
+    });
+    await flush();
+    held.shift()!();
+    await flush(() => sent.some((request) => request.kind === 'post'));
+    await flush();
+
+    expect(sent.filter((request) => request.auth === 'Bearer jwt-bob')).toEqual([]);
+    expect(sent.filter((request) => request.kind === 'post')).toEqual([]);
+    expect(journal).toEqual([]);
+    expect(el.querySelector('[role="alert"]')).toBeNull();
   });
 });

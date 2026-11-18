@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { IDENTITY_CHANGED, type HttpTransport } from '@/lib/api/http';
+import { IDENTITY_CHANGED, createHttpTransport, type HttpTransport } from '@/lib/api/http';
 import type { PostMediaUploadDeps } from '@/lib/api/post-media-upload';
 import { ownedSendDeps } from '@/lib/api/query';
-import { currentIdentity } from '@/lib/api/client';
+import { currentCredential, currentIdentity } from '@/lib/api/client';
 import { sessionStore } from '@/lib/api/session';
-import { talkieCopyDeps } from '@/routes/user-profile-talkie';
+import { liveTalkieCopier } from '@/routes/user-profile-talkie';
 
 import { durableSendDeps } from './outbox-durability-instance';
 import { sendSheetDepsOf } from './send-sheet-ports';
@@ -55,12 +55,43 @@ describe('les fabriques de production des envois sont liées au compte qui les l
     expect(mediaFollowsOwner(deps.transfer!.media!)).toEqual({ credential: null, identityChanged: true });
   });
 
-  test('la copie vocale du talkie : ses requêtes parlent au nom de qui a appuyé, même prises après le changement', async () => {
+  const gatewayRecording = () => {
+    const emitted: Array<string | null> = [];
+    const deps = {
+      source: 'gateway' as const,
+      transport: createHttpTransport({
+        base: '',
+        credential: currentCredential,
+        identity: currentIdentity,
+        fetchImpl: (async (_input: RequestInfo | URL, init?: RequestInit) => {
+          emitted.push(new Headers(init?.headers).get('Authorization'));
+          return new Response(JSON.stringify({ success: false, error: 'refus' }), { status: 422 });
+        }) as typeof fetch,
+      }),
+    };
+    return { emitted, deps };
+  };
+  const voiceOf = (owner: string | null) => ({ frames: [new Uint8Array([1, 2, 3])], durationMs: 400, toUserId: 'u-proche', conversationId: null, owner });
+
+  test('la copie vocale du talkie parle par la passerelle, au nom de qui a appuyé', async () => {
+    const { emitted, deps } = gatewayRecording();
+    signIn('u-ada');
+
+    await liveTalkieCopier(() => 'fr', deps)(voiceOf(currentIdentity()));
+
+    expect(emitted.length).toBeGreaterThan(0);
+    expect(new Set(emitted)).toEqual(new Set(['Bearer jwt-u-ada']));
+  });
+
+  test('la copie vocale du talkie : rien ne part quand l’onglet a changé de compte depuis l’appui', async () => {
+    const { emitted, deps } = gatewayRecording();
     signIn('u-ada');
     const owner = currentIdentity();
     signIn('u-bob');
-    const deps = talkieCopyDeps({ frames: [], durationMs: 0, toUserId: 'u-proche', conversationId: null, owner });
 
-    expect(await refusedUnderBob(deps.transport)).toBe(IDENTITY_CHANGED);
+    const sent = await liveTalkieCopier(() => 'fr', deps)(voiceOf(owner));
+
+    expect(emitted).toEqual([]);
+    expect(sent).toBe(false);
   });
 });
