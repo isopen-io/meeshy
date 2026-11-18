@@ -333,6 +333,53 @@
         }
       }
     },
+    "NSLocalNetworkUsageDescription" : {
+      "comment" : "Privacy - Local Network Usage Description",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يعثر Meeshy على الهاتف المجاور لهاتفك عندما تشارك ملفك الشخصي دون تلامس. لا يُرسَل شيء قبل أن تختار ما تعطيه."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy findet das Telefon neben Ihrem, wenn Sie Ihr Profil kontaktlos teilen. Nichts wird gesendet, bevor Sie gewählt haben, was Sie geben."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy finds the phone next to yours when you share your profile without contact. Nothing is sent until you choose what to give."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy encuentra el teléfono junto al tuyo cuando compartes tu perfil sin contacto. No se envía nada hasta que eliges qué das."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy trouve le téléphone à côté du vôtre quand vous partagez votre profil sans contact. Rien ne part tant que vous n'avez pas choisi ce que vous donnez."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy trova il telefono accanto al tuo quando condividi il profilo senza contatto. Non parte nulla finché non scegli cosa dare."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy encontra o celular ao lado do seu quando você compartilha seu perfil sem contato. Nada é enviado até você escolher o que dar."
+          }
+        }
+      }
+    },
     "NSLocationWhenInUseUsageDescription" : {
       "comment" : "Privacy - Location When In Use Usage Description",
       "localizations" : {

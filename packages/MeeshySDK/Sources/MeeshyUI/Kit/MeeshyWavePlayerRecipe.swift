@@ -1,5 +1,6 @@
 import MeeshySDK
 import SwiftUI
+import MeeshySDK
 
 /// Les deux tailles du lecteur : `row` (60 / 40) et `compact` (44 / 28).
 public nonisolated enum MeeshyWavePlayerSize: String, Sendable, Equatable, CaseIterable {

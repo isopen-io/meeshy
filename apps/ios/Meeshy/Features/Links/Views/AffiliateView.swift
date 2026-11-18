@@ -1,20 +1,27 @@
 import SwiftUI
-import Combine
-import os
 import MeeshySDK
 import MeeshyUI
 
 struct AffiliateView: View {
     private var theme: ThemeManager { ThemeManager.shared }
-    @StateObject private var viewModel = AffiliateViewModel()
+    @StateObject var viewModel = AffiliateViewModel()
+    @Environment(\.colorScheme) var colorScheme
+    @Environment(\.routerCommands) var router
     @State private var showCreateSheet = false
+    @State var showsInviteSheet = false
+    @State var showsAllReferrals = false
+    @State var qrShareImage: QRShareImage?
+    @State var sharedLink: ShareableLink?
 
     private let accentColor = MeeshyColors.brandPrimaryHex
+
+    var isDark: Bool { colorScheme == .dark }
+    var accent: Color { Color(hex: accentColor) }
 
     var body: some View {
         LinksPage(
             title: String(localized: "affiliate.title", defaultValue: "Parrainage", bundle: .main),
-            accent: Color(hex: accentColor),
+            accent: accent,
             action: LinksPageAction(
                 label: String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main),
                 perform: { showCreateSheet = true }
@@ -23,20 +30,38 @@ struct AffiliateView: View {
         )
         .sheet(isPresented: $showCreateSheet) {
             AffiliateCreateView { token in
-                viewModel.tokens.insert(token, at: 0)
+                viewModel.insertToken(token)
             }
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
-        .task { await viewModel.load() }
+        .sheet(isPresented: $showsInviteSheet) {
+            ReferralInviteSheet(onSend: { email in await viewModel.invite(email: email) })
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $qrShareImage) { qr in ShareSheet(activityItems: [qr.image]) }
+        .sheet(item: $sharedLink) { shared in ShareSheet(activityItems: shared.activityItems) }
+        .task { await viewModel.loadPage() }
     }
 
     // MARK: - Content
 
+    /// De haut en bas, comme la planche : le code, les chiffres, l'entonnoir, ce que ça rapporte, le palier, les
+    /// filleuls, les invitations, « Inviter quelqu'un » ; puis mes liens de parrainage, qui se créent, se copient,
+    /// se partagent et se suppriment comme avant.
     private var affiliateContent: some View {
-        VStack(spacing: MeeshySpacing.xl) {
+        let page = viewModel.page
+        return VStack(spacing: MeeshySpacing.xl) {
             SettingsSentence(text: String(localized: "affiliate.orientation", defaultValue: "Ceux qui s'inscrivent par votre lien de parrainage vous sont rattachés.", bundle: .main))
-            statsOverview
+            heroSection(page.hero)
+            figuresBand(page.figures)
+            funnelSection(page.funnel)
+            rewardSection(page.reward)
+            tierSection(page.tier)
+            referralsSection(page.referrals)
+            invitationsSection(page.invitations)
+            inviteButton
             tokensSection
             Spacer().frame(height: 40)
         }
@@ -44,78 +69,12 @@ struct AffiliateView: View {
         .padding(.top, MeeshySpacing.sm)
     }
 
-    // MARK: - Stats Overview
-
-    private var statsOverview: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            affiliateStatCard(
-                value: "\(viewModel.tokens.count)",
-                label: String(localized: "affiliate.stat.links", defaultValue: "Liens", bundle: .main),
-                color: accentColor,
-                icon: "link"
-            )
-            affiliateStatCard(
-                value: "\(viewModel.tokens.reduce(0) { $0 + $1.referralCount })",
-                label: String(localized: "affiliate.stat.signups", defaultValue: "Inscrits", bundle: .main),
-                color: accentColor,
-                icon: "person.fill.checkmark"
-            )
-            affiliateStatCard(
-                value: "\(viewModel.tokens.reduce(0) { $0 + $1.clickCount })",
-                label: String(localized: "affiliate.stat.clicks", defaultValue: "Clics", bundle: .main),
-                color: accentColor,
-                icon: "cursorarrow.click"
-            )
-        }
-    }
-
-    private func affiliateStatCard(value: String, label: String, color: String, icon: String) -> some View {
-        VStack(spacing: MeeshySpacing.xsPlus) {
-            Image(systemName: icon)
-                .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
-                .foregroundStyle(Color(hex: color))
-                .accessibilityHidden(true)
-
-            Text(value)
-                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
-                .foregroundStyle(Color(hex: color))
-
-            Text(label)
-                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundStyle(theme.textMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-        .padding(.vertical, MeeshySpacing.mdPlus)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(theme.surfaceGradient(tint: color))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(theme.border(tint: color), lineWidth: 1)
-                )
-        )
-        .accessibilityElement(children: .combine)
-    }
-
     // MARK: - Tokens Section
 
     private var tokensSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                Image(systemName: "link.badge.plus")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundStyle(Color(hex: accentColor))
-                    .accessibilityHidden(true)
-                Text(String(localized: "affiliate.section.myLinks", defaultValue: "MES LIENS", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: accentColor))
-                    .tracking(1.2)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            .padding(.leading, MeeshySpacing.xs)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
+            MeeshySectionHeader(title: ReferralCopy.myLinks, count: viewModel.tokens.isEmpty ? nil : viewModel.tokens.count,
+                                size: .sheet)
 
             if viewModel.tokens.isEmpty {
                 emptyTokensState
@@ -225,11 +184,23 @@ struct AffiliateView: View {
                 label: String(localized: "affiliate.action.delete", defaultValue: "Supprimer le lien de parrainage", bundle: .main),
                 kind: .destructive,
                 size: .s36,
-                action: { Task { await viewModel.deleteToken(token) } }
+                action: { deleteToken(token) }
             )
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.smPlus)
+    }
+
+    /// La rangée part tout de suite ; un refus la rend et se dit.
+    private func deleteToken(_ token: AffiliateToken) {
+        Task {
+            guard await viewModel.deleteToken(token) else {
+                HapticFeedback.error()
+                FeedbackToastManager.shared.showError(ShareLinkDetailCopy.actionFailed)
+                return
+            }
+            HapticFeedback.success()
+        }
     }
 
     /// Native share: `ShareLink` gives the activity sheet, the iPad popover
@@ -272,61 +243,6 @@ enum AffiliateTokenRowDates {
                 format: String(localized: "links.row.created", defaultValue: "Créé le %@", bundle: .main),
                 date.formatted(.dateTime.day().month(.abbreviated).year().locale(locale))
             )
-        }
-    }
-}
-
-// MARK: - ViewModel
-
-@MainActor
-final class AffiliateViewModel: ObservableObject {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-    @Published var tokens: [AffiliateToken] = []
-    @Published var isLoading = false
-
-    private static let logger = MeeshyLog.logger(.affiliate)
-
-    func load() async {
-        let cached = await CacheCoordinator.shared.affiliateTokens.load(for: "list")
-        switch cached {
-        case .fresh(let data, _):
-            tokens = data
-            return
-        case .stale(let data, _):
-            tokens = data
-            await refreshFromAPI()
-        case .expired, .empty:
-            isLoading = tokens.isEmpty
-            await refreshFromAPI()
-        }
-    }
-
-    private func refreshFromAPI() async {
-        do {
-            tokens = try await AffiliateService.shared.listTokens()
-            await bestEffort("affiliateView.affiliateTokens.save", category: .cache) { try await CacheCoordinator.shared.affiliateTokens.save(tokens, for: "list") }
-        } catch {
-            AffiliateViewModel.logger.error("affiliate tokens refresh failed: \(error.localizedDescription)")
-        }
-        isLoading = false
-    }
-
-    func deleteToken(_ token: AffiliateToken) async {
-        let snapshot = tokens
-        tokens.removeAll { $0.id == token.id }
-        await bestEffort("affiliateView.affiliateTokens.save.2", category: .cache) { try await CacheCoordinator.shared.affiliateTokens.save(tokens, for: "list") }
-        HapticFeedback.success()
-        do {
-            try await AffiliateService.shared.deleteToken(id: token.id)
-        } catch {
-            tokens = snapshot
-            await bestEffort("affiliateView.affiliateTokens.save.3", category: .cache) { try await CacheCoordinator.shared.affiliateTokens.save(snapshot, for: "list") }
-            HapticFeedback.error()
-            FeedbackToastManager.shared.showError(ShareLinkDetailCopy.actionFailed)
         }
     }
 }

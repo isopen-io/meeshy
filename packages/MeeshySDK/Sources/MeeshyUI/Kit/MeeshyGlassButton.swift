@@ -353,6 +353,7 @@ public struct MeeshyGlassButton<Glyph: View, Badge: View>: View {
             kind: spec.kind, size: spec.size, tone: spec.tone, tint: spec.tint, glyphTint: spec.glyphTint,
             isPressed: nil, glyph: glyph, badge: badge
         )
+        .meeshyPointerLift(in: Circle(), tint: spec.tint)
         .contentShape(Rectangle().inset(by: -spec.size.hitSlack))
     }
 

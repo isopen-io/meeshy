@@ -97,6 +97,8 @@ enum Route: Hashable {
     case trackingLinks
     case shareLinks
     case communityLinks
+    /// « Mes adresses » (#18871) : poussé depuis la face Liens de ma fiche.
+    case myAddresses
     case dataExport
     case postDetail(String, FeedPost? = nil, showComments: Bool = false, commentId: String? = nil, parentCommentId: String? = nil)
     case hashtagResults(tag: String)
@@ -192,6 +194,8 @@ extension Route {
             return String(localized: "route.title.share_links", defaultValue: "Liens de partage", bundle: .main)
         case .communityLinks:
             return String(localized: "route.title.community_links", defaultValue: "Liens de communauté", bundle: .main)
+        case .myAddresses:
+            return ProfileLinksCopy.addressesTitle
         case .dataExport:
             return String(localized: "route.title.data_export", defaultValue: "Export de données", bundle: .main)
         case .postDetail(_, let post, _, _, _):

@@ -732,7 +732,7 @@ final class ConversationEpureTests: XCTestCase {
         let button = try XCTUnwrap(app["share.link.create.button.create"]?["fr"])
         XCTAssertFalse(button.contains("de partage"), "« \(button) » redit « \(title) »")
         let view = try code("Meeshy/Features/Links/Views/CreateShareLinkView.swift")
-        XCTAssertTrue(view.contains("defaultValue: \"Créer le lien\""))
+        XCTAssertTrue(view.contains("defaultValue: \"Créer et copier le lien\""))
     }
 
     func test_createShareLink_orientationSentences_stayVisible_andSayGuestsOnce() throws {

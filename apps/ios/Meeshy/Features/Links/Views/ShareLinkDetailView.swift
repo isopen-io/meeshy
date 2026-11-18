@@ -3,22 +3,23 @@ import UIKit
 import MeeshySDK
 import MeeshyUI
 
-/// La fiche d'un lien de conversation, détails ET édition (#7797) — Liens ›
-/// Liens de conversation › le lien.
+/// La fiche d'un lien de partage (planche `Lien-Partage`, #18871 ; détails et édition depuis #7797).
 ///
-/// De haut en bas : la carte du lien (dégradé de la marque), ce qu'il a fait
-/// venir, sa configuration en lecture, puis le formulaire qui la modifie.
-/// Le lien s'affiche depuis la ligne de liste qui l'a ouvert (cache-first) ;
-/// les statistiques arrivent ensuite, sans jamais bloquer la fiche.
+/// De haut en bas : le billet héros et ses gestes, l'interrupteur Actif, la jauge des entrées, « Qui peut entrer »,
+/// les chiffres, les arrivées, les arrivées par pays et leurs langues, puis Désactiver. « Modifier » ouvre le
+/// formulaire dans une feuille. Fait du kit : rien n'y est redessiné. Le lien s'affiche depuis la ligne de liste
+/// qui l'a ouvert (cache d'abord) ; les statistiques arrivent ensuite, sans jamais bloquer la fiche.
 struct ShareLinkDetailView: View {
-    @StateObject private var viewModel: ShareLinkDetailViewModel
-    @Environment(\.colorScheme) private var colorScheme
+    @StateObject var viewModel: ShareLinkDetailViewModel
+    @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showDeleteConfirm = false
-    @State private var copiedFeedback = false
-
-    private static let formAnchor = "share-link-edit-form"
+    @State private var showResetConfirm = false
+    @State private var showsMore = false
+    @State private var isEditing = false
+    @State private var qrShareImage: QRShareImage?
+    @State private var sharedLink: ShareableLink?
+    @State var arrivalToRemove: ShareLinkArrivalStats.Arrival?
 
     init(
         link: MyShareLink,
@@ -27,192 +28,192 @@ struct ShareLinkDetailView: View {
     ) {
         _viewModel = StateObject(wrappedValue: ShareLinkDetailViewModel(
             link: link,
+            removeParticipant: { conversationId, key in
+                try await ConversationService.shared.removeParticipant(conversationId: conversationId, key: key)
+            },
             onLinkChanged: onLinkChanged,
             onLinkDeleted: onLinkDeleted
         ))
     }
 
-    private var isDark: Bool { colorScheme == .dark }
-    private var link: MyShareLink { viewModel.link }
+    var isDark: Bool { colorScheme == .dark }
+    var link: MyShareLink { viewModel.link }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            LinksPage(title: link.displayName, accent: MeeshyColors.brandPrimary) {
-                VStack(spacing: MeeshySpacing.lg) {
-                    heroCard
-                    ShareLinkArrivalsSection(linkId: link.linkId, state: viewModel.stats, isDark: isDark)
-                    ShareLinkConfigurationCard(link: link, isDark: isDark) {
-                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) { proxy.scrollTo(Self.formAnchor, anchor: .top) }
-                    }
-                    ShareLinkEditForm(
-                        draft: $viewModel.draft,
-                        isActive: link.isActive,
-                        canSave: viewModel.canSave,
-                        isSaving: viewModel.isSaving,
-                        isDark: isDark,
-                        onSave: save,
-                        onToggleActive: toggleActive,
-                        onDelete: { showDeleteConfirm = true }
-                    )
-                    .id(Self.formAnchor)
+        LinksPage(title: ShareLinkDetailCopy.pageTitle, accent: MeeshyColors.brandPrimary,
+                  action: LinksPageAction(label: ShareLinkDetailCopy.more, systemImage: "ellipsis") { showsMore = true }) {
+            VStack(spacing: MeeshySpacing.xl) {
+                heroTicket
+                activeRow
+                entriesMeter
+                entryRules
+                figuresBand
+                arrivalsSection
+                countriesSection
+                languagesSection
+                VStack(spacing: MeeshySpacing.md) {
+                    resetUsesButton
+                    disableButton
                 }
-                .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.top, MeeshySpacing.lg)
-                .padding(.bottom, 60)
             }
-            .scrollDismissesKeyboard(.interactively)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.lg)
+            .padding(.bottom, 60)
         }
         .task { await viewModel.loadStats() }
+        .confirmationDialog(link.displayName, isPresented: $showsMore, titleVisibility: .visible) {
+            Button(ShareLinkDetailCopy.edit) { isEditing = true }
+            Button(TrackingDetailCopy.deleteLink, role: .destructive) { showDeleteConfirm = true }
+            Button(ShareLinkDetailCopy.cancel, role: .cancel) {}
+        }
         .confirmationDialog(ShareLinkDetailCopy.deleteTitle, isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button(ShareLinkDetailCopy.delete, role: .destructive) { deleteLink() }
             Button(ShareLinkDetailCopy.cancel, role: .cancel) {}
         } message: {
             Text(ShareLinkDetailCopy.deleteConfirmation)
         }
+        .confirmationDialog(ShareLinkDetailCopy.resetUses, isPresented: $showResetConfirm, titleVisibility: .visible) {
+            Button(ShareLinkDetailCopy.resetUses) { resetUses() }
+            Button(ShareLinkDetailCopy.cancel, role: .cancel) {}
+        } message: {
+            Text(ShareLinkDetailCopy.resetUsesMessage)
+        }
+        .confirmationDialog(arrivalToRemove.map { ShareLinkDetailCopy.removeArrivalTitle($0.displayName) } ?? "",
+                            isPresented: removalBinding, titleVisibility: .visible,
+                            presenting: arrivalToRemove) { arrival in
+            Button(ShareLinkDetailCopy.removeArrival, role: .destructive) { removeArrival(arrival) }
+            Button(ShareLinkDetailCopy.cancel, role: .cancel) {}
+        }
+        .sheet(isPresented: $isEditing, onDismiss: { viewModel.discardChanges() }) { editSheet }
+        .sheet(item: $qrShareImage) { qr in ShareSheet(activityItems: [qr.image]) }
+        .sheet(item: $sharedLink) { shared in ShareSheet(activityItems: shared.activityItems) }
     }
 
-    // MARK: - Hero card
+    private var removalBinding: Binding<Bool> {
+        Binding(get: { arrivalToRemove != nil }, set: { if !$0 { arrivalToRemove = nil } })
+    }
+
+    // MARK: - Le billet héros (K30)
 
     private var groupName: String {
         link.conversation?.title ?? link.conversationTitle ?? link.displayName
     }
 
-    private var heroCard: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
-            HStack(spacing: MeeshySpacing.md) {
-                groupLogo
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(groupName)
-                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .heavy, design: .rounded))
-                        .lineLimit(2)
-                    Text(ShareLinkDetailCopy.createdOn(link.createdAt))
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .opacity(MeeshyOpacity.intense)
-                }
-                Spacer(minLength: 0)
-                statusBadge
-            }
-            .accessibilityElement(children: .combine)
-
-            Text(verbatim: link.address.displayString)
-                .font(MeeshyFont.relative(MeeshyFont.bodySize, design: .monospaced))
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, MeeshySpacing.smPlus)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm).fill(Color.white.opacity(0.16)))
-                .environment(\.layoutDirection, .leftToRight)
-                .textSelection(.enabled)
-
-            if let message = link.description, !message.isEmpty {
-                Text(verbatim: "« \(message) »")
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                    .italic()
-                    .opacity(0.92)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            HStack(spacing: MeeshySpacing.smPlus) {
-                shareActionButton
-                Button(action: copyLink) {
-                    heroButtonLabel(copiedFeedback ? ShareLinkDetailCopy.copied : ShareLinkDetailCopy.copyLink,
-                                    icon: copiedFeedback ? "checkmark" : "doc.on.doc", filled: false)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(ShareLinkDetailCopy.copyLink)
-            }
-        }
-        .foregroundColor(.white)
-        .padding(MeeshySpacing.xl)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
-                .fill(LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700, MeeshyColors.purple600],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+    private var heroTicket: some View {
+        MeeshyTicket(
+            title: link.displayName,
+            code: link.address.displayString,
+            tint: MeeshyColors.brandPrimary,
+            systemImage: "bubble.left.and.bubble.right.fill",
+            size: .hero,
+            label: "\(link.displayName), \(link.address.displayString)",
+            statusLabel: link.isActive ? ShareLinkDetailCopy.active : ShareLinkDetailCopy.inactive,
+            stub: { heroStub },
+            leading: { EmptyView() },
+            trailing: { EmptyView() },
+            status: { EmptyView() },
+            back: { EmptyView() }
         )
-        .shadow(color: MeeshyColors.indigo600.opacity(isDark ? 0.15 : 0.3), radius: 16, y: 10)
+        .accessibilityIdentifier("shareLink.detail.hero")
     }
 
-    private var groupLogo: some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
-            .fill(Color.white.opacity(MeeshyOpacity.light))
-            .overlay(
-                CachedAsyncImage(url: link.conversation?.avatar, targetSize: CGSize(width: 48, height: 48), showsStatusOverlays: false) {
-                    Text(MeeshyAvatar.initials(for: groupName))
-                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .heavy, design: .rounded))
-                        .foregroundStyle(Color.white)
+    /// « Mène à Studio » : la pile des dernières arrivées (K48) quand elles sont lues, sinon l'avatar du groupe.
+    private var heroStub: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            let faces = viewModel.headFaces
+            if faces.isEmpty {
+                MeeshyPersonRow(title: ShareLinkDetailCopy.leadsTo(groupName), size: .inline, showsDivider: false) {
+                    MeeshyAvatar(name: groupName, context: .custom(26), kind: .entity,
+                                 avatarURL: link.conversation?.avatar, isDark: isDark)
                 }
-                .scaledToFill()
-            )
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
-            .frame(width: 48, height: 48)
-            .accessibilityHidden(true)
+            } else {
+                LinksFaceStack(members: faces, summary: ShareLinkDetailCopy.leadsTo(groupName),
+                               label: ProfileLinksCopy.facesLabel(ShareLinkDetailCopy.leadsTo(groupName), faces: faces),
+                               tint: MeeshyColors.brandPrimary)
+                    .accessibilityIdentifier("shareLink.detail.faces")
+            }
+            heroActions
+        }
     }
 
-    private var statusBadge: some View {
-        Text(link.isActive ? ShareLinkDetailCopy.active : ShareLinkDetailCopy.inactive)
-            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy))
-            .textCase(.uppercase)
-            .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(Capsule().fill(link.isActive ? MeeshyColors.success.opacity(MeeshyOpacity.intense) : Color.white.opacity(MeeshyOpacity.medium)))
-            .foregroundStyle(link.isActive ? MeeshyColors.indigo950 : Color.white)
+    private var heroActions: some View {
+        MeeshyActionGrid(columns: .fixed(4)) {
+            MeeshyLabeledAction(title: TrackingDetailCopy.copy, systemImage: "doc.on.doc", tint: MeeshyColors.brandPrimary,
+                                hint: link.address.displayString, action: {
+                LinksClipboard.copy(link.address.absoluteString, confirmation: .inline, message: ShareLinkDetailCopy.copied)
+            })
+            MeeshyLabeledAction(title: TrackingDetailCopy.qr, systemImage: "qrcode", tint: MeeshyColors.brandPrimary,
+                                action: { qrShareImage = LinkQRCode.shareImage(for: link.address.absoluteString) })
+                .disabled(link.address.url == nil)
+            MeeshyLabeledAction(title: ShareLinkDetailCopy.share, systemImage: "square.and.arrow.up",
+                                tint: MeeshyColors.brandPrimary, action: {
+                sharedLink = link.address.url.map { ShareableLink(url: $0) }
+            })
+            .disabled(link.address.url == nil)
+            MeeshyLabeledAction(title: ShareLinkDetailCopy.edit, systemImage: "pencil", tint: MeeshyColors.brandPrimary,
+                                action: { isEditing = true })
+        }
     }
 
-    /// Native share: `ShareLink` gives the activity sheet, the iPad popover
-    /// anchor and top-VC presentation for free — no manual
-    /// `UIActivityViewController` / window-hierarchy traversal. The
-    /// `presentSheet(_:)` helper it replaced resolved its presenter from
-    /// `connectedScenes.first`, an unordered `Set`.
-    ///
-    /// The address shared is `/chat/<linkId>` (#7795) — never `/l/<token>`.
+    // MARK: - Actif
+
+    /// L'interrupteur répond au toucher ; le serveur confirme ensuite, et l'état revient s'il refuse.
+    private var activeRow: some View {
+        MeeshyToggleRow(ShareLinkDetailCopy.active,
+                        subtitle: link.isActive ? nil : ShareLinkDetailCopy.inactiveHint,
+                        accessory: .toggle(isOn: link.isActive),
+                        tint: MeeshyColors.brandPrimary,
+                        action: { toggleActive() })
+            .accessibilityIdentifier("shareLink.detail.active")
+    }
+
+    // MARK: - Remettre le compteur à zéro (#19505)
+
+    /// Offert dès qu'une entrée a été comptée ; le compteur repart de zéro sitôt confirmé, et revient si le serveur
+    /// refuse ou ne connaît pas la remise.
     @ViewBuilder
-    private var shareActionButton: some View {
-        if let url = link.address.url {
-            ShareLink(item: url) {
-                heroButtonLabel(ShareLinkDetailCopy.share, icon: "square.and.arrow.up", filled: true)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(ShareLinkDetailCopy.share)
-        } else {
-            // Malformed join URL: a dimmed, VoiceOver-hidden label rather than
-            // a dead control.
-            heroButtonLabel(ShareLinkDetailCopy.share, icon: "square.and.arrow.up", filled: true)
-                .opacity(0.4)
-                .accessibilityHidden(true)
+    private var resetUsesButton: some View {
+        if viewModel.canResetUses {
+            MeeshyButton(ShareLinkDetailCopy.resetUses, systemImage: "arrow.counterclockwise", kind: .outline,
+                         width: .fill, action: { showResetConfirm = true })
+                .accessibilityIdentifier("shareLink.detail.resetUses")
         }
     }
 
-    private func heroButtonLabel(_ text: String, icon: String, filled: Bool) -> some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: icon).accessibilityHidden(true)
-            Text(text).lineLimit(1).minimumScaleFactor(0.8)
+    // MARK: - Désactiver
+
+    private var disableButton: some View {
+        MeeshyButton(link.isActive ? ShareLinkDetailCopy.disableLink : ShareLinkDetailCopy.enableLink,
+                     systemImage: link.isActive ? "nosign" : "link", kind: .outline, width: .fill,
+                     isDestructive: link.isActive, action: { toggleActive() })
+            .accessibilityIdentifier("shareLink.detail.disable")
+    }
+
+    // MARK: - Modifier (feuille)
+
+    private var editSheet: some View {
+        LinksPage(title: ShareLinkDetailCopy.editTitle, accent: MeeshyColors.brandPrimary, glyph: .close,
+                  onBack: { isEditing = false }) {
+            ShareLinkEditForm(
+                draft: $viewModel.draft,
+                isActive: link.isActive,
+                canSave: viewModel.canSave,
+                isSaving: viewModel.isSaving,
+                isDark: isDark,
+                onSave: save,
+                onToggleActive: toggleActive,
+                onDelete: {
+                    isEditing = false
+                    showDeleteConfirm = true
+                }
+            )
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.lg)
         }
-        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-        .foregroundColor(filled ? MeeshyColors.indigo700 : .white)
-        .frame(maxWidth: .infinity, minHeight: 46)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
-                .fill(filled ? Color.white : Color.white.opacity(0.14))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
-                .stroke(Color.white.opacity(filled ? 0 : 0.45), lineWidth: MeeshyBorder.emphasis)
-        )
-        .contentShape(Rectangle())
+        .scrollDismissesKeyboard(.interactively)
     }
 
     // MARK: - Actions
-
-    private func copyLink() {
-        LinksClipboard.copy(link.address.absoluteString, confirmation: .inline)
-        withAnimation { copiedFeedback = true }
-        Task { @MainActor in
-            _ = await cancellableSleep(for: .seconds(2))
-            withAnimation { copiedFeedback = false }
-        }
-    }
 
     private func save() {
         HapticFeedback.light()
@@ -220,6 +221,7 @@ struct ShareLinkDetailView: View {
             if await viewModel.save() {
                 HapticFeedback.success()
                 FeedbackToastManager.shared.showSuccess(ShareLinkDetailCopy.saved)
+                isEditing = false
             } else {
                 HapticFeedback.error()
                 FeedbackToastManager.shared.showError(ShareLinkDetailCopy.saveFailed)
@@ -231,6 +233,30 @@ struct ShareLinkDetailView: View {
         HapticFeedback.light()
         Task {
             guard await viewModel.toggleActive() else {
+                HapticFeedback.error()
+                FeedbackToastManager.shared.showError(ShareLinkDetailCopy.actionFailed)
+                return
+            }
+        }
+    }
+
+    private func resetUses() {
+        HapticFeedback.light()
+        Task {
+            guard await viewModel.resetUses() else {
+                HapticFeedback.error()
+                FeedbackToastManager.shared.showError(ShareLinkDetailCopy.actionFailed)
+                return
+            }
+            HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess(ShareLinkDetailCopy.resetUsesDone)
+        }
+    }
+
+    private func removeArrival(_ arrival: ShareLinkArrivalStats.Arrival) {
+        HapticFeedback.light()
+        Task {
+            guard await viewModel.removeArrival(participantId: arrival.participantId) else {
                 HapticFeedback.error()
                 FeedbackToastManager.shared.showError(ShareLinkDetailCopy.actionFailed)
                 return

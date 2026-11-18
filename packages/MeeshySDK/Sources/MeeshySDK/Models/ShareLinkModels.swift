@@ -236,6 +236,8 @@ public struct CreateShareLinkRequest: Encodable, Sendable {
     public let requireNickname: Bool
     public let requireEmail: Bool
     public let requireBirthday: Bool
+    /// Les langues autorisées (ISO 639-1) ; absent ⇒ toutes. La passerelle les accepte à la création.
+    public let allowedLanguages: [String]?
 
     public init(
         conversationId: String,
@@ -252,7 +254,8 @@ public struct CreateShareLinkRequest: Encodable, Sendable {
         requireAccount: Bool = false,
         requireNickname: Bool = false,
         requireEmail: Bool = false,
-        requireBirthday: Bool = false
+        requireBirthday: Bool = false,
+        allowedLanguages: [String]? = nil
     ) {
         self.conversationId = conversationId
         self.name = name
@@ -269,6 +272,7 @@ public struct CreateShareLinkRequest: Encodable, Sendable {
         self.requireNickname = requireNickname
         self.requireEmail = requireEmail
         self.requireBirthday = requireBirthday
+        self.allowedLanguages = allowedLanguages
     }
 }
 

@@ -20,6 +20,8 @@ public struct FullscreenImageView: View {
     /// feuille entière. `nil` : la vue a été PRÉSENTÉE, elle se renvoie.
     public let onClose: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
 
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
@@ -94,7 +96,8 @@ public struct FullscreenImageView: View {
                     close()
                     return
                 }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                let reduce = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+                meeshyWithMotion(.morph, reduceMotion: reduce) {
                     offset = .zero
                     dismissDrag = 0
                 }

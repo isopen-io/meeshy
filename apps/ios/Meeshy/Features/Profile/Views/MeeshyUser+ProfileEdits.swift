@@ -23,7 +23,9 @@ extension MeeshyUser {
         bio: String? = nil,
         systemLanguage: String? = nil,
         regionalLanguage: String? = nil,
-        customDestinationLanguage: String? = nil
+        customDestinationLanguage: String? = nil,
+        autoTranslateEnabled: Bool? = nil,
+        voicePublic: Bool? = nil
     ) -> MeeshyUser {
         MeeshyUser(
             id: id,
@@ -53,18 +55,24 @@ extension MeeshyUser {
             emailVerifiedAt: emailVerifiedAt,
             phoneVerifiedAt: phoneVerifiedAt,
             customDestinationLanguage: customDestinationLanguage ?? self.customDestinationLanguage,
-            autoTranslateEnabled: autoTranslateEnabled,
+            autoTranslateEnabled: autoTranslateEnabled ?? self.autoTranslateEnabled,
             deviceLocale: deviceLocale,
             timezone: timezone,
             registrationCountry: registrationCountry,
             profileCompletionRate: profileCompletionRate,
             signalIdentityKeyPublic: signalIdentityKeyPublic,
-            voicePublic: voicePublic,
+            voicePublic: voicePublic ?? self.voicePublic,
             voiceSampleUrl: voiceSampleUrl,
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
             activation: activation,
-            profileDecor: profileDecor
+            profileDecor: profileDecor,
+            addresses: addresses,
+            city: city, cityCircle: cityCircle,
+            profileAccentColor: profileAccentColor,
+            lockedAddresses: lockedAddresses,
+            openCommunities: openCommunities,
+            acceptsFriendRequests: acceptsFriendRequests
         )
     }
 }
@@ -115,8 +123,33 @@ extension ProfileView {
     /// instantiating the SwiftUI view.
     static func mergingServerUser(_ server: MeeshyUser, onto local: MeeshyUser?) -> MeeshyUser {
         let decor = server.profileDecor ?? local?.profileDecor
-        let merged = server.voicePublic == nil && local?.voicePublic != nil ? server.withProfileChanges(voicePublic: local?.voicePublic) : server
+        let carried = server.carryingDeclaredCity(from: local).carryingProfileAccent(from: local)
+        let merged = carried.voicePublic == nil && local?.voicePublic != nil ? carried.withProfileChanges(voicePublic: local?.voicePublic) : carried
         return merged.profileDecor == decor ? merged : merged.withProfileDecor(decor)
+    }
+
+    /// Ce qui part pour l'accent de ma vitrine (#19391) : `nil` quand le choix est celui que je tiens déjà (omis du
+    /// PATCH), le choix sinon — l'automatique compris, qui part en `null`.
+    static func accentEditToSend(_ choice: ProfileAccentChoice, original: MeeshyUser) -> ProfileAccentChoice? {
+        choice == ProfileAccentChoice(wire: original.profileAccentColor) ? nil : choice
+    }
+
+    /// L'accent de ma bannière et de mon avatar : celui que je tiens, ou, en édition, celui que je suis en train de
+    /// choisir — l'aperçu en direct de la planche `Moi-Edition` (#19391). `nil` sans compte.
+    static func vitrineAccentHex(of user: MeeshyUser?, choosing choice: ProfileAccentChoice?) -> String? {
+        guard let user else { return nil }
+        guard let choice else { return user.profileAccentHex }
+        return ProfileAccent.hex(chosen: choice.wire, userId: user.id, name: user.displayName ?? user.username)
+    }
+
+    /// Ce qui part pour ma ville et son cercle (#19388) : `nil` pour ce qui n'a pas changé (omis du PATCH), `""` pour
+    /// une ville effacée, la saisie rognée sinon. Une ville trop longue est coupée à la borne de la passerelle.
+    static func cityEditToSend(typed: String, circle: RelationLevel?,
+                               original: MeeshyUser) -> (city: String?, circle: RelationLevel?) {
+        let normalized = ProfileCity.normalized(typed).map { String($0.prefix(ProfileCity.maxLength)) }
+        let city: String? = normalized == original.declaredCity ? nil : (normalized ?? "")
+        let sentCircle: RelationLevel? = circle == original.declaredCityCircle ? nil : circle
+        return (city, sentCircle)
     }
 
     /// Ce qui part pour un champ d'identité : la saisie ROGNÉE, ou `nil` quand
