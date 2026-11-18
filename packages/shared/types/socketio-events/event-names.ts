@@ -403,6 +403,12 @@ export const SERVER_EVENTS = {
    */
   FRIEND_REQUEST_REJECTED: 'friend-request:rejected',
   /**
+   * Emitted to the RECEIVER's user-room when the message of a pending request
+   * has just been translated (#19361), after `FRIEND_REQUEST_NEW`. A signal
+   * with no content: the client re-reads the request through the route.
+   */
+  FRIEND_REQUEST_UPDATED: 'friend-request:updated',
+  /**
    * A member was ADDED to the conversation (`POST /conversations/:id/participants`).
    * The symmetric counterpart of `CONVERSATION_PARTICIPANT_LEFT`, and the ONLY
    * event that carries that fact unambiguously.

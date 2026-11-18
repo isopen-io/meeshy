@@ -14,6 +14,7 @@
  */
 
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
+import type { FriendRequestUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import type { ZmqTranslationClient } from '../zmq-translation/ZmqTranslationClient';
 import type { TranslationCompletedEvent } from '../zmq-translation/types';
@@ -28,6 +29,12 @@ const NAMESPACE = 'friend-request';
 
 type ZmqTraduction = Pick<ZmqTranslationClient, 'translateToMultipleLanguages' | 'on'>;
 
+/**
+ * Le signal de `friend-request:updated` (#19361) remis au DESTINATAIRE seul,
+ * sans contenu : la liste déjà ouverte relit la demande par la route.
+ */
+export type AnnonceTraduction = (receiverId: string, data: FriendRequestUpdatedEventData) => void;
+
 export type DeclenchementTraduction = {
   readonly friendRequestId: string;
   readonly receiverId: string;
@@ -41,10 +48,11 @@ export class FriendRequestMessageTranslationService {
   private constructor(
     private readonly prisma: PrismaClient,
     private readonly zmqClient: ZmqTraduction,
+    private annonce: AnnonceTraduction | null,
   ) {}
 
-  static init(prisma: PrismaClient, zmqClient: ZmqTraduction): FriendRequestMessageTranslationService {
-    const instance = new FriendRequestMessageTranslationService(prisma, zmqClient);
+  static init(prisma: PrismaClient, zmqClient: ZmqTraduction, annonce: AnnonceTraduction | null = null): FriendRequestMessageTranslationService {
+    const instance = new FriendRequestMessageTranslationService(prisma, zmqClient, annonce);
     instance.ecouter();
     FriendRequestMessageTranslationService._shared = instance;
     return instance;
@@ -56,11 +64,14 @@ export class FriendRequestMessageTranslationService {
    * écouteur est posé avant la première requête, donc avant tout retour.
    * `null` tant que le translator n'est pas joignable : l'envoi n'en dépend pas.
    */
-  static maybeShared(prisma: PrismaClient): FriendRequestMessageTranslationService | null {
+  static maybeShared(prisma: PrismaClient, annonce: AnnonceTraduction | null = null): FriendRequestMessageTranslationService | null {
     const actuel = FriendRequestMessageTranslationService._shared;
-    if (actuel) return actuel;
+    if (actuel) {
+      if (annonce) actuel.annonce = annonce;
+      return actuel;
+    }
     const zmqClient = ZMQSingleton.getInstanceSync();
-    return zmqClient ? FriendRequestMessageTranslationService.init(prisma, zmqClient) : null;
+    return zmqClient ? FriendRequestMessageTranslationService.init(prisma, zmqClient, annonce) : null;
   }
 
   async trigger(params: DeclenchementTraduction): Promise<void> {
@@ -134,6 +145,20 @@ export class FriendRequestMessageTranslationService {
 
     if ((resultat?.writeErrors ?? []).length > 0 || (resultat?.n ?? 0) === 0) {
       log.warn('FriendRequestMessageTranslation: nothing written (request withdrawn?)', { friendRequestId, targetLanguage });
+      return;
     }
+    await this.annoncer(friendRequestId);
+  }
+
+  /** Le destinataire relit la demande : un identifiant, jamais le mot ni sa traduction. */
+  private async annoncer(friendRequestId: string): Promise<void> {
+    const annonce = this.annonce;
+    if (!annonce) return;
+    const demande = await this.prisma.friendRequest.findUnique({
+      where: { id: friendRequestId },
+      select: { receiverId: true },
+    });
+    if (!demande) return;
+    annonce(demande.receiverId, { friendRequestId });
   }
 }

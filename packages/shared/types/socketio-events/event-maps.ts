@@ -175,6 +175,7 @@ import type {
   FriendRequestCancelledEventData,
   FriendRequestNewEventData,
   FriendRequestRejectedEventData,
+  FriendRequestUpdatedEventData,
 } from './friend-request.js';
 import type { LinkMessageNewEventData } from './link.js';
 import type {
@@ -415,6 +416,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.FRIEND_REQUEST_NEW]: (data: FriendRequestNewEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED]: (data: FriendRequestAcceptedEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_REJECTED]: (data: FriendRequestRejectedEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_UPDATED]: (data: FriendRequestUpdatedEventData) => void;
   [SERVER_EVENTS.RELATION_LEVEL_RAISED]: (data: RelationLevelRaisedEventData) => void;
   [SERVER_EVENTS.RELATION_LEVEL_LOWERED]: (data: RelationLevelLoweredEventData) => void;
   [SERVER_EVENTS.USER_BLOCKED_BY_ME]: (data: UserBlockedByMeEventData) => void;

@@ -24,6 +24,8 @@ import {
 import { trancherDemande } from './friend-request-answer';
 import { detectContentLanguage } from '../../utils/content-language';
 import { FriendRequestMessageTranslationService } from '../../services/friend-requests/FriendRequestMessageTranslationService';
+import { broadcastToUser } from '../../utils/socket-broadcast';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { retirerDemande } from './friend-request-withdraw';
 
 export { INCLUDE_PARTIES, clauseHorsBlocage, filtreStatut, servirParties } from './friend-request-parties';
@@ -179,7 +181,9 @@ export async function envoyerDemande(
   }
 
   if (mot && langueDuMot && !replayed) {
-    void FriendRequestMessageTranslationService.maybeShared(fastify.prisma)?.trigger({
+    void FriendRequestMessageTranslationService.maybeShared(fastify.prisma, (receiverId, data) => {
+      broadcastToUser(fastify, receiverId, SERVER_EVENTS.FRIEND_REQUEST_UPDATED, data);
+    })?.trigger({
       friendRequestId: demande.id,
       receiverId: receveurId,
       message: mot,
