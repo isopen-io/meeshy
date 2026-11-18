@@ -39306,7 +39306,7 @@
         }
       }
     },
-    "locationMap.nearby.new": {
+    "profile.novelty.new": {
       "extractionState": "manual",
       "localizations": {
         "ar": {

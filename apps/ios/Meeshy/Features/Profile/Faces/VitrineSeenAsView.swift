@@ -69,13 +69,16 @@ struct VitrineSeenAsView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            HStack(spacing: MeeshySpacing.sm) {
-                MeeshyGlassButton(systemImage: "xmark", label: VitrineSeenAsCopy.close, action: { dismiss() })
-                Text(VitrineSeenAsCopy.title)
-                    .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
-                    .foregroundStyle(theme.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 0)
+            ProfileNoveltyReader(feature: .vitrinePreview, accountId: user.id) { badge in
+                HStack(spacing: MeeshySpacing.sm) {
+                    MeeshyGlassButton(systemImage: "xmark", label: VitrineSeenAsCopy.close, action: { dismiss() })
+                    Text(VitrineSeenAsCopy.title)
+                        .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
+                        .foregroundStyle(theme.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
+                    if let badge { ProfileNoveltyTag(text: badge, tint: accent) }
+                    Spacer(minLength: 0)
+                }
             }
             ViewThatFits(in: .horizontal) {
                 circlePicker(form: .dots).frame(maxWidth: .infinity)

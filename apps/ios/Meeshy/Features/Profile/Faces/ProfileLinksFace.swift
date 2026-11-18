@@ -45,8 +45,13 @@ struct ProfileLinksFace: View {
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
             if showsHeader { header }
-            if let profileLink { profileTicket(profileLink) }
-            ProfileAddressesRail(store: addresses, accent: accent, onManage: { onOpen(.myAddresses) })
+            if let profileLink {
+                ProfileNoveltyReader(feature: .profileLink, accountId: user?.id) { badge in
+                    profileTicket(profileLink, badge: badge)
+                }
+            }
+            ProfileAddressesRail(store: addresses, accent: accent, accountId: user?.id,
+                                 onManage: { onOpen(.myAddresses) })
             ProfileCreatedLinks(model: links, accent: accent, onOpen: onOpen,
                                 onCreate: { presented = .create })
         }
@@ -85,8 +90,8 @@ struct ProfileLinksFace: View {
 
     /// Le billet héros : « Mon lien de profil », l'adresse en chasse fixe, « 1 719 visites ce mois » dès que la
     /// passerelle le sert (#19489, rien sinon) et le QR qui s'agrandit ; sous la coupe, les quatre gestes. Le QR ne
-    /// porte que l'adresse publique, jamais une donnée de cercle.
-    private func profileTicket(_ link: ProfileLink) -> some View {
+    /// porte que l'adresse publique, jamais une donnée de cercle. « Nouveau » suit le titre à sa première apparition.
+    private func profileTicket(_ link: ProfileLink, badge: String?) -> some View {
         let month = visits.monthVisits
         let spoken = [ProfileLinksCopy.profileLinkTitle, link.displayText, month.map { ProfileLinksCopy.visitsFigure($0) }]
         return MeeshyTicket(
@@ -100,6 +105,7 @@ struct ProfileLinksFace: View {
             isSelected: false,
             isDragging: false,
             label: spoken.compactMap { $0 }.joined(separator: ", "),
+            titleBadge: badge,
             onPress: nil,
             stub: { profileActions(link) },
             leading: { EmptyView() },

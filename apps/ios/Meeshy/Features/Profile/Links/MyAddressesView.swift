@@ -32,8 +32,9 @@ struct MyAddressesView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                     MeeshyNote(MyAddressesCopy.intro, lead: .systemImage("eye"))
                     if !store.addresses.isEmpty {
-                        MeeshyNote(MyAddressesCopy.summary(count: store.addresses.count, clicks: store.totalClicks),
-                                   lead: .systemImage("cursorarrow.click"), tint: accent)
+                        ProfileNoveltyReader(feature: .myAddresses, accountId: owner?.id) { badge in
+                            summaryNote(badge: badge)
+                        }
                     }
                     list(scrollToForm: {
                         withAnimation(.easeInOut) { proxy.scrollTo(Self.formAnchor, anchor: .top) }
@@ -67,6 +68,19 @@ struct MyAddressesView: View {
             }
         }
         .accessibilityIdentifier("profile.addresses")
+    }
+
+    /// « 3 adresses · 546 clics », et « Nouveau » à côté à la première apparition pour ce compte.
+    @ViewBuilder
+    private func summaryNote(badge: String?) -> some View {
+        let summary = MyAddressesCopy.summary(count: store.addresses.count, clicks: store.totalClicks)
+        if let badge {
+            MeeshyNote(summary, lead: .systemImage("cursorarrow.click"), tint: accent) {
+                ProfileNoveltyTag(text: badge, tint: accent)
+            }
+        } else {
+            MeeshyNote(summary, lead: .systemImage("cursorarrow.click"), tint: accent)
+        }
     }
 
     /// Mon compte, pour la mini-vitrine et « Voir comme » : sans compte, l'écran s'en passe.

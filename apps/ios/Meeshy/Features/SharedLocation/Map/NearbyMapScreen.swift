@@ -16,9 +16,6 @@ struct NearbyMapScreen: View {
     @State private var focus: LocationMapFocus?
     @State private var filter: NearbyCircleFilter = .all
     @State private var sort: NearbySort = .nearest
-    /// « Nouveau » à côté du titre tant que la carte de mes proches n'a jamais été ouverte sur cet appareil.
-    @AppStorage("locationMap.nearby.opened") private var wasOpened = false
-    @State private var showsNew = false
     @State private var me: SharedLocationFix?
     @State private var opened: ShareMyLocationRecipient?
     @State private var sharesMine = false
@@ -107,10 +104,10 @@ struct NearbyMapScreen: View {
         HStack(spacing: MeeshySpacing.md) {
             MeeshyGlassButton(systemImage: "chevron.backward", label: LocationMapCopy.back, size: .s44, action: { dismiss() })
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                HStack(spacing: MeeshySpacing.sm) {
-                    Text(LocationMapCopy.nearbyTitle).font(.headline.weight(.bold)).foregroundStyle(Color.white)
-                    if showsNew {
-                        MeeshyBadge(.label(LocationMapCopy.isNew), surface: .solid, kind: .accent)
+                ProfileNoveltyReader(feature: .closeOnesMap, accountId: AuthManager.shared.currentUser?.id) { badge in
+                    HStack(spacing: MeeshySpacing.sm) {
+                        Text(LocationMapCopy.nearbyTitle).font(.headline.weight(.bold)).foregroundStyle(Color.white)
+                        if let badge { ProfileNoveltyTag(text: badge) }
                     }
                 }
                 Text(LocationMapCopy.nearbySubtitle(model.pins.count)).font(.caption).foregroundStyle(Color.white.opacity(0.75))
@@ -316,8 +313,6 @@ struct NearbyMapScreen: View {
     }
 
     private func appear() async {
-        showsNew = !wasOpened
-        wasOpened = true
         me = LocationMapOwnPosition.lastKnown()
         await model.appeared()
         refocus(animated: false)

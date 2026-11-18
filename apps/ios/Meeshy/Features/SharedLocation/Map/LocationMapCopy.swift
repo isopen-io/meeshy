@@ -153,7 +153,6 @@ enum LocationMapCopy {
     static var around: String { String(localized: "locationMap.nearby.around", defaultValue: "Autour de toi", bundle: .main) }
     static var nearestFirst: String { String(localized: "locationMap.nearby.nearestFirst", defaultValue: "Du plus près", bundle: .main) }
     static var sortLabel: String { String(localized: "locationMap.nearby.sort", defaultValue: "Trier", bundle: .main) }
-    static var isNew: String { String(localized: "locationMap.nearby.new", defaultValue: "Nouveau", bundle: .main) }
 
     static func sort(_ sort: NearbySort) -> String {
         switch sort {

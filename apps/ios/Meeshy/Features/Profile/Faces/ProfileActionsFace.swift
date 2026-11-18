@@ -124,7 +124,7 @@ struct ProfileActionsFace: View {
             BatterySharingSettingsSection(accentColor: accentColor)
             PhoneReachabilitySharingSettingsSection(accentColor: accentColor)
             VStack(spacing: 0) {
-                ghostRow
+                ProfileNoveltyReader(feature: .ghostMode, accountId: user?.id) { badge in ghostRow(badge: badge) }
                 privacyToggle(ProfileActionsCopy.notifyReturnTitle, systemImage: "bell",
                               subtitle: nil, keyPath: \.notifyContactsOnReturn, divider: false)
             }
@@ -144,14 +144,16 @@ struct ProfileActionsFace: View {
             .accessibilityIdentifier("profile.actions.position")
     }
 
-    /// Le fantôme global : appliqué aussitôt, défait et dit sur un refus.
-    private var ghostRow: some View {
+    /// Le fantôme global : appliqué aussitôt, défait et dit sur un refus. « Nouveau » suit le titre à sa première
+    /// apparition pour ce compte.
+    private func ghostRow(badge: String?) -> some View {
         MeeshyToggleRow(
             content: MeeshyToggleRowContent(title: BloodLocationCopy.ghostTitle, subtitle: ProfileActionsCopy.ghostSubtitle,
-                                            accessory: .toggle(isOn: ghost.isGhost), showsDivider: true, tint: accent),
+                                            accessory: .toggle(isOn: ghost.isGhost), showsDivider: true, tint: accent,
+                                            titleAccessoryLabel: badge),
             action: { toggleGhost() },
             leading: { MeeshyToggleRowSymbol("theatermasks") },
-            titleAccessory: { MeeshyBadge(.label(LocationMapCopy.isNew), surface: .solid, kind: .accent) },
+            titleAccessory: { if let badge { ProfileNoveltyTag(text: badge, tint: accent) } },
             trailing: { MeeshyToggleRowNoSlot() }
         )
         .disabled(ghost.isBusy)

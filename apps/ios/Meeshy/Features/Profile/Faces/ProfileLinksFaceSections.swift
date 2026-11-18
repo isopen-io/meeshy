@@ -6,15 +6,20 @@ import MeeshyUI
 
 /// « Mes adresses » sur la face Liens (planche `Moi-Liens`) : un rail de billets compacts (K30), chaque billet avec
 /// son glyphe, son titre et son adresse en chasse fixe, puis le billet fantôme « Ajouter ». Une adresse masquée de la
-/// vitrine se lit barrée. Tout geste mène à « Mes adresses », où elles se règlent.
+/// vitrine se lit barrée. Tout geste mène à « Mes adresses », où elles se règlent. « Nouveau » suit le titre à sa
+/// première apparition pour ce compte.
 struct ProfileAddressesRail: View {
     @ObservedObject var store: ProfileAddressesStore
     let accent: Color
+    let accountId: String?
     let onManage: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            MeeshySectionHeader(title: ProfileLinksCopy.addressesTitle, lead: { EmptyView() }, accessory: { manage })
+            ProfileNoveltyReader(feature: .myAddresses, accountId: accountId) { badge in
+                MeeshySectionHeader(title: ProfileLinksCopy.addressesTitle, titleBadge: badge, tint: accent,
+                                    lead: { EmptyView() }, accessory: { manage })
+            }
             content
         }
         .accessibilityIdentifier("profile.links.addresses")
