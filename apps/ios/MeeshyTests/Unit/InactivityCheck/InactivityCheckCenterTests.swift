@@ -92,13 +92,16 @@ final class InactivityCheckCenterTests: XCTestCase {
         XCTAssertEqual(rig.feed.entries.first?.dotStyle, .success)
     }
 
-    func test_theSyncPillAnnouncement_neverPersists() async {
-        let rig = makeSUT()
-        await rig.sut.receive(alert(announced: true))
-        let expiry = rig.feed.current.first?.expiresAt
-        XCTAssertEqual(expiry?.timeIntervalSince(since.addingTimeInterval(43_200)), InactivityAnnouncementFeed.lifetime)
-        rig.feed.expireDue()
-        XCTAssertFalse(rig.feed.current.isEmpty, "l'horloge du témoin n'a pas avancé : l'annonce vit encore")
+    func test_theSyncPillAnnouncement_goesOutAfterItsLifetime_neverPersists() {
+        var clock = since
+        let feed = InactivityAnnouncementFeed(now: { clock })
+        feed.post(userId: "peer", kind: .alert, label: "Jacques")
+        clock = since.addingTimeInterval(InactivityAnnouncementFeed.lifetime - 1)
+        feed.expireDue()
+        XCTAssertEqual(feed.current.count, 1)
+        clock = since.addingTimeInterval(InactivityAnnouncementFeed.lifetime + 1)
+        feed.expireDue()
+        XCTAssertTrue(feed.current.isEmpty)
     }
 
     func test_catchUp_theSnapshotIsTheTruth_withoutMyOwnState() async {
