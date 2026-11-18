@@ -27,7 +27,7 @@ const makePrisma = (existingRelation: { id: string; status: string } | null) => 
   affiliateRelation: {
     findFirst: jest.fn(async () => existingRelation),
     create: jest.fn(async () => ({ id: 'rel-1', status: 'completed' })),
-    count: jest.fn(async () => 14),
+    count: jest.fn(async (_args: unknown) => 14),
   },
   friendRequest: { findFirst: jest.fn(async () => null), create: jest.fn(async () => ({})) },
 });

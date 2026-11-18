@@ -39,7 +39,7 @@ const prisma = {} as never;
 
 const makeIO = () => {
   const emit = jest.fn();
-  const to = jest.fn(() => ({ emit }));
+  const to = jest.fn((_room: string) => ({ emit }));
   return { io: { to, emit } as never, to, emit };
 };
 

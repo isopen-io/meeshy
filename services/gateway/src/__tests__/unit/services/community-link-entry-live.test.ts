@@ -34,7 +34,7 @@ function fakePrisma(community: unknown = { id: 'c-1', identifier: 'mshy_club', c
     communityMember: {
       findMany: jest.fn(async ({ where }: { where: { role?: { in: string[] } } }) =>
         MEMBERS.filter((member) => !where.role || where.role.in.includes(member.role))),
-      count: jest.fn(async () => 4),
+      count: jest.fn(async (_args: unknown) => 4),
     },
   };
 }
