@@ -462,8 +462,10 @@ def create_voice_api_router(
     async def _owned_job(job_id: str, authorization: Optional[str]):
         caller = get_user_id(authorization)
         job = await translation_pipeline.get_job(job_id)
-        if not job or job.user_id != caller:
+        if not job:
             raise HTTPException(status_code=404, detail="Job not found")
+        if job.user_id != caller:
+            raise HTTPException(status_code=404, detail="Job not yours")
         return job
 
     @router.get("/voice/job/{job_id}", response_model=JobResponse)
