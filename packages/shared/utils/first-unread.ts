@@ -118,7 +118,7 @@
  * messages gravés dans la même milliseconde).
  */
 
-import { readCursorFloorOf } from './read-cursor-floor';
+import { readCursorFloorOf } from './read-cursor-floor.js';
 
 export type FirstUnreadCandidateMessage = {
   readonly id: string;

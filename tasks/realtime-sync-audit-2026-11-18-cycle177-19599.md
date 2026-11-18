@@ -129,8 +129,8 @@ vert, donc il doit d'abord prouver qu'il voit.
 
 - **RED d'abord**, poussé avant la logique (`71d0059c0f`, doctrine de la branche
   poussée tôt) : 2 témoins sur 4 rouges sur l'arbre de `dev` ;
-- `packages/shared` : **69 suites, 1 398 témoins verts** (`npx vitest run utils/`),
-  dont les 31 de `first-unread` + `read-cursor-floor` + le cliquet ;
+- `packages/shared`, suite **COMPLÈTE** : **447 suites, 10 692 témoins verts**,
+  seuils de couverture tenus (voir § ci-dessous sur le gate manqué) ;
 - gateway : **14 suites, 296 témoins verts** sur `MessageReadStatusService*`,
   `conversationUnreadBadge`, `unreadCountsParity`, `captureNoticeUnreadCounts`,
   plus `readFloor` et `deliveryFloor` (15 témoins) ;
@@ -149,6 +149,35 @@ vert, donc il doit d'abord prouver qu'il voit.
 - **aucun comportement de production ne change** : les deux formes coïncident
   sur toute donnée saine, et l'arbitrage retenu est celui déjà en place des deux
   côtés. Ce lot rend VÉRIFIABLE ce qui ne l'était pas.
+
+## Le gate que je n'avais pas lancé, et qui tenait un bug de RUNTIME
+
+Les suites CIBLÉES étaient vertes, et la suite COMPLÈTE de `packages/shared` ne
+l'était pas :
+
+```
+FAIL __tests__/esm-relative-imports.test.ts
+  × tout import relatif de valeur porte une extension .js/.json explicite
+    + "utils/first-unread.ts → './read-cursor-floor'"
+```
+
+`packages/shared` est en ESM pur et sert son `dist` : un import relatif SANS
+`.js` ne se résout pas à l'exécution. Le défaut n'était visible par aucun des
+instruments que j'avais lancés — ni `tsc` (qui résout par le `moduleResolution`
+du paquet), ni vitest sur les suites ciblées (qui résout comme un bundler), ni
+`bun run build` (qui compile sans exécuter). **Il l'était par le cliquet, et le
+cliquet n'est pas dans le fichier que je touchais.**
+
+> La leçon n'est pas « lancer la suite complète », qui est déjà écrite. C'est
+> que **le premier fichier qu'un paquet reçoit depuis longtemps éprouve des
+> conventions que les fichiers existants satisfont tous** — personne n'écrit
+> l'extension en pensant à la résolution ESM, on la copie du voisin. Ajouter un
+> MODULE à un paquet n'est pas la même opération qu'éditer un module : c'est la
+> seule qui peut violer une convention de paquet.
+
+Réparé (`./read-cursor-floor.js`), et la suite complète est verte :
+**447 suites, 10 692 témoins**, seuils de couverture tenus (98,47 / 94,23 /
+98,95 / 99,23 contre 98 / 94 / 93 / 98).
 
 ## Ce que ce conteneur ne peut pas prouver
 
