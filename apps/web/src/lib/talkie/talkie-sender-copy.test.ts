@@ -186,3 +186,31 @@ describe('une voix réveillée que personne n’a rejointe devient un message vo
     expect(h.copies).toEqual([]);
   });
 });
+
+describe('la copie vocale part au nom du compte qui a parlé (audit #19352, X1)', () => {
+  test('l’onglet passe à un autre compte pendant que le doigt tient : la copie reste à celui qui a appuyé', async () => {
+    let speaking: string | null = 'u:ada';
+    const h = harness({ ack: refusedVoice(CONVERSATION), identity: () => speaking });
+    h.sender.press(PROCHE);
+    await settle();
+    await settle();
+    h.capture.push(2);
+    speaking = 'u:bob';
+    await h.sender.release();
+    expect(h.copies.map((copy) => copy.owner)).toEqual(['u:ada']);
+  });
+
+  test('une voix réveillée que personne n’a rejointe part aussi au nom de celui qui a appuyé', async () => {
+    let speaking: string | null = 'u:ada';
+    const h = harness({ ack: wakingAck, identity: () => speaking });
+    bindTalkieSender({ socket: h.wire.socket, sender: h.sender });
+    h.sender.press(PROCHE);
+    await settle();
+    h.capture.push(2);
+    speaking = 'u:bob';
+    await h.sender.release();
+    h.wire.fire(TALKIE_SERVER_EVENTS.TALKIE_ENDED, endedFor(false));
+    await settle();
+    expect(h.copies.map((copy) => copy.owner)).toEqual(['u:ada']);
+  });
+});
