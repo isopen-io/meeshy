@@ -1547,3 +1547,40 @@ socket jusqu'au client.
 3. #19597, #19596, puis #19473, #18668 et #18692 (messages d'exception bruts), #19381, #19253, #19294, #19295, #19255.
 4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
 5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 46 — 2026-11-18
+
+- **Base** : `origin/dev` @ `6ccc8482b`, puis fusionnée avec `dev` @ `09fc63152`. La PR du cycle 45 (#19675) était encore ouverte : sa CI était annulée à chaque mise à jour depuis `dev`, puis bloquée en file. Le cliquet de poids (#19684) passe de nouveau sur `dev` (`measure-weight.mjs` EXIT=0, mesuré).
+- **Branche** : `claude/determined-volta-5jflwy`, **empilée sur #19675**, parce que les deux cycles écrivent dans le même journal.
+- **Objectif** : #19672. Aucune route ni aucun événement socket ne sert plus le chemin disque (`path`) des pistes traduites d'une pièce jointe de message.
+- **Livré** (passerelle et schéma partagé) :
+  - `messageAttachmentSchema` ne déclare plus `translations.<lang>.path` ni `translatedAudios[].path`. Toutes les routes qui le servent sont fermées par le sérialiseur.
+  - `servedAttachmentTranslations` (`services/attachments/`) est le seul endroit qui retire `path`. Son type de sortie ne déclare plus `path`, et un cliquet `tsc` le garantit. Il est appliqué :
+    - au socket (`serializeAttachmentForSocket` : `message:new`, `message:edited`, `attachment:updated`, `ready-listener`) ;
+    - à `cleanAttachmentsForApi` ;
+    - au fil de réponses (`GET /conversations/:id/threads/:messageId`, schéma `additionalProperties: true`) ;
+    - aux deux lectures d'administration (projection souveraine, `GET /admin/messages`).
+  - La persistance n'a pas changé : `path` reste en base.
+- **Rétrocompatibilité** : aucun client ne lit `path` sur une traduction de pièce jointe (vérifié par le spécialiste puis par la QA).
+  - iOS : `APIAttachmentTranslation`, `MessageTranslatedAudio`, `TranslatedAudioInfo`.
+  - Android : `ApiAttachmentTranslation`, `TranslatedAudioPayload`.
+  - Web : aucun accès.
+- **Tests** :
+  - Rouge du premier commit : `4 failed, 15 passed` ; vert : `19 passed`.
+  - B, C et D ont chacun un témoin, rouge puis vert, qui traverse la route par `app.inject`, ou qui appelle directement `cleanAttachmentsForApi`.
+  - Sur l'arbre fusionné avec `dev` et #19675, j'ai relancé moi-même les suites security, routes/voice, routes/attachments, threads, admin et serializeAttachmentForSocket : `94 suites, 1223 passed`. `tsc --noEmit` : 0.
+  - Échecs préexistants, sans lien avec ce lot : `call-live-frame-events` (plafond d'appel de 6 à 5) et 4 suites d'images (sharp/libvips du conteneur).
+- **QA** (`auditeur-adversarial`, deux passages) :
+  - Premier passage : défavorable pour fermer l'issue. Le fil de réponses, les deux routes d'administration et `audioPath` sur les transcriptions servaient encore le chemin. Le diff était sain par ailleurs.
+  - Second passage : **favorable à la fermeture**, à condition que #19675 soit fusionnée (elle ferme `audioPath`, ce que la QA a vérifié par la vraie route).
+  - Mutations B, C1, C2 et D : chacune fait tomber un test (`1 failed, 156 passed`).
+  - Réserves : #19702 (retirer `audioPath` à la source, dans les vues audio) ; formes non-carte de `translations` laissées telles quelles (aucun producteur connu) ; médias de post non examinés.
+
+### Cycle suivant : par où reprendre
+
+0. Si #19675 ou la PR de ce cycle ne sont pas fusionnées, les reprendre : fusion à la main quand la CI est verte, #19675 d'abord. Fermer #19647 et #19672 à la main avec leur preuve si `Closes` ne les ferme pas.
+1. #19702, petite ; puis #19673, puis #19648. Examiner aussi `PostMedia.translations` (même classe de fuite, hors appels : ouvrir une issue si la fuite existe).
+2. #19520, second critère : constat sur le serveur avec `sre-infra`, dans la même séance que la mesure des journaux d'accès pour #19471.
+3. #19597, #19596, puis #19473, #18668 et #18692 (messages d'exception bruts), #19381, #19253, #19294, #19295, #19255.
+4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
+5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
