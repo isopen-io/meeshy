@@ -8,9 +8,11 @@ import MeeshySDK
 // (`RelationFeature.minimumLevel`) : aucun seuil n'est réécrit ici. La passerelle rejuge à chaque appui ; ce catalogue
 // ne sert qu'à ne pas proposer ce qu'elle refusera, et à dire ce qui manque (loi 4).
 
-/// Une opération sur la fiche d'un autre. L'ordre des cas est celui de la planche `Autre-Actions`.
+/// Une opération sur la fiche d'un autre. L'ordre des cas est celui de la planche `Autre-Actions`. `presence` n'est
+/// offerte nulle part (on ne « fait » pas la présence de quelqu'un) : elle est comptée dans ce qui est fermé, pour que
+/// « Pas encore ouvert » dise « Présence · dès Ami » (planche `Autre-Inconnu`, loi 10).
 public nonisolated enum ProfileRelationAction: String, CaseIterable, Sendable {
-    case write, call, video, talkie, together, bring, location, battery, unreachable, sendProfile, block, report
+    case write, call, video, talkie, together, presence, bring, location, battery, unreachable, sendProfile, block, report
 
     /// La feature de la loi d'accès qui garde l'opération ; `nil` : ouverte à tous (envoyer le profil, bloquer, signaler).
     public var feature: RelationFeature? {
@@ -19,6 +21,7 @@ public nonisolated enum ProfileRelationAction: String, CaseIterable, Sendable {
         case .call, .video: return .callRing
         case .talkie: return .talkie
         case .together: return .together
+        case .presence: return .presenceOnline
         case .bring: return .bring
         case .location: return .locationTemporary
         case .battery: return .deviceBattery
@@ -64,7 +67,8 @@ public nonisolated enum ProfileRelationAction: String, CaseIterable, Sendable {
         case .talkie: return String(localized: "profile.relation.action.talkie", defaultValue: "Talkie", bundle: .module)
         case .together: return String(localized: "profile.relation.action.together", defaultValue: "Ensemble", bundle: .module)
         case .bring: return String(localized: "profile.relation.action.bring", defaultValue: "Bring", bundle: .module)
-        case .location: return String(localized: "profile.relation.action.location", defaultValue: "Position", bundle: .module)
+        case .presence: return String(localized: "profile.relation.action.presence", defaultValue: "Présence", bundle: .module)
+        case .location: return String(localized: "profile.relation.action.map", defaultValue: "Carte", bundle: .module)
         case .battery: return String(localized: "profile.relation.action.battery", defaultValue: "Batterie", bundle: .module)
         case .unreachable: return String(localized: "profile.relation.action.unreachable", defaultValue: "Injoignable", bundle: .module)
         case .sendProfile: return String(localized: "profile.relation.action.sendProfile", defaultValue: "Envoyer son profil", bundle: .module)
@@ -81,6 +85,7 @@ public nonisolated enum ProfileRelationAction: String, CaseIterable, Sendable {
         case .video: return "video"
         case .talkie: return "radio"
         case .together: return "play.tv"
+        case .presence: return "eye"
         case .bring: return "hand.wave"
         case .location: return "mappin.and.ellipse"
         case .battery: return "battery.50percent"

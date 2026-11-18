@@ -40,6 +40,15 @@ nonisolated enum ProfileRequestStage: Equatable, Sendable {
         self == .open || self == .unsent
     }
 
+    /// Sans amitié acceptée, le cercle commun reste Public à toutes les étapes d'une demande — ouverte, pas partie,
+    /// fermée, envoyée ou reçue : ce qui est fermé reste dit (loi 4), une demande en cours n'ouvre rien.
+    var leavesTheCirclePublic: Bool {
+        switch self {
+        case .open, .unsent, .closed, .sent, .received: return true
+        case .accepted, .connected: return false
+        }
+    }
+
     private static func matching(_ request: FriendRequest?, _ requestId: String) -> FriendRequest? {
         guard let request, request.id == requestId else { return nil }
         return request

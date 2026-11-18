@@ -63,12 +63,13 @@ extension UserProfileSheet {
 
     /// La pastille d'« Écrire » (#19646) : rien sur ma fiche ni quand l'un de nous a bloqué l'autre.
     var writeBadge: ProfileWriteBadge {
-        isCurrentUser || isInteractionDisabled ? .empty : writeUnread
+        isCurrentUser || isInteractionDisabled ? .empty : directDigest.badge
     }
 
-    /// Hors ligne (planche `Etat-HorsLigne`) : « Écrire » partira au retour du réseau, les appels l'attendent.
+    /// Hors ligne (planche `Etat-HorsLigne`) : « Écrire » partira au retour du réseau dans une directe connue, les appels
+    /// — et une première conversation — l'attendent.
     func talkReach(_ action: ProfileRelationAction) -> ProfileTalkReach {
-        ProfileTalkReach.resolve(action, isOffline: ProfileTalkReach.isOffline(phase))
+        ProfileTalkReach.resolve(action, isOffline: talksOffline, knowsDirect: directDigest.knowsDirect)
     }
 
     var offersCall: Bool {
@@ -107,18 +108,27 @@ extension UserProfileSheet {
                                     acceptsRequests: loader.profile?.acceptsFriendRequests)
     }
 
-    @ViewBuilder
+    /// L'étape de la demande, puis — tant qu'aucune amitié ni aucun lien n'est montré, quelle que soit l'étape de la
+    /// demande (ouverte, pas partie, fermée, envoyée, reçue) — ce que le cercle commun
+    /// (Public) n'ouvre pas encore (loi 4) : ce qui est fermé reste dit.
     private var connectionControls: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            requestStageCard
+            if requestStage.leavesTheCirclePublic, !relationLinked {
+                ProfileLockedCapabilities(level: .public, tint: accentTint)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var requestStageCard: some View {
         let name = displayUser.resolvedDisplayName
         switch requestStage {
         case .open, .unsent:
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
                                 linked: $relationLinked, tint: accentTint) {
-                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                    ProfileFriendRequestCard(tint: accentTint, unsent: requestStage == .unsent) { note in
-                        Task { await sendConnectionRequest(message: note) }
-                    }
-                    ProfileLockedCapabilities(level: .public, tint: accentTint)
+                ProfileFriendRequestCard(tint: accentTint, unsent: requestStage == .unsent, isSending: isSendingRequest) { note in
+                    Task { await sendConnectionRequest(message: note) }
                 }
             }
         case .closed:
@@ -127,7 +137,7 @@ extension UserProfileSheet {
                 ProfileClosedRequestCard(name: name)
             }
         case .sent(let sentAt):
-            ProfileSentRequestCard(name: name, sentAt: sentAt, tint: accentTint,
+            ProfileSentRequestCard(name: name, sentAt: sentAt, tint: accentTint, isPending: isSendingRequest,
                                    onResend: { Task { await resendRequest() } },
                                    onCancel: { Task { await cancelRequest() } })
             ProfileRelationFailureSlot(failure: relationFailure, stage: requestStage) { failed in
@@ -167,15 +177,19 @@ extension UserProfileSheet {
     }
 
     /// Le signalement part avec son motif, son mot et ses messages joints ; « Bloquer aussi » ne bloque qu'une fois le
-    /// signalement parti, et la fiche passe aussitôt à son état bloqué.
+    /// signalement parti, et la fiche passe aussitôt à son état bloqué. Un blocage raté est rendu à la feuille, qui le dit.
     func sendReport(_ draft: ProfileReportDraft) async -> ProfileReportOutcome {
-        guard let userId = resolvedUserId, !userId.isEmpty, draft.canSend else { return .notSent }
-        guard await connectionActions.report(userId: userId, draft: draft) else {
-            return .notSent
-        }
-        guard draft.alsoBlocks, !isBlocked else { return ProfileReportOutcome(isSent: true, isBlocked: isBlocked) }
-        let blocked = await connectionActions.block(userId: userId)
-        if blocked { isBlocked = true }
-        return ProfileReportOutcome(isSent: true, isBlocked: blocked)
+        guard let userId = resolvedUserId, !userId.isEmpty else { return .notSent }
+        let outcome = await connectionActions.reportThenBlock(userId: userId, draft: draft, alreadyBlocked: isBlocked)
+        if outcome.isBlocked { isBlocked = true }
+        return outcome
+    }
+
+    /// « Réessayer » sous un blocage qui n'a pas abouti : `true` une fois la personne bloquée.
+    func retryReportBlock() async -> Bool {
+        guard let userId = resolvedUserId, !userId.isEmpty else { return false }
+        guard await connectionActions.block(userId: userId) else { return false }
+        isBlocked = true
+        return true
     }
 }

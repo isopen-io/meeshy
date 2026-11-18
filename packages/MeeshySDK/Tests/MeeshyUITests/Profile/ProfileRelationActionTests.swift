@@ -10,7 +10,7 @@ final class ProfileRelationActionTests: XCTestCase {
 
     func test_allCases_listEveryExistingOperation_inThePlancheOrder() {
         XCTAssertEqual(ProfileRelationAction.allCases, [
-            .write, .call, .video, .talkie, .together, .bring, .location, .battery, .unreachable,
+            .write, .call, .video, .talkie, .together, .presence, .bring, .location, .battery, .unreachable,
             .sendProfile, .block, .report
         ])
     }
@@ -49,7 +49,19 @@ final class ProfileRelationActionTests: XCTestCase {
     func test_lockedGroups_atPublic_orderGroupsFromTheNearestCircle() {
         let groups = ProfileRelationAction.lockedGroups(at: .public)
         XCTAssertEqual(groups.map(\.opensAt), [.friend, .close])
-        XCTAssertEqual(groups.first?.actions, [.bring, .location])
+        XCTAssertEqual(groups.first?.actions, [.presence, .bring, .location])
+    }
+
+    /// Planche `Autre-Inconnu`, loi 10 : rien de la présence sous Ami — « Pas encore ouvert » le dit.
+    func test_lockedGroups_atPublic_theFriendGroupNamesPresence() {
+        let friend = ProfileRelationAction.lockedGroups(at: .public).first { $0.opensAt == .friend }
+        XCTAssertEqual(friend?.actions.contains(.presence), true)
+        XCTAssertEqual(ProfileRelationAction.presence.gate(at: .friend), .offered)
+    }
+
+    /// La rangée verrouillée de la position reprend le mot de la face Actions : « Carte ».
+    func test_location_isNamedLikeTheMapAction() {
+        XCTAssertEqual(ProfileRelationAction.location.title, ProfileLocationMapAction.title)
     }
 
     func test_lockedGroups_atClose_isEmpty() {

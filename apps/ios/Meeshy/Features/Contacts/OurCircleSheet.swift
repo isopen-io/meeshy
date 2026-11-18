@@ -15,11 +15,15 @@ private func filledCircleGlyph(_ level: RelationLevel) -> String {
 struct ProfileRelationPillView: View {
     @StateObject private var viewModel: ProfileCircleViewModel
     let displayName: String
+    /// Le lien montré, publié à la fiche depuis l'en-tête — toujours monté, quelle que soit la face lue (#18857) : la
+    /// Vitrine sait dès le cache qu'écrire n'est plus une demande.
+    @Binding var linked: Bool
     @State private var showsOurCircle = false
 
-    init(userId: String, displayName: String) {
+    init(userId: String, displayName: String, linked: Binding<Bool> = .constant(false)) {
         _viewModel = StateObject(wrappedValue: ProfileCircleModels.model(for: userId))
         self.displayName = displayName
+        _linked = linked
     }
 
     var body: some View {
@@ -40,6 +44,7 @@ struct ProfileRelationPillView: View {
         }
         .meeshyMotion(.morph, value: viewModel.shownLevel)
         .task(id: viewModel.userId) { await viewModel.load() }
+        .adaptiveOnChange(of: viewModel.claimsTheSlot, initial: true) { _, claims in linked = claims }
         .sheet(isPresented: $showsOurCircle) {
             OurCircleSheet(viewModel: viewModel, displayName: displayName)
                 .presentationDetents([.large])

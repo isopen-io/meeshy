@@ -191,17 +191,17 @@ struct RelationLinksFace: View {
         .accessibilityIdentifier("profile.relation.links.addresses")
     }
 
+    /// Une carte de groupe du kit (K43), une rangée (K06) par adresse, la sortie de Meeshy en accessoire (planche
+    /// `Autre-Liens`) : ces adresses s'ouvrent hors de l'app.
     private var servedAddresses: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            VStack(spacing: 0) {
-                ForEach(Array(addresses.enumerated()), id: \.element.id) { index, address in
+            MeeshyGroupCard(layout: .group) {
+                MeeshyGroupCardRows(addresses, id: \.id) { address in
                     MeeshyToggleRow(address.title, systemImage: address.glyph.systemImage, subtitle: address.displayURL,
-                                    accessory: .chevron, showsDivider: index < addresses.count - 1, tint: tint,
-                                    action: { leaving = address })
+                                    accessory: .external, tint: tint, action: { leaving = address })
                         .accessibilityHint(Text(RelationLinksCopy.leaveMessage(address.host)))
                 }
             }
-            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
             MeeshyNote(RelationLinksCopy.visibleToYou(addresses.count), lead: .systemImage("eye"))
         }
     }
@@ -258,9 +258,10 @@ enum RelationLinksCopy {
     static var addressesTitle: String {
         String(localized: "profile.relation.links.addresses", defaultValue: "Ses adresses", bundle: .module)
     }
+    /// « 1 visible pour toi », « 3 visibles pour toi » : le pluriel vient du catalogue, dans chaque langue.
     static func visibleToYou(_ count: Int) -> String {
-        let format = String(localized: "profile.relation.links.addresses.visible", defaultValue: "%@ visibles pour toi", bundle: .module)
-        return String(format: format, count.formatted())
+        String(localized: "profile.relation.links.addresses.visible.count", defaultValue: "\(count) visibles pour toi",
+               bundle: .module)
     }
     static var leaveTitle: String {
         String(localized: "profile.relation.links.leave.title", defaultValue: "Tu quittes Meeshy", bundle: .module)

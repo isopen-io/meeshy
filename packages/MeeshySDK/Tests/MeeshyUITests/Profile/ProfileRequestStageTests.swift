@@ -18,6 +18,16 @@ final class ProfileRequestStageTests: XCTestCase {
                                     justAccepted: false, prism: prism)
     }
 
+    /// Loi 4 — une demande envoyée n'ouvre rien : « Pas encore ouvert » reste à l'étape « Envoyée » comme aux autres.
+    func test_leavesTheCirclePublic_aToutesLesEtapesSansAmitie() {
+        XCTAssertTrue(ProfileRequestStage.sent(sentAt: nil).leavesTheCirclePublic)
+        XCTAssertTrue(ProfileRequestStage.closed.leavesTheCirclePublic)
+        XCTAssertTrue(ProfileRequestStage.received(note: nil).leavesTheCirclePublic)
+        XCTAssertTrue(ProfileRequestStage.open.leavesTheCirclePublic)
+        XCTAssertFalse(ProfileRequestStage.accepted.leavesTheCirclePublic)
+        XCTAssertFalse(ProfileRequestStage.connected.leavesTheCirclePublic)
+    }
+
     func test_resolve_sansDemande_estOuverte() {
         XCTAssertEqual(ProfileRequestStage.resolve(connection: .none, request: nil, justAccepted: false), .open)
     }

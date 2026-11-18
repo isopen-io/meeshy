@@ -36,6 +36,12 @@ final class ProfileRelationFailureTests: XCTestCase {
         XCTAssertFalse(ProfileRelationMutation.cancel.isShown(on: .connected))
     }
 
+    func test_renvoyerRate_seDitTantQueLaDemandeEstEnvoyee() {
+        XCTAssertTrue(ProfileRelationMutation.resend.isShown(on: .sent(sentAt: nil)))
+        XCTAssertFalse(ProfileRelationMutation.resend.isShown(on: .open))
+        XCTAssertFalse(ProfileRelationMutation.resend.isShown(on: .unsent))
+    }
+
     // MARK: - « Réessayer » rejoue la même mutation optimiste
 
     func test_reessayerApresUneAcceptationRatee_rejoueLAcceptationOptimiste() async {
