@@ -92,6 +92,16 @@ actor ParticipantService {
         return await CacheCoordinator.shared.participants.loadIgnoringExpiry(for: conversationId)?.items
     }
 
+    /// La page à peindre après `loadFirstPage` (#19309). Un rafraîchissement FORCÉ sert la page que cette requête
+    /// vient de relire : une revalidation `.stale` encore en vol est plus ANCIENNE et peut ignorer le membre qui
+    /// vient de rejoindre. Sans force, l'écran a peint la page `.stale` et repeint la page revalidée.
+    func pageToPaint(
+        afterLoading served: [PaginatedParticipant], for conversationId: String, forceRefresh: Bool
+    ) async -> [PaginatedParticipant] {
+        guard !forceRefresh else { return served }
+        return await revalidatedFirstPage(for: conversationId) ?? served
+    }
+
     /// Stale-while-revalidate : une page `.fresh` se sert telle quelle ; une page
     /// `.stale` aussi — aussitôt, sans attendre le réseau — et sa revalidation
     /// part en arrière-plan. La servir sans jamais la relire laissait un membre
