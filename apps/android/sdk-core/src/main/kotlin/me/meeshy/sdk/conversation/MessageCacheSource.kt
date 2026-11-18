@@ -254,12 +254,14 @@ internal class MessageCacheSource(
      * is shorter than its `limit`. The gateway counts `total` and reads the page in two queries without a shared
      * snapshot: a message written between them lets a FULL page claim `hasMore == false` while an older message still
      * exists behind it. A page that did not reach its limit is the read's own proof. An absent or partial pagination
-     * proves nothing, and counts as « more remain ».
+     * proves nothing, and counts as « more remain » — `hasMore` DECODES to `false` when left out, so the page must also
+     * serve its own `total`: one that counts more messages than it serves has older ones behind it, whatever it says.
      */
     private fun servesWholeHistory(served: Int, pagination: Pagination?): Boolean {
         if (pagination == null) return false
         val limit = pagination.limit ?: return false
-        return pagination.total != null && !pagination.hasMore && served < limit
+        val total = pagination.total ?: return false
+        return !pagination.hasMore && served in total until limit
     }
 
     /** The messages read beyond the window, and how far that read went. */

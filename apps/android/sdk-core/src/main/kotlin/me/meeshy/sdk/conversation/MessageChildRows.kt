@@ -10,9 +10,10 @@ import me.meeshy.core.database.dao.PendingIdDao
  * Every gate that REMOVES message rows takes their child rows with them, in its transaction (miroir de
  * `MessageChildRows.delete`, iOS) — the retained translations, transcriptions and audio tracks
  * ([DedicatedTranslationRows]), the edit history, the pending ids and the ephemeral receipts. None of them may keep the
- * text of a message that left: the retention purge, the recent window's prune, the thread purge and « Vider le cache »
- * ([me.meeshy.sdk.cache.purge.RoomCachePayloadStores]) share this one rule (audit A3, #19046, #19440 — the last three
- * dropped none of them).
+ * text of a message that left: the retention purge, the recent window's prune, the thread purge, the purge of named
+ * messages ([CachedMessageUpdater.purgeInTransaction]) and « Vider le cache »
+ * ([me.meeshy.sdk.cache.purge.RoomCachePayloadStores]) share this one rule (audit A3, #19046, #19440 — the last four
+ * dropped some or all of them).
  */
 internal object MessageChildRows {
 

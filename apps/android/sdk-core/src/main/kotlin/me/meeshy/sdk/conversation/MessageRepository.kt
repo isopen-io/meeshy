@@ -33,6 +33,7 @@ import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
+import me.meeshy.sdk.session.withAccountTicket
 
 /**
  * The messages of a conversation, offline-first (ARCHITECTURE.md §4, §5): Room is the single
@@ -402,8 +403,9 @@ class MessageRepository internal constructor(
         }
     }
 
+    /** The erasure is stamped with [ticket]'s account ([withAccountTicket]), never with whoever the session names now. */
     private suspend fun confirmDeletionUnder(ticket: AccountTicket?, messageId: String) {
-        mutations.commitUnder(ticket) { confirmDeletion(messageId) }
+        mutations.commitUnder(ticket) { withAccountTicket(ticket) { confirmDeletion(messageId) } }
     }
 
     private suspend fun readBackWithin(conversationId: String, messageId: String, budgetMillis: Long): MessageReadBack =
