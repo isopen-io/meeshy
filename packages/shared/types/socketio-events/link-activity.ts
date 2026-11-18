@@ -15,18 +15,33 @@ export interface TrackingLinkClickedEventData {
   readonly country: string | null;
 }
 
+export interface ShareLinkArrivalItem {
+  readonly participantId: string;
+  readonly isAnonymous: boolean;
+  readonly country: string | null;
+  /** ISO 8601. */
+  readonly joinedAt: string;
+}
+
+/**
+ * Les émissions d'un lien sont regroupées par fenêtre d'une seconde : une
+ * charge porte TOUTES les arrivées nommées depuis la précédente (`arrivals`,
+ * chronologique, au plus 20, les plus récentes). Quand une rafale en a compté
+ * davantage, `arrivalsTruncated` vaut `true` : le client RELIT la liste des
+ * arrivées plutôt que d'ajouter ce qu'il a reçu. `currentUses` reste le total
+ * absolu qui fait foi.
+ */
 export interface ShareLinkArrivalEventData {
   /** L'identifiant PUBLIC du lien (`ConversationShareLink.linkId`). */
   readonly linkId: string;
   readonly currentUses: number;
   readonly maxUses: number | null;
-  readonly arrival: {
-    readonly participantId: string;
-    readonly isAnonymous: boolean;
-    readonly country: string | null;
-    /** ISO 8601. */
-    readonly joinedAt: string;
-  };
+  /** La DERNIÈRE arrivée de la fenêtre (gardée pour les clients qui ne lisent qu'elle). */
+  readonly arrival: ShareLinkArrivalItem;
+  /** Toutes les arrivées de la fenêtre, dans l'ordre, au plus 20. */
+  readonly arrivals: readonly ShareLinkArrivalItem[];
+  /** Plus d'arrivées que `arrivals` n'en porte : relire la liste. */
+  readonly arrivalsTruncated: boolean;
 }
 
 export interface CommunityLinkEntryEventData {

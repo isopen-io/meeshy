@@ -14,7 +14,7 @@
 export const LINK_ACTIVITY_SERVER_EVENTS = {
   /** Au créateur d'un lien de suivi : ses compteurs après un clic. */
   TRACKING_LINK_CLICKED: 'tracking-link:clicked',
-  /** Au créateur et aux gestionnaires d'un lien de partage : une arrivée par ce lien. */
+  /** Au créateur et aux gestionnaires d'un lien de partage : les arrivées de la fenêtre (`arrivals`, aucune perdue ; `arrivalsTruncated` ⇒ relire). */
   SHARE_LINK_ARRIVAL: 'share-link:arrival',
   /** Aux intendants d'une communauté : une entrée par son lien. */
   COMMUNITY_LINK_ENTRY: 'community-link:entry',

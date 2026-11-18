@@ -13,6 +13,11 @@
  *   échouer le geste qu'elle annonce.
  * - **Regroupée** : au plus une émission par fenêtre et par lien — la première
  *   part, la dernière de la rafale part à la fin de la fenêtre.
+ * - **Aucune arrivée perdue** : `share-link:arrival` ACCUMULE les arrivées
+ *   nommées de la fenêtre et les porte toutes (`arrivals`, chronologique,
+ *   au plus `SHARE_LINK_ARRIVALS_MAX`, les plus récentes) ; au-delà,
+ *   `arrivalsTruncated` dit au client de relire la liste. `arrival` reste la
+ *   dernière, pour les clients qui ne lisent qu'elle.
  */
 import {
   ROOMS,
@@ -35,11 +40,18 @@ const realScheduler: LinkActivityScheduler = {
 };
 
 export const LINK_ACTIVITY_WINDOW_MS = 1000;
+/** Les arrivées nommées qu'une charge porte au plus ; au-delà, le client relit. */
+export const SHARE_LINK_ARRIVALS_MAX = 20;
 
+type Send = (io: ServerEmitIO, room: string) => void;
+
+/** `compose` est appelé UNE fois, au moment de l'envoi : la charge se fige alors. */
 type Emission = {
   readonly recipientIds: readonly string[];
-  readonly send: (io: ServerEmitIO, room: string) => void;
+  readonly compose: () => Send;
 };
+
+type Arrival = ShareLinkArrivalEventData['arrival'];
 
 export type TrackingLinkClickInput = {
   readonly link: {
@@ -97,13 +109,16 @@ export function createLinkActivityRelay(deps: {
   const windowMs = deps.windowMs ?? LINK_ACTIVITY_WINDOW_MS;
   const open = new Map<string, Emission | null>();
 
+  const arrivalsByKey = new Map<string, Arrival[]>();
+
   const deliver = (emission: Emission): void => {
     try {
+      const send = emission.compose();
       const io = deps.io();
       if (!io) return;
       distinct(emission.recipientIds).forEach((recipientId) => {
         try {
-          emission.send(io, ROOMS.user(recipientId));
+          send(io, ROOMS.user(recipientId));
         } catch {
           /* un destinataire injoignable n'empêche pas les autres */
         }
@@ -124,9 +139,10 @@ export function createLinkActivityRelay(deps: {
     scheduler.after(windowMs, () => closeWindow(key));
   };
 
-  const push = (key: string, emission: Emission): void => {
+  const push = (key: string, emission: Emission, accumulate?: () => void): void => {
     if (emission.recipientIds.length === 0) return;
     scheduler.defer(() => {
+      accumulate?.();
       if (open.has(key)) {
         open.set(key, emission);
         return;
@@ -149,24 +165,36 @@ export function createLinkActivityRelay(deps: {
       };
       push(`tracking:${link.token}`, {
         recipientIds: [link.createdBy],
-        send: (io, room) => io.to(room).emit(SERVER_EVENTS.TRACKING_LINK_CLICKED, payload),
+        compose: () => (io, room) => io.to(room).emit(SERVER_EVENTS.TRACKING_LINK_CLICKED, payload),
       });
     },
     shareLinkArrival: (input) => {
-      const payload: ShareLinkArrivalEventData = {
-        linkId: input.linkId,
-        currentUses: input.currentUses,
-        maxUses: input.maxUses,
-        arrival: {
-          participantId: input.arrival.participantId,
-          isAnonymous: input.arrival.isAnonymous,
-          country: input.arrival.country,
-          joinedAt: input.arrival.joinedAt.toISOString(),
-        },
+      const key = `share:${input.linkId}`;
+      const arrival: Arrival = {
+        participantId: input.arrival.participantId,
+        isAnonymous: input.arrival.isAnonymous,
+        country: input.arrival.country,
+        joinedAt: input.arrival.joinedAt.toISOString(),
       };
-      push(`share:${input.linkId}`, {
+      push(key, {
         recipientIds: input.recipientIds,
-        send: (io, room) => io.to(room).emit(SERVER_EVENTS.SHARE_LINK_ARRIVAL, payload),
+        compose: () => {
+          const pending = arrivalsByKey.get(key) ?? [arrival];
+          arrivalsByKey.delete(key);
+          const payload: ShareLinkArrivalEventData = {
+            linkId: input.linkId,
+            currentUses: input.currentUses,
+            maxUses: input.maxUses,
+            arrival: pending[pending.length - 1] ?? arrival,
+            arrivals: pending.slice(-SHARE_LINK_ARRIVALS_MAX),
+            arrivalsTruncated: pending.length > SHARE_LINK_ARRIVALS_MAX,
+          };
+          return (io, room) => io.to(room).emit(SERVER_EVENTS.SHARE_LINK_ARRIVAL, payload);
+        },
+      }, () => {
+        const buffer = arrivalsByKey.get(key) ?? [];
+        // Borné en mémoire : au-delà de la borne, seules les plus récentes servent.
+        arrivalsByKey.set(key, [...buffer, arrival].slice(-(SHARE_LINK_ARRIVALS_MAX + 1)));
       });
     },
     communityLinkEntry: (input) => {
@@ -178,14 +206,14 @@ export function createLinkActivityRelay(deps: {
       };
       push(`community:${input.communityId}`, {
         recipientIds: input.recipientIds,
-        send: (io, room) => io.to(room).emit(SERVER_EVENTS.COMMUNITY_LINK_ENTRY, payload),
+        compose: () => (io, room) => io.to(room).emit(SERVER_EVENTS.COMMUNITY_LINK_ENTRY, payload),
       });
     },
     affiliateReferralJoined: (input) => {
       const payload: AffiliateReferralJoinedEventData = { tokenId: input.tokenId, referralCount: input.referralCount };
       push(`affiliate:${input.tokenId}`, {
         recipientIds: [input.sponsorId],
-        send: (io, room) => io.to(room).emit(SERVER_EVENTS.AFFILIATE_REFERRAL_JOINED, payload),
+        compose: () => (io, room) => io.to(room).emit(SERVER_EVENTS.AFFILIATE_REFERRAL_JOINED, payload),
       });
     },
   };
