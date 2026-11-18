@@ -21,6 +21,8 @@ final class ProfileCircleViewModel: ObservableObject {
     @Published private(set) var link: RelationLink?
     @Published private(set) var pendingLevel: RelationLevel?
     @Published var notice: String?
+    /// La montée qui n'est pas partie (#19611, planche `Etat-Erreur` vue 2) : « Notre cercle » le dit, avec « Réessayer ».
+    @Published private(set) var failedRaise: RelationLevel?
     @Published private(set) var isLowering = false
     @Published private(set) var didUnlink = false
     /// Le niveau auquel la passerelle juge les outils de cercle (`accessLevel`, #16623) ; `nil` tant qu'il n'est pas lu.
@@ -221,9 +223,11 @@ final class ProfileCircleViewModel: ObservableObject {
     func requestRaise() async -> Bool {
         guard let target = offeredRaise else { return false }
         pendingLevel = target
+        failedRaise = nil
         do {
             try await CircleRaiseSender(offlineQueue: offlineQueue).send(to: userId, level: target) { [weak self] in
                 self?.pendingLevel = nil
+                self?.failedRaise = target
                 self?.notice = String(localized: "circles.notice.requestFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .main)
                 HapticFeedback.error()
             }
@@ -231,6 +235,7 @@ final class ProfileCircleViewModel: ObservableObject {
             return true
         } catch {
             pendingLevel = nil
+            failedRaise = target
             notice = String(localized: "circles.notice.requestFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .main)
             HapticFeedback.error()
             return false
@@ -337,6 +342,7 @@ final class ProfileCircleViewModel: ObservableObject {
         let pendingBefore = pendingLevel
         let toolBefore = toolLevel
         isLowering = true
+        failedRaise = nil
         defer { isLowering = false }
         link = current.lowered(to: target)
         toolLevel = Self.toolLevelAfterLowering(toolBefore, link: current.effectiveLevel, to: target)

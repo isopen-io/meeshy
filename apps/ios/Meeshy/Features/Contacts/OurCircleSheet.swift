@@ -244,6 +244,14 @@ struct OurCircleSheet: View {
                 )
                 .accessibilityHint(ProfileCircleWording.promoteAccessibility(to: target, name: displayName) ?? label)
             }
+            if let failed = viewModel.failedRaise, viewModel.pendingLevel == nil {
+                MeeshyNote(OurCircleCopy.raiseFailed(failed), form: .band, kind: .warn,
+                           detail: OurCircleCopy.raiseFailedDetail, announces: true) {
+                    MeeshyButton(OurCircleCopy.retry, systemImage: "arrow.clockwise", kind: .outline, size: .s44,
+                                 action: { Task { await viewModel.requestRaise() } })
+                }
+                .accessibilityIdentifier("circles.ours.raiseFailed")
+            }
             if let lowering = viewModel.offeredLowering {
                 loweringButton(lowering, from: summary.common)
                 Text(OurCircleCopy.silentLowering(name: displayName))
@@ -339,6 +347,18 @@ nonisolated enum OurCircleCopy {
         case .pending(let level):
             return String(format: String(localized: "circles.pending", defaultValue: "Demande envoyée · %@", bundle: .main), CircleLevelNames.title(of: level))
         }
+    }
+
+    static func raiseFailed(_ level: RelationLevel) -> String {
+        String(format: String(localized: "circles.ours.raiseFailed", defaultValue: "Ta demande pour %@ n'est pas partie", bundle: .main), CircleLevelNames.title(of: level))
+    }
+
+    static var raiseFailedDetail: String {
+        String(localized: "circles.ours.raiseFailed.detail", defaultValue: "Rien n'a été envoyé. Le bouton est revenu comme avant.", bundle: .main)
+    }
+
+    static var retry: String {
+        String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main)
     }
 
     static func silentLowering(name: String) -> String {
