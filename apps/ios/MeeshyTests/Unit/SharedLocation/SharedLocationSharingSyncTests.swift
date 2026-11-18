@@ -214,6 +214,21 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertEqual(east.centerLongitude, -179.9, accuracy: 1e-9)
     }
 
+    func test_aTurnedMap_asksTheGatewayForTheAreaCoveringItsCorners() throws {
+        let flat = LocationMapViewport(centerLatitude: 38.72, centerLongitude: -9.13, latitudeDelta: 0.04,
+                                       longitudeDelta: 0.02, width: 200, height: 400)
+        let turned = LocationMapViewport(centerLatitude: 38.72, centerLongitude: -9.13, latitudeDelta: 0.04,
+                                         longitudeDelta: 0.02, width: 200, height: 400, heading: 90)
+
+        let flatBounds = try XCTUnwrap(flat.bounds)
+        let turnedBounds = try XCTUnwrap(turned.bounds)
+
+        XCTAssertEqual(flatBounds.maxLongitude - flatBounds.minLongitude, 0.02, accuracy: 1e-9)
+        XCTAssertEqual(flatBounds.maxLatitude - flatBounds.minLatitude, 0.04, accuracy: 1e-9)
+        XCTAssertEqual(turnedBounds.maxLongitude - turnedBounds.minLongitude, 0.04, accuracy: 1e-9)
+        XCTAssertEqual(turnedBounds.maxLatitude - turnedBounds.minLatitude, 0.02, accuracy: 1e-9)
+    }
+
     // MARK: - La liste servie
 
     func test_withServed_adoptsThePeopleAndDeadlinesTheGatewayServes() {

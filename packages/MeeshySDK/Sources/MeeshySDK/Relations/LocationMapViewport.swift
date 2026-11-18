@@ -3,7 +3,8 @@ import Foundation
 
 /// CE QUE MONTRE UNE CARTE, EN VALEURS (#18872) : son centre, son étendue en degrés et sa taille à l'écran. De quoi
 /// poser une épingle (K36) ou un tracé (K54) au-dessus d'elle sans lui demander quoi que ce soit : la projection est
-/// celle de Mercator, la même que la carte, sans rotation ni inclinaison (la carte les refuse).
+/// celle de Mercator, la même que la carte, sans inclinaison. Une carte qui tourne (#19622) porte son CAP : les étendues
+/// restent celles de la carte remise au nord, et chaque point tourne autour du centre de l'écran.
 public struct LocationMapViewport: Equatable, Sendable {
     public let centerLatitude: Double
     public let centerLongitude: Double
@@ -11,15 +12,60 @@ public struct LocationMapViewport: Equatable, Sendable {
     public let longitudeDelta: Double
     public let width: Double
     public let height: Double
+    /// Le cap de la carte en degrés, dans [0, 360) : la direction que montre le haut de l'écran (0 = le nord).
+    public let heading: Double
+
+    /// La carte est au nord à un demi-degré près : la boussole n'a rien à remettre.
+    public static let northUpTolerance: Double = 0.5
 
     public init(centerLatitude: Double, centerLongitude: Double, latitudeDelta: Double, longitudeDelta: Double,
-                width: Double, height: Double) {
+                width: Double, height: Double, heading: Double = 0) {
         self.centerLatitude = min(max(centerLatitude, -85), 85)
         self.centerLongitude = centerLongitude
         self.latitudeDelta = max(latitudeDelta, 1e-6)
         self.longitudeDelta = max(longitudeDelta, 1e-6)
         self.width = max(width, 1)
         self.height = max(height, 1)
+        self.heading = Self.normalized(heading)
+    }
+
+    /// La carte montre-t-elle le nord en haut ?
+    public var isNorthUp: Bool {
+        min(heading, 360 - heading) < Self.northUpTolerance
+    }
+
+    /// L'angle de l'aiguille d'une boussole posée sur la carte : à l'inverse du cap, elle montre le nord.
+    public var compassNeedleDegrees: Double {
+        -heading
+    }
+
+    /// L'étendue en longitude qui couvre les quatre coins de l'écran, la carte tournée comprise.
+    public var visibleLongitudeDelta: Double {
+        let (cosine, sine) = Self.turn(heading)
+        return longitudeDelta * (width * abs(cosine) + height * abs(sine)) / width
+    }
+
+    /// L'étendue en latitude qui couvre les quatre coins de l'écran, la carte tournée comprise.
+    public var visibleLatitudeDelta: Double {
+        let (cosine, sine) = Self.turn(heading)
+        return latitudeDelta * (width * abs(sine) + height * abs(cosine)) / height
+    }
+
+    /// Lit une carte tournée depuis ce qu'elle montre : son centre, la coordonnée du milieu de son bord DROIT et son
+    /// cap. L'échelle de Mercator est la même dans toutes les directions : la demi-largeur suffit à la poser.
+    public static func reading(centerLatitude: Double, centerLongitude: Double, edgeLatitude: Double,
+                               edgeLongitude: Double, width: Double, height: Double,
+                               heading: Double) -> LocationMapViewport {
+        let longitudeStep = (edgeLongitude - centerLongitude).remainder(dividingBy: 360)
+        let latitudeStep = mercatorY(latitude: edgeLatitude) - mercatorY(latitude: centerLatitude)
+        let halfWidth = max(hypot(longitudeStep / 360, latitudeStep), 1e-12)
+        let halfHeight = halfWidth * max(height, 1) / max(width, 1)
+        let middle = mercatorY(latitude: centerLatitude)
+        let top = latitude(mercatorY: middle - halfHeight)
+        let bottom = latitude(mercatorY: middle + halfHeight)
+        return LocationMapViewport(centerLatitude: centerLatitude, centerLongitude: centerLongitude,
+                                   latitudeDelta: top - bottom, longitudeDelta: halfWidth * 2 * 360,
+                                   width: width, height: height, heading: heading)
     }
 
     /// Le point d'écran d'une coordonnée (hors champ compris : l'hôte décide de ce qu'il dessine).
@@ -30,7 +76,10 @@ public struct LocationMapViewport: Equatable, Sendable {
         let worldHeight = max(bottom - top, 1e-12)
         let x = (Self.mercatorX(longitude: longitude) - Self.mercatorX(longitude: centerLongitude)) / worldWidth
         let y = (Self.mercatorY(latitude: latitude) - Self.mercatorY(latitude: centerLatitude)) / worldHeight
-        return CGPoint(x: width / 2 + x * width, y: height / 2 + y * height)
+        let (cosine, sine) = Self.turn(heading)
+        let dx = x * width
+        let dy = y * height
+        return CGPoint(x: width / 2 + dx * cosine + dy * sine, y: height / 2 - dx * sine + dy * cosine)
     }
 
     /// Combien de points d'écran couvre une distance au sol, au centre de la carte.
@@ -44,6 +93,21 @@ public struct LocationMapViewport: Equatable, Sendable {
     public func contains(latitude: Double, longitude: Double, margin: Double = 0) -> Bool {
         let p = point(latitude: latitude, longitude: longitude)
         return p.x >= -margin && p.x <= width + margin && p.y >= -margin && p.y <= height + margin
+    }
+
+    private static func normalized(_ heading: Double) -> Double {
+        guard heading.isFinite else { return 0 }
+        let turned = heading.truncatingRemainder(dividingBy: 360)
+        return turned < 0 ? turned + 360 : turned
+    }
+
+    private static func turn(_ heading: Double) -> (cosine: Double, sine: Double) {
+        let radians = heading * .pi / 180
+        return (cos(radians), sin(radians))
+    }
+
+    private static func latitude(mercatorY y: Double) -> Double {
+        atan(sinh(.pi * (1 - 2 * y))) * 180 / .pi
     }
 
     private static func mercatorX(longitude: Double) -> Double {

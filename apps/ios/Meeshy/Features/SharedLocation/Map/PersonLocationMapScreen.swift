@@ -27,6 +27,7 @@ struct PersonLocationMapScreen: View {
     @State private var viewport: LocationMapViewport?
     @State private var focus: LocationMapFocus?
     @State private var style: LocationMapStyle = .standard
+    @State private var northToken = 0
     @State private var hasArrived = false
     @State private var me: SharedLocationFix?
     @State private var sharesMine = false
@@ -83,7 +84,8 @@ struct PersonLocationMapScreen: View {
 
     private var mapStage: some View {
         ZStack(alignment: .top) {
-            LocationMapCanvas(focus: focus, style: style, onViewport: { viewport = $0 },
+            LocationMapCanvas(focus: focus, style: style, allowsRotation: true, northToken: northToken,
+                              animatesNorth: !reduceMotion, onViewport: { viewport = $0 },
                               onRegionSettled: { model.regionChanged($0.bounds) })
                 .ignoresSafeArea()
             trace
@@ -182,10 +184,25 @@ struct PersonLocationMapScreen: View {
                                   kind: style == .hybrid ? .active : nil, size: .s44, action: { style = style.toggled })
                 MeeshyGlassButton(systemImage: "scope", label: LocationMapCopy.recenter, size: .s44,
                                   action: { refocus(animated: true) })
+                compass
             }
+            .animation(MeeshyMotion.animation(.morph, reduce: reduceMotion), value: viewport?.isNorthUp ?? true)
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.top, MeeshySpacing.sm)
+    }
+
+    /// LA BOUSSOLE (#19622, planche Carte-Personne) : absente tant que la carte est au nord ; dès qu'elle tourne, son
+    /// aiguille suit le cap, et la toucher remet le nord en haut (sans voyage sous Réduire les animations).
+    @ViewBuilder
+    private var compass: some View {
+        if let viewport, !viewport.isNorthUp {
+            MeeshyGlassButton(label: LocationMapCopy.northUp, size: .s44, action: { northToken += 1 }) {
+                Image(systemName: "location.north.line")
+                    .rotationEffect(.degrees(viewport.compassNeedleDegrees))
+            }
+            .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+        }
     }
 
     // MARK: - La feuille
