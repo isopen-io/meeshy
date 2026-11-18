@@ -37,6 +37,9 @@ object SocketEventNames {
     const val CALL_ANALYTICS = "call:analytics"
     const val CALL_BACKGROUNDED = "call:backgrounded"
     const val CALL_CHECK_ACTIVE = "call:check-active"
+
+    /** Serveur → room de l'appel : l'appel vit désormais dans le groupe des présents (#19650). */
+    const val CALL_CONVERSATION_CHANGED = "call:conversation-changed"
     const val CALL_END = "call:end"
     const val CALL_ENDED = "call:ended"
     const val CALL_ERROR = "call:error"
@@ -109,7 +112,6 @@ object SocketEventNames {
     const val COMMENT_UPDATED = "comment:updated"
 
     // community
-    const val COMMUNITY_DELETED = "community:deleted"
     const val COMMUNITY_MEMBER_JOINED = "community:member-joined"
     const val COMMUNITY_MEMBER_LEFT = "community:member-left"
     const val COMMUNITY_MEMBER_ROLE_UPDATED = "community:member-role-updated"
@@ -328,6 +330,7 @@ object SocketEventNames {
         CALL_ANALYTICS,
         CALL_BACKGROUNDED,
         CALL_CHECK_ACTIVE,
+        CALL_CONVERSATION_CHANGED,
         CALL_END,
         CALL_ENDED,
         CALL_ERROR,
@@ -392,7 +395,6 @@ object SocketEventNames {
         COMMENT_TRANSLATION_UPDATED,
         COMMENT_UNLIKED,
         COMMENT_UPDATED,
-        COMMUNITY_DELETED,
         COMMUNITY_MEMBER_JOINED,
         COMMUNITY_MEMBER_LEFT,
         COMMUNITY_MEMBER_ROLE_UPDATED,
