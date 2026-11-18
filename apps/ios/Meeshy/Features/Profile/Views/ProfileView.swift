@@ -50,11 +50,17 @@ struct ProfileView: View {
     @State private var avatarItem: PhotosPickerItem?
     @State private var avatarImageForEditor: UIImage?
     @State private var isUploadingAvatar = false
+    /// Les commandes d'image de l'édition (#19548) : « Photo » et l'appareil photo ouvrent le même sélecteur ;
+    /// « Retoucher » lit ma photo actuelle avant d'ouvrir la retouche ; « Décor » et ses vignettes ouvrent la feuille.
+    @State private var avatarPickerShown = false
+    @State private var isLoadingRetouch = false
+    @State private var decorShown = false
 
     // Banner
     @State private var bannerItem: PhotosPickerItem?
     @State private var bannerImageForEditor: UIImage?
     @State private var isUploadingBanner = false
+    @State private var bannerPickerShown = false
     @State private var scrollRelay = ScrollOffsetRelay()
     /// Les trois faces (#18869) : la face montrée, et les portes que la Vitrine et la face Actions ouvrent.
     @State private var face: ProfileFace = .vitrine
@@ -114,6 +120,8 @@ struct ProfileView: View {
         .sheet(item: $securityFocus) { focus in
             SecurityView(focus: focus).environmentObject(authManager).closesForConversationOpening(.sheet)
         }
+        .modifier(ProfileEditImagePresentations(avatarPickerShown: $avatarPickerShown, bannerPickerShown: $bannerPickerShown,
+            decorShown: $decorShown, avatarItem: $avatarItem, bannerItem: $bannerItem, user: user, onOpenShop: { openPackShop($0) }))
         .onAppear { loadUserData() }
         .task { await loadStats() }
         .task { await circles.load() }
@@ -355,6 +363,8 @@ struct ProfileView: View {
         if isEditing {
             ProfileAccentSection(choice: $accentChoice, userId: user?.id,
                                  name: user?.displayName ?? user?.username ?? "")
+            ProfileEditDecorSection(user: user, accentHex: shownAccentHex, isDark: theme.mode.isDark,
+                                    onOpenDecor: { decorShown = true }, onOpenMyPacks: { open(.myPacks) })
             ProfileContactSection(
                 email: user?.email, isEmailVerified: user?.emailVerifiedAt != nil,
                 phoneNumber: user?.phoneNumber, isPhoneVerified: user?.phoneVerifiedAt != nil,
@@ -436,9 +446,40 @@ struct ProfileView: View {
             avatarBlock
                 .offset(y: -45)
                 .padding(.bottom, -45 + ProfileOwnAvatar.reserveBelow(user))
-            if !isEditing {
+            if isEditing {
+                ProfileEditImageCommands(
+                    retouchDisabledReason: ProfileEditRetouch.disabledReason(avatar: user?.avatar),
+                    isRetouchLoading: isLoadingRetouch,
+                    onPhoto: { avatarPickerShown = true },
+                    onRetouch: retouchCurrentPhoto,
+                    onDecor: { decorShown = true }
+                )
+                .padding(.top, MeeshySpacing.md)
+                .transition(.opacity)
+            } else {
                 nameBlock.transition(.opacity)
             }
+        }
+    }
+
+    private func openPackShop(_ domain: PackDomain) {
+        router.openPackShop(domain: domain)
+    }
+
+    /// « Retoucher » : ma photo actuelle entre dans la retouche, comme une photo qu'on vient de choisir ; l'envoi ne
+    /// part qu'à « Terminé ». Une photo illisible le dit, et rien ne s'ouvre.
+    private func retouchCurrentPhoto() {
+        guard ProfileEditRetouch.disabledReason(avatar: user?.avatar) == nil, !isLoadingRetouch else { return }
+        isLoadingRetouch = true
+        let avatar = user?.avatar
+        Task {
+            let image = await ProfileEditRetouch.currentPhoto(avatar)
+            isLoadingRetouch = false
+            guard let image else {
+                showError(ProfileEditImageCopy.retouchFailed)
+                return
+            }
+            avatarImageForEditor = image
         }
     }
 
@@ -463,16 +504,12 @@ struct ProfileView: View {
             .accessibilityLabel(ProfileImageCopy.bannerLabel)
 
             if isEditing {
-                PhotosPicker(selection: $bannerItem, matching: .images) {
-                    Label(String(localized: "profile.edit", bundle: .main), systemImage: "photo.fill")
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .padding(.horizontal, MeeshySpacing.smPlus)
-                        .padding(.vertical, MeeshySpacing.xsPlus)
-                        .background(Capsule().fill(Color.black.opacity(0.5)))
-                }
-                .padding(MeeshySpacing.sm)
-                .transition(.opacity)
+                // « Changer la bannière » (planche `Moi-Edition`) : la capsule de verre libellée du kit (K40).
+                MeeshyButton(ProfileEditImageCopy.changeBanner, systemImage: "photo", kind: .glass, size: .s36,
+                             action: { bannerPickerShown = true })
+                    .accessibilityIdentifier("profile.edit.banner")
+                    .padding(MeeshySpacing.sm)
+                    .transition(.opacity)
             }
 
             if isUploadingBanner {
@@ -500,16 +537,12 @@ struct ProfileView: View {
             }
 
             if isEditing {
-                let textPrimary = theme.textPrimary
-                PhotosPicker(selection: $avatarItem, matching: .images) {
-                    Image(systemName: "pencil.circle.fill")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xxxl))
-                        .foregroundStyle(Color(hex: accentColor))
-                        .background(Circle().fill(textPrimary.opacity(0.1)))
-                }
-                .accessibilityLabel(String(localized: "profile.avatar.edit", bundle: .main))
-                .offset(x: 4, y: 4)
-                .transition(.opacity)
+                // La pastille d'action de coin du kit (K02, petite taille) : l'appareil photo sur l'avatar modifiable.
+                MeeshyGlassButton(systemImage: "camera.fill", label: ProfileEditImageCopy.changePhoto, size: .s32,
+                                  action: { avatarPickerShown = true })
+                    .accessibilityIdentifier("profile.edit.avatar")
+                    .offset(x: 4, y: 4)
+                    .transition(.opacity)
             }
 
             if isUploadingAvatar {
@@ -594,7 +627,9 @@ struct ProfileView: View {
             ProfileActivityBand(stats: stats, isLoading: statsLoading, isOffline: statsOffline, accentColor: accentColor,
                                 onOpen: openActivity, onRetry: retryStats)
             progressionEntry
-            ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })
+            if !isEditing {
+                ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })
+            }
         }
     }
 

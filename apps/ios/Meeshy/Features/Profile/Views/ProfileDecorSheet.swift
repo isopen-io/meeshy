@@ -449,7 +449,6 @@ struct ProfileDecorEntry: View {
     var onPickBanner: (PhotosPickerItem) -> Void = { _ in }
 
     @State private var showSheet = false
-    @State private var pendingBanner: PhotosPickerItem?
 
     /// `profile:decor-updated` venu d'un AUTRE de mes appareils : la règle vit au SDK
     /// (`MeeshyUser.applying`), et c'est le socket qui repeint mon compte — quel que soit
@@ -472,7 +471,24 @@ struct ProfileDecorEntry: View {
                             accessory: .chevron, action: { showSheet = true })
                 .accessibilityIdentifier("profile.decor.entry")
         }
-        .sheet(isPresented: $showSheet, onDismiss: handOverPickedBanner) {
+        .modifier(ProfileDecorSheetPresentation(isPresented: $showSheet, user: user, onOpenShop: onOpenShop,
+                                                onPickBanner: onPickBanner))
+    }
+}
+
+/// La feuille du décor, présentée depuis la rangée de « Mon activité » comme depuis l'édition de ma vitrine (#19548) :
+/// une seule présentation. L'image choisie par la tuile « Image » est remise au profil une fois la feuille FERMÉE, sa
+/// retouche plein écran ne pouvant pas se présenter par-dessus une feuille encore ouverte.
+struct ProfileDecorSheetPresentation: ViewModifier {
+    @Binding var isPresented: Bool
+    let user: MeeshyUser?
+    let onOpenShop: (PackDomain) -> Void
+    let onPickBanner: (PhotosPickerItem) -> Void
+
+    @State private var pendingBanner: PhotosPickerItem?
+
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $isPresented, onDismiss: handOverPickedBanner) {
             ProfileDecorSheet(
                 decor: user?.profileDecor,
                 avatarURL: user?.avatar,
@@ -481,12 +497,12 @@ struct ProfileDecorEntry: View {
                 bannerURL: user?.banner,
                 bannerThumbHash: user?.bannerThumbHash,
                 onOpenShop: { domain in
-                    showSheet = false
+                    isPresented = false
                     onOpenShop(domain)
                 },
                 onPickBanner: { item in
                     pendingBanner = item
-                    showSheet = false
+                    isPresented = false
                 }
             )
         }
