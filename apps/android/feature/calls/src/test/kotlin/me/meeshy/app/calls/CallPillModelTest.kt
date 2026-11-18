@@ -7,7 +7,6 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallActionFamily
-import me.meeshy.sdk.model.call.CallCaptionsGate
 import me.meeshy.sdk.model.call.CallControlsDisposition
 import me.meeshy.sdk.model.call.CallGroupStageSizing
 import me.meeshy.sdk.model.call.CallScreenLayer
@@ -72,7 +71,7 @@ class CallPillModelTest {
         val set = CallPillModel.available(state(), items) { it == CallAction.Captions }
         val rows = CallGroupStageSizing.rows(set.familyRows, isCompactHeight = false)
         assertThat(rows.flatMap { it.actions }).containsExactly(CallAction.Camera, CallAction.FlipCamera, CallAction.Captions).inOrder()
-        assertThat(CallAction.Journal in set).isFalse()
+        assertThat(CallAction.React in set).isFalse()
     }
 
     @Test
@@ -122,9 +121,8 @@ class CallPillModelTest {
     }
 
     @Test
-    fun `the call's journal and reactions carry their short legends (P12_3)`() {
+    fun `the call's reactions carry their short legend (P12_3)`() {
         val connected = state()
-        assertThat(CallCaptionsPresenter.journal(CallCaptionsChip(gate = CallCaptionsGate.Open))!!.captionRes).isEqualTo(R.string.call_captions_journal)
         assertThat(CallReactionsActionHandler().present(connected)!!.captionRes).isEqualTo(UiR.string.fullscreen_react)
     }
 
