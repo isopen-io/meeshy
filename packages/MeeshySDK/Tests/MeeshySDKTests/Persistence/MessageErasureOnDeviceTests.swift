@@ -28,11 +28,13 @@ final class MessageErasureOnDeviceTests: XCTestCase {
         dbQueue = nil
     }
 
-    private func served(id: String, extra: String = "") throws -> APIMessage {
+    private func served(id: String, extra: String = "", translated: Bool = true) throws -> APIMessage {
+        let translations = translated
+            ? #","translations":[{"id":"\#(id)-en","messageId":"\#(id)","sourceLanguage":"fr","targetLanguage":"en","translatedContent":"Hello"}]"#
+            : ""
         let json = """
         {"id":"\(id)","conversationId":"\(Self.conversationId)","senderId":"user_other","content":"Bonjour",
-         "messageType":"text","messageSource":"user"\(extra),
-         "translations":[{"id":"\(id)-en","messageId":"\(id)","sourceLanguage":"fr","targetLanguage":"en","translatedContent":"Hello"}],
+         "messageType":"text","messageSource":"user"\(extra)\(translations),
          "createdAt":"2026-11-17T10:00:00.000Z","updatedAt":"2026-11-17T10:00:00.000Z"}
         """
         return try MeeshyCoders.decoder(.api).decode(APIMessage.self, from: Data(json.utf8))
@@ -182,6 +184,65 @@ final class MessageErasureOnDeviceTests: XCTestCase {
         XCTAssertEqual(outcome.erasures.first?.messageId, id)
         XCTAssertEqual(outcome.erasures.first?.conversationId, Self.conversationId)
         XCTAssertNotNil(outcome.erasures.first?.deletedAt)
+    }
+
+    // MARK: - Une ligne scellée resservie ne se réécrit plus
+
+    /// La page suivante ressert la même ligne supprimée — le serveur peut garder son texte, et un éphémère échu par la
+    /// durée locale est servi entier. Rien ne doit se réécrire : ni texte remis puis revidé, ni fil rafraîchi, ni
+    /// caches purgés à chaque revalidation.
+    func test_upsert_deletedRowServedAgain_writesNothingAndAnnouncesNothing() async throws {
+        let id = "m-resservi"
+        let context = APIMessageUpsert.Context(currentUserId: nil, preferredLanguages: [])
+        let live = try served(id: id)
+        let deleted = try served(id: id, extra: #","deletedAt":"2026-11-17T11:00:00.000Z""#)
+        _ = try dbQueue.write { db in try APIMessageUpsert.upsertOutcome([live], context: context, in: db) }
+        try seedNeighbours(of: id)
+        let transition = try dbQueue.write { db in try APIMessageUpsert.upsertOutcome([deleted], context: context, in: db) }
+        XCTAssertEqual(transition.erasures.map(\.messageId), [id], "précondition : la transition s'annonce")
+        let version = try row(id).changeVersion
+
+        let again = try dbQueue.write { db in try APIMessageUpsert.upsertOutcome([deleted], context: context, in: db) }
+
+        XCTAssertTrue(again.erasures.isEmpty, "rien n'est plus à effacer : les caches ne se purgent pas à chaque page")
+        XCTAssertTrue(again.changedConversationIds.isEmpty, "la ligne n'a pas changé : le fil ne se redessine pas")
+        XCTAssertEqual(try row(id).changeVersion, version, "aucune écriture")
+        try assertNothingReadableRemains(of: id, "la page resservie ne remet pas le texte")
+    }
+
+    func test_upsert_ephemeralGoneLocallyServedAgain_writesNothingAndAnnouncesNothing() async throws {
+        let id = "m-eph-resservi"
+        let context = APIMessageUpsert.Context(
+            currentUserId: nil, preferredLanguages: [],
+            ephemeralLedger: ErasureTestLedger(receptions: [id: Date().addingTimeInterval(-10_800)])
+        )
+        let api = try served(id: id, extra: #","ephemeralDuration":7200"#)
+        let first = try dbQueue.write { db in try APIMessageUpsert.upsertOutcome([api], context: context, in: db) }
+        try assertNothingReadableRemains(of: id, "échu à son arrivée")
+        XCTAssertEqual(first.erasures.map(\.messageId), [id])
+        let version = try row(id).changeVersion
+
+        let again = try dbQueue.write { db in try APIMessageUpsert.upsertOutcome([api], context: context, in: db) }
+
+        XCTAssertTrue(again.erasures.isEmpty)
+        XCTAssertTrue(again.changedConversationIds.isEmpty)
+        XCTAssertEqual(try row(id).changeVersion, version)
+        try assertNothingReadableRemains(of: id, "le serveur, qui ne sait rien de l'horloge locale, ressert le texte")
+    }
+
+    /// Le cache de fil double le CONTENU, pas seulement les enrichissements : une suppression apprise par le REST
+    /// s'annonce même quand la ligne n'avait ni traduction ni transcription.
+    func test_upsert_deletedElsewhere_withoutEnrichments_stillAnnouncesTheErasure() async throws {
+        let id = "m-nu"
+        let context = APIMessageUpsert.Context(currentUserId: nil, preferredLanguages: [])
+        let live = try served(id: id, translated: false)
+        let deleted = try served(id: id, extra: #","deletedAt":"2026-11-17T11:00:00.000Z""#, translated: false)
+        _ = try dbQueue.write { db in try APIMessageUpsert.upsertOutcome([live], context: context, in: db) }
+
+        let outcome = try dbQueue.write { db in try APIMessageUpsert.upsertOutcome([deleted], context: context, in: db) }
+
+        XCTAssertEqual(outcome.erasures.map(\.messageId), [id])
+        XCTAssertNil(try row(id).content)
     }
 
     // MARK: - Le balayage unique
