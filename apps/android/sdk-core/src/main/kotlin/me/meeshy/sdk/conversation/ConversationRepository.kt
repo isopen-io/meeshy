@@ -15,6 +15,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.appearance.ConversationAppearance
 import me.meeshy.sdk.model.DIRECT_CONVERSATION_TYPE
 import me.meeshy.sdk.model.directConversationRequest
@@ -104,6 +105,7 @@ class ConversationRepository @Inject constructor(
         presenceSink = presenceSink,
         syncDelta = syncDelta,
         journal = liveJournal,
+        pendingGestures = OutboxPendingConversationGestures(database.outboxDao()),
     )
 
     /**
@@ -733,15 +735,28 @@ class ConversationRepository @Inject constructor(
 
     /** [declaration] : ce qui a été lu et dans quelle langue, résolu à la composition (jamais à l'envoi de la file). */
     private suspend fun queueReadReceipt(id: String, declaration: ReadReceiptPayload? = null) {
+        val stamped = declaration?.takeIf { it.caughtUpToMessageId != null }
+            ?: (declaration ?: ReadReceiptPayload()).copy(readThroughAt = lastMessageInstant(id))
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.READ_RECEIPT,
                 lane = OutboxLanes.READ_RECEIPT,
                 targetId = id,
-                payload = declaration?.let { MeeshyApi.json.encodeToString(ReadReceiptPayload.serializer(), it) } ?: "{}",
+                payload = MeeshyApi.json.encodeToString(ReadReceiptPayload.serializer(), stamped),
             ),
         )
     }
+
+    /**
+     * #19424 — la frontière d'un reçu qui ne nomme aucun message (toute la conversation est lue) : l'instant SERVEUR du
+     * dernier message de [id] tel que le cache le tient. Un reçu qui nomme jusqu'où le lecteur a rattrapé porte déjà
+     * l'instant de CE message ([ReadReceiptPayload.readThroughAt], résolu à la composition) : la ligne de liste peut
+     * tenir un message plus récent, pas encore lu, ou un plus ancien, que le temps réel n'a pas encore avancé.
+     */
+    private suspend fun lastMessageInstant(id: String): Long? =
+        conversationDao.find(id)
+            ?.let { runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull() }
+            ?.lastMessage?.createdAt?.let(::isoToEpochMillisOrNull)
 
     /**
      * The open conversation's read receipt (#13793): the decision to acknowledge was taken by the

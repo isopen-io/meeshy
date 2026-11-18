@@ -14,4 +14,8 @@ object PostEngagementPatch {
     /** `comment:added` / `comment:deleted` — the post's ABSOLUTE comment count. */
     fun commented(post: ApiPost, commentCount: Int): ApiPost? =
         post.copy(commentCount = commentCount.coerceAtLeast(0)).takeUnless { it == post }
+
+    /** `post:bookmarked` — personal to the viewer: the saved state and the ABSOLUTE bookmark count the gateway served. */
+    fun bookmarked(post: ApiPost, bookmarked: Boolean, bookmarkCount: Int): ApiPost? =
+        post.copy(isBookmarkedByMe = bookmarked, bookmarkCount = bookmarkCount.coerceAtLeast(0)).takeUnless { it == post }
 }
