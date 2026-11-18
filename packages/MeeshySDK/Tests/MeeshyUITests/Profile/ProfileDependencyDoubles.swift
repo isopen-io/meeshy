@@ -45,6 +45,7 @@ final class StubProfileSocialActions: ProfileSocialActionsProviding {
     private(set) var blockCalls: [String] = []
     private(set) var unblockCalls: [String] = []
     private(set) var reportCalls: [(userId: String, reportType: String, reason: String?)] = []
+    private(set) var reportAttachedMessageIds: [[String]] = []
 
     private(set) var sentMessages: [String?] = []
 
@@ -78,8 +79,9 @@ final class StubProfileSocialActions: ProfileSocialActionsProviding {
         try unblockResult.get()
     }
 
-    func reportUser(_ userId: String, reportType: String, reason: String?) async throws {
+    func reportUser(_ userId: String, reportType: String, reason: String?, attachedMessageIds: [String]) async throws {
         reportCalls.append((userId, reportType, reason))
+        reportAttachedMessageIds.append(attachedMessageIds)
         try reportResult.get()
     }
 
