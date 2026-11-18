@@ -336,6 +336,14 @@ function applyWrite(row: MongoDocument, data: MongoDocument | undefined): void {
   });
 }
 
+/**
+ * Les clés UNIQUES que `Participant` (et les modèles de ce dépôt) offrent à un
+ * `update`. Prisma exige qu'au moins une figure dans le `where` — à défaut il
+ * lève `PrismaClientValidationError` AVANT tout aller-retour, et un double qui
+ * l'accepte ment par ce qu'il admet.
+ */
+const CLES_UNIQUES = ['id'];
+
 export function updateIn<T extends MongoDocument>(rows: readonly T[]) {
   const calls: Array<{ readonly where?: MongoDocument; readonly data?: MongoDocument }> = [];
   const update = (args: {
@@ -346,6 +354,12 @@ export function updateIn<T extends MongoDocument>(rows: readonly T[]) {
   } = {}): Promise<MongoDocument> => {
     const unknown = Object.keys(args).filter((arg) => !SUPPORTED_UPDATE_ARGS.has(arg));
     if (unknown.length > 0) return Promise.reject(new Error(`double Mongo: argument non supporté « ${unknown.join(', ')} »`));
+    // Le vrai client REFUSE un `update` sans clé unique dans le `where`, et le
+    // refuse avant la base. Un double qui l'accepte atteste une écriture que la
+    // production ne fait pas.
+    if (!CLES_UNIQUES.some((cle) => args.where !== undefined && args.where[cle] !== undefined)) {
+      return Promise.reject(new Error("double Mongo: `update` sans clé unique dans le `where` — le vrai client lève PrismaClientValidationError"));
+    }
     calls.push({ where: args.where, data: args.data });
     const found = rows.find((row) => matchesMongoWhere(row, args.where));
     if (!found) return Promise.reject(new MongoDoubleP2025Error());

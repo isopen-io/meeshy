@@ -311,7 +311,10 @@ export const REJOIN_PARTICIPANT_STATE = {
   // commettent donc leur rentrée par `commitParticipantRejoin`
   // (`rejoinParticipantWrite.ts`), qui porte `unsetOrNull('bannedAt')` dans le
   // `where` et rend la vraie cause sur `P2025`. L'affirmation est désormais
-  // VRAIE, et c'est l'ÉCRITURE qui la tient, pas l'amont.
+  // VRAIE, et c'est l'ÉCRITURE qui la tient, pas l'amont — **aux deux côtés de
+  // la course** : l'écriture du bannissement repose `isActive: false` même sur
+  // une cible qu'elle a lue inactive (`resolveBanWrite`), sans quoi l'ordre
+  // inverse produisait le même état interdit.
   //
   // Le verdict des trois colonnes est gardé par
   // `__tests__/unit/rejoin-clears-departure-columns.test.ts`, qui les relève

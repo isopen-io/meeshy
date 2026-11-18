@@ -48,9 +48,11 @@ jest.mock('../../../../utils/conversation-id-cache', () => ({
 }));
 
 import { findFirstIn, findManyIn, updateIn, type MongoDocument } from '../../../helpers/mongo-where';
+import { commitParticipantRejoin } from '../../../../services/conversations/rejoinParticipantWrite';
 import { admitConversationMember } from '../../../../services/conversations/memberAdmission';
 import { performLinkJoin } from '../../../../routes/conversations/link-admission';
 import { registerSharingRoutes } from '../../../../routes/conversations/sharing';
+import { resolveBanWrite } from '../../../../services/conversations/conversationBanState';
 
 const CONV_ID = '507f1f77bcf86cd799439011';
 const ACTOR_ID = '507f1f77bcf86cd799439022';
@@ -212,7 +214,100 @@ describe('#19688 — une rentrée ne rallume pas une ligne bannie dans sa fenêt
       reply
     );
 
-    expect({ status: reply.statusCode, success: (sent[0] as { success?: boolean } | undefined)?.success, isActive: race.rows[0].isActive })
-      .toEqual({ status: 403, success: false, isActive: false });
+    expect({
+      status: reply.statusCode,
+      success: (sent[0] as { success?: boolean } | undefined)?.success,
+      code: (sent[0] as { code?: string } | undefined)?.code,
+      message: String((sent[0] as { error?: string; message?: string } | undefined)?.error ?? ''),
+      isActive: race.rows[0].isActive,
+    }).toEqual({
+      status: 403,
+      success: false,
+      code: undefined,
+      // Épinglé : le handler porte d'AUTRES `sendForbidden` en amont (rang
+      // insuffisant, `COMMUNITY_INVITE_FORBIDDEN`), et un témoin qui n'assert
+      // que `403` serait satisfait par n'importe lequel d'entre eux.
+      message: 'This user is banned from the conversation — lift the ban first',
+      isActive: false,
+    });
+  });
+});
+
+/**
+ * #19688, audit adversarial — LA COURSE MIROIR, et c'est la moitié que le lot
+ * ci-dessus ne fermait pas.
+ *
+ * Les trois portes refusent désormais une rentrée quand le bannissement a
+ * commis le PREMIER. Dans l'ordre INVERSE, c'est l'écriture du BANNISSEMENT qui
+ * fabrique le même état interdit :
+ *
+ * | t  | ce qui se passe                                                              | état de la ligne                      |
+ * |----|------------------------------------------------------------------------------|---------------------------------------|
+ * | t1 | un modérateur bannit. `resolveTargetParticipant` lit `isActive: false`        | `isActive: false`, `bannedAt` absent  |
+ * | t2 | `resolveBanWrite` décide `{ bannedAt }` SEUL — « un membre déjà parti n'a plus d'appartenance à retirer » | — |
+ * | t3 | une porte de rentrée commet : la garde passe, `bannedAt` est toujours absent  | **`isActive: true`**                  |
+ * | t4 | le bannissement commet sur `where: { id }`, sans garde d'état                 | **`isActive: true, bannedAt ≠ null`** |
+ *
+ * La fenêtre n'est pas plus étroite que celle de l'autre sens — un aller-retour
+ * réseau complet — et l'état produit est en prime COLLANT : rebannir est refusé
+ * en `400 « déjà banni »`, il faut débannir d'abord pour en sortir.
+ *
+ * > La maxime du lot vaut des DEUX côtés d'une course : **« l'état que
+ * > l'écriture POSE est-il encore légitime au moment où elle commet ? »**. Y
+ * > répondre pour une seule des deux écritures ferme une moitié de la fenêtre
+ * > et laisse l'autre produire exactement le même état.
+ *
+ * Le correctif est dans la DONNÉE, et il est strictement meilleur qu'une garde
+ * de `where` ici : `isActive: false` est un no-op sur une ligne réellement
+ * inactive, et il ÉCRASE la rentrée qui aurait gagné la course — ce qui est le
+ * bon verdict (banni ⇒ dehors). `leftAt` reste intact, ce qui est la raison
+ * d'être même de cette branche.
+ */
+describe('#19688 (miroir) — bannir ne laisse pas une rentrée gagner la course', () => {
+  const BANNED_AT = new Date('2026-11-18T12:00:00Z');
+
+  it('la transition d’un membre DÉJÀ PARTI pose aussi `isActive: false`, et garde `leftAt`', () => {
+    const transition = resolveBanWrite(
+      { isActive: false, leftAt: new Date('2026-11-01T10:00:00Z'), bannedAt: null },
+      BANNED_AT,
+    );
+
+    expect(transition.data).toEqual({ bannedAt: BANNED_AT, isActive: false });
+  });
+
+  it('un membre VIVANT garde la transition qui date son départ', () => {
+    const transition = resolveBanWrite({ isActive: true, leftAt: null, bannedAt: null }, BANNED_AT);
+
+    expect(transition).toEqual({
+      data: { bannedAt: BANNED_AT, isActive: false, leftAt: BANNED_AT },
+      membershipEnded: true,
+    });
+  });
+
+  it('et la course entière, jouée sur UNE ligne : la rentrée commet, le bannissement la recouvre', async () => {
+    const rows = [departedRow()];
+    const { update } = updateIn(rows);
+
+    // t1–t2 — le bannissement LIT, et décide, sur une ligne inactive.
+    const transition = resolveBanWrite(
+      { isActive: rows[0].isActive as boolean, leftAt: rows[0].leftAt as Date, bannedAt: null },
+      BANNED_AT,
+    );
+
+    // t3 — une porte de rentrée commet AVANT lui : sa garde passe, rien ne la retient.
+    const rejoin = await commitParticipantRejoin<{ id: string }>({
+      prisma: { participant: { update, findFirst: findFirstIn(rows) } } as never,
+      participantId: PARTICIPANT_ID,
+      data: { isActive: true, leftAt: null },
+    });
+    expect(rejoin.outcome).toBe('rejoined');
+
+    // t4 — le bannissement commet.
+    await update({ where: { id: PARTICIPANT_ID }, data: transition.data });
+
+    expect({ isActive: rows[0].isActive, banni: rows[0].bannedAt instanceof Date }).toEqual({
+      isActive: false,
+      banni: true,
+    });
   });
 });

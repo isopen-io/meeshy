@@ -14,14 +14,24 @@ import { unsetOrNull } from '../../utils/prisma-unset';
  * | t3 | le bannissement commet                                                           | `isActive: false, bannedAt`          |
  * | t4 | la porte commet `{ ...REJOIN_PARTICIPANT_STATE }` — sans toucher `bannedAt`       | **`isActive: true, bannedAt ≠ null`** |
  *
- * C'est l'état qu'aucune lecture du service ne sait refuser : une ligne ACTIVE
- * et BANNIE est lue comme vivante par toute lecture `userId + isActive: true`
- * (liste des conversations, envoi REST, push, aperçu socket) — l'état exact que
- * #19525, #19604 et #19676 refusent, produit par du code vivant et non hérité.
+ * Une ligne ACTIVE et BANNIE est lue comme vivante par toute lecture
+ * `userId + isActive: true` NUE — et il y en a 199 au relevé de #19677 (liste
+ * des conversations, envoi REST, push, aperçu socket). Le prédicat qui la
+ * refuse EXISTE (`PARTICIPATION_VIVANTE`, `isActive` + `bannedAt`) ; ce sont les
+ * sites qui ne l'emploient pas tous, et c'est l'état exact que #19525, #19604 et
+ * #19676 refusent.
  *
  * La garde est donc AUSSI dans le `where` de l'écriture : un bannissement tombé
  * dans la fenêtre fait que la ligne ne s'apparie plus, Prisma lève `P2025`, et
- * la porte refuse. C'est la discipline que `restore-for-me.ts` porte depuis
+ * la porte refuse.
+ *
+ * **La MOITIÉ MIROIR de cette course est fermée par `resolveBanWrite`**
+ * (`conversationBanState.ts`), relevée par l'audit adversarial de ce lot :
+ * dans l'ordre inverse — le bannissement LIT une ligne inactive, une rentrée
+ * commet, puis le bannissement commet — c'était son écriture qui produisait le
+ * même état. Fermer une seule des deux écritures ferme une moitié de fenêtre.
+ * Une course a DEUX côtés, et la question « l'état que cette écriture POSE
+ * est-il encore légitime quand elle commet ? » se pose aux deux. C'est la discipline que `restore-for-me.ts` porte depuis
  * #10436/#10443 — **la QUATRIÈME porte de rentrée, la seule à l'avoir reçue** —
  * reprise ici EN ENTIER, `catch` compris : `P2025` ne dit que « plus
  * d'appariement », c'est-à-dire bannie OU disparue, et ces deux causes ne
@@ -67,6 +77,13 @@ export interface RejoinWriteParams<TRow> {
 
 const isP2025 = (error: unknown): boolean => (error as { code?: unknown } | null)?.code === 'P2025';
 
+/**
+ * Ce que vaut `bannedAt` quand la relecture de la cause n'a PAS conclu : une
+ * date, donc le verdict `'banned'`. Fail-CLOSED — les deux verdicts refusent,
+ * et celui-ci n'invente pas une ligne disparue qu'on n'a pas lue.
+ */
+const UNREADABLE = new Date(0);
+
 export async function commitParticipantRejoin<TRow>(
   params: RejoinWriteParams<TRow>
 ): Promise<RejoinWriteOutcome<TRow>> {
@@ -81,10 +98,19 @@ export async function commitParticipantRejoin<TRow>(
     return { outcome: 'rejoined', participant };
   } catch (error) {
     if (!isP2025(error)) throw error;
-    const current = await prisma.participant.findFirst({
-      where: { id: participantId },
-      select: { bannedAt: true },
-    });
+    // La relecture ne sert qu'à NOMMER la cause ; le refus est déjà acquis —
+    // `P2025` dit que la ligne ne s'apparie plus, donc rien n'a été rallumé.
+    // Elle est donc entourée de sa propre garde : si elle LÈVE, laisser
+    // l'exception remonter ferait tomber le geste ENTIER (`admitConversationMember`
+    // rend un verdict par identifiant pour qu'un refus n'emporte pas le lot ;
+    // son appelant traduit toute exception en 500, après avoir déjà ajouté,
+    // annoncé et notifié les identifiants précédents). On rend alors le verdict
+    // le plus FERMÉ des deux : « banni » refuse comme « disparue », et c'est la
+    // cause la plus probable d'un `P2025` sur cette écriture-ci, dont le `where`
+    // ne porte que l'id et la garde.
+    const current = await prisma.participant
+      .findFirst({ where: { id: participantId }, select: { bannedAt: true } })
+      .catch(() => ({ bannedAt: UNREADABLE }));
     return current?.bannedAt ? { outcome: 'banned' } : { outcome: 'vanished' };
   }
 }

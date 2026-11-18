@@ -66,6 +66,61 @@ Les trois portes commettent par cette unité et rendent chacune SON refus
 est fail-closed, jamais recréée. La note de `REJOIN_PARTICIPANT_STATE` cesse
 d'affirmer que l'amont suffit.
 
+## L'audit adversarial a trouvé la MOITIÉ MIROIR, et elle était ouverte
+
+Le lot est passé par `auditeur-adversarial` avant fusion (#9226, lot de contrôle
+d'accès). Verdict : **BLOQUANT**, un constat, et c'est exactement la moitié de la
+course que le correctif ne fermait pas.
+
+Les trois portes refusent désormais une rentrée quand le bannissement a commis le
+PREMIER. Dans l'ordre INVERSE, c'est l'écriture du BANNISSEMENT qui fabriquait le
+même état :
+
+| t | ce qui se passe | état de la ligne |
+|---|---|---|
+| t1 | un modérateur bannit ; `resolveTargetParticipant` lit `isActive: false` | `isActive: false`, `bannedAt` absent |
+| t2 | `resolveBanWrite` décide `{ bannedAt }` **seul** — « un membre déjà parti n'a plus d'appartenance à retirer » | — |
+| t3 | une porte de rentrée commet : la garde passe, `bannedAt` est toujours absent | **`isActive: true`** |
+| t4 | le bannissement commet sur `where: { id }`, sans garde d'état | **`isActive: true, bannedAt ≠ null`** |
+
+La fenêtre n'est pas plus étroite que l'autre — un aller-retour réseau complet —
+et l'état produit est en prime **COLLANT** : rebannir est refusé en
+`400 « déjà banni »`, il faut débannir d'abord pour en sortir.
+
+> **La maxime du lot vaut des DEUX côtés d'une course.** « L'état que l'écriture
+> POSE est-il encore légitime au moment où elle commet ? » — y répondre pour une
+> seule des deux écritures ferme une moitié de fenêtre et laisse l'autre produire
+> exactement le même état. Et la leçon que ce cycle venait d'écrire contenait la
+> phrase qui l'attrapait : elle n'avait été appliquée qu'à un bout.
+
+Le correctif est dans la **donnée**, et il est strictement meilleur qu'une garde
+de `where` à cet endroit : la branche « déjà dehors » de `resolveBanWrite` pose
+`{ bannedAt, isActive: false }` — `isActive: false` est un **no-op** sur une ligne
+réellement inactive, et il **écrase** la rentrée qui aurait gagné la course, ce
+qui est le bon verdict (banni ⇒ dehors). `leftAt` reste intact, ce qui est la
+raison d'être même de cette branche.
+
+Résidu assumé et consigné : `membershipEnded` se décide sur la LECTURE, donc
+sous-compte d'une unité dans la course (#19741). Un compteur qui dérive dans une
+course rare n'a pas le coût d'une évasion de bannissement.
+
+### Les autres constats de l'audit
+
+| constat | sort |
+|---|---|
+| le recensement des portes (#19080) était aveugle à la nouvelle graphie — **le QUATRIÈME scanner, que j'avais touché sans l'instruire** | corrigé : le census lit `commitParticipantRejoin(`, trois sondes neuves, les trois portes repassent à 2 écritures activantes jugées par leur loi |
+| la relecture de la cause pouvait LEVER et faire tomber le lot entier en 500 | corrigé : elle porte son `.catch`, et rend le verdict le plus FERMÉ des deux |
+| le double `updateIn` acceptait un `update` sans clé unique, que le vrai client refuse | corrigé : il lève, comme lui |
+| le témoin de la porte « invitation » n'épinglait que `403` | corrigé : il épingle le message du refus de bannissement |
+| la clause `where` étendue de Prisma+MongoDB n'est **jamais mesurée** au runtime — la pierre d'angle du lot | **#19739** — le dépôt a le précédent de la mesure (#8309) |
+| une jointure par lien CONSOMME une place avant de pouvoir être refusée | **#19740** |
+
+Trois affirmations trop absolues du lot ont été corrigées sur place : « aucune
+lecture du service ne sait refuser cet état » (le prédicat
+`PARTICIPATION_VIVANTE` le refuse — ce sont les 199 sites de #19677 qui ne
+l'emploient pas), et les deux qui disaient la fenêtre fermée sans nommer le
+second côté.
+
 ## Ce que le lot a trouvé en se faisant : TROIS cliquets aveuglés d'un coup
 
 C'est la partie du cycle qui apprend quelque chose, et elle n'était pas dans
@@ -77,6 +132,7 @@ gardent, **sans qu'une ligne de leurs inventaires bouge** :
 | `participant-reactivation-writers-sweep` (#10436) | est resté **VERT** avec un inventaire vidé de ses trois rentrées |
 | `participant-reactivation-rejoins-room-sweep` (#16964) | n'a rougi que par sa **sonde de non-vacuité** (« ≥ 5 sites », tombée à 2) |
 | `participant-language-producer-sweep` (#4662) | a classé l'unité partagée **`sans-langue`** — « ce site n'écrit pas la colonne », ce qui est FAUX |
+| `member-activation-doors-sweep` / `memberActivationCensus` (#19080) | **non vu par moi** — trouvé par l'audit : j'avais instruit trois scanners et pas le quatrième, que le lot touchait pourtant |
 
 Les deux premiers portaient **la même copie du scanner** : ils ne cherchaient
 que `.participant.update(`, donc ils sont devenus aveugles ENSEMBLE. Le scanner
@@ -127,8 +183,19 @@ rend `non-resolue`, jamais `sans-langue`.
 ## Suivis
 
 - **#19677** (199 lookups `isActive: true` nus) reste ouvert, et ce lot en
-  diminue l'urgence sans l'annuler : il tarit le producteur VIVANT, pas les
-  lignes déjà en base.
+  diminue l'urgence sans l'annuler : il tarit les DEUX producteurs vivants de
+  l'état — la rentrée et le bannissement — pas les lignes déjà en base.
+- **#19739** — la clause `where` étendue de Prisma+MongoDB est la pierre
+  d'angle du lot et n'est pas mesurée au runtime. Son seul témoin la DÉFINIT.
+- **#19740** — une jointure par lien consomme une place avant de pouvoir être
+  refusée, et `LINK_EXHAUSTED` nomme deux causes qui n'épuisent rien.
+- **#19741** — `membershipEnded` se décide sur la lecture du bannissement.
+- Un rouge de `dev` que rien ne nommait, corrigé en passant parce qu'il rougit
+  **toute PR** (la suite gateway est un seul job) : `call-live-frame-events`
+  énumérait `[3, 4, 5, 6]` en dur quand `6ccc8482b4` a fait passer
+  `CALL_MAX_PARTICIPANTS` de 6 à 5. La borne se DÉRIVE désormais de la
+  constante. *Un témoin qui recopie une constante partagée en dérive en silence,
+  et dans le sens qui accuse la production d'un défaut qui est le sien.*
 - **#19604** reste bloqué par **#19603** (`décision-produit` : un membre banni
   peut-il RETIRER une réaction qu'il a posée ?).
 - **#19688** est fermée par ce lot.
