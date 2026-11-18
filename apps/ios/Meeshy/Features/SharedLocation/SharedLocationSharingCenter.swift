@@ -87,7 +87,8 @@ private final class SharedLocationSerialGate {
 ///   partage que le démarrage suivant vient de poser ;
 /// - une réponse arrivée après que le compte a quitté l'appareil (`abandon()`) n'adopte rien, n'écrit rien et ne
 ///   rallume rien ;
-/// - dans le doute, on ARRÊTE : sans relevé pour republier une liste réduite, tout le partage s'arrête ; un accusé perdu
+/// - dans le doute, on ARRÊTE : une liste réduite part SEULE (#19287), et sans relevé pour la republier devant une
+///   passerelle d'avant, tout le partage s'arrête ; un accusé perdu
 ///   garde « Arrêter » pour chaque personne que le serveur peut servir ; une échéance qui n'a pas pu se solder est
 ///   rejouée, et à chaque socket accrochée ; un « Arrêter » qui n'a pas pu partir devient un retrait en attente, gardé et
 ///   rejoué de la même façon (#18204).
@@ -368,13 +369,23 @@ final class SharedLocationSharingCenter: ObservableObject {
         return await operation()
     }
 
-    /// Redémarrer le partage serveur avec une liste réduite demande une position : la dernière envoyée, sinon celle de
-    /// l'appareil. Sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête : retirer une personne ne
-    /// dépend jamais de la localisation. Un point choisi se republie lui-même, jamais un relevé (#19558) ; perdu avec
-    /// un lancement, on arrête.
+    /// Retirer quelqu'un ou solder une échéance republie la LISTE SEULE (#19287, iso du web #19284) : la passerelle
+    /// reprend le point qu'elle garde, et cet appareil n'envoie pas sa position — il peut n'avoir fait que recevoir la
+    /// liste d'un autre appareil (#18580), et aucun retrait ne demande la permission de localisation (#18714).
+    /// « Pas de partage » : la passerelle dit ce qui court (`settleNotSharing`). Une passerelle d'avant refuse la
+    /// liste seule (`INVALID`) : la liste repart avec une position, la dernière envoyée, sinon celle de l'appareil ;
+    /// sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête : retirer une personne ne dépend jamais
+    /// de la localisation. Un point choisi se republie lui-même, jamais un relevé (#19558) ; perdu avec un lancement,
+    /// on arrête.
     private func republish(_ wanted: SharedLocationRoster) async -> SharedLocationShareProblem? {
         let next = wanted.settled
         guard next.hasRecipients else { return await stopAll() }
+        switch await publishListOnly(next) {
+        case .refused(.invalid): break
+        case .refused(.notSharing): return await settleNotSharing()
+        case let problem: return problem
+        }
+        guard isLive else { return .refused(.failed) }
         if next.isFixedPoint {
             guard let pinnedFix else { return await stopAll() }
             return await publish(next, fix: pinnedFix, previous: roster)
@@ -383,6 +394,36 @@ final class SharedLocationSharingCenter: ObservableObject {
         guard case .fix(let fix) = await fixes.currentFix() else { return await stopAll() }
         guard isLive else { return .refused(.failed) }
         return await publish(next, fix: fix, previous: roster)
+    }
+
+    /// La liste seule, sans « Prévenir » (elle n'ajoute personne) et sans repli : une passerelle qui la connaît connaît
+    /// aussi les options et les échéances par personne. La batterie accordée part avec elle ; absente, la passerelle
+    /// garde la sienne.
+    private func publishListOnly(_ wanted: SharedLocationRoster) async -> SharedLocationShareProblem? {
+        let next = wanted.settled.withBattery(wanted.sharesBattery && servesShareOptions != false)
+        let instant = now()
+        guard let request = SharedLocationStartRequest(
+            listOnly: next.deadlinedRecipients(now: instant), duration: next.serverDuration(now: instant),
+            shareBattery: next.sharesBattery, untilStopped: next.isOpenEnded
+        ) else {
+            return .refused(.invalid)
+        }
+        guard isLive else { return .refused(.failed) }
+        let previous = roster
+        let verdict = await emitter.start(request)
+        guard isLive else { return .refused(.failed) }
+        return settle(verdict, next: next, fix: nil, previous: previous, claimsPublishing: false)
+    }
+
+    /// « Pas de partage » à une liste seule couvre aussi une session remplacée par un autre appareil pendant l'envoi : la
+    /// passerelle dit ce qui court. Un partage servi ⇒ le retrait reste en attente et se rejoue (la liste seule ignore
+    /// qui n'est plus servi) ; aucun, ou une relecture qui ne conclut pas ⇒ la liste se vide, sans arrêt ni relevé.
+    private func settleNotSharing() async -> SharedLocationShareProblem? {
+        let truth = await served()
+        guard isLive else { return .refused(.failed) }
+        if let truth, !truth.recipients.isEmpty { return .refused(.unconfirmed) }
+        wipe()
+        return nil
     }
 
     /// La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte.
@@ -435,7 +476,7 @@ final class SharedLocationSharingCenter: ObservableObject {
     private func settle(
         _ verdict: SharedLocationStartVerdict,
         next: SharedLocationRoster,
-        fix: SharedLocationFix,
+        fix: SharedLocationFix?,
         previous: SharedLocationRoster,
         claimsPublishing: Bool
     ) -> SharedLocationShareProblem? {
@@ -481,11 +522,14 @@ final class SharedLocationSharingCenter: ObservableObject {
         return nil
     }
 
-    private func engage(_ next: SharedLocationRoster, fix: SharedLocationFix) {
+    /// `fix` nul : une liste seule, qui n'a rien envoyé de nouveau — le point choisi et la dernière position envoyée
+    /// restent ceux d'avant.
+    private func engage(_ next: SharedLocationRoster, fix: SharedLocationFix?) {
         adopt(next)
+        let pinned = fix ?? pinnedFix
         if next.isFixedPoint { stopFollowingDevice() }
-        pinnedFix = next.isFixedPoint ? fix : nil
-        lastSent = .init(fix: fix, at: now())
+        pinnedFix = next.isFixedPoint ? pinned : nil
+        if let fix { lastSent = .init(fix: fix, at: now()) }
         if next.hasRecipients, !received, !next.isFixedPoint { startFollowing() }
         scheduleDeadline()
     }

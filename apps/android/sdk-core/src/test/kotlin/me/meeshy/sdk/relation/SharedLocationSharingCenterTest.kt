@@ -100,7 +100,7 @@ class SharedLocationSharingCenterTest {
         val sent = rig.starts.single()
         assertThat(sent.recipients.map { it.userId to it.precision }).containsExactly(alice to SharedLocationPrecision.NEIGHBORHOOD)
         assertThat(sent.duration).isEqualTo(SharedLocationShareDuration.ONE_HOUR)
-        assertThat(sent.fix.wire()).containsEntry("accuracy", 8.0)
+        assertThat(sent.fix!!.wire()).containsEntry("accuracy", 8.0)
         assertThat(rig.center.roster.value.entry(alice)).isNotNull()
         assertThat(rig.saved["me"]).doesNotContain("48.85")
         assertThat(rig.following).isEqualTo(1)
@@ -339,19 +339,20 @@ class SharedLocationSharingCenterTest {
     }
 
     @Test
-    fun `sans permission arreter une personne arrete tout plutot que de la laisser voir`() = runTest {
+    fun `devant une passerelle d'avant la liste seule, sans permission arreter une personne arrete tout`() = runTest {
         val rig = Rig(this)
         rig.saved["me"] = SharedLocationRoster.EMPTY
             .adding(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS, nowMillis = 0L)
             .adding(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS, nowMillis = 0L)
             .stored()
         rig.granted = false
+        rig.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID)
 
         val problem = rig.center.stopSharing(alice)
 
         assertThat(problem).isNull()
         assertThat(rig.stops).isEqualTo(1)
-        assertThat(rig.starts).isEmpty()
+        assertThat(rig.starts.map { it.isListOnly }).containsExactly(true)
         assertThat(rig.center.roster.value.isEmpty).isTrue()
     }
 
@@ -438,16 +439,17 @@ class SharedLocationSharingCenterTest {
     }
 
     @Test
-    fun `une derniere position trop ancienne n'est jamais republiee comme fraiche`() = runTest {
+    fun `devant une passerelle d'avant la liste seule, une derniere position trop ancienne n'est jamais republiee comme fraiche`() = runTest {
         val rig = Rig(this)
         rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
         rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
         rig.deviceFix = LiveLocationFix(49.1, 2.5, accuracy = 10.0)
+        rig.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID)
 
         advanceTimeBy(121_000L)
         rig.center.stopSharing(bob)
 
-        assertThat(rig.starts.last().fix.latitude).isEqualTo(49.1)
+        assertThat(rig.starts.last().fix!!.latitude).isEqualTo(49.1)
         assertThat(rig.starts.last().recipients.map { it.userId }).containsExactly(alice)
         rig.center.clear()
     }
@@ -507,5 +509,73 @@ class SharedLocationSharingCenterTest {
 
         assertThat(problem).isEqualTo(SharedLocationShareProblem.Refused(SharedLocationSendOutcome.RATE_LIMITED))
         assertThat(rig.starts.drop(before)).hasSize(1)
+    }
+
+    @Test
+    fun `retirer une personne envoie la liste seule et ne demande jamais la position de l'appareil`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.deviceFix = null
+
+        val problem = rig.center.stopSharing(bob)
+
+        assertThat(problem).isNull()
+        assertThat(rig.starts.last().isListOnly).isTrue()
+        assertThat(rig.starts.last().wire()).doesNotContainKey("position")
+        assertThat(rig.starts.last().recipients.map { it.userId }).containsExactly(alice)
+        assertThat(rig.stops).isEqualTo(0)
+        assertThat(rig.center.roster.value.entry(alice)).isNotNull()
+        assertThat(rig.center.roster.value.entry(bob)).isNull()
+        rig.center.clear()
+    }
+
+    @Test
+    fun `sans permission retirer une personne ne retire qu'elle`() = runTest {
+        val rig = Rig(this)
+        rig.saved["me"] = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS, nowMillis = 0L)
+            .adding(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS, nowMillis = 0L)
+            .stored()
+        rig.granted = false
+
+        val problem = rig.center.stopSharing(alice)
+
+        assertThat(problem).isNull()
+        assertThat(rig.stops).isEqualTo(0)
+        assertThat(rig.starts.map { it.isListOnly }).containsExactly(true)
+        assertThat(rig.center.roster.value.entry(bob)).isNotNull()
+        rig.center.clear()
+    }
+
+    @Test
+    fun `une passerelle d'avant la liste seule recoit la liste avec une position`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+        val before = rig.starts.size
+        rig.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID)
+
+        val problem = rig.center.stopSharing(bob)
+
+        assertThat(problem).isNull()
+        assertThat(rig.starts.drop(before).map { it.isListOnly }).containsExactly(true, false).inOrder()
+        assertThat(rig.starts.last().recipients.map { it.userId }).containsExactly(alice)
+        rig.center.clear()
+    }
+
+    @Test
+    fun `une liste seule qui ne trouve aucun partage vide la liste sans arreter ni suivre`() = runTest {
+        val rig = Rig(this)
+        rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
+        rig.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.NOT_SHARING)
+
+        val problem = rig.center.stopSharing(bob)
+
+        assertThat(problem).isNull()
+        assertThat(rig.stops).isEqualTo(0)
+        assertThat(rig.center.roster.value.isEmpty).isTrue()
+        assertThat(rig.saved["me"]).isNull()
     }
 }
