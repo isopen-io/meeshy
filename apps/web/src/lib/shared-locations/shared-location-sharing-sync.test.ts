@@ -256,6 +256,32 @@ describe('l’appareil qui publiait cède quand un autre partage à son tour', (
     expect(reloaded.source.following).toBe(0);
   });
 
+  test('deux onglets du même navigateur sont UN appareil : le « Partager » de l’un ne fait pas céder l’autre, ni taire le premier au rechargement', async () => {
+    const memory = new Map<string, string>();
+    const a = makeWorld({ memory, served: servedOf() });
+    a.startQueue.push(async () => ({ kind: 'started', expiresAt: T0 + HOUR, startedAt: MOI }));
+    await a.center.share({ userId: AMI, precision: 'exact', durationMinutes: 60 });
+    const b = makeWorld({ memory, served: servedOf() });
+    b.startQueue.push(async () => ({ kind: 'started', expiresAt: T0 + HOUR, startedAt: AUTRE_APPAREIL }));
+    await b.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 });
+    a.server.served = servedFrom(AUTRE_APPAREIL, [AMI, 'exact', T0 + HOUR], [AUTRE, 'city', T0 + HOUR]);
+    await a.center.sync();
+    expect(a.source.following).toBe(1);
+    const reloaded = makeWorld({ memory, served: a.server.served });
+    await reloaded.advance(0);
+    await reloaded.center.sync();
+    expect(reloaded.source.following).toBe(1);
+  });
+
+  test('un démarrage avec position refusé après coup (panne passerelle) : inconnu, le démarrage servi est pris pour le sien', async () => {
+    const world = await publiant();
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'unavailable' }));
+    await world.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 });
+    world.server.served = servedFrom(AUTRE_APPAREIL, [AMI, 'exact', T0 + HOUR], [AUTRE, 'city', T0 + HOUR]);
+    await world.center.sync();
+    expect(world.source.following).toBe(1);
+  });
+
   test('« Partager » d’ici après avoir cédé en refait l’appareil qui publie', async () => {
     const world = await publiant();
     world.server.served = servedFrom(AUTRE_APPAREIL, [AMI, 'exact', T0 + HOUR]);

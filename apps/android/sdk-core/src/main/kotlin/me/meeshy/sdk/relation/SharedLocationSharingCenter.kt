@@ -347,6 +347,7 @@ class SharedLocationSharingCenter internal constructor(
         deadline = null
         lastSent = null
         received = false
+        publishedStart = null
         loadedFor = account
         _roster.value = SharedLocationRoster.EMPTY
     }
@@ -451,7 +452,11 @@ class SharedLocationSharingCenter internal constructor(
                 engage(ticket, previous.union(next), fix)
                 SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
             }
-            is SharedLocationStartVerdict.Refused -> SharedLocationShareProblem.Refused(verdict.outcome)
+            is SharedLocationStartVerdict.Refused -> {
+                // La passerelle a PU appliquer un démarrage avec position qu'elle refuse ensuite : dans le doute, inconnu.
+                if (fix != null) publishedStart = null
+                SharedLocationShareProblem.Refused(verdict.outcome)
+            }
         }
     }
 

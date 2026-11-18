@@ -1435,8 +1435,13 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   (passerelle d'avant) : rien ne change. iOS : `silentFix()` au repli, jamais de demande de permission.
 - Reste ouvert (suivi) : un appareil relancé PENDANT qu'un autre a repris la publication prend le démarrage servi pour
   le sien, et publie avec lui jusqu'au prochain « Partager » (persister `startedAt` avec la marque « reçue »).
-- Gates : passerelle `sharedLocation` + `relations` + `socketio` 1 380 verts, `tsc` vert ; web `shared-locations` +
-  `api` 174 verts, `tsc` vert ; jvm-check `:core:model` `*SharedLocation*` 61 verts ; gardes iOS (règles maison 42,
+- Contre-audit n°2 (sur `startedAt`) : quatre constats, tous corrigés. Web : `publishedStart` vit dans le stockage
+  partagé des onglets (un navigateur est UN appareil ; deux onglets ne se font plus céder l'un l'autre). Un refus
+  d'un démarrage avec position remet l'identité à inconnu sur les trois clients (iOS `forgetPublishedStart`, Android
+  aussi au changement de compte, `resetSession`). Témoin de route : `startedAt` traverse le sérialiseur de
+  `GET /relations/locations/mine`.
+- Gates : passerelle `sharedLocation` + `relations` + `socketio` 1 380 verts puis `relations` + `sharedLocation` 388
+  verts après l'audit, `tsc` vert ; web `shared-locations` + `api` 176 verts, `tsc` vert ; jvm-check `:core:model` `*SharedLocation*` 61 verts ; gardes iOS (règles maison 42,
   cohésion, inscription des tests) vertes ; `packages/shared/__tests__/ci` 214/215, le rouge
   (`call:conversation-changed`, parité socket) vient du lot appels de `dev`, étranger aux cercles. Swift et `sdk-core`
   se prouvent par la CI de la PR.

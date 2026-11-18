@@ -495,4 +495,25 @@ class SharedLocationSharingSyncTest {
 
         assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
     }
+
+    @Test
+    fun `le demarrage d'un autre compte du telephone ne fait pas ceder le partage de celui-ci`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.account = "other"
+        device.center.clear()
+        runCurrent()
+        device.startVerdict = SharedLocationStartVerdict.Started(hour, elsewhere)
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+
+        device.account = "me"
+        device.center.clear()
+        runCurrent()
+        device.servedSnapshot = servedFrom(mine, alice to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
+    }
 }

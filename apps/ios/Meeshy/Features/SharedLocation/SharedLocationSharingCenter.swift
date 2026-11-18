@@ -500,12 +500,19 @@ final class SharedLocationSharingCenter: ObservableObject {
             return nil
         case .refused(.unconfirmed):
             if claimsPublishing { markReceived(false) }
-            if fix != nil { publishedStart = nil }
+            forgetPublishedStart(ifSent: fix)
             engage(previous.union(next), fix: fix)
             return .refused(.unconfirmed)
         case .refused(let outcome):
+            forgetPublishedStart(ifSent: fix)
             return .refused(outcome)
         }
+    }
+
+    /// La passerelle a PU appliquer un démarrage avec position qu'elle refuse ensuite (accusé perdu, panne après la
+    /// prise, session remplacée) : dans le doute, inconnu — deux appareils publient plutôt qu'aucun (#18580).
+    private func forgetPublishedStart(ifSent fix: SharedLocationFix?) {
+        if fix != nil { publishedStart = nil }
     }
 
     /// Une passerelle d'avant #19204 refuse « Prévenir » et la batterie, une d'avant #18205 l'échéance par personne
