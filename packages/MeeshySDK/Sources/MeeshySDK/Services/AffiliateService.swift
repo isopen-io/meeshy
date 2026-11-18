@@ -7,7 +7,14 @@ public protocol AffiliateServiceProviding: Sendable {
     func fetchStats() async throws -> AffiliateStats
 }
 
-public final class AffiliateService: AffiliateServiceProviding, Sendable {
+/// Mes invitations envoyées par e-mail et leur relance (#19207). Une passerelle qui ne connaît pas ces routes
+/// répond par une erreur : l'écran se passe alors du bloc, rien n'est inventé.
+public protocol SentInvitationsProviding: Sendable {
+    func listSentInvitations(offset: Int, limit: Int) async throws -> [SentEmailInvitation]
+    func resendInvitation(id: String) async throws -> SentEmailInvitation
+}
+
+public final class AffiliateService: AffiliateServiceProviding, SentInvitationsProviding, Sendable {
     public static let shared = AffiliateService()
     private let api: APIClientProviding
 
@@ -40,4 +47,24 @@ public final class AffiliateService: AffiliateServiceProviding, Sendable {
         let response: APIResponse<AffiliateStats> = try await api.request(AffiliateEndpoint.stats)
         return response.data
     }
+
+    public func listSentInvitations(offset: Int = 0, limit: Int = 20) async throws -> [SentEmailInvitation] {
+        let response: OffsetPaginatedAPIResponse<[SentEmailInvitation]> = try await api.request(
+            InvitationsEndpoint.email,
+            queryItems: [
+                URLQueryItem(name: "offset", value: "\(offset)"),
+                URLQueryItem(name: "limit", value: "\(limit)"),
+            ]
+        )
+        return response.data
+    }
+
+    public func resendInvitation(id: String) async throws -> SentEmailInvitation {
+        let response: APIResponse<SentEmailInvitation> = try await api.post(
+            InvitationsEndpoint.emailByIdResend(id: id), body: ResendInvitationBody()
+        )
+        return response.data
+    }
+
+    private struct ResendInvitationBody: Encodable {}
 }

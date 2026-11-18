@@ -21,7 +21,7 @@ final class UserProfileSheetMoodTests: XCTestCase {
         XCTAssertNil(UserProfileSheet.shownMood(nil, isBlockedByTarget: false))
     }
 
-    func test_header_paintsTheSameMoodOnBothAvatars() throws {
+    func test_header_paintsTheMoodOnTheTravellingAvatar() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // Profile
             .deletingLastPathComponent()   // MeeshyUITests
@@ -30,12 +30,12 @@ final class UserProfileSheetMoodTests: XCTestCase {
             .appendingPathComponent("Sources/MeeshyUI/Profile/UserProfileSheet+Header.swift")
         let code = try String(contentsOf: url, encoding: .utf8)
         XCTAssertEqual(
-            code.components(separatedBy: "moodEmoji: shownMoodEmoji,").count - 1, 2,
-            "le grand avatar et celui de la barre compacte portent la même humeur"
+            code.components(separatedBy: "moodEmoji: shownMoodEmoji,").count - 1, 1,
+            "un seul avatar voyage du héros à la barre repliée (K28, #19410) : il porte l'humeur aux deux tailles"
         )
         XCTAssertEqual(
-            code.components(separatedBy: "onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap").count - 1, 2,
-            "les deux avatars ouvrent l'humeur au toucher, et aucun sans humeur"
+            code.components(separatedBy: "onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap").count - 1, 1,
+            "l'avatar ouvre l'humeur au toucher, et jamais sans humeur"
         )
     }
 

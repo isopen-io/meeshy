@@ -1,0 +1,113 @@
+{
+  "composant": "MeeshyAvatarGroup",
+  "cle": "K48",
+  "note": "Vecteurs de parité (fiche K48 § 03, § 06). Détourage 2/3/3/3,5/4 et chevauchement 10/9/10/13/17 par taille ; « +N » = compte − visibles, jamais « +0 », « 99+ » au-delà de 99.",
+  "tailles": [
+    {
+      "taille": 26,
+      "detourage": 2,
+      "chevauchement": 10
+    },
+    {
+      "taille": 40,
+      "detourage": 3,
+      "chevauchement": 9
+    },
+    {
+      "taille": 44,
+      "detourage": 3,
+      "chevauchement": 10
+    },
+    {
+      "taille": 56,
+      "detourage": 3.5,
+      "chevauchement": 13
+    },
+    {
+      "taille": 72,
+      "detourage": 4,
+      "chevauchement": 17
+    }
+  ],
+  "pile": [
+    {
+      "compte": 0,
+      "max": 4,
+      "visibles": 0,
+      "reste": 0,
+      "texte": null
+    },
+    {
+      "compte": 3,
+      "max": 4,
+      "visibles": 3,
+      "reste": 0,
+      "texte": null
+    },
+    {
+      "compte": 4,
+      "max": 4,
+      "visibles": 4,
+      "reste": 0,
+      "texte": null
+    },
+    {
+      "compte": 12,
+      "max": 4,
+      "visibles": 4,
+      "reste": 8,
+      "texte": "+8"
+    },
+    {
+      "compte": 12,
+      "max": 9,
+      "visibles": 5,
+      "reste": 7,
+      "texte": "+7"
+    },
+    {
+      "compte": 12,
+      "max": 1,
+      "visibles": 2,
+      "reste": 10,
+      "texte": "+10"
+    },
+    {
+      "compte": 200,
+      "max": 4,
+      "visibles": 4,
+      "reste": 196,
+      "texte": "99+"
+    }
+  ],
+  "grille": [
+    {
+      "colonnes": 2,
+      "compte": 4,
+      "max": 7,
+      "visibles": 4,
+      "reste": 0
+    },
+    {
+      "colonnes": 4,
+      "compte": 12,
+      "max": 7,
+      "visibles": 7,
+      "reste": 5
+    },
+    {
+      "colonnes": 4,
+      "compte": 8,
+      "max": 7,
+      "visibles": 8,
+      "reste": 0
+    },
+    {
+      "colonnes": 9,
+      "compte": 20,
+      "max": 99,
+      "visibles": 7,
+      "reste": 13
+    }
+  ]
+}

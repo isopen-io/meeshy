@@ -128,7 +128,7 @@ public enum MeeshyAnchoredSheetCopy {
 ///   si sa fin prédite passe la moitié (`MeeshyAnchoredSheetMetrics`).
 /// - En-tête : titre au bord de début, ✕ doux au bord de fin, remplacé par `trailing`.
 ///   Sans titre ni `trailing`, pas de rangée.
-/// - `surface` : `.theme` suit le thème, `.dark` force l'indigo sombre sans
+/// - `surface` : `.theme` suit le thème, `.glass` pose le verre sombre sur une carte, `.dark` force l'indigo sombre sans
 ///   `preferredColorScheme`.
 /// - `outside` : `.dismisses` ferme au toucher hors feuille et rend la feuille modale,
 ///   `.passesThrough` laisse le toucher à l'hôte.
@@ -248,7 +248,7 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
             .background(alignment: .top) { surfaceShape }
             .modifier(MeeshyAnchoredSheetOffset(restOffset: layout.restOffset, drag: drag))
             .environment(\.meeshySheetClose, onDismiss)
-            .modifier(MeeshyAnchoredSheetScheme(forcesDark: surface == .dark))
+            .modifier(MeeshyAnchoredSheetScheme(forcesDark: MeeshyAnchoredSheetMetrics.usesMediaInk(surface: surface)))
             .modifier(MeeshyAnchoredSheetAccessibility(
                 label: title == nil ? accessibilityLabel : nil, isModal: chrome.isModal
             ))
@@ -276,7 +276,18 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
         return true
     }
 
+    @ViewBuilder
     private var surfaceShape: some View {
+        if surface == .glass {
+            Color.clear
+                .meeshyGlass(in: RoundedCorner(radius: MeeshyRadius.xxl, corners: [.topLeft, .topRight]), tone: .deep)
+                .ignoresSafeArea(.container, edges: .bottom)
+        } else {
+            opaqueSurface
+        }
+    }
+
+    private var opaqueSurface: some View {
         RoundedCorner(radius: MeeshyRadius.xxl, corners: [.topLeft, .topRight])
             .fill(surface == .dark ? MeeshyColors.indigo950 : MeeshyColors.backgroundPrimary(isDark: colorScheme == .dark))
             .shadow(
@@ -287,7 +298,8 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
     }
 
     private var ink: Color {
-        surface == .dark ? MeeshyColors.onMedia : MeeshyColors.textPrimary(isDark: colorScheme == .dark)
+        MeeshyAnchoredSheetMetrics.usesMediaInk(surface: surface)
+            ? MeeshyColors.onMedia : MeeshyColors.textPrimary(isDark: colorScheme == .dark)
     }
 
     // MARK: Poignée et en-tête
@@ -353,7 +365,8 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
                 trailing
             } else if chrome.showsClose, let closeLabel {
                 MeeshyGlassButton(systemImage: "xmark", label: closeLabel, kind: .soft, size: .s36,
-                                  tone: surface == .dark ? MeeshyGlassTone.deep : MeeshyGlassTone.theme, action: onDismiss)
+                                  tone: MeeshyAnchoredSheetMetrics.usesMediaInk(surface: surface)
+                                      ? MeeshyGlassTone.deep : MeeshyGlassTone.theme, action: onDismiss)
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)

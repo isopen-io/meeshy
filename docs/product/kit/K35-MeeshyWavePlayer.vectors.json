@@ -182,5 +182,27 @@
     "scrubScale": 1.12,
     "avenir": 0.3,
     "pulseBas": 0.62
-  }
+  },
+  "variantesNote": "Évolutions du profil (plan-kit K35) : `transport` relit autre chose qu'un son (trajet du Sang : lecture/pause, piste K05 à repères, pouce, heure en chasse fixe, capsule de verre) ; `indicator` est l'onde seule, sans lecture ni durée (égaliseur).",
+  "variantes": [
+    "transport",
+    "indicator"
+  ],
+  "transport": {"bouton": 44, "ecart": 14, "debut": 10, "fin": 16, "vertical": 10, "repereLargeur": 3, "repereHauteur": 10, "hauteur": 64, "glypheLecture": "pause.fill", "glypheRepos": "play.fill"},
+  "transportReperes": [
+    {"entree": [1.4, 0.48, 0.22, 0.48, -0.2], "reperes": [0, 0.22, 0.48, 1]},
+    {"entree": [], "reperes": []}
+  ],
+  "transportCentres": [
+    {"fraction": 0.5, "largeur": 220, "marge": 10, "rtl": false, "centre": 110},
+    {"fraction": 0.25, "largeur": 220, "marge": 10, "rtl": false, "centre": 60},
+    {"fraction": 0.25, "largeur": 220, "marge": 10, "rtl": true, "centre": 160},
+    {"fraction": 2, "largeur": 220, "marge": 10, "rtl": false, "centre": 210}
+  ],
+  "indicateur": {"barres": 5, "hauteur": 16, "min": 3, "max": 24, "largeurCinq": 30},
+  "indicateurBornes": [
+    {"demande": 1, "barres": 3},
+    {"demande": 5, "barres": 5},
+    {"demande": 99, "barres": 24}
+  ]
 }

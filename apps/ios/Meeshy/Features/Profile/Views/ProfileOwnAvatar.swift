@@ -14,6 +14,8 @@ struct ProfileOwnAvatar: View {
     let accentColor: String
     /// En édition, le crayon occupe le coin de la pastille.
     let isEditing: Bool
+    /// Le diamètre que l'en-tête repliable (K28) lui donne : 112 sous la bannière, 36 dans la barre (#19589).
+    var size: CGFloat = ProfileOwnAvatar.size
 
     @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
     @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
@@ -28,14 +30,14 @@ struct ProfileOwnAvatar: View {
         let mood = Self.shownMood(moodEmojiResolver?(userId), isEditing: isEditing)
         MeeshyAvatar(
             name: user?.displayName ?? user?.username ?? "?",
-            context: .profileBanner,
+            context: .custom(size),
             accentColor: accentColor,
             secondaryColor: MeeshyColors.indigo300Hex,
             avatarURL: user?.avatar,
             moodEmoji: mood,
             onMoodTap: mood == nil ? nil : moodTapResolver?(userId)
         )
-        .avatarRing(ring, avatarSize: Self.size, decorRoom: AvatarRingLayout.fullSpill(ring, box: Self.size * 100 / 84))
+        .avatarRing(ring, avatarSize: size, decorRoom: AvatarRingLayout.fullSpill(ring, box: size * 100 / 84))
     }
 
     static let size: CGFloat = AvatarContext.profileBanner.size

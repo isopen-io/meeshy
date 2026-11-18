@@ -161,6 +161,8 @@ public struct UserUpdatedEvent: Decodable, Sendable {
     public let hasNameGroup: Bool
     public let avatar: OptionalMediaChange
     public let banner: OptionalMediaChange
+    /// L'accent choisi de la vitrine (#19201) : clé absente = inchangé, `null` = revenu à l'automatique.
+    public let profileAccentColor: ProfileAccentChange
 
     /// Clé absente vs clé à `null` — même distinction que
     /// `LastMessagePreviewTranslations`, pour la même raison.
@@ -174,7 +176,7 @@ public struct UserUpdatedEvent: Decodable, Sendable {
     }
 
     private enum ChangeKeys: String, CodingKey {
-        case displayName, firstName, lastName, username, avatar, banner
+        case displayName, firstName, lastName, username, avatar, banner, profileAccentColor
     }
 
     public init(from decoder: Decoder) throws {
@@ -198,6 +200,7 @@ public struct UserUpdatedEvent: Decodable, Sendable {
         } else {
             self.banner = .unchanged
         }
+        self.profileAccentColor = ProfileAccentChange.decode(from: changes, forKey: .profileAccentColor)
     }
 }
 

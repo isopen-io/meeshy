@@ -15,7 +15,10 @@ public nonisolated enum MeeshyCollapsingHeroAlignment: String, Sendable, Equatab
 ///
 /// Les lois : hauteur = déplié − (déplié − replié) × progress ; l'avatar et le
 /// titre finissent à 55 % ; la bannière s'efface de 0 à 50 %, le verre apparaît
-/// de 50 à 100 % ; l'identité passe dans la barre au-delà de 50 %.
+/// de 50 à 100 % ; l'identité passe dans la barre au-delà de 50 %. Sous « Réduire les
+/// animations », le doigt mène toujours la hauteur, mais l'identité ne glisse plus :
+/// elle s'efface et reparaît à sa place au passage de main (un fondu). Un tic léger
+/// marque l'épinglage, un seul par sens (`pinTick`).
 public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
 
     public static let expandedHeight: Double = 318
@@ -35,6 +38,14 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
     public static let controlInsetCollapsed: Double = 12
     public static let barCornerRadius: Double = 28
     public static let controlTarget: Double = 44
+    /// Le gabarit de l'identité au premier chargement (cache vide) : le nom et le pseudo en squelettes K38.
+    public static let loadingTitleWidth: Double = 236
+    public static let loadingTitleHeight: Double = 34
+    public static let loadingTitleRadius: Double = 10
+    public static let loadingSubtitleWidth: Double = 148
+    /// Sous mouvement réduit, la part de l'avancée sur laquelle l'identité s'efface puis reparaît, de part et
+    /// d'autre du passage de main.
+    public static let reducedFadeShare: Double = 0.1
 
     public let height: Double
     public let bannerStretch: Double
@@ -50,6 +61,11 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
     public let barOwnsIdentity: Bool
     public let isPinned: Bool
     public let alignment: MeeshyCollapsingHeroAlignment
+    /// Où en est le voyage de l'avatar et du titre, de 0 (sous la bannière) à 1 (dans la barre) ; sous mouvement
+    /// réduit, 0 ou 1, jamais entre les deux.
+    public let identityTravel: Double
+    /// L'opacité de l'avatar et du titre : 1, sauf sous mouvement réduit autour du passage de main.
+    public let identityOpacity: Double
 
     public static func resolve(
         progress: Double,
@@ -58,11 +74,12 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
         alignment: MeeshyCollapsingHeroAlignment = .leading,
         hasAvatar: Bool = true,
         hasSubtitle: Bool = true,
-        overscroll: Double = 0
+        overscroll: Double = 0,
+        reduceMotion: Bool = false
     ) -> MeeshyCollapsingHeroRecipe {
         let raw = progress.isFinite ? progress : 0
         let share = clamp01(progress)
-        let travel = min(share / finishShare, 1)
+        let travel = travelShare(share, reduceMotion: reduceMotion)
         let distance = scrollDistance(expandedHeight: expandedHeight, collapsedHeight: collapsedHeight)
         let pulled = max(max(overscroll.isFinite ? overscroll : 0, 0), raw < 0 ? -raw * distance : 0)
         return MeeshyCollapsingHeroRecipe(
@@ -79,8 +96,21 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
             controlShift: controlInsetExpanded - lerp(controlInsetExpanded, controlInsetCollapsed, travel),
             barOwnsIdentity: share > handoverShare,
             isPinned: share >= 1,
-            alignment: alignment
+            alignment: alignment,
+            identityTravel: travel,
+            identityOpacity: reduceMotion ? clamp01(abs(share - handoverShare) / reducedFadeShare) : 1
         )
+    }
+
+    /// Le tic d'épinglage : il sonne quand l'avancée franchit l'épinglage, dans un sens ou dans l'autre, une fois.
+    public static func pinTick(from previous: Double, to current: Double) -> Bool {
+        guard previous.isFinite, current.isFinite else { return false }
+        return (clamp01(previous) >= 1) != (clamp01(current) >= 1)
+    }
+
+    private static func travelShare(_ share: Double, reduceMotion: Bool) -> Double {
+        guard !reduceMotion else { return share > handoverShare ? 1 : 0 }
+        return min(share / finishShare, 1)
     }
 
     /// La distance de défilement : le héros déplié occupe 450, la barre 96.
@@ -97,6 +127,13 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
         guard offset.isFinite else { return 0 }
         let distance = scrollDistance(expandedHeight: expandedHeight, collapsedHeight: collapsedHeight)
         return distance > 0 ? offset / distance : 0
+    }
+
+    /// Le haut des commandes : l'inset que l'hôte donne (une feuille n'a pas de barre d'état au-dessus d'elle),
+    /// sinon la zone sûre, sinon 54. Un inset négatif vaut 0 ; un non-nombre est ignoré.
+    public static func controlTop(safeArea: Double, topInset: Double? = nil) -> Double {
+        if let topInset, topInset.isFinite { return max(topInset, 0) }
+        return safeArea > 0 ? safeArea : 54
     }
 
     /// `progress` borné de 0 à 1 ; un non-nombre vaut 0.

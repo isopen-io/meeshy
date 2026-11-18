@@ -334,7 +334,6 @@
     "GET /api/v1/users/:userId/affiliate-token",
     "GET /api/v1/users/friend-requests",
     "GET /api/v1/users/id/:id",
-    "GET /api/v1/users/me/addresses",
     "POST /api/v1/users/me/addresses",
     "PATCH /api/v1/users/me/addresses/:id",
     "DELETE /api/v1/users/me/addresses/:id",

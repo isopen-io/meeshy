@@ -10,12 +10,16 @@ struct ProfileShareLocationRow: View {
     @ObservedObject private var center: SharedLocationSharingCenter
     let userId: String
     let displayName: String
+    /// Le cercle commun, qui ouvre « Jusqu'à ce que j'arrête » entre Sangs (#19616) ; `nil` : la tuile reste verrouillée.
+    let circle: RelationLevel?
     @State private var choosing = false
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(userId: String, displayName: String, center: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
+    init(userId: String, displayName: String, circle: RelationLevel? = nil,
+         center: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
         self.userId = userId
         self.displayName = displayName
+        self.circle = circle
         _center = ObservedObject(wrappedValue: center)
     }
 
@@ -25,10 +29,8 @@ struct ProfileShareLocationRow: View {
             .background(MeeshyColors.indigo500.opacity(MeeshyOpacity.subtle))
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             .sheet(isPresented: $choosing) {
-                ShareLocationChoiceSheet(displayName: displayName) { precision, duration in
-                    choosing = false
-                    Task { await share(precision: precision, duration: duration) }
-                }
+                ShareMyLocationSheet(recipients: [ShareMyLocationRecipient(userId: userId, name: displayName, circle: circle)],
+                                     center: center)
             }
     }
 
@@ -73,14 +75,6 @@ struct ProfileShareLocationRow: View {
         }
     }
 
-    private func share(precision: SharedLocationPrecision, duration: SharedLocationShareDuration) async {
-        guard let problem = await center.share(with: userId, precision: precision, duration: duration) else {
-            HapticFeedback.success()
-            return
-        }
-        FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
-    }
-
     private func stop() async {
         switch await center.stopSharing(with: userId) {
         case nil:
@@ -90,58 +84,6 @@ struct ProfileShareLocationRow: View {
         case let problem?:
             FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
         }
-    }
-}
-
-/// La feuille du choix : durée et précision, la ville par défaut (on ouvre plus, jamais l'inverse).
-struct ShareLocationChoiceSheet: View {
-    let displayName: String
-    let onShare: (SharedLocationPrecision, SharedLocationShareDuration) -> Void
-    @State private var precision: SharedLocationPrecision = .city
-    @State private var duration: SharedLocationShareDuration = .oneHour
-    @State private var openNoteID: String?
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Picker(ShareLocationWording.durationTitle, selection: $duration) {
-                        ForEach(SharedLocationShareDuration.allCases, id: \.self) { Text(ShareLocationWording.duration($0)).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                } header: {
-                    Text(ShareLocationWording.durationTitle)
-                }
-                Section {
-                    Picker(ShareLocationWording.precisionTitle, selection: $precision) {
-                        ForEach([SharedLocationPrecision.city, .neighborhood, .exact], id: \.self) {
-                            Text(ShareLocationWording.precision($0)).tag($0)
-                        }
-                    }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
-                } header: {
-                    Text(ShareLocationWording.precisionTitle)
-                } footer: {
-                    MeeshyInfoNoted(note: ShareLocationWording.explainNote, openNoteID: $openNoteID) {
-                        Text(ShareLocationWording.explain(name: displayName))
-                    }
-                }
-            }
-            .navigationTitle(ShareLocationWording.sheetTitle(name: displayName))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(ShareLocationWording.confirm) { onShare(precision, duration) }
-                        .accessibilityIdentifier("sharedLocation.confirm")
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
     }
 }
 
@@ -200,9 +142,19 @@ enum ShareLocationWording {
     }
 
     static func sharing(name: String, precision: SharedLocationPrecision, until: Date) -> String {
-        String(
+        guard !SharedLocationShareTerm.isOpenEnded(until) else { return sharingUntilStopped(name: name, precision: precision) }
+        return String(
             format: String(localized: "sharedLocation.share.active", defaultValue: "%1$@ voit ta position (%2$@) jusqu'à %3$@", bundle: .main),
             name, Self.precision(precision).lowercased(), until.formatted(date: .omitted, time: .shortened)
+        )
+    }
+
+    /// Un partage sans fin (#19616) : ni heure ni compte à rebours, seul « Arrêter » le termine.
+    static func sharingUntilStopped(name: String, precision: SharedLocationPrecision) -> String {
+        String(
+            format: String(localized: "sharedLocation.share.activeUntilStopped",
+                           defaultValue: "%1$@ voit ta position (%2$@) jusqu'à ce que tu arrêtes", bundle: .main),
+            name, Self.precision(precision).lowercased()
         )
     }
 

@@ -242,5 +242,12 @@
   "contrast": {
     "inkMin": 3.0,
     "glyphMin": 4.0
-  }
+  },
+  "autreCouleurNote": "Évolution du profil (plan-kit K07) : la pastille « autre couleur » — spectre de sept teintes (rouge à rouge), pipette — délègue au sélecteur de couleur du système, dont le puits (28) s'agrandit à la cellule (44). La variante `swatch` remplace le disque par une vignette d'aperçu peinte par l'hôte (64 × 44, coins 12), la courante cernée de 2,5 à 3 du bord.",
+  "autreCouleur": {"glyphe": "eyedropper", "puitsSysteme": 28, "teintes": [0, 0.16666666666666666, 0.3333333333333333, 0.5, 0.6666666666666666, 0.8333333333333334, 1], "saturation": 0.75, "luminosite": 0.95},
+  "autreCouleurEchelle": [
+    {"cellule": 44, "echelle": 1.5714285714285714},
+    {"cellule": 0, "echelle": 1}
+  ],
+  "swatch": {"largeur": 64, "hauteur": 44, "coins": 12, "ecartCercle": 3, "traitCercle": 2.5, "espacement": 8, "coinsCercle": 17.5}
 }

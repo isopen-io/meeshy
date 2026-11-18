@@ -182,12 +182,13 @@ final class UserActivityCardsTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(Self.contrast(translations.valueHex(isDark: true), card), 4.5)
     }
 
-    func test_statsScreenAndProfileBand_paintTheNumberWithItsInk() throws {
+    func test_statsScreen_paintsTheNumberWithItsInk_andTheProfileBand_leavesItToTheKit() throws {
         XCTAssertTrue(try statsViewSource().contains("card.valueHex(isDark: theme.mode.isDark)"))
         let band = try String(contentsOf: URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Profile/Views/ProfileActivityBand.swift"), encoding: .utf8)
-        XCTAssertTrue(band.contains("item.valueHex(isDark: theme.mode.isDark)"))
+        XCTAssertTrue(band.contains("MeeshyFigureBand("), "la bande K34 peint le chiffre à l'encre du texte, jamais à la teinte")
+        XCTAssertFalse(band.contains("valueHex("), "aucune encre de carte recopiée sur la fiche")
     }
 
     // MARK: - L'erreur et la frise paraissent en fondu

@@ -90,6 +90,28 @@ final class MeeshyToggleRowTests: XCTestCase {
         )
     }
 
+    func test_accessibilityLabel_withTitleAccessoryLabel_speaksItRightAfterTheTitle() {
+        XCTAssertEqual(
+            MeeshyToggleRowRecipe.accessibilityLabel(title: "E-mail", titleAccessory: "Vérifié", subtitle: "a@b.sn"),
+            "E-mail, Vérifié, a@b.sn"
+        )
+    }
+
+    func test_accessibilityLabel_withBlankTitleAccessoryLabel_staysSilentOnIt() {
+        XCTAssertEqual(
+            MeeshyToggleRowRecipe.accessibilityLabel(title: "E-mail", titleAccessory: "  ", subtitle: nil),
+            "E-mail"
+        )
+    }
+
+    func test_content_carriesTheSpokenTitleAccessory_andComparesOnIt() {
+        let verified = MeeshyToggleRowContent(title: "E-mail", titleAccessoryLabel: "Vérifié")
+        let unverified = MeeshyToggleRowContent(title: "E-mail", titleAccessoryLabel: "Non vérifié")
+        XCTAssertEqual(verified.titleAccessoryLabel, "Vérifié")
+        XCTAssertNotEqual(verified, unverified)
+        XCTAssertNil(MeeshyToggleRowContent(title: "E-mail").titleAccessoryLabel)
+    }
+
     func test_valueFor_toggle_readsItsState() {
         XCTAssertEqual(MeeshyToggleRowRecipe.valueFor(accessory: .toggle(isOn: false)), .toggle(isOn: false))
     }

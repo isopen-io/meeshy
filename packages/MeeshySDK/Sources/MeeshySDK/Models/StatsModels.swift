@@ -19,19 +19,26 @@ public struct UserStats: Codable, Sendable, CacheIdentifiable {
     public let storiesCount: Int?
     public let languages: [String]
     public let achievements: [Achievement]
+    /// « Mes contenus » (#19469, #19470) : mes messages favoris, mes publications enregistrées et mes packs — `nil`
+    /// tant que la passerelle ne les sert pas ; la rangée garde alors son chevron sans chiffre.
+    public let starredMessagesCount: Int?
+    public let bookmarksCount: Int?
+    public let packsCount: Int?
 
     public init(
         totalMessages: Int = 0, totalConversations: Int = 0,
         totalTranslations: Int = 0, friendRequestsReceived: Int = 0,
         languagesUsed: Int = 0, memberDays: Int = 0,
         postsCount: Int? = nil, reelsCount: Int? = nil, storiesCount: Int? = nil,
-        languages: [String] = [], achievements: [Achievement] = []
+        languages: [String] = [], achievements: [Achievement] = [],
+        starredMessagesCount: Int? = nil, bookmarksCount: Int? = nil, packsCount: Int? = nil
     ) {
         self.totalMessages = totalMessages; self.totalConversations = totalConversations
         self.totalTranslations = totalTranslations; self.friendRequestsReceived = friendRequestsReceived
         self.languagesUsed = languagesUsed; self.memberDays = memberDays
         self.postsCount = postsCount; self.reelsCount = reelsCount; self.storiesCount = storiesCount
         self.languages = languages; self.achievements = achievements
+        self.starredMessagesCount = starredMessagesCount; self.bookmarksCount = bookmarksCount; self.packsCount = packsCount
     }
 
     public init(from decoder: Decoder) throws {
@@ -47,6 +54,15 @@ public struct UserStats: Codable, Sendable, CacheIdentifiable {
         storiesCount = try? container.decode(Int.self, forKey: .storiesCount)
         languages = (try? container.decode([String].self, forKey: .languages)) ?? []
         achievements = (try? container.decode([Achievement].self, forKey: .achievements)) ?? []
+        starredMessagesCount = Self.count(container, .starredMessagesCount)
+        bookmarksCount = Self.count(container, .bookmarksCount)
+        packsCount = Self.count(container, .packsCount)
+    }
+
+    /// Un compteur servi négatif ou illisible se lit absent : jamais un chiffre inventé.
+    private static func count(_ container: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> Int? {
+        guard let value = try? container.decode(Int.self, forKey: key), value >= 0 else { return nil }
+        return value
     }
 
     enum CodingKeys: String, CodingKey {
@@ -54,6 +70,7 @@ public struct UserStats: Codable, Sendable, CacheIdentifiable {
         case friendRequestsReceived, languagesUsed, memberDays
         case postsCount, reelsCount, storiesCount
         case languages, achievements
+        case starredMessagesCount, bookmarksCount, packsCount
     }
 }
 

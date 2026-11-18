@@ -1,0 +1,108 @@
+{
+  "composant": "MeeshyChoiceTiles",
+  "cle": "K47",
+  "note": "Vecteurs de parité (fiche K47 § 06). Colonnes ramenées dans 2 à 4 ; au plafond d'une sélection multiple, les tuiles libres passent en désactivées.",
+  "colonnes": [
+    {
+      "demande": 0,
+      "colonnes": 2
+    },
+    {
+      "demande": 1,
+      "colonnes": 2
+    },
+    {
+      "demande": 2,
+      "colonnes": 2
+    },
+    {
+      "demande": 3,
+      "colonnes": 3
+    },
+    {
+      "demande": 4,
+      "colonnes": 4
+    },
+    {
+      "demande": 9,
+      "colonnes": 4
+    }
+  ],
+  "unique": [
+    {
+      "choisi": null,
+      "touche": "a",
+      "vide": false,
+      "issue": "select",
+      "id": "a"
+    },
+    {
+      "choisi": "a",
+      "touche": "b",
+      "vide": false,
+      "issue": "select",
+      "id": "b"
+    },
+    {
+      "choisi": "a",
+      "touche": "a",
+      "vide": false,
+      "issue": "ignored"
+    },
+    {
+      "choisi": "a",
+      "touche": "a",
+      "vide": true,
+      "issue": "deselect",
+      "id": "a"
+    }
+  ],
+  "multiple": [
+    {
+      "choisis": [],
+      "touche": "a",
+      "plafond": 2,
+      "issue": "select"
+    },
+    {
+      "choisis": [
+        "a"
+      ],
+      "touche": "b",
+      "plafond": 2,
+      "issue": "select"
+    },
+    {
+      "choisis": [
+        "a",
+        "b"
+      ],
+      "touche": "c",
+      "plafond": 2,
+      "issue": "ignored"
+    },
+    {
+      "choisis": [
+        "a",
+        "b"
+      ],
+      "touche": "a",
+      "plafond": 2,
+      "issue": "deselect"
+    }
+  ],
+  "chiffre": [
+    {
+      "colonnes": 2,
+      "corps": 40
+    },
+    {
+      "colonnes": 3,
+      "corps": 40
+    },
+    {
+      "colonnes": 4,
+      "corps": 30
+    }
+  ]
+}

@@ -23,6 +23,7 @@ public struct MeeshyTicket<Stub: View, Leading: View, Trailing: View, Status: Vi
     private let isDragging: Bool
     private let label: String?
     private let statusLabel: String?
+    private let titleBadge: String?
     private let flipLabels: (front: String, back: String)?
     private let onPress: (() -> Void)?
     private let stub: Stub
@@ -50,6 +51,7 @@ public struct MeeshyTicket<Stub: View, Leading: View, Trailing: View, Status: Vi
                 isDragging: Bool = false,
                 label: String? = nil,
                 statusLabel: String? = nil,
+                titleBadge: String? = nil,
                 flipLabels: (front: String, back: String)? = nil,
                 onPress: (() -> Void)? = nil,
                 @ViewBuilder stub: () -> Stub,
@@ -70,6 +72,7 @@ public struct MeeshyTicket<Stub: View, Leading: View, Trailing: View, Status: Vi
         self.isDragging = isDragging
         self.label = label
         self.statusLabel = statusLabel
+        self.titleBadge = titleBadge
         self.flipLabels = flipLabels
         self.onPress = onPress
         self.stub = stub()
@@ -89,8 +92,8 @@ public struct MeeshyTicket<Stub: View, Leading: View, Trailing: View, Status: Vi
     }
 
     private var spokenName: String {
-        if let label { return label }
-        return [title, code, figure, statusLabel].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        MeeshyTicketRecipe.spokenName(label: label, title: title, code: code, figure: figure,
+                                      statusLabel: statusLabel, titleBadge: titleBadge)
     }
 
     public var body: some View {
@@ -168,12 +171,18 @@ public struct MeeshyTicket<Stub: View, Leading: View, Trailing: View, Status: Vi
             leading
             pastille(recipe: recipe, isDark: isDark)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(MeeshyFont.relative(size == .hero ? 11 : 17, weight: .heavy, design: .rounded))
-                    .foregroundStyle(size == .hero ? MeeshyColors.textMuted(isDark: isDark) : MeeshyColors.textPrimary(isDark: isDark))
-                    .textCase(size == .hero ? .uppercase : nil)
-                    .strikethrough(struck)
-                    .lineLimit(1)
+                HStack(spacing: MeeshySpacing.sm) {
+                    Text(title)
+                        .font(MeeshyFont.relative(size == .hero ? 11 : 17, weight: .heavy, design: .rounded))
+                        .foregroundStyle(size == .hero ? MeeshyColors.textMuted(isDark: isDark) : MeeshyColors.textPrimary(isDark: isDark))
+                        .textCase(size == .hero ? .uppercase : nil)
+                        .strikethrough(struck)
+                        .lineLimit(1)
+                    if let titleBadge, !titleBadge.isEmpty {
+                        MeeshyBadge(.label(titleBadge), surface: .solid, kind: .accent, tint: tint)
+                            .transition(.opacity)
+                    }
+                }
                 if size != .mini {
                     Text(code)
                         .font(MeeshyFont.relative(CGFloat(recipe.codeFontSize), weight: .regular, design: .monospaced))
@@ -320,10 +329,12 @@ extension MeeshyTicket where Stub == EmptyView, Leading == EmptyView, Trailing =
                 isSelected: Bool = false,
                 label: String? = nil,
                 statusLabel: String? = nil,
+                titleBadge: String? = nil,
                 onPress: (() -> Void)? = nil) {
         self.init(title: title, code: code, tint: tint, systemImage: systemImage, figure: figure,
                   figureCaption: figureCaption, size: size, kind: kind, isFlipped: false, isSelected: isSelected,
-                  isDragging: false, label: label, statusLabel: statusLabel, flipLabels: nil, onPress: onPress,
+                  isDragging: false, label: label, statusLabel: statusLabel, titleBadge: titleBadge, flipLabels: nil,
+                  onPress: onPress,
                   stub: { EmptyView() }, leading: { EmptyView() }, trailing: { EmptyView() },
                   status: { EmptyView() }, back: { EmptyView() })
     }

@@ -1,0 +1,206 @@
+{
+  "composant": "MeeshyMapTrace",
+  "cle": "K54",
+  "note": "Vecteurs de parité (fiche K54 § 03, § 06). Le trait commence sous le premier nœud et finit sous le dernier : aucun point inventé. link ne lit que le premier et le dernier point.",
+  "longueur": [
+    {
+      "genre": "route",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "longueur": 5
+    },
+    {
+      "genre": "route",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "longueur": 7
+    },
+    {
+      "genre": "link",
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          100,
+          100
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "longueur": 5
+    },
+    {
+      "genre": "route",
+      "points": [
+        [
+          0,
+          0
+        ]
+      ],
+      "longueur": null
+    }
+  ],
+  "arrets": [
+    {
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "indice": 0,
+      "fraction": 0
+    },
+    {
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "indice": 1,
+      "fraction": 0.428571
+    },
+    {
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          3,
+          4
+        ]
+      ],
+      "indice": 2,
+      "fraction": 1
+    }
+  ],
+  "tete": [
+    {
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "fraction": 0.5,
+      "x": 5,
+      "y": 0
+    },
+    {
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "fraction": 2,
+      "x": 10,
+      "y": 0
+    },
+    {
+      "points": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ]
+      ],
+      "fraction": -1,
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "traits": [
+    {
+      "genre": "route",
+      "poids": "regular",
+      "trait": 4,
+      "liseré": 7
+    },
+    {
+      "genre": "route",
+      "poids": "large",
+      "trait": 4.5,
+      "liseré": 8
+    },
+    {
+      "genre": "link",
+      "poids": "regular",
+      "trait": 2.5,
+      "liseré": 5
+    },
+    {
+      "genre": "history",
+      "poids": "regular",
+      "trait": 7,
+      "liseré": 16
+    }
+  ],
+  "fond": [
+    {
+      "carte_claire": false,
+      "liseré": 0.55
+    },
+    {
+      "carte_claire": true,
+      "liseré": 0.7
+    }
+  ]
+}

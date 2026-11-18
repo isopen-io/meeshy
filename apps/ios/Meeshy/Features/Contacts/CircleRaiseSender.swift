@@ -10,13 +10,30 @@ struct CircleRaiseSender {
 
     func send(to userId: String, level: RelationLevel, onExhausted: @escaping @MainActor () -> Void) async throws {
         let cmid = ClientMutationId.generate()
-        observe(cmid: cmid, onExhausted: onExhausted)
+        CircleOutboxWatch.exhaustion(of: cmid, in: offlineQueue, onExhausted: onExhausted)
         let payload = SendFriendRequestPayload(clientMutationId: cmid, targetUserId: userId, targetLevel: level.rawValue)
         try await offlineQueue.enqueue(.sendFriendRequest, payload: payload, conversationId: nil)
     }
+}
 
-    private func observe(cmid: String, onExhausted: @escaping @MainActor () -> Void) {
-        let queue = offlineQueue
+/// La réponse à une proposition de cercle reçue, depuis la fiche (#19449) : la même file durable que « Mes cercles »
+/// (`.respondFriendRequest`), et la même main rendue quand la file y renonce (le serveur a refusé).
+@MainActor
+struct CircleAnswerSender {
+    let offlineQueue: OfflineQueueing
+
+    func send(_ requestId: String, action: RespondFriendRequestPayload.Action,
+              onExhausted: @escaping @MainActor () -> Void) async throws {
+        let cmid = ClientMutationId.generate()
+        CircleOutboxWatch.exhaustion(of: cmid, in: offlineQueue, onExhausted: onExhausted)
+        let payload = RespondFriendRequestPayload(clientMutationId: cmid, friendRequestId: requestId, action: action)
+        try await offlineQueue.enqueue(.respondFriendRequest, payload: payload, conversationId: nil)
+    }
+}
+
+@MainActor
+enum CircleOutboxWatch {
+    static func exhaustion(of cmid: String, in queue: OfflineQueueing, onExhausted: @escaping @MainActor () -> Void) {
         Task { @MainActor in
             let stream = await queue.outcomeStream(for: cmid)
             for await event in stream {

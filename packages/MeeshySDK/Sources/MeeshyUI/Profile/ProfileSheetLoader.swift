@@ -17,11 +17,23 @@ final class ProfileSheetLoader: ObservableObject {
     @Published private(set) var stats: UserStats?
     @Published private(set) var isLoadingProfile = false
     @Published private(set) var isLoadingStats = false
-    @Published private(set) var isBlockedByTarget = false
+    /// Introuvable, privé ou il m'a bloqué : la fiche rend « Personne ici », le même écran pour les trois (loi 9).
+    @Published private(set) var isUnavailable = false
+    /// Pourquoi la dernière synchronisation a échoué ; `nil` quand elle a abouti. Un refus n'en est pas une.
+    @Published private(set) var failure: ProfileLoadFailure?
+    /// L'âge du profil peint depuis le cache, pour dire de quand date une fiche lue hors ligne (#18873).
+    @Published private(set) var cachedAge: TimeInterval?
+
     /// Le profil n'a pas pu se charger et rien du cache ne le remplace : la
     /// fiche propose « Réessayer » (#8025). Un cache peint n'est jamais
     /// recouvert d'une erreur, et un refus (403) n'en est pas une.
-    @Published private(set) var profileLoadFailed = false
+    var profileLoadFailed: Bool { profile == nil && failure != nil }
+
+    /// L'écran que la fiche rend, je l'aie bloqué ou non (#18873).
+    func phase(isBlockedByMe: Bool) -> ProfileSheetPhase {
+        ProfileSheetPhase.resolve(isBlockedByMe: isBlockedByMe, isUnavailable: isUnavailable, hasProfile: profile != nil,
+                                  isLoading: isLoadingProfile, failure: failure, cachedAge: cachedAge)
+    }
 
     private let served: any ServedAppearanceProviding
     private var servedSubscription: AnyCancellable?
@@ -52,8 +64,10 @@ final class ProfileSheetLoader: ObservableObject {
         let userId = Self.known(userId)
         let key = Self.lookupKey(userId: userId, username: username)
         guard !key.isEmpty else { return }
-        if let cached = CacheFirst.paintable(await data.cachedProfile(for: key)) {
+        let cachedProfile = await data.cachedProfile(for: key)
+        if let cached = CacheFirst.paintable(cachedProfile) {
             profile = cached
+            cachedAge = Self.age(of: cachedProfile)
         }
         if let id = userId ?? profile?.id, let cached = CacheFirst.paintable(await data.cachedStats(for: id)) {
             stats = cached
@@ -84,7 +98,7 @@ final class ProfileSheetLoader: ObservableObject {
 
     /// « Réessayer » : rejoue l'ouverture — le cache d'abord, puis la synchronisation.
     func retry(userId: String?, username: String, using data: any ProfileLoading) async {
-        profileLoadFailed = false
+        failure = nil
         await open(userId: userId, username: username, using: data)
     }
 
@@ -98,27 +112,35 @@ final class ProfileSheetLoader: ObservableObject {
         do {
             let fresh = try await data.fetchProfile(handle: key)
             profile = fresh
-            profileLoadFailed = false
+            failure = nil
+            cachedAge = nil
             await data.storeProfile(fresh, lookupKey: key)
-        } catch APIError.serverError(403, _) {
-            markBlockedByTarget()
-        } catch APIError.serverError(404, _) where profile != nil {
-            markBlockedByTarget()
-        } catch MeeshyError.server(statusCode: 404, message: _) where profile != nil {
-            markBlockedByTarget()
+        } catch APIError.serverError(403, _), APIError.serverError(404, _) {
+            markUnavailable()
+        } catch MeeshyError.server(statusCode: 404, message: _), MeeshyError.server(statusCode: 403, message: _) {
+            markUnavailable()
         } catch MeeshyError.forbidden {
-            // Un refus n'est pas une panne : réessayer ne changerait rien.
+            markUnavailable()
         } catch {
-            profileLoadFailed = profile == nil
+            failure = ProfileLoadFailure.classify(error)
         }
     }
 
-    /// La passerelle sert 404 au BLOQUÉ (#10750) — le transport le lève en `MeeshyError.server` : sur une
-    /// fiche déjà peinte, rien du cache (décor, actions, statistiques) ne reste.
-    private func markBlockedByTarget() {
-        isBlockedByTarget = true
+    /// Introuvable, privé, ou la passerelle sert 404 au BLOQUÉ (#10750, loi 9) : un refus n'est pas une panne,
+    /// réessayer ne changerait rien, et rien du cache (décor, actions, statistiques) ne reste peint.
+    private func markUnavailable() {
+        isUnavailable = true
+        failure = nil
+        cachedAge = nil
         profile = nil
         stats = nil
+    }
+
+    private static func age(of result: CacheResult<[MeeshyUser]>) -> TimeInterval? {
+        switch result {
+        case .fresh(_, let age), .stale(_, let age): return age
+        case .expired, .empty: return nil
+        }
     }
 
     private func synchronizeStats(_ userId: String, using data: any ProfileLoading) async {

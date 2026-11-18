@@ -37,10 +37,14 @@ struct CreateShareLinkView: View {
     @State private var allowAnonymousImages: Bool = true
     @State private var allowViewHistory: Bool = false
 
-    // Limites
-    @State private var maxUsesEnabled: Bool = false
-    @State private var maxUsesValue: Int = 100
-    @State private var expirationOption: ExpirationOption = .never
+    // Limites — les crans et le plafond de la planche `Lien-Creer` (#19502)
+    @State private var maxUsesEnabled: Bool = true
+    @State private var maxUsesValue: Int = ShareLinkDraft.defaultEntries
+    @State private var expiry: LinkExpiryNotch = .days7
+
+    // Langues autorisées — vide = toutes
+    @State private var languages: [String] = []
+    @State private var showsLanguages = false
 
     // Etat
     @State private var isCreating = false
@@ -60,6 +64,10 @@ struct CreateShareLinkView: View {
                 accessSection
                 permissionsSection
                 limitsSection
+                languagesSection
+                LinkTicketPreviewView(preview: draft.ticket, tint: accent, systemImage: "bubble.left.and.bubble.right")
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.lg)
                 createButton
                     .padding(.top, MeeshySpacing.sm)
                     .padding(.bottom, 40)
@@ -119,16 +127,11 @@ struct CreateShareLinkView: View {
                 divider
                 formField(String(localized: "share.link.create.field.description", defaultValue: "Description", bundle: .main), placeholder: String(localized: "share.link.create.field.description.placeholder", defaultValue: "Optionnel", bundle: .main), text: $linkDescription, input: .paragraph)
                 divider
-                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                    formField(String(localized: "share.link.create.field.slug", defaultValue: "Slug URL (optionnel)", bundle: .main), placeholder: String(localized: "share.link.create.field.slug.placeholder", defaultValue: "ex: mon-groupe-2025", bundle: .main), text: $customSlug, input: .token)
-                    if !customSlug.isEmpty {
-                        Text("meeshy.me/chat/\(customSlug.lowercased())")
-                            .font(.caption2.weight(.medium))
-                            .foregroundColor(accent.opacity(MeeshyOpacity.intense))
-                            .padding(.horizontal, MeeshySpacing.mdPlus)
-                            .padding(.bottom, MeeshySpacing.sm)
-                    }
-                }
+                LinkSlugField(prefix: "meeshy.me/chat/", slug: customSlug, isAcceptable: LinkSlugRules.isAcceptable(customSlug),
+                              onChange: { customSlug = $0 })
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.vertical, MeeshySpacing.md)
+                    .background(rowBackground)
             }
         }
     }
@@ -216,16 +219,21 @@ struct CreateShareLinkView: View {
 
     // MARK: - Section: Limites
 
+    /// « Expire » en crans (24 h · 7 j · 30 j · Jamais, K04) et « Nombre d'entrées » au pas-à-pas du kit (K53) :
+    /// planche `Lien-Creer`. Le plafond reste débrayable : un lien sans limite garde son chemin.
     private var limitsSection: some View {
         formSection(title: String(localized: "share.link.create.section.limits", defaultValue: "Limites", bundle: .main), icon: "gauge.with.dots.needle.bottom.50percent",
                     subtitle: String(localized: "share.link.create.section.limits.subtitle", defaultValue: "Nombre d’utilisations et durée du lien", bundle: .main)) {
             VStack(spacing: 0) {
-                // Max utilisations
+                LinkExpiryPicker(notches: LinkExpiryNotch.shareNotches, selection: expiry, onChange: { expiry = $0 })
+                    .padding(MeeshySpacing.mdPlus)
+                    .background(rowBackground)
+                divider
                 MeeshyToggleRow(
                     content: MeeshyToggleRowContent(
-                        title: String(localized: "share.link.create.limit_uses", defaultValue: "Limiter les utilisations", bundle: .main),
+                        title: LinkCreationCopy.entries,
                         subtitle: maxUsesEnabled
-                            ? String(localized: "share.link.create.max_uses", defaultValue: "^[\(maxUsesValue) utilisation](inflect: true) maximum", bundle: .main)
+                            ? LinkCreationCopy.entriesDetail
                             : String(localized: "share.link.create.unlimited", defaultValue: "Illimité", bundle: .main),
                         accessory: .toggle(isOn: maxUsesEnabled)
                     ),
@@ -238,56 +246,103 @@ struct CreateShareLinkView: View {
 
                 if maxUsesEnabled {
                     divider
-                    Stepper(
-                        value: $maxUsesValue,
-                        in: 1...10000,
-                        step: maxUsesValue < 100 ? 1 : (maxUsesValue < 1000 ? 10 : 100)
-                    ) {
-                        HStack {
-                            Spacer()
-                            Text("\(maxUsesValue)")
-                                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                                .foregroundColor(accent)
-                            Text(String(localized: "share.link.create.uses_label", defaultValue: "utilisations", bundle: .main))
-                                .font(.footnote)
-                                .foregroundStyle(theme.textSecondary)
-                            Spacer()
-                        }
-                    }
+                    MeeshyStepper(
+                        value: maxUsesValue,
+                        range: ShareLinkDraft.entriesRange,
+                        label: LinkCreationCopy.entries,
+                        spokenValue: String(localized: "share.link.create.max_uses", defaultValue: "^[\(maxUsesValue) utilisation](inflect: true) maximum", bundle: .main),
+                        step: draft.entriesStep,
+                        decrementLabel: LinkCreationCopy.lessEntries,
+                        incrementLabel: LinkCreationCopy.moreEntries,
+                        tint: accent,
+                        onChange: { maxUsesValue = $0 }
+                    )
+                    .frame(maxWidth: .infinity)
                     .padding(MeeshySpacing.mdPlus)
                     .background(rowBackground)
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                 }
-
-                divider
-
-                // Expiration
-                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                    HStack(spacing: MeeshySpacing.md) {
-                        iconBadge("clock.badge.xmark", color: MeeshyColors.warningHex)
-                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                            Text(String(localized: "share.link.create.expiration", defaultValue: "Expiration", bundle: .main))
-                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                                .foregroundStyle(theme.textPrimary)
-                            Text(expirationOption.label)
-                                .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                                .foregroundStyle(expirationOption == .never ? theme.textSecondary : MeeshyColors.warning)
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
-                    MeeshyChipRow(
-                        ExpirationOption.allCases.map { MeeshyChip(id: $0, title: $0.label) },
-                        selection: [expirationOption],
-                        label: String(localized: "share.link.create.expiration", defaultValue: "Expiration", bundle: .main),
-                        surface: .theme,
-                        size: .compact,
-                        onChange: { _, option in expirationOption = option }
-                    )
-                }
-                .padding(MeeshySpacing.mdPlus)
-                .background(rowBackground)
             }
         }
+    }
+
+    // MARK: - Section: Langues autorisées
+
+    /// « Langues autorisées · Toutes » (planche `Lien-Creer`) : la rangée du kit (K06) dit le choix ; ouverte, la
+    /// bascule « Toutes » et les puces des langues (K04). La passerelle accepte la liste à la création.
+    private var languagesSection: some View {
+        formSection(title: LinkCreationCopy.languages, icon: "character.bubble") {
+            VStack(spacing: 0) {
+                MeeshyToggleRow(LinkCreationCopy.languages, systemImage: "character.bubble",
+                                accessory: .value(languagesSummary), tint: accent,
+                                action: { showsLanguages.toggle() })
+                    .background(rowBackground)
+                if showsLanguages {
+                    divider
+                    VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                        MeeshyToggleRow(LinkCreationCopy.allLanguages, accessory: .toggle(isOn: languages.isEmpty), tint: accent,
+                                        action: { setAllLanguages(!languages.isEmpty) })
+                        if !languages.isEmpty {
+                            MeeshyChipRow(
+                                languageCodes.map { MeeshyChip(id: $0, title: LanguageData.autonym(for: $0)) },
+                                selection: Set(languages),
+                                label: LinkCreationCopy.languages,
+                                mode: .multiple,
+                                layout: .wrap,
+                                surface: .theme,
+                                size: .compact,
+                                onChange: { _, code in toggleLanguage(code) }
+                            )
+                        }
+                    }
+                    .padding(MeeshySpacing.mdPlus)
+                    .background(rowBackground)
+                }
+            }
+        }
+    }
+
+    private var languagesSummary: String {
+        languages.isEmpty ? LinkCreationCopy.allLanguages : languages.map { LanguageData.autonym(for: $0) }.joined(separator: ", ")
+    }
+
+    private var languageCodes: [String] {
+        LanguageData.quickTranslationCodes + languages.filter { !LanguageData.quickTranslationCodes.contains($0) }
+    }
+
+    private func setAllLanguages(_ all: Bool) {
+        var next = draft
+        next.setAllLanguages(all, fallback: Locale.current.language.languageCode?.identifier ?? "fr")
+        languages = next.languages
+    }
+
+    private func toggleLanguage(_ code: String) {
+        var next = draft
+        next.toggleLanguage(code)
+        languages = next.languages
+    }
+
+    /// Le brouillon que la feuille compose : il dit ce qui part et ce que le billet montre (#19502).
+    private var draft: ShareLinkDraft {
+        var draft = ShareLinkDraft()
+        draft.conversationId = selectedConversation?.id
+        draft.conversationName = selectedConversation?.name
+        draft.name = linkName
+        draft.description = linkDescription
+        draft.slug = customSlug
+        draft.expiry = expiry
+        draft.limitsEntries = maxUsesEnabled
+        draft.maxEntries = maxUsesValue
+        draft.acceptsGuests = !requireAccount
+        draft.asksNickname = requireNickname
+        draft.asksEmail = requireEmail
+        draft.asksBirthday = requireBirthday
+        draft.allowsMessages = allowAnonymousMessages
+        draft.allowsImages = allowAnonymousImages
+        draft.allowsFiles = allowAnonymousFiles
+        draft.guestsSeeHistory = allowViewHistory
+        draft.languages = languages
+        return draft
     }
 
     // MARK: - Bouton créer
@@ -306,12 +361,12 @@ struct CreateShareLinkView: View {
             }
 
             MeeshySplitActionButton(
-                String(localized: "share.link.create.button.create", defaultValue: "Créer le lien", bundle: .main),
+                String(localized: "share.link.create.button.create", defaultValue: "Créer et copier le lien", bundle: .main),
                 phase: isCreating
                     ? .busy(progress: nil, title: String(localized: "share.link.create.button.creating", defaultValue: "Création en cours…", bundle: .main))
                     : .ready,
                 width: .fill,
-                isEnabled: selectedConversation != nil,
+                isEnabled: draft.canCreate,
                 action: create
             )
             .padding(.horizontal, MeeshySpacing.xl)
@@ -425,32 +480,16 @@ struct CreateShareLinkView: View {
     // MARK: - Action
 
     private func create() {
-        guard let conv = selectedConversation else { return }
+        guard let req = draft.request(now: Date()) else { return }
         isCreating = true
         errorMessage = nil
-
-        let req = CreateShareLinkRequest(
-            conversationId: conv.id,
-            name: linkName.isEmpty ? nil : linkName,
-            description: linkDescription.isEmpty ? nil : linkDescription,
-            identifier: customSlug.isEmpty ? nil : customSlug.lowercased(),
-            maxUses: maxUsesEnabled ? maxUsesValue : nil,
-            expiresAt: expirationOption.iso8601,
-            allowAnonymousMessages: allowAnonymousMessages,
-            allowAnonymousFiles: allowAnonymousFiles,
-            allowAnonymousImages: allowAnonymousImages,
-            allowViewHistory: allowViewHistory,
-            requireAccount: requireAccount,
-            requireNickname: requireNickname && !requireAccount,
-            requireEmail: requireEmail && !requireAccount,
-            requireBirthday: requireBirthday && !requireAccount
-        )
 
         Task {
             do {
                 let created = try await ShareLinkService.shared.createShareLink(request: req)
                 await MainActor.run {
                     HapticFeedback.success()
+                    LinksClipboard.copy(created.joinUrl, message: LinkCreationCopy.copied)
                     onCreate(created)
                     dismiss()
                 }
@@ -543,36 +582,6 @@ private struct ConversationPickerSheet: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Expiration Option
-
-private enum ExpirationOption: String, CaseIterable {
-    case never, h24, d7, d30, m3
-
-    var label: String {
-        switch self {
-        case .never: String(localized: "share.link.create.expiration.never", defaultValue: "Jamais", bundle: .main)
-        case .h24:   String(localized: "share.link.create.expiration.h24", defaultValue: "24 heures", bundle: .main)
-        case .d7:    String(localized: "share.link.create.expiration.d7", defaultValue: "7 jours", bundle: .main)
-        case .d30:   String(localized: "share.link.create.expiration.d30", defaultValue: "30 jours", bundle: .main)
-        case .m3:    String(localized: "share.link.create.expiration.m3", defaultValue: "3 mois", bundle: .main)
-        }
-    }
-
-    var iso8601: String? {
-        let cal = Calendar.current
-        let now = Date()
-        let date: Date? = switch self {
-        case .never: nil
-        case .h24:   cal.date(byAdding: .hour, value: 24, to: now)
-        case .d7:    cal.date(byAdding: .day, value: 7, to: now)
-        case .d30:   cal.date(byAdding: .day, value: 30, to: now)
-        case .m3:    cal.date(byAdding: .month, value: 3, to: now)
-        }
-        guard let date else { return nil }
-        return WireDate.string(from: date)
     }
 }
 
