@@ -184,18 +184,45 @@ cycle 179 : une affirmation du côté qui ABSOUT.
 - `tsc --noEmit` **vert** sur `services/gateway` et `packages/shared` ;
 - suite gateway complète : voir § ci-dessous.
 
-## Ce que la fusion attend — et c'est la même cause qu'au cycle 179
+## La CI : une mesure juste, une conclusion périmée en 45 minutes
 
-**Les 25 workflows du dépôt sont toujours `disabled_manually`** (mesuré à
-20:47 UTC ; leur `updated_at` est groupé à la minute, 19:20 UTC le même jour,
-donc une désactivation en LOT et non une dérive). `workflow_dispatch` sur
-`ci.yml` rend « Cannot trigger a 'workflow_dispatch' on a disabled workflow ».
+**À 20:47 UTC**, les 25 workflows du dépôt étaient `disabled_manually` (leur
+`updated_at` groupé à la minute, 19:20 UTC — une désactivation en LOT), et
+`workflow_dispatch` sur `ci.yml` rendait « Cannot trigger a 'workflow_dispatch'
+on a disabled workflow ». J'en ai conclu, et ouvert en #19752, qu'aucune PR ne
+pouvait obtenir de verdict — comme le cycle 179 l'avait consigné sur sa PR.
 
-La directive #9226 — « toute PR vers `dev` fusionne dès la CI verte » — reste
-donc inapplicable pour tout le monde, et une session ne réactive pas un workflow
-de dépôt. Le cycle 179 l'avait consigné sur sa PR ; **c'est désormais une
-issue, #19752**, parce que la condition porte sur toutes les sessions et qu'elle
-a survécu à un cycle.
+**À 21:32 UTC**, l'ouverture de la PR a déclenché un run `ci.yml` sur
+`pull_request`. Les workflows étaient donc RÉACTIVÉS entre-temps. Le run a
+conclu `skipped`, ses 18 jobs compris — ce qui ressemble à un verdict et n'en est
+pas un. La cause vivante est tout autre, et elle est ÉCRITE dans `ci.yml:127` :
+
+```yaml
+if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true')
+    && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || …)
+```
+
+Un gel DÉLIBÉRÉ de la CI des PR, piloté par deux variables de dépôt. Trois
+conséquences, mesurées :
+
+1. une PR rend un run tout sauté — **« aucun run » et « un run `skipped` » ont la
+   même valeur probante : zéro**, et le second est plus trompeur ;
+2. **`workflow_dispatch` n'est pas `pull_request`** : la première clause le laisse
+   passer, un verdict EST obtenable pendant le gel (vérifié : `204`, et le run
+   DÉMARRE). C'est la preuve de ce lot ;
+3. `dev` et `main` sont exemptés : la CI d'intégration tourne, donc les sessions
+   qui fusionnent pendant le gel ne travaillent pas à l'aveugle.
+
+> **Une mesure d'infrastructure a une date de péremption très courte.** La mienne
+> était juste à 20:47 et périmée à 21:32 ; **la conclusion, elle, avait
+> survécu** — et elle commandait de ne pas fusionner. Le dépôt porte la leçon
+> jumelle, écrite le même jour par une autre session
+> (`tasks/lessons/2026-11-18-une-prediction-d-audit-a-une-date-de-peremption-de-trois-heures.md`).
+> Remesurer avant de FUSIONNER, pas seulement avant d'ouvrir. #19752 est corrigée
+> en ce sens, et ce qu'il en reste est un constat de pilotage : **rien n'écrit la
+> raison du gel ni sa porte de sortie**, donc une session qui voit un run sauté ne
+> peut pas distinguer une panne d'une politique — et les deux lectures mènent à
+> des actes opposés.
 
 
 ---
