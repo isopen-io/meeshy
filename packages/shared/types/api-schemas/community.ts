@@ -77,6 +77,22 @@ export const communityMemberSchema = {
     },
     isActive: { type: 'boolean', description: 'Whether membership is active' },
     leftAt: { type: 'string', format: 'date-time', nullable: true, description: 'Leave timestamp' },
+    user: { ...userMinimalSchema, description: 'User info' }
+  }
+} as const;
+
+/**
+ * La rangée d'un membre telle que la lisent ceux qui animent ou modèrent la
+ * communauté (#19429) : la porte d'entrée et le pays d'arrivée en plus. Le
+ * schéma COMMUN ne les déclare pas, donc toute autre réponse les retire à la
+ * sérialisation, même quand la lecture en base les rend (recherche, adhésion).
+ * Seules les routes réservées aux intendants servent celui-ci.
+ */
+export const communityStewardMemberSchema = {
+  ...communityMemberSchema,
+  description: 'Community membership, as read by the community admins and moderators',
+  properties: {
+    ...communityMemberSchema.properties,
     joinedVia: {
       type: 'string',
       nullable: true,
@@ -87,8 +103,7 @@ export const communityMemberSchema = {
       type: 'string',
       nullable: true,
       description: "Arrival country at entry, ISO 3166-1 alpha-2, never the city (#19429). Served to the community's admins and moderators only; null otherwise"
-    },
-    user: { ...userMinimalSchema, description: 'User info' }
+    }
   }
 } as const;
 

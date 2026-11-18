@@ -9,7 +9,7 @@ import { FastifyInstance, FastifyReply } from 'fastify';
 import {
   communityEntryStatsSchema,
   communityJoinRequestSchema,
-  communityMemberSchema,
+  communityStewardMemberSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -175,7 +175,7 @@ export async function registerEntryRoutes(fastify: FastifyInstance) {
       summary: 'Accept a join request',
       params: requestParams,
       response: {
-        200: { type: 'object', properties: { success: { type: 'boolean' }, data: communityMemberSchema } },
+        200: { type: 'object', properties: { success: { type: 'boolean' }, data: communityStewardMemberSchema } },
         ...notFoundResponses
       }
     }

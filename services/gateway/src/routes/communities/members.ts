@@ -24,6 +24,7 @@ import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/auth
 const logger = enhancedLogger.child({ module: 'CommunityMembersRoutes' });
 import {
   communityMemberSchema,
+  communityStewardMemberSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import {
@@ -88,7 +89,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
             success: { type: 'boolean', example: true },
             data: {
               type: 'array',
-              items: communityMemberSchema
+              items: communityStewardMemberSchema
             },
             pagination: {
               type: 'object',
