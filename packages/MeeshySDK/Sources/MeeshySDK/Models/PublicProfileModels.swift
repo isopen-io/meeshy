@@ -48,9 +48,12 @@ public struct PublicProfile: Decodable, Sendable {
     /// Le cercle de « Voir comme » (`?as=`) que le serveur a APPLIQUÉ. Absent ⇒ la charge est la fiche
     /// du lecteur réel : un serveur qui ignore `as` ne doit jamais passer pour une vue par cercle.
     public let viewAs: RelationLevel?
+    /// Les langues du Prisme que la fiche publique sert, dans leur ordre (`buildPublicProfile` retire les trois
+    /// colonnes de rang et ne sert que cette liste). Absente ⇒ vide : rien n'est affirmé.
+    public let languages: [String]
 
     private enum CodingKeys: String, CodingKey {
-        case stats, relation, isSelf, circle, viewAs
+        case stats, relation, isSelf, circle, viewAs, languages
     }
 
     public init(from decoder: Decoder) throws {
@@ -62,16 +65,18 @@ public struct PublicProfile: Decodable, Sendable {
         circle = try? container.decodeIfPresent(ProfileCircleView.self, forKey: .circle)
         viewAs = (try? container.decodeIfPresent(String.self, forKey: .viewAs))
             .flatMap(RelationLevel.init(rawValue:))
+        languages = ((try? container.decodeIfPresent([String].self, forKey: .languages)) ?? nil) ?? []
     }
 
     public init(user: MeeshyUser, stats: UserStats? = nil, relation: String? = nil, isSelf: Bool = false,
-                circle: ProfileCircleView? = nil, viewAs: RelationLevel? = nil) {
+                circle: ProfileCircleView? = nil, viewAs: RelationLevel? = nil, languages: [String] = []) {
         self.user = user
         self.stats = stats
         self.relation = relation
         self.isSelf = isSelf
         self.circle = circle
         self.viewAs = viewAs
+        self.languages = languages
     }
 
     /// La relation, lue avec un repli : une valeur inconnue vaut « aucune »,

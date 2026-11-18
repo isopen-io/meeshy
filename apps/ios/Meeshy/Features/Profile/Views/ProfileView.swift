@@ -120,7 +120,7 @@ struct ProfileView: View {
             user: user, authManager: authManager,
             seenAsShown: $seenAsShown, shareShown: $shareShown, securityShown: $securityShown,
             logoutAsked: $logoutAsked, moodComposerShown: $moodComposerShown, statusComposer: statusComposer,
-            onLogout: { logout() }
+            onLogout: { logout() }, circleSummary: circles.hasServedLinks ? circles.summary : nil
         ))
         .sheet(item: $securityFocus) { focus in
             SecurityView(focus: focus).environmentObject(authManager).closesForConversationOpening(.sheet)

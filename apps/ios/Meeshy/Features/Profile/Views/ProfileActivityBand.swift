@@ -129,9 +129,11 @@ struct ProfileActivityBand: View {
     }
 
     /// Le titre de la section, puis chaque valeur avec son nom : « Mon activité: 12 Messages, 3 Conversations, … ».
-    static func accessibilityLabel(stats: UserStats?, isLoading: Bool = false) -> String {
-        if stats == nil { return "\(title): \(isLoading ? loadingLabel : emptyLabel)" }
-        let pairs = values(of: stats).map { "\($0.value) \($0.label)" }.joined(separator: ", ")
-        return "\(title): \(pairs)"
+    /// Les nombres sont dits comme la bande les écrit (« 12 480 »), la liste jointe et ponctuée par la langue.
+    static func accessibilityLabel(stats: UserStats?, isLoading: Bool = false, locale: Locale = .current) -> String {
+        let format = String(localized: "profile.activity.a11y", defaultValue: "%1$@ : %2$@", bundle: .main)
+        guard stats != nil else { return String(format: format, title, isLoading ? loadingLabel : emptyLabel) }
+        let pairs = values(of: stats).map { "\($0.value.formatted(.number.locale(locale))) \($0.label)" }
+        return String(format: format, title, ListFormatter.localizedString(byJoining: pairs))
     }
 }
