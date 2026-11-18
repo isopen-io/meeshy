@@ -357,8 +357,9 @@ struct NearbyPersonRow: View {
             onPress: onOpen,
             avatar: { LocationMapPinAvatar(pin: pin, size: MeeshyPersonRowRecipe.avatarSize(for: .regular)) },
             trailing: {
-                MeeshyProgressRing(progress: window.fraction, label: LocationMapCopy.remaining(window),
-                                   diameter: 34, tint: .solid(LocationMapTint.color(for: pin.circle)), showsPercent: false)
+                MeeshyProgressRing(countdown: .resolve(remaining: window.remaining, total: window.total),
+                                   label: LocationMapCopy.sharedFor(window), valueText: LocationMapCopy.remaining(window),
+                                   tint: .solid(LocationMapTint.color(for: pin.circle)))
             }
         )
     }
