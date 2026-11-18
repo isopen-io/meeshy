@@ -191,6 +191,54 @@ Réparé (`./read-cursor-floor.js`), et la suite complète est verte :
   c'est son code de sortie qu'on interroge » attrape encore, et elle m'a
   attrapé dans le lot même qui cite le cycle 176.
 
+## Et `dev` portait TROIS rouges indépendants, dont personne n'avait rien vu
+
+Le lot est prêt et ne peut pas fusionner. La cause n'est pas en lui : les deux
+jobs qui gardent les miroirs natifs sont rouges à la tête de `dev`, et le
+troisième rouge en cachait quarante-trois. Chacun mesuré sur un export PROPRE
+d'`origin/dev` (`git archive`), jamais déduit.
+
+| rouge | verdict | issue |
+|---|---|---|
+| cliquet du catalogue Swift : six déclarations « en attente de client » périmées + une amélioration non enregistrée derrière | **corrigé ici** | #19653 |
+| cliquet de verbosité natif : `ios:Meeshy/profile` 18 libellés pour un budget de 7, `ios:MeeshyUI/profile` 9 pour 3 | à l'épure, pas à moi | #18062 |
+| manifeste i18n Android : **44 entrées** pointent une clé iOS absente des sept catalogues | à ses lots, pas à moi | #19654 |
+
+### Ce que les deux rouges non corrigés ont en commun, et pourquoi je ne les ai pas pris
+
+Les deux remèdes possibles de chacun sont des DÉCISIONS, pas des correctifs :
+ranger une explication derrière un (i) est un geste d'interface sur un écran que
+ce conteneur ne peut ni compiler ni voir ; relever un budget déferait le cliquet ;
+écrire 44 libellés en sept langues est un lot de produit ; et repointer le
+manifeste CHANGE le texte Android — mesuré sur un cas, `report_message_sent` dit
+« Signalement envoyé » là où la clé iOS plausible dit « Merci. C'est entre nos
+mains. » Prendre l'un de ces remèdes « en passant » aurait livré une décision
+de produit sous l'étiquette d'un correctif de CI.
+
+### Le défaut d'OUTIL que le troisième a révélé
+
+`xcstrings_to_android.py --check` échoue au PREMIER manquement. Il ne peut donc
+pas dire l'ampleur de sa dette, et c'est exactement ce qui a laissé 44 entrées
+s'accumuler : chaque session qui s'y cogne voit UNE clé, la lit comme un oubli
+isolé, et n'a aucune raison de compter. Il a fallu neutraliser localement les
+deux premières entrées pour que la troisième apparaisse — puis écrire le relevé
+que l'outil ne sait pas produire.
+
+> **Un vérificateur qui s'arrête au premier défaut mesure la PRÉSENCE d'une
+> dette, jamais sa TAILLE** — et une dette sans taille ne se priorise pas, donc
+> ne se solde pas. C'est la leçon 261 déplacée du balayage au vérificateur : là
+> où un balayage qui écarte doit publier ce qu'il écarte, un vérificateur qui
+> s'arrête doit dire combien il n'a pas regardé.
+
+### Le cliquet du catalogue Swift avait, lui aussi, DEUX dérives empilées
+
+Et la seconde n'était visible qu'après le retrait de la première, pour la même
+raison. Le registre le dit à l'endroit où il baisse la référence, y compris ce
+qu'il n'a PAS établi — quelle entrée vaut ce `-1` : la référence 328 avait été
+posée sur un commit de FUSION qui portait déjà la condition périmée, donc son
+compte n'est pas reproductible. **Une baisse mesurée deux fois sur deux arbres
+vaut mieux qu'une cause devinée.**
+
 ## Suivis
 
 - **Le miroir Kotlin n'a pas de `remainingUnread`**, que Swift porte depuis
@@ -199,6 +247,12 @@ Réparé (`./read-cursor-floor.js`), et la suite complète est verte :
 - **`unreadCountHint` est un `Int` non borné en haut** dans les trois miroirs ;
   un hint supérieur à la fenêtre rend tous les candidats, ce que la borne
   assumée documente. Inchangé.
+- **#19653 est corrigé ici ; #18062 et #19654 bloquent la fusion de ce lot**, et
+  aucun des deux ne lui appartient. C'est la quatrième session de suite que
+  **#18760** coûte cher : sans verdict exploitable à la tête de `dev`, trois
+  rouges y ont vécu jusqu'à ce qu'une PR sans rapport s'y cogne, en bloquant
+  entre-temps toute PR qui touche `apps/ios`, `packages/MeeshySDK` ou
+  `apps/android`.
 - Les quatre autres suivis du cycle 176 restent ouverts : **#19603** (l'arbitrage
   produit de la rétractation), **#19604** (le point de convergence des
   réactions), **#19612** et **#19613** (le self-test du cliquet de verrouillage
