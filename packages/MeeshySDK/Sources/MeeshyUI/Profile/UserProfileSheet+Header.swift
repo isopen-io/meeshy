@@ -236,7 +236,7 @@ extension UserProfileSheet {
     var relationPillSlot: some View {
         if RelationFace.showsRelationPill(isCurrentUser: isCurrentUser, isBlocked: isBlocked || isBlockedByTarget),
            let relationPill, let userId = resolvedUserId, !userId.isEmpty {
-            relationPill.build(userId, displayUser.resolvedDisplayName, $relationLinked)
+            relationPill.build(userId, displayUser.resolvedDisplayName, $relationStanding)
         }
     }
 

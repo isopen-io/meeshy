@@ -151,7 +151,7 @@ final class LiveProfileAcquaintance: ProfileAcquaintanceProviding {
     func writesARequest(to userId: String) async -> Bool? {
         guard let served = try? await relations.link(userId: userId),
               served.userId.lowercased() == userId.lowercased() else { return nil }
-        return ProfileRelationAction.writesARequest(at: served.effectiveLevel)
+        return ProfileRelationAction.writesARequest(at: served.toolLevel)
     }
 
     func sendMessageRequest(to userId: String, text: String) async -> Bool {

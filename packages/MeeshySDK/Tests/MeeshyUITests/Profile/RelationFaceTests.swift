@@ -59,10 +59,40 @@ final class RelationFaceTests: XCTestCase {
     }
 
     func test_writing_isARequest_untilALinkIsShownOrTheConnectionAccepted() {
-        XCTAssertTrue(RelationFace.writesARequest(linked: false, connection: .none))
-        XCTAssertTrue(RelationFace.writesARequest(linked: false, connection: .pendingSent(requestId: "r")))
-        XCTAssertFalse(RelationFace.writesARequest(linked: true, connection: .none))
-        XCTAssertFalse(RelationFace.writesARequest(linked: false, connection: .connected))
+        let stranger = ProfileRelationStanding(linked: false, toolLevel: .public)
+        let linked = ProfileRelationStanding(linked: true, toolLevel: .friend)
+        XCTAssertTrue(RelationFace.writesARequest(standing: stranger, connection: .none))
+        XCTAssertTrue(RelationFace.writesARequest(standing: stranger, connection: .pendingSent(requestId: "r")))
+        XCTAssertFalse(RelationFace.writesARequest(standing: linked, connection: .none))
+        XCTAssertFalse(RelationFace.writesARequest(standing: stranger, connection: .connected))
+    }
+
+    /// #16623 — entre deux comptes de l'équipe, sans lien, la passerelle sert le Sang aux outils de cercle : écrire
+    /// n'est pas une demande, et rien n'est dit fermé, au même niveau que ce que l'app propose.
+    func test_standing_aServedBloodToolLevelWithoutALink_locksNothing_andWritingIsNotARequest() {
+        let team = ProfileRelationStanding(linked: false, toolLevel: .blood)
+
+        let locked = team.unlinkedLockedLevel.map { RelationCapability.lockedGroups(at: $0) } ?? []
+
+        XCTAssertTrue(locked.isEmpty)
+        XCTAssertFalse(RelationFace.writesARequest(standing: team, connection: .none))
+    }
+
+    /// Tant que l'app n'a rien lu, la fiche ne pose ni rangée verrouillée ni mention « demande » : un Proche ne voit
+    /// jamais, le temps d'un chargement, la liste fermée d'un inconnu.
+    func test_standing_unresolved_locksNothing_andSaysNoRequest() {
+        let unread = ProfileRelationStanding.unresolved
+
+        XCTAssertNil(unread.unlinkedLockedLevel)
+        XCTAssertFalse(RelationFace.writesARequest(standing: unread, connection: .none))
+    }
+
+    /// Sous un lien montré, c'est l'emplacement du cercle qui dit ce qui reste fermé, pas la fiche ; sans hôte, la
+    /// fiche reste au cercle Public d'avant.
+    func test_standing_linked_leavesTheLockedRowsToTheSlot_andUnhostedStaysPublic() {
+        XCTAssertNil(ProfileRelationStanding(linked: true, toolLevel: .friend).unlinkedLockedLevel)
+        XCTAssertEqual(ProfileRelationStanding.unhosted.unlinkedLockedLevel, .public)
+        XCTAssertTrue(RelationFace.writesARequest(standing: .unhosted, connection: .none))
     }
 
     /// Loi 12 — la face Actions est faite du kit : actions libellées K32, boutons K40, rangées verrouillées K37 ; plus

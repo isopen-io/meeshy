@@ -109,13 +109,14 @@ extension UserProfileSheet {
     }
 
     /// L'étape de la demande, puis — tant qu'aucune amitié ni aucun lien n'est montré, quelle que soit l'étape de la
-    /// demande (ouverte, pas partie, fermée, envoyée, reçue) — ce que le cercle commun
-    /// (Public) n'ouvre pas encore (loi 4) : ce qui est fermé reste dit.
+    /// demande (ouverte, pas partie, fermée, envoyée, reçue) — ce que le cercle n'ouvre pas encore (loi 4), jugé au
+    /// niveau d'outil que l'app a lu, celui qui propose Talkie et Ensemble : rien n'est à la fois offert et verrouillé,
+    /// et rien ne se dit fermé avant la lecture.
     private var connectionControls: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             requestStageCard
-            if requestStage.leavesTheCirclePublic, !relationLinked {
-                ProfileLockedCapabilities(level: .public, tint: accentTint)
+            if requestStage.leavesTheCirclePublic, let level = servedStanding.unlinkedLockedLevel {
+                ProfileLockedCapabilities(level: level, tint: accentTint)
             }
         }
     }
@@ -126,7 +127,7 @@ extension UserProfileSheet {
         switch requestStage {
         case .open, .unsent:
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
-                                linked: $relationLinked, tint: accentTint) {
+                                standing: $relationStanding, tint: accentTint) {
                 ProfileFriendRequestCard(tint: accentTint, unsent: requestStage == .unsent, isSending: isSendingRequest,
                                          draft: requestStage == .unsent ? unsentNote : nil) { note in
                     Task { await sendConnectionRequest(message: note) }
@@ -134,7 +135,7 @@ extension UserProfileSheet {
             }
         case .closed:
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
-                                linked: $relationLinked, tint: accentTint) {
+                                standing: $relationStanding, tint: accentTint) {
                 ProfileClosedRequestCard(name: name)
             }
         case .sent(let sentAt):
@@ -155,10 +156,10 @@ extension UserProfileSheet {
             ProfileAcceptedRequestCard(name: name, isOnline: resolvedPresence == .online, tint: accentTint,
                                        onWrite: { openConversation() })
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
-                                linked: $relationLinked, tint: accentTint) { EmptyView() }
+                                standing: $relationStanding, tint: accentTint) { EmptyView() }
         case .connected:
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
-                                linked: $relationLinked, tint: accentTint) { ProfileConnectedBadge() }
+                                standing: $relationStanding, tint: accentTint) { ProfileConnectedBadge() }
         }
     }
 

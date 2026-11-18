@@ -17,13 +17,13 @@ struct ProfileRelationPillView: View {
     let displayName: String
     /// Le lien montré, publié à la fiche depuis l'en-tête — toujours monté, quelle que soit la face lue (#18857) : la
     /// Vitrine sait dès le cache qu'écrire n'est plus une demande.
-    @Binding var linked: Bool
+    @Binding var standing: ProfileRelationStanding
     @State private var showsOurCircle = false
 
-    init(userId: String, displayName: String, linked: Binding<Bool> = .constant(false)) {
+    init(userId: String, displayName: String, standing: Binding<ProfileRelationStanding> = .constant(.unresolved)) {
         _viewModel = StateObject(wrappedValue: ProfileCircleModels.model(for: userId))
         self.displayName = displayName
-        _linked = linked
+        _standing = standing
     }
 
     var body: some View {
@@ -44,7 +44,7 @@ struct ProfileRelationPillView: View {
         }
         .meeshyMotion(.morph, value: viewModel.shownLevel)
         .task(id: viewModel.userId) { await viewModel.load() }
-        .adaptiveOnChange(of: viewModel.claimsTheSlot, initial: true) { _, claims in linked = claims }
+        .adaptiveOnChange(of: viewModel.standing, initial: true) { _, read in standing = read }
         .sheet(isPresented: $showsOurCircle) {
             OurCircleSheet(viewModel: viewModel, displayName: displayName)
                 .presentationDetents([.large])

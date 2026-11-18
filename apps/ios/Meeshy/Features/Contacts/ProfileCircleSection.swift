@@ -2,28 +2,29 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// L'emplacement du cercle sur la face Actions d'une personne liée, Connaissance comprise (#13940, #14910) : il pose
-/// `linked` dès qu'un lien d'au moins Connaissance est servi (la fiche range alors la demande de connexion), et ne garde
+/// L'emplacement du cercle sur la face Actions d'une personne liée, Connaissance comprise (#13940, #14910) : il publie
+/// `standing` — lié dès qu'un lien d'au moins Connaissance est servi, avec le niveau d'outil lu — (la fiche range alors la demande de connexion), et ne garde
 /// que « Partager ma position » quand « Où il est » ne l'offre pas, puis ce que le cercle commun n'ouvre pas encore, par
 /// cercle qui l'ouvrirait (loi 4, « Pas encore ouvert »). Le niveau, monter, descendre et le cran suivant vivent dans
 /// « Notre cercle » (`OurCircleSheet`), ouvert par sa rangée de « Sa fiche » (#19433, planche
 /// `Autre-Actions`) ; Talkie, « Ensemble » et « Son téléphone » ont leurs sections. Une proposition de cercle reçue de
-/// la personne s'y pose en carte, pour y répondre sans quitter la fiche (#19449). Sans lien servi, rien : `linked`
-/// reste faux et la fiche garde ce qu'elle montrait avant.
+/// la personne s'y pose en carte, pour y répondre sans quitter la fiche (#19449). Sans lien servi, rien : la fiche garde
+/// ce qu'elle montrait avant, et juge ce qui reste fermé au niveau d'outil publié.
 struct ProfileCircleSection: View {
     @StateObject private var viewModel: ProfileCircleViewModel
     @ObservedObject private var sharing: SharedLocationSharingCenter
     let displayName: String
-    @Binding var linked: Bool
+    /// Ce que la fiche apprend du cercle : le lien montré et le niveau d'outil qui juge ce qu'elle dit fermé.
+    @Binding var standing: ProfileRelationStanding
     /// L'accent de la fiche, qui teinte « Partager ma position » (#19637).
     let tint: Color?
 
-    init(userId: String, displayName: String, linked: Binding<Bool>, tint: Color? = nil,
+    init(userId: String, displayName: String, standing: Binding<ProfileRelationStanding>, tint: Color? = nil,
          sharing: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
         _viewModel = StateObject(wrappedValue: ProfileCircleModels.model(for: userId))
         _sharing = ObservedObject(wrappedValue: sharing)
         self.displayName = displayName
-        _linked = linked
+        _standing = standing
         self.tint = tint
     }
 
@@ -45,7 +46,7 @@ struct ProfileCircleSection: View {
         }
         .meeshyMotion(.morph, value: viewModel.shownLevel)
         .task(id: viewModel.userId) { await viewModel.load() }
-        .adaptiveOnChange(of: viewModel.claimsTheSlot, initial: true) { _, claims in linked = claims }
+        .adaptiveOnChange(of: viewModel.standing, initial: true) { _, read in standing = read }
         .adaptiveOnChange(of: viewModel.notice) { _, new in
             guard let new else { return }
             FeedbackToastManager.shared.showError(new)

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - L'emplacement du cercle sur la fiche d'un profil (#13940)
 //
@@ -7,12 +8,46 @@ import SwiftUI
 // la fiche disait « Connectés » — ou proposait la demande de connexion, une Connaissance n'ayant pas d'amitié acceptée
 // (#14910). Sans emplacement, elle montre toujours ce qu'elle montrait.
 
-/// Ce que l'app fournit : à partir de l'identifiant et du nom d'affichage du membre, la vue du cercle. L'app pose
-/// `linked` à vrai dès qu'elle montre un lien d'au moins Connaissance (ou qu'il vient d'être annulé) : la fiche cesse
-/// alors de montrer ce qu'elle montrait sans lien (« Connectés », ou la demande de connexion). `tint` est l'accent de la
-/// fiche (#19637) : `nil` quand la fiche n'en remet aucun, jamais une teinte transparente qui passerait pour un accent.
+/// Ce que l'emplacement du cercle et la pilule publient à la fiche (#18870) : si un lien d'au moins Connaissance est
+/// montré (ou vient d'être annulé), et le cercle auquel l'app juge les outils — `nil` tant qu'elle n'a rien lu. La fiche
+/// juge au MÊME niveau ce qui reste fermé et si écrire part en demande : entre deux comptes de l'équipe sans lien
+/// (#16623), le Sang servi ouvre Talkie ET ne laisse rien de verrouillé ; une opération n'est jamais à la fois offerte
+/// et verrouillée, et rien ne se dit fermé avant d'être lu.
+public nonisolated struct ProfileRelationStanding: Equatable, Sendable {
+    public let linked: Bool
+    public let toolLevel: RelationLevel?
+
+    public init(linked: Bool, toolLevel: RelationLevel?) {
+        self.linked = linked
+        self.toolLevel = toolLevel
+    }
+
+    /// Rien de lu : ni rangée verrouillée, ni mention « demande ».
+    public static let unresolved = ProfileRelationStanding(linked: false, toolLevel: nil)
+
+    /// Une fiche sans emplacement de cercle ni pilule : le cercle commun reste Public, comme avant.
+    public static let unhosted = ProfileRelationStanding(linked: false, toolLevel: .public)
+
+    /// Ce que la fiche dit fermé sans lien montré ; `nil` sous un lien (l'emplacement le dit) ou avant toute lecture.
+    public var unlinkedLockedLevel: RelationLevel? {
+        linked ? nil : toolLevel
+    }
+
+    /// Écrire part en demande de message (`dm.request`) : sans lien, sans connexion acceptée, sous le niveau qui ouvre
+    /// l'écriture directe — et jamais avant que le niveau soit lu.
+    public func writesARequest(connection: ConnectionStatus) -> Bool {
+        guard !linked, connection != .connected, let toolLevel else { return false }
+        return ProfileRelationAction.writesARequest(at: toolLevel)
+    }
+}
+
+/// Ce que l'app fournit : à partir de l'identifiant et du nom d'affichage du membre, la vue du cercle. L'app publie
+/// `standing` : dès qu'elle montre un lien d'au moins Connaissance, la fiche cesse de montrer ce qu'elle montrait sans
+/// lien (« Connectés », ou la demande de connexion), et le niveau d'outil juge ce que la fiche dit fermé. `tint` est
+/// l'accent de la fiche (#19637) : `nil` quand la fiche n'en remet aucun, jamais une teinte transparente.
 public struct ProfileRelationSection {
-    public typealias Build = (_ userId: String, _ displayName: String, _ linked: Binding<Bool>, _ tint: Color?) -> AnyView
+    public typealias Build = (_ userId: String, _ displayName: String, _ standing: Binding<ProfileRelationStanding>,
+                              _ tint: Color?) -> AnyView
 
     public let build: Build
 
@@ -28,7 +63,7 @@ struct ProfileRelationSlot<Unlinked: View>: View {
     let userId: String?
     let displayName: String
     /// Porté par la fiche : le cercle commun n'est plus Public dès qu'un lien est montré (#18870).
-    @Binding var linked: Bool
+    @Binding var standing: ProfileRelationStanding
     /// L'accent de la fiche, remis tel quel au cercle (#19637).
     let tint: Color?
     @ViewBuilder let unlinked: () -> Unlinked
@@ -36,8 +71,8 @@ struct ProfileRelationSlot<Unlinked: View>: View {
     var body: some View {
         if let section, let userId, !userId.isEmpty {
             VStack(spacing: 0) {
-                section.build(userId, displayName, $linked, tint)
-                if !linked { unlinked() }
+                section.build(userId, displayName, $standing, tint)
+                if !standing.linked { unlinked() }
             }
         } else {
             unlinked()
@@ -61,9 +96,10 @@ public extension EnvironmentValues {
 
 /// Ce que l'app fournit : la pilule qui dit le cercle COMMUN (« 🔥 Proche ▾ ») et mène à « Notre cercle ». Vide tant
 /// qu'aucun lien n'est servi : la fiche n'invente aucun niveau. Posée dans l'en-tête, toujours monté, la pilule publie
-/// `linked` (comme `ProfileRelationSection`) : la Vitrine sait dès le cache qu'écrire n'est plus une demande.
+/// `standing` (comme `ProfileRelationSection`) : la Vitrine sait dès le cache si écrire part en demande.
 public struct ProfileRelationPill {
-    public typealias Build = (_ userId: String, _ displayName: String, _ linked: Binding<Bool>) -> AnyView
+    public typealias Build = (_ userId: String, _ displayName: String,
+                              _ standing: Binding<ProfileRelationStanding>) -> AnyView
 
     public let build: Build
 

@@ -398,6 +398,85 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertTrue(section.contains("viewModel.lockedCapabilitiesLevel"))
     }
 
+    /// #16623 — entre deux comptes de l'équipe sans lien, la fiche juge ce qui reste fermé et l'écriture au niveau
+    /// servi par `GET /relations/:userId`, le même qui propose Talkie, Ensemble et Batterie.
+    func test_standing_betweenTeamAccountsWithoutALink_locksNothing_andWritingIsNotARequest() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+        rig.relations.linkResult = .success(RelationLink(userId: "a", effectiveLevel: .public, grantedByMe: .public, accessLevel: .blood))
+
+        await rig.sut.load()
+
+        let standing = rig.sut.standing
+        let locked = standing.unlinkedLockedLevel.map { RelationCapability.lockedGroups(at: $0) } ?? []
+        XCTAssertTrue(rig.sut.offersTalkie)
+        XCTAssertFalse(standing.linked)
+        XCTAssertEqual(standing.toolLevel, .blood)
+        XCTAssertTrue(locked.isEmpty, "rien n'est à la fois offert et verrouillé")
+        XCTAssertFalse(RelationFace.writesARequest(standing: standing, connection: .none))
+    }
+
+    func test_standing_beforeAnyRead_isUnresolved() {
+        let rig = makeRig()
+
+        XCTAssertEqual(rig.sut.standing, .unresolved, "un Proche ne voit pas la liste fermée d'un inconnu le temps du chargement")
+    }
+
+    func test_standing_aStrangerOnceRead_locksAtPublic_andWritingIsARequest() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+        rig.relations.linkResult = .success(link("a", .public))
+
+        await rig.sut.load()
+
+        let standing = rig.sut.standing
+        XCTAssertEqual(standing, ProfileRelationStanding(linked: false, toolLevel: .public))
+        XCTAssertTrue(RelationFace.writesARequest(standing: standing, connection: .none))
+    }
+
+    func test_standing_aFriend_isLinkedAtTheToolGate() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+
+        await rig.sut.load()
+
+        XCTAssertEqual(rig.sut.standing, ProfileRelationStanding(linked: true, toolLevel: .friend))
+    }
+
+    /// RG-07 — l'autre est descendu en silence de Proche à Ami : la liste en cache dit encore Proche et sa
+    /// revalidation échoue, mais le détail servi dit Ami. Le détail gagne, le cache des liens est invalidé, et ni la
+    /// batterie ni Talkie ne restent proposés.
+    func test_loadServedDetail_aSilentLoweringServedByTheDetail_winsOverTheCachedList() async throws {
+        try await CacheCoordinator.shared.relationLinks.saveAsStale([link("a", .close)], for: CirclesViewModel.cacheKey)
+        let rig = makeRig()
+        rig.relations.linksResult = .failure(NSError(domain: "test", code: 503))
+        rig.relations.linkResult = .success(link("a", .friend))
+
+        await rig.sut.load()
+
+        let cached = await CacheCoordinator.shared.relationLinks.load(for: CirclesViewModel.cacheKey)
+        XCTAssertEqual(rig.sut.shownLevel, .friend)
+        XCTAssertFalse(rig.sut.offersBattery)
+        XCTAssertFalse(rig.sut.offersTalkie)
+        XCTAssertEqual(rig.sut.toolGateLevel, .friend)
+        guard case .empty = cached else {
+            return XCTFail("le cache des liens qui disait Proche est invalidé, reçu \(cached)")
+        }
+    }
+
+    func test_loadServedDetail_aDetailThatAgreesWithTheList_keepsTheCachedLinks() async throws {
+        try await CacheCoordinator.shared.relationLinks.saveAsStale([link("a", .close)], for: CirclesViewModel.cacheKey)
+        let rig = makeRig()
+        rig.relations.linksResult = .failure(NSError(domain: "test", code: 503))
+        rig.relations.linkResult = .success(link("a", .close))
+
+        await rig.sut.load()
+
+        let cached = await CacheCoordinator.shared.relationLinks.load(for: CirclesViewModel.cacheKey)
+        XCTAssertEqual(rig.sut.shownLevel, .close)
+        if case .empty = cached { XCTFail("un détail d'accord avec la liste n'invalide rien") }
+    }
+
     func test_offersTalkieAndTogether_aStrangerWithoutAccessLevel_areNotOffered() async {
         let rig = makeRig()
         rig.relations.linksResult = .success([])
