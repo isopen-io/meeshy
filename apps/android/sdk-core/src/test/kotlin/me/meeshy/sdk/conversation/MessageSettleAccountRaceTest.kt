@@ -65,7 +65,8 @@ class MessageSettleAccountRaceTest {
         if (holdingM1) seed(tombstoned("texte de B"))
     }
 
-    private val erasures = PlaintextErasureLedger(db, clock) { owner.id }
+    /** Built on first use: [db] exists only once [setUp] has run. */
+    private val erasures by lazy { PlaintextErasureLedger(db, clock) { owner.id } }
 
     private fun repository(api: MessageApi) = MessageRepository(
         api,
