@@ -20,6 +20,9 @@ enum ShareLinkDetailCopy {
     static var more: String { String(localized: "common.more", defaultValue: "Plus", bundle: .main) }
     static var inactiveHint: String { String(localized: "shareLink.sheet.inactiveState", defaultValue: "Personne ne peut plus entrer par ce lien", bundle: .main) }
     static var disableLink: String { String(localized: "shareLink.sheet.disableLink", defaultValue: "Désactiver le lien", bundle: .main) }
+    static var resetUses: String { String(localized: "shareLink.sheet.resetUses", defaultValue: "Remettre le compteur à zéro", bundle: .main) }
+    static var resetUsesMessage: String { String(localized: "shareLink.sheet.resetUses.message", defaultValue: "Les personnes déjà entrées restent. Seul le compteur repart de zéro.", bundle: .main) }
+    static var resetUsesDone: String { String(localized: "shareLink.sheet.resetUses.done", defaultValue: "Compteur remis à zéro", bundle: .main) }
     static var enableLink: String { String(localized: "shareLink.sheet.enableLink", defaultValue: "Réactiver le lien", bundle: .main) }
 
     static func leadsTo(_ name: String) -> String {

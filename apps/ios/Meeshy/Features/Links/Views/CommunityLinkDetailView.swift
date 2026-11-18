@@ -5,7 +5,7 @@ import MeeshyUI
 /// La fiche d'un lien de communauté (planche `Lien-Communaute`, #18871).
 ///
 /// De haut en bas : le billet héros, son QR et ses gestes (Copier · QR · Partager · Modifier), les chiffres, les
-/// entrées sur trente jours, les règles d'entrée, les entrées récentes, puis Fermer les entrées. Fait du kit : rien
+/// entrées sur trente jours, les règles d'entrée, les entrées récentes, l'invitation, puis Fermer les entrées. Fait du kit : rien
 /// n'y est redessiné. Le lien s'affiche depuis la ligne qui l'a ouvert (cache d'abord) ; la communauté et ses
 /// arrivées viennent ensuite, sans jamais bloquer la fiche.
 struct CommunityLinkDetailView: View {
@@ -35,6 +35,7 @@ struct CommunityLinkDetailView: View {
                 entriesChart
                 entryRules
                 recentSection
+                invitationSection
                 closeButton
             }
             .padding(.horizontal, MeeshySpacing.lg)
@@ -203,6 +204,16 @@ extension CommunityLinkDetailViewModel {
                 _ = try await CommunityService.shared.update(communityId: id, name: nil, identifier: nil,
                                                              description: nil, isPrivate: closed, avatar: nil,
                                                              banner: nil)
+            },
+            loadFriends: {
+                await FriendsCacheAudienceContacts().cachedContacts().map { contact in
+                    let name = contact.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    return CommunityInviteCandidate(id: contact.id, name: name.isEmpty ? contact.username : name,
+                                                    avatar: contact.avatar)
+                }
+            },
+            invite: { communityId, userId in
+                _ = try await CommunityService.shared.invite(communityId: communityId, userId: userId)
             }
         )
     }

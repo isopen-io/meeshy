@@ -10,19 +10,23 @@ nonisolated struct CommunityLinkDetails: Equatable, Sendable {
     let memberCount: Int?
     let avatar: String?
     let settingsCommunity: MeeshyCommunity?
+    /// Les entrées faites par le lien, si la passerelle les sert (#19290) ; `nil` : la fiche s'en passe.
+    let linkEntryCount: Int?
 
-    init(isPrivate: Bool, role: String?, memberCount: Int?, avatar: String?, settingsCommunity: MeeshyCommunity?) {
+    init(isPrivate: Bool, role: String?, memberCount: Int?, avatar: String?, settingsCommunity: MeeshyCommunity?,
+         linkEntryCount: Int? = nil) {
         self.isPrivate = isPrivate
         self.role = role
         self.memberCount = memberCount
         self.avatar = avatar
         self.settingsCommunity = settingsCommunity
+        self.linkEntryCount = linkEntryCount
     }
 
     init(community: APICommunity) {
         self.init(isPrivate: community.isPrivate, role: community.currentUserRole,
                   memberCount: community.memberCount ?? community._count?.members, avatar: community.avatar,
-                  settingsCommunity: community.toCommunity())
+                  settingsCommunity: community.toCommunity(), linkEntryCount: community.linkEntryCount)
     }
 }
 
@@ -44,26 +48,41 @@ final class CommunityLinkDetailViewModel: ObservableObject {
     @Published private(set) var details: CommunityLinkDetails?
     @Published private(set) var entries: CommunityLinkEntriesState = .loading
     @Published private(set) var isClosed: Bool?
+    /// Les amis que l'on peut inviter, lus dans le cache (#19505) ; la rangée n'attend pas le réseau.
+    @Published private(set) var friends: [CommunityInviteCandidate] = []
+    /// Les personnes choisies, dans l'ordre des touchers.
+    @Published var chosenInviteeIds: [String] = []
+    /// Les personnes dont l'invitation est partie : elles quittent la rangée.
+    @Published var invitedIds: Set<String> = []
 
     let link: CommunityLink
-    private let viewerId: String?
+    let viewerId: String?
+    let inviteUser: @Sendable (String, String) async throws -> Void
     private let loadDetails: @Sendable (String) async throws -> CommunityLinkDetails
     private let loadEntries: @Sendable (String) async throws -> [CommunityLinkEntry]
     private let setPrivate: @Sendable (String, Bool) async throws -> Void
+    private let loadFriends: @Sendable () async -> [CommunityInviteCandidate]
 
     init(link: CommunityLink,
          viewerId: String?,
          loadDetails: @escaping @Sendable (String) async throws -> CommunityLinkDetails,
          loadEntries: @escaping @Sendable (String) async throws -> [CommunityLinkEntry],
-         setPrivate: @escaping @Sendable (String, Bool) async throws -> Void) {
+         setPrivate: @escaping @Sendable (String, Bool) async throws -> Void,
+         loadFriends: @escaping @Sendable () async -> [CommunityInviteCandidate] = { [] },
+         invite: @escaping @Sendable (String, String) async throws -> Void = { _, _ in }) {
         self.link = link
         self.viewerId = viewerId
         self.loadDetails = loadDetails
         self.loadEntries = loadEntries
         self.setPrivate = setPrivate
+        self.loadFriends = loadFriends
+        self.inviteUser = invite
     }
 
     var memberCount: Int { details?.memberCount ?? link.memberCount }
+
+    /// « 58 entrées par ce lien » — seulement si la passerelle le sert.
+    var linkEntryCount: Int? { details?.linkEntryCount }
 
     var stewardship: CommunityLinkStewardship { CommunityLinkStewardship(role: details?.role) }
 
@@ -71,7 +90,8 @@ final class CommunityLinkDetailViewModel: ObservableObject {
     /// avant elles les visages que la liste avait servis (cache d'abord).
     var headFaces: [LinksFaceMember] {
         guard let loaded = loadedEntries else { return LinksFaceMember.stack(link.memberPreviews ?? []) }
-        return LinksFaceMember.stack(loaded.recent.map { LinksFaceMember(id: $0.userId, name: $0.name, avatar: $0.avatar) })
+        return LinksFaceMember.stack(loaded.recent.filter { !$0.isPending }
+            .map { LinksFaceMember(id: $0.userId, name: $0.name, avatar: $0.avatar) })
     }
 
     var loadedEntries: CommunityLinkEntries? {
@@ -80,6 +100,7 @@ final class CommunityLinkDetailViewModel: ObservableObject {
     }
 
     func load() async {
+        if friends.isEmpty { friends = await loadFriends() }
         let id = link.id
         let loadDetails = self.loadDetails
         let loadEntries = self.loadEntries

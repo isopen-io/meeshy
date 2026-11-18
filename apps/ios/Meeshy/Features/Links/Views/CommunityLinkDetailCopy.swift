@@ -15,6 +15,7 @@ enum CommunityLinkDetailCopy {
     static var membersUnit: String { String(localized: "communityLink.sheet.figure.members", defaultValue: "membres", bundle: .main) }
     static var weekUnit: String { String(localized: "communityLink.sheet.figure.week", defaultValue: "cette semaine", bundle: .main) }
     static var monthUnit: String { String(localized: "communityLink.sheet.figure.month", defaultValue: "sur 30 jours", bundle: .main) }
+    static var linkEntriesUnit: String { String(localized: "communityLink.sheet.figure.byLink", defaultValue: "entrées par ce lien", bundle: .main) }
 
     static var chartTitle: String { String(localized: "communityLink.sheet.chart.title", defaultValue: "Entrées sur 30 jours", bundle: .main) }
     static var chartEmpty: String { String(localized: "communityLink.sheet.chart.empty", defaultValue: "Aucune entrée sur la période", bundle: .main) }
@@ -48,6 +49,33 @@ enum CommunityLinkDetailCopy {
 
     static func joined(_ relative: String) -> String {
         String(localized: "communityLink.sheet.recent.joined", defaultValue: "a rejoint \(relative)", bundle: .main)
+    }
+
+    static var pending: String { String(localized: "communityLink.sheet.recent.pending", defaultValue: "En attente de validation", bundle: .main) }
+
+    static var inviteTitle: String { String(localized: "communityLink.sheet.invite.title", defaultValue: "Envoyer l'invitation", bundle: .main) }
+    static var inviteRailLabel: String { String(localized: "communityLink.sheet.invite.rail", defaultValue: "Amis à inviter", bundle: .main) }
+    static var inviteHint: String { String(localized: "communityLink.sheet.invite.hint", defaultValue: "Choisis d'abord les personnes à inviter", bundle: .main) }
+    static var inviteFailed: String { String(localized: "communityLink.sheet.invite.failed", defaultValue: "Certaines invitations ne sont pas parties. Réessaie.", bundle: .main) }
+
+    static func chosen(_ count: Int) -> String {
+        count == 1
+            ? String(localized: "communityLink.sheet.invite.chosen.one", defaultValue: "1 choisi", bundle: .main)
+            : String(localized: "communityLink.sheet.invite.chosen.other", defaultValue: "\(count) choisis", bundle: .main)
+    }
+
+    static func inviteAction(_ count: Int) -> String {
+        switch count {
+        case 0: return String(localized: "communityLink.sheet.invite.action", defaultValue: "Inviter", bundle: .main)
+        case 1: return String(localized: "communityLink.sheet.invite.action.one", defaultValue: "Inviter 1 personne", bundle: .main)
+        default: return String(localized: "communityLink.sheet.invite.action.other", defaultValue: "Inviter \(count) personnes", bundle: .main)
+        }
+    }
+
+    static func invited(_ count: Int) -> String {
+        count == 1
+            ? String(localized: "communityLink.sheet.invite.sent.one", defaultValue: "Invitation envoyée", bundle: .main)
+            : String(localized: "communityLink.sheet.invite.sent.other", defaultValue: "\(count) invitations envoyées", bundle: .main)
     }
 
     static var closeEntries: String { String(localized: "communityLink.sheet.close", defaultValue: "Fermer les entrées", bundle: .main) }

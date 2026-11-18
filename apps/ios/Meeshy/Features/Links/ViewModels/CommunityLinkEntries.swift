@@ -1,7 +1,7 @@
 import Foundation
 import MeeshySDK
 
-/// Une entrée par le lien d'une communauté : qui est arrivé, et quand.
+/// Une entrée par le lien d'une communauté : qui est arrivé, et quand — ou qui attend qu'on le valide (#19505).
 nonisolated struct CommunityLinkEntry: Equatable, Sendable, Identifiable {
     let id: String
     let userId: String
@@ -9,21 +9,26 @@ nonisolated struct CommunityLinkEntry: Equatable, Sendable, Identifiable {
     let username: String?
     let avatar: String?
     let joinedAt: Date
+    let isPending: Bool
 
-    init(id: String, userId: String, name: String, username: String?, avatar: String?, joinedAt: Date) {
+    init(id: String, userId: String, name: String, username: String?, avatar: String?, joinedAt: Date,
+         isPending: Bool = false) {
         self.id = id
         self.userId = userId
         self.name = name
         self.username = username
         self.avatar = avatar
         self.joinedAt = joinedAt
+        self.isPending = isPending
     }
 
-    /// Un membre dont la date d'arrivée est inconnue ne dit rien des entrées : il n'en est pas une.
+    /// Un membre dont la date d'arrivée est inconnue ne dit rien des entrées : il n'en est pas une. Le statut
+    /// `pending` n'est lu que s'il est servi (#19290) ; absent, la rangée est une entrée faite.
     init?(member: APICommunityMember) {
         guard let joinedAt = member.joinedAt else { return nil }
         self.init(id: member.id, userId: member.userId, name: member.user?.name ?? member.userId,
-                  username: member.user?.username, avatar: member.user?.avatar, joinedAt: joinedAt)
+                  username: member.user?.username, avatar: member.user?.avatar, joinedAt: joinedAt,
+                  isPending: member.status?.lowercased() == "pending")
     }
 }
 
@@ -46,15 +51,20 @@ nonisolated struct CommunityLinkEntries: Equatable, Sendable {
         Array(entries.prefix(Self.recentLimit))
     }
 
+    /// Les entrées FAITES : une demande en attente se montre, mais ne compte pas comme une entrée.
+    var joined: [CommunityLinkEntry] {
+        entries.filter { !$0.isPending }
+    }
+
     func count(lastDays days: Int, now: Date, calendar: Calendar) -> Int {
         guard let start = calendar.date(byAdding: .day, value: -(days - 1), to: calendar.startOfDay(for: now)) else {
             return 0
         }
-        return entries.filter { $0.joinedAt >= start && $0.joinedAt <= now }.count
+        return joined.filter { $0.joinedAt >= start && $0.joinedAt <= now }.count
     }
 
     func days(now: Date, calendar: Calendar) -> [TrackingDayBucket] {
-        TrackingLinkInsights(samples: entries.map {
+        TrackingLinkInsights(samples: joined.map {
             TrackingClickSample(country: nil, device: nil, source: nil, clickedAt: $0.joinedAt)
         })
         .days(period: .month, now: now, calendar: calendar)

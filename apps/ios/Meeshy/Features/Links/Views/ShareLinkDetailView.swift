@@ -14,6 +14,7 @@ struct ShareLinkDetailView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) private var dismiss
     @State private var showDeleteConfirm = false
+    @State private var showResetConfirm = false
     @State private var showsMore = false
     @State private var isEditing = false
     @State private var qrShareImage: QRShareImage?
@@ -50,7 +51,10 @@ struct ShareLinkDetailView: View {
                 arrivalsSection
                 countriesSection
                 languagesSection
-                disableButton
+                VStack(spacing: MeeshySpacing.md) {
+                    resetUsesButton
+                    disableButton
+                }
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.top, MeeshySpacing.lg)
@@ -67,6 +71,12 @@ struct ShareLinkDetailView: View {
             Button(ShareLinkDetailCopy.cancel, role: .cancel) {}
         } message: {
             Text(ShareLinkDetailCopy.deleteConfirmation)
+        }
+        .confirmationDialog(ShareLinkDetailCopy.resetUses, isPresented: $showResetConfirm, titleVisibility: .visible) {
+            Button(ShareLinkDetailCopy.resetUses) { resetUses() }
+            Button(ShareLinkDetailCopy.cancel, role: .cancel) {}
+        } message: {
+            Text(ShareLinkDetailCopy.resetUsesMessage)
         }
         .confirmationDialog(arrivalToRemove.map { ShareLinkDetailCopy.removeArrivalTitle($0.displayName) } ?? "",
                             isPresented: removalBinding, titleVisibility: .visible,
@@ -157,6 +167,19 @@ struct ShareLinkDetailView: View {
             .accessibilityIdentifier("shareLink.detail.active")
     }
 
+    // MARK: - Remettre le compteur à zéro (#19505)
+
+    /// Offert dès qu'une entrée a été comptée ; le compteur repart de zéro sitôt confirmé, et revient si le serveur
+    /// refuse ou ne connaît pas la remise.
+    @ViewBuilder
+    private var resetUsesButton: some View {
+        if viewModel.canResetUses {
+            MeeshyButton(ShareLinkDetailCopy.resetUses, systemImage: "arrow.counterclockwise", kind: .outline,
+                         width: .fill, action: { showResetConfirm = true })
+                .accessibilityIdentifier("shareLink.detail.resetUses")
+        }
+    }
+
     // MARK: - Désactiver
 
     private var disableButton: some View {
@@ -214,6 +237,19 @@ struct ShareLinkDetailView: View {
                 FeedbackToastManager.shared.showError(ShareLinkDetailCopy.actionFailed)
                 return
             }
+        }
+    }
+
+    private func resetUses() {
+        HapticFeedback.light()
+        Task {
+            guard await viewModel.resetUses() else {
+                HapticFeedback.error()
+                FeedbackToastManager.shared.showError(ShareLinkDetailCopy.actionFailed)
+                return
+            }
+            HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess(ShareLinkDetailCopy.resetUsesDone)
         }
     }
 

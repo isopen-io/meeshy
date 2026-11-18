@@ -129,6 +129,31 @@ final class ShareLinkDetailViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Remettre le compteur à zéro (#19505)
+
+    /// Offert dès qu'une entrée a été comptée.
+    var canResetUses: Bool { link.currentUses > 0 }
+
+    /// Optimiste : le compteur tombe à zéro tout de suite. Il n'y reste que si le serveur SERT le compteur remis
+    /// (#19283) ; un refus, ou un serveur qui ne connaît pas la remise, rend le compteur d'avant.
+    @discardableResult
+    func resetUses() async -> Bool {
+        guard canResetUses else { return false }
+        let previous = link.currentUses
+        publish(link.withCurrentUses(0))
+        do {
+            guard let served = try await service.resetLinkUses(linkId: link.linkId) else {
+                publish(link.withCurrentUses(previous))
+                return false
+            }
+            publish(link.withCurrentUses(served))
+            return true
+        } catch {
+            publish(link.withCurrentUses(previous))
+            return false
+        }
+    }
+
     // MARK: - Deletion
 
     @discardableResult

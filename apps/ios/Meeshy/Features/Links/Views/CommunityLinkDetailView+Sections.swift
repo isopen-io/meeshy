@@ -8,18 +8,24 @@ extension CommunityLinkDetailView {
 
     // MARK: - Les chiffres (K34)
 
+    /// « 342 membres · 58 entrées par ce lien · 12 cette semaine » quand la passerelle sert les entrées du lien
+    /// (#19290) ; sans elles, la bande garde la semaine et les trente jours lus sur les arrivées.
     var figuresBand: some View {
         let entries = viewModel.loadedEntries
         let now = Date()
-        return MeeshyFigureBand(items: [
-            MeeshyFigureItem(value: viewModel.memberCount.formatted(), unit: CommunityLinkDetailCopy.membersUnit),
-            MeeshyFigureItem(value: entries.map { $0.count(lastDays: 7, now: now, calendar: .current).formatted() },
-                             unit: CommunityLinkDetailCopy.weekUnit),
-            MeeshyFigureItem(value: entries.map {
-                $0.count(lastDays: CommunityLinkEntries.windowDays, now: now, calendar: .current).formatted()
-            }, unit: CommunityLinkDetailCopy.monthUnit)
-        ], emptyLabel: TrackingDetailCopy.noData)
-        .accessibilityIdentifier("communityLink.detail.figures")
+        let members = MeeshyFigureItem(value: viewModel.memberCount.formatted(),
+                                       unit: CommunityLinkDetailCopy.membersUnit)
+        let week = MeeshyFigureItem(
+            value: entries.map { $0.count(lastDays: 7, now: now, calendar: .current).formatted() },
+            unit: CommunityLinkDetailCopy.weekUnit)
+        let third: MeeshyFigureItem = viewModel.linkEntryCount.map {
+            MeeshyFigureItem(value: $0.formatted(), unit: CommunityLinkDetailCopy.linkEntriesUnit)
+        } ?? MeeshyFigureItem(value: entries.map {
+            $0.count(lastDays: CommunityLinkEntries.windowDays, now: now, calendar: .current).formatted()
+        }, unit: CommunityLinkDetailCopy.monthUnit)
+        let items = viewModel.linkEntryCount == nil ? [members, week, third] : [members, third, week]
+        return MeeshyFigureBand(items: items, emptyLabel: TrackingDetailCopy.noData)
+            .accessibilityIdentifier("communityLink.detail.figures")
     }
 
     // MARK: - Les entrées sur trente jours (K50)
@@ -135,13 +141,16 @@ extension CommunityLinkDetailView {
         .accessibilityIdentifier("communityLink.detail.recent")
     }
 
+    /// Une entrée faite dit quand ; une demande en attente le dit à la place (Accepter et Refuser attendent #19290).
     private func entryRow(_ entry: CommunityLinkEntry) -> some View {
-        let joined = CommunityLinkDetailCopy.joined(entry.joinedAt.formatted(.relative(presentation: .named)))
+        let status = entry.isPending
+            ? CommunityLinkDetailCopy.pending
+            : CommunityLinkDetailCopy.joined(entry.joinedAt.formatted(.relative(presentation: .named)))
         return MeeshyPersonRow(title: entry.name,
-                               subtitle: joined,
+                               subtitle: status,
                                meta: entry.username.map { "@\($0)" },
                                showsDivider: false,
-                               label: [entry.name, joined].joined(separator: ", ")) {
+                               label: [entry.name, status].joined(separator: ", ")) {
             MeeshyAvatar(name: entry.name, context: .custom(36), avatarURL: entry.avatar, enablePulse: false,
                          isDark: isDark)
         }

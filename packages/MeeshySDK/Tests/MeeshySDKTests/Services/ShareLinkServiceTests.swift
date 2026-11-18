@@ -289,6 +289,48 @@ final class ShareLinkServiceTests: XCTestCase {
         XCTAssertTrue(body["expiresAt"] is NSNull)
     }
 
+    // MARK: - resetLinkUses (#19505)
+
+    func test_resetLinkUses_patchesResetUsesOnly_andReturnsTheServedCounter() async throws {
+        mock.stub("/links/mshy_abc", result: APIResponse<ShareLinkUsesReset>(
+            success: true, data: ShareLinkUsesReset(currentUses: 0), error: nil))
+
+        let served = try await service.resetLinkUses(linkId: "mshy_abc")
+
+        let body = try XCTUnwrap(mock.lastRequest?.bodyJSON)
+        XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/links/mshy_abc")
+        XCTAssertEqual(body["resetUses"] as? Bool, true)
+        XCTAssertEqual(body.count, 1, "the reset never rewrites the link settings")
+        XCTAssertEqual(served, 0)
+    }
+
+    func test_resetLinkUses_olderServerWithoutCounter_returnsNil() async throws {
+        mock.stub("/links/mshy_abc", result: APIResponse<ShareLinkUsesReset>(
+            success: true, data: ShareLinkUsesReset(currentUses: nil), error: nil))
+
+        let served = try await service.resetLinkUses(linkId: "mshy_abc")
+
+        XCTAssertNil(served)
+    }
+
+    func test_shareLinkUsesReset_decodesALinkWithoutCounterAsAbsent() throws {
+        let data = Data(#"{"id":"row-1","linkId":"mshy_abc","isActive":true}"#.utf8)
+
+        let decoded = try JSONDecoder().decode(ShareLinkUsesReset.self, from: data)
+
+        XCTAssertNil(decoded.currentUses)
+    }
+
+    func test_withCurrentUses_changesOnlyTheCounter() {
+        let link = makeMyShareLink()
+
+        let reset = link.withCurrentUses(0)
+
+        XCTAssertEqual(reset.currentUses, 0)
+        XCTAssertEqual(reset.withCurrentUses(link.currentUses), link)
+    }
+
     // MARK: - deleteLink
 
     func test_deleteLink_callsCorrectEndpoint() async throws {

@@ -165,6 +165,63 @@ final class ShareLinkDetailViewModelTests: XCTestCase {
         XCTAssertEqual(recorder.changes.map(\.isActive), [false, true])
     }
 
+    // MARK: - Remettre le compteur à zéro (#19505)
+
+    func test_resetUses_dropsTheCounterAtOnce_andKeepsWhatTheServerServes() async {
+        let (sut, service, recorder) = makeSUT(link: makeLink(currentUses: 12))
+        service.resetLinkUsesResult = .success(0)
+        XCTAssertTrue(sut.canResetUses)
+
+        let done = await sut.resetUses()
+
+        XCTAssertTrue(done)
+        XCTAssertEqual(sut.link.currentUses, 0)
+        XCTAssertEqual(recorder.changes.first?.currentUses, 0, "the counter drops before the server answers")
+        XCTAssertEqual(service.resetLinkUsesCallCount, 1)
+        XCTAssertFalse(sut.canResetUses)
+    }
+
+    func test_resetUses_refused_bringsTheCounterBack() async {
+        let (sut, service, recorder) = makeSUT(link: makeLink(currentUses: 12))
+        service.resetLinkUsesResult = .failure(ProbeError.offline)
+
+        let done = await sut.resetUses()
+
+        XCTAssertFalse(done)
+        XCTAssertEqual(sut.link.currentUses, 12)
+        XCTAssertEqual(recorder.changes.map(\.currentUses), [0, 12])
+    }
+
+    func test_resetUses_olderServerThatIgnoresTheReset_bringsTheCounterBack() async {
+        let (sut, service, _) = makeSUT(link: makeLink(currentUses: 12))
+        service.resetLinkUsesResult = .success(nil)
+
+        let done = await sut.resetUses()
+
+        XCTAssertFalse(done, "a server that does not serve the counter has not reset it")
+        XCTAssertEqual(sut.link.currentUses, 12)
+    }
+
+    func test_resetUses_keepsTheEditedSettings_whileTheServerAnswers() async {
+        let (sut, service, _) = makeSUT(link: makeLink(maxUses: 100, currentUses: 12))
+        service.resetLinkUsesResult = .success(0)
+
+        _ = await sut.resetUses()
+
+        XCTAssertEqual(sut.link.maxUses, 100)
+        XCTAssertEqual(sut.link.isActive, true)
+    }
+
+    func test_resetUses_atZero_isNotOffered_andSendsNothing() async {
+        let (sut, service, _) = makeSUT(link: makeLink(currentUses: 0))
+
+        XCTAssertFalse(sut.canResetUses)
+        let done = await sut.resetUses()
+
+        XCTAssertFalse(done)
+        XCTAssertEqual(service.resetLinkUsesCallCount, 0)
+    }
+
     // MARK: - Deletion
 
     func test_delete_success_marksDeletedAndTellsTheList() async {
@@ -475,6 +532,17 @@ final class CommunityLinkDetailTests: XCTestCase {
 
     private final class Calls {
         var closed: [Bool] = []
+        var invited: [String] = []
+    }
+
+    private func details(isPrivate: Bool = false, role: String? = "admin",
+                         linkEntryCount: Int? = nil) -> CommunityLinkDetails {
+        CommunityLinkDetails(isPrivate: isPrivate, role: role, memberCount: 350, avatar: nil, settingsCommunity: nil,
+                             linkEntryCount: linkEntryCount)
+    }
+
+    private func friend(_ id: String) -> CommunityInviteCandidate {
+        CommunityInviteCandidate(id: id, name: "Ami \(id)", avatar: nil)
     }
 
     private func makeSUT(
@@ -482,7 +550,9 @@ final class CommunityLinkDetailTests: XCTestCase {
                                                                                      memberCount: 350, avatar: nil,
                                                                                      settingsCommunity: nil)),
         entries: Result<[CommunityLinkEntry], Error> = .success([]),
-        setPrivate: Result<Void, Error> = .success(())
+        setPrivate: Result<Void, Error> = .success(()),
+        friends: [CommunityInviteCandidate] = [],
+        refusedInvitees: Set<String> = []
     ) -> (CommunityLinkDetailViewModel, Calls) {
         let calls = Calls()
         let sut = CommunityLinkDetailViewModel(
@@ -493,6 +563,11 @@ final class CommunityLinkDetailTests: XCTestCase {
             setPrivate: { _, closed in
                 await MainActor.run { calls.closed.append(closed) }
                 try setPrivate.get()
+            },
+            loadFriends: { friends },
+            invite: { _, userId in
+                await MainActor.run { calls.invited.append(userId) }
+                if refusedInvitees.contains(userId) { throw ProbeError.offline }
             }
         )
         return (sut, calls)
@@ -605,5 +680,123 @@ final class CommunityLinkDetailTests: XCTestCase {
         let succeeded = await sut.setEntriesClosed(true)
         XCTAssertFalse(succeeded)
         XCTAssertTrue(calls.closed.isEmpty)
+    }
+
+    // MARK: - En attente de validation (#19505)
+
+    func test_pendingEntry_isListed_butNeverCountedAsAnEntry() {
+        let pending = CommunityLinkEntry(id: "ns", userId: "user-ns", name: "Nadia", username: "nadia.snd",
+                                         avatar: nil, joinedAt: Self.now, isPending: true)
+        let entries = CommunityLinkEntries(entries: [pending, entry("a", daysAgo: 1)], excludingUserId: nil)
+
+        XCTAssertEqual(entries.recent.map(\.id), ["ns", "a"])
+        XCTAssertEqual(entries.count(lastDays: 7, now: Self.now, calendar: Self.calendar), 1)
+        XCTAssertEqual(entries.days(now: Self.now, calendar: Self.calendar).last?.count, 0)
+    }
+
+    private func member(status: String?) throws -> APICommunityMember {
+        let statusField = status.map { #","status":"\#($0)""# } ?? ""
+        let json = #"{"id":"m","communityId":"c-1","userId":"u","role":"member","joinedAt":0,"user":null"#
+            + statusField + "}"
+        return try JSONDecoder().decode(APICommunityMember.self, from: Data(json.utf8))
+    }
+
+    func test_entryFromMember_readsTheServedPendingStatus_andAbsentMeansJoined() throws {
+        let joined = CommunityLinkEntry(member: try member(status: nil))
+        let pending = CommunityLinkEntry(member: try member(status: "pending"))
+
+        XCTAssertEqual(joined?.isPending, false)
+        XCTAssertEqual(pending?.isPending, true)
+    }
+
+    // MARK: - Entrées par ce lien (#19505)
+
+    func test_linkEntryCount_isShownOnlyWhenServed() async {
+        let (served, _) = makeSUT(details: .success(details(linkEntryCount: 58)))
+        let (olderServer, _) = makeSUT()
+
+        await served.load()
+        await olderServer.load()
+
+        XCTAssertEqual(served.linkEntryCount, 58)
+        XCTAssertNil(olderServer.linkEntryCount)
+    }
+
+    // MARK: - Envoyer l'invitation (#19505)
+
+    func test_canInvite_followsWhoTheServerLetsInvite() async {
+        let (closedAdmin, _) = makeSUT(details: .success(details(isPrivate: true, role: "admin")))
+        let (closedMember, _) = makeSUT(details: .success(details(isPrivate: true, role: "member")))
+        let (openMember, _) = makeSUT(details: .success(details(isPrivate: false, role: "member")))
+        let (notYetKnown, _) = makeSUT()
+
+        await closedAdmin.load()
+        await closedMember.load()
+        await openMember.load()
+
+        XCTAssertTrue(closedAdmin.canInvite)
+        XCTAssertFalse(closedMember.canInvite)
+        XCTAssertTrue(openMember.canInvite)
+        XCTAssertFalse(notYetKnown.canInvite, "nothing is offered before the community is read")
+    }
+
+    func test_inviteCandidates_areMyFriends_withoutKnownMembersNorMe() async {
+        let (sut, _) = makeSUT(entries: .success([entry("a", daysAgo: 1, userId: "kb")]),
+                               friends: [friend("kb"), friend("leo"), friend("me"), friend("mina")])
+
+        await sut.load()
+
+        XCTAssertEqual(sut.inviteCandidates.map(\.id), ["leo", "mina"])
+    }
+
+    func test_toggleInvitee_choosesThenUnchooses_inTheOrderOfTheTaps() async {
+        let (sut, _) = makeSUT(friends: [friend("leo"), friend("mina"), friend("kwame")])
+        await sut.load()
+
+        sut.toggleInvitee("kwame")
+        sut.toggleInvitee("leo")
+        sut.toggleInvitee("mina")
+        sut.toggleInvitee("kwame")
+
+        XCTAssertEqual(sut.chosenInviteeIds, ["leo", "mina"])
+    }
+
+    func test_inviteChosen_leavesTheRailAtOnce_andTellsTheServerForEachPerson() async {
+        let (sut, calls) = makeSUT(friends: [friend("leo"), friend("mina"), friend("kwame")])
+        await sut.load()
+        sut.toggleInvitee("leo")
+        sut.toggleInvitee("kwame")
+
+        let outcome = await sut.inviteChosen()
+
+        XCTAssertEqual(outcome, CommunityInviteOutcome(sent: 2, failed: 0))
+        XCTAssertEqual(Set(calls.invited), ["leo", "kwame"])
+        XCTAssertEqual(sut.inviteCandidates.map(\.id), ["mina"])
+        XCTAssertTrue(sut.chosenInviteeIds.isEmpty)
+    }
+
+    func test_inviteChosen_aRefusedPerson_comesBackChosen() async {
+        let (sut, _) = makeSUT(friends: [friend("leo"), friend("mina")], refusedInvitees: ["mina"])
+        await sut.load()
+        sut.toggleInvitee("leo")
+        sut.toggleInvitee("mina")
+
+        let outcome = await sut.inviteChosen()
+
+        XCTAssertEqual(outcome, CommunityInviteOutcome(sent: 1, failed: 1))
+        XCTAssertEqual(sut.inviteCandidates.map(\.id), ["mina"])
+        XCTAssertEqual(sut.chosenInviteeIds, ["mina"])
+    }
+
+    func test_inviteChosen_whenTheViewerCannotInvite_sendsNothing() async {
+        let (sut, calls) = makeSUT(details: .success(details(isPrivate: true, role: "member")),
+                                   friends: [friend("leo")])
+        await sut.load()
+        sut.toggleInvitee("leo")
+
+        let outcome = await sut.inviteChosen()
+
+        XCTAssertEqual(outcome, CommunityInviteOutcome(sent: 0, failed: 0))
+        XCTAssertTrue(calls.invited.isEmpty)
     }
 }
