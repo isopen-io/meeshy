@@ -51,7 +51,8 @@ function buildApp() {
   const prisma = {
     user: {
       findMany: jest.fn(async () => []),
-      findFirst: jest.fn<any>(async () => ({
+      // `hasBlocked` interroge `findFirst` avec `blockedUserIds` : personne n'est bloqué ici.
+      findFirst: jest.fn<any>(async (args: any) => args?.where?.blockedUserIds ? null : ({
         id: PROPRIETAIRE,
         username: 'cible',
         createdAt: new Date('2026-01-01T00:00:00Z'),

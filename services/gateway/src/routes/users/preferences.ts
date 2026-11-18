@@ -32,6 +32,9 @@ import { contentCountReaderFor } from '../../services/posts/authorContentCounts'
 import { keepDiscoverable } from '../../services/profile-discoverability';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
 import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS } from '../communities/serialization';
+import { targetHasBlockedViewer } from './profile-block-gate';
+import { ownerIsActive } from '../../services/profile-addresses/address-link-gate';
+import { computeETag, ifNoneMatchMatches } from '../../utils/etag';
 
 
 /**
@@ -479,6 +482,14 @@ export async function getUserStats(fastify: FastifyInstance) {
         (acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum,
         'canViewUsers'
       );
+      // La porte de la fiche (`servirProfilPublic`) : un bloqueur est INTROUVABLE, et un compte
+      // parti ne sert plus rien de lui — jamais un 200 qui distinguerait « bloqué » d'« absent ».
+      if (await targetHasBlockedViewer(fastify.prisma, request, user.id)) {
+        return sendNotFound(reply, 'User not found');
+      }
+      if (!estSoi && !estAdministration && !(await ownerIsActive(fastify.prisma, user.id))) {
+        return sendNotFound(reply, 'User not found');
+      }
       // #19371 : « En chiffres » au Proche — même loi que `?expand=stats`.
       const lecteurInscrit = acteur?.registeredUser?.id;
       const audience = {
@@ -497,6 +508,18 @@ export async function getUserStats(fastify: FastifyInstance) {
         { cache: getCacheStore() }
       );
 
+      // La charge d'un autre dépend de la RELATION (« En chiffres » au Proche, compteurs par audience) :
+      // `no-cache` + ETag comme la fiche (#10755), pour qu'une baisse de cercle ou un blocage atteigne
+      // l'écran. Seules sa propre charge et celle de l'administration gardent un cache à durée.
+      const servi = servedUserStats(stats, audience);
+      if (!estSoi && !estAdministration) {
+        reply.header('Vary', 'Authorization');
+        reply.header('Cache-Control', 'private, no-cache');
+        const etag = computeETag({ success: true, data: servi });
+        reply.header('ETag', etag);
+        if (ifNoneMatchMatches(request.headers['if-none-match'], etag)) return reply.code(304).send();
+        return sendSuccess(reply, servi);
+      }
       reply.header('Cache-Control', 'private, max-age=300, stale-while-revalidate=3600');
 
       // L'AUTORISATION, distincte du calcul, et elle aussi à site unique
@@ -506,7 +529,7 @@ export async function getUserStats(fastify: FastifyInstance) {
       // Les quatre compteurs intimes partaient à TOUT compte authentifié, sans
       // filtre d'amitié ni préférence de confidentialité — mesuré en
       // intégration sur un viewer tiers.
-      return sendSuccess(reply, servedUserStats(stats, audience));
+      return sendSuccess(reply, servi);
 
     } catch (error) {
       logError(fastify.log, '[USER_STATS] Error getting user stats', error);

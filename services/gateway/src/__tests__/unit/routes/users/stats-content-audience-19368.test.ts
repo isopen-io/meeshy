@@ -45,7 +45,7 @@ async function monter(viewerId: string): Promise<FastifyInstance> {
   app.decorate('prisma', {
     user: {
       findMany: jest.fn(async () => []),
-      findFirst: jest.fn<any>(async () => ({ id: PROPRIETAIRE, createdAt: new Date('2026-01-01T00:00:00Z') })),
+      findFirst: jest.fn<any>(async (args: any) => (args?.where?.blockedUserIds ? null : { id: PROPRIETAIRE, createdAt: new Date('2026-01-01T00:00:00Z') })),
       findUnique: jest.fn<any>(async () => ({ createdAt: new Date('2026-01-01T00:00:00Z') })),
     },
     message: { count: jest.fn<any>(async () => 0), groupBy: jest.fn<any>(async () => []) },
