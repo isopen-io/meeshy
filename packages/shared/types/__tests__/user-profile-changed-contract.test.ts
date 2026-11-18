@@ -8,10 +8,10 @@ describe('user:profile-changed — la fiche ouverte se revalide (#19384)', () =>
     expect(SERVER_EVENTS.USER_PROFILE_CHANGED).toMatch(/^[a-z]+:[a-z]+(-[a-z]+)*$/);
   });
 
-  it('ne transporte que le sujet et l’horloge — aucun contenu de fiche', () => {
-    const payload: UserProfileChangedEventData = { userId: 'u', updatedAt: '2026-11-17T10:00:00.000Z' };
+  it('ne transporte que le sujet — ni contenu de fiche, ni horloge qui daterait le geste', () => {
+    const payload: UserProfileChangedEventData = { userId: 'u' };
     const listener: ServerToClientEvents[typeof SERVER_EVENTS.USER_PROFILE_CHANGED] = (data) => {
-      expect(Object.keys(data).sort()).toEqual(['updatedAt', 'userId']);
+      expect(Object.keys(data)).toEqual(['userId']);
     };
     listener(payload);
   });

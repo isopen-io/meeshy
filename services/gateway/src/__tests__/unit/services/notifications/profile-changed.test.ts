@@ -19,8 +19,10 @@ const mockBlocked = jest.fn<(prisma: unknown, userId: string) => Promise<Set<str
 jest.mock('../../../../services/friendship', () => ({
   comptesLies: (prisma: unknown, sujet: string) => mockComptesLies(prisma, sujet),
 }));
+const mockAllPartners = jest.fn<(prisma: unknown, userId: string) => Promise<string[]>>();
 jest.mock('../../../../utils/conversation-partners', () => ({
-  getDistinctConversationPartnerUserIds: (prisma: unknown, userId: string) => mockPartners(prisma, userId),
+  getDirectConversationPartnerUserIds: (prisma: unknown, userId: string) => mockPartners(prisma, userId),
+  getDistinctConversationPartnerUserIds: (prisma: unknown, userId: string) => mockAllPartners(prisma, userId),
 }));
 jest.mock('../../../../utils/blocking', () => ({
   getBlockRelatedUserIds: (prisma: unknown, userId: string) => mockBlocked(prisma, userId),
@@ -34,7 +36,6 @@ import {
 } from '../../../../services/notifications/profile-changed';
 
 const SUBJECT = 'subject-0000000000000001';
-const AT = new Date('2026-11-17T10:00:00.000Z');
 const prisma = {} as never;
 
 const makeIO = () => {
@@ -71,7 +72,16 @@ describe('profileChangedAudience — qui revalide la fiche', () => {
     expect([...audience].sort()).toEqual(['connaissance', 'proche']);
   });
 
-  it('ajoute les partenaires de conversation, même sans lien (ils ont la fiche en cache)', async () => {
+  it('un co-membre d’un GROUPE sans lien ne reçoit rien : un geste silencieux ne trahit pas l’activité du sujet à 500 personnes', async () => {
+    given({ liens: [] });
+    mockAllPartners.mockResolvedValue(['co-membre-du-groupe']);
+    expect(await profileChangedAudience(prisma, SUBJECT)).toEqual([]);
+    const { io, emit } = makeIO();
+    await emitProfileChanged({ io, prisma }, { userId: SUBJECT });
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('ajoute les partenaires de conversations DIRECTES, même sans lien (ils ont la fiche en cache)', async () => {
     given({ liens: [{ id: 'communaute', niveau: 'COMMUNITY' }], partenaires: ['communaute', 'inconnu-du-fil'] });
     const audience = await profileChangedAudience(prisma, SUBJECT);
     expect([...audience].sort()).toEqual(['communaute', 'inconnu-du-fil']);
@@ -93,24 +103,24 @@ describe('profileChangedAudience — qui revalide la fiche', () => {
 });
 
 describe('emitProfileChanged — le signal sans contenu', () => {
-  it('part vers la room personnelle de chaque lecteur, avec le seul sujet et son horloge', async () => {
+  it('part vers la room personnelle de chaque lecteur, avec le seul sujet — aucune horloge qui daterait le geste à la seconde', async () => {
     given({ liens: [{ id: 'connaissance', niveau: 'ACQUAINTANCE' }], partenaires: ['partenaire'] });
     const { io, to, emit } = makeIO();
 
-    await emitProfileChanged({ io, prisma }, { userId: SUBJECT, updatedAt: AT });
+    await emitProfileChanged({ io, prisma }, { userId: SUBJECT });
 
     expect(to.mock.calls.map(([room]) => room).sort()).toEqual([ROOMS.user('connaissance'), ROOMS.user('partenaire')].sort());
     expect(emit).toHaveBeenCalledTimes(2);
     for (const [event, payload] of emit.mock.calls) {
       expect(event).toBe(SERVER_EVENTS.USER_PROFILE_CHANGED);
-      expect(payload).toEqual({ userId: SUBJECT, updatedAt: AT.toISOString() });
+      expect(payload).toEqual({ userId: SUBJECT });
     }
   });
 
   it('ne part vers personne quand le sujet n’a ni lien ni partenaire', async () => {
     given({ liens: [{ id: 'communaute', niveau: 'COMMUNITY' }] });
     const { io, emit } = makeIO();
-    await emitProfileChanged({ io, prisma }, { userId: SUBJECT, updatedAt: AT });
+    await emitProfileChanged({ io, prisma }, { userId: SUBJECT });
     expect(emit).not.toHaveBeenCalled();
   });
 });
@@ -119,7 +129,7 @@ describe('announceProfileChanged — canal latéral, jamais bloquant', () => {
   it('est un no-op sans couche Socket.IO', async () => {
     given({ liens: [{ id: 'ami', niveau: 'FRIEND' }] });
     const fastify = { prisma, log: { warn: jest.fn(), error: jest.fn() } } as never;
-    await expect(announceProfileChanged(fastify, { userId: SUBJECT, updatedAt: AT })).resolves.toBeUndefined();
+    await expect(announceProfileChanged(fastify, { userId: SUBJECT })).resolves.toBeUndefined();
     expect(mockComptesLies).not.toHaveBeenCalled();
   });
 
@@ -129,15 +139,15 @@ describe('announceProfileChanged — canal latéral, jamais bloquant', () => {
     mockBlocked.mockResolvedValue(new Set());
     const { io } = makeIO();
     const fastify = { prisma, log: { warn: jest.fn(), error: jest.fn() }, socketIOHandler: { io } } as never;
-    await expect(announceProfileChanged(fastify, { userId: SUBJECT, updatedAt: AT })).resolves.toBeUndefined();
+    await expect(announceProfileChanged(fastify, { userId: SUBJECT })).resolves.toBeUndefined();
   });
 
   it('émet par la couche Socket.IO de l’instance', async () => {
     given({ liens: [{ id: 'ami', niveau: 'FRIEND' }] });
     const { io, emit } = makeIO();
     const fastify = { prisma, log: { warn: jest.fn(), error: jest.fn() }, socketIOHandler: { io } } as never;
-    await announceProfileChanged(fastify, { userId: SUBJECT, updatedAt: AT });
-    expect(emit).toHaveBeenCalledWith(SERVER_EVENTS.USER_PROFILE_CHANGED, { userId: SUBJECT, updatedAt: AT.toISOString() });
+    await announceProfileChanged(fastify, { userId: SUBJECT });
+    expect(emit).toHaveBeenCalledWith(SERVER_EVENTS.USER_PROFILE_CHANGED, { userId: SUBJECT });
   });
 });
 

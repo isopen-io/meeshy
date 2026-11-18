@@ -9,11 +9,11 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { type FastifyInstance } from 'fastify';
 
-const mockAnnounce = jest.fn<(fastify: unknown, params: { userId: string; updatedAt?: Date }) => Promise<void>>(async () => undefined);
+const mockAnnounce = jest.fn<(fastify: unknown, params: { userId: string }) => Promise<void>>(async () => undefined);
 
 jest.mock('../../../services/notifications/profile-changed', () => ({
   ...(jest.requireActual('../../../services/notifications/profile-changed') as object),
-  announceProfileChanged: (fastify: unknown, params: { userId: string; updatedAt?: Date }) => mockAnnounce(fastify, params),
+  announceProfileChanged: (fastify: unknown, params: { userId: string }) => mockAnnounce(fastify, params),
 }));
 jest.mock('../../../utils/logger', () => ({
   ...(jest.requireActual('../../../utils/logger') as object),
@@ -115,7 +115,7 @@ describe('PATCH /users/me', () => {
     const app = await boot(async (a) => updateUserProfile(a));
     const res = await app.inject({ method: 'PATCH', url: '/users/me', payload });
     expect(res.statusCode).toBe(200);
-    expect(mockAnnounce).toHaveBeenCalledWith(expect.anything(), { userId: USER, updatedAt: WRITTEN_AT });
+    expect(mockAnnounce).toHaveBeenCalledWith(expect.anything(), { userId: USER });
     await app.close();
   });
 

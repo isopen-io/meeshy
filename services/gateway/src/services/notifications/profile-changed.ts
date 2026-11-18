@@ -5,7 +5,7 @@ import { ROOMS, SERVER_EVENTS, type UserProfileChangedEventData } from '@meeshy/
 
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { getBlockRelatedUserIds } from '../../utils/blocking';
-import { getDistinctConversationPartnerUserIds } from '../../utils/conversation-partners';
+import { getDirectConversationPartnerUserIds } from '../../utils/conversation-partners';
 import { logWarn } from '../../utils/logger';
 import { resolveSocketIO } from '../../utils/socket-broadcast';
 import { comptesLies } from '../friendship';
@@ -20,10 +20,15 @@ import { comptesLies } from '../friendship';
  *
  * L'audience est celle qui peut tenir la fiche en cache et y voir quelque chose de
  * plus que l'inconnu : les comptes liés au niveau Connaissance ou plus (la loi des
- * niveaux, `comptesLies`), et les partenaires de conversation (ceux que
- * `user:updated` atteint déjà). Tout blocage, dans un sens ou dans l'autre, retire
- * le lecteur ; le sujet n'est jamais son propre lecteur (`profile:updated` sert ses
- * autres appareils). `user:updated` reste inchangé : ce signal s'y ajoute.
+ * niveaux, `comptesLies`), et les partenaires de conversations DIRECTES. Jamais
+ * chaque co-membre d'un groupe, d'un salon ou de « meeshy » : le signal part à
+ * chaque geste SILENCIEUX (album réordonné, décor, voix), et le servir à des
+ * centaines de comptes sans lien dirait à chacun que le sujet est actif à cette
+ * seconde — ce que seule l'activité de conversation révèle (directive de présence
+ * du 2026-08-25). Pour la même raison la charge ne porte aucune horloge : le
+ * lecteur revalide par `If-None-Match`. Tout blocage, dans un sens ou dans
+ * l'autre, retire le lecteur ; le sujet n'est jamais son propre lecteur
+ * (`profile:updated` sert ses autres appareils). `user:updated` reste inchangé.
  */
 const MIN_READER_LEVEL = 'ACQUAINTANCE' as const;
 
@@ -50,7 +55,7 @@ export const touchesProfileFiche = (body: ProfileFicheBody): boolean =>
 export async function profileChangedAudience(prisma: PrismaClient, userId: string): Promise<string[]> {
   const [liens, partenaires, bloques] = await Promise.all([
     comptesLies(prisma, userId),
-    getDistinctConversationPartnerUserIds(prisma, userId),
+    getDirectConversationPartnerUserIds(prisma, userId),
     getBlockRelatedUserIds(prisma, userId),
   ]);
   const lecteursLies = liens.filter((lien) => relationLevelIfAtLeast(lien.niveau, MIN_READER_LEVEL) !== null).map((lien) => lien.id);
@@ -59,10 +64,10 @@ export async function profileChangedAudience(prisma: PrismaClient, userId: strin
 
 export async function emitProfileChanged(
   deps: { readonly io: ServerEmitIO; readonly prisma: PrismaClient },
-  params: { readonly userId: string; readonly updatedAt: Date },
+  params: { readonly userId: string },
 ): Promise<void> {
   const readers = await profileChangedAudience(deps.prisma, params.userId);
-  const payload: UserProfileChangedEventData = { userId: params.userId, updatedAt: params.updatedAt.toISOString() };
+  const payload: UserProfileChangedEventData = { userId: params.userId };
   readers.forEach((readerId) => deps.io.to(ROOMS.user(readerId)).emit(SERVER_EVENTS.USER_PROFILE_CHANGED, payload));
 }
 
@@ -72,12 +77,12 @@ export async function emitProfileChanged(
  */
 export async function announceProfileChanged(
   fastify: FastifyInstance,
-  params: { readonly userId: string; readonly updatedAt?: Date },
+  params: { readonly userId: string },
 ): Promise<void> {
   const io = resolveSocketIO(fastify);
   if (!io) return;
   try {
-    await emitProfileChanged({ io, prisma: fastify.prisma }, { userId: params.userId, updatedAt: params.updatedAt ?? new Date() });
+    await emitProfileChanged({ io, prisma: fastify.prisma }, { userId: params.userId });
   } catch (error) {
     logWarn(fastify.log, `[PROFILE_CHANGED] emit failed (userId=${params.userId})`, error);
   }

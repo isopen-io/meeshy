@@ -383,7 +383,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // #19384 — la fiche que les AUTRES lisent a changé (bio, ville, langues, voix) :
       // signal sans contenu vers ses lecteurs, qui la revalident par If-None-Match.
       if (touchesProfileFiche(body)) {
-        void announceProfileChanged(fastify, { userId: userId!, updatedAt: updatedUser.updatedAt })
+        void announceProfileChanged(fastify, { userId: userId! })
           .catch((error: unknown) => logWarn(fastify.log, '[PROFILE_UPDATE] profile-changed announce failed', error));
       }
 
