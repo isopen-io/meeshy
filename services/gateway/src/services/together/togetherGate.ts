@@ -20,6 +20,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { TogetherMediaKind } from '@meeshy/shared/types/together';
 import { pairAccess, type PairAccessDb } from '../relations/pairAccess';
 import { ACCOUNT_STATE_SELECT, isUsableAccount } from '../relations/usableAccount';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
+import { unsetOrNull } from '../../utils/prisma-unset';
 
 export type TogetherGateDb = PairAccessDb & Pick<PrismaClient, 'participant' | 'messageAttachment' | 'conversation'>;
 
@@ -58,14 +60,25 @@ async function playableMedia(prisma: TogetherGateDb, subject: TogetherSubject): 
   return togetherMediaOf(attachment.mimeType);
 }
 
+/**
+ * Les deux prédicats d'ABSENCE, composés par `AND` (#19690).
+ *
+ * `leftAt: null` et `bannedAt: null` en ÉGALITÉ n'appariaient pas une clé
+ * ABSENTE — l'état de tout membre qui n'est ni parti ni banni, Prisma n'écrivant
+ * pas un `DateTime?` qu'on ne lui donne pas. Cette fonction rendait donc `false`
+ * pour presque toutes les paires, et la séance « Ensemble » était INERTE pour la
+ * population entière. La règle était récitée treize lignes plus bas pour
+ * `closedAt` (`openConversation`) et oubliée pour ces deux voisines.
+ *
+ * `AND` et non un double spread : `PARTICIPATION_VIVANTE` et `unsetOrNull`
+ * rendent chacun une clé `OR`, dont la seconde écraserait la première.
+ */
 async function bothActiveMembers(prisma: TogetherGateDb, subject: TogetherSubject): Promise<boolean> {
   const rows = await prisma.participant.findMany({
     where: {
       conversationId: subject.conversationId,
       userId: { in: [subject.hostId, subject.guestId] },
-      isActive: true,
-      leftAt: null,
-      bannedAt: null,
+      AND: [PARTICIPATION_VIVANTE, unsetOrNull('leftAt')],
     },
     select: { userId: true },
   });

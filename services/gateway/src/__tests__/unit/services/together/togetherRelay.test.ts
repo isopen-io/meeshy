@@ -86,11 +86,28 @@ function cacheEnMemoire(clock: () => number) {
   };
 }
 
+/**
+ * La ligne NOMINALE de production : `leftAt` et `bannedAt` sont ABSENTS du
+ * document. Prisma n'écrit pas un `DateTime?` qu'on ne lui donne pas, et aucun
+ * chemin de création de `Participant` ne les pose (mesuré #19690) — c'est donc
+ * l'état de l'immense majorité des membres, ceux qui ne sont ni partis ni bannis.
+ *
+ * La fixture portait `leftAt: null, bannedAt: null` EXPLICITEMENT, et c'est
+ * ainsi que le défaut a vécu : sous MongoDB `{ champ: null }` est une égalité
+ * qui n'apparie pas une clé absente, si bien qu'un témoin posé sur une ligne
+ * portant les nulls ne peut pas tomber sur un filtre qui les exige.
+ */
 const membre = (userId: string, conversationId = CONV, extra: Row = {}): Row => ({
   id: `p-${userId}-${conversationId}`,
   userId,
   conversationId,
   isActive: true,
+  ...extra,
+});
+
+/** La ligne d'un chemin qui a REMIS les colonnes à zéro — l'autre état « pas encore ». */
+const membreAuxNullsExplicites = (userId: string, conversationId = CONV, extra: Row = {}): Row => ({
+  ...membre(userId, conversationId),
   leftAt: null,
   bannedAt: null,
   ...extra,
@@ -183,6 +200,22 @@ describe('inviter — dès Proche, sur un média audio ou vidéo d\'une conversa
   it('un audio s\'écoute ensemble, avec un Sang aussi', async () => {
     const m = monde();
     expect(await inviter(m, SANG, AUDIO)).toMatchObject({ success: true, data: { media: 'audio' } });
+  });
+
+  /**
+   * #19690 — les DEUX états « pas encore » sont des membres actifs, et le témoin
+   * porte sur celui que le filtre ratait : la ligne dont les colonnes sont
+   * ABSENTES. Posé sur la seule ligne aux nulls explicites, il ne pouvait pas
+   * tomber — c'est ce qui a laissé la séance « Ensemble » inerte pour la
+   * population entière.
+   */
+  it.each([
+    ['ni leftAt ni bannedAt dans le document (la ligne nominale)', membre],
+    ['leftAt et bannedAt remis à zéro explicitement', membreAuxNullsExplicites],
+  ])('invite un Proche dont la participation porte %s', async (_forme, ligne) => {
+    const m = monde({ participants: [ligne(HOTE), ligne(PROCHE)] });
+
+    expect(await inviter(m)).toMatchObject({ success: true, data: { media: 'video' } });
   });
 
   it.each([
