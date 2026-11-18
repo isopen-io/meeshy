@@ -86,7 +86,8 @@ struct TrackingLinksView: View {
 
     private func destination(of ticket: LinksFaceTicket) -> ProfileCreatedLinkDestination {
         guard let link = viewModel.link(ticketId: ticket.id) else { return .route(.trackingLinks) }
-        return .trackingDetail(link)
+        let model = viewModel
+        return .tracking(link, onChanged: { model.apply($0) }, onDeleted: { model.remove(linkId: $0) })
     }
 
     /// Ce qui fait reconnaître un lien sous son billet : sa campagne, puis ses dates (règle 7 de l'épure).
@@ -186,8 +187,23 @@ class TrackingLinksViewModel: ObservableObject {
         }
     }
 
+    /// Le lien tel que son détail l'a laissé (interrupteur, modification) : le billet et le cache le reprennent.
+    func apply(_ link: TrackingLink) {
+        replace(link)
+    }
+
+    /// Le lien supprimé depuis son détail quitte la page et le cache.
+    func remove(linkId: String) {
+        links = links.filter { $0.id != linkId }
+        persist()
+    }
+
     private func replace(_ link: TrackingLink) {
         links = links.map { $0.id == link.id ? link : $0 }
+        persist()
+    }
+
+    private func persist() {
         let snapshot = links
         Task { await bestEffort("trackingLinksView.trackingLinks.save.2", category: .cache) { try await CacheCoordinator.shared.trackingLinks.save(snapshot, for: "list") } }
     }

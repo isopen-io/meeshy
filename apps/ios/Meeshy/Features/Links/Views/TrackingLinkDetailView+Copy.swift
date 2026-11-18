@@ -7,6 +7,8 @@ enum TrackingDetailCopy {
     static let qr = String(localized: "tracking.link.detail.qr", defaultValue: "QR code", bundle: .main)
     static let enlargeQR = String(localized: "tracking.link.sheet.qr.enlarge", defaultValue: "Agrandir le QR code", bundle: .main)
     static let share = String(localized: "tracking.link.detail.share", defaultValue: "Partager", bundle: .main)
+    static let shareQR = String(localized: "tracking.link.qr.shareImage", defaultValue: "Partager le QR code", bundle: .main)
+    static let clicksFailed = String(localized: "tracking.link.detail.clicksFailed", defaultValue: "Les clics de ce lien n'ont pas pu être lus", bundle: .main)
     static let active = String(localized: "common.active", defaultValue: "Actif", bundle: .main)
     static let inactive = String(localized: "common.inactive", defaultValue: "Inactif", bundle: .main)
     static let inactiveHint = String(localized: "tracking.link.sheet.inactiveState", defaultValue: "Le lien ne redirige plus personne", bundle: .main)

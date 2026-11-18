@@ -175,26 +175,24 @@ final class NativeSharePresentationTests: XCTestCase {
     /// The QR bitmap is rendered on tap, so `ShareLink` (item required up front)
     /// cannot serve it — `.sheet(item:)` is the repo's answer for deferred items,
     /// and it fixes the same two failure modes as the 215i sites.
-    func test_trackingLinkDetailView_presentsQRCodeThroughSwiftUI() throws {
+    /// The QR grows in its own sheet (K31, planche `Lien-Detail`), and the image is shared from there — never handed
+    /// straight to the system sheet by a control that says « Agrandir » (revue 1, #18857).
+    func test_trackingLinkDetailView_enlargesItsQR_andTheQRSheetSharesItThroughSwiftUI() throws {
         let source = try source(Self.trackingLinkDetailView)
 
-        XCTAssertTrue(
-            source.contains("@State private var qrShareImage: QRShareImage?"),
-            "TrackingLinkDetailView must hold the rendered QR bitmap in Identifiable state."
-        )
-        XCTAssertTrue(
-            source.contains(".sheet(item: $qrShareImage)"),
-            "The QR share sheet must be presented via .sheet(item:) so SwiftUI anchors the " +
-            "iPad popover and presents against the view's own scene."
-        )
-        XCTAssertTrue(
-            source.contains("ShareSheet(activityItems: [qr.image])"),
-            "It must reuse the shared ShareSheet representable."
-        )
-        XCTAssertFalse(
-            source.contains("func presentVC"),
-            "The hand-rolled presentVC(_:) helper must be gone."
-        )
+        XCTAssertTrue(source.contains(".sheet(item: $enlargedQR)"),
+                      "The QR must open enlarged in its sheet, presented via .sheet(item:).")
+        XCTAssertTrue(source.contains("LinkQRSheet(presentation: qr"), "The enlarged QR is the shared K31 sheet.")
+
+        let sheet = try self.source("Meeshy/Features/Links/Views/LinkQRCode.swift")
+        XCTAssertTrue(sheet.contains("@State private var shared: QRShareImage?"),
+                      "The QR sheet must hold the rendered QR bitmap in Identifiable state.")
+        XCTAssertTrue(sheet.contains(".sheet(item: $shared)"),
+                      "The QR share sheet must be presented via .sheet(item:) so SwiftUI anchors the " +
+                      "iPad popover and presents against the view's own scene.")
+        XCTAssertTrue(sheet.contains("ShareSheet(activityItems: [qr.image])"),
+                      "It must reuse the shared ShareSheet representable.")
+        XCTAssertFalse(source.contains("func presentVC"), "The hand-rolled presentVC(_:) helper must be gone.")
     }
 
     // MARK: - Single-source-of-truth lock

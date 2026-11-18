@@ -115,12 +115,42 @@ extension CommunityLinkDetailView {
         }
     }
 
+    // MARK: - La communauté n'a pas pu être lue
+
+    /// Sans la communauté, la fiche ne sait ni ses règles ni si elle est fermée : elle le dit, et « Réessayer » relit,
+    /// au lieu de laisser « Fermer les entrées » éteint sans raison.
+    @ViewBuilder
+    var detailsFailedBlock: some View {
+        if viewModel.detailsPhase == .failed {
+            MeeshyStateBlock(kind: .error, title: CommunityLinkDetailCopy.detailsFailed,
+                             primary: MeeshyStateBlockAction(title: ShareLinkDetailCopy.retry,
+                                                             systemImage: "arrow.clockwise",
+                                                             perform: { Task { await viewModel.load() } }),
+                             art: .none, size: .compact, tint: Self.accent)
+                .accessibilityIdentifier("communityLink.detail.detailsFailed")
+        }
+    }
+
     // MARK: - Entrées récentes (K39 dans K43)
+
+    /// « Tout voir » ouvre les membres de la communauté quand elle en compte plus que la fiche n'en montre.
+    var showsAllEntries: Bool {
+        guard let loaded = viewModel.loadedEntries else { return false }
+        return viewModel.memberCount > loaded.recent.count
+    }
 
     @ViewBuilder
     var recentSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            MeeshySectionHeader(title: CommunityLinkDetailCopy.recentTitle, size: .sheet)
+            MeeshySectionHeader(title: CommunityLinkDetailCopy.recentTitle, size: .sheet,
+                                lead: { EmptyView() },
+                                accessory: {
+                if showsAllEntries {
+                    MeeshyButton(ShareLinkDetailCopy.seeAll, kind: .text, size: .s44, tint: Self.accent,
+                                 action: { router.push(.communityMembers(link.id)) })
+                        .accessibilityIdentifier("communityLink.detail.recent.seeAll")
+                }
+            })
             switch viewModel.entries {
             case .loading:
                 MeeshySkeleton(shape: .card(aspect: 2.4, radius: Double(MeeshyRadius.lg)))

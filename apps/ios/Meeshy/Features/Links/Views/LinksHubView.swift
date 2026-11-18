@@ -12,15 +12,21 @@ struct LinksHubView: View {
     @EnvironmentObject private var authManager: AuthManager
     @State private var scannerShown = false
 
+    /// L'accent de ma vitrine, celui que la face Liens prend sur ma fiche : le même contenu garde sa teinte quelle que
+    /// soit la porte d'entrée, et l'en-tête s'accorde avec lui.
+    private var accentColor: String {
+        authManager.currentUser?.profileAccentHex ?? MeeshyColors.purple500Hex
+    }
+
     var body: some View {
         LinksPage(
             title: ProfileLinksCopy.title,
-            accent: MeeshyColors.communityAccent,
+            accent: Color(hex: accentColor),
             action: LinksPageAction(label: ProfileLinksCopy.scan, systemImage: "qrcode.viewfinder",
                                     perform: { scannerShown = true }),
             onBack: { router.pop() }
         ) {
-            ProfileLinksFace(user: authManager.currentUser, accentColor: MeeshyColors.purple500Hex,
+            ProfileLinksFace(user: authManager.currentUser, accentColor: accentColor,
                              showsHeader: false, onOpen: { router.push($0) })
                 .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.top, MeeshySpacing.sm)
