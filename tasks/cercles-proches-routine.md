@@ -1461,3 +1461,16 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `src/lib/shared-locations` 152 verts + `api/shared-locations` 24 verts, `tsc` vert. iOS et Android par la CI.
 - Prochain lot recommandé : fusion de #19683, puis #19681 (startedAt persisté au relancement natif), plafond
   `untilStopped` de `listOnlyState`, #18351 une fois décidé.
+
+## 2026-11-18 — réveil de 21 h : #19683 fusionnée, #19682 instruite et renvoyée en décision
+
+- Reprise : #19683 (un seul appareil publie) fusionnée dans `dev` à 20:12 UTC (d6f1d3284) ; #18580 et #18714 fermées à
+  la main. Les 25 workflows du dépôt restent désactivés par le porteur : aucune fusion possible sans verdict de CI.
+- Lot : #19682 (le début d'un partage flouté servi à la milliseconde). Correctif écrit en TDD sur
+  `claude/cercles-19682-debut-arrondi` (9d5465624) : `projectSharedLocation` sert `startedAt` au quart d'heure à tout
+  lecteur non exact, l'état scellé garde l'instant. Gates : `sharedLocation` + `shared-location-handler` 235/235.
+- Audit adversarial BLOQUANT pour la clôture : `expiresAt` exact moins la durée (60 ou 480 min) redonne le début à la
+  ms, comme l'arrivée du premier événement et la notification de démarrage. Aucune PR ouverte ; décision demandée au
+  porteur sur l'issue (fermer en « non planifiée », recommandé, ou tronquer aussi l'échéance).
+- Prochain lot recommandé : #19681 (startedAt persisté au relancement natif), plafond `untilStopped` de
+  `listOnlyState`, #18351 une fois décidé ; #19682 selon la décision.
