@@ -74,7 +74,7 @@ const matches = (row: AnyRow | null | undefined, where: AnyRow | undefined): boo
   });
 };
 
-type Store = { highlights: AnyRow[]; posts: AnyRow[] };
+type Store = { highlights: AnyRow[]; posts: AnyRow[]; ownerState?: AnyRow };
 let store: Store;
 let seq = 0;
 
@@ -118,6 +118,9 @@ const H3 = '65a0000000000000000000d3';
 const emptyTable = () => ({ findMany: jest.fn(async () => []), findFirst: jest.fn(async () => null) });
 
 const prisma = () => ({
+  user: {
+    findUnique: jest.fn(async () => store.ownerState ?? { isActive: true, deletedAt: null, deactivatedAt: null }),
+  },
   storyHighlight: {
     findMany: jest.fn(async (args: AnyRow = {}) =>
       store.highlights
@@ -268,6 +271,19 @@ describe('GET /users/:id/highlights — chaque story sous SA propre audience', (
     const { status, body } = await read(OWNER, BLOCKED);
     expect(status).toBe(200);
     expect(body.data.highlights).toEqual([]);
+  });
+
+  it('un compte DÉSACTIVÉ ne sert plus ses albums à un autre lecteur, même à un Proche ; la même liste vide qu’un absent', async () => {
+    store.ownerState = { isActive: true, deletedAt: null, deactivatedAt: new Date('2026-11-10T00:00:00Z') };
+    const { status, body } = await read(OWNER, CLOSE);
+    expect(status).toBe(200);
+    expect(body.data.highlights).toEqual([]);
+  });
+
+  it('le propriétaire désactivé lit toujours les siens', async () => {
+    store.ownerState = { isActive: true, deletedAt: null, deactivatedAt: new Date('2026-11-10T00:00:00Z') };
+    const { body } = await read(OWNER, OWNER);
+    expect(body.data.highlights.length).toBeGreaterThan(0);
   });
 
   it('un identifiant illisible rend une liste vide, jamais un 404 qui distinguerait l’absent du privé', async () => {

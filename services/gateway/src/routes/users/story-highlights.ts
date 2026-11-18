@@ -31,6 +31,8 @@ import { announceProfileChanged } from '../../services/notifications/profile-cha
 import { sendBadRequest, sendConflict, sendForbidden, sendInternalError, sendNotFound, sendSuccess, sendUnauthorized } from '../../utils/response';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { logError, logWarn } from '../../utils/logger';
+import { ownerIsActive } from '../../services/profile-addresses/address-link-gate';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { profileViewerId } from './profile-block-gate';
 
 const highlightSchema = {
@@ -100,7 +102,12 @@ export async function storyHighlightRoutes(fastify: FastifyInstance) {
     const viewerId = profileViewerId(request);
     if (!viewerId) return sendForbidden(reply, 'Utilisateur enregistré requis');
     try {
-      const highlights = await readStoryHighlights(prisma, { ownerId: request.params.id, viewerId, keepEmpty: false });
+      const ownerId = request.params.id;
+      // La fiche d'un compte parti ne sert plus rien de lui, comme ses adresses et ses communautés.
+      if (viewerId !== ownerId && isValidObjectId(ownerId) && !(await ownerIsActive(prisma, ownerId))) {
+        return sendSuccess(reply, { highlights: [] });
+      }
+      const highlights = await readStoryHighlights(prisma, { ownerId, viewerId, keepEmpty: false });
       return sendSuccess(reply, { highlights });
     } catch (error) {
       logError(fastify.log, '[users/highlights] Failed to read highlights', error);
