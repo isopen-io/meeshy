@@ -375,6 +375,21 @@ final class GroupCallModelTests: XCTestCase {
         XCTAssertTrue(event.isGroupCall)
     }
 
+    /// #19650 — recette du 2026-11-18 : la tuile de l'invitant portait « Talkie
+    /// Un vous invite à un appel de groupe ». La phrase est un TITRE de sonnerie ;
+    /// le pair principal se nomme par la personne.
+    func test_principalDisplayName_invitation_isTheInvitersNameNotTheSentence() throws {
+        let event = try offer(#"{"callId":"c1","conversationId":"dm","initiator":{"userId":"b","username":"bob","displayName":"Bob"},"invitedBy":{"userId":"a","username":"alice","displayName":"Alice"},"isGroup":true}"#)
+
+        XCTAssertEqual(event.principalDisplayName, "Alice")
+    }
+
+    func test_principalDisplayName_withoutDisplayName_fallsBackToUsername() throws {
+        let event = try offer(#"{"callId":"c1","conversationId":"dm","initiator":{"userId":"b","username":"bob"}}"#)
+
+        XCTAssertEqual(event.principalDisplayName, "bob")
+    }
+
     func test_principalUserId_plainDirectCall_isTheInitiator() throws {
         let event = try offer(#"{"callId":"c1","conversationId":"dm","initiator":{"userId":"b","username":"bob"},"conversationType":"direct"}"#)
 
