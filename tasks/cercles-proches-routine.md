@@ -1414,3 +1414,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `sdk-core` ne compilent pas dans le conteneur : la CI de la PR fait foi.
 - Lot suivant : voir les issues ouvertes du milestone des cercles (prochaine dimension non mûre de la liste seule :
   le cas « jusqu'à l'arrêt » côté passerelle).
+
+## 2026-11-18 — réveil de 13 h : un seul appareil publie la position (#18580, #18714)
+
+- Reprise : #19652 (liste seule iOS + Android) fusionnée, aucune PR de la routine ouverte, aucune branche vivante sur
+  les centres de partage : lot réservé avant toute écriture (`claude/cercles-18580-un-seul-publie`).
+- Ce qui restait de #18580 et #18714 après la liste seule (#19284, #19287) : un appareil qui PUBLIAIT et relisait une
+  liste agrandie par un autre appareil l'adoptait sans céder ; les deux envoyaient leur position et la personne voyait
+  le point sauter. Et iOS, au repli vers une passerelle d'avant la liste seule, pouvait faire surgir la demande de
+  permission pour un simple retrait.
+- Livré, sur les trois clients : à la relecture du partage servi, une liste qui a GAGNÉ quelque chose (une personne de
+  plus, une autre précision, une échéance repoussée de plus de 5 min) fait céder l'appareil d'ici (marque « reçue »,
+  suivi coupé, aucun relevé ne part). Un retrait fait ailleurs passe par la liste seule et ne change pas qui publie ;
+  « Partager » d'ici en refait l'appareil qui publie. iOS : `silentFix()` au repli, jamais de demande de permission.
+  Les points 1 et 3 de #18714 sont tenus par la liste seule (une personne qui n'est plus servie est ignorée) et par
+  `silentFix` ; le point 2 par ce lot.
