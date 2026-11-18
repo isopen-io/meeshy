@@ -1516,3 +1516,9 @@ socket jusqu'au client.
 3. #19597, #19596, puis #19473, #18668 et #18692 (messages d'exception bruts), #19381, #19253, #19294, #19295, #19255.
 4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
 5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 47 — 2026-11-18 (en cours)
+
+- **Base** : `origin/dev` @ `2fcb40b94`. La PR du cycle 46 (#19704, qui contient aussi le cycle 45) attend sa CI, en file depuis 17:22.
+- **Branche** : `claude/determined-volta-mn4257`, partie de `dev` (fichiers disjoints de #19704).
+- **Objectif** : #19648 (une traduction vocale sans audio rend `audioUrl` null de bout en bout) et #19596 (horodatages d'un job vocal en ISO 8601 UTC avec `Z`).
