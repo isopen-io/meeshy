@@ -44,6 +44,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { readReceiptCircleOpen } from '../../helpers/read-receipt-circle-world';
 import Fastify, { FastifyInstance } from 'fastify';
 
 const CONVERSATION_ID = '507f1f77bcf86cd799439012';
@@ -114,6 +115,10 @@ import { conversationReceiptsRoutes } from '../../../routes/conversations/receip
 import { makeChainableIO } from '../../helpers/chainable-io';
 
 const mockPrisma: any = {
+  // #19385 — le cercle n'est pas le sujet de cette suite : monde OUVERT, soit
+  // ce qu'elle supposait avant que la loi existe. Les témoins qui GARDENT la
+  // loi construisent, eux, des paires sous le plancher.
+  ...readReceiptCircleOpen(),
   participant: { findFirst: jest.fn<any>(), findMany: jest.fn<any>(), findUnique: jest.fn<any>() },
   message: { findFirst: jest.fn<any>(), findMany: jest.fn<any>(), findUnique: jest.fn<any>(), count: jest.fn<any>() },
   conversationReadCursor: {

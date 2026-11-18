@@ -220,14 +220,23 @@ describe.each(DOORS)('#7357 — GET status-details ($name) garde plancher et sup
     const response = await serve({ createdAt: AFTER_FLOOR, deletedAt: null });
 
     expect(response.statusCode).toBe(200);
-    expect(service).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ historyFloor: HISTORY_FLOOR }));
+    // #19385 — assertion sur la PROPRIÉTÉ, pas sur la POSITION : les deux
+    // portes de ce `describe.each` n'ont plus la même arité (le message prend
+    // le viewer en 2e, la pièce jointe le porte dans ses options), et une
+    // assertion positionnelle ne peut pas décrire les deux. Ce qui est sous
+    // témoin est que le plancher ATTEINT le service.
+    expect(service.mock.calls.at(-1)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ historyFloor: HISTORY_FLOOR })])
+    );
   });
 
   it('sert un membre sans restriction (plancher null) — pas de régression', async () => {
     const response = await serve({ createdAt: BEFORE_FLOOR, deletedAt: null }, { id: PARTICIPANT_ID });
 
     expect(response.statusCode).toBe(200);
-    expect(service).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ historyFloor: null }));
+    expect(service.mock.calls.at(-1)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ historyFloor: null })])
+    );
   });
 
   it("rend 404 pour un message SUPPRIMÉ — ses accusés partent avec lui", async () => {

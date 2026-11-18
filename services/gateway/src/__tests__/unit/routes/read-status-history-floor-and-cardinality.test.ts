@@ -21,6 +21,7 @@
  */
 
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from '@jest/globals';
+import { readReceiptCircleOpen } from '../../helpers/read-receipt-circle-world';
 import Fastify, { FastifyInstance } from 'fastify';
 import messageReadStatusRoutes from '../../../routes/message-read-status';
 
@@ -83,6 +84,10 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 // --- Prisma mocké ---
 
 const mockPrisma: any = {
+  // #19385 — le cercle n'est pas le sujet de cette suite : monde OUVERT, soit
+  // ce qu'elle supposait avant que la loi existe. Les témoins qui GARDENT la
+  // loi construisent, eux, des paires sous le plancher.
+  ...readReceiptCircleOpen(),
   participant: {
     findFirst: jest.fn(),
     findMany: jest.fn(),
@@ -251,7 +256,7 @@ describe('#4179 — GET /messages/:messageId/read-status respecte le plancher d\
     });
 
     expect(response.statusCode).toBe(200);
-    expect(mockGetMessageReadStatus).toHaveBeenCalledWith(MESSAGE_ID, CONVERSATION_ID);
+    expect(mockGetMessageReadStatus).toHaveBeenCalledWith(MESSAGE_ID, CONVERSATION_ID, expect.anything());
   });
 
   it('sert normalement un membre SANS restriction (plancher null — pas de régression)', async () => {
@@ -269,7 +274,7 @@ describe('#4179 — GET /messages/:messageId/read-status respecte le plancher d\
     });
 
     expect(response.statusCode).toBe(200);
-    expect(mockGetMessageReadStatus).toHaveBeenCalledWith(MESSAGE_ID, CONVERSATION_ID);
+    expect(mockGetMessageReadStatus).toHaveBeenCalledWith(MESSAGE_ID, CONVERSATION_ID, expect.anything());
   });
 });
 

@@ -272,7 +272,7 @@ describe('GET /messages/:messageId/read-status', () => {
     const body = response.json();
     expect(body.success).toBe(true);
     expect(body.data).toMatchObject(expectedStatus);
-    expect(mockGetMessageReadStatus).toHaveBeenCalledWith(MESSAGE_ID, CONVERSATION_ID);
+    expect(mockGetMessageReadStatus).toHaveBeenCalledWith(MESSAGE_ID, CONVERSATION_ID, expect.anything());
   });
 
   it('returns 500 when readStatusService.getMessageReadStatus throws', async () => {

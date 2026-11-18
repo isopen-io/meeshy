@@ -345,6 +345,7 @@ describe('#4349 critère 2 — GET /conversations/:conversationId/receipts', () 
 
     expect(mockGetMessageStatusDetails).toHaveBeenLastCalledWith(
       MESSAGE_ID,
+      expect.anything(),
       expect.objectContaining({ offset: 1, limit: 1 })
     );
   });
@@ -356,6 +357,7 @@ describe('#4349 critère 2 — GET /conversations/:conversationId/receipts', () 
 
     expect(mockGetMessageStatusDetails).toHaveBeenCalledWith(
       MESSAGE_ID,
+      expect.anything(),
       expect.objectContaining({ filter: 'read' })
     );
   });

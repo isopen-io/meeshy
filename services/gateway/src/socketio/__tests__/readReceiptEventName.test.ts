@@ -33,6 +33,7 @@
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { readReceiptCircleOpen } from '../../__tests__/helpers/read-receipt-circle-world';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { broadcastReadStatus } from '../broadcastReadStatus';
 import { makeChainableIO } from '../../__tests__/helpers/chainable-io';
@@ -60,6 +61,9 @@ function makeHarness(overrides: { unreadCount?: number } = {}) {
   const deps = {
     io,
     prisma: {
+      // #19385 — le cercle n'est pas le sujet de cette suite : monde OUVERT,
+      // soit ce qu'elle supposait avant que la loi existe.
+      ...readReceiptCircleOpen(),
       conversationReadCursor: {
         findUnique: jest.fn<any>().mockResolvedValue({
           lastReadAt: new Date('2026-08-17T10:00:00.000Z'),

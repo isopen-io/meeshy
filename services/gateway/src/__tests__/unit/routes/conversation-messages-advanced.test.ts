@@ -1,4 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { readReceiptCircleOpen } from '../../helpers/read-receipt-circle-world';
 
 // ─── Module mocks (hoisted before imports) ────────────────────────────────────
 
@@ -194,6 +195,10 @@ const PART_ID = '507f1f77bcf86cd799439055';
 // ─── Factories ────────────────────────────────────────────────────────────────
 
 const makePrisma = (): any => ({
+  // #19385 — le cercle n'est pas le sujet de cette suite : monde OUVERT, soit
+  // ce qu'elle supposait avant que la loi existe. Les témoins qui GARDENT la
+  // loi construisent, eux, des paires sous le plancher.
+  ...readReceiptCircleOpen(),
   message: {
     findFirst: jest.fn().mockResolvedValue(null),
     findMany: jest.fn().mockResolvedValue([]),
@@ -238,6 +243,10 @@ const makePrisma = (): any => ({
     count: jest.fn().mockResolvedValue(0),
   },
   user: {
+    // #19385 — le monde OUVERT du cercle d'abord (il porte `findMany` pour
+    // l'âge et `findUnique` pour le blocage), les clés de la suite ensuite :
+    // une clé répandue puis redéclarée est PERDUE.
+    ...readReceiptCircleOpen().user,
     findUnique: jest.fn().mockResolvedValue(null),
   },
   conversation: {
