@@ -33,6 +33,7 @@ import { TURNCredentialService } from './TURNCredentialService';
 import { ActiveCallClaim, type ActiveCallChangedListener } from './calls/activeCallClaim';
 import { fireAndForget } from './calls/fireAndForget';
 import { LoneSurvivorGrace } from './calls/loneSurvivorGrace';
+import { isDuoCall } from './calls/answeredCallRoster';
 import { LIVE_MESSAGE_MARK } from './messaging/liveMessage';
 import { isConversationClosed } from './messaging/conversationWriteAdmission';
 import type { CallHistoryItem } from './callHistory';
@@ -1340,10 +1341,14 @@ export class CallService {
     return (error as { code?: string } | null)?.code === 'P2034';
   }
 
-  /** A missing conversation reads as NOT direct — fail toward never ending a call others may still be on. */
-  private async isDirectConversation(conversationId: string): Promise<boolean> {
-    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId }, select: { type: true } });
-    return conversation?.type === 'direct';
+  /**
+   * Un DUO (conversation directe, personne d'invité) se termine au premier départ ; un appel direct devenu
+   * groupe par invitation suit la règle du groupe (#19238). Une conversation absente n'est pas un duo —
+   * on ne termine jamais un appel que d'autres occupent peut-être encore.
+   */
+  private async isDuoSession(call: { readonly conversationId: string; readonly invitedUserIds?: readonly string[] | null }): Promise<boolean> {
+    const conversation = await this.prisma.conversation.findUnique({ where: { id: call.conversationId }, select: { type: true } });
+    return isDuoCall({ conversation, invitedUserIds: call.invitedUserIds ?? null });
   }
 
   /**
@@ -1582,7 +1587,7 @@ export class CallService {
       }
 
       // Mirror the normal direct/last-participant decision below.
-      const idemIsDirect = await this.isDirectConversation(existing.conversationId);
+      const idemIsDirect = await this.isDuoSession(existing);
       const idemRemaining = existing.participants.filter((p) => !p.leftAt).length;
       if (!idemIsDirect && idemRemaining > 1) {
         // Group call with others still active and this leaver already gone:
@@ -1714,7 +1719,7 @@ export class CallService {
     // call stayed open, no call:ended was broadcast, and the caller's ringback kept
     // playing until they manually hung up. GROUP calls still continue until the
     // last participant leaves.
-    const isDirectCall = data.snapshot?.isDirectCall ?? await this.isDirectConversation(call.conversationId);
+    const isDirectCall = data.snapshot?.isDirectCall ?? await this.isDuoSession(call);
 
     // Vague 183 — `isLastParticipant` is decided FRESH inside the
     // transaction (see below), never from `call.participants` here. That
@@ -2116,8 +2121,8 @@ export class CallService {
     // "not direct" — fail toward NOT destroying a call that may still be
     // live for others.
     const isDirectCall = options?.session
-      ? options.session.conversation?.type === 'direct'
-      : await this.isDirectConversation(call.conversationId);
+      ? isDuoCall({ conversation: options.session.conversation ?? null, invitedUserIds: options.session.invitedUserIds ?? null })
+      : await this.isDuoSession(call);
     if (options?.preJoinDecline) {
       if (!isDirectCall) {
         logger.info('ℹ️ Pre-join decline on a group call — session continues for other invitees', {
