@@ -143,6 +143,57 @@ journal daté ne se lit que par celui qui sait déjà quoi y chercher.
 > dans le code, pas chez l'utilisateur, et une session EST un utilisateur de
 > ses outils.
 
+## Ce que le cycle a livré en plus, et ce qu'il a payé pour l'apprendre
+
+Deux lots se sont ajoutés en attendant le verdict Android, tous deux de la même
+famille que le premier — **un vérificateur qui ne dit pas tout** :
+
+- **#19707** — le générateur i18n relevait sa dette une clé à la fois. Il la dit
+  désormais en entier, son nombre d'abord. `generate()` passe en DEUX temps :
+  tout résoudre, puis rendre — sans quoi une collision de noms du module 3
+  masquerait les entrées fautives du module 1.
+- **#19710** — le cliquet du texte natif disait « 2 libellés de plus de 80
+  caractères » sans dire LESQUELS. Il les nomme, bornés à dix. Les paires
+  `{ famille, clé, valeur }` deviennent la source unique des compteurs ET du
+  relevé : deux balayages séparés divergeraient sur la famille, la valeur
+  française ou les pluriels.
+
+Et un rouge de `dev` corrigé en passant : `journal-one-file-per-entry-guard`
+refusait `tasks/lessons/2026-11-18-jvm-check-ne-prouve-que-core-model.md`, posé
+par un autre lot avec un titre `#` et deux titres `##` là où l'invariant #7711
+en exige un seul, en première ligne. Mesuré sur un export propre de `origin/dev`
+(`cb6356e61`) : 956 fichiers, 1 malformé. Le contenu est intact — seuls les
+niveaux de titre changent — et la carte le cite désormais, puisqu'une leçon
+qu'aucun index ne nomme ne se lit pas.
+
+### Le prix de la cadence, et c'est le plus instructif du cycle
+
+Les trois commits de documentation poussés pendant l'attente ont évincé, un à
+un, les runs en cours (`cancel-in-progress`). Sur les ~70 jobs des quatre SHA
+successifs, **aucun n'a rendu de verdict** : seuls les agrégateurs concluaient,
+rouges faute de résumé à agréger. Quatre fausses alertes, quatre tours de
+triage, et les tranches macOS annulées avant de démarrer — les suites du SDK iOS
+n'ont tourné sur aucun de ces SHA.
+
+> **Un commit qui n'a pas besoin du verdict ne se pousse pas en attendant le
+> verdict.** Réciproque exacte de la leçon du cycle 157 (« un run ANNULÉ n'est
+> ni un verdict ni une panne », qui dit de ne pas la LIRE comme un échec) :
+> celle-ci dit de ne pas la PROVOQUER, et c'est celle qu'un agent paie, puisqu'il
+> pousse volontiers de la documentation pour occuper une attente.
+
+Détail : `tasks/lessons/2026-11-18-une-poussee-annule-le-verdict-en-vol.md`.
+
+### Et deux gates du même nom jugeaient deux ARBRES
+
+Sur le MÊME `head_sha`, `node scripts/check-verbosity-native.mjs` a rendu `ok`
+dans « Graphe des modules Android » et `ECHEC` ×2 dans « Gardes iOS (texte) ».
+`android.yml` n'a pas de `ref:` à son `checkout` et lit donc `refs/pull/N/merge`
+— la tête fusionnée dans la base VIVANTE — quand `ios.yml` lit
+`pull_request.head.sha`, la tête seule. Les deux avaient raison sur l'arbre
+qu'ils voyaient, et aucun ne disait lequel. L'asymétrie se trompe dans les deux
+sens : la tête fusionnée VERDIT un rouge que la PR introduit dès que la base le
+corrige ailleurs. Ouvert en **#19712**.
+
 ## Suivis
 
 - **#19703** — l'accusé d'ouverture d'Android : `caughtUpToMessageId`
@@ -165,3 +216,16 @@ journal daté ne se lit que par celui qui sait déjà quoi y chercher.
   commit `1f0acea17` l'ayant soldé en passant. L'issue reste ouverte sur son
   second critère — le relevé complet à 0 entrée, et le `--check` qui RELÈVE tout
   avant de conclure plutôt que de s'arrêter au premier manquement.
+- **#19703** — l'accusé d'ouverture d'Android (le lot que ce cycle a instruit
+  sans le livrer, et dont la loi livrée ici est le prérequis).
+- **#19712** — quel arbre un gate doit juger, et le dire dans sa sortie.
+- **#19654 est FERMÉE** : `--check` rend `EXIT=0` sur `origin/dev` et le relevé
+  complet rend 0 entrée absente sur 7 565. Sa « troisième forme de dérive » n'en
+  était pas une — 338 clés iOS sont réclamées par plusieurs modules, c'est le
+  motif normal du dépôt et la génération est verte avec. **Une énumération qui
+  range ses trouvailles par FORME affirme aussi que chaque forme est un
+  défaut** ; celle-ci avait raison sur deux et avait pris pour une dérive un
+  motif dont elle n'avait pas mesuré la population.
+- **#19709 est FERMÉE** : les deux explications de « Pour aller plus loin »
+  raccourcies sur `dev` par `df2bc5b9d` (131 → 78 et 118 → 80 caractères), sans
+  qu'aucun budget de plafond ne monte.
