@@ -711,3 +711,46 @@ describe('GET threads — la citation d’un éphémère échu POUR CE LECTEUR e
     await app.close();
   });
 });
+
+describe('GET threads — #19672 : le chemin disque des pistes traduites ne sort pas', () => {
+  const DISK_PATH = '/app/uploads/translated/507f1f77bcf86cd799439055_en.mp3';
+  const voiceNote = (id: string) => ({
+    id,
+    fileName: 'note.m4a',
+    mimeType: 'audio/mp4',
+    fileUrl: `/api/v1/attachments/file/${id}.m4a`,
+    thumbnailUrl: null,
+    translations: {
+      en: {
+        type: 'audio',
+        transcription: 'Hello there',
+        path: DISK_PATH,
+        url: `/api/v1/attachments/file/translated/${id}_en.mp3`,
+        durationMs: 1200,
+        format: 'mp3',
+      },
+    },
+  });
+
+  it('ni le parent ni ses réponses ne servent translations.<lang>.path', async () => {
+    const parent = { ...mockParentMessage, messageType: 'audio', attachments: [voiceNote('507f1f77bcf86cd799439055')] };
+    const replyWithVoice = { ...mockReplyMessage, messageType: 'audio', attachments: [voiceNote('507f1f77bcf86cd799439066')] };
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue(parent),
+        findMany: jest.fn<any>().mockResolvedValueOnce([replyWithVoice]).mockResolvedValueOnce([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data;
+    expect(data.parent.attachments[0].translations.en).toMatchObject({ transcription: 'Hello there', format: 'mp3' });
+    expect(data.replies[0].attachments[0].translations.en).toMatchObject({ transcription: 'Hello there', format: 'mp3' });
+    expect(data.parent.attachments[0].translations.en).not.toHaveProperty('path');
+    expect(data.replies[0].attachments[0].translations.en).not.toHaveProperty('path');
+    expect(res.body).not.toContain('/app/uploads');
+    await app.close();
+  });
+});

@@ -13,11 +13,13 @@ import uuid
 import json
 from typing import Optional, List, Dict, Any, Callable
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from enum import Enum
 from collections import OrderedDict
 import base64
+
+from utils.served_time import served_utc
 
 from .job_webhook import admitted_webhook_url, send_job_webhook
 
@@ -74,7 +76,7 @@ class TranslationJob:
     error_code: Optional[str] = None
 
     # Timing
-    created_at: datetime = field(default_factory=datetime.now)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
@@ -104,9 +106,9 @@ class TranslationJob:
             "result": self.result,
             "error": self.error,
             "error_code": self.error_code,
-            "created_at": self.created_at.isoformat(),
-            "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "created_at": served_utc(self.created_at),
+            "started_at": served_utc(self.started_at),
+            "completed_at": served_utc(self.completed_at),
             "target_languages": self.target_languages,
             "webhook_url": self.webhook_url,
             "model_version": self.model_version,
@@ -475,7 +477,7 @@ class TranslationPipelineService:
 
             if job.status == JobStatus.PENDING:
                 job.status = JobStatus.CANCELLED
-                job.completed_at = datetime.now()
+                job.completed_at = datetime.now(timezone.utc)
                 self._stats["jobs_cancelled"] += 1
                 logger.info(f"[PIPELINE] ❌ Job annulé: {job_id}")
                 return True
@@ -495,7 +497,7 @@ class TranslationPipelineService:
         try:
             # Marquer comme en cours
             job.status = JobStatus.PROCESSING
-            job.started_at = datetime.now()
+            job.started_at = datetime.now(timezone.utc)
 
             result = PipelineResult(job_id=job_id)
 
@@ -692,7 +694,7 @@ class TranslationPipelineService:
             job.status = JobStatus.COMPLETED
             job.progress = 100
             job.current_step = "completed"
-            job.completed_at = datetime.now()
+            job.completed_at = datetime.now(timezone.utc)
             job.result = result.to_dict()
             job._pipeline_result = result
 
@@ -725,7 +727,7 @@ class TranslationPipelineService:
             job.status = JobStatus.FAILED
             job.error = str(e)
             job.error_code = type(e).__name__
-            job.completed_at = datetime.now()
+            job.completed_at = datetime.now(timezone.utc)
             self._stats["jobs_failed"] += 1
 
             # CRITIQUE: Notifier via callback même en cas d'échec
@@ -900,13 +902,13 @@ class TranslationPipelineService:
 
     async def cleanup_old_jobs(self):
         """Nettoie les vieux jobs terminés"""
-        cutoff = datetime.now() - timedelta(hours=self._job_ttl_hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=self._job_ttl_hours)
 
         async with self._jobs_lock:
             to_remove = []
             for job_id, job in self._jobs.items():
                 if job.status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
-                    if job.completed_at and job.completed_at < cutoff:
+                    if job.completed_at and job.completed_at.astimezone(timezone.utc) < cutoff:
                         to_remove.append(job_id)
 
             for job_id in to_remove:

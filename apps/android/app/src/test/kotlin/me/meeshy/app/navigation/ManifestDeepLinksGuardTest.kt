@@ -78,6 +78,12 @@ class ManifestDeepLinksGuardTest {
     }
 
     @Test
+    fun `a verified app link claims only the hosts that serve assetlinks`() {
+        val strayHosts = filters.filter { it.verified }.flatMap { it.hosts }.toSet() - hosts.toSet()
+        assertThat(strayHosts).isEmpty()
+    }
+
+    @Test
     fun `the share path is not claimed so the browser keeps it`() {
         assertThat(hosts.none { host -> filters.any { it.claims("https", host, "/share") } }).isTrue()
     }

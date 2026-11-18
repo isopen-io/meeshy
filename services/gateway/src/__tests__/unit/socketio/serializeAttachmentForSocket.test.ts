@@ -186,3 +186,40 @@ describe('serializeAttachmentForSocket', () => {
     expect(result.videoCodec).toBe('avc1');
   });
 });
+
+// ─── #19672 — le chemin disque d'une piste traduite ne part pas sur le fil ────
+
+describe('serializeAttachmentForSocket — #19672', () => {
+  const DISK_PATH = '/app/uploads/translated/att-1_en.mp3';
+  const storedTranslations = () => ({
+    en: {
+      type: 'audio',
+      transcription: 'Hello there',
+      path: DISK_PATH,
+      url: '/api/v1/attachments/file/translated/att-1_en.mp3',
+      durationMs: 1200,
+      format: 'mp3',
+      cloned: true,
+      segments: [{ text: 'Hello', startMs: 0, endMs: 400 }],
+      createdAt: '2026-11-18T10:00:01.000Z',
+    },
+  });
+
+  it('retire translations.<lang>.path de la charge message:new / attachment:updated', () => {
+    const result = serializeAttachmentForSocket(
+      makeRaw({ mimeType: 'audio/mp4', translations: storedTranslations() }) as never,
+    );
+
+    expect(JSON.stringify(result)).not.toContain('/app/uploads');
+    expect((result.translations as Record<string, Record<string, unknown>>).en).not.toHaveProperty('path');
+  });
+
+  it('garde tous les autres champs de la piste traduite', () => {
+    const { path: _disk, ...served } = storedTranslations().en;
+    const result = serializeAttachmentForSocket(
+      makeRaw({ mimeType: 'audio/mp4', translations: storedTranslations() }) as never,
+    );
+
+    expect(result.translations).toEqual({ en: served });
+  });
+});
