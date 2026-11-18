@@ -11,7 +11,7 @@ import { retireDeletedAccountLater } from './account-deleted';
 import { endGuestAccess, type GuestAccessEnd } from './guest-access-end';
 import { VIEWER_ID } from './fixtures-base';
 import { ownerCredentialOf, ownerScopeOf, type OwnerCredential } from './owner-session';
-import { sessionIdentityKey, sessionStore, type SessionState, type SessionStoreApi } from './session';
+import { heldSessionKey, sessionIdentityKey, sessionStore, type SessionState, type SessionStoreApi } from './session';
 
 /**
  * LE TRANSPORT DE PRODUCTION — l'UNIQUE instance que toute l'application
@@ -99,23 +99,41 @@ type AccountEnd = Pick<typeof import('./account-end'), 'endRevokedSession'>;
 function endWithoutModule(store: SessionStoreApi, storage: SafeStorage): void {
   const state = store.getState();
   const current = state.session;
-  if (current.status === 'guest' && current.account !== undefined) {
-    state.dropAnonymous(current.guest.conversationId);
-    return;
-  }
   const leaving = current.status === 'authenticated' && state.holdsDeviceSession() ? current.user.id : null;
   state.clearSession();
   if (leaving !== null) notePendingAccountEnd(storage, leaving);
 }
 
-/** La fin d'une session refusée se charge quand elle sert (`account-end.ts`) : la première peinture n'en porte que le repli. */
+/** QUELLE session un refus vise — son état et ses jetons : un compte et l'identité anonyme qu'il tient partagent les jetons du compte (`heldSessionKey`), pas l'état. */
+const refusedSessionKey = (session: SessionState): string => `${session.status} ${heldSessionKey(session) ?? ''}`;
+
+/**
+ * La fin d'une session refusée se charge quand elle sert (`account-end.ts`) : la première peinture n'en porte que le repli.
+ *
+ * ELLE VISE LA SESSION REFUSÉE, JAMAIS CELLE QUE L'ONGLET TIENT QUAND LE MORCEAU ARRIVE (audit #19352) :
+ * - l'identité anonyme d'un compte (#8816) finit SUR-LE-CHAMP — rien à charger, et la navigation qui suit la fin
+ *   d'un accès d'invité rendrait la session au COMPTE avant la fin chargée, qui le déconnecterait alors ;
+ * - une autre session finit à l'arrivée du morceau (ou de son échec) seulement si l'onglet la tient encore : s'il a
+ *   suivi l'appareil passé à un autre compte, ou repris une session neuve, rien ne finit.
+ */
 export function endRefusedSession(
   store: SessionStoreApi,
   { load = () => import('./account-end'), storage }: { readonly load?: () => Promise<AccountEnd>; readonly storage?: SafeStorage } = {},
 ): void {
+  const refused = store.getState().session;
+  if (refused.status === 'guest' && refused.account !== undefined) {
+    store.getState().dropAnonymous(refused.guest.conversationId);
+    return;
+  }
+  const refusedKey = refusedSessionKey(refused);
+  const stillRefused = (): boolean => refusedSessionKey(store.getState().session) === refusedKey;
   void load()
-    .then(({ endRevokedSession }) => endRevokedSession(store))
-    .catch(() => endWithoutModule(store, storage ?? safeLocalStorage()));
+    .then(({ endRevokedSession }) => {
+      if (stillRefused()) endRevokedSession(store);
+    })
+    .catch(() => {
+      if (stillRefused()) endWithoutModule(store, storage ?? safeLocalStorage());
+    });
 }
 
 const endSessionOf = (store: SessionStoreApi): void => endRefusedSession(store);
