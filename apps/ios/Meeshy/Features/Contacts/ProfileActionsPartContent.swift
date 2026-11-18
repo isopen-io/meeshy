@@ -187,6 +187,7 @@ private struct ProfilePhoneSection: View {
     private func section(now: Date) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileActionsWording.phone)
+            InactivityAlertDetailSection(userId: request.userId)
             if let board = ProfileLiveBoard.resolve(
                 level: circle.toolGateLevel, place: nil,
                 battery: ProfileLiveSourceRules.battery(battery, now: now),
@@ -207,6 +208,9 @@ private struct ProfilePhoneSection: View {
                 ProfileBatteryRow(userId: request.userId, displayName: request.displayName,
                                   canPull: circle.offersBatteryPull, asksConsent: circle.batteryAsksConsent,
                                   showsDetail: false)
+            }
+            if circle.offersInactivity {
+                ProfileInactivityRow(userId: request.userId, tint: request.tint)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -121,7 +121,7 @@ export const InactivityDetailCard = memo(function InactivityDetailCard({ detail 
         {position === null ? null : (
           <a
             data-inactivity-map=""
-            href={mapsUrlOf({ latitude: position.latitude, longitude: position.longitude, name: null }, { platform: coqueCourante()?.getPlatform?.() })}
+            href={mapsUrlOf({ latitude: position.latitude, longitude: position.longitude, name: null, address: null }, { platform: coqueCourante()?.getPlatform?.() })}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center text-caption font-semibold underline focus-visible:outline-2"

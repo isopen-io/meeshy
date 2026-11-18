@@ -39,6 +39,8 @@ struct ConnectionBanner: View {
     @ObservedObject private var batteryAnnouncements: BatteryAnnouncementFeed
     /// Le téléphone injoignable d'un proche (#18737) : même nature, même rotation, même extinction.
     @ObservedObject private var phoneAnnouncements: PhoneReachabilityAnnouncementFeed
+    /// L'alerte d'inactivité d'un Sang et son retour (#18738) : même nature, même rotation, même extinction.
+    @ObservedObject private var inactivityAnnouncements: InactivityAnnouncementFeed
     @StateObject private var statusVM = ConnectionStatusViewModel()
     @StateObject private var syncPillVM = SyncPillViewModel()
     /// Source des frappes hors conversation. Injectée EXPLICITEMENT par
@@ -146,11 +148,13 @@ struct ConnectionBanner: View {
         activeConversationId: (() -> String?)? = nil,
         inAppNotices: NotificationToastManager = .shared,
         batteryAnnouncements: BatteryAnnouncementFeed = .shared,
-        phoneAnnouncements: PhoneReachabilityAnnouncementFeed = .shared
+        phoneAnnouncements: PhoneReachabilityAnnouncementFeed = .shared,
+        inactivityAnnouncements: InactivityAnnouncementFeed = .shared
     ) {
         self.inAppNotices = inAppNotices
         self.batteryAnnouncements = batteryAnnouncements
         self.phoneAnnouncements = phoneAnnouncements
+        self.inactivityAnnouncements = inactivityAnnouncements
         self.isStoryViewerPresenting = isStoryViewerPresenting
         self.onItemTap = onItemTap
         self.activeConversationId = activeConversationId
@@ -243,6 +247,7 @@ struct ConnectionBanner: View {
 
         result.append(contentsOf: batteryAnnouncements.entries)
         result.append(contentsOf: phoneAnnouncements.entries)
+        result.append(contentsOf: inactivityAnnouncements.entries)
 
         result.append(contentsOf: Self.typingEntries(
             typingUsers: typingSource.typingUsers,

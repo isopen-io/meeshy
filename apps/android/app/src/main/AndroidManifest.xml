@@ -363,6 +363,11 @@
             android:name=".push.DeclineCallReceiver"
             android:exported="false" />
 
+        <!-- Bouton « Je vais bien » de la question « Tout va bien ? » (#18738) : POST /me/wellness/ok -->
+        <receiver
+            android:name=".inactivity.WellnessOkReceiver"
+            android:exported="false" />
+
         <!-- Home-screen widget: unread-count scaffold (feature-parity.md
              "Home-screen widgets" — first sub-slice). Parity target: iOS
              MeeshyWidgets.UnreadCountWidget. -->
