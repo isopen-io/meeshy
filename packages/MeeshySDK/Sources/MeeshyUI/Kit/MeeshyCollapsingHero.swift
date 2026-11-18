@@ -166,14 +166,17 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     @ViewBuilder
     private func collapsedButton(recipe: MeeshyCollapsingHeroRecipe) -> some View {
         if recipe.barOwnsIdentity, let onCollapsedTap {
+            let height = CGFloat(collapsedHeight)
+            let inset = CGFloat(MeeshyCollapsingHeroRecipe.controlInsetExpanded + MeeshyCollapsingHeroRecipe.controlTarget)
             Color.clear
-                .frame(height: CGFloat(collapsedHeight))
+                .frame(height: height)
                 .contentShape(Rectangle())
-                .padding(.horizontal, CGFloat(MeeshyCollapsingHeroRecipe.controlInsetExpanded + MeeshyCollapsingHeroRecipe.controlTarget))
+                .padding(.horizontal, inset)
                 .onTapGesture(perform: onCollapsedTap)
                 .accessibilityElement()
                 .accessibilityLabel(collapsedTapLabel ?? title)
                 .accessibilityAddTraits(.isButton)
+                .accessibilityAction { onCollapsedTap() }
         }
     }
 }
