@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
@@ -187,5 +188,26 @@ class PostEngagementBindingTest {
 
         eventually { grid("author").single().let { it.isBookmarkedByMe == true && it.bookmarkCount == 4 } && posts.cachedPost("p1")?.isBookmarkedByMe == true }
         assertThat(saved().map { it.id }).containsExactly("p1", "p9")
+    }
+
+    @Test
+    fun `a post saved elsewhere that the saved copy lacks makes the next open revalidate it`() = runTest {
+        seeded()
+        assertThat(userPosts.cachedBookmarks()).isInstanceOf(CacheResult.Fresh::class.java)
+
+        bookmarked.emit(SocketPostBookmarkedData(postId = "p5", bookmarked = true, bookmarkCount = 1))
+
+        eventually { userPosts.cachedBookmarks() is CacheResult.Stale }
+        assertThat(saved().map { it.id }).containsExactly("p1", "p9").inOrder()
+    }
+
+    @Test
+    fun `a post saved again that the saved copy already holds keeps the copy fresh`() = runTest {
+        seeded()
+
+        bookmarked.emit(SocketPostBookmarkedData(postId = "p1", bookmarked = true, bookmarkCount = 4))
+
+        eventually { saved().first { it.id == "p1" }.bookmarkCount == 4 }
+        assertThat(userPosts.cachedBookmarks()).isInstanceOf(CacheResult.Fresh::class.java)
     }
 }
