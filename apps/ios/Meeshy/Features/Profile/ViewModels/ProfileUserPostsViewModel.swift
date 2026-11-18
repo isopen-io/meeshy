@@ -335,11 +335,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
                 if repostedOverrides[post.id] == post.isRepostedByMe { repostedOverrides[post.id] = nil }
             }
 
-            // The live VM keeps the full paginated list in memory; the cache is
-            // bounded to the NEWEST 100. GRDBCacheStore.save keeps `suffix(100)`
-            // (oldest, posts are newest-first) so we persist `prefix(100)` to
-            // avoid trimming the newest posts on cold start.
-            await bestEffort("profileUserPostsViewModel.feed.save", category: .cache) { try await CacheCoordinator.shared.feed.save(Array(posts.prefix(100)), for: cacheKey) }
+            await saveHead()
             // Persisté À CÔTÉ de la page (même clé) : la prochaine instance du
             // VM reprend au curseur profond au lieu de se coincer sur un cache
             // `.fresh` sans curseur.
@@ -578,14 +574,29 @@ final class ProfileUserPostsViewModel: ObservableObject {
         persistHead()
     }
 
+    private func applyUpdated(_ apiPost: APIPost) {
+        guard let index = posts.firstIndex(where: { $0.id == apiPost.id }) else { return }
+        var merged = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
+        // L'état personnel n'est pas porté par un broadcast destiné à
+        // toute l'audience — le reprendre de l'exemplaire local évite
+        // que l'édition d'un poste éteigne le cœur de son lecteur.
+        merged.isLiked = posts[index].isLiked
+        merged.isBookmarkedByMe = posts[index].isBookmarkedByMe
+        merged.isRepostedByMe = posts[index].isRepostedByMe
+        posts[index] = merged
+    }
+
     private func persistHead() {
+        Task { [weak self] in await self?.saveHead() }
+    }
+
+    /// The live VM keeps the full paginated list in memory; the cache is
+    /// bounded to the NEWEST 100. GRDBCacheStore.save keeps `suffix(100)`
+    /// (oldest, posts are newest-first) so we persist `prefix(100)` to
+    /// avoid trimming the newest posts on cold start.
+    private func saveHead() async {
         let head = Array(posts.prefix(100))
-        let key = cacheKey
-        Task {
-            await bestEffort("profileUserPostsViewModel.feed.save", category: .cache) {
-                try await CacheCoordinator.shared.feed.save(head, for: key)
-            }
-        }
+        await bestEffort("profileUserPostsViewModel.feed.save", category: .cache) { try await CacheCoordinator.shared.feed.save(head, for: cacheKey) }
     }
 
     private func subscribeToSocketUpdates() {
@@ -658,18 +669,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
 
         socialSocket.postUpdated
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] apiPost in
-                guard let self, let index = self.posts.firstIndex(where: { $0.id == apiPost.id })
-                else { return }
-                var merged = apiPost.toFeedPost(preferredLanguages: self.preferredLanguages)
-                // L'état personnel n'est pas porté par un broadcast destiné à
-                // toute l'audience — le reprendre de l'exemplaire local évite
-                // que l'édition d'un poste éteigne le cœur de son lecteur.
-                merged.isLiked = self.posts[index].isLiked
-                merged.isBookmarkedByMe = self.posts[index].isBookmarkedByMe
-                merged.isRepostedByMe = self.posts[index].isRepostedByMe
-                self.posts[index] = merged
-            }
+            .sink { [weak self] apiPost in self?.applyUpdated(apiPost) }
             .store(in: &cancellables)
 
         socialSocket.postTranslationUpdated
