@@ -70,13 +70,16 @@ class PostEngagementBinding @Inject constructor(
         everywhere(postId) { PostEngagementPatch.liked(it, count, mine) }
     }
 
-    /** `post:bookmarked` is personal to the viewer: every copy takes the state, and an un-saved post leaves the saved list (#19426). */
+    /**
+     * `post:bookmarked` is personal to the viewer: every copy takes the state, an un-saved post leaves the saved list, and
+     * a post saved that the list lacks makes it revalidate at the next open (#19426).
+     */
     private suspend fun saved(postId: String, bookmarked: Boolean, count: Int) = isolated(postId) {
         val ticket = userPosts.ticket()
         val patch = { post: ApiPost -> PostEngagementPatch.bookmarked(post, bookmarked, count) }
         posts.applyEngagement(postId, patch)
         userPosts.patchEverywhere(postId, patch, ticket)
-        if (!bookmarked) userPosts.removeFromBookmarks(postId, ticket)
+        if (bookmarked) userPosts.bookmarkedElsewhere(postId, ticket) else userPosts.removeFromBookmarks(postId, ticket)
     }
 
     private suspend fun everywhere(postId: String, patch: (ApiPost) -> ApiPost?) = isolated(postId) {
