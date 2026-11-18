@@ -25,5 +25,6 @@ export function ownedApiDeps(owner: string | null = currentIdentity()): Conversa
 }
 
 export function ownedPostMediaUploadDeps(owner: string | null = currentIdentity()): PostMediaUploadDeps {
-  return { ...postMediaUploadDeps, credential: () => (currentIdentity() === owner ? currentCredential() : null) };
+  const identityChanged = (): boolean => currentIdentity() !== owner;
+  return { ...postMediaUploadDeps, credential: () => (identityChanged() ? null : currentCredential()), identityChanged };
 }
