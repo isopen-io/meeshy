@@ -58,6 +58,7 @@ struct ProfileLinksFace: View {
                                 onCreate: { presented = .create })
                 .meeshyCascade(rank: 3)
         }
+        .meeshyCascadeFace()
         .task { await loadAll() }
         .task(id: createRequested.wrappedValue) { openRequestedCreation() }
         .modifier(ProfileLinksPresentations(

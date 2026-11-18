@@ -58,6 +58,36 @@ struct MeeshyCollapsingHeroBarTests {
         #expect(MeeshyHeroBarRecipe.capsuleMinHeight(hasSubtitle: false) == MeeshyHeroBarRecipe.capsuleHeight)
         #expect(MeeshyHeroBarRecipe.capsuleTitleFontSize(hasSubtitle: false) == MeeshyHeroBarRecipe.capsuleTitleSize)
         #expect(MeeshyHeroBarRecipe.capsuleMinHeight(hasSubtitle: true) >= 44)
+        let twoLines = MeeshyHeroBarRecipe.capsuleInsets(hasSubtitle: true)
+        #expect(twoLines.leading == row["debut"] as? Double)
+        #expect(twoLines.trailing == row["fin"] as? Double)
+        let oneLine = MeeshyHeroBarRecipe.capsuleInsets(hasSubtitle: false)
+        let capsule = try KitEvolutionVectors.object(Self.file, "capsule")
+        #expect(oneLine.leading == capsule["debut"] as? Double)
+        #expect(oneLine.trailing == capsule["fin"] as? Double)
+    }
+
+    @Test("l'encre de la capsule suit le ton de son verre : un verre sombre porte l'encre claire, même en apparence claire")
+    func capsule_ink_followsTheGlassTone() throws {
+        for row in try KitEvolutionVectors.rows(Self.file, "capsuleEncre") {
+            let toneName = try #require(row["ton"] as? String)
+            let tone = try #require(MeeshyGlassTone(rawValue: toneName))
+            let appearanceIsDark = try #require(row["apparenceSombre"] as? Bool)
+            let inkIsDark = MeeshyHeroBarRecipe.capsuleInkIsDark(tone: tone, appearanceIsDark: appearanceIsDark)
+            #expect(inkIsDark == row["encreClaire"] as? Bool, "\(row)")
+        }
+    }
+
+    @Test("la capsule pleine passe avant les espaces qui centrent le titre ; ajustée, elle ne réclame rien")
+    func capsule_fill_takesThePlaceBetweenTheCommands() throws {
+        #expect(MeeshyHeroBarRecipe.capsuleLayoutPriority(.fill) > 0)
+        #expect(MeeshyHeroBarRecipe.capsuleLayoutPriority(.fit) == 0)
+        let code = try KitEvolutionVectors.code("MeeshyCollapsingHeroBar.swift")
+        let priorities = code.components(separatedBy: ".layoutPriority(MeeshyHeroBarRecipe.capsuleLayoutPriority(width))").count - 1
+        #expect(priorities == 2, "chaque forme de la capsule (bouton ou en-tête) porte sa priorité")
+        #expect(code.contains("MeeshyHeroBarRecipe.capsuleInsets(hasSubtitle: hasSubtitle)"))
+        #expect(code.contains("textSecondary(isDark: inkIsDark)"))
+        #expect(code.contains("textPrimary(isDark: inkIsDark)"))
     }
 
     @Test("la capsule se lit d'un bloc : titre, étiquette, sous-titre ; une partie vide se tait")

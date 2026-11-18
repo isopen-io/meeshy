@@ -42,13 +42,35 @@ public nonisolated struct MeeshyHeroBarRecipe: Sendable, Equatable {
     public static let capsuleGap: Double = 8
     public static let capsuleTitleSize: Double = 16
 
-    /// La capsule à deux lignes (planche Carte-Proches) : 56 de haut, titre 19, sous-titre 12,5.
+    /// La capsule à deux lignes (planche Carte-Proches) : 56 de haut, 18 au début et à la fin (aucune
+    /// marque en tête), titre 19, sous-titre 12,5.
     public static let capsuleTwoLineHeight: Double = 56
+    public static let capsuleTwoLineHorizontalInset: Double = 18
     public static let capsuleTwoLineTitleSize: Double = 19
     public static let capsuleSubtitleSize: Double = 12.5
 
     public static func capsuleMinHeight(hasSubtitle: Bool) -> Double {
         hasSubtitle ? capsuleTwoLineHeight : capsuleHeight
+    }
+
+    /// Les retraits de la capsule : 18 et 18 à deux lignes, 12 et 16 à une ligne (sa marque en tête).
+    public static func capsuleInsets(hasSubtitle: Bool) -> (leading: Double, trailing: Double) {
+        hasSubtitle
+            ? (capsuleTwoLineHorizontalInset, capsuleTwoLineHorizontalInset)
+            : (capsuleLeadingInset, capsuleTrailingInset)
+    }
+
+    /// La priorité de mise en page de la capsule dans la barre : pleine, elle passe avant les espaces
+    /// qui la centrent et prend toute la place entre les deux commandes.
+    public static func capsuleLayoutPriority(_ width: MeeshyHeroCapsuleWidth) -> Double {
+        width == .fill ? 1 : 0
+    }
+
+    /// L'encre de la capsule suit le TON de son verre, jamais le thème de l'app : tout verre autre que
+    /// `theme` est sombre (Liquid Glass le force en sombre, le verre dessiné le fonce), donc l'encre
+    /// claire (`isDark` vrai) ; le verre `theme` suit l'apparence.
+    public static func capsuleInkIsDark(tone: MeeshyGlassTone, appearanceIsDark: Bool) -> Bool {
+        tone != .theme || appearanceIsDark
     }
 
     public static func capsuleTitleFontSize(hasSubtitle: Bool) -> Double {
@@ -198,6 +220,7 @@ public struct MeeshyCollapsingHeroCapsule<Mark: View>: View {
     private let mark: Mark
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.meeshyGlassTone) private var hostTone
 
     public init(_ title: String,
                 subtitle: String? = nil,
@@ -221,6 +244,10 @@ public struct MeeshyCollapsingHeroCapsule<Mark: View>: View {
 
     private var hasSubtitle: Bool { !(subtitle ?? "").isEmpty }
 
+    private var inkIsDark: Bool {
+        MeeshyHeroBarRecipe.capsuleInkIsDark(tone: tone ?? hostTone, appearanceIsDark: colorScheme == .dark)
+    }
+
     private var spoken: String {
         accessibilityLabel ?? MeeshyHeroBarRecipe.capsuleSpoken(title: title, badge: titleBadge, subtitle: subtitle)
     }
@@ -230,11 +257,13 @@ public struct MeeshyCollapsingHeroCapsule<Mark: View>: View {
             Button(action: action) { capsule }
                 .buttonStyle(.plain)
                 .accessibilityLabel(spoken)
+                .layoutPriority(MeeshyHeroBarRecipe.capsuleLayoutPriority(width))
         } else {
             capsule
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(spoken)
                 .accessibilityAddTraits(.isHeader)
+                .layoutPriority(MeeshyHeroBarRecipe.capsuleLayoutPriority(width))
         }
     }
 
@@ -246,14 +275,14 @@ public struct MeeshyCollapsingHeroCapsule<Mark: View>: View {
                 if let subtitle, hasSubtitle {
                     Text(subtitle)
                         .font(MeeshyFont.relative(CGFloat(MeeshyHeroBarRecipe.capsuleSubtitleSize), weight: .semibold))
-                        .foregroundStyle(MeeshyColors.textSecondary(isDark: colorScheme == .dark))
+                        .foregroundStyle(MeeshyColors.textSecondary(isDark: inkIsDark))
                         .lineLimit(1)
                 }
             }
             if width == .fill { Spacer(minLength: 0) }
         }
-        .padding(.leading, CGFloat(MeeshyHeroBarRecipe.capsuleLeadingInset))
-        .padding(.trailing, CGFloat(MeeshyHeroBarRecipe.capsuleTrailingInset))
+        .padding(.leading, CGFloat(MeeshyHeroBarRecipe.capsuleInsets(hasSubtitle: hasSubtitle).leading))
+        .padding(.trailing, CGFloat(MeeshyHeroBarRecipe.capsuleInsets(hasSubtitle: hasSubtitle).trailing))
         .frame(maxWidth: width == .fill ? .infinity : nil,
                minHeight: CGFloat(MeeshyHeroBarRecipe.capsuleMinHeight(hasSubtitle: hasSubtitle)))
         .meeshyGlass(in: Capsule(), tone: tone, isInteractive: action != nil)
@@ -265,6 +294,7 @@ public struct MeeshyCollapsingHeroCapsule<Mark: View>: View {
             Text(title)
                 .font(MeeshyFont.relative(CGFloat(MeeshyHeroBarRecipe.capsuleTitleFontSize(hasSubtitle: hasSubtitle)),
                                           weight: .heavy, design: .rounded))
+                .foregroundStyle(MeeshyColors.textPrimary(isDark: inkIsDark))
                 .lineLimit(1)
             if let titleBadge, !titleBadge.isEmpty {
                 MeeshyBadge(.label(titleBadge), surface: .solid, kind: .accent, tint: tint)

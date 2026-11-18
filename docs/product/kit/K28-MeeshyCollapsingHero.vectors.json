@@ -73,7 +73,16 @@
   ],
   "capsule": {"hauteur": 44, "debut": 12, "fin": 16, "ecart": 8, "titre": 16},
   "capsuleDeuxLignesNote": "Planche Carte-Proches : la capsule qui porte un sous-titre passe à 56 de haut, titre 19, sous-titre 12,5 ; une étiquette (K41) suit le titre ; `fill` occupe la place entre les deux commandes de la barre. Lue d'un bloc : titre, étiquette, sous-titre.",
-  "capsuleDeuxLignes": {"hauteur": 56, "titre": 19, "sousTitre": 12.5, "largeurs": ["fit", "fill"]},
+  "capsuleDeuxLignes": {"hauteur": 56, "debut": 18, "fin": 18, "titre": 19, "sousTitre": 12.5, "largeurs": ["fit", "fill"]},
+  "capsuleEncreNote": "L'encre de la capsule suit le TON de son verre, jamais le thème de l'app : un verre sombre (tout ton autre que theme, celui que Liquid Glass force en sombre) porte l'encre claire même en apparence claire. Planche Carte-Proches : var(--ink) / var(--ink2) sur rgba(19,17,28,.55).",
+  "capsuleEncre": [
+    {"ton": "deep", "apparenceSombre": false, "encreClaire": true},
+    {"ton": "deep", "apparenceSombre": true, "encreClaire": true},
+    {"ton": "onLight", "apparenceSombre": false, "encreClaire": true},
+    {"ton": "plain", "apparenceSombre": false, "encreClaire": true},
+    {"ton": "theme", "apparenceSombre": false, "encreClaire": false},
+    {"ton": "theme", "apparenceSombre": true, "encreClaire": true}
+  ],
   "capsuleLue": [
     {"titre": "Mes proches", "etiquette": "Nouveau", "sousTitre": "3 partagent leur position", "lu": "Mes proches, Nouveau, 3 partagent leur position"},
     {"titre": "Mes proches", "etiquette": null, "sousTitre": "3 partagent leur position", "lu": "Mes proches, 3 partagent leur position"},

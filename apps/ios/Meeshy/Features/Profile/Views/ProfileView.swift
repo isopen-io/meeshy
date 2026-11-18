@@ -470,7 +470,8 @@ struct ProfileView: View {
     private func facePage(_ shown: ProfileFace) -> some View {
         switch shown {
         case .vitrine:
-            vitrineFace
+            VStack(spacing: MeeshySpacing.xxl) { vitrineFace }
+                .meeshyCascadeFace()
         case .links:
             ProfileLinksFace(user: user, accentColor: shownAccentHex, createRequested: $linkCreateRequested,
                              onOpen: { router.push($0) })
@@ -532,11 +533,11 @@ struct ProfileView: View {
             )
         }
         if languagesMode == .reorderable { languagesSection }
-        activitySection.meeshyCascade(rank: 3)
-        voiceBlock.meeshyCascade(rank: 3)
+        activitySection.meeshyCascade(rank: 4)
+        voiceBlock.meeshyCascade(rank: 5)
         if !isEditing, let userId = user?.id {
             ProfilePublicationsSection(userId: userId, accentColor: accentColor)
-                .meeshyCascade(rank: 3)
+                .meeshyCascade(rank: 6)
         }
     }
 

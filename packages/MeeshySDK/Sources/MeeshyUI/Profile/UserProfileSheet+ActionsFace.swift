@@ -21,6 +21,7 @@ extension UserProfileSheet {
                     .meeshyCascade(rank: ProfileActionsSection.order.firstIndex(of: section) ?? 0)
             }
         }
+        .meeshyCascadeFace()
         .padding(.horizontal, MeeshySpacing.xl)
         .task(id: pendingRequestId) { await loadPendingRequest() }
         .sheet(isPresented: $sharesProfile) {

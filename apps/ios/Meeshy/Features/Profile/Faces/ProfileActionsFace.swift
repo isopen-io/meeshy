@@ -61,13 +61,14 @@ struct ProfileActionsFace: View {
             whoSeesMeSection.meeshyCascade(rank: 3)
             if ProfilePackShortcuts.isShown(viewerId: user?.id, profileUserId: user?.id) {
                 ProfileSavedContentRows(stats: stats, accentColor: accentColor, onOpen: { onAction(.door($0)) })
-                    .meeshyCascade(rank: 3)
+                    .meeshyCascade(rank: 4)
             }
-            accountSection.meeshyCascade(rank: 3)
+            accountSection.meeshyCascade(rank: 5)
             MeeshyButton(ProfileActionsCopy.logout, systemImage: "rectangle.portrait.and.arrow.right",
                          kind: .danger, width: .fill, isDestructive: true, action: { onAction(.logout) })
-                .meeshyCascade(rank: 3)
+                .meeshyCascade(rank: 6)
         }
+        .meeshyCascadeFace()
         .fullScreenCover(isPresented: $showsNearbyMap) { NearbyMapScreen() }
         .modifier(ProfileLinksPresentations(
             user: user, link: profileLink, accentColor: accentColor, presented: $presented, sent: $sent,

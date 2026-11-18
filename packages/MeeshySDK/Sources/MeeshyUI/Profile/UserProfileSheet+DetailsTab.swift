@@ -19,13 +19,14 @@ extension UserProfileSheet {
             withThemSection.meeshyCascade(rank: 1)
             liveSection.meeshyCascade(rank: 2)
             ProfilePendingSection.of(self).meeshyCascade(rank: 3)
-            voiceSection.meeshyCascade(rank: 3)
-            gameSectionCard.meeshyCascade(rank: 3)
-            statsSection.meeshyCascade(rank: 3)
-            commonSection.meeshyCascade(rank: 3)
-            publicationsSection.meeshyCascade(rank: 3)
-            ProfileAcquaintanceSection.of(self).meeshyCascade(rank: 3)
+            voiceSection.meeshyCascade(rank: 4)
+            gameSectionCard.meeshyCascade(rank: 5)
+            statsSection.meeshyCascade(rank: 6)
+            commonSection.meeshyCascade(rank: 7)
+            publicationsSection.meeshyCascade(rank: 8)
+            ProfileAcquaintanceSection.of(self).meeshyCascade(rank: 9)
         }
+        .meeshyCascadeFace()
     }
 
     // MARK: - En commun (l'ancien onglet Conversations)
