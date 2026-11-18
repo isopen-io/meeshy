@@ -42,9 +42,6 @@ struct ProfileView: View {
     @State private var statsLoading = true
     /// Vrai quand le dernier chargement de Mon activité a échoué hors ligne.
     @State private var statsOffline = false
-    @State private var showSystemLanguagePicker = false
-    @State private var showRegionalLanguagePicker = false
-    @State private var showCustomLanguagePicker = false
     @StateObject private var circles = ProfileCirclesViewModel()
     /// #16264 — mon décor d'un pack non embarqué se repeint dès son contrat arrivé.
     @StateObject private var servedAppearance = ServedAppearanceRefresh()
@@ -349,6 +346,7 @@ struct ProfileView: View {
             displayName: $displayName, bio: $bio, city: $city, cityCircle: $cityCircle,
             username: user?.username, accentColor: accentColor
         )
+        if languagesMode == .chips { ProfileLanguageChips(languages: prismLanguages) }
         if Self.showsEncryptionBadge(isEditing: isEditing, hasSignalKeys: hasSignalKeys) {
             ProfileE2EEBadge()
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -363,7 +361,7 @@ struct ProfileView: View {
                 accentHex: accentColor, onOpenSecurity: { securityFocus = $0 }
             )
         }
-        languagesSection
+        if languagesMode == .reorderable { languagesSection }
         activitySection
         voiceBlock
         if !isEditing, let userId = user?.id {
@@ -568,68 +566,22 @@ struct ProfileView: View {
             .task(id: user?.profileDecor) { await servedAppearance.load(decor: user?.profileDecor) }
     }
 
-    // MARK: - Languages Section
+    // MARK: - Languages (#19534)
 
-    private var languagesSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ProfileSectionHeader(icon: "globe", title: String(localized: "profile.section.languages", bundle: .main), color: MeeshyColors.error)
-
-            Text(String(localized: "profile.language.intro", defaultValue: "Meeshy te montre tout dans ta langue principale, sinon dans la suivante.", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundStyle(theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(spacing: 0) {
-                languageRow(title: String(localized: "profile.language.primary", bundle: .main), subtitle: nil,
-                            code: systemLanguage, isRequired: true) { showSystemLanguagePicker = true }
-                languageRow(title: String(localized: "profile.language.regional", bundle: .main),
-                            subtitle: String(localized: "profile.language.regional.rank", defaultValue: "2e choix", bundle: .main),
-                            code: regionalLanguage, isRequired: false) { showRegionalLanguagePicker = true }
-                languageRow(title: String(localized: "profile.language.custom", bundle: .main),
-                            subtitle: String(localized: "profile.language.custom.rank", defaultValue: "3e choix", bundle: .main),
-                            code: customDestinationLanguage, isRequired: false) { showCustomLanguagePicker = true }
-            }
-            .background(ProfileSectionCard(tintHex: accentColor))
-            if isEditing, let autoTranslate = editSettings.autoTranslate {
-                MeeshyToggleRow(ProfileEditSettingsCopy.autoTranslate, subtitle: ProfileEditSettingsCopy.autoTranslateHint,
-                                accessory: .toggle(isOn: autoTranslate), tint: Color(hex: accentColor),
-                                action: { editSettings.autoTranslate = !autoTranslate })
-                    .accessibilityIdentifier("profile.edit.autoTranslate")
-            }
-        }
-        .sheet(isPresented: $showSystemLanguagePicker) {
-            ProfileLanguagePickerSheet(
-                title: String(localized: "profile.language.primary", bundle: .main),
-                languages: LanguageData.allLanguages,
-                selectedCode: systemLanguage,
-                allowClear: false,
-                onSelect: { systemLanguage = $0 }
-            )
-        }
-        .sheet(isPresented: $showRegionalLanguagePicker) {
-            ProfileLanguagePickerSheet(
-                title: String(localized: "profile.language.regional", bundle: .main),
-                languages: LanguageData.allLanguages,
-                selectedCode: regionalLanguage,
-                allowClear: true,
-                onSelect: { regionalLanguage = $0 }
-            )
-        }
-        .sheet(isPresented: $showCustomLanguagePicker) {
-            ProfileLanguagePickerSheet(
-                title: String(localized: "profile.language.custom", bundle: .main),
-                languages: LanguageData.allLanguages,
-                selectedCode: customDestinationLanguage,
-                allowClear: true,
-                onSelect: { customDestinationLanguage = $0 }
-            )
-        }
+    private var prismLanguages: ProfilePrismLanguages {
+        ProfilePrismLanguages(system: systemLanguage, regional: regionalLanguage, custom: customDestinationLanguage)
     }
 
-    private func languageRow(title: String, subtitle: String?, code: String, isRequired: Bool,
-                             onPick: @escaping () -> Void) -> some View {
-        ProfileLanguageRow(title: title, subtitle: subtitle, code: code, isRequired: isRequired,
-                           isEditing: isEditing, accentHex: accentColor, onPick: onPick)
+    private var languagesMode: ProfilePrismLanguagesMode {
+        ProfilePrismLanguagesMode.resolve(isEditing: isEditing)
+    }
+
+    /// En édition, mes langues s'ordonnent dans leur section ; au repos, elles se lisent en pastilles sous ma bio.
+    private var languagesSection: some View {
+        ProfilePrismLanguagesSection(
+            system: $systemLanguage, regional: $regionalLanguage, custom: $customDestinationLanguage,
+            autoTranslate: editSettings.autoTranslate, accentColor: accentColor,
+            onAutoTranslate: { editSettings.autoTranslate = $0 })
     }
 
     // MARK: - Activity Section

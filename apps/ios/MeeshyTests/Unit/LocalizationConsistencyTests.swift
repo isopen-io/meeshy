@@ -183,7 +183,9 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Profile/Views/ProfileSavedContentRows.swift",
         "apps/ios/Meeshy/Features/Profile/Views/ProfileContactSection.swift",
         "apps/ios/Meeshy/Features/Profile/Views/ProfileIdentitySection.swift",
-        "apps/ios/Meeshy/Features/Profile/Views/ProfileLanguageRow.swift",
+        // #19534 — les langues du Prisme quittent la rangée maison pour leur section K52 : leurs clés suivent.
+        "apps/ios/Meeshy/Features/Profile/Views/ProfilePrismLanguages.swift",
+        "apps/ios/Meeshy/Features/Profile/Views/ProfilePrismLanguagesSection.swift",
         "apps/ios/Meeshy/Features/Profile/Views/ProfileMembershipLine.swift",
         "apps/ios/Meeshy/Features/Settings/Views/VoiceProfileManageView.swift",  // 34
         "apps/ios/Meeshy/Features/Stories/Views/StoryViewerView+Sidebar.swift",  // 32
