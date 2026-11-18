@@ -19,6 +19,8 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.UserUpdatedEvent
 import me.meeshy.sdk.model.profile.ProfileLoadState
 import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.profile.ProfileCacheRepository
 import me.meeshy.sdk.profile.ProfileSheetLoader
 import me.meeshy.sdk.session.SessionRepository
@@ -49,7 +51,7 @@ class UserProfileSheetViewModelTest {
     private fun viewModel(
         vararg states: ProfileLoadState,
         me: MeeshyUser? = null,
-        network: me.meeshy.sdk.network.NetworkMonitor = me.meeshy.sdk.network.InMemoryNetworkMonitor(),
+        network: NetworkMonitor = InMemoryNetworkMonitor(),
     ): UserProfileSheetViewModel {
         every { loader.open(any(), any(), any()) } returns flowOf(*states)
         val socket = mockk<MessageSocketManager>()
@@ -159,7 +161,7 @@ class UserProfileSheetViewModelTest {
 
     @Test
     fun `la fiche sait que l'appareil est hors ligne et le suit au retour du reseau`() = runTest(dispatcher) {
-        val network = me.meeshy.sdk.network.InMemoryNetworkMonitor(initialOnline = false)
+        val network = InMemoryNetworkMonitor(initialOnline = false)
         val vm = viewModel(ProfileLoadState(profile = bob), network = network)
         vm.onEvent(UserProfileSheetEvent.Open(ProfileSheetUser(userId = bob.id, username = "bob")))
         advanceUntilIdle()
@@ -179,7 +181,7 @@ class UserProfileSheetViewModelTest {
 
     @Test
     fun `une panne hors ligne se rejoue d'elle-meme au retour du reseau, comme le message le promet`() = runTest(dispatcher) {
-        val network = me.meeshy.sdk.network.InMemoryNetworkMonitor(initialOnline = false)
+        val network = InMemoryNetworkMonitor(initialOnline = false)
         val vm = viewModel(ProfileLoadState(profileLoadFailed = true), network = network)
         vm.onEvent(UserProfileSheetEvent.Open(ProfileSheetUser(userId = bob.id, username = "bob")))
         advanceUntilIdle()
@@ -193,7 +195,7 @@ class UserProfileSheetViewModelTest {
 
     @Test
     fun `le retour du reseau ne recharge pas une fiche peinte ni un refus`() = runTest(dispatcher) {
-        val network = me.meeshy.sdk.network.InMemoryNetworkMonitor(initialOnline = false)
+        val network = InMemoryNetworkMonitor(initialOnline = false)
         val painted = viewModel(ProfileLoadState(profile = bob), network = network)
         painted.onEvent(UserProfileSheetEvent.Open(ProfileSheetUser(userId = bob.id, username = "bob")))
         advanceUntilIdle()
