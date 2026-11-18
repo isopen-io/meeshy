@@ -1378,3 +1378,9 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 
 - `origin/dev` (d84e74a80) fusionnée sans conflit ; aucun fichier de carte ou de position client ne bougeait côté `dev`.
   Web `src/lib/shared-locations` + `relations` 180 verts, `tsc` vert sur l'arbre fusionné. iOS et Android par la CI.
+
+## 2026-11-18 — réveil de 9 h : iOS et Android envoient la liste seule (#19287)
+
+- Reprise : #19289 (liste seule, passerelle + web) et #19354 (icône de cercle) sont fusionnées dans `dev`. Aucune branche
+  vivante n'écrit `SharedLocationSharingCenter` ni le centre Android : lot réservé avant toute écriture
+  (`claude/cercles-19287-liste-seule-natifs`).
