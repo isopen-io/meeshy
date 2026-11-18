@@ -294,6 +294,7 @@ final class WidgetDataManager: NotificationWidgetSink {
         if let defaults = sharedDefaults {
             let accountKeys = [
                 conversationsKey, snapshotsKey, favoritesKey, profileLinkKey, profileLinkVisitsKey, lastUpdatedKey,
+                ClosePeopleWidgetKeys.defaultsKey,
                 unreadCountKey, WidgetActionFlusher.pendingMarkReadKey,
                 ShareDirectorySnapshot.defaultsKey,
             ]
@@ -565,6 +566,26 @@ final class WidgetDataManager: NotificationWidgetSink {
             writingToSharedContainer { defaults.removeObject(forKey: key) }
         }
         WidgetCenter.shared.reloadTimelines(ofKind: "MyProfileLink")
+    }
+
+    /// « Mes proches » (#19524) : Proche et au-dessus, déjà projetés par `ClosePeopleWidgetProjection`. Le même
+    /// cliché sert le raccourci Talkie. Une liste vide le retire : le widget dit alors qu'il n'a personne.
+    func publishClosePeople(_ people: [WidgetClosePerson]) {
+        guard let defaults = sharedDefaults else { return }
+        let key = ClosePeopleWidgetKeys.defaultsKey
+        let capped = Array(people.prefix(ClosePeopleWidgetKeys.publishedCap))
+        if !capped.isEmpty,
+           let data = encoder.encodeOrLog(capped, field: "widget close people", logger: Logger.widgetData) {
+            writingToSharedContainer { defaults.set(data, forKey: key) }
+        } else {
+            writingToSharedContainer { defaults.removeObject(forKey: key) }
+        }
+        WidgetCenter.shared.reloadTimelines(ofKind: ClosePeopleWidgetKeys.kind)
+    }
+
+    /// La présence servie d'une personne, telle que les widgets la publient (`nil` : inconnue).
+    func servedPresence(of userId: String) -> PresenceState? {
+        presenceStateProvider(userId)
     }
 
     /// Suit le pseudo du compte connecté : le widget « Mon lien » change avec le compte et le pseudo.

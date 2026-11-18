@@ -30,7 +30,8 @@ extension CirclesViewModel {
             friendService: FriendService.shared,
             people: CirclePeopleDirectory.shared,
             offlineQueue: OfflineQueue.shared,
-            networkMonitor: NetworkMonitor.shared
+            networkMonitor: NetworkMonitor.shared,
+            publishClosePeople: { links, people in ClosePeopleWidgetFeed.publish(links: links, people: people) }
         )
     }
 }

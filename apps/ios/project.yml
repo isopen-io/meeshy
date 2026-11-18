@@ -247,6 +247,14 @@ targets:
       # App Group, l'extension de widgets la LIT par `context.activityID`. Une
       # Live Activity ne fait pas de réseau. Garde : `LiveActivityAvatarStoreTests`.
       - path: MeeshyWidgets/LiveActivityAvatarStore.swift
+      # #19524 — la planche `Hors-App` : l'activité en direct d'une position qu'on me
+      # partage (l'app la DEMANDE, l'extension la PEINT), le cliché « Mes proches »
+      # (l'app le PUBLIE, le widget et le raccourci Talkie le LISENT) et l'intention
+      # d'un avatar du widget (déclarée dans les deux cibles, exécutée dans l'app).
+      # Gardes : `LocationShareActivityLawTests`, `ClosePeopleWidgetTests`.
+      - path: MeeshyWidgets/LocationShareActivityAttributes.swift
+      - path: MeeshyWidgets/ClosePeopleWidgetContract.swift
+      - path: MeeshyWidgets/OpenVitrineIntent.swift
       # #14628 — l'AGPL-3.0 de libsignal : le texte officiel de la licence et
       # les avis de libsignal publiés par Signal au tag épinglé voyagent DANS
       # l'app (écran Réglages › À propos › Licences), jamais téléchargés. Une
