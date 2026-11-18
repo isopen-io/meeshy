@@ -58,12 +58,10 @@ final class CallReducedPresenceTests: XCTestCase {
         XCTAssertFalse(CallReducedPresence.isInCallConversation(visibleConversationId: "c1", callConversationId: nil), "un appel sans conversation connue n'est celle d'aucun écran")
     }
 
-    // MARK: - La vignette ne descend jamais au cercle
+    // MARK: - #19701 — une seule forme : la vignette rectangulaire, sans palier cercle
 
-    func test_effectiveTier_vignetteLiftsTheCircleToSmall_andKeepsAnyOtherChoice() {
-        XCTAssertEqual(CallReducedPresence.effectiveTier(stored: .circle, presence: .vignette), .small)
-        XCTAssertEqual(CallReducedPresence.effectiveTier(stored: .medium, presence: .vignette), .medium)
-        XCTAssertEqual(CallReducedPresence.effectiveTier(stored: .circle, presence: .bubble), .circle, "hors de la conversation de l'appel, le palier choisi au pincement reste")
+    func test_sizeTiers_areTheThreeVignetteSizes_noCircle() {
+        XCTAssertEqual(CallBubbleSizeTier.allCases, [.small, .medium, .large])
     }
 
     // MARK: - Les deux portes passent par la loi

@@ -22,8 +22,8 @@ final class CallBubbleViewMiniMenuWiringTests: XCTestCase {
 
     func test_reducedCall_showsThePerson_andTheDuration() throws {
         let source = try callBubbleViewSource()
-        XCTAssertTrue(source.contains("CallEdgeDisk(callManager: callManager, edge: callManager.bubbleEdge, strength: signalStrength)"),
-                      "au cercle, le disque porte l'avatar ou la vidéo, et la durée")
+        XCTAssertTrue(source.contains("CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)"),
+                      "la vignette porte la vidéo de l'autre, sinon son avatar (#19701 : plus de disque)")
         XCTAssertTrue(source.contains("CallReducedCaption(callManager: callManager, style: .glass)"),
                       "en vignette, l'étiquette « nom · durée »")
     }

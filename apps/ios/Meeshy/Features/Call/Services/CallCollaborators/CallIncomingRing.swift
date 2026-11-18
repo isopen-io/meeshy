@@ -17,6 +17,14 @@ final class CallIncomingRing: CallIncomingRingProviding {
 
     private weak var call: CallManager?
     private var voipFreshnessTask: Task<Void, Never>?
+    /// #19650 — l'invitant de l'offre reçue : `remoteUsername` porte la phrase
+    /// de sonnerie (« X vous invite… »), la tuile du pair garde son NOM.
+    private var invitedPrincipal: (callId: String, name: String)?
+
+    func principalPeerName(for callId: String?) -> String? {
+        guard let invitedPrincipal, invitedPrincipal.callId == callId else { return nil }
+        return invitedPrincipal.name
+    }
 
     func attach(to call: CallManager) {
         self.call = call
@@ -366,6 +374,7 @@ final class CallIncomingRing: CallIncomingRingProviding {
             iceServers: dynamicIceServers,
             conversationId: event.conversationId
         )
+        invitedPrincipal = event.invitedBy == nil ? nil : (callId: event.callId, name: event.principalDisplayName)
     }
 
     /// Le TAP sur l'alerte d'appel entrant (push sans VoIP : région Chine,
@@ -650,6 +659,7 @@ protocol CallIncomingRingProviding: AnyObject {
     func endRingingAnsweredElsewhere(callId: String)
     func cancelFreshnessCheck()
     func handleCallOffer(_ event: CallOfferData)
+    func principalPeerName(for callId: String?) -> String?
     func handleIncomingCallAlertTap(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]?, conversationId: String?)
     func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]?, conversationId: String?)
     func rejectPendingCall()
