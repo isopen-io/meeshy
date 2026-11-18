@@ -494,8 +494,9 @@ public data class ReadReceiptPayload(
     val messageLanguages: Map<String, String>? = null,
     val caughtUpToMessageId: String? = null,
     /**
-     * #19424 — l'instant SERVEUR (epoch ms, `createdAt` du dernier message du cache) jusqu'où cet appareil a lu. Il ne part
-     * pas à la passerelle : il garde le badge à zéro sur une ligne servie tant que ce reçu est dû.
+     * #19424 — l'instant SERVEUR (epoch ms) jusqu'où cet appareil a lu : celui de [caughtUpToMessageId] quand le reçu en
+     * nomme un, sinon celui du dernier message que le cache tient. Il ne part pas à la passerelle : il garde le badge à
+     * zéro sur une ligne servie tant que ce reçu est dû.
      */
     val readThroughAt: Long? = null,
 )

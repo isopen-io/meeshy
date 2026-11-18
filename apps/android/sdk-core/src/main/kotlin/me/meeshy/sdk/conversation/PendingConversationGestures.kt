@@ -19,7 +19,7 @@ import me.meeshy.sdk.outbox.ReadReceiptPayload
  * - [prefs] (#19425) : les instantanés de préférences (épingle, sourdine, archive, nom, catégorie…), du plus ancien
  *   au plus récent, par conversation ;
  * - [readThrough] (#19424) : par conversation, l'instant SERVEUR du dernier message lu sur cet appareil, tant que
- *   l'accusé de lecture n'est pas confirmé.
+ *   l'accusé de lecture n'est pas confirmé et qu'aucun « marquer non lu » plus récent n'attend en file.
  */
 internal data class PendingGestures(
     val prefs: Map<String, List<ConversationPrefsPayload>> = emptyMap(),
@@ -46,15 +46,26 @@ internal class OutboxPendingConversationGestures(private val outboxDao: OutboxDa
                 prefs = rows(OutboxKind.UPDATE_CONVERSATION_PREFS)
                     .mapNotNull { row -> decode<ConversationPrefsPayload>(row)?.let { row.targetId to it } }
                     .groupBy({ it.first }, { it.second }),
-                readThrough = rows(OutboxKind.READ_RECEIPT)
-                    .mapNotNull { row -> decode<ReadReceiptPayload>(row)?.readThroughAt?.let { row.targetId to it } }
-                    .toMap(),
+                readThrough = readFrontiers(rows(OutboxKind.READ_RECEIPT), rows(OutboxKind.MARK_UNREAD)),
             )
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
             PendingGestures.None
         }
+
+    /**
+     * Par conversation, la frontière la plus avancée des reçus encore dus APRÈS le dernier « marquer non lu » en file :
+     * un reçu déjà en vol que le geste inverse n'a pas pu annuler ne tient plus le badge à zéro.
+     */
+    private fun readFrontiers(receipts: List<OutboxEntity>, unreads: List<OutboxEntity>): Map<String, Long> {
+        val lastUnread = unreads.groupBy { it.targetId }.mapValues { (_, rows) -> rows.maxOf { it.createdAt } }
+        return receipts
+            .filter { row -> lastUnread[row.targetId]?.let { row.createdAt > it } ?: true }
+            .mapNotNull { row -> decode<ReadReceiptPayload>(row)?.readThroughAt?.let { row.targetId to it } }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, frontiers) -> frontiers.max() }
+    }
 
     private suspend fun rows(kind: OutboxKind): List<OutboxEntity> =
         outboxDao.byKind(kind.name).filter { it.state != OutboxState.EXHAUSTED.name }
