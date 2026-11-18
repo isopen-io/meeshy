@@ -19,6 +19,7 @@ import {
   resolveParticipantDisplayName
 } from '@meeshy/shared/utils/participant-helpers';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
+import { PARTICIPATION_VIVANTE } from '../routes/conversations/utils/access-control.js';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
 import { assertValidObjectId } from '../utils/object-id.js';
 import { notePairInteraction } from './relations/pairInteractionRecorder.js';
@@ -122,7 +123,35 @@ export class ReactionService {
         sender: { select: { userId: true } },
         conversation: {
           include: {
-            participants: { where: { isActive: true } }
+            // #19604 — la loi d'appartenance au POINT DE CONVERGENCE.
+            //
+            // Ce `where` alimente le SECOND verrou, dix lignes plus bas
+            // (`participants.some(p => p.id === participantId)`), et ce service
+            // est l'endroit où les transports de réaction se rejoignent. Il
+            // épelait `isActive: true` NU, quand la loi du dépôt est
+            // `PARTICIPATION_VIVANTE` — active ET `bannedAt` nul ou absent.
+            //
+            // **Pourquoi la loi la plus ÉTROITE ici.** Ce `where` dit qui a le
+            // DROIT D'AGIR, pas qui doit être SERVI : son sens ne s'inverse
+            // pas, à l'inverse d'une liste d'EXCLUSION, qui se construit sur le
+            // sur-ensemble (#16690).
+            //
+            // **Ce que ça rend inoffensif.** #19525 a fermé CINQ portes en
+            // amont, et son audit a prédit qu'« un sixième transport qui
+            // résoudrait son participant à la main ne rougirait nulle part ».
+            // Il est arrivé trois heures plus tard (`callReactionOnBubble.ts`,
+            // #19650) et la graphie nue y était LIVE, le verrou d'appel ne
+            // posant que la question de la session (#19676). La convergence est
+            // le seul endroit qui rende le septième gratuit.
+            //
+            // **Et le RETRAIT n'est pas touché par ce resserrement** :
+            // `removeReaction` n'interroge AUCUNE ligne de participation (il
+            // supprime par le triplet messageId/participantId/emoji), donc
+            // l'arbitrage de #19603 — un banni peut-il reprendre une réaction
+            // posée avant son bannissement ? — reste entier et se décide en
+            // amont, aux portes de #19525. Le témoin de clôture
+            // (`conversationClosedWriteVerbs.test.ts` § 3) ne voit pas cet axe.
+            participants: { where: PARTICIPATION_VIVANTE }
           }
         }
       }

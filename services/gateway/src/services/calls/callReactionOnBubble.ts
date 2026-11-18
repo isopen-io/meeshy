@@ -4,6 +4,7 @@ import { callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
 import type { ReactionService } from '../ReactionService';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { isEndToEndMode } from '../conversations/encryptionRegime';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { logger } from '../../utils/logger';
 
 /**
@@ -42,8 +43,18 @@ export async function reflectCallReactionOnBubble(
     select: { id: true },
   });
   if (!bubble) return false;
+  // #19676 — LE SIXIÈME TRANSPORT des réactions de message.
+  //
+  // Le seul verrou en amont, `resolveActiveCallParticipant`, ne pose que la
+  // question de la participation à la SESSION D'APPEL (`!p.leftAt`) : jamais
+  // celle de l'appartenance à la CONVERSATION. Un membre banni PENDANT qu'il
+  // est dans l'appel — un modérateur qui bannit en cours d'appel — gardait donc
+  // sa ligne de session, et son emoji était persisté sur la bulle du fil puis
+  // diffusé en `reaction:added` à toute la room de la conversation dont il
+  // venait d'être banni. La loi est `PARTICIPATION_VIVANTE`, comme aux cinq
+  // portes de #19525 et au point de convergence (#19604).
   const author = await deps.prisma.participant.findFirst({
-    where: { conversationId, userId: input.userId, isActive: true },
+    where: { conversationId, userId: input.userId, ...PARTICIPATION_VIVANTE },
     select: { id: true },
   });
   if (!author) return false;
