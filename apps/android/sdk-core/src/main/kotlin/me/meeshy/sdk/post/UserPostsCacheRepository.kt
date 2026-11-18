@@ -97,6 +97,21 @@ class UserPostsCacheRepository @Inject constructor(
             if (snapshot.posts.none { it.id == postId }) null else snapshot.copy(posts = snapshot.posts.filterNot { it.id == postId })
         }
 
+    /**
+     * #19426 — a post saved elsewhere (`post:bookmarked` true) that the copy does not hold: the copy is no longer the whole
+     * list, so it loses its freshness and the next open paints it then revalidates it, instead of hiding the new save for
+     * the rest of the fresh window.
+     */
+    suspend fun bookmarkedElsewhere(postId: String, ticket: AccountTicket?) {
+        fence.commitOrWrite(ticket) {
+            val row = dao.observe(key(BOOKMARKS)).first() ?: return@commitOrWrite
+            val snapshot = runCatching { MeeshyApi.json.decodeFromString<UserPostsSnapshot>(row.payload) }.getOrNull()
+            if (snapshot == null || snapshot.posts.any { it.id == postId }) return@commitOrWrite
+            val staleAt = clock.nowMillis() - CachePolicy.Feed.freshForMillis - 1
+            if (row.cachedAt > staleAt) dao.upsert(row.copy(cachedAt = staleAt))
+        }
+    }
+
     private suspend fun rewriteEverywhere(
         postId: String,
         ticket: AccountTicket?,
