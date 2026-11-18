@@ -171,6 +171,27 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertNotNil(rig.sut.notice)
     }
 
+    /// #19611 — planche `Etat-Erreur` vue 2 : une montée ratée reste dite dans « Notre cercle », et « Réessayer » la
+    /// rejoue vers le même cran.
+    func test_requestRaise_failure_isKeptUntilARetrySucceeds() async throws {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend, eligibleFor: .close)])
+        await rig.sut.load()
+        rig.queue.enqueueResult = .failure(NSError(domain: "test", code: 1))
+
+        _ = await rig.sut.requestRaise()
+        let failedRaise = rig.sut.failedRaise
+        rig.queue.enqueueResult = .success("mock-cmid")
+        let retried = await rig.sut.requestRaise()
+
+        XCTAssertEqual(failedRaise, .close)
+        XCTAssertTrue(retried)
+        XCTAssertNil(rig.sut.failedRaise)
+        XCTAssertEqual(rig.sut.pendingLevel, .close)
+        let payload = try XCTUnwrap(rig.queue.lastPayload as? SendFriendRequestPayload)
+        XCTAssertEqual(payload.targetLevel, "CLOSE")
+    }
+
     func test_aServedPendingRequest_isShownAsWaiting() async {
         let rig = makeRig()
         rig.relations.linksResult = .success([link("a", .friend, eligibleFor: .close)])
