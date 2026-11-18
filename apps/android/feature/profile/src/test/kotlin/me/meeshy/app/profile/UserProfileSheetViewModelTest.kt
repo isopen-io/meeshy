@@ -203,4 +203,46 @@ class UserProfileSheetViewModelTest {
         advanceUntilIdle()
         io.mockk.verify(exactly = 1) { loader.open(any(), any(), any()) }
     }
+
+    @Test
+    fun `rouverte pour une autre personne la feuille peint le squelette et jamais la fiche de la precedente`() = runTest(dispatcher) {
+        val vm = viewModel(ProfileLoadState(profile = bob))
+        val bobRequest = ProfileSheetUser(userId = bob.id, username = "bob")
+        vm.onEvent(UserProfileSheetEvent.Open(bobRequest))
+        advanceUntilIdle()
+        assertThat(vm.state.value.presentedFor(bobRequest).content).isEqualTo(ProfileSheetContent.Loaded)
+
+        val alice = ProfileSheetUser(userId = "64b7f0a1c2d3e4f5a6b7c8aa", username = "alice", displayName = "Alice")
+        val firstFrame = vm.state.value.presentedFor(alice)
+        assertThat(firstFrame.content).isEqualTo(ProfileSheetContent.Skeleton)
+        assertThat(firstFrame.profile).isNull()
+        assertThat(firstFrame.user.resolvedDisplayName).isEqualTo("Alice")
+    }
+
+    @Test
+    fun `une feuille refermee sur une panne ne se recharge pas au retour du reseau`() = runTest(dispatcher) {
+        val network = InMemoryNetworkMonitor(initialOnline = false)
+        val vm = viewModel(ProfileLoadState(profileLoadFailed = true), network = network)
+        vm.onEvent(UserProfileSheetEvent.Open(ProfileSheetUser(userId = bob.id, username = "bob")))
+        advanceUntilIdle()
+        vm.onEvent(UserProfileSheetEvent.Closed)
+        network.simulateOnline()
+        advanceUntilIdle()
+        io.mockk.verify(exactly = 1) { loader.open(any(), any(), any()) }
+    }
+
+    @Test
+    fun `rouverte apres fermeture la panne hors ligne se rejoue de nouveau au retour du reseau`() = runTest(dispatcher) {
+        val network = InMemoryNetworkMonitor(initialOnline = false)
+        val request = ProfileSheetUser(userId = bob.id, username = "bob")
+        val vm = viewModel(ProfileLoadState(profileLoadFailed = true), network = network)
+        vm.onEvent(UserProfileSheetEvent.Open(request))
+        advanceUntilIdle()
+        vm.onEvent(UserProfileSheetEvent.Closed)
+        vm.onEvent(UserProfileSheetEvent.Open(request))
+        advanceUntilIdle()
+        network.simulateOnline()
+        advanceUntilIdle()
+        io.mockk.verify(exactly = 3) { loader.open(any(), any(), any()) }
+    }
 }

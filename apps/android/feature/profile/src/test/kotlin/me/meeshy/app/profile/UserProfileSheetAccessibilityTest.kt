@@ -80,7 +80,8 @@ class UserProfileSheetAccessibilityTest {
         body(UserProfileSheetUiState(user = bob, isLoadingProfile = true))
 
         compose.onNodeWithTag(PROFILE_SHEET_SKELETON_TAG, useUnmergedTree = true).assertExists()
-        compose.onNodeWithText(context.getString(R.string.profile_loadFailed_message)).assertDoesNotExist()
+        compose.onNodeWithText(context.getString(R.string.profile_state_error_title)).assertDoesNotExist()
+        compose.onNodeWithText(context.getString(R.string.profile_state_nobody_title)).assertDoesNotExist()
     }
 
     @Test
