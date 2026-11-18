@@ -300,8 +300,20 @@ export const REJOIN_PARTICIPANT_STATE = {
   // liste »).
   //
   // `bannedAt`, la troisième, n'est PAS ici et ne doit pas l'être : une rentrée
-  // ne débannit personne, et les trois portes refusent un banni en amont. Le
-  // verdict des trois colonnes est gardé par
+  // ne débannit personne.
+  //
+  // #19688 — et l'amont ne suffit PAS. Cette note affirmait « les trois portes
+  // refusent un banni en amont », ce qui est vrai de la LECTURE et faux de la
+  // FENÊTRE : `resolveBanWrite` n'écrit QUE `bannedAt` quand la cible est déjà
+  // inactive, si bien qu'un bannissement commis entre la décision `'rejoin'` et
+  // l'écriture laissait celle-ci rallumer `isActive: true` sur une ligne BANNIE
+  // — l'état qu'aucune lecture du service ne sait refuser. Les quatre portes
+  // commettent donc leur rentrée par `commitParticipantRejoin`
+  // (`rejoinParticipantWrite.ts`), qui porte `unsetOrNull('bannedAt')` dans le
+  // `where` et rend la vraie cause sur `P2025`. L'affirmation est désormais
+  // VRAIE, et c'est l'ÉCRITURE qui la tient, pas l'amont.
+  //
+  // Le verdict des trois colonnes est gardé par
   // `__tests__/unit/rejoin-clears-departure-columns.test.ts`, qui les relève
   // dans le source du flux plutôt que de les recopier.
   deletedForMe: null,

@@ -36,19 +36,19 @@ const GUARDED: ReadonlyArray<Reactivation & { readonly guard: string }> = [
   {
     file: 'routes/conversations/link-admission.ts',
     marker: 'REJOIN_PARTICIPANT_STATE',
-    guard: "resolveConversationEntry (via services/conversations/linkAdmission.ts) refuse 'banned' en 403 BANNED",
+    guard: "commitParticipantRejoin porte unsetOrNull(bannedAt) dans le where (#19688) ; resolveConversationEntry refuse déjà 'banned' en amont",
   },
   {
     // #19650 — l'ajout d'un membre vit, partagé par la route et l'appel, dans
     // `services/conversations/memberAdmission.ts`.
     file: 'services/conversations/memberAdmission.ts',
     marker: 'REJOIN_PARTICIPANT_STATE',
-    guard: "resolveConversationEntry rend 'banned' avant toute réintégration",
+    guard: "commitParticipantRejoin porte unsetOrNull(bannedAt) dans le where (#19688) ; resolveConversationEntry rend déjà 'banned' en amont",
   },
   {
     file: 'routes/conversations/sharing-invite.ts',
     marker: 'REJOIN_PARTICIPANT_STATE',
-    guard: "resolveConversationEntry rend 'banned' avant toute réintégration",
+    guard: "commitParticipantRejoin porte unsetOrNull(bannedAt) dans le where (#19688) ; resolveConversationEntry rend déjà 'banned' en amont",
   },
   {
     file: 'routes/conversations/participant-ban-core.ts',
@@ -73,8 +73,24 @@ function productionFiles(dir: string): string[] {
   });
 }
 
+/**
+ * #19688 — l'opener voit DEUX formes, et la seconde n'est pas une commodité.
+ *
+ * Quand les trois portes de rentrée sont passées par
+ * `commitParticipantRejoin`, leur écriture a cessé d'être un
+ * `prisma.participant.update(` : ce balayage, qui ne cherchait que cette
+ * graphie, les a toutes les trois perdues d'un coup — inventaire vert, et
+ * PLUS AUCUNE porte de rentrée sous surveillance. Centraliser une écriture
+ * déplace donc la frontière que le cliquet garde, sans qu'une ligne de
+ * l'inventaire bouge.
+ *
+ * > **Un cliquet qui cherche une graphie mesure cette graphie, pas la
+ * > propriété.** C'est la règle du cycle 105 — chercher une forme par son NOM
+ * > de déclaration manque tous les sites qui l'obtiennent autrement — prise
+ * > par le bon bout : ici, c'est la RÉPARATION qui a rendu le site invisible.
+ */
 function callBodies(source: string): string[] {
-  const opener = /\.participant\.(update|updateMany|upsert)\(/g;
+  const opener = /\.participant\.(update|updateMany|upsert)\(|commitParticipantRejoin(?:<[^>]*>)?\(/g;
   const bodies: string[] = [];
   for (let match = opener.exec(source); match; match = opener.exec(source)) {
     const start = match.index + match[0].length;
@@ -171,5 +187,72 @@ describe('les écritures qui rallument une participation sont toutes inventorié
     const restore = callBodies(source).filter((body) => writtenPart(body).includes('isActive: true'));
     expect(restore).toHaveLength(1);
     expect(restore[0]).toContain("unsetOrNull('bannedAt')");
+  });
+
+  /**
+   * #19688 — la TROISIÈME question, et c'est celle que ce balayage posait de
+   * la façon la plus rassurante.
+   *
+   * Il acceptait, comme garde d'une rentrée, que `resolveConversationEntry`
+   * refuse un banni EN AMONT. C'est vrai de la LECTURE, et faux de la FENÊTRE :
+   * `resolveBanWrite` n'écrit QUE `bannedAt` quand la cible est déjà inactive,
+   * si bien qu'un bannissement commis entre la décision et l'écriture laissait
+   * celle-ci rallumer `isActive: true` sur une ligne BANNIE. Trois des quatre
+   * portes étaient dans ce cas ; la quatrième — `restore-for-me`, gardée par le
+   * témoin ci-dessus — portait la garde dans son `where` et DISAIT pourquoi.
+   *
+   * > **Une garde posée en AMONT d'une écriture garde une LECTURE.** La
+   * > question à poser à une rentrée n'est pas « le banni est-il refusé ? »
+   * > mais **« l'état que l'écriture POSE est-il encore légitime au moment où
+   * > elle commet ? »** — et seule la clause de l'écriture peut y répondre.
+   *
+   * La garde n'est plus un argument écrit dans un inventaire : elle est dans le
+   * `where`, une fois, chez `commitParticipantRejoin`. Toute porte qui écrit
+   * `REJOIN_PARTICIPANT_STATE` par un `prisma.participant.update` NU rougit ici
+   * — c'est la seule réparation, jamais une ligne d'inventaire.
+   */
+  it('aucune porte ne commet une rentrée par un update NU — toutes passent par commitParticipantRejoin', () => {
+    const nudeOpener = /\.participant\.(update|updateMany|upsert)\(/g;
+    const nudeBodies = (source: string): string[] => {
+      const bodies: string[] = [];
+      for (let match = nudeOpener.exec(source); match; match = nudeOpener.exec(source)) {
+        const start = match.index + match[0].length;
+        let depth = 1;
+        let end = start;
+        while (end < source.length && depth > 0) {
+          if (source[end] === '(') depth += 1;
+          if (source[end] === ')') depth -= 1;
+          end += 1;
+        }
+        bodies.push(source.slice(start, end));
+      }
+      return bodies;
+    };
+
+    const nus = productionFiles(SRC)
+      .filter((path) => relative(SRC, path) !== 'services/conversations/rejoinParticipantWrite.ts')
+      .flatMap((path) => {
+        const file = relative(SRC, path);
+        return nudeBodies(readFileSync(path, 'utf8'))
+          .map(writtenPart)
+          .filter((written) => written.includes('REJOIN_PARTICIPANT_STATE'))
+          .map(() => file);
+      });
+
+    expect([...new Set(nus)].sort()).toEqual([]);
+  });
+
+  it('la rentrée se commet par une unité UNIQUE, qui porte la garde dans son where', () => {
+    const writer = readFileSync(join(SRC, 'services/conversations/rejoinParticipantWrite.ts'), 'utf8');
+    const rejoiners = GUARDED.filter((entry) => entry.marker === 'REJOIN_PARTICIPANT_STATE');
+
+    expect({
+      portes: rejoiners.length,
+      appellent: rejoiners.filter(({ file }) =>
+        readFileSync(join(SRC, file), 'utf8').includes('commitParticipantRejoin')
+      ).length,
+      garde: writer.includes("unsetOrNull('bannedAt')"),
+      relitLaCause: writer.includes('P2025') && writer.includes('bannedAt: true'),
+    }).toEqual({ portes: rejoiners.length, appellent: rejoiners.length, garde: true, relitLaCause: true });
   });
 });
