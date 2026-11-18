@@ -40,12 +40,18 @@ struct ProfileVoiceSection: View {
                 .padding(.vertical, MeeshySpacing.sm)
                 .padding(.horizontal, MeeshySpacing.md)
             }
+            if player.loadFailed {
+                MeeshyNote(ProfileVoiceCopy.loadFailed, kind: .warn)
+                    .meeshyTransition(.opacity)
+                    .accessibilityIdentifier("profile.voice.failed")
+            }
             if let editing {
                 editControls(editing)
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.voice")
+        .meeshyMotion(.rise, value: player.loadFailed)
         .onDisappear { player.stop() }
     }
 
@@ -66,13 +72,18 @@ struct ProfileVoiceSection: View {
     }
 
     /// Le glissement n'existe qu'une fois l'échantillon chargé.
+    private var loadedURL: String? {
+        ProfileVoiceSample.loadedURL(currentUrl: player.currentUrl, hasPlayer: player.hasLoadedPlayer,
+                                     isLoading: player.isLoading)
+    }
+
     private var scrub: ((Double) -> Void)? {
-        guard sample.acceptsScrub(loadedURL: player.currentUrl) else { return nil }
+        guard player.hasLoadedPlayer, sample.acceptsScrub(loadedURL: loadedURL) else { return nil }
         return { fraction in player.seek(to: fraction) }
     }
 
     private func toggle() {
-        switch sample.toggle(loadedURL: player.currentUrl) {
+        switch sample.toggle(loadedURL: loadedURL) {
         case .start(let url): player.play(urlString: url)
         case .pauseOrResume: player.togglePlayPause()
         }
@@ -110,6 +121,12 @@ nonisolated enum ProfileVoiceCopy {
 
     static var rerecord: String {
         String(localized: "profile.vitrine.voice.rerecord", defaultValue: "Réenregistrer", bundle: .main)
+    }
+
+    /// Le chargement a échoué : le disque reste touchable et le relance.
+    static var loadFailed: String {
+        String(localized: "profile.vitrine.voice.failed",
+               defaultValue: "Impossible de charger ma voix. Touche le bouton pour réessayer.", bundle: .main)
     }
 
     static var record: String {

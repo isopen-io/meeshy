@@ -356690,6 +356690,53 @@
         }
       }
     },
+    "profile.vitrine.voice.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تحميل صوتي. اضغط على الزر لإعادة المحاولة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Stimme konnte nicht geladen werden. Tippe auf die Taste, um es erneut zu versuchen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't load my voice. Tap the button to try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo cargar mi voz. Toca el botón para reintentar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de charger ma voix. Touche le bouton pour réessayer."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile caricare la mia voce. Tocca il pulsante per riprovare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível carregar minha voz. Toque no botão para tentar de novo."
+          }
+        }
+      }
+    },
     "profile.vitrine.posts.photo": {
       "extractionState": "manual",
       "localizations": {

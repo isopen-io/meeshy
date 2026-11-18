@@ -429,6 +429,24 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertTrue(sample.acceptsScrub(loadedURL: "/v.m4a"))
     }
 
+    func test_voiceToggle_afterAFailedLoad_startsAgain_insteadOfResumingNothing() {
+        let sample = ProfileVoiceSample(url: "/v.m4a", isPublic: true, servedDuration: 9)
+        let failed = ProfileVoiceSample.loadedURL(currentUrl: "/v.m4a", hasPlayer: false, isLoading: false)
+        XCTAssertNil(failed, "un son demandé sans lecteur n'est pas chargé")
+        XCTAssertEqual(sample.toggle(loadedURL: failed), .start("/v.m4a"), "le toucher suivant relance l'échantillon")
+        XCTAssertFalse(sample.acceptsScrub(loadedURL: failed), "aucun glissement vers un lecteur absent")
+        let playing = ProfileVoiceSample.loadedURL(currentUrl: "/v.m4a", hasPlayer: true, isLoading: false)
+        XCTAssertEqual(sample.toggle(loadedURL: playing), .pauseOrResume)
+        let buffering = ProfileVoiceSample.loadedURL(currentUrl: "/v.m4a", hasPlayer: false, isLoading: true)
+        XCTAssertEqual(buffering, "/v.m4a", "un chargement en cours tient le son")
+    }
+
+    func test_voiceSection_saysAFailedLoad_andTheKitForgetsTheUrlItCouldNotLoad() throws {
+        let voice = try code("Meeshy/Features/Profile/Faces/ProfileVoiceSection.swift")
+        XCTAssertTrue(voice.contains("if player.loadFailed"), "l'échec se dit, le disque reste touchable")
+        XCTAssertFalse(voice.contains("toggle(loadedURL: player.currentUrl)"), "jamais l'URL seulement demandée")
+    }
+
     func test_voiceDuration_isTheServedOne_untilTheFileTellsItsOwn() {
         let sample = ProfileVoiceSample(url: "/v.m4a", isPublic: true, servedDuration: 9)
         XCTAssertEqual(sample.shownDuration(playerDuration: 0), 9)
