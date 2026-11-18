@@ -498,7 +498,6 @@
     <string name="retouch_tool_text">نص</string>
     <string name="retouch_tool_trim">قص</string>
     <string name="skeleton_feed_post_loading">جارٍ تحميل منشور</string>
-    <string name="skeleton_link_row_loading">جارٍ تحميل رابط</string>
     <string name="skeleton_profile_loading">جارٍ تحميل الملف الشخصي</string>
     <string name="skeleton_stories_loading">جارٍ تحميل القصص</string>
     <string name="slide_rail_delete_cancel">إلغاء</string>

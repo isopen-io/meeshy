@@ -41,6 +41,7 @@ struct ProfileCardView: View {
     @State private var sent: SharedContentWrapper?
     @State private var exported: ProfileCardExport?
     @State private var contactlessUnavailable = false
+    @State private var openNoteID: String?
 
     private var accent: Color { Color(hex: accentColor) }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -97,11 +98,13 @@ struct ProfileCardView: View {
         }
     }
 
-    /// « Ce QR montre » (K47) : la vitrine, ou l'invitation dont la charge porte le jeton bref. Tant que l'invitation
-    /// n'est pas servie, le QR garde la vitrine et la note le dit.
+    /// « Ce QR montre » (K47) : la vitrine, ou l'invitation dont la charge porte le jeton bref, que le (i) du titre
+    /// explique. Tant que l'invitation n'est pas servie, le QR garde la vitrine et la note le dit.
     private var qrShowsChoice: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            MeeshySectionHeader(title: ProfileLinksCopy.qrShows, form: .overline)
+            MeeshyInfoNoted(note: ProfileLinksCopy.qrShowsInvitationNote, openNoteID: $openNoteID, tint: theme.textSecondary) {
+                MeeshySectionHeader(title: ProfileLinksCopy.qrShows, form: .overline)
+            }
             MeeshyChoiceTiles(label: ProfileLinksCopy.qrShows, items: ProfileCardQRShows.allCases.map { $0.choiceItem },
                               selection: .single(qr.state.shows.rawValue), columns: 1, format: .wide, tint: accent,
                               onSelect: { id in if let shows = ProfileCardQRShows(rawValue: id) { qr.choose(shows) } })

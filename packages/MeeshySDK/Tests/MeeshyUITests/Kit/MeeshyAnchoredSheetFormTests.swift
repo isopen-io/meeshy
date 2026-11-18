@@ -14,7 +14,8 @@ struct MeeshyAnchoredSheetFormTests {
         let rows = try KitEvolutionVectors.rows(Self.file, "surfaces")
         #expect(MeeshyAnchoredSheetSurface.allCases.map(\.rawValue) == rows.compactMap { $0["surface"] as? String })
         for row in rows {
-            let surface = try #require(MeeshyAnchoredSheetSurface(rawValue: try #require(row["surface"] as? String)))
+            let surfaceRaw = try #require(row["surface"] as? String)
+            let surface = try #require(MeeshyAnchoredSheetSurface(rawValue: surfaceRaw))
             #expect(MeeshyAnchoredSheetMetrics.usesMediaInk(surface: surface) == row["encreMedia"] as? Bool, "\(row)")
             #expect(MeeshyAnchoredSheetMetrics.handleOpacity(surface: surface) == row["poignee"] as? Double, "\(row)")
         }
@@ -25,7 +26,8 @@ struct MeeshyAnchoredSheetFormTests {
         let rows = try KitEvolutionVectors.rows(Self.file, "formes")
         #expect(MeeshyAnchoredSheetForm.allCases.map(\.rawValue) == rows.compactMap { $0["forme"] as? String })
         for row in rows {
-            let form = try #require(MeeshyAnchoredSheetForm(rawValue: try #require(row["forme"] as? String)))
+            let formRaw = try #require(row["forme"] as? String)
+            let form = try #require(MeeshyAnchoredSheetForm(rawValue: formRaw))
             let law = MeeshyAnchoredSheetFormLaw.resolve(form)
             #expect(law.height == Self.height(row["hauteur"]), "\(row)")
             #expect(law.scrim == row["voile"] as? Bool, "\(row)")
@@ -39,7 +41,8 @@ struct MeeshyAnchoredSheetFormTests {
     @Test("sous Réduire la transparence ou les animations, l'hôte ne se floute pas ; le voile reste")
     func forms_reducedEffects_dropTheBlurOnly() throws {
         for row in try KitEvolutionVectors.rows(Self.file, "formesSansEffets") {
-            let form = try #require(MeeshyAnchoredSheetForm(rawValue: try #require(row["forme"] as? String)))
+            let formRaw = try #require(row["forme"] as? String)
+            let form = try #require(MeeshyAnchoredSheetForm(rawValue: formRaw))
             let law = MeeshyAnchoredSheetFormLaw.resolve(form, reducesEffects: true)
             #expect(Double(law.hostBlur) == row["flou"] as? Double, "\(row)")
             #expect(law.scrim)

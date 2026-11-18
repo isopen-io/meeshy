@@ -204,7 +204,6 @@
     <string name="status_composer_mood_question">Come ti senti?</string>
     <string name="status_composer_publish">Pubblica</string>
     <string name="status_composer_publish_disabled_hint">Scegli un\'emoji per pubblicare il tuo stato</string>
-    <string name="status_composer_title">Stato</string>
     <string name="status_composer_visibility_community">Community</string>
     <string name="status_composer_visibility_friends">Amici</string>
     <string name="status_composer_visibility_private">Privato</string>

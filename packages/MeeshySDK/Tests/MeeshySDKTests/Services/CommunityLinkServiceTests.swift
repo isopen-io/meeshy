@@ -39,7 +39,7 @@ final class CommunityLinkServiceTests: XCTestCase {
                                     memberCount: Int? = 42, isActive: Bool = true) -> APICommunityMini {
         APICommunityMini(
             id: id, name: name, identifier: identifier,
-            isActive: isActive, memberCount: memberCount, createdAt: Date()
+            isActive: isActive, memberCount: memberCount, createdAt: Date(), memberPreviews: nil
         )
     }
 

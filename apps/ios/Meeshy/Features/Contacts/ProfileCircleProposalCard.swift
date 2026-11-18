@@ -176,11 +176,11 @@ nonisolated enum ProfileCircleProposalCopy {
         guard level != .blood else {
             return String(localized: "circles.requests.ritual", defaultValue: "Ouvrir le rituel", bundle: .main)
         }
-        return String(format: String(localized: "circles.proposal.accept.hint", defaultValue: "Votre cercle commun passe à %@", bundle: .main),
+        return String(format: String(localized: "circles.proposal.accept.a11y", defaultValue: "Votre cercle commun passe à %@", bundle: .main),
                       CircleLevelNames.title(of: level))
     }
 
     static func declineHint(name: String) -> String {
-        String(format: String(localized: "circles.proposal.decline.hint", defaultValue: "%@ n'en sera pas averti(e)", bundle: .main), name)
+        String(format: String(localized: "circles.proposal.decline.a11y", defaultValue: "%@ n'en sera pas averti(e)", bundle: .main), name)
     }
 }

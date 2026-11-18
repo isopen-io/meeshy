@@ -69,7 +69,7 @@ extension UserProfileSheet {
         MeeshyGlassButton(
             systemImage: "chevron.down",
             label: String(localized: "common.close", defaultValue: "Fermer", bundle: .module),
-            hint: String(localized: "profile.close.hint", defaultValue: "Ferme le profil", bundle: .module),
+            hint: String(localized: "profile.close.a11y", defaultValue: "Ferme le profil", bundle: .module),
             haptic: .none,
             action: { closeSheet() }
         )
@@ -237,7 +237,7 @@ extension UserProfileSheet {
         // App câblée → état réel (pas d'anneau sans story active) ; legacy (nil) → anneau décoratif historique.
         let ringState = ProfileHeroPlan.storyRing(showRing ? (storyRingState ?? .read) : .none, avatarSize: Double(size))
         let context = AvatarContext.custom(size)
-        let photoHint = String(localized: "profile.avatar.viewFullscreen.hint", defaultValue: "Ouvre la photo en plein écran", bundle: .module)
+        let photoHint = String(localized: "profile.avatar.viewFullscreen.a11y", defaultValue: "Ouvre la photo en plein écran", bundle: .module)
 
         return MeeshyLivePresence { MeeshyAvatar(
             name: avatarName,
@@ -334,6 +334,6 @@ extension UserProfileSheet {
         }
         .padding(EdgeInsets(top: MeeshySpacing.mdPlus - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular), leading: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular), bottom: 0, trailing: 0))
         .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
-        .accessibilityHint(String(localized: "profile.close.hint", defaultValue: "Ferme le profil", bundle: .module))
+        .accessibilityHint(String(localized: "profile.close.a11y", defaultValue: "Ferme le profil", bundle: .module))
     }
 }

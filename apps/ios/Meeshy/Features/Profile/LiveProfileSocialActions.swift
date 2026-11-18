@@ -14,7 +14,7 @@ final class LiveProfileSocialActions: ProfileSocialActionsProviding {
     }
 
     func pendingFriendRequest(_ requestId: String) async -> FriendRequest? {
-        let store = CacheCoordinator.shared.friendRequests
+        let store = await CacheCoordinator.shared.friendRequests
         let received = await store.loadIgnoringExpiry(for: FriendshipCache.PersistenceKeys.receivedRequests)?.items ?? []
         let sent = await store.loadIgnoringExpiry(for: FriendshipCache.PersistenceKeys.sentRequests)?.items ?? []
         return (received + sent).first { $0.id == requestId }

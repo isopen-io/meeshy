@@ -128,7 +128,7 @@ struct CreateShareLinkView: View {
                 formField(String(localized: "share.link.create.field.description", defaultValue: "Description", bundle: .main), placeholder: String(localized: "share.link.create.field.description.placeholder", defaultValue: "Optionnel", bundle: .main), text: $linkDescription, input: .paragraph)
                 divider
                 LinkSlugField(prefix: "meeshy.me/chat/", slug: customSlug, isAcceptable: LinkSlugRules.isAcceptable(customSlug),
-                              onChange: { customSlug = $0 })
+                              openNoteID: $openNoteID, onChange: { customSlug = $0 })
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.vertical, MeeshySpacing.md)
                     .background(rowBackground)
@@ -233,7 +233,7 @@ struct CreateShareLinkView: View {
                     content: MeeshyToggleRowContent(
                         title: LinkCreationCopy.entries,
                         subtitle: maxUsesEnabled
-                            ? LinkCreationCopy.entriesDetail
+                            ? nil
                             : String(localized: "share.link.create.unlimited", defaultValue: "Illimité", bundle: .main),
                         accessory: .toggle(isOn: maxUsesEnabled)
                     ),

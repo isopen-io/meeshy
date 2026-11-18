@@ -32,7 +32,8 @@ struct MeeshyCollapsingHeroBarTests {
     @Test("le grand titre est seul ; le titre en ligne porte son sous-titre s'il en a un")
     func bar_subtitle_followsTheStyle() throws {
         for row in try KitEvolutionVectors.rows(Self.file, "barreSousTitre") {
-            let style = try #require(MeeshyHeroBarTitleStyle(rawValue: try #require(row["titre"] as? String)))
+            let styleRaw = try #require(row["titre"] as? String)
+            let style = try #require(MeeshyHeroBarTitleStyle(rawValue: styleRaw))
             let hasSubtitle = try #require(row["sousTitre"] as? Bool)
             #expect(MeeshyHeroBarRecipe.showsSubtitle(style, hasSubtitle: hasSubtitle) == row["montre"] as? Bool, "\(row)")
         }
