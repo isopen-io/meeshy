@@ -18,7 +18,8 @@
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { LIVE_RECEIPTS_CAPABILITY } from '@meeshy/shared/types/live-receipts';
+import { LIVE_RECEIPTS_CAPABILITY, LIVE_RECEIPT_FIELDS, type LiveReceiptField } from '@meeshy/shared/types/live-receipts';
+import { messageSchema } from '@meeshy/shared/types/api-schemas';
 
 const mockLogInfo = jest.fn();
 jest.mock('../../../../services/messaging/captureNoticeVisibility', () => ({
@@ -181,6 +182,88 @@ describe('#19049 — le validateur de la fenêtre', () => {
 
     expect(messageWindowETag(page(2), { liveReceipts: true })).toMatch(/^W\/"[0-9a-f]{64}"$/);
     expect(messageWindowETag(empty, { liveReceipts: true }).replace(/^W\//, '')).not.toBe(computeETag(empty));
+  });
+});
+
+/**
+ * Le validateur faible ignore les CINQ champs d'accusé, et RIEN d'autre. Les
+ * témoins ci-dessus ne changeaient que le texte : un validateur qui ignorait en
+ * plus les réactions, les pièces jointes, les traductions ou la suppression les
+ * laissait tous verts — et un client `live-receipts` revalidait en 304 une
+ * fenêtre dont une réaction, une traduction ou un rappel lui échappait.
+ *
+ * Chaque ligne change UN champ du message servi, déclaré par le schéma de la
+ * fenêtre (`messageSchema`) et déjà présent dans le message : ajouter une clé
+ * absente changerait l'empreinte quoi qu'ignore le validateur, et la ligne ne
+ * prouverait rien.
+ */
+describe('#19049 — le validateur faible ignore les cinq champs d’accusé, et aucun champ de contenu', () => {
+  const servedMessage: Readonly<Record<string, unknown>> = {
+    id: MESSAGE_ID,
+    conversationId: CONV_ID,
+    content: 'Rendez-vous à 18 h',
+    originalLanguage: 'fr',
+    messageType: 'text',
+    isEdited: false,
+    editedAt: null,
+    deletedAt: null,
+    expiresAt: null,
+    isViewOnce: false,
+    reactionSummary: { '👍': 1 },
+    reactionCount: 1,
+    attachments: [],
+    translations: [{ targetLanguage: 'en', translatedContent: 'Meeting at 6 pm' }],
+    readCount: 2,
+    deliveredCount: 4,
+    recipientCount: 4,
+    deliveredToAllAt: '2026-11-17T08:01:00.000Z',
+    readByAllAt: null,
+  };
+  const windowServing = (message: Readonly<Record<string, unknown>>) => ({
+    success: true,
+    data: [message],
+    meta: { userLanguage: 'fr', mentionedUsers: [] },
+  });
+  const weakValidatorOf = (message: Readonly<Record<string, unknown>>): string =>
+    messageWindowETag(windowServing(message), { liveReceipts: true });
+
+  const CONTENT_CHANGES: readonly (readonly [string, string, unknown])[] = [
+    ['édition', 'content', 'Rendez-vous à 19 h'],
+    ['édition', 'isEdited', true],
+    ['édition', 'editedAt', '2026-11-17T08:05:00.000Z'],
+    ['réaction', 'reactionSummary', { '👍': 1, '❤️': 1 }],
+    ['réaction', 'reactionCount', 2],
+    ['pièce jointe', 'attachments', [{ id: '507f1f77bcf86cd799439044', fileName: 'plan.pdf', mimeType: 'application/pdf' }]],
+    ['traduction', 'translations', [{ targetLanguage: 'en', translatedContent: 'Meeting at 6 pm' }, { targetLanguage: 'es', translatedContent: 'Cita a las 18 h' }]],
+    ['suppression', 'deletedAt', '2026-11-17T08:10:00.000Z'],
+    ['échéance', 'expiresAt', '2026-11-18T08:00:00.000Z'],
+    ['vue unique', 'isViewOnce', true],
+  ];
+
+  it.each(CONTENT_CHANGES)('%s — `%s` changé change le validateur faible', (_kind, field, changed) => {
+    expect(messageSchema.properties).toHaveProperty(field);
+    expect(servedMessage).toHaveProperty(field);
+
+    expect(weakValidatorOf({ ...servedMessage, [field]: changed })).not.toBe(weakValidatorOf(servedMessage));
+  });
+
+  const RECEIPT_CHANGES = {
+    deliveredCount: 3,
+    readCount: 3,
+    recipientCount: 5,
+    deliveredToAllAt: null,
+    readByAllAt: '2026-11-17T08:30:00.000Z',
+  } as const satisfies Record<LiveReceiptField, unknown>;
+
+  it.each(LIVE_RECEIPT_FIELDS.map((field) => [field] as const))('accusé — `%s` changé ne change pas le validateur faible', (field) => {
+    expect(messageSchema.properties).toHaveProperty(field);
+    expect(servedMessage).toHaveProperty(field);
+
+    expect(weakValidatorOf({ ...servedMessage, [field]: RECEIPT_CHANGES[field] })).toBe(weakValidatorOf(servedMessage));
+  });
+
+  it('les cinq accusés changés ENSEMBLE ne le changent pas non plus', () => {
+    expect(weakValidatorOf({ ...servedMessage, ...RECEIPT_CHANGES })).toBe(weakValidatorOf(servedMessage));
   });
 });
 

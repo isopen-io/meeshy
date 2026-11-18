@@ -22,7 +22,7 @@ const conversation = (id: string, overrides: Partial<Conversation> = {}): Conver
   ({ id, type: 'group', isActive: true, listRankAt: '2026-11-01T10:00:00.000Z', ...overrides }) as Conversation;
 
 const frames = [new Uint8Array([0xff, 0xf1, 1]), new Uint8Array([0xff, 0xf1, 2])];
-const copyOf = (conversationId: string | null) => ({ frames, durationMs: 4_200, toUserId: PROCHE, conversationId });
+const copyOf = (conversationId: string | null) => ({ frames, durationMs: 4_200, toUserId: PROCHE, conversationId, owner: null });
 
 function gateway({ shared = [] as readonly Conversation[], direct = conversation(DIRECT, { type: 'direct' }), uploads = 1, sends = true } = {}) {
   const requests: HttpRequest[] = [];

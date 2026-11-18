@@ -1,8 +1,6 @@
-import { forgetCallJournal } from '../calls/call-network-journal-keys';
 import { SW_ACCOUNT_CACHE_NAMES } from '../sw-caches';
-import { safeLocalStorage, type SafeStorage } from '../storage';
+import type { SafeStorage } from '../storage';
 
-import type { SessionStoreApi } from './session';
 
 /**
  * L'ÉTAGÈRE DES CACHES DE COMPTE (#8674) — le cache de requêtes d'un compte
@@ -115,28 +113,6 @@ export function createAccountCacheShelf(storage: SafeStorage): AccountCacheShelf
   };
 }
 
-export type IndexedDbEraser = { readonly deleteDatabase: (name: string) => unknown };
-
-/**
- * LES POINTS DE REPRISE DES ENVOIS DE MÉDIAS (#11311) — la base IndexedDB de
- * `tus-checkpoint.ts`, dont le nom est recopié ici plutôt qu'importé : le
- * client TUS se charge à la demande, et l'importer ferait payer un module de
- * plus avant le premier pixel. `account-query-cache.test.ts` lie les deux noms
- * (il efface `TUS_CHECKPOINT_DB_NAME`, importé du client). Un point de reprise
- * porte l'adresse d'une session ouverte par le compte : rien du compte
- * précédent ne survit à sa déconnexion (#104). Meilleur effort, silencieux.
- */
-const TUS_CHECKPOINT_DB = 'meeshy-tus';
-
-function forgetTusCheckpoints(factory: IndexedDbEraser | null): void {
-  if (factory === null) return;
-  try {
-    factory.deleteDatabase(TUS_CHECKPOINT_DB);
-  } catch {
-    /* rien à effacer */
-  }
-}
-
 export type CacheStorageLike = {
   keys(): Promise<readonly string[]>;
   delete(cacheName: string): Promise<boolean>;
@@ -167,65 +143,20 @@ export function purgeReaderCaches(storage?: CacheStorageLike): void {
 }
 
 /**
- * LA FIN D'UN COMPTE SUR L'APPAREIL (#8674) — déconnexion, session révoquée ou
- * expirée : son cache rangé part, son journal réseau d'appels (#8698) aussi,
- * les seaux du service worker et les points de reprise de ses envois de
- * médias (IndexedDB `meeshy-tus`, #11311) avec eux, et ses publications non
- * envoyées (médias et intention du studio, #13416) : une déconnexion explicite
- * vaut suppression par l'utilisateur — la règle « rien ne s'efface avant la
- * confirmation du serveur » ne vaut que pour le compte connecté.
- * Changer de compte n'appelle jamais ceci.
+ * LES COMPTES DONT LA FIN EST RESTÉE À FAIRE (audit #19352) — une session
+ * refusée dont le morceau de fin (`account-end.ts`) n'a pas pu se charger finit
+ * tout de suite, et son compte est NOTÉ ici (identifiants séparés par une
+ * espace) : ce qu'il laisse sur l'appareil part au prochain chargement de ce
+ * morceau (`forgetPendingAccountEnds`). Seule la note vit dans la première
+ * peinture.
  */
-export type PublicationsEraser = { readonly clear: (userId: string) => Promise<unknown> };
+export const PENDING_ACCOUNT_ENDS_KEY = 'meeshy.account-end.pending';
 
-/* Chargé au geste : la fin d'un compte n'embarque pas le studio. */
-const studioPublications: PublicationsEraser = {
-  clear: (userId) => import('../stories/studio-outbox-records').then(({ eraseStudioOutbox }) => eraseStudioOutbox(userId)),
-};
-
-export function forgetAccountCaches({
-  userId,
-  storage,
-  cacheStorage,
-  indexedDb = typeof indexedDB === 'undefined' ? null : indexedDB,
-  publications = studioPublications,
-}: {
-  readonly userId: string;
-  readonly storage?: SafeStorage;
-  readonly cacheStorage?: CacheStorageLike;
-  readonly indexedDb?: IndexedDbEraser | null;
-  readonly publications?: PublicationsEraser;
-}): void {
-  const local = storage ?? safeLocalStorage();
-  createAccountCacheShelf(local).forget(userId);
-  forgetCallJournal(local, userId);
-  purgeReaderCaches(cacheStorage);
-  forgetTusCheckpoints(indexedDb);
+export function notePendingAccountEnd(storage: SafeStorage, userId: string): void {
   try {
-    void publications.clear(userId).catch(() => undefined);
+    const noted = storage.getItem(PENDING_ACCOUNT_ENDS_KEY);
+    if (noted === null || !noted.split(' ').includes(userId)) storage.setItem(PENDING_ACCOUNT_ENDS_KEY, noted === null ? userId : `${noted} ${userId}`);
   } catch {
-    /* La déconnexion aboutit même si l'appareil refuse. */
+    /* Stockage plein ou interdit : la session est finie quand même. */
   }
-}
-
-/**
- * LA SESSION COURANTE EST REFUSÉE (401 sur son jeton, `auth:session-revoked`
- * du socket) — elle finit, et ce que l'appareil gardait d'elle part avec.
- * L'ordre compte : `clearSession()` fait d'abord ranger le cache du compte
- * par `query-client.ts`, que l'oubli retire aussitôt.
- */
-export function endRevokedSession(
-  store: SessionStoreApi,
-  deps: { readonly storage?: SafeStorage; readonly cacheStorage?: CacheStorageLike; readonly publications?: PublicationsEraser } = {},
-): void {
-  const current = store.getState().session;
-  /* Sous une identité anonyme TENUE par un compte (#8816), le 401 a refusé
-     le jeton de l'INVITÉ : c'est lui qui finit, le compte reste. */
-  if (current.status === 'guest' && current.account !== undefined) {
-    store.getState().dropAnonymous(current.guest.conversationId);
-    return;
-  }
-  const userId = current.status === 'authenticated' ? current.user.id : null;
-  store.getState().clearSession();
-  if (userId !== null) forgetAccountCaches({ userId, ...deps });
 }

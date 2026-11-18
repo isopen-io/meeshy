@@ -408,7 +408,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getEditHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
     });
 
     /**
@@ -433,7 +433,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getEditHandler(fastify)(req, reply);
 
-      expect(mockSendError).toHaveBeenCalledWith(reply, 410, 'Cette conversation est terminée');
+      expect(mockSendError).toHaveBeenCalledWith(reply, 410, 'Cette conversation est terminée', { code: 'CONVERSATION_CLOSED' });
       expect(prisma.message.update).not.toHaveBeenCalled();
     });
 
@@ -1102,7 +1102,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getEditHandler(fastify)(req, makeReply());
 
-      expect(mockSendNotFound).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(expect.anything(), 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
       expect(mockSendInternalError).not.toHaveBeenCalled();
     });
 
@@ -1391,7 +1391,19 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getPatchHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message introuvable', { code: 'MESSAGE_NOT_FOUND' });
+    });
+
+    it('nomme la clôture du fil (410 CONVERSATION_CLOSED) : un client qui lit le code ne réessaie pas un geste sans issue', async () => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage({ conversation: { isActive: true, closedAt: new Date() } }));
+
+      const req = makeRequest({ params: { messageId: MSG_ID }, body: { content: 'Updated' } });
+      const reply = makeReply();
+
+      await getPatchHandler(fastify)(req, reply);
+
+      expect(mockSendError).toHaveBeenCalledWith(reply, 410, 'Cette conversation est terminée', { code: 'CONVERSATION_CLOSED' });
+      expect(prisma.message.update).not.toHaveBeenCalled();
     });
 
     it('returns 403 when user is not author', async () => {
@@ -1925,7 +1937,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(prisma.message.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: MSG_ID, deletedAt: null } })
       );
-      expect(mockSendNotFound).toHaveBeenCalled();
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message introuvable', { code: 'MESSAGE_NOT_FOUND' });
       expect(mockSendInternalError).not.toHaveBeenCalled();
     });
 

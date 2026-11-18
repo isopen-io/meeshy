@@ -122,9 +122,12 @@ final class ConversationHistoryLoader: ConversationHistoryLoading {
 
     /// D'où repart le rattrapage `after` : la fin du fil détenu SANS TROU (#18929), jamais un message
     /// entré seul — déposé par la NSE, ramené par un push, relayé par le socket conversation fermée.
+    /// Sans filigrane, le plus ancien message serveur détenu.
     func catchUpCursor(newestHeld: Date?) async -> Date? {
-        let watermark = try? await ConversationContiguity.base(of: conversationId, on: persistence).watermark
-        return ConversationContiguity.catchUpCursor(watermark: watermark, newestHeld: newestHeld)
+        let base = try? await ConversationContiguity.base(of: conversationId, on: persistence)
+        return ConversationContiguity.catchUpCursor(
+            watermark: base?.watermark, oldestHeld: base?.oldestHeld, newestHeld: newestHeld
+        )
     }
 
     /// Le balayage `after`, gravé dans la base ; parti de l'intérieur du fil détenu sans trou, il en

@@ -34,10 +34,14 @@ export const LIVE_RECEIPTS_CAPABILITY = 'live-receipts' as const;
 /**
  * Les champs d'accusé AGRÉGÉS de chaque message de la fenêtre — ce que le
  * validateur sous la capacité ignore. Tous dérivent du même état d'accusés
- * (`MessageReadStatusService.getConversationReadStatuses`), et la socket les
- * tient : `read-status:updated` porte `deliveredCount`, `readCount`,
- * `totalMembers` (le `recipientCount` servi) et `readByAllAt` ;
- * `deliveredToAllAt` est l'instant où `deliveredCount` atteint le total.
+ * (`MessageReadStatusService.getConversationReadStatuses`), et la socket en
+ * tient la plus grande part : `read-status:updated` porte `deliveredCount`,
+ * `readCount`, `totalMembers` (le `recipientCount` servi) et `readByAllAt`.
+ * Deux restent ceux du dernier 200 tant que les revalidations rendent 304 :
+ * `deliveredToAllAt` (l'instant où `deliveredCount` atteint le total), absent
+ * de `ReadStatusSummary`, et `recipientCount`, qui change à l'arrivée ou au
+ * départ d'un membre sans qu'aucun `read-status:updated` ne parte — affichage
+ * seulement (décision #19049, `services/gateway/decisions/`).
  *
  * @see messageSchema (`api-schemas/message.ts`) — ces champs y sont déclarés.
  */

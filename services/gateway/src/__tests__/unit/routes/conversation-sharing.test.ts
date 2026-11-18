@@ -1124,7 +1124,7 @@ describe('POST /conversations/:id/invite', () => {
 
     expect(fastify.prisma.participant.create).not.toHaveBeenCalled();
     expect(fastify.prisma.participant.update).not.toHaveBeenCalled();
-    expect(mockSendError).toHaveBeenCalledWith(reply, 410, expect.any(String));
+    expect(mockSendError).toHaveBeenCalledWith(reply, 410, expect.any(String), { code: 'CONVERSATION_CLOSED' });
   });
 
   it('CONTRE-ÉPREUVE — une conversation vivante laisse l\'invitation aboutir', async () => {

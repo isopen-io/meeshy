@@ -3,7 +3,7 @@
  *   - updateUserProfile: customDestinationLanguage='' → null (line 151)
  *   - updateUserProfile: voicePublic field present (line 206)
  *   - updateUserProfile: ZodError catch path (lines 248-250)
- *   - updateUserProfile: onDuplicate callback in withMutationLog (line 194)
+ *   - updateUserProfile: onDuplicate callback in withMutationVerdict (line 194)
  *   - updateUserAvatar: ZodError catch path (lines 359-360)
  *   - updateUserBanner: ZodError catch path (lines 462-463)
  *   - updateUserPassword: notification .catch() error body (line 555)
@@ -45,7 +45,7 @@ jest.mock('../../../../services/CacheStore', () => ({
   getCacheStore: jest.fn(() => ({ del: jest.fn().mockResolvedValue(undefined) })),
 }));
 
-const mockWithMutationLog = jest.fn<any>();
+const mockWithMutationVerdict = jest.fn<any>();
 jest.mock('../../../../utils/withMutationLog', () => ({
   // Le module réel est ÉTALÉ d'abord : `MutationResultGone` est une CLASSE
   // dont les routes font `instanceof`, et `withMutationOutcome` est le
@@ -53,7 +53,7 @@ jest.mock('../../../../utils/withMutationLog', () => ({
   // les laissait à `undefined` — `instanceof undefined` lève un TypeError
   // qui se déguise en 500 sur des chemins d'erreur sans rapport.
   ...(jest.requireActual('../../../../utils/withMutationLog') as object),
-  withMutationLog: (...args: any[]) => mockWithMutationLog(...args),
+  withMutationVerdict: (...args: any[]) => mockWithMutationVerdict(...args),
 }));
 
 jest.mock('../../../../utils/sanitize.js', () => ({
@@ -224,10 +224,10 @@ function makeZodError(msg = 'test validation error'): z.ZodError {
   return new z.ZodError([{ code: z.ZodIssueCode.custom, message: msg, path: [] }]);
 }
 
-// ─── beforeEach: reset withMutationLog to default (calls op()) ────────────────
+// ─── beforeEach: reset withMutationVerdict to default (calls op()) ────────────
 
 beforeEach(() => {
-  mockWithMutationLog.mockImplementation(({ op }: any) => op());
+  mockWithMutationVerdict.mockImplementation(async ({ op }: any) => ({ result: await op(), replayed: false }));
   // Reset parse mocks to passthrough
   (validation.updateUserProfileSchema.parse as jest.Mock).mockImplementation((b: any) => b);
   (validation.updateAvatarSchema.parse as jest.Mock).mockImplementation((b: any) => b);
@@ -247,7 +247,7 @@ describe('PATCH /users/me — customDestinationLanguage empty string (line 151)'
       payload: { customDestinationLanguage: '' },
     });
     expect(res.statusCode).toBe(200);
-    // withMutationLog was called; prisma.user.update should have received null
+    // withMutationVerdict was called; prisma.user.update should have received null
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ customDestinationLanguage: null }) })
     );
@@ -301,20 +301,21 @@ describe('PATCH /users/me — regionalLanguage empty string (clear)', () => {
   });
 });
 
-// ─── Line 194: onDuplicate callback in withMutationLog ───────────────────────
+// ─── Line 194: onDuplicate callback in withMutationVerdict ───────────────────
 
 describe('PATCH /users/me — onDuplicate callback (line 194)', () => {
-  it('calls onDuplicate when withMutationLog invokes it', async () => {
-    mockWithMutationLog.mockImplementationOnce(({ onDuplicate }: any) => onDuplicate(USER_ID));
+  it('calls onDuplicate when withMutationVerdict invokes it', async () => {
+    mockWithMutationVerdict.mockImplementationOnce(async ({ onDuplicate }: any) => ({ result: await onDuplicate(USER_ID), replayed: true }));
     const prisma = makePrisma();
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'PATCH', url: '/users/me',
       payload: { firstName: 'Bob' },
     });
-    // onDuplicate calls prisma.user.findUnique
+    // onDuplicate re-reads the row WITH its relation (`include`) — the pre-read
+    // of the names uses a `select`, so `where` alone would match it too.
     expect(prisma.user.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: USER_ID } })
+      expect.objectContaining({ where: { id: USER_ID }, include: expect.any(Object) })
     );
     expect(res.statusCode).toBe(200);
     await app.close();

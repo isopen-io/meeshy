@@ -2,7 +2,7 @@ import * as uploadsEndpoints from '@meeshy/shared/api/endpoints/uploads';
 
 import { anySignal, timeoutSignal } from './abort';
 import type { DataSource } from './config';
-import { credentialHeaders, type ApiFailure, type ApiResult, type Credential } from './http';
+import { IDENTITY_CHANGED, credentialHeaders, type ApiFailure, type ApiResult, type Credential } from './http';
 import { TUS_CHECKPOINT_MAX_AGE_MS, claimTusLease, idbTusCheckpointStore, tusFingerprint, type TusCheckpointStore } from './tus-checkpoint';
 
 /**
@@ -48,6 +48,13 @@ export type PostMediaUploadDeps = {
   readonly source: DataSource;
   readonly base: string;
   readonly credential: () => Credential | null;
+  /**
+   * LE COMPTE QUI A LANCÉ LE TÉLÉVERSEMENT N'EST PLUS CELUI QUI PARLE (audit
+   * #19352, X1) — `credential` rend alors `null` (`owned-deps.ts`), et ce
+   * n'est pas un refus : le téléversement rend {@link IDENTITY_CHANGED}, que
+   * l'opération lit comme « reprendre quand son compte revient ».
+   */
+  readonly identityChanged?: () => boolean;
   readonly fetchImpl?: typeof fetch;
 };
 
@@ -114,6 +121,10 @@ const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTim
 function failure(status: number, error: string, code?: string): ApiFailure {
   return { ok: false, status, error, ...(code !== undefined ? { code } : {}) };
 }
+
+/** Aucun jeton à présenter : le compte de l'opération a changé, ou aucun n'est connecté. */
+const absentCredential = (params: Pick<PostMediaUploadDeps, 'identityChanged'>): ApiFailure =>
+  params.identityChanged?.() === true ? failure(0, IDENTITY_CHANGED, IDENTITY_CHANGED) : failure(401, 'Authentification requise', 'UNAUTHORIZED');
 
 /** UTF-8 → base64, la forme que `@tus/utils` DÉCODE (`Metadata.js:35`,
  * `Buffer.from(value, 'base64').toString('utf8')`). `btoa` seul encode du
@@ -241,7 +252,7 @@ export async function uploadPostMedia(params: PostMediaUploadParams): Promise<Ap
   }
 
   const credential = params.credential();
-  if (credential === null) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
+  if (credential === null) return absentCredential(params);
   if (credential.kind === 'anonymous') {
     return failure(403, 'Post media upload requires an identifiable registered account', 'POST_MEDIA_REQUIRES_ACCOUNT');
   }
@@ -259,7 +270,7 @@ export async function uploadMessageAttachment(params: MessageAttachmentUploadPar
     return { ok: true, data: { attachmentId: `fx-att-tus-${fixtureAttachments}` } };
   }
   const credential = params.credential();
-  if (credential === null) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
+  if (credential === null) return absentCredential(params);
   const result = await resumableUpload(params, credential);
   return result.ok ? { ok: true, data: { attachmentId: result.data.postMediaId } } : result;
 }
@@ -355,7 +366,7 @@ async function transmit(
     /* L'IDENTITÉ EST RELUE À CHAQUE TRANCHE, ET SON ABSENCE ARRÊTE TOUT (#9743) —
        une tranche ne part jamais sans jeton, ni après la sortie de son auteur. */
     const live = params.credential();
-    if (live === null) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
+    if (live === null) return absentCredential(params);
     const patched = await exchange(
       location,
       {
@@ -395,7 +406,7 @@ async function transmit(
       realignments += 1;
       if (realignments > MAX_OFFSET_REALIGNMENTS) return refusal(response);
       const relive = params.credential();
-      if (relive === null) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
+      if (relive === null) return absentCredential(params);
       const head = await exchange(location, { method: 'HEAD', headers: { ...credentialHeaders(relive), 'Tus-Resumable': TUS_RESUMABLE } }, params);
       if (head.kind === 'failure') return head.failure;
       const served = head.response.status === 200 ? offsetOf(head.response) : null;
@@ -409,7 +420,7 @@ async function transmit(
       if (restarted) return failure(response.status, 'Session de téléversement perdue', 'TUS_SESSION_LOST');
       restarted = true;
       const again = params.credential();
-      if (again === null || again.kind !== credential.kind) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
+      if (again === null || again.kind !== credential.kind) return absentCredential(params);
       const recreated = await createUpload(params, again);
       if (typeof recreated !== 'string') return recreated;
       location = recreated;

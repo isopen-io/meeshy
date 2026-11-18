@@ -50,7 +50,7 @@ jest.mock('../../../../services/CacheStore', () => ({
 
 jest.mock('../../../../utils/withMutationLog', () => ({
   ...(jest.requireActual('../../../../utils/withMutationLog') as object),
-  withMutationLog: jest.fn<any>().mockImplementation(({ op }: any) => op()),
+  withMutationVerdict: jest.fn<any>().mockImplementation(async ({ op }: any) => ({ result: await op(), replayed: false })),
 }));
 
 jest.mock('../../../../utils/sanitize.js', () => ({
@@ -71,7 +71,7 @@ jest.mock('../../../../utils/socket-broadcast', () => ({
 // ─── Imports après les doubles ──────────────────────────────────────────────
 
 import { updateUserProfile } from '../../../../routes/users/profile-updates';
-import { withMutationLog } from '../../../../utils/withMutationLog';
+import { withMutationVerdict } from '../../../../utils/withMutationLog';
 import { handleGetMe, meRouteSharedOptions } from '../../../../routes/me/get-me';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
@@ -217,7 +217,7 @@ const lireMoi = (query = '') => app.inject({ method: 'GET', url: `/me${query}` }
 
 beforeEach(() => {
   broadcastToUser.mockClear();
-  (withMutationLog as unknown as jest.Mock).mockClear();
+  (withMutationVerdict as unknown as jest.Mock).mockClear();
 });
 
 afterEach(async () => {
@@ -306,7 +306,7 @@ describe('PATCH /users/me — la préférence est ÉCRITE', () => {
     await demarrer({ autoTranslateEnabled: false });
     await patcher({ displayName: 'Ada' });
 
-    const appels = (withMutationLog as unknown as jest.Mock).mock.calls;
+    const appels = (withMutationVerdict as unknown as jest.Mock).mock.calls;
     const args = appels[appels.length - 1][0] as {
       onDuplicate: (id: string) => Promise<unknown>;
     };

@@ -4,13 +4,14 @@ import { withEmailGate } from '../activation/email-gated-transport';
 import { apiConfig } from './config';
 import { createHttpTransport, type ApiFailure, type ApiResult, type Credential, type HttpTransport } from './http';
 import { navigate } from '../router';
+import { safeLocalStorage, type SafeStorage } from '../storage';
 
-import { endRevokedSession } from './account-caches';
+import { notePendingAccountEnd } from './account-caches';
 import { retireDeletedAccountLater } from './account-deleted';
-import { endGuestAccess } from './guest-access-end';
+import { endGuestAccess, type GuestAccessEnd } from './guest-access-end';
 import { VIEWER_ID } from './fixtures-base';
 import { ownerCredentialOf, ownerScopeOf, type OwnerCredential } from './owner-session';
-import { sessionIdentityKey, sessionStore, type SessionState } from './session';
+import { scopedConversationOf, sessionIdentityKey, sessionStore, type SessionState, type SessionStoreApi } from './session';
 
 /**
  * LE TRANSPORT DE PRODUCTION — l'UNIQUE instance que toute l'application
@@ -66,6 +67,9 @@ export function currentDeviceLocale(): string | null {
  * sont pas (le client TUS, `post-media-upload.ts`). */
 export const currentCredential = (): Credential | null => credentialFromSession(sessionStore.getState().session);
 
+/** QUI parle à cet instant — la clé que le transport relit au départ et à l'arrivée de chaque requête (#8674). */
+export const currentIdentity = (): string | null => sessionIdentityKey(sessionStore.getState().session);
+
 /**
  * LE JETON DU PROPRIÉTAIRE D'UNE ATTENTE (#9743, `owner-session.ts`) — la
  * session lue en UN instantané, ou, sur fixtures (ni session ni réseau : ce
@@ -83,6 +87,55 @@ export function sessionEmailUnproven(session: SessionState): boolean {
   return session.status === 'authenticated' && session.user.emailUnproven === true;
 }
 
+type AccountEnd = Pick<typeof import('./account-end'), 'endRevokedSession'>;
+
+/**
+ * LE REPLI QUAND LE MORCEAU DE FIN NE SE CHARGE PAS (audit #19352) — réseau
+ * instable, version changée en route : la session refusée finit quand même,
+ * tout de suite, sans toucher l'entrée d'un autre compte que l'appareil tient
+ * (`clearSession`), et son compte est noté pour que ce qu'il laisse sur
+ * l'appareil parte au prochain chargement (`forgetPendingAccountEnds`).
+ */
+function endWithoutModule(store: SessionStoreApi, storage: SafeStorage): void {
+  const state = store.getState();
+  const current = state.session;
+  const leaving = current.status === 'authenticated' && state.holdsDeviceSession() ? current.user.id : null;
+  state.clearSession();
+  if (leaving !== null) notePendingAccountEnd(storage, leaving);
+}
+
+/**
+ * La fin d'une session refusée se charge quand elle sert (`account-end.ts`) : la première peinture n'en porte que le repli.
+ *
+ * ELLE VISE LA SESSION REFUSÉE, JAMAIS CELLE QUE L'ONGLET TIENT QUAND LE MORCEAU ARRIVE (audit #19352) :
+ * - l'identité anonyme d'un compte (#8816) finit SUR-LE-CHAMP — rien à charger, et la navigation qui suit la fin
+ *   d'un accès d'invité rendrait la session au COMPTE avant la fin chargée, qui le déconnecterait alors ;
+ * - une autre session finit à l'arrivée du morceau (ou de son échec) seulement si l'onglet la tient encore, la même :
+ *   s'il a suivi l'appareil passé à un autre compte, repris une session neuve ou réécrit la sienne, rien ne finit ici,
+ *   et la requête suivante sous un jeton refusé rapporte son propre 401.
+ */
+export function endRefusedSession(
+  store: SessionStoreApi,
+  { load = () => import('./account-end'), storage }: { readonly load?: () => Promise<AccountEnd>; readonly storage?: SafeStorage } = {},
+): void {
+  const refused = store.getState().session;
+  const scoped = scopedConversationOf(refused);
+  if (scoped !== null) return store.getState().dropAnonymous(scoped);
+  const stillRefused = (): boolean => store.getState().session === refused;
+  void load()
+    .then(({ endRevokedSession }) => {
+      if (stillRefused()) endRevokedSession(store);
+    })
+    .catch(() => {
+      if (stillRefused()) endWithoutModule(store, storage ?? safeLocalStorage());
+    });
+}
+
+const endSessionOf = (store: SessionStoreApi): void => endRefusedSession(store);
+
+/** Ce que l'onglet fait quand la passerelle dit que l'accès de son invité est fini — exporté pour que le témoin passe par le câblage de l'application. */
+export const onTabGuestAccessEnded = (reason: GuestAccessEnd): void => endGuestAccess({ reason, store: sessionStore, end: endSessionOf, navigate });
+
 /** Enveloppé par la garde de l'e-mail (#8365) : un refus `EMAIL_NOT_VERIFIED`
  * ouvre la validation et la requête repart au code validé
  * (`lib/activation/email-gated-transport.ts`). */
@@ -90,11 +143,11 @@ export const httpTransport: HttpTransport = withEmailGate(
   createHttpTransport({
     base: apiConfig.base,
     credential: currentCredential,
-    identity: () => sessionIdentityKey(sessionStore.getState().session),
+    identity: currentIdentity,
     deviceLocale: currentDeviceLocale,
-    onUnauthorized: () => endRevokedSession(sessionStore),
+    onUnauthorized: () => endSessionOf(sessionStore),
     onAccountDeleted: retireDeletedAccountLater,
-    onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endRevokedSession, navigate }),
+    onGuestAccessEnded: onTabGuestAccessEnded,
   }),
   { ask: emailGate.ask, emailUnproven: () => sessionEmailUnproven(sessionStore.getState().session) },
 );

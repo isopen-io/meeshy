@@ -64,10 +64,10 @@ const storedUser = (over: Record<string, unknown> = {}) => ({
   preferences: null, city: null, cityCircle: null, profileAccentColor: null, ...over,
 });
 
-async function patch(payload: Record<string, unknown>, after: Record<string, unknown> = {}) {
+async function patch(payload: Record<string, unknown>, after: Record<string, unknown> = {}, before: Record<string, unknown> = {}) {
   const prisma = {
     user: {
-      findUnique: jest.fn<any>().mockResolvedValue(storedUser()),
+      findUnique: jest.fn<any>().mockResolvedValue(storedUser(before)),
       update: jest.fn<any>().mockResolvedValue(storedUser(after)),
     },
     userVoiceModel: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
@@ -128,10 +128,16 @@ describe('PATCH /users/me — la couleur d’accent', () => {
   });
 
   it('`null` part aussi à mes appareils : ils reviennent à l’accent calculé', async () => {
-    const { emit } = await patch({ profileAccentColor: null }, { profileAccentColor: null });
+    const { emit } = await patch({ profileAccentColor: null }, { profileAccentColor: null }, { profileAccentColor: '#4ECDC4' });
     expect(emit).toHaveBeenCalledWith(SERVER_EVENTS.PROFILE_UPDATED, expect.objectContaining({
       profile: expect.objectContaining({ profileAccentColor: null }),
     }));
+  });
+
+  it('un accent réécrit à l’identique ne repeint pas mes appareils : l’instantané n’a pas changé (#18924)', async () => {
+    const { res, emit } = await patch({ profileAccentColor: '#4ECDC4' }, { profileAccentColor: '#4ECDC4' }, { profileAccentColor: '#4ECDC4' });
+    expect(res.statusCode).toBe(200);
+    expect(emit.mock.calls.map(([event]) => event)).not.toContain(SERVER_EVENTS.PROFILE_UPDATED);
   });
 
   it('un ancien client qui ne nomme pas le champ n’écrit ni ne diffuse rien de l’accent', async () => {

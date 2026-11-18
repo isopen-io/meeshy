@@ -1,5 +1,5 @@
 import { forwardBodyOf, type ForwardResult, type ForwardSource } from '@/lib/api/forward';
-import type { ApiFailure, ApiResult } from '@/lib/api/http';
+import { IDENTITY_CHANGED, type ApiFailure, type ApiResult } from '@/lib/api/http';
 import { canSendPlaintext, E2EE_PLAINTEXT_WITHHELD } from '@/lib/end-to-end-regime-ledger';
 import type { SendMessageBody, SentMessageAck } from '@/lib/api/messages';
 import type { PublishedPost } from '@/lib/api/share-publish';
@@ -125,7 +125,8 @@ class StepFailed extends Error {
   }
 }
 
-/** Le réseau est tombé pendant l'étape : la cible retourne en file, sans motif. */
+/** Le réseau est tombé pendant l'étape, ou le compte qui l'a lancée n'est plus
+ * celui qui parle (audit #19352, X1) : la cible retourne en file, sans motif. */
 class WentOffline extends Error {}
 
 const isTransportFailure = (failure: ApiFailure): boolean => failure.status === 0 || failure.code === 'TIMEOUT' || failure.code === 'ABORTED';
@@ -227,6 +228,7 @@ export function createSendRun(params: {
   const need = async <T,>(result: Promise<ApiResult<T>>): Promise<T> => {
     const settled = await result;
     if (!settled.ok) {
+      if (settled.code === IDENTITY_CHANGED) throw new WentOffline();
       const failure = failureOf(settled);
       if (failure.kind === 'network' && !ports.online()) throw new WentOffline();
       throw new StepFailed(failure);
@@ -299,6 +301,7 @@ export function createSendRun(params: {
           ...(step.ephemeralDuration === undefined ? {} : { ephemeralDuration: step.ephemeralDuration }),
         });
         if (result.ok) return;
+        if (result.code === IDENTITY_CHANGED) throw new WentOffline();
         const transport = result.status === 0;
         if (transport && !ports.online()) throw new WentOffline();
         throw new StepFailed(transport ? { kind: 'network' } : refusalOf(result.status ?? 0, result.error, result.code));

@@ -121,11 +121,11 @@ class ExhaustionHandlersTest {
         coVerify(exactly = 0) { messageRepository.confirmDeletion(any()) }
     }
 
-    /** #19047 — the refusal a 404 or a 410 left on the row tells the repository the target is gone. */
+    /** #19047 — the refusal the gateway's 404 left on the row (the code it serves, audit A6) tells the repository the target is gone. */
     @Test
     fun `an exhausted delete the gateway refused as gone says so to the repository`() = runTest {
         val refused = outboxRow(OutboxKind.DELETE_MESSAGE, targetId = "m1", lane = OutboxLanes.forMessage("c1"))
-            .copy(lastError = "Refused: HTTP 410 MESSAGE_ALREADY_DELETED")
+            .copy(lastError = "Refused: HTTP 404 MESSAGE_NOT_FOUND")
 
         DeleteMessageHandler(mockk<MessageApi>(), messageRepository).onExhausted(refused)
 

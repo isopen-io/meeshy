@@ -10,8 +10,10 @@ import { bridgeBannerRevocations } from '@/lib/notifications/banner-revocation';
 import { navigate } from '@/lib/router';
 import { href } from '@/routes/route-table';
 import { outboxStore } from '@/lib/send/outbox-store';
+import { safeLocalStorage } from '@/lib/storage';
 
-import { endRevokedSession } from './account-caches';
+import { createAccountCacheShelf } from './account-caches';
+import { endRevokedSession } from './account-end';
 import { retireDeletedAccountLater } from './account-deleted';
 import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';
@@ -41,6 +43,7 @@ import { relaunchConversationList } from './realtime-thread-catch-up';
 import { appProfileActionDeps } from './profile-action-deps';
 import { followServedProfile } from './served-profile-session';
 import { sessionStore } from './session';
+import { bindDeviceFollow, endRevokedSessionWithReason } from './session-follow';
 import { createRealtimeConnection, type RealtimeConnection } from './socket';
 import { typingStore } from './typing-store';
 import { resolveViewer } from './viewer';
@@ -96,18 +99,16 @@ export const watchLiveSocket = liveWatchers.watch;
 /**
  * UNE SESSION RÉVOQUÉE DIT POURQUOI (#9613) — le motif est NOTÉ avant que la
  * session ne finisse, pour que l'écran de connexion l'explique
- * (`lib/session-end.ts`). Sans motif (jeton expiré), la session finit aussitôt ;
- * un module qui ne se charge pas ne la retient jamais ouverte.
+ * (`lib/session-end.ts`), et seulement si l'onglet tient encore la session
+ * révoquée quand le motif est chargé (#19132, `session-follow.ts`).
  */
 function endWithReason(reason?: string): void {
-  if (reason === undefined) {
-    endRevokedSession(sessionStore);
-    return;
-  }
-  void import('@/lib/session-end')
-    .then(({ sessionEnd }) => sessionEnd.note(reason))
-    .catch(() => undefined)
-    .finally(() => endRevokedSession(sessionStore));
+  void endRevokedSessionWithReason({
+    store: sessionStore,
+    reason,
+    load: () => import('@/lib/session-end').then(({ sessionEnd }) => sessionEnd),
+    end: endRevokedSession,
+  });
 }
 
 function bridgeCalls(next: RealtimeConnection | null): void {
@@ -249,6 +250,11 @@ watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversa
    (re)connexion (`CATCH_UP_PERSONAL_FAMILIES`), avec le même assemblage que
    les gestes du profil. */
 followServedProfile(appProfileActionDeps());
+/* LA SESSION SUIT L'APPAREIL (#19132) — un autre onglet qui se reconnecte,
+   change de compte ou se déconnecte écrit `meeshy.session` : celui-ci le suit
+   au lieu de le contredire (`session-follow.ts`) — et une session refusée que
+   l'appareil ne tient plus le suit aussi (`account-caches.ts`). */
+bindDeviceFollow(sessionStore, { shelf: createAccountCacheShelf(safeLocalStorage()) });
 /* LE CLIENT SE DÉCLARE (#9611) — appris après la première peinture, publié
    pour le flux de connexion (`auth.ts`) ; la socket le relit elle-même. */
 void import('@/lib/net/client-session').then(({ publishClientDeclaration }) => publishClientDeclaration()).catch(() => undefined);

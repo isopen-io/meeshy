@@ -36,7 +36,7 @@ schéma du contrat avant de partir** (`routes/users/own-profile-sync.ts`). Une
 ligne qui ne le satisfait pas ne diffuse rien : on n'invente pas l'instant sur
 lequel les clients arbitrent.
 
-**4. Seules les écritures qui touchent un champ de l'instantané diffusent** —
+**4. Seules les écritures qui CHANGENT un champ de l'instantané diffusent** —
 `PATCH /users/me` quand une langue ou un nom change, `PATCH /users/me/avatar`,
 `PATCH /users/me/banner`, `PATCH /users/me/username` (le pseudo est l'un des
 quatre composants du nom ; son `select` lit désormais l'instantané entier).
@@ -45,8 +45,28 @@ changé » enverrait mes autres appareils réconcilier un non-événement. Les
 écrivains se cherchent par CHAMP de l'instantané, pas par route : c'est en
 énumérant ceux du pseudo que le quatrième a été trouvé.
 
+Sur `PATCH /users/me`, « change » se mesure contre la ligne lue AVANT
+l'écriture (`ownProfileSnapshotChanged`, sur les neuf champs), jamais par la
+PRÉSENCE d'un champ dans le corps : l'iOS publié renvoie prénom, nom et nom
+affiché inchangés à chaque enregistrement (#13825), et une langue se réécrit à
+l'identique. Mesurer la présence diffusait donc à chaque enregistrement d'une
+bio (constat de l'audit adversarial). Une écriture de langue seule ouvre une
+lecture de la ligne de plus, par clé primaire ; les colonnes lues
+(`OWN_PROFILE_SELECT`) sont tenues égales à `OWN_PROFILE_FIELDS` par le
+compilateur.
+
 **5. La diffusion est un canal LATÉRAL** : rien dans `announceOwnProfileUpdated`
 ne lève, et une écriture faite ne se rapporte jamais comme un échec.
+
+Sur `PATCH /users/me`, elle part JUSTE APRÈS l'écriture du profil, avant les
+écritures voisines (préférence de traduction automatique, profil vocal), et
+seulement si le journal de mutation dit que l'écriture vient d'avoir lieu
+(`withMutationVerdict`, `replayed` faux — la règle de `utils/withMutationLog.ts`).
+Une voisine qui lève répond 500 sur une ligne DÉJÀ écrite : diffusée après
+elles, l'annonce était perdue, et la reprise du client — qui ne change plus rien
+(§ 4) — ne la rattrapait jamais. Le reste de la suite (écritures voisines,
+`user:updated` vers les partenaires) se rejoue sur un rejeu, par décision : c'est
+ce qu'une reprise doit refaire.
 
 ### Ce que les clients font
 

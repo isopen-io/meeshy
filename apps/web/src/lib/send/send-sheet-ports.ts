@@ -1,5 +1,5 @@
 import { forwardMessages } from '@/lib/api/forward';
-import { apiDeps, postMediaUploadDeps } from '@/lib/api/deps';
+import { ownedApiDeps, ownedPostMediaUploadDeps } from '@/lib/api/owned-deps';
 import { createDirectConversation, createGroupConversation, type ConversationsDeps } from '@/lib/api/conversations';
 import { uploadAttachments, uploadShortfall } from '@/lib/api/attachments';
 import { newClientMessageId } from '@/lib/api/client-message-id';
@@ -117,9 +117,13 @@ async function downloadFile(
   }
 }
 
+/** Les dépendances d'UN envoi, liées au compte qui parle à leur création (audit #19352, X1) : construites pour le compte qui lance l'envoi, ou pour celui qui le reprend. */
+export function sendSheetDepsOf(params: Pick<SendSheetPortsParams, 'deps' | 'media'>): { readonly deps: ConversationsDeps; readonly media: PostMediaUploadDeps } {
+  return { deps: params.deps ?? ownedApiDeps(), media: params.media ?? ownedPostMediaUploadDeps() };
+}
+
 export function createSendSheetPorts(params: SendSheetPortsParams): SendSheetPorts {
-  const deps = params.deps ?? apiDeps;
-  const mediaDeps = params.media ?? postMediaUploadDeps;
+  const { deps, media: mediaDeps } = sendSheetDepsOf(params);
   const fetchImpl = params.fetchImpl ?? fetch;
   const prepare = params.prepare ?? browserImagePreparer;
 

@@ -1578,7 +1578,7 @@ describe('PUT /conversations/:id/messages/:messageId/pin', () => {
     prisma.message.findFirst.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeReqWithMsg(), reply);
-    expect(mockSendNotFound).toHaveBeenCalledWith(expect.anything(), 'Message not found');
+    expect(mockSendNotFound).toHaveBeenCalledWith(expect.anything(), 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
   });
 
   it('happy path: pins message and broadcasts via socket', async () => {
@@ -1653,7 +1653,7 @@ describe('DELETE /conversations/:id/messages/:messageId/pin', () => {
     prisma.message.findFirst.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeReqWithMsg(), reply);
-    expect(mockSendNotFound).toHaveBeenCalledWith(expect.anything(), 'Message not found');
+    expect(mockSendNotFound).toHaveBeenCalledWith(expect.anything(), 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
     expect(prisma.message.update).not.toHaveBeenCalled();
   });
 
@@ -1962,7 +1962,7 @@ describe('POST /conversations/:id/messages/:messageId/consume', () => {
     prisma.message.findFirst.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeReqWithMsg(), reply);
-    expect(mockSendNotFound).toHaveBeenCalledWith(expect.anything(), 'Message not found');
+    expect(mockSendNotFound).toHaveBeenCalledWith(expect.anything(), 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
   });
 
   it('400 when message.isViewOnce is false', async () => {

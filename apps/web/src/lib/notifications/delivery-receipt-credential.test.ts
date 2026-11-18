@@ -69,21 +69,25 @@ describe('deliveryReceiptCredentialOf — la projection PURE (#7368, W4)', () =>
 });
 
 describe('watchDeliveryReceiptCredential — posé à l’instant, tenu à jour ensuite', () => {
+  /** L'appareil tient la session du magasin : un seul onglet. */
   function fakeSessionStore(initial: SessionState) {
-    return createStore<{ session: SessionState }>(() => ({ session: initial }));
+    return createStore<{ session: SessionState; deviceSession: () => SessionState }>((_set, get) => ({
+      session: initial,
+      deviceSession: () => get().session,
+    }));
   }
 
   test('écrit le crédential COURANT dès l’appel — sans attendre un premier changement', () => {
     const store = fakeSessionStore(authenticated);
     const writes: unknown[] = [];
-    watchDeliveryReceiptCredential({ sessionStore: store, write: async (v) => void writes.push(v) });
+    watchDeliveryReceiptCredential({ sessionStore: store, write: async (read) => void writes.push(read()) });
     expect(writes).toEqual([{ apiBase: apiConfig.base, credential: { kind: 'registered', token: 'jwt-abc' } }]);
   });
 
   test('une déconnexion RETIRE le crédential — jamais laisser le worker accuser sous une identité périmée', () => {
     const store = fakeSessionStore(authenticated);
     const writes: unknown[] = [];
-    watchDeliveryReceiptCredential({ sessionStore: store, write: async (v) => void writes.push(v) });
+    watchDeliveryReceiptCredential({ sessionStore: store, write: async (read) => void writes.push(read()) });
     store.setState({ session: anonymous });
     expect(writes.at(-1)).toEqual({ apiBase: apiConfig.base, credential: null });
   });
@@ -91,7 +95,7 @@ describe('watchDeliveryReceiptCredential — posé à l’instant, tenu à jour 
   test('le désabonnement rendu arrête la synchronisation', () => {
     const store = fakeSessionStore(authenticated);
     const writes: unknown[] = [];
-    const stop = watchDeliveryReceiptCredential({ sessionStore: store, write: async (v) => void writes.push(v) });
+    const stop = watchDeliveryReceiptCredential({ sessionStore: store, write: async (read) => void writes.push(read()) });
     stop();
     store.setState({ session: guest });
     expect(writes.length).toBe(1);
@@ -103,7 +107,7 @@ describe('writeDeliveryReceiptCredential — la vraie persistance, contre un Ind
     const fake = createFakeIndexedDB();
     (globalThis as { indexedDB?: unknown }).indexedDB = fake;
     try {
-      await writeDeliveryReceiptCredential({ apiBase: 'https://gate.meeshy.me', credential: { kind: 'registered', token: 'jwt-abc' } });
+      await writeDeliveryReceiptCredential(() => ({ apiBase: 'https://gate.meeshy.me', credential: { kind: 'registered', token: 'jwt-abc' } }));
 
       // La lecture rejoue EXACTEMENT ce que `public/sw-push.js` fait — un
       // script classique, jamais un import de ce module.
@@ -124,7 +128,7 @@ describe('writeDeliveryReceiptCredential — la vraie persistance, contre un Ind
 
   test('IndexedDB absente (portée privée, navigateur ancien) ne lève jamais — best-effort', async () => {
     delete (globalThis as { indexedDB?: unknown }).indexedDB;
-    const result = await writeDeliveryReceiptCredential({ apiBase: 'https://gate.meeshy.me', credential: null });
+    const result = await writeDeliveryReceiptCredential(() => ({ apiBase: 'https://gate.meeshy.me', credential: null }));
     expect(result).toBeUndefined();
   });
 });

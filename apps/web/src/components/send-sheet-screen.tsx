@@ -17,7 +17,7 @@ import { SendSheet } from './send-sheet';
 export function SendSheetScreen({ request, onClose }: { readonly request: SendSheetRequest; readonly onClose: () => void }) {
   const viewer = useViewer();
   const { locale } = useReaderLanguages();
-  const ports = useMemo(() => createSendSheetPorts({ language: locale }), [locale]);
+  const ports = useMemo(() => createSendSheetPorts({ language: locale }), [locale, viewer.id]);
   return (
     <SendSheet
       request={request}

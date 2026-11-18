@@ -17,6 +17,11 @@ import GRDB
 /// isolée ne le touche jamais, et il ne recule pas : un rattrapage le borne au
 /// plus récent message détenu.
 ///
+/// SANS filigrane — une conversation née après la migration, que seuls la NSE,
+/// un push ou le socket ont nourrie —, rien n'atteste qu'un message détenu en
+/// rejoint un autre : le rattrapage repart du plus ANCIEN message serveur
+/// détenu, et seule une page qui remonte jusqu'à lui ouvre le fil.
+///
 /// Les règles sont pures, les écritures atomiques ; QUAND synchroniser reste à
 /// l'app (`ConversationHistoryLoader`).
 public enum ConversationContiguity {
@@ -27,33 +32,41 @@ public enum ConversationContiguity {
     public struct Base: Sendable, Equatable {
         /// La fin du fil détenu sans trou ; `nil` tant qu'aucune synchro contiguë ne l'a posée.
         public let watermark: Date?
+        /// Le plus ancien message SERVEUR détenu, d'où qu'il vienne.
+        public let oldestHeld: Date?
         /// Le plus récent message SERVEUR détenu, d'où qu'il vienne.
         public let newestHeld: Date?
 
-        public init(watermark: Date?, newestHeld: Date?) {
+        public init(watermark: Date?, oldestHeld: Date?, newestHeld: Date?) {
             self.watermark = watermark
+            self.oldestHeld = oldestHeld
             self.newestHeld = newestHeld
         }
+
+        /// D'où un fil détenu se prouve rejoint : sa fin sans trou, sinon le plus ancien message serveur détenu.
+        var junction: Date? { watermark ?? oldestHeld ?? newestHeld }
     }
 
     // MARK: - Les règles
 
     /// D'où repart un rattrapage : la fin du fil détenu sans trou, bornée au plus
-    /// récent message détenu ; sans filigrane, ce plus récent message (la
-    /// frontière d'avant #18929) ; rien de détenu, aucun rattrapage.
-    public static func catchUpCursor(watermark: Date?, newestHeld: Date?) -> Date? {
+    /// récent message détenu ; sans filigrane, le plus ANCIEN message serveur
+    /// détenu — repartir du plus récent laissait invisible tout trou entre deux
+    /// messages entrés seuls ; rien de détenu, aucun rattrapage.
+    public static func catchUpCursor(watermark: Date?, oldestHeld: Date?, newestHeld: Date?) -> Date? {
         guard let newestHeld else { return nil }
-        return watermark.map { min($0, newestHeld) } ?? newestHeld
+        return min(watermark ?? oldestHeld ?? newestHeld, newestHeld)
     }
 
     /// Jusqu'où une page des PLUS RÉCENTS messages — d'un seul tenant jusqu'au
     /// présent — étend le fil : elle l'ouvre quand rien n'était détenu, l'étend
-    /// quand elle rejoint le bloc, et le laisse quand un écart l'en sépare (le
-    /// balayage le comblera). `nil` : le filigrane ne bouge pas.
+    /// quand elle rejoint le bloc — sans filigrane, quand elle remonte jusqu'au
+    /// plus ancien message serveur détenu —, et le laisse quand un écart l'en
+    /// sépare (le balayage le comblera). `nil` : le filigrane ne bouge pas.
     public static func extent(ofRefresh page: [Date], over base: Base) -> Date? {
         guard let oldest = page.min(), let newest = page.max() else { return nil }
-        guard let newestHeld = base.newestHeld else { return newest }
-        return oldest <= (base.watermark ?? newestHeld) ? newest : nil
+        guard let junction = base.junction else { return newest }
+        return oldest <= junction ? newest : nil
     }
 
     /// Jusqu'où un balayage `after` parti de `cursor` étend le fil : jusqu'au plus
@@ -71,6 +84,10 @@ public enum ConversationContiguity {
             Base(
                 watermark: try Date.fetchOne(
                     db, sql: "SELECT contiguousUpTo FROM \(table) WHERE conversationId = ?", arguments: [conversationId]
+                ),
+                oldestHeld: try Date.fetchOne(
+                    db, sql: "SELECT MIN(createdAt) FROM messages WHERE conversationId = ? AND serverId IS NOT NULL",
+                    arguments: [conversationId]
                 ),
                 newestHeld: try Date.fetchOne(
                     db, sql: "SELECT MAX(createdAt) FROM messages WHERE conversationId = ? AND serverId IS NOT NULL",

@@ -27,6 +27,16 @@ public enum OwnProfileSync {
         return next.holdsTheSameOwnProfile(as: user) ? nil : next
     }
 
+    /// Une RELECTURE du compte — `GET /me`, la session rafraîchie — lue avant un instantané déjà appliqué ne le défait
+    /// pas (#18924, #19281) : plus ancienne que le compte tenu, elle garde ses neuf champs et son instant. Le reste
+    /// passe — activation, désactivation, vérifications — : l'instantané ne le porte pas, et un compte désactivé doit
+    /// se savoir. Rien de connu, un autre compte ou une relecture sans instant : elle s'applique telle quelle.
+    public static func reconciled(_ incoming: MeeshyUser, holding held: MeeshyUser?) -> MeeshyUser {
+        guard let held, held.id == incoming.id, let incomingUpdatedAt = incoming.updatedAt,
+              isStale(knownUpdatedAt: held.updatedAt, incomingUpdatedAt: incomingUpdatedAt) else { return incoming }
+        return incoming.keepingOwnProfile(of: held)
+    }
+
     /// Appliqué au compte connecté, avec la règle de la revalidation (`updateUserAfterRevalidation`) : la session
     /// se garde au trousseau pour le démarrage à froid, et une modification optimiste encore en vol sur CET appareil
     /// n'est pas écrasée — elle se lève dès que l'instantané la porte.
@@ -78,6 +88,40 @@ extension MeeshyUser {
             addresses: addresses,
             city: city, cityCircle: cityCircle,
             profileAccentColor: profile.profileAccentColor.applied(to: profileAccentColor)
+        )
+    }
+
+    /// Le même compte avec les neuf champs de l'instantané — et son instant — que tient `held` ; les empreintes
+    /// floues suivent la photo et la bannière qu'elles décrivent.
+    func keepingOwnProfile(of held: MeeshyUser) -> MeeshyUser {
+        MeeshyUser(
+            id: id, username: held.username, email: email,
+            firstName: held.firstName, lastName: held.lastName,
+            displayName: held.displayName, bio: bio,
+            avatar: held.avatar, avatarThumbHash: held.avatarThumbHash,
+            banner: held.banner, bannerThumbHash: held.bannerThumbHash,
+            role: role,
+            systemLanguage: held.systemLanguage, regionalLanguage: held.regionalLanguage,
+            isOnline: isOnline, lastActiveAt: lastActiveAt,
+            createdAt: createdAt, updatedAt: held.updatedAt,
+            blockedUserIds: blockedUserIds,
+            isActive: isActive, deactivatedAt: deactivatedAt,
+            isAnonymous: isAnonymous, isMeeshyer: isMeeshyer,
+            phoneNumber: phoneNumber,
+            emailVerifiedAt: emailVerifiedAt, phoneVerifiedAt: phoneVerifiedAt,
+            customDestinationLanguage: held.customDestinationLanguage,
+            autoTranslateEnabled: autoTranslateEnabled,
+            deviceLocale: deviceLocale,
+            timezone: timezone,
+            registrationCountry: registrationCountry,
+            profileCompletionRate: profileCompletionRate,
+            signalIdentityKeyPublic: signalIdentityKeyPublic,
+            voicePublic: voicePublic,
+            voiceSampleUrl: voiceSampleUrl,
+            voiceSampleDurationMs: voiceSampleDurationMs,
+            voiceQuality: voiceQuality,
+            activation: activation,
+            profileDecor: profileDecor
         )
     }
 

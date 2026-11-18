@@ -44,9 +44,15 @@ const PublicationEditSheet = lazy(() => import('@/components/publication-edit-sh
  * ouvert à froid, sur la publication (le détail, ou « Mes stories »).
  */
 export function PublicationEditView({ postId }: { readonly postId: string }) {
-  const lang = currentInterfaceLanguage();
   const session = useStore(sessionStore, (s) => s.session);
   const viewerId = session.status === 'authenticated' ? session.user.id : null;
+  /* L'hydratation est figée à la première donnée, POUR CE COMPTE (audit #19352, X1) : l'onglet qui change de compte
+     remonte la vue, et la modification en cours de l'auteur ne reste pas sous les yeux de l'autre. */
+  return <PublicationEditFor key={viewerId ?? 'anonymous'} postId={postId} viewerId={viewerId} />;
+}
+
+function PublicationEditFor({ postId, viewerId }: { readonly postId: string; readonly viewerId: string | null }) {
+  const lang = currentInterfaceLanguage();
   const reader = useReaderLanguages();
   const query = usePost(postId);
   const hydrate = (post: FeedPost): StudioEditHydration =>

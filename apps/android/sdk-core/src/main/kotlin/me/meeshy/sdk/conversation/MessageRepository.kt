@@ -2,7 +2,11 @@ package me.meeshy.sdk.conversation
 
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.sdk.e2ee.PlaintextErasureLedger
@@ -363,15 +367,36 @@ class MessageRepository internal constructor(
      * - answered WITHOUT it ⇒ the server no longer knows it: the deletion is confirmed, its end-to-end plaintext erased —
      *   never a row revived out of the window for good, its plaintext kept in the vault;
      * - a read that proves nothing (offline, refused) ⇒ a refusal that already said the target is gone ([refusedAsGone]:
-     *   404, 410) keeps it deleted, its plaintext kept until a read proves its absence; any other refusal gives it back.
+     *   404, 410 answered by the gateway) is the proof: the deletion is confirmed, its plaintext erased (audit A6); any
+     *   other refusal gives it back.
+     *
+     * Audit A1 — the settlement starts once the outbox row is EXHAUSTED and nothing else ever lifts the tombstone (a served
+     * copy never does once the deletion left the queue): interrupted midway (the worker stopped, the drainer cancelled),
+     * it left a LIVE message « deleted » for good. It therefore runs out of reach of cancellation, and its read is bounded
+     * in REAL time ([readBackBudgetMillis], on an IO thread: a virtual clock never ends it early) — an answer that never
+     * comes proves nothing ([MessageReadBack.Unknown]).
      */
-    suspend fun settleRefusedDeletion(conversationId: String?, messageId: String, refusedAsGone: Boolean = false) {
-        when (val read = conversationId?.let { history.readBack(it, messageId) } ?: MessageReadBack.Unknown) {
+    suspend fun settleRefusedDeletion(
+        conversationId: String?,
+        messageId: String,
+        refusedAsGone: Boolean = false,
+        readBackBudgetMillis: Long = READ_BACK_BUDGET_MS,
+    ): Unit = withContext(NonCancellable) {
+        val read = conversationId?.let { readBackWithin(it, messageId, readBackBudgetMillis) } ?: MessageReadBack.Unknown
+        settle(messageId, read, refusedAsGone)
+    }
+
+    private suspend fun settle(messageId: String, read: MessageReadBack, refusedAsGone: Boolean) {
+        when (read) {
             is MessageReadBack.Served -> if (read.message.deletedAt == null) markUndeleted(messageId, snapshot = read.message)
             MessageReadBack.Absent -> confirmDeletion(messageId)
-            MessageReadBack.Unknown -> if (!refusedAsGone) markUndeleted(messageId)
+            MessageReadBack.Unknown -> if (refusedAsGone) confirmDeletion(messageId) else markUndeleted(messageId)
         }
     }
+
+    private suspend fun readBackWithin(conversationId: String, messageId: String, budgetMillis: Long): MessageReadBack =
+        withContext(Dispatchers.IO) { withTimeoutOrNull(budgetMillis) { history.readBack(conversationId, messageId) } }
+            ?: MessageReadBack.Unknown
 
     /** Removes the named rows (either of their two ids) and their edit history. */
     suspend fun purgeMessages(messageIds: Collection<String>) = mutations.purgeMessages(messageIds)
@@ -398,4 +423,9 @@ class MessageRepository internal constructor(
     /** `read-status:updated` : le résumé ne touche que le message qu'il décrit ; `true` si la ligne a changé. */
     suspend fun applyReadStatusSummary(conversationId: String, summary: ReadStatusSummary, currentUserId: String): Boolean =
         receipts.applyReadStatusSummary(conversationId, summary, currentUserId)
+
+    public companion object {
+        /** Audit A1 — how long a refused deletion waits for its read back before settling on what it knows. */
+        public const val READ_BACK_BUDGET_MS: Long = 15_000L
+    }
 }

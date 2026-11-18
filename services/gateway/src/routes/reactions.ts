@@ -258,7 +258,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       }
 
       if (error.message === 'Message not found') {
-        return sendNotFound(reply, 'Message not found');
+        return sendNotFound(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
       }
 
       if (error.message === 'Cannot react to a system message') {
@@ -270,7 +270,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       // le refus retombait sur le `sendInternalError` du bas — un 500 pour une
       // règle métier, donc un client qui réessaie sans fin.
       if (error.message === CLOSED_CONVERSATION_REACTION_ERROR) {
-        return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE, { code: 'CONVERSATION_CLOSED' });
       }
 
       if (error.message.includes('not a member') || error.message.includes('not a participant')) {

@@ -2,6 +2,11 @@ import Foundation
 import GRDB
 
 /// Écriture d'une traduction persistée, quel que soit le schéma d'id sous lequel elle arrive.
+///
+/// L'écriture est BRUTE : elle ne regarde pas la ligne du message. Ce qui décide qu'une traduction peut se garder
+/// est `MessageEnrichmentLaw`, que ses deux seuls appelants consultent d'abord — `MessageEnrichmentWriter` (socket,
+/// via `saveTranslation`) et `APIMessageUpsert.persistTranslations` (REST). `TranslationWriterCallSitesGuardTests`
+/// rougit à l'apparition d'un troisième.
 enum TranslationRecordWriter {
     /// grdb-06 — deux schémas d'id coexistent pour la même (message, langue) :
     /// le fallback socket horodaté (`m1_en_1700…`) et l'id serveur stable

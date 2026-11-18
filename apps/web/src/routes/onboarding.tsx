@@ -5,7 +5,7 @@ import { useStore } from 'zustand/react';
 
 import '@/styles/onboarding.css';
 
-import { endRevokedSession } from '@/lib/api/account-caches';
+import { endRevokedSession } from '@/lib/api/account-end';
 import { apiDeps } from '@/lib/api/deps';
 import { performSendRequest, type FriendActionOutcome } from '@/lib/api/friend-actions';
 import {

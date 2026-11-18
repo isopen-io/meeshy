@@ -704,7 +704,18 @@ export const conversationMinimalSchema = {
           // `version` est le compteur sur lequel les trois clients arbitrent le
           // temps réel (`incoming.version <= local -> drop`) — sans lui, une
           // relecture REST ne se départage pas d'une diffusion.
-          version: { type: 'number', description: 'Monotonic version of the reader preferences (optimistic-concurrency arbiter for user:preferences-updated)' },
+          //
+          // Il n'arbitre PAS toute la ligne : deux champs lui échappent, et pour
+          // eux la relecture REST fait foi, quelle que soit la version servie.
+          //  - `orderInCategory` : le réordonnancement (`POST
+          //    /user-preferences/reorder`, `reorderConversationPreferences`) le
+          //    change SANS faire monter la version, et sa diffusion
+          //    (`user:preferences-reordered`) n'en porte aucune ;
+          //  - `isArchived` de la conversation `global` servie à un mineur : la
+          //    liste le RECOUVRE à `true` à la lecture (`servedListRowRestriction`,
+          //    #9927) sans rien écrire, donc sous la version de la préférence
+          //    stockée — qu'une diffusion plus récente peut porter à `false`.
+          version: { type: 'number', description: 'Monotonic version of the reader preferences (optimistic-concurrency arbiter for user:preferences-updated). Does NOT cover orderInCategory (a reorder never bumps it) nor isArchived of a Global conversation served to a minor (overlaid at read time): for those two, the REST row is authoritative' },
           mentionsOnly: { type: 'boolean', description: 'Only notify for mentions and @everyone' },
           orderInCategory: { type: 'number', nullable: true, description: 'Manual order within the category (null = no manual order)' },
           clearHistoryBefore: { type: 'string', format: 'date-time', nullable: true, description: 'Messages before this instant are hidden for the reader (clear history); null = nothing hidden' }

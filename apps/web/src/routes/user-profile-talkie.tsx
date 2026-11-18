@@ -2,7 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useStore } from 'zustand/react';
 
+import { currentIdentity } from '@/lib/api/client';
+import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
+import { ownedDepsOf } from '@/lib/api/owned-deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { relationLinksQueryOptions, type RelationDeps } from '@/lib/api/relations';
 import { watchRealtime, type WatchRealtime } from '@/lib/api/watch-realtime';
@@ -174,8 +177,15 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   );
 });
 
-/** La copie vocale vivante (#16698) : passerelle de l'application, langue de l'interface prêtée à la voix. */
-export const liveTalkieCopier = (language: () => string): TalkieVoiceCopier => createTalkieVoiceCopier({ deps: apiDeps, language });
+/**
+ * La copie vocale vivante (#16698) : passerelle de l'application, langue de l'interface prêtée à la voix. Ses requêtes
+ * (chercher la conversation, téléverser, envoyer) parlent au nom de qui a appuyé (audit #19352, X1) ; `base` n'est
+ * injecté que par les témoins, qui y posent un transport de passerelle.
+ */
+export const liveTalkieCopier =
+  (language: () => string, base: ConversationsDeps = apiDeps): TalkieVoiceCopier =>
+  (copy) =>
+    createTalkieVoiceCopier({ deps: ownedDepsOf(base, copy.owner), language })(copy);
 
 export function useTalkieSender({
   watch,
@@ -198,7 +208,7 @@ export function useTalkieSender({
   languageRef.current = language;
   const copierRef = useRef(copier ?? liveTalkieCopier(() => languageRef.current));
   const sender = useMemo(
-    () => createTalkieSender({ socket: () => socketRef.current, capture, onOutcome: (outcome) => outcomeRef.current(outcome), copier: (copy) => copierRef.current(copy) }),
+    () => createTalkieSender({ socket: () => socketRef.current, capture, onOutcome: (outcome) => outcomeRef.current(outcome), copier: (copy) => copierRef.current(copy), identity: currentIdentity }),
     [capture],
   );
   useEffect(

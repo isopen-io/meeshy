@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { forgetAccountCaches } from './account-caches';
+import { forgetAccountCaches } from './account-end';
 import {
   createAccountSwitcher,
   createAccountVault,

@@ -181,15 +181,13 @@ extension ConversationSyncEngine {
         _messagesDidChange.send(event.conversationId)
     }
 
-    /// Patches the enriched attachment fields (Whisper transcription, NLLB+TTS audio
-    /// translations) into the cached `MeeshyMessage` for conversations that are not
-    /// currently open. The open-conversation path is handled by `ConversationSocketHandler`
-    /// which also updates the GRDB store and in-memory ViewModel dictionaries; this
-    /// handler ensures the `CacheCoordinator` message cache stays consistent for every
-    /// conversation, preventing stale previews after the user closes and reopens a chat.
+    /// Pose la transcription (Whisper) et les pistes traduites (NLLB + TTS) d'une pièce dans le `MeeshyMessage` du
+    /// cache de fil, conversation ouverte ou fermée, puis dans la base canonique : rouverte, elle s'affiche enrichie.
+    /// Un message dont le contenu ne se garde plus en clair (`MessageEnrichmentLaw`) n'en reçoit rien.
     /* partagé entre les fichiers du moteur (#4172) */ func handleAttachmentUpdated(_ event: AttachmentUpdatedEvent) async {
         await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
-            guard let idx = msg.attachments.firstIndex(where: { $0.id == event.attachment.id }) else { return }
+            guard MessageEnrichmentLaw.keepsEnrichments(of: msg),
+                  let idx = msg.attachments.firstIndex(where: { $0.id == event.attachment.id }) else { return }
             let api = event.attachment
             if let t = api.transcription {
                 msg.attachments[idx].transcription = MeeshyMessageAttachment.EmbeddedTranscription(

@@ -76,9 +76,13 @@ final class ProfileSheetLoaderTests: XCTestCase {
         XCTAssertEqual(data.storedStatsUserIds, ["u-bob"])
     }
 
-    /// #18937 — au-delà des cinq minutes de fraîcheur, la fiche se peint depuis le cache SANS
-    /// squelette, puis se revalide : le réseau ne s'interroge qu'une fois le profil déjà à l'écran.
-    func test_open_staleCacheBeyondTheFreshWindow_paintsItThenRevalidatesWithoutTheLoadingState() async {
+    /// #10093 — sur un cache périmé, la fiche se peint depuis lui et l'y GARDE, sans squelette,
+    /// pendant que la synchronisation est en vol ; la réponse le remplace ensuite.
+    ///
+    /// Ce n'est pas le témoin de #18937 : le `.stale` est simulé ici, alors que ce défaut vivait
+    /// dans la LECTURE du magasin réel, qui remettait l'horloge de fraîcheur à zéro. Ses témoins,
+    /// capables d'échouer, sont `LiveProfileLoadingTests` (bundle de l'app).
+    func test_open_staleCache_keepsItOnScreenWithoutTheLoadingStateWhileSynchronizing() async {
         let (sut, data) = makeSUT(
             cachedProfile: .stale([makeUser(displayName: "Bob en cache")], age: 360),
             fetchedProfile: .success(makeUser(displayName: "Bob à jour"))

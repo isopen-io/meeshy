@@ -55,6 +55,10 @@ public interface SyncMetaDao {
     @Query("DELETE FROM sync_meta WHERE substr(resourceKey, 1, length(:prefix)) = :prefix")
     public suspend fun deleteByPrefix(prefix: String)
 
+    /** The keys under [prefix] (a literal prefix, never a pattern): what a family of keys holds, to forget part of it. */
+    @Query("SELECT resourceKey FROM sync_meta WHERE substr(resourceKey, 1, length(:prefix)) = :prefix")
+    public suspend fun keysWithPrefix(prefix: String): List<String>
+
     @Query("DELETE FROM sync_meta")
     public suspend fun clear()
 }

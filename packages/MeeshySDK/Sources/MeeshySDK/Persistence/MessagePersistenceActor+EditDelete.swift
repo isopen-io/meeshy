@@ -47,7 +47,7 @@ extension MessagePersistenceActor {
                 let edit = PendingEdit(newContent: newContent, editedAt: editedAt,
                                        marksEdited: marksEdited, noticeJson: noticeJson, authorship: authorship)
                 if let kept = events.edit, kept.editedAt > edit.editedAt { return }
-                events.edit = edit
+                events.keep(edit)
             }
             return
         }
@@ -176,6 +176,7 @@ extension MessagePersistenceActor {
                 record.updatedAt = Date()
                 record.changeVersion += 1
                 try record.update(db)
+                try MessageEnrichmentLaw.erase(enrichmentsOf: record, in: db)
                 return record.conversationId
             }
             try db.execute(
@@ -186,6 +187,7 @@ extension MessagePersistenceActor {
                     """,
                 arguments: [deletedAt, Date(), localId, localId]
             )
+            try MessageEnrichmentLaw.erase(enrichmentsOf: record, in: db)
             try MessagePlaintextErasures.settle(localId, awaitingConfirmation: awaitingConfirmation, in: db)
             try MessagePlaintextErasures.settle(localId, cause: .deleted, origin: origin, in: db)
             try Self.followQuotes(of: record, in: db) { quote in
@@ -200,14 +202,11 @@ extension MessagePersistenceActor {
 
     // MARK: - Événements arrivés avant leur message
     //
-    // Un `message:new` passe par le flux d'écriture ; `message:deleted`,
-    // `message:edited` et `reaction:*` s'écrivent tout de suite. Ils trouvaient
-    // la table sans la ligne, ne faisaient rien, puis l'insertion posait le
-    // message intact : « supprimé pour tous », il restait lisible ; modifié,
-    // il gardait l'ancien texte ; la réaction n'apparaissait jamais. Ces
-    // événements sont gardés et rejoués quand la ligne arrive. Bornés en
-    // NOMBRE (le plus ancien part) et en DURÉE : ceux d'un message qu'on ne
-    // recevra jamais — hors de la fenêtre chargée — ne s'accumulent pas.
+    // Un `message:new` passe par le flux d'écriture ; `message:deleted`, `message:edited`, `reaction:*` et
+    // `message:translation` s'écrivent tout de suite. Sans la ligne, « supprimé pour tous » restait lisible, une
+    // modification gardait l'ancien texte, une réaction n'apparaissait jamais, une traduction restait en clair sous
+    // une ligne née chiffrée ou déjà ouverte. Ils attendent la ligne et se rejouent à son arrivée, bornés en NOMBRE
+    // et en DURÉE : ceux d'un message qu'on ne recevra jamais ne s'accumulent pas.
 
     func rowExists(_ localId: String) throws -> Bool {
         try dbWriter.read { db in
@@ -239,6 +238,7 @@ extension MessagePersistenceActor {
                                     sparingOpenedViewOnce: tombstone.sparingOpenedViewOnce, expired: tombstone.expired,
                                     awaitingConfirmation: tombstone.awaitingConfirmation, origin: tombstone.origin)
                 }
+                try MessageEnrichmentWriter.replay(events.translations, on: self)
             } catch {
                 Logger.messages.error("replayPendingRowEvents failed for \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }

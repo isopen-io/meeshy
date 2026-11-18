@@ -26,7 +26,7 @@ import { formatUserResponse } from '../auth/types';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
-import { withMutationLog } from '../../utils/withMutationLog';
+import { withMutationVerdict } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { changedNameViolations, sendLengthFloorRefusal, sendZodRefusal, type NameField } from '../../utils/identity-name-floor';
 import { sendSuccess, sendInternalError, sendUnauthorized, sendBadRequest } from '../../utils/response';
@@ -45,7 +45,7 @@ import { refreshParticipantNameSnapshots } from '../../services/participantNameS
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
-import { announceOwnProfileUpdated } from './own-profile-sync';
+import { announceOwnProfileUpdated, OWN_PROFILE_SELECT, ownProfileSnapshotChanged } from './own-profile-sync';
 
 /**
  * Le seuil d'une bio qui « compte » (#8959) : le MÊME que l'anneau de
@@ -193,18 +193,23 @@ export async function updateUserProfile(fastify: FastifyInstance) {
 
       // UNE lecture de la ligne avant l'écriture, ouverte seulement quand un
       // champ du corps en a besoin : un NOM (la borne de #13825 ne juge que les
-      // noms CHANGÉS, il faut donc la valeur stockée) ou un des cinq champs du
+      // noms CHANGÉS, il faut donc la valeur stockée), un des cinq champs du
       // taux de complétion (#3688 — displayName, bio ici ; avatar a sa propre
-      // route). Les langues seules n'ouvrent aucune requête.
+      // route), une LANGUE ou l'ACCENT (#18924, #19201 — `profile:updated` ne
+      // part que si l'écriture CHANGE l'instantané, comparé à cette ligne). Un
+      // corps qui ne touche ni nom, ni bio, ni langue, ni accent n'ouvre aucune
+      // requête.
       const touchesName = body.firstName !== undefined || body.lastName !== undefined || body.displayName !== undefined;
+      const touchesLanguage =
+        body.systemLanguage !== undefined ||
+        body.regionalLanguage !== undefined ||
+        body.customDestinationLanguage !== undefined;
+      const touchesAccent = body.profileAccentColor !== undefined;
       const touchesCompletion = body.displayName !== undefined || body.bio !== undefined;
-      const current = touchesName || touchesCompletion
+      const current = touchesName || touchesLanguage || touchesAccent || touchesCompletion
         ? await fastify.prisma.user.findUnique({
             where: { id: userId },
-            select: {
-              firstName: true, lastName: true, displayName: true,
-              avatar: true, bio: true, phoneNumber: true, email: true,
-            },
+            select: { ...OWN_PROFILE_SELECT, bio: true, phoneNumber: true, email: true },
           })
         : null;
 
@@ -243,7 +248,14 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         updateData.customDestinationLanguage = body.customDestinationLanguage === '' ? null : body.customDestinationLanguage;
       }
 
-      const updatedUser = await withMutationLog({
+      // Le VERDICT (`replayed`), pas seulement la ligne : `profile:updated`
+      // ci-dessous ne part que d'une écriture qui vient d'avoir lieu (règle de
+      // `utils/withMutationLog.ts`). Le reste de la suite se REJOUE sur un rejeu,
+      // et c'est voulu : les écritures voisines et la propagation aux partenaires
+      // sont ce qu'une reprise après un 500 doit refaire — elles convergent,
+      // `user:updated` rediffuse un état ABSOLU sans crédit ni notification
+      // (suivi #9623), et les crédits de profil se paient une fois par compte.
+      const { result: updatedUser, replayed } = await withMutationVerdict({
         request,
         fastify,
         userId: userId!,
@@ -259,9 +271,9 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         // décorative : une relecture de rejeu qui l'omettrait servirait le
         // DÉFAUT à la place de la valeur stockée — sur le seul chemin dont
         // personne ne regarde la sortie. Le COMPILATEUR le tient, mesuré :
-        // `withMutationLog` intersecte les deux formes de retour, si bien que
-        // retirer l'`include` d'un SEUL des deux sites fait perdre la relation
-        // au type et `resolveAutoTranslateEnabled` refuse l'argument
+        // `withMutationVerdict` intersecte les deux formes de retour, si bien
+        // que retirer l'`include` d'un SEUL des deux sites fait perdre la
+        // relation au type et `resolveAutoTranslateEnabled` refuse l'argument
         // (TS2559) — le témoin de projection en nomme l'intention.
         op: () => fastify.prisma.user.update({
           where: { id: userId },
@@ -275,6 +287,19 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
+
+      // #18924 — MES autres appareils : la charge PROPRE (langues comprises), sur
+      // `user:<moi>` seulement. Les partenaires ont `user:updated` plus bas, et sa
+      // charge publique. Seule une écriture qui A EU LIEU et qui CHANGE
+      // l'instantané diffuse — la ligne écrite comparée à la ligne lue avant
+      // elle : une bio, une ville, un réglage, ou des noms renvoyés à l'identique
+      // par l'iOS publié ne diffusent rien. Elle part ICI, avant les écritures
+      // voisines (traduction automatique, profil vocal) : l'une d'elles peut
+      // lever et répondre 500 sur une ligne DÉJÀ écrite, et la reprise du client,
+      // qui ne change plus rien, ne diffuserait plus.
+      if (!replayed && ownProfileSnapshotChanged(current, updatedUser)) {
+        announceOwnProfileUpdated(fastify, updatedUser);
+      }
 
       // `autoTranslateEnabled` — ACCEPTÉE par les deux schémas du corps (AJV
       // `updateUserRequestSchema`, Zod `updateUserProfileSchema`) et JETÉE
@@ -318,11 +343,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // B3 (5.3) — un changement de langue doit rafraîchir le snapshot
       // `resolvedLanguages` des sockets connectés du user, sinon SOCKET_LANG_FILTER
       // continue de filtrer sur l'ancienne langue jusqu'à reconnexion. Best-effort.
-      const langChanged =
-        body.systemLanguage !== undefined ||
-        body.regionalLanguage !== undefined ||
-        body.customDestinationLanguage !== undefined;
-      if (langChanged) {
+      if (touchesLanguage) {
         // #9708 — les langues cibles des conversations de ce compte changent.
         announceConversationLanguageChange({ kind: 'reader-languages', userId: userId! });
         fastify.socketIOHandler?.getManager?.()?.refreshUserResolvedLanguages(userId!, {
@@ -344,11 +365,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // client appliquer SON résolveur (`getUserDisplayName` web,
       // `APIConversationUser.name` iOS) au lieu d'en fabriquer une quatrième
       // copie côté serveur.
-      const nameChanged =
-        body.firstName !== undefined ||
-        body.lastName !== undefined ||
-        body.displayName !== undefined;
-      if (nameChanged) {
+      if (touchesName) {
         const publicChanges = {
           displayName: updatedUser.displayName,
           firstName: updatedUser.firstName,
@@ -367,17 +384,11 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
       }
 
-      const accentChanged = body.profileAccentColor !== undefined;
-      if (accentChanged) {
+      // #19201 — les PARTENAIRES reçoivent l'accent par leur canal public. MES
+      // appareils le reçoivent par `profile:updated`, parti plus haut quand la
+      // ligne écrite change l'instantané (l'accent en est un champ).
+      if (body.profileAccentColor !== undefined) {
         announceProfileAccentToPartners(fastify, userId!, servedProfileAccentColor(updatedUser.profileAccentColor));
-      }
-
-      // #18924 — MES autres appareils : la charge PROPRE (langues comprises), sur
-      // `user:<moi>` seulement. Les partenaires ont `user:updated` ci-dessus, et sa
-      // charge publique ; une écriture qui ne touche aucun champ de l'instantané
-      // (bio, ville, réglages) ne diffuse rien. L'accent (#19201) en est un.
-      if (langChanged || nameChanged || accentChanged) {
-        announceOwnProfileUpdated(fastify, updatedUser);
       }
 
       // #19384 — la fiche que les AUTRES lisent a changé (bio, ville, langues, voix) :
