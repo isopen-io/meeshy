@@ -368,7 +368,11 @@ describe('POST /links/:key/members — inscrit (S2)', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().data.entry.outcome).toBe('rejoin');
     expect((app as any).prisma.participant.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'p-left' } })
+      // #19688 — l'id ET la garde de bannissement : une égalité NUE sur le
+      // `where` attesterait l'écriture qui rallumait une ligne bannie.
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'p-left', OR: [{ bannedAt: null }, { bannedAt: { isSet: false } }] }),
+      })
     );
     (app as any).prisma.participant.findMany = jest.fn().mockResolvedValue([]);
   });
@@ -387,7 +391,7 @@ describe('POST /links/:key/members — inscrit (S2)', () => {
     expect(res.json().data.entry.outcome).toBe('rejoin');
     expect((app as any).prisma.participant.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'p-hidden' },
+        where: expect.objectContaining({ id: 'p-hidden', OR: [{ bannedAt: null }, { bannedAt: { isSet: false } }] }),
         data: expect.objectContaining({ isActive: true, leftAt: null, deletedForMe: null }),
       })
     );

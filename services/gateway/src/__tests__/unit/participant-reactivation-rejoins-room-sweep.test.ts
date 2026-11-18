@@ -29,13 +29,21 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { readFileSync, readdirSync, statSync } from 'fs';
-import { join, relative } from 'path';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { REACTIVATION_MARKERS, reactivatingFiles as scanReactivatingFiles } from '../helpers/participant-reactivation-scan';
 
 const SRC = join(__dirname, '..', '..');
 
-/** Les marqueurs d'une écriture qui RALLUME, repris du balayage frère (#10436). */
-const MARKERS = ['isActive: true', 'REJOIN_PARTICIPANT_STATE', 'unban.data'] as const;
+/**
+ * Les marqueurs d'une écriture qui RALLUME, repris du balayage frère (#10436) —
+ * et le scanner avec eux depuis #19688 : il était recopié ici, et les DEUX
+ * copies sont devenues aveugles ensemble le jour où les trois portes de rentrée
+ * sont passées par `commitParticipantRejoin`. Celui-ci n'a rougi que par sa
+ * sonde de non-vacuité (« ≥ 5 sites », tombée à 2), ce qui est exactement ce
+ * qu'elle existe pour attraper. Détail : `helpers/participant-reactivation-scan.ts`.
+ */
+const MARKERS = REACTIVATION_MARKERS;
 
 /**
  * Le verbe qui remet les sockets du compte dans la room du fil.
@@ -64,49 +72,7 @@ const REJOIN_DELEGATE: Readonly<Record<string, string>> = {
 /** VIDE, et à défendre : voir l'en-tête. */
 const SANS_REJOIN: ReadonlyArray<{ readonly file: string; readonly raison: string }> = [];
 
-function productionFiles(dir: string): string[] {
-  return readdirSync(dir).flatMap((name) => {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) {
-      return name === '__tests__' || name === 'node_modules' ? [] : productionFiles(path);
-    }
-    return name.endsWith('.ts') && !name.endsWith('.test.ts') && !name.endsWith('.d.ts') ? [path] : [];
-  });
-}
-
-function callBodies(source: string): string[] {
-  const opener = /\.participant\.(update|updateMany|upsert)\(/g;
-  const bodies: string[] = [];
-  for (let match = opener.exec(source); match; match = opener.exec(source)) {
-    const start = match.index + match[0].length;
-    let depth = 1;
-    let end = start;
-    while (end < source.length && depth > 0) {
-      if (source[end] === '(') depth += 1;
-      if (source[end] === ')') depth -= 1;
-      end += 1;
-    }
-    bodies.push(source.slice(start, end));
-  }
-  return bodies;
-}
-
-/** Ce que l'appel ÉCRIT : un `isActive: true` du `where` filtre, il ne rallume rien. */
-function writtenPart(body: string): string {
-  const written = /\b(data|update)\s*:/.exec(body);
-  return written ? body.slice(written.index) : body;
-}
-
-function reactivatingFiles(): string[] {
-  const files = productionFiles(SRC)
-    .filter((path) =>
-      callBodies(readFileSync(path, 'utf8'))
-        .map(writtenPart)
-        .some((written) => MARKERS.some((marker) => written.includes(marker)))
-    )
-    .map((path) => relative(SRC, path));
-  return [...new Set(files)].sort();
-}
+const reactivatingFiles = (): string[] => scanReactivatingFiles(SRC);
 
 function rejoins(file: string): boolean {
   const delegate = REJOIN_DELEGATE[file];

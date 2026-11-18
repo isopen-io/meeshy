@@ -72,6 +72,14 @@ export const OPERATIONS_DECRITURE = [
 ] as const;
 
 /**
+ * L'unité partagée qui COMMET une rentrée (#19688,
+ * `services/conversations/rejoinParticipantWrite.ts`). Elle prend la place d'un
+ * `prisma.participant.update(` chez les trois portes de rentrée : son appel est
+ * donc une ÉCRITURE de participation, et le balayage doit l'ouvrir comme telle.
+ */
+export const COMMIT_DE_RENTREE = 'commitParticipantRejoin';
+
+/**
  * Les portes du site unique. `recipientDateLocale` n'en est pas : elle rend une
  * étiquette pour `Intl`, jamais un code de langue à persister.
  */
@@ -115,6 +123,19 @@ export const ECRITURES_OPAQUES: Readonly<Record<string, string>> = {
   // les deux ecritures opaques ont suivi TELLES QUELLES dans
   // `participant-ban-core.ts`. Seule la CLE change — l'inventaire est indexe par
   // FICHIER, et rien de ce qu'il gele n'a bouge.
+  // #19688 — l'unité partagée qui commet les rentrées reçoit sa charge en
+  // PARAMÈTRE (`data`, posé en raccourci). Il n'y a rien à remonter DEPUIS ce
+  // fichier : la `language` est écrite par la porte qui l'appelle, et c'est là
+  // que le balayage la juge — les trois appels y sortent `conforme`. Gelé en
+  // `non-resolue` plutôt qu'en `sans-langue` : ce site n'« écrit pas la
+  // colonne » est FAUX, et ce serait l'erreur qui absout.
+  'services/conversations/rejoinParticipantWrite.ts': [
+    '`data` est un PARAMÈTRE de `commitParticipantRejoin` — la valeur vient des',
+    'trois portes de rentrée, où le balayage la juge par leur propre appel (les',
+    'trois y sortent `conforme`). Deux écritures y sont relevées : la',
+    'DÉCLARATION de la fonction, que l’opener apparie comme un appel, et son',
+    '`update` au `data` en raccourci. Aucune des deux ne porte de valeur.',
+  ].join(' '),
   'routes/conversations/participant-ban-core.ts': [
     '`data: ban.data` / `data: unban.data` — une transition d’état composée par',
     '`conversationBanState.ts`, à deux sauts. Ses deux littéraux ne portent que',
@@ -330,13 +351,29 @@ const langueDe = (ctx: Contexte, corps: string, profondeur: number): Trouvaille 
   return 'absente';
 };
 
+/**
+ * Une clé posée en RACCOURCI (`{ data }`) — sa valeur n'est pas dans l'objet.
+ *
+ * #19688 — sans cette question, `valeurDeCle` rend `undefined` et l'écriture
+ * sort en `sans-langue` (« aucun objet de données ») : un VERDICT, là où il n'y
+ * a qu'une ignorance. L'unité partagée qui commet les rentrées écrit
+ * exactement cette forme, et ses trois portes posent bien une `language` — le
+ * balayage l'a classée « n'écrit pas la colonne », ce qui est faux, et dans le
+ * sens qui ABSOUT. Un balayage négatif doit se tromper du côté qui accuse.
+ */
+const cleEnRaccourci = (options: string, cle: string): boolean =>
+  new RegExp(`(^|[{,\\s])${cle}\\s*(,|\\}|$)`).test(options);
+
 /** Les objets de données qu'une opération remet — `data`, ou les deux branches d'un `upsert`. */
 const objetsDeDonnees = (ctx: Contexte, options: string, operation: string): readonly string[] | undefined => {
   const cles = operation === 'upsert' ? ['create', 'update'] : ['data'];
   const objets: string[] = [];
   for (const cle of cles) {
     const brut = valeurDeCle(options, cle);
-    if (brut === undefined) continue;
+    if (brut === undefined) {
+      if (cleEnRaccourci(options, cle)) return undefined;
+      continue;
+    }
     const resolu = brut.startsWith('{') || brut.startsWith('[')
       ? brut
       : /^[A-Za-z_$][\w$]*$/.test(brut)
@@ -352,14 +389,22 @@ const estDuSiteUnique = (valeur: string): boolean =>
   SITE_UNIQUE.some((porte) => new RegExp(`\\b${porte}\\s*\\(`).test(valeur));
 
 const ecrituresDunFichier = (ctx: Contexte, relatif: string): readonly EcritureDeParticipant[] => {
+  // #19688 — DEUX graphies. Les trois portes de rentrée ne commettent plus par
+  // `prisma.participant.update(` mais par `commitParticipantRejoin(`, qui porte
+  // la garde de bannissement dans son `where`. Un opener qui ne cherchait que
+  // la première a cessé de voir leurs trois écritures de `language` du jour au
+  // lendemain, sans qu'aucune ligne d'inventaire bouge — et l'unité partagée,
+  // dont la charge est un PARAMÈTRE, est entrée à sa place sous un verdict
+  // FAUX (voir `cleEnRaccourci`). Centraliser une écriture déplace la
+  // frontière qu'un cliquet garde : la nouvelle graphie se déclare ICI.
   const sites = new RegExp(
-    `\\bparticipant\\s*\\.\\s*(${OPERATIONS_DECRITURE.join('|')})\\s*\\(`,
+    `\\bparticipant\\s*\\.\\s*(${OPERATIONS_DECRITURE.join('|')})\\s*\\(|\\b${COMMIT_DE_RENTREE}(?:<[^>]*>)?\\s*\\(`,
     'g',
   );
   const trouvailles: EcritureDeParticipant[] = [];
   let trouve: RegExpExecArray | null;
   while ((trouve = sites.exec(ctx.source)) !== null) {
-    const operation = trouve[1] as string;
+    const operation = (trouve[1] as string | undefined) ?? 'rejoin';
     const ouvrante = trouve.index + trouve[0].length - 1;
     const args = partiesDe(ctx.source.slice(ouvrante + 1, finDuBloc(ctx.source, ouvrante)));
     const litteral = args.find((a) => a.startsWith('{'));
