@@ -502,6 +502,14 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : `jvm-check -PjvmCheckModelOnly` (compilation en processus, le démon Kotlin manquant de mémoire) : `CommunityDeletedEventTest` 4/4, les suites `Community*` et `socket.*` de `core/model` vertes. `sdk-core` (Robolectric) ne se prouve que par `android.yml` : `CommunityDeletedBindingTest` (4), `CommunityCacheRepositoryTest` (+3).
 - Prochain lot recommandé : #19591 (iOS lit la disparition, débloqué par la fusion de #19297), puis fermer #16857 après avoir ouvert l'issue des entrées INDIRECTES (salon via `applyCommunityAdmission`, compte supprimé).
 
+## 2026-11-18 — réveil 11:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #19655 (#19592, Android lit la disparition) fusionnée. #19591 (iOS lit la disparition) cédé : #19665 et #19667, vivantes (poussées à 11:30), écrivent `ConversationListView+CommunitiesLoader.swift` et `CommunityListViewModelTests.swift`.
+- Lot : #19406 (une communauté grandit en silence), première moitié de #18769. `applyCommunityAdmission` (écrivain UNIQUE des admissions implicites) reçoit `CommunityMemberAnnounce` en paramètre REQUIS et annonce ce qu'il a ÉCRIT : `community:member-joined`, `via: self` (l'appelant qui revient admin) ou `invited`, rang écrit (une ligne réactivée repart `member`) ; un lot de réactivations qu'une course a déjà en partie fait ne s'annonce pas. Les plans portent désormais `userId` et `via` sur chaque entrée. `broadcastCommunityMemberChanges` relit communauté et effectif UNE fois pour tout le lot (un salon à cent participants n'en fait pas cent lectures). Deux fabriques : `communityMemberAnnouncerFrom(fastify)` (routes) et `communityMemberAnnouncerOverIO(prisma, io)` (`admitConversationMember`, débannissement, entrée par lien de salon). Sept appelants branchés (`core-lifecycle`, `participants-writes` via `memberAdmission`, `call-invite-events` idem, `link-admission`, `sharing-invite`, `participant-ban-core`, `communities/core`) + `admitSalonOccupants` / `closeSalonsAfterSwitch` (`settings`, `admin/communities-oversight`).
+- Cliquet : `src/__tests__/community-member-writer-sweep.test.ts` fige les six fichiers qui écrivent `CommunityMember` et leur émetteur ; seul muet nommé : la désactivation d'un compte supprimé (#18769, qui reste ouverte pour elle — `MeeshySocketIOManager` étant hors budget, l'injection d'une annonce dans `MaintenanceService` demande son propre lot).
+- Aucun client touché : web, iOS et Android lisent déjà `community:member-joined` (#18766, #18767, #18768).
+- Prochain lot recommandé : #19591 (iOS lit la disparition) dès que #19665 / #19667 sont fusionnées ; sinon la moitié « compte supprimé » de #18769.
+
 ## 2026-11-18 — réveil 13:38 UTC
 
 - Début du run : #19678 (#19406, admissions implicites) ouverte, poussée à 13:12 : vivante, cédée. #19655 (#19592, Android) fusionnée.
@@ -512,9 +520,16 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : SDK `CommunityDeletedEventTests` (5), `CacheCoordinatorCommunityDeletionsTests` (2), `SocketInboundRouteTableTests` (+1, relevé figé +1 nom) ; app `CommunityDetailViewModelTests` (+3), `CommunityListViewModelTests` (+2), `MyCommunitiesTests` (+1). Preuve : CI iOS de la PR. Gardes iOS locales : `check_house_rules.sh` (42 règles), `check_cohesion_budget.sh`, `check_test_registration.sh`, accent-color verts.
 - Prochain lot recommandé : ouvrir l'issue des entrées INDIRECTES restantes puis fermer #16857 ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
 
+## 2026-11-18 — réveil 15:38 UTC
+
+- Début du run : #19694 (#19591, iOS lit la disparition) poussée à 15:01, donc vivante : cédée. #19678 (#19406) inactive depuis 14:20 : run consacré à la mener à la fusion.
+- `dev` (11 commits, appels et miroirs Swift ; seul `packages/shared/types/call-rules.ts` côté partagé) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : passerelle `tsc --noEmit` vert, `unit/routes` + `unit/services/conversations` + `services/conversations/__tests__` + balayage des écrivains + `tsc-never-loaded` 976 suites / 14 845 tests verts ; shared `__tests__/ci/` 25 fichiers / 216 tests verts.
+- Prochain lot recommandé : la moitié « compte supprimé » de #18769 ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
 ## 2026-11-18 — réveil 17:38 UTC
 
 - Début du run : deux PR de la routine ouvertes, inactives depuis plus d'une heure (dernières poussées 16:26 et 16:31) : #19694 (#19591, iOS lit la disparition) et #19678 (#19406, admissions implicites). Run consacré à les mener à la fusion.
 - État trouvé : leur CI n'avait pas démarré (102 runs en file sur le dépôt), et `dev` avait reçu deux commits utiles aux deux branches : `725488896` (la deinit isolée au MainActor qui tuait xctest au démontage) et `2fcb40b94` (leçon jvm-check, garde `journal-one-file-per-entry-guard`).
 - `dev` (`2fcb40b94`) fusionnée dans les deux branches sans conflit. Rejoués sur les arbres fusionnés : shared `__tests__/ci/` 25 fichiers / 216 tests verts (les deux), gardes de leçons de la passerelle vertes ; pour #19694, `check_house_rules.sh`, `check_cohesion_budget.sh`, `check_test_registration.sh` et `check-accent-color-hardcoding.mjs` (410 = référence) verts.
 - Prochain lot recommandé : fusionner #19694 et #19678 dès que leur CI est verte sur ces têtes (la seconde fusionnée devra reprendre `dev` : les deux écrivent ce journal) ; puis fermer #16857.
+- 17:43 : #19678 fusionnée par Jacques (`ba1f209bf`), #19406 fermée. `dev` reprise dans #19694 (seul conflit : ce journal, les deux entrées gardées dans l'ordre des réveils).

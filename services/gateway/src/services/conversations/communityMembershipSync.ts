@@ -1,14 +1,23 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { CommunityMemberJoinVia } from '@meeshy/shared/types/socketio-events';
+import type { CommunityMemberAnnounce, CommunityMemberChange } from '../community-member-broadcast';
 
 export type CommunityMembershipSyncPrisma = Pick<PrismaClient, 'communityMember' | 'user'>;
 
 type AdmittedRole = 'admin' | 'member';
 
+/** Une personne admise : son rang, et la porte par laquelle elle entre (elle-même, ou par celui qui l'ajoute). */
+export type CommunityEntrant = {
+  readonly userId: string;
+  readonly role: AdmittedRole;
+  readonly via: Extract<CommunityMemberJoinVia, 'self' | 'invited'>;
+};
+
 export type CommunityAdmission =
   | {
       readonly kind: 'admitted';
-      readonly reactivations: ReadonlyArray<{ readonly id: string; readonly role: AdmittedRole }>;
-      readonly creations: ReadonlyArray<{ readonly userId: string; readonly role: AdmittedRole }>;
+      readonly reactivations: ReadonlyArray<CommunityEntrant & { readonly id: string }>;
+      readonly creations: ReadonlyArray<CommunityEntrant>;
     }
   | { readonly kind: 'refused'; readonly reason: 'invite-forbidden' | 'not-addable' };
 
@@ -113,40 +122,53 @@ export async function planCommunityAdmission(
   const actorEntering = request.admitActor === false || rowOf.get(request.actorId)?.isActive === true
     ? []
     : [request.actorId];
-  const admissions = [
-    ...actorEntering.map((userId) => ({ userId, role: 'admin' as const })),
-    ...entering.map((userId) => ({ userId, role: 'member' as const })),
+  const admissions: readonly CommunityEntrant[] = [
+    ...actorEntering.map((userId) => ({ userId, role: 'admin' as const, via: 'self' as const })),
+    ...entering.map((userId) => ({ userId, role: 'member' as const, via: 'invited' as const })),
   ];
   return {
     kind: 'admitted',
-    reactivations: admissions.flatMap(({ userId, role }) => {
-      const row = rowOf.get(userId);
-      return row ? [{ id: row.id, role }] : [];
+    reactivations: admissions.flatMap((entrant) => {
+      const row = rowOf.get(entrant.userId);
+      return row ? [{ ...entrant, id: row.id }] : [];
     }),
     creations: admissions.filter(({ userId }) => !rowOf.has(userId)),
   };
 }
 
-/** Écrit un plan admis par `planCommunityAdmission`, après la création de la conversation. */
+/**
+ * Écrit un plan admis par `planCommunityAdmission`, après la création de la
+ * conversation, puis ANNONCE ce qui a été écrit (#19406) : chaque entrée part
+ * en `community:member-joined` vers la communauté, comme une entrée par ses
+ * propres routes. L'annonce nomme ce qui a été ÉCRIT : un lot de
+ * réactivations qu'une course a déjà en partie réactivé ne dit pas lesquelles
+ * il a touchées, et ne s'annonce pas — la course gagnante l'a fait.
+ */
 export async function applyCommunityAdmission(
   prisma: Pick<PrismaClient, 'communityMember'>,
   communityId: string,
   admission: Extract<CommunityAdmission, { kind: 'admitted' }>,
-): Promise<void> {
+  announce: CommunityMemberAnnounce,
+): Promise<readonly CommunityEntrant[]> {
   const roles: readonly AdmittedRole[] = ['admin', 'member'];
+  const reactivated: CommunityEntrant[] = [];
   for (const role of roles) {
-    const ids = admission.reactivations.filter((r) => r.role === role).map((r) => r.id);
-    if (ids.length === 0) continue;
-    await prisma.communityMember.updateMany({
-      where: { id: { in: ids }, isActive: false },
+    const batch = admission.reactivations.filter((r) => r.role === role);
+    if (batch.length === 0) continue;
+    const { count } = await prisma.communityMember.updateMany({
+      where: { id: { in: batch.map((r) => r.id) }, isActive: false },
       data: { isActive: true, leftAt: null, role },
     });
+    if (count === batch.length) reactivated.push(...batch.map(({ userId, via }) => ({ userId, role, via })));
   }
   if (admission.creations.length > 0) {
     await prisma.communityMember.createMany({
       data: admission.creations.map(({ userId, role }) => ({ communityId, userId, role })),
     });
   }
+  const written = [...reactivated, ...admission.creations];
+  announce(written.map((entrant): CommunityMemberChange => ({ kind: 'joined', communityId, ...entrant })));
+  return written;
 }
 
 /** La communauté PRIVÉE et vivante qui héberge un salon, vue depuis celui qui y fait entrer. */
