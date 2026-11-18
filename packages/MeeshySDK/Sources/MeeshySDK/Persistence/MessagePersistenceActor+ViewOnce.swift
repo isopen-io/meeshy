@@ -29,12 +29,8 @@ public extension MessageRecord {
     mutating func sealAsOpenedViewOnce(at date: Date) {
         viewOnceOpenedAt = viewOnceOpenedAt ?? date
         effectFlags |= MessageEffectFlags.viewOnce.rawValue
-        content = nil
         encryptedPayload = nil
-        attachmentsJson = nil
-        stickerJson = nil
-        locationJson = nil
-        trackedLinksJson = nil
+        eraseReadableContent()
     }
 }
 

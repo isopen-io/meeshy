@@ -80,16 +80,25 @@ public enum MessageEnrichmentLaw {
     /// - Returns: `true` quand quelque chose est parti.
     @discardableResult
     static func erase(enrichmentsOf record: MessageRecord, in db: Database) throws -> Bool {
+        try erase(enrichmentsOfLocalId: record.localId, serverId: record.serverId, in: db)
+    }
+
+    /// Les colonnes se lisent par leur NOM, jamais en décodant `MessageRecord` : le balayage d'une migration passe
+    /// ici, et une ligne décodée avant qu'une migration suivante n'ajoute sa colonne ferait échouer l'ouverture de la
+    /// base.
+    @discardableResult
+    static func erase(enrichmentsOfLocalId localId: String, serverId: String?, in db: Database) throws -> Bool {
         let removed = try TranslationRecord
-            .filter(Column("messageLocalId") == record.localId
-                    || Column("messageServerId") == (record.serverId ?? record.localId))
+            .filter(Column("messageLocalId") == localId || Column("messageServerId") == (serverId ?? localId))
             .deleteAll(db)
-        guard let pieces = try MessageRecord.fetchOne(db, key: record.localId)?.attachmentsJson else { return removed > 0 }
+        guard let pieces = try Data.fetchOne(
+            db, sql: "SELECT attachmentsJson FROM messages WHERE localId = ?", arguments: [localId]
+        ) else { return removed > 0 }
         let bare = strippedOfEnrichments(pieces)
         guard bare != pieces else { return removed > 0 }
         try db.execute(
             sql: "UPDATE messages SET attachmentsJson = ? WHERE localId = ?",
-            arguments: [bare, record.localId]
+            arguments: [bare, localId]
         )
         return true
     }
