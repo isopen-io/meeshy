@@ -66,6 +66,8 @@ struct ProfileView: View {
     @State private var face: ProfileFace = .vitrine
     @State private var seenAsShown = false
     @State private var shareShown = false
+    /// « Créer un lien » touché à côté du sélecteur : la face Liens ouvre son choix de création, puis consomme la demande.
+    @State private var linkCreateRequested = false
     @State private var securityShown = false
     @State private var logoutAsked = false
     @State private var moodComposerShown = false
@@ -321,9 +323,16 @@ struct ProfileView: View {
             VStack {
                 Spacer()
                 ProfileFaceSelector(face: $face, canShare: ProfileLink(username: user?.username) != nil,
-                                    onShare: { shareShown = true })
+                                    onAccessory: { performFaceAccessory($0) })
             }
             .meeshyTransition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    private func performFaceAccessory(_ accessory: ProfileFaceAccessory) {
+        switch accessory {
+        case .share: shareShown = true
+        case .createLink: linkCreateRequested = true
         }
     }
 
@@ -333,7 +342,8 @@ struct ProfileView: View {
         case .vitrine:
             vitrineFace
         case .links:
-            ProfileLinksFace(user: user, accentColor: shownAccentHex, onOpen: { router.push($0) })
+            ProfileLinksFace(user: user, accentColor: shownAccentHex, createRequested: $linkCreateRequested,
+                             onOpen: { router.push($0) })
         case .actions:
             ProfileActionsFace(user: user, stats: stats, accentColor: shownAccentHex,
                                canShare: ProfileLink(username: user?.username) != nil,

@@ -3862,6 +3862,7 @@
 		CB458EC6E2033E0F22B86B06 /* ConversationMediaGalleryView+Scrims.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4D30D7DDF32852155FC66B /* ConversationMediaGalleryView+Scrims.swift */; };
 		CB69DEB192A278078C4E983D /* ProfileSectionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2AAB3F225BDB623FB93C5B9 /* ProfileSectionsTests.swift */; };
 		FF80719071CDBDC67D32A09B /* ProfileEditImageControlsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59C83C915F25F8B4D4A07AFE /* ProfileEditImageControlsTests.swift */; };
+		AC3BBA8F9A969D7D212AF186 /* ProfileFaceAccessoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E268A5B93481672907A16BC /* ProfileFaceAccessoryTests.swift */; };
 		026E503E853DE693695B31B5 /* ProfilePrismLanguagesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BF27F934E2CC2E8D4C3A836 /* ProfilePrismLanguagesTests.swift */; };
 		CB6FE9A9E9C940AF24F7C942 /* KeypadViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A16767B9BEE9022C5FA208D /* KeypadViewModel.swift */; };
 		CB8A23A6332C56ED769E7628 /* iPadRootView+Overlays.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0657278C679C2B31B12E21BD /* iPadRootView+Overlays.swift */; };
@@ -7997,6 +7998,7 @@
 		A2A3F077279BF971961A6F2A /* SignInLinkDeviceConfirmationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInLinkDeviceConfirmationTests.swift; sourceTree = "<group>"; };
 		A2AAB3F225BDB623FB93C5B9 /* ProfileSectionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSectionsTests.swift; sourceTree = "<group>"; };
 		59C83C915F25F8B4D4A07AFE /* ProfileEditImageControlsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditImageControlsTests.swift; sourceTree = "<group>"; };
+		9E268A5B93481672907A16BC /* ProfileFaceAccessoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileFaceAccessoryTests.swift; sourceTree = "<group>"; };
 		6BF27F934E2CC2E8D4C3A836 /* ProfilePrismLanguagesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePrismLanguagesTests.swift; sourceTree = "<group>"; };
 		A2ADF8165B87F6C2798DD9A0 /* ConversationListDeviceTranslations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListDeviceTranslations.swift; sourceTree = "<group>"; };
 		A2B480B0DBAB8F5DE28D2F64 /* ProfileQRScannerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileQRScannerSheet.swift; sourceTree = "<group>"; };
@@ -11110,6 +11112,7 @@
 				5ACC3D2D894929A7962048FD /* ProfileOtherPublicationsTests.swift */,
 				A2AAB3F225BDB623FB93C5B9 /* ProfileSectionsTests.swift */,
 				59C83C915F25F8B4D4A07AFE /* ProfileEditImageControlsTests.swift */,
+				9E268A5B93481672907A16BC /* ProfileFaceAccessoryTests.swift */,
 				6BF27F934E2CC2E8D4C3A836 /* ProfilePrismLanguagesTests.swift */,
 				20BCE3E070E7AFA7EDFAA998 /* TrackingLinkDetailMapTests.swift */,
 				1E64377001153F575FA050E3 /* ReferralPageTests.swift */,
@@ -20655,6 +20658,7 @@
 				253D45D16586B885169965C8 /* ProfilePostsCountsTests.swift in Sources */,
 				CB69DEB192A278078C4E983D /* ProfileSectionsTests.swift in Sources */,
 				FF80719071CDBDC67D32A09B /* ProfileEditImageControlsTests.swift in Sources */,
+				AC3BBA8F9A969D7D212AF186 /* ProfileFaceAccessoryTests.swift in Sources */,
 				026E503E853DE693695B31B5 /* ProfilePrismLanguagesTests.swift in Sources */,
 				6E7D4F23DBCD02C2D776B78A /* ProfileUserPostsRealtimeSyncTests.swift in Sources */,
 				A5F8A5CC2D2B3185E0EB26FD /* ProfileUserPostsRenderWindowTests.swift in Sources */,

@@ -56,14 +56,47 @@ nonisolated enum ProfileFace: String, CaseIterable, Hashable, Sendable {
     static var shareLabel: String {
         String(localized: "profile.face.share", defaultValue: "Partager mon profil", bundle: .main)
     }
+
+    /// Le bouton posé à côté du sélecteur dépend de la face (planches `Main`, `Moi-Liens`, `Moi-Actions`) : partager ma
+    /// vitrine quand mon lien existe, créer un lien sur les Liens, rien sur les Actions.
+    func accessory(canShare: Bool) -> ProfileFaceAccessory? {
+        switch self {
+        case .vitrine: return canShare ? .share : nil
+        case .links: return .createLink
+        case .actions: return nil
+        }
+    }
+}
+
+/// Le bouton de fin du sélecteur de faces, avec son glyphe et le libellé que VoiceOver lit.
+nonisolated enum ProfileFaceAccessory: Hashable, Sendable {
+    case share
+    case createLink
+
+    var systemImage: String {
+        switch self {
+        case .share: return "square.and.arrow.up"
+        case .createLink: return "plus"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .share: return ProfileFace.shareLabel
+        case .createLink: return ProfileLinksCopy.createLink
+        }
+    }
 }
 
 /// Le sélecteur de faces, en bas, dans la zone du pouce (loi 5) : le choix segmenté du kit (K03, glyphe de tête plein
-/// pour la face courante) posé dans un verre dense, et le partage de mon profil à côté (K01).
+/// pour la face courante) posé dans un verre dense, et à côté le bouton propre à la face (K01) — il change avec elle
+/// selon la table K26.
 struct ProfileFaceSelector: View {
     @Binding var face: ProfileFace
     let canShare: Bool
-    let onShare: () -> Void
+    let onAccessory: (ProfileFaceAccessory) -> Void
+
+    private var accessory: ProfileFaceAccessory? { face.accessory(canShare: canShare) }
 
     var body: some View {
         HStack(spacing: MeeshySpacing.sm) {
@@ -76,16 +109,19 @@ struct ProfileFaceSelector: View {
             )
             .padding(MeeshySpacing.xs)
             .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl + MeeshySpacing.xs), density: .dense)
-            if canShare {
+            if let accessory {
                 MeeshyGlassButton(
-                    systemImage: "square.and.arrow.up",
-                    label: ProfileFace.shareLabel,
+                    systemImage: accessory.systemImage,
+                    label: accessory.label,
                     kind: .active,
                     size: .s48,
-                    action: { onShare() }
+                    action: { onAccessory(accessory) }
                 )
+                .id(accessory)
+                .meeshyTransition(.scale.combined(with: .opacity))
             }
         }
+        .meeshyMotion(.morph, value: accessory)
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.bottom, MeeshySpacing.sm)
     }

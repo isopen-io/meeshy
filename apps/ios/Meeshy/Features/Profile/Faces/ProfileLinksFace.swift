@@ -15,6 +15,8 @@ struct ProfileLinksFace: View {
     let user: MeeshyUser?
     let accentColor: String
     let showsHeader: Bool
+    /// Une demande de création venue d'ailleurs (le bouton à côté du sélecteur de faces) : ouverte, puis consommée.
+    let createRequested: Binding<Bool>
     let onOpen: (Route) -> Void
 
     @StateObject private var links: ProfileLinksFaceModel
@@ -24,11 +26,13 @@ struct ProfileLinksFace: View {
     @State private var sent: SharedContentWrapper?
 
     init(user: MeeshyUser?, accentColor: String, showsHeader: Bool = true,
+         createRequested: Binding<Bool> = .constant(false),
          links: ProfileLinksFaceModel? = nil, addresses: ProfileAddressesStore = .shared,
          visits: ProfileLinkVisitsModel? = nil, onOpen: @escaping (Route) -> Void) {
         self.user = user
         self.accentColor = accentColor
         self.showsHeader = showsHeader
+        self.createRequested = createRequested
         self.onOpen = onOpen
         _links = StateObject(wrappedValue: links ?? ProfileLinksFaceModel())
         _addresses = ObservedObject(wrappedValue: addresses)
@@ -47,10 +51,17 @@ struct ProfileLinksFace: View {
                                 onCreate: { presented = .create })
         }
         .task { await loadAll() }
+        .task(id: createRequested.wrappedValue) { openRequestedCreation() }
         .modifier(ProfileLinksPresentations(
             user: user, link: profileLink, accentColor: accentColor, profileVisits: visits.monthVisits,
             presented: $presented, sent: $sent, onOpen: onOpen, onCreated: { Task { await links.refresh() } }
         ))
+    }
+
+    private func openRequestedCreation() {
+        guard createRequested.wrappedValue else { return }
+        createRequested.wrappedValue = false
+        presented = .create
     }
 
     private func loadAll() async {
