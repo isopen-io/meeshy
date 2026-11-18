@@ -69,6 +69,14 @@ public struct SharedLocationRecipient: Sendable, Equatable, Hashable {
     }
 }
 
+/// D'où vient la position d'un partage : un relevé de l'appareil, suivi tant que le partage court, ou un point choisi à
+/// la main sur la carte (#19558), fixe, qui ne demande aucune permission et ne se met jamais à jour (`source: 'manual'`,
+/// #19557). Seul `manual` voyage : une passerelle d'avant n'a jamais lu la clé.
+public enum SharedLocationPositionSource: String, Sendable, Equatable {
+    case device
+    case manual
+}
+
 /// La charge de `location:share-start`. Démarrer de nouveau REMPLACE le partage : la liste est toujours entière.
 /// `notifyRecipients` (« Prévenir ») et `shareBattery` (« Partager aussi ma batterie ») ne partent que vrais (#19204).
 public struct SharedLocationStartRequest: Sendable, Equatable {
@@ -82,6 +90,8 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
     public let notifyRecipients: Bool
     /// La batterie accompagne le partage, pour ses destinataires et jusqu'à son terme seulement.
     public let shareBattery: Bool
+    /// Un relevé de l'appareil, ou un point choisi à la main.
+    public let source: SharedLocationPositionSource
 
     /// `nil` : aucun destinataire valide, ou plus que le plafond. Un destinataire en double garde sa DERNIÈRE précision
     /// et sa dernière échéance (le schéma serveur refuse les doublons, insensibles à la casse).
@@ -90,7 +100,8 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
         duration: SharedLocationShareDuration,
         fix: SharedLocationFix,
         notifyRecipients: Bool = false,
-        shareBattery: Bool = false
+        shareBattery: Bool = false,
+        source: SharedLocationPositionSource = .device
     ) {
         let valid = recipients.filter { Self.isObjectId($0.userId) }
         let latest = Dictionary(valid.map { ($0.userId.lowercased(), $0) }, uniquingKeysWith: { _, last in last })
@@ -101,7 +112,8 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
             return SharedLocationRecipient(userId: key, precision: last.precision, expiresInSeconds: last.expiresInSeconds)
         }
         guard !ordered.isEmpty, ordered.count <= Self.maxRecipients else { return nil }
-        self.init(validated: ordered, duration: duration, fix: fix, notifyRecipients: notifyRecipients, shareBattery: shareBattery)
+        self.init(validated: ordered, duration: duration, fix: fix, notifyRecipients: notifyRecipients, shareBattery: shareBattery,
+                  source: source)
     }
 
     private init(
@@ -109,13 +121,15 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
         duration: SharedLocationShareDuration,
         fix: SharedLocationFix,
         notifyRecipients: Bool,
-        shareBattery: Bool
+        shareBattery: Bool,
+        source: SharedLocationPositionSource
     ) {
         self.recipients = recipients
         self.duration = duration
         self.fix = fix
         self.notifyRecipients = notifyRecipients
         self.shareBattery = shareBattery
+        self.source = source
     }
 
     /// Au moins une personne part avec sa propre échéance.
@@ -132,13 +146,16 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
             duration: duration,
             fix: fix,
             notifyRecipients: notifyRecipients,
-            shareBattery: shareBattery
+            shareBattery: shareBattery,
+            source: source
         )
     }
 
-    /// La même liste sans « Prévenir » ni la batterie : une passerelle d'avant #19204 refuse ces clés (`INVALID`).
+    /// La même liste sans « Prévenir » ni la batterie : une passerelle d'avant #19204 refuse ces clés (`INVALID`). La
+    /// source reste : un point choisi ne part jamais déguisé en relevé de l'appareil.
     public var withoutExtras: SharedLocationStartRequest {
-        SharedLocationStartRequest(validated: recipients, duration: duration, fix: fix, notifyRecipients: false, shareBattery: false)
+        SharedLocationStartRequest(validated: recipients, duration: duration, fix: fix, notifyRecipients: false, shareBattery: false,
+                                   source: source)
     }
 
     /// Les charges à essayer, dans l'ordre, après un refus `INVALID` : sans les options de #19204, puis sans les
@@ -156,6 +173,7 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
         ]
         if notifyRecipients { wire["notifyRecipients"] = true }
         if shareBattery { wire["shareBattery"] = true }
+        if source == .manual { wire["source"] = source.rawValue }
         return wire
     }
 

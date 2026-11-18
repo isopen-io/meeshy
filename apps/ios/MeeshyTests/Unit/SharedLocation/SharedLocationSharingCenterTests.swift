@@ -835,7 +835,13 @@ final class FakeSharedLocationFixSource: SharedLocationFixProviding {
 
     var fixes: AnyPublisher<SharedLocationFix, Never> { subject.eraseToAnyPublisher() }
 
-    func currentFix() async -> SharedLocationFixResult { result }
+    /// Combien de fois on a demandé un relevé à l'appareil (et donc, la permission).
+    private(set) var asks = 0
+
+    func currentFix() async -> SharedLocationFixResult {
+        asks += 1
+        return result
+    }
 
     func follow() { isFollowing = true }
 

@@ -112,6 +112,9 @@ final class SharedLocationSharingCenter: ObservableObject {
     /// La passerelle sert-elle « Prévenir » et la batterie (#19204) ? `nil` : on ne sait pas encore (on les propose) ;
     /// `false` : elle a refusé leurs clés, l'écran ne les propose plus.
     @Published private(set) var servesShareOptions: Bool?
+    /// La passerelle accepte-t-elle un point choisi à la main (`acceptsManualSource`, #19557) ? Tant qu'elle ne l'a pas
+    /// dit, « Choisir sur la carte » n'est pas proposé (#19558).
+    @Published private(set) var servesFixedPoint = false
 
     private let emitter: SharedLocationEmitting
     private let fixes: SharedLocationFixProviding
@@ -124,6 +127,8 @@ final class SharedLocationSharingCenter: ObservableObject {
     private let gate = SharedLocationSerialGate()
     private var abandoned = false
     private var lastSent: SharedLocationUpdateGate.Sent?
+    /// Le point choisi à la main que le partage montre, en mémoire seulement : une liste réduite se republie avec lui.
+    private var pinnedFix: SharedLocationFix?
     /// La liste vient d'un autre appareil du compte : celui-ci ne publie pas sa position (#18578).
     private var received: Bool
     private var following = Set<AnyCancellable>()
@@ -170,7 +175,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             .store(in: &socketWatch)
         lane.store(in: &socketWatch)
         guard !restored.isEmpty else { return }
-        if restored.hasRecipients, !received { startFollowing() }
+        if restored.hasRecipients, !received, !restored.isFixedPoint { startFollowing() }
         scheduleDeadline()
     }
 
@@ -202,11 +207,37 @@ final class SharedLocationSharingCenter: ObservableObject {
             case .unavailable: return .locationUnavailable
             }
             guard self.isLive else { return .refused(.failed) }
-            let previous = self.roster
-            let added = previous.pruned(now: self.now()).adding(userId: userId, precision: precision, duration: duration, now: self.now())
-            let next = battery.map { added.withBattery($0) } ?? added
-            return await self.publish(next, fix: fix, previous: previous, claimsPublishing: true, notify: notify)
+            let next = self.adding(userId, precision: precision, duration: duration, battery: battery).withFixedPoint(false)
+            return await self.publish(next, fix: fix, previous: self.roster, claimsPublishing: true, notify: notify)
         }
+    }
+
+    /// Montrer à une personne un point CHOISI à la main sur la carte (#19558) : aucun relevé n'est demandé à l'appareil,
+    /// donc aucune permission, et l'appareil n'est jamais suivi. Refusé tant que la passerelle n'accepte pas un point.
+    @discardableResult
+    func sharePoint(
+        _ point: SharedLocationFix,
+        with userId: String,
+        precision: SharedLocationPrecision,
+        duration: SharedLocationShareDuration,
+        notify: Bool = false,
+        battery: Bool? = nil
+    ) async -> SharedLocationShareProblem? {
+        await locked {
+            guard self.servesFixedPoint else { return .refused(.unavailable) }
+            let next = self.adding(userId, precision: precision, duration: duration, battery: battery).withFixedPoint(true)
+            return await self.publish(next, fix: point, previous: self.roster, claimsPublishing: true, notify: notify)
+        }
+    }
+
+    private func adding(
+        _ userId: String,
+        precision: SharedLocationPrecision,
+        duration: SharedLocationShareDuration,
+        battery: Bool?
+    ) -> SharedLocationRoster {
+        let added = roster.pruned(now: now()).adding(userId: userId, precision: precision, duration: duration, now: now())
+        return battery.map { added.withBattery($0) } ?? added
     }
 
     /// Ne plus montrer ma position à cette personne ; les autres gardent la leur. Si l'arrêt ne peut pas partir, la
@@ -251,6 +282,7 @@ final class SharedLocationSharingCenter: ObservableObject {
         _ = await locked {
             guard let truth = await self.served(), self.isLive else { return nil }
             if truth.shareBattery != nil { self.servesShareOptions = true }
+            if truth.acceptsManualSource { self.servesFixedPoint = true }
             let before = self.roster
             let next = before.withServed(truth, now: self.now())
             guard next != before else { return nil }
@@ -271,7 +303,7 @@ final class SharedLocationSharingCenter: ObservableObject {
     func didMove(to fix: SharedLocationFix) async {
         guard gate.tryEnter() else { return }
         defer { gate.leave() }
-        guard isLive, !received, roster.hasRecipients, !roster.hasPendingWithdrawals, SharedLocationUpdateGate.shouldSend(fix, now: now(), last: lastSent) else { return }
+        guard isLive, !received, roster.hasRecipients, !roster.isFixedPoint, !roster.hasPendingWithdrawals, SharedLocationUpdateGate.shouldSend(fix, now: now(), last: lastSent) else { return }
         lastSent = .init(fix: fix, at: now())
         let verdict = await emitter.update(fix)
         if isLive, case .refused(.notSharing) = verdict { wipe() }
@@ -304,10 +336,15 @@ final class SharedLocationSharingCenter: ObservableObject {
 
     /// Redémarrer le partage serveur avec une liste réduite demande une position : la dernière envoyée, sinon celle de
     /// l'appareil. Sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête : retirer une personne ne
-    /// dépend jamais de la localisation.
+    /// dépend jamais de la localisation. Un point choisi se republie lui-même, jamais un relevé (#19558) ; perdu avec
+    /// un lancement, on arrête.
     private func republish(_ wanted: SharedLocationRoster) async -> SharedLocationShareProblem? {
         let next = wanted.settled
         guard next.hasRecipients else { return await stopAll() }
+        if next.isFixedPoint {
+            guard let pinnedFix else { return await stopAll() }
+            return await publish(next, fix: pinnedFix, previous: roster)
+        }
         if let last = freshLastFix { return await publish(next, fix: last, previous: roster) }
         guard case .fix(let fix) = await fixes.currentFix() else { return await stopAll() }
         guard isLive else { return .refused(.failed) }
@@ -349,7 +386,8 @@ final class SharedLocationSharingCenter: ObservableObject {
         let recipients = next.deadlinedRecipients(now: instant)
         guard let request = SharedLocationStartRequest(
             recipients: recipients, duration: next.serverDuration(now: instant), fix: fix,
-            notifyRecipients: notify && offersOptions, shareBattery: next.sharesBattery
+            notifyRecipients: notify && offersOptions, shareBattery: next.sharesBattery,
+            source: next.isFixedPoint ? .manual : .device
         ) else {
             return .refused(.invalid)
         }
@@ -411,8 +449,10 @@ final class SharedLocationSharingCenter: ObservableObject {
 
     private func engage(_ next: SharedLocationRoster, fix: SharedLocationFix) {
         adopt(next)
+        if next.isFixedPoint { stopFollowingDevice() }
+        pinnedFix = next.isFixedPoint ? fix : nil
         lastSent = .init(fix: fix, at: now())
-        if next.hasRecipients, !received { startFollowing() }
+        if next.hasRecipients, !received, !next.isFixedPoint { startFollowing() }
         scheduleDeadline()
     }
 
@@ -464,6 +504,7 @@ final class SharedLocationSharingCenter: ObservableObject {
 
     private func stopFollowingDevice() {
         lastSent = nil
+        pinnedFix = nil
         following = []
         fixes.stopFollowing()
     }

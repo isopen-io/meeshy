@@ -29,6 +29,9 @@ struct ShareMyLocationSheet: View {
     /// La position m'est refusée par le téléphone (planche `Etat-Erreur` vue 5) : le bloc d'état remplace le formulaire
     /// jusqu'au retour dans l'app, où le formulaire revient pour un nouvel essai.
     @State private var locationDenied = false
+    /// « Choisir sur la carte » (#19558) : la feuille partage le point que l'épingle désigne, jamais un relevé.
+    @State private var choosingPoint = false
+    @State private var pointViewport: LocationMapViewport?
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
@@ -48,9 +51,12 @@ struct ShareMyLocationSheet: View {
                 header
                 if let sharing = activeShare {
                     activeSection(sharing)
-                } else if locationDenied {
+                } else if locationDenied && !choosingPoint {
                     deniedState
                 } else {
+                    if choosingPoint {
+                        ShareMyLocationPointCard(precision: precision, viewport: $pointViewport)
+                    }
                     durationSection
                     precisionSection
                     optionsSection
@@ -66,15 +72,21 @@ struct ShareMyLocationSheet: View {
         }
     }
 
+    /// Planche `Etat-Erreur` cas 5 : « Ouvrir les réglages », et « Choisir sur la carte » dès que la passerelle accepte un
+    /// point choisi (#19557) — sans elle, les réglages restent la seule issue.
     private var deniedState: some View {
-        MeeshyStateBlock(
+        let offersMap = center.servesFixedPoint
+        return MeeshyStateBlock(
             kind: .denied,
             title: ShareMyLocationCopy.deniedTitle,
-            message: ShareMyLocationCopy.deniedMessage,
+            message: offersMap ? ShareMyLocationCopy.deniedMessageOrMap : ShareMyLocationCopy.deniedMessage,
             primary: MeeshyStateBlockAction(title: ShareMyLocationCopy.openSettings, systemImage: "gearshape") {
                 guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
                 openURL(url)
             },
+            secondary: offersMap
+                ? MeeshyStateBlockAction(title: ShareMyLocationCopy.chooseOnMap, systemImage: "map") { choosingPoint = true }
+                : nil,
             art: .none,
             systemImage: "location.slash"
         )
@@ -218,14 +230,27 @@ struct ShareMyLocationSheet: View {
     private var shareButton: some View {
         VStack(spacing: MeeshySpacing.sm) {
             MeeshyButton(ShareMyLocationCopy.shareFor(duration), systemImage: "location.fill", kind: .accent, width: .fill,
-                         isPending: center.isBusy, disabledReason: chosen.isEmpty ? ShareMyLocationCopy.chooseLabel : nil,
-                         action: { Task { await share() } })
+                         isPending: center.isBusy, disabledReason: shareDisabledReason,
+                         action: {
+                             if choosingPoint { sharePoint() } else { Task { await share() } }
+                         })
             Text(ShareMyLocationCopy.footnote)
                 .font(.footnote)
                 .foregroundStyle(theme.textMuted)
                 .frame(maxWidth: .infinity)
                 .multilineTextAlignment(.center)
         }
+    }
+
+    private var shareDisabledReason: String? {
+        if chosen.isEmpty { return ShareMyLocationCopy.chooseLabel }
+        if choosingPoint, chosenPoint == nil { return ShareMyLocationCopy.pointLabel }
+        return nil
+    }
+
+    private var chosenPoint: SharedLocationFix? {
+        guard let pointViewport else { return nil }
+        return ShareMyLocationPoint.fix(at: pointViewport)
     }
 
     private var activeShare: SharedLocationRoster.Entry? {
@@ -269,6 +294,28 @@ struct ShareMyLocationSheet: View {
         dismiss()
     }
 
+    /// Le point se partage d'un geste, en mise à jour optimiste : la feuille se ferme aussitôt, et un refus revient en
+    /// message. Aucun relevé n'est demandé à l'appareil.
+    private func sharePoint() {
+        guard let point = chosenPoint else { return }
+        let targets = recipients.filter { chosen.contains($0.userId) }.map(\.userId)
+        let offers = center.servesShareOptions != false
+        let options = (notify: offers && notify, battery: offers ? battery : nil)
+        let sharing = self.center
+        let precision = self.precision
+        let duration = self.duration
+        HapticFeedback.success()
+        dismiss()
+        Task { @MainActor in
+            for userId in targets {
+                guard let problem = await sharing.sharePoint(point, with: userId, precision: precision, duration: duration,
+                                                             notify: options.notify, battery: options.battery) else { continue }
+                FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
+                return
+            }
+        }
+    }
+
     private func stop() async {
         guard let only = recipients.first else { return }
         switch await center.stopSharing(with: only.userId) {
@@ -296,6 +343,30 @@ enum ShareMyLocationCopy {
     }
     static var deniedMessage: String {
         String(localized: "locationMap.share.denied.message", defaultValue: "Tu peux l'autoriser dans les réglages de ton téléphone.", bundle: .main)
+    }
+    static var deniedMessageOrMap: String {
+        String(localized: "locationMap.share.denied.messageOrMap",
+               defaultValue: "Tu peux l'autoriser dans les réglages de ton téléphone, ou choisir un lieu à la main.", bundle: .main)
+    }
+    static var chooseOnMap: String {
+        String(localized: "locationMap.share.denied.chooseOnMap", defaultValue: "Choisir sur la carte", bundle: .main)
+    }
+    static var pointLabel: String {
+        String(localized: "locationMap.share.point.label", defaultValue: "Le lieu que tu partages", bundle: .main)
+    }
+    static var pointHint: String {
+        String(localized: "locationMap.share.point.hint", defaultValue: "Fais glisser la carte pour placer l'épingle.", bundle: .main)
+    }
+    static var pointNote: String {
+        String(localized: "locationMap.share.point.note", defaultValue: "C'est ce lieu qui sera partagé, pas ta position.", bundle: .main)
+    }
+    static func pointMove(_ direction: ShareMyLocationPoint.Direction) -> String {
+        switch direction {
+        case .north: return String(localized: "locationMap.share.point.north", defaultValue: "Vers le nord", bundle: .main)
+        case .south: return String(localized: "locationMap.share.point.south", defaultValue: "Vers le sud", bundle: .main)
+        case .east: return String(localized: "locationMap.share.point.east", defaultValue: "Vers l'est", bundle: .main)
+        case .west: return String(localized: "locationMap.share.point.west", defaultValue: "Vers l'ouest", bundle: .main)
+        }
     }
     static var openSettings: String {
         String(localized: "locationMap.share.denied.settings", defaultValue: "Ouvrir les réglages", bundle: .main)
@@ -346,5 +417,83 @@ enum ShareMyLocationCopy {
             return String(format: String(localized: "locationMap.share.visibleWithin.many", defaultValue: "On te verra dans un rayon d'environ %@", bundle: .main), radius)
         }
         return String(format: String(localized: "locationMap.share.visibleWithin", defaultValue: "%1$@ te verra dans un rayon d'environ %2$@", bundle: .main), name, radius)
+    }
+}
+
+/// Le point choisi à la main (#19558), en valeurs : l'épingle désigne le centre de la carte, et VoiceOver la déplace d'un
+/// quart de carte par geste.
+enum ShareMyLocationPoint {
+    enum Direction: CaseIterable {
+        case north, south, east, west
+    }
+
+    /// Le point que l'épingle désigne : le centre de la carte, sans précision d'appareil (personne ne l'a mesuré).
+    static func fix(at viewport: LocationMapViewport) -> SharedLocationFix? {
+        SharedLocationFix(latitude: viewport.centerLatitude, longitude: viewport.centerLongitude)
+    }
+
+    /// La carte décalée d'un quart de son étendue : l'épingle, au centre, désigne le lieu voisin.
+    static func moved(_ viewport: LocationMapViewport, _ direction: Direction) -> LocationMapRegion {
+        let (dLat, dLon): (Double, Double) = switch direction {
+        case .north: (viewport.latitudeDelta / 4, 0)
+        case .south: (-viewport.latitudeDelta / 4, 0)
+        case .east: (0, viewport.longitudeDelta / 4)
+        case .west: (0, -viewport.longitudeDelta / 4)
+        }
+        let longitude = viewport.centerLongitude + dLon
+        return LocationMapRegion(
+            centerLatitude: min(max(viewport.centerLatitude + dLat, -85), 85),
+            centerLongitude: longitude > 180 ? longitude - 360 : (longitude < -180 ? longitude + 360 : longitude),
+            latitudeDelta: viewport.latitudeDelta,
+            longitudeDelta: viewport.longitudeDelta
+        )
+    }
+}
+
+/// La carte du point choisi (planche `Carte-Partage`) : le fond nu, le flou de la précision choisie, et MON épingle K36
+/// au centre — on fait glisser la carte sous elle. Rien ne demande où est l'appareil.
+struct ShareMyLocationPointCard: View {
+    let precision: SharedLocationPrecision
+    @Binding var viewport: LocationMapViewport?
+    @State private var focus: LocationMapFocus?
+
+    private static let height: CGFloat = 220
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            ZStack {
+                LocationMapCanvas(focus: focus, onViewport: { viewport = $0 })
+                if let viewport {
+                    MeeshyBlurDisc(radius: min(viewport.points(forMeters: LocationMapRules.visibleRadiusMeters(for: precision)), 2_000))
+                        .allowsHitTesting(false)
+                }
+                MeeshyMapPin(label: ShareMyLocationCopy.pointLabel, kind: .own) {
+                    ZStack {
+                        MeeshyColors.brandPrimary
+                        Image(systemName: "person.fill")
+                            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
+                            .foregroundStyle(Color.white)
+                    }
+                }
+                .allowsHitTesting(false)
+            }
+            .frame(height: Self.height)
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(ShareMyLocationCopy.pointLabel)
+            .accessibilityHint(ShareMyLocationCopy.pointHint)
+            .accessibilityActions {
+                ForEach(ShareMyLocationPoint.Direction.allCases, id: \.self) { direction in
+                    Button(ShareMyLocationCopy.pointMove(direction)) { move(direction) }
+                }
+            }
+            .accessibilityIdentifier("sharedLocation.share.point")
+            MeeshyNote(ShareMyLocationCopy.pointNote, lead: .systemImage("mappin.and.ellipse"))
+        }
+    }
+
+    private func move(_ direction: ShareMyLocationPoint.Direction) {
+        guard let viewport else { return }
+        focus = LocationMapFocus(region: ShareMyLocationPoint.moved(viewport, direction), token: (focus?.token ?? 0) + 1)
     }
 }

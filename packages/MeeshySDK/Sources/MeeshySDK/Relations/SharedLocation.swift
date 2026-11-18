@@ -203,18 +203,23 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
     /// La batterie accompagne-t-elle le partage (#19204) ? `nil` : la passerelle ne le dit pas (aucun partage, ou
     /// passerelle antérieure) — jamais lu comme « non ».
     public let shareBattery: Bool?
+    /// La passerelle accepte-t-elle un point choisi à la main (`source: 'manual'`, #19557) ? Absent : non — l'écran
+    /// garde alors « Ouvrir les réglages » seul.
+    public let acceptsManualSource: Bool
 
-    public init(recipients: [SharedLocationOwnRecipient], shareBattery: Bool? = nil) {
+    public init(recipients: [SharedLocationOwnRecipient], shareBattery: Bool? = nil, acceptsManualSource: Bool = false) {
         self.recipients = recipients
         self.shareBattery = shareBattery
+        self.acceptsManualSource = acceptsManualSource
     }
 
-    private enum CodingKeys: String, CodingKey { case recipients, shareBattery }
+    private enum CodingKeys: String, CodingKey { case recipients, shareBattery, acceptsManualSource }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         recipients = try c.decode([Lenient].self, forKey: .recipients).compactMap(\.value)
         shareBattery = (try? c.decodeIfPresent(Bool.self, forKey: .shareBattery)) ?? nil
+        acceptsManualSource = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsManualSource)) ?? nil) ?? false
     }
 
     private struct Lenient: Decodable {

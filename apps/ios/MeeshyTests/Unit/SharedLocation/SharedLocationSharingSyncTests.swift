@@ -94,6 +94,126 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertTrue(next.sharesBattery)
     }
 
+    // MARK: - Un point choisi à la main (#19558)
+
+    private let lisbon = SharedLocationFix(latitude: 38.72, longitude: -9.14)!
+
+    private func makeManualSUT(store: FakeSharedLocationRosterStore = FakeSharedLocationRosterStore()) async -> SUT {
+        let served = Served()
+        served.snapshot = SharedLocationOwnSnapshot(recipients: [], acceptsManualSource: true)
+        let sut = makeSUT(store: store, served: served)
+        await sut.center.sync()
+        return sut
+    }
+
+    func test_choosingOnTheMap_isOfferedOnlyWhenTheGatewayAcceptsAPoint() async {
+        let legacy = makeSUT()
+        legacy.served.snapshot = snapshot([])
+        await legacy.center.sync()
+        XCTAssertFalse(legacy.center.servesFixedPoint)
+
+        let sut = await makeManualSUT()
+        XCTAssertTrue(sut.center.servesFixedPoint)
+    }
+
+    func test_sharingAChosenPoint_neverAsksTheDevice_andSendsThePointAsManual() async {
+        let sut = await makeManualSUT()
+        sut.fixes.result = .denied
+
+        let problem = await sut.center.sharePoint(lisbon, with: alice, precision: .neighborhood, duration: .oneHour)
+
+        XCTAssertNil(problem)
+        XCTAssertEqual(sut.fixes.asks, 0)
+        XCTAssertFalse(sut.fixes.isFollowing)
+        XCTAssertEqual(sut.emitter.starts.last?.fix, lisbon)
+        XCTAssertEqual(sut.emitter.starts.last?.source, .manual)
+        XCTAssertEqual(sut.center.entry(for: alice)?.precision, .neighborhood)
+        XCTAssertTrue(sut.center.roster.isFixedPoint)
+    }
+
+    func test_aGatewayThatDoesNotAcceptAPoint_sendsNothing() async {
+        let sut = makeSUT()
+
+        let problem = await sut.center.sharePoint(lisbon, with: alice, precision: .city, duration: .oneHour)
+
+        XCTAssertEqual(problem, .refused(.unavailable))
+        XCTAssertTrue(sut.emitter.starts.isEmpty)
+    }
+
+    func test_aChosenPoint_isNotUpdatedByTheDevice() async {
+        let sut = await makeManualSUT()
+        _ = await sut.center.sharePoint(lisbon, with: alice, precision: .city, duration: .oneHour)
+
+        await sut.center.didMove(to: SharedLocationFix(latitude: 48.85, longitude: 2.35)!)
+
+        XCTAssertTrue(sut.emitter.updates.isEmpty)
+    }
+
+    func test_removingSomeoneFromAChosenPoint_republishesThePoint_neverTheDevice() async {
+        let sut = await makeManualSUT()
+        _ = await sut.center.sharePoint(lisbon, with: alice, precision: .city, duration: .oneHour)
+        _ = await sut.center.sharePoint(lisbon, with: bob, precision: .city, duration: .oneHour)
+
+        _ = await sut.center.stopSharing(with: alice)
+
+        XCTAssertEqual(sut.fixes.asks, 0)
+        XCTAssertEqual(sut.emitter.starts.last?.recipients.map(\.userId), [bob])
+        XCTAssertEqual(sut.emitter.starts.last?.fix, lisbon)
+        XCTAssertEqual(sut.emitter.starts.last?.source, .manual)
+    }
+
+    func test_aChosenPoint_survivesARelaunch_withoutFollowingTheDevice() async {
+        let store = FakeSharedLocationRosterStore()
+        let first = await makeManualSUT(store: store)
+        _ = await first.center.sharePoint(lisbon, with: alice, precision: .city, duration: .oneHour)
+
+        let relaunched = makeSUT(store: store)
+
+        XCTAssertNotNil(relaunched.center.entry(for: alice))
+        XCTAssertTrue(relaunched.center.roster.isFixedPoint)
+        XCTAssertFalse(relaunched.fixes.isFollowing)
+    }
+
+    func test_sharingFromTheDeviceAfterAChosenPoint_followsTheDeviceAgain() async {
+        let sut = await makeManualSUT()
+        _ = await sut.center.sharePoint(lisbon, with: alice, precision: .city, duration: .oneHour)
+
+        _ = await sut.center.share(with: bob, precision: .city, duration: .oneHour)
+
+        XCTAssertFalse(sut.center.roster.isFixedPoint)
+        XCTAssertEqual(sut.emitter.starts.last?.source, .device)
+        XCTAssertTrue(sut.fixes.isFollowing)
+    }
+
+    func test_theChosenPointFlag_neverStoresAPosition() throws {
+        let roster = SharedLocationRoster.empty
+            .adding(userId: alice, precision: .city, duration: .oneHour, now: t0)
+            .withFixedPoint(true)
+
+        let data = try JSONEncoder().encode(roster)
+        let text = String(decoding: data, as: UTF8.self)
+        let decoded = try JSONDecoder().decode(SharedLocationRoster.self, from: data)
+
+        XCTAssertTrue(decoded.isFixedPoint)
+        XCTAssertFalse(text.contains("latitude"))
+        XCTAssertFalse(SharedLocationRoster.empty.withFixedPoint(true).isFixedPoint)
+    }
+
+    func test_thePin_pointsAtTheMapCenter_andVoiceOverMovesItAQuarterMapAtATime() {
+        let viewport = LocationMapViewport(centerLatitude: 38.72, centerLongitude: 179.9, latitudeDelta: 0.4,
+                                           longitudeDelta: 0.8, width: 390, height: 220)
+
+        let fix = ShareMyLocationPoint.fix(at: viewport)
+        let north = ShareMyLocationPoint.moved(viewport, .north)
+        let east = ShareMyLocationPoint.moved(viewport, .east)
+
+        XCTAssertEqual(fix?.latitude, 38.72)
+        XCTAssertNil(fix?.accuracy)
+        XCTAssertEqual(north.centerLatitude, 38.82, accuracy: 1e-9)
+        XCTAssertEqual(north.latitudeDelta, 0.4, accuracy: 1e-9)
+        XCTAssertEqual(east.centerLongitude, -179.9, accuracy: 1e-9)
+    }
+
     // MARK: - La liste servie
 
     func test_withServed_adoptsThePeopleAndDeadlinesTheGatewayServes() {
