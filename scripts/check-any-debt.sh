@@ -393,7 +393,7 @@ readonly SHARED_BASELINE=0
 # désormais `undefined` et ne fait rien : un objet nul se dit en ne faisant
 # rien, pas en construisant la chose dont on n'a pas besoin, et la dette descend
 # avec la seconde instance.
-readonly GATEWAY_BASELINE=486
+readonly GATEWAY_BASELINE=484
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO
