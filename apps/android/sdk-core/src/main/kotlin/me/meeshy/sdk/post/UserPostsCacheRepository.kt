@@ -62,6 +62,17 @@ class UserPostsCacheRepository @Inject constructor(
         }
     }
 
+    /** #19426 — the viewer's saved posts, kept like an author's page (iOS `bookmarks` key of the `feed` store). */
+    suspend fun cachedBookmarks(): CacheResult<UserPostsSnapshot> = cached(BOOKMARKS)
+
+    /**
+     * Written only while the list fits [MAX_CACHED]: a longer one would be cut and its cursor would then skip the
+     * rows between the cut and the cursor, so the previous (shorter, consistent) copy stays.
+     */
+    suspend fun persistBookmarks(snapshot: UserPostsSnapshot, ticket: AccountTicket?) {
+        if (snapshot.posts.size <= MAX_CACHED) persist(BOOKMARKS, snapshot, ticket)
+    }
+
     /**
      * #18931 — a live gesture on [postId] ([patch]: the gateway's absolute counts) reaches EVERY author's cached page that
      * holds it; each page keeps its own freshness (a gesture is not a reload).
@@ -80,9 +91,20 @@ class UserPostsCacheRepository @Inject constructor(
             if (snapshot.posts.none { it.id == postId }) null else snapshot.copy(posts = snapshot.posts.filterNot { it.id == postId })
         }
 
-    private suspend fun rewriteEverywhere(postId: String, ticket: AccountTicket?, rewrite: (UserPostsSnapshot) -> UserPostsSnapshot?) {
+    /** #19426 — a post un-saved elsewhere (`post:bookmarked` false) leaves the saved posts only; the author pages keep it. */
+    suspend fun removeFromBookmarks(postId: String, ticket: AccountTicket?) =
+        rewriteEverywhere(postId, ticket, key(BOOKMARKS)) { snapshot ->
+            if (snapshot.posts.none { it.id == postId }) null else snapshot.copy(posts = snapshot.posts.filterNot { it.id == postId })
+        }
+
+    private suspend fun rewriteEverywhere(
+        postId: String,
+        ticket: AccountTicket?,
+        prefix: String = KEY_PREFIX,
+        rewrite: (UserPostsSnapshot) -> UserPostsSnapshot?,
+    ) {
         fence.commitOrWrite(ticket) {
-            dao.namingUnderPrefix(KEY_PREFIX, postId).forEach { row ->
+            dao.namingUnderPrefix(prefix, postId).forEach { row ->
                 val snapshot = runCatching { MeeshyApi.json.decodeFromString<UserPostsSnapshot>(row.payload) }.getOrNull()
                     ?: return@forEach
                 val next = rewrite(snapshot) ?: return@forEach
@@ -94,6 +116,9 @@ class UserPostsCacheRepository @Inject constructor(
     internal companion object {
         const val MAX_CACHED: Int = 100
         private const val KEY_PREFIX = "profile_posts:"
+
+        /** Not a user id (ObjectIds are hex): the saved posts live under their own key, in reach of [patchEverywhere]. */
+        private const val BOOKMARKS = "bookmarks"
         fun key(userId: String): String = KEY_PREFIX + userId
     }
 }
