@@ -14,6 +14,8 @@ extension MessagePersistenceActor {
         guard !ids.isEmpty else { return }
         Task {
             do {
+                // La ligne morte se vide d'abord (#19437) : hors ligne, elle gardait son texte sur disque.
+                try await MessageEnrichmentLaw.enforceLocalDeath(ofMessages: ids, on: self)
                 try await purgeQuoteCascade(fromDead: ids)
             } catch {
                 Logger.messages.warning("[EphemeralExpiry] purgeQuoteCascade failed \(ids.count, privacy: .public) id(s): \(error.localizedDescription, privacy: .public)")

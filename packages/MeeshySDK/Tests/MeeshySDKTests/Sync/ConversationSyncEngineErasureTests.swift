@@ -150,14 +150,33 @@ final class ConversationSyncEngineErasureTests: XCTestCase {
 
     func test_translationReceived_forAMessageThatKeepsNothing_isNotWrittenToTheTranslationCache() async throws {
         let (engine, socket, cache) = try makeEngine()
-        cache.setTranslationAdmission { _ in false }
+        cache.setTranslationAdmission { $0 != "m-scelle" }
         await engine.startSocketRelay()
 
         socket.translationReceived.send(translation(of: "m-scelle"))
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        // Une absence ne se prouve pas par un sommeil : la traduction témoin, envoyée APRÈS, est admise ; une fois
+        // cachée, celle de la ligne scellée a forcément été jugée avant elle (le relais traite dans l'ordre).
+        socket.translationReceived.send(translation(of: "m-temoin"))
+        for _ in 0..<100 {
+            if await cache.cachedTranslations(for: "m-temoin") != nil { break }
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+        let witness = await cache.cachedTranslations(for: "m-temoin")
+        XCTAssertNotNil(witness, "précondition : le relais a traité le témoin")
 
         let cached = await cache.cachedTranslations(for: "m-scelle")
         XCTAssertNil(cached, "une vue unique ouverte ne regagne pas sa traduction par un événement tardif")
+    }
+
+    func test_cacheTranslation_afterTheMessageContentWasErased_isRefusedEvenWhenAdmissionSaysYes() async throws {
+        let (_, _, cache) = try makeEngine()
+        cache.setTranslationAdmission { _ in true }
+        await cache.applyErasure(MessageContentErasure(messageId: "m-efface", conversationId: conversationId, deletedAt: Date()))
+
+        await cache.cacheTranslation(translation(of: "m-efface"))
+
+        let cached = await cache.cachedTranslations(for: "m-efface")
+        XCTAssertNil(cached, "une admission en vol ne regagne pas la traduction d'un contenu effacé")
     }
 
     func test_translationReceived_forAnOrdinaryMessage_isCachedAsBefore() async throws {

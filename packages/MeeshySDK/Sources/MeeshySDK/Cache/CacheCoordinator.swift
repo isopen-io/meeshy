@@ -111,6 +111,8 @@ public actor CacheCoordinator {
     // en lockstep ET la rehydratation disque (`loadTranslationCaches`)
     // réassigne l'ordre en bulk — deux besoins hors du contrat du helper.
     var translationCache: [String: [TranslationData]] = [:]
+    /// Les messages dont le contenu vient de partir : une admission en vol (`cacheTranslation`) ne les regagne pas.
+    var contentErasedMessageIds: Set<String> = []
     var translationTimestamps: [String: Date] = [:]
     var translationInsertionOrder: [String] = []
     /// Translations older than this are dropped at read time so stale

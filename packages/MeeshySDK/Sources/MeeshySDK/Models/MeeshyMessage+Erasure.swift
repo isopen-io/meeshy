@@ -14,6 +14,7 @@ public extension MeeshyMessage {
         sticker = nil
         location = nil
         trackedLinkMap = [:]
+        forwardedFrom = nil
     }
 
     /// Scelle le message comme vue unique **déjà ouverte** par ce lecteur (jumelle de `MessageRecord.sealAsOpenedViewOnce`).

@@ -179,11 +179,10 @@ extension MessagePersistenceActor {
                 try MessageEnrichmentLaw.erase(enrichmentsOf: record, in: db)
                 return record.conversationId
             }
+            let neighbours = awaitingConfirmation ? "" : MessageEnrichmentLaw.neighbourErasureAssignments
             try db.execute(
                 sql: """
-                    UPDATE messages SET deletedAt = ?, content = NULL, attachmentsJson = NULL, stickerJson = NULL,
-                    locationJson = NULL, trackedLinksJson = NULL,
-                    updatedAt = ?, changeVersion = changeVersion + 1
+                    UPDATE messages SET deletedAt = ?, content = NULL\(neighbours), updatedAt = ?, changeVersion = changeVersion + 1
                     WHERE localId = ? OR serverId = ?
                     """,
                 arguments: [deletedAt, Date(), localId, localId]

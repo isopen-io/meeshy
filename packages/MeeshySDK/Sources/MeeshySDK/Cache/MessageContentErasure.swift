@@ -39,6 +39,9 @@ extension CacheCoordinator {
     /// Le cache de fil ne garde du message que son enveloppe (`MeeshyMessage.eraseContent`), scellée « déjà ouverte »
     /// ou « supprimée » selon la transition, et ses traductions quittent mémoire et disque.
     public func applyErasure(_ erasure: MessageContentErasure) async {
+        // Avant le premier `await` : une admission de traduction en vol doit le voir à sa reprise.
+        if contentErasedMessageIds.count > 1_024 { contentErasedMessageIds.removeAll() }
+        contentErasedMessageIds.insert(erasure.messageId)
         await messages.upsertPatch(for: erasure.conversationId, itemId: erasure.messageId) { msg in
             if let opened = erasure.viewOnceOpenedAt { msg.sealAsOpenedViewOnce(at: opened) }
             if let deleted = erasure.deletedAt {

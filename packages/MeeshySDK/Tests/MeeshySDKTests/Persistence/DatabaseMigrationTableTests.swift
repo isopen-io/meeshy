@@ -50,6 +50,7 @@ final class DatabaseMigrationTableTests: XCTestCase {
         "messages_e2ee_plaintext_erasures_authenticated_v1",
         "messages_served_client_message_id",
         "conversation_contiguity",
+        "messages_erasure_lookup_indexes_v1",
         "messages_enrichment_sweep_v1",
     ]
 

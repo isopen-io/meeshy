@@ -66,6 +66,7 @@ public struct MessagePlaintextErasureQueue: Sendable {
     public func confirmDeletion(localId: String) async throws {
         let conversationId = try await dbWriter.write { db -> String? in
             try MessagePlaintextErasures.confirmDeletion(of: localId, in: db)
+            try MessageEnrichmentLaw.scrubNeighbours(ofMessage: localId, in: db)
             return try String.fetchOne(
                 db, sql: "SELECT conversationId FROM messages WHERE localId = ? OR serverId = ?", arguments: [localId, localId]
             )

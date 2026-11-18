@@ -75,6 +75,11 @@ extension CacheCoordinator {
             invalidateTranslations(for: msgId)
             return
         }
+        // L'acteur est réentrant : un effacement (`applyErasure`) a pu passer pendant l'attente du verdict.
+        guard !contentErasedMessageIds.contains(msgId) else {
+            invalidateTranslations(for: msgId)
+            return
+        }
         var existing = translationCache[msgId] ?? []
         let isNew = translationCache[msgId] == nil
         for translation in event.translations {
