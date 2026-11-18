@@ -160,7 +160,7 @@ public actor ConversationStore {
         for incoming in convs {
             let existing = conversations[incoming.id]
             var merged = incoming
-            if let existing, existing.userState.version > incoming.userState.version {
+            if let existing, existing.userState.holdsLocalPreferences(over: incoming.userState) {
                 merged.userState = existing.userState.preferencesGrafted(onto: incoming.userState)
             }
             // `openConversationId: nil` — le gate « conversation ouverte » n'a
