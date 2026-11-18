@@ -54,6 +54,12 @@ describe('saveStudioEdit (#9317)', () => {
     expect(calls()).toHaveLength(1);
   });
 
+  test('un PUT refusé parce que le compte a changé (IDENTITY_CHANGED) : rien d’autre ne part, et ce n’est pas un échec (audit #19352, X1)', async () => {
+    const { outcome, calls } = run({ 'PUT /api/v1/posts/s-1': { ok: false, status: 0, error: 'IDENTITY_CHANGED', code: 'IDENTITY_CHANGED' } });
+    expect(await outcome).toEqual({ kind: 'aborted', published: 0, total: 2 });
+    expect(calls()).toHaveLength(1);
+  });
+
   test('un post : le PUT seul', async () => {
     const plan = { ...storyPlan, creations: null };
     const { outcome, calls } = run({ 'PUT /api/v1/posts/s-1': { ok: true, data: { id: 's-1', type: 'POST', createdAt: '2026-10-01T10:00:00.000Z' } } }, plan);
