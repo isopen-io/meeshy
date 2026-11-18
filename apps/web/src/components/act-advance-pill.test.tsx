@@ -119,3 +119,16 @@ describe('ActAdvancePill', () => {
     expect(cache.listeners.size).toBe(0);
   });
 });
+
+describe('ActAdvanceOnSend — la pastille ne se charge qu’au premier envoi', () => {
+  test('avant tout envoi, rien n’est monté', async () => {
+    const { ActAdvanceOnSend } = await import('./act-advance-pill-lazy');
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root: Root = createRoot(host);
+    await act(async () => root.render(<ActAdvanceOnSend sent={0} />));
+    expect(host.innerHTML).toBe('');
+    await act(async () => root.unmount());
+    host.remove();
+  });
+});
