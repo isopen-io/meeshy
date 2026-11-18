@@ -37,7 +37,7 @@ const WRITERS: Readonly<Record<string, Announcement>> = {
   'routes/communities/membership.ts': { kind: 'member-broadcast' },
   'services/conversations/communityMembershipSync.ts': { kind: 'member-broadcast' },
   'routes/communities/settings.ts': { kind: 'community-deleted' },
-  'services/deactivateDeletedAccountCommunityMemberships.ts': { kind: 'silent', issue: '#18769' },
+  'services/deactivateDeletedAccountCommunityMemberships.ts': { kind: 'member-broadcast' },
 };
 
 const MARKS: Readonly<Record<Exclude<Announcement['kind'], 'silent'>, RegExp>> = {

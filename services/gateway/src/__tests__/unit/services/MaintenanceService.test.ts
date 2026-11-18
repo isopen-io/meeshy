@@ -906,8 +906,49 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
 
     await sweepDeletions(sut);
 
-    expect(deactivateCommunityMembershipsOfDeletedAccount).toHaveBeenNthCalledWith(1, prisma, 'user-a');
-    expect(deactivateCommunityMembershipsOfDeletedAccount).toHaveBeenNthCalledWith(2, prisma, 'user-b');
+    expect(deactivateCommunityMembershipsOfDeletedAccount).toHaveBeenNthCalledWith(1, prisma, 'user-a', expect.any(Function));
+    expect(deactivateCommunityMembershipsOfDeletedAccount).toHaveBeenNthCalledWith(2, prisma, 'user-b', expect.any(Function));
+  });
+
+  // #18769 — le départ d'un compte supprimé se voit chez les membres restants,
+  // par le serveur Socket.IO que le manager injecte après sa naissance.
+  it("le départ d'un compte supprimé s'annonce aux membres restants par le serveur injecté (#18769)", async () => {
+    jest.useRealTimers();
+    const prisma = makePrisma() as any;
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    prisma.community = { findFirst: jest.fn<any>().mockResolvedValue({ id: 'community-1', createdBy: 'creator-1' }) };
+    prisma.communityMember = { findMany: jest.fn<any>().mockResolvedValue([{ userId: 'member-1', role: 'member' }]) };
+    const emitted: Array<{ room: string; event: string; payload: any }> = [];
+    const io = { to: (room: string) => ({ emit: (event: string, payload: unknown) => { emitted.push({ room, event, payload }); return true; } }) };
+    const sut = new MaintenanceService(prisma, attachmentService as any);
+    sut.setShareLinkRevocationLive({ resolveIO: () => io as any });
+
+    await sweepDeletions(sut);
+    const announce = (deactivateCommunityMembershipsOfDeletedAccount as jest.Mock).mock.calls[0]![2] as (changes: unknown[]) => void;
+    announce([{ kind: 'left', communityId: 'community-1', userId: 'user-a', reason: 'removed' }]);
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(emitted.map((e) => e.room).sort()).toEqual(['user:creator-1', 'user:member-1', 'user:user-a']);
+    expect(emitted.every((e) => e.event === 'community:member-left')).toBe(true);
+    expect(emitted[0]!.payload).toEqual({
+      communityId: 'community-1',
+      userId: 'user-a',
+      reason: 'removed',
+      memberCount: 1,
+      at: expect.any(String),
+    });
+  });
+
+  it("sans serveur Socket.IO injecté, l'annonce ne fait rien et ne lève pas", async () => {
+    const prisma = makePrisma();
+    prisma.accountDeletionRequest.findMany.mockResolvedValueOnce([expiredRequest('req-a', 'user-a')]);
+    const sut = new MaintenanceService(prisma as any, attachmentService as any);
+
+    await sweepDeletions(sut);
+    const announce = (deactivateCommunityMembershipsOfDeletedAccount as jest.Mock).mock.calls[0]![2] as (changes: unknown[]) => void;
+
+    expect(() => announce([{ kind: 'left', communityId: 'community-1', userId: 'user-a', reason: 'removed' }])).not.toThrow();
   });
 
   it("une transaction qui échoue ne désactive PAS les adhésions de ce compte", async () => {
