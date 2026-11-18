@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, onRequestHookHandler } from 'fastify';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
-import { TrackingTargetCarriesEmailSecretError, isServableTrackingTarget } from '../../services/tracking-link-target';
+import { TRACKING_TARGET_IMMUTABLE, TrackingTargetCarriesEmailSecretError, hasImmutableTarget, isServableTrackingTarget } from '../../services/tracking-link-target';
 import { logError } from '../../utils/logger';
 import { UnifiedAuthRequest, isRegisteredUser } from '../../middleware/auth';
 import { trackingLinkSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -156,6 +156,12 @@ export function registerUpdateRoute(ctx: UpdateRouteContext): void {
       );
       if (body.newToken && body.newToken.length < 5 && !isPrivileged) {
         return sendBadRequest(reply, 'Le token doit contenir au moins 5 caractères');
+      }
+
+      if (body.originalUrl !== undefined && hasImmutableTarget(trackingLink)) {
+        return sendBadRequest(reply, 'La destination d\'un lien vers un contenu Meeshy ne se modifie pas', {
+          code: TRACKING_TARGET_IMMUTABLE
+        });
       }
 
       // `new URL()` ne fait que parser : `javascript:` et `data:` passaient,
