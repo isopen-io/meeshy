@@ -112,6 +112,7 @@ object SocketEventNames {
     const val COMMENT_UPDATED = "comment:updated"
 
     // community
+    const val COMMUNITY_DELETED = "community:deleted"
     const val COMMUNITY_MEMBER_JOINED = "community:member-joined"
     const val COMMUNITY_MEMBER_LEFT = "community:member-left"
     const val COMMUNITY_MEMBER_ROLE_UPDATED = "community:member-role-updated"
@@ -395,6 +396,7 @@ object SocketEventNames {
         COMMENT_TRANSLATION_UPDATED,
         COMMENT_UNLIKED,
         COMMENT_UPDATED,
+        COMMUNITY_DELETED,
         COMMUNITY_MEMBER_JOINED,
         COMMUNITY_MEMBER_LEFT,
         COMMUNITY_MEMBER_ROLE_UPDATED,
