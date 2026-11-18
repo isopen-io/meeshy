@@ -16,6 +16,14 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn(), debug: jest.fn() }) },
 }));
 
+const memoire = new Map<string, string>();
+jest.mock('../../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    get: async (key: string) => memoire.get(key) ?? null,
+    set: async (key: string, value: string) => { memoire.set(key, value); },
+  }),
+}));
+
 import { getUserInCommon } from '../../../../routes/users/in-common';
 import { clearPrivacyPreferencesCache } from '../../../../services/preferences/privacy-cache';
 
@@ -169,6 +177,7 @@ const get = async (q = '?parts=history') => {
 
 beforeEach(() => {
   mid = 0;
+  memoire.clear();
   clearPrivacyPreferencesCache();
 });
 
@@ -244,6 +253,20 @@ describe('GET /users/:id/in-common?parts=history — « Notre histoire » (#1937
       { kind: 'firstMessage', at: new Date(base).toISOString() },
       { kind: 'messages1000', at: new Date(base + 999 * 60_000).toISOString() },
     ]);
+  });
+
+  it('la date d’un jalon franchi se garde : la frise rouverte ne reparcourt pas les 1 000 messages de la paire', async () => {
+    store = pairStore('ACQUAINTANCE', 'ACQUAINTANCE', []);
+    const base = day('03-01').getTime();
+    store.messages = Array.from({ length: 1000 }, (_, i) => msg(DM, i % 2 ? V : T, new Date(base + i * 60_000)));
+    await build();
+    const premiere = (await get()).body.data.history;
+    const sauts = () => messageTable.findFirst.mock.calls.filter(([args]) => ((args as AnyRow)?.skip ?? 0) > 0).length;
+    expect(sauts()).toBe(1);
+
+    const seconde = (await get()).body.data.history;
+    expect(seconde).toEqual(premiere);
+    expect(sauts()).toBe(1);
   });
 
   it('999 messages : pas de jalon', async () => {

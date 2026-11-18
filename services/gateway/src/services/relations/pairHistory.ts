@@ -26,6 +26,18 @@ import {
   type PairHistoryItem,
 } from '@meeshy/shared/utils/profile-pair-history';
 import { niveauEffectif } from '../friendship';
+import { getCacheStore } from '../CacheStore';
+
+/**
+ * La date d'un jalon FRANCHI ne bouge plus (sauf retrait d'un message ancien) : elle se garde un
+ * jour par paire, pour qu'une frise rouverte ne reparcoure pas jusqu'à 10 000 messages par `skip`.
+ */
+const MILESTONE_CACHE_TTL_S = 86_400;
+type MilestoneCache = { get(key: string): Promise<string | null>; set(key: string, value: string, ttlSeconds?: number): Promise<void> };
+const milestoneKey = (viewerId: string, targetId: string, count: number): string => {
+  const { userLowId, userHighId } = relationPairKey(viewerId, targetId);
+  return `pair-history:milestone:${userLowId}:${userHighId}:${count}`;
+};
 
 const MEMBERSHIP_LIMIT = 5000;
 const DIRECT = 'direct';
@@ -92,10 +104,17 @@ async function messageFacts(prisma: PrismaClient, viewerId: string, targetId: st
     prisma.message.count({ where }),
   ]);
   const reached = PAIR_HISTORY_MESSAGE_MILESTONES.filter((count) => count <= total);
+  const cache: MilestoneCache = getCacheStore();
   const milestones = await Promise.all(
     reached.map(async (count) => {
+      const key = milestoneKey(viewerId, targetId, count);
+      const kept = await cache.get(key).catch(() => null);
+      const keptAt = kept ? new Date(kept) : null;
+      if (keptAt && !Number.isNaN(keptAt.getTime())) return [{ count, at: keptAt }];
       const row = await prisma.message.findFirst({ where, orderBy: { createdAt: 'asc' }, skip: count - 1, select: { createdAt: true } });
-      return row ? [{ count, at: row.createdAt }] : [];
+      if (!row) return [];
+      void cache.set(key, row.createdAt.toISOString(), MILESTONE_CACHE_TTL_S).catch(() => undefined);
+      return [{ count, at: row.createdAt }];
     }),
   );
   return { firstMessageAt: first?.createdAt ?? null, milestones: milestones.flat() };
