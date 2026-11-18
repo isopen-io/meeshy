@@ -4,7 +4,7 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
-import { lecteurDuMot, servirMot } from './friend-request-message';
+import { lecteurDuMot, relancerMotsPerdus, servirMot } from './friend-request-message';
 
 
 /**
@@ -105,6 +105,7 @@ export async function servirParties<T extends Record<string, unknown>>(
   );
 
   const langues = await lecteurDuMot(fastify, acteurId, demandes);
+  relancerMotsPerdus(fastify, acteurId, demandes, langues);
 
   if (identifiants.length === 0) {
     return demandes.map((demande) => servirMot(masquerRefus(demande, acteurId), acteurId, langues));

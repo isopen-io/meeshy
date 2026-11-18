@@ -30,6 +30,13 @@ jest.mock('../../../../services/relations/relationRequestGate', () => ({
 const declencher = jest.fn<any>(async () => undefined);
 jest.mock('../../../../services/friend-requests/FriendRequestMessageTranslationService', () => ({
   FriendRequestMessageTranslationService: { maybeShared: () => ({ trigger: declencher }) },
+  startFriendRequestMessageTranslation: () => ({ trigger: declencher }),
+}));
+const verrous = new Set<string>();
+jest.mock('../../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    setnx: async (key: string) => (verrous.has(key) ? false : (verrous.add(key), true)),
+  }),
 }));
 
 import { directoryFriendRequestsRoutes } from '../../../../routes/directory/friend-requests';
@@ -54,7 +61,7 @@ const ligne = (id: string, senderId: string, receiverId: string) => ({
 const RECUE = 'aaaaaaaaaaaaaaaaaaaaaaa1';
 const ENVOYEE = 'aaaaaaaaaaaaaaaaaaaaaaa2';
 
-async function monter(lecteur: Record<string, unknown>) {
+async function monter(lecteur: Record<string, unknown>, lignes?: () => Array<Record<string, unknown>>) {
   const prisma = {
     user: {
       findMany: jest.fn<any>(async () => []),
@@ -68,7 +75,7 @@ async function monter(lecteur: Record<string, unknown>) {
     userPreferences: { findMany: jest.fn(async () => []) },
     userPreference: { findMany: jest.fn(async () => []) },
     friendRequest: {
-      findMany: jest.fn<any>(async () => [ligne(RECUE, AUTRE, MOI), ligne(ENVOYEE, MOI, TIERS)]),
+      findMany: jest.fn<any>(async () => (lignes ? lignes() : [ligne(RECUE, AUTRE, MOI), ligne(ENVOYEE, MOI, TIERS)])),
       create: jest.fn<any>(async (args: any) => ({ ...ligne(RECUE, MOI, AUTRE), ...args.data, messageTranslations: null })),
     },
   };
@@ -157,5 +164,41 @@ describe('#19361 — l’envoi détecte la langue du mot et le remet au translat
 
     expect(declencher).not.toHaveBeenCalled();
     expect(prisma.friendRequest.create.mock.calls[0][0].data.messageOriginalLanguage).toBeUndefined();
+  });
+});
+
+describe('#19361 — un mot dont la traduction s’est perdue se relance à la lecture du destinataire', () => {
+  const FR = { systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null };
+  const perdue = (over: Record<string, unknown> = {}) => ({ ...ligne(RECUE, AUTRE, MOI), messageTranslations: null, createdAt: new Date(), ...over });
+  const lire = async (lignes: () => Array<Record<string, unknown>>) => {
+    const { app } = await monter(FR, lignes);
+    const res = await app.inject({ method: 'GET', url: `${PREFIXE}/friend-requests?direction=any` });
+    await app.close();
+    await new Promise((r) => setTimeout(r, 0));
+    return res;
+  };
+
+  it('une demande EN ATTENTE, récente, avec un mot et sans traduction dans le Prisme du destinataire relance le translator — UNE fois, malgré deux lectures', async () => {
+    declencher.mockClear();
+    verrous.clear();
+    expect((await lire(() => [perdue()])).statusCode).toBe(200);
+    await lire(() => [perdue()]);
+
+    expect(declencher).toHaveBeenCalledTimes(1);
+    expect(declencher).toHaveBeenCalledWith({ friendRequestId: RECUE, receiverId: MOI, message: 'التقينا في المهرجان', sourceLanguage: 'ar' });
+  });
+
+  it('ne relance rien pour l’émetteur, une demande tranchée, ancienne, déjà traduite, ou dont le mot est déjà dans la langue du lecteur', async () => {
+    declencher.mockClear();
+    verrous.clear();
+    await lire(() => [
+      { ...perdue(), id: 'aaaaaaaaaaaaaaaaaaaaaab1', senderId: MOI, receiverId: AUTRE },
+      perdue({ id: 'aaaaaaaaaaaaaaaaaaaaaab2', status: 'accepted' }),
+      perdue({ id: 'aaaaaaaaaaaaaaaaaaaaaab3', createdAt: new Date(Date.now() - 30 * 86_400_000) }),
+      perdue({ id: 'aaaaaaaaaaaaaaaaaaaaaab4', messageTranslations: { fr: { text: 'On s’est croisés au festival' } } }),
+      perdue({ id: 'aaaaaaaaaaaaaaaaaaaaaab5', messageOriginalLanguage: 'fr' }),
+    ]);
+
+    expect(declencher).not.toHaveBeenCalled();
   });
 });

@@ -13,8 +13,9 @@
  * messages ne s'en saisit pas (`isMessageTranslationTarget`).
  */
 
+import type { FastifyInstance } from 'fastify';
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
-import type { FriendRequestUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, type FriendRequestUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import type { ZmqTranslationClient } from '../zmq-translation/ZmqTranslationClient';
 import type { TranslationCompletedEvent } from '../zmq-translation/types';
@@ -22,6 +23,7 @@ import { translationTargetId, translationTargetNamespace } from '../zmq-translat
 import { RECIPIENT_LANG_SELECT, recipientLanguages } from '../../utils/recipient-language';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ZMQSingleton } from '../ZmqSingleton';
+import { broadcastToUser } from '../../utils/socket-broadcast';
 
 const log = enhancedLogger.child({ module: 'FriendRequestMessageTranslationService' });
 
@@ -59,10 +61,10 @@ export class FriendRequestMessageTranslationService {
   }
 
   /**
-   * Le service, branché PARESSEUSEMENT sur le client ZMQ du processus
-   * (`ZMQSingleton`, celui que `MessageTranslationService` initialise) — son
-   * écouteur est posé avant la première requête, donc avant tout retour.
-   * `null` tant que le translator n'est pas joignable : l'envoi n'en dépend pas.
+   * Le service du processus, sur le client ZMQ partagé (`ZMQSingleton`, celui que
+   * `MessageTranslationService` initialise). Posé au démarrage par
+   * {@link startFriendRequestMessageTranslation} ; une seule instance, donc un seul
+   * écouteur. `null` tant que le translator n'est pas joignable : l'envoi n'en dépend pas.
    */
   static maybeShared(prisma: PrismaClient, annonce: AnnonceTraduction | null = null): FriendRequestMessageTranslationService | null {
     const actuel = FriendRequestMessageTranslationService._shared;
@@ -161,4 +163,21 @@ export class FriendRequestMessageTranslationService {
     if (!demande) return;
     annonce(demande.receiverId, { friendRequestId });
   }
+}
+
+/**
+ * Le service de la passerelle, son annonce branchée sur Socket.IO. Appelé au DÉMARRAGE
+ * (`server.ts`, dès que le client ZMQ du processus est prêt) : l'écouteur
+ * `translationCompleted` existe alors avant tout retour du translator, quel que soit le
+ * processus qui a servi l'envoi. L'envoi l'appelle aussi, sans effet s'il est déjà posé.
+ * Au démarrage, `prisma` est passé à part : l'instance Fastify ne le décore qu'ensuite ;
+ * l'annonce, elle, résout Socket.IO à l'émission.
+ */
+export function startFriendRequestMessageTranslation(
+  fastify: FastifyInstance,
+  prisma: PrismaClient = fastify.prisma,
+): FriendRequestMessageTranslationService | null {
+  return FriendRequestMessageTranslationService.maybeShared(prisma, (receiverId, data) => {
+    broadcastToUser(fastify, receiverId, SERVER_EVENTS.FRIEND_REQUEST_UPDATED, data);
+  });
 }
