@@ -37,6 +37,9 @@ object SocketEventNames {
     const val CALL_ANALYTICS = "call:analytics"
     const val CALL_BACKGROUNDED = "call:backgrounded"
     const val CALL_CHECK_ACTIVE = "call:check-active"
+
+    /** Serveur → room de l'appel : l'appel vit désormais dans le groupe des présents (#19650). */
+    const val CALL_CONVERSATION_CHANGED = "call:conversation-changed"
     const val CALL_END = "call:end"
     const val CALL_ENDED = "call:ended"
     const val CALL_ERROR = "call:error"
@@ -327,6 +330,7 @@ object SocketEventNames {
         CALL_ANALYTICS,
         CALL_BACKGROUNDED,
         CALL_CHECK_ACTIVE,
+        CALL_CONVERSATION_CHANGED,
         CALL_END,
         CALL_ENDED,
         CALL_ERROR,

@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.call.group.GroupCallTitle
 import me.meeshy.sdk.model.call.group.GroupSignalDestination
 import me.meeshy.sdk.model.call.group.GroupSignalRouting
 import me.meeshy.sdk.model.call.group.named
+import me.meeshy.sdk.model.call.group.withMediaFrom
 import org.webrtc.VideoTrack
 
 /** Ce que la scène lit du maillage : le registre, et la vidéo reçue de chaque membre du maillage. */
@@ -91,6 +92,9 @@ internal class GroupCallMesh(
     private val knownArrivals = HashMap<String, GroupCallArrival>()
     private val servedMemberIds = HashSet<String>()
     private val departedMemberIds = HashSet<String>()
+
+    /** Les membres dont un événement a dit la caméra ou le micro : plus récent que toute lecture de la session. */
+    private val mediaAsserted = HashSet<String>()
     private var directory = GroupCallDirectory.EMPTY
     private var namesJob: Job? = null
     private var groupProbeJob: Job? = null
@@ -144,6 +148,20 @@ internal class GroupCallMesh(
     }
 
     /**
+     * L'appel est rattaché au groupe des présents (`call:conversation-changed`, #19650) : ses noms et son titre se
+     * relisent là, une fois ; avant que le groupe se prouve, la lecture qui viendra la prend. Un autre appel ne
+     * déplace rien.
+     */
+    fun moveToConversation(callId: String, conversationId: String) {
+        if (scope == null || callId != this.callId || conversationId.isBlank() || conversationId == this.conversationId) return
+        this.conversationId = conversationId
+        val reading = namesJob ?: return
+        reading.cancel()
+        namesJob = null
+        readNames()
+    }
+
+    /**
      * Un signal de l'appel arrive : `true` quand il appartient au maillage (ou à personne) et que la connexion de
      * l'appel ne doit pas le traiter. Le premier membre qui m'offre devient mon principal quand je réponds.
      */
@@ -188,7 +206,7 @@ internal class GroupCallMesh(
         servedMemberIds += userId
         departedMemberIds -= userId
         if (userId !in roster && roster.isFull) return true
-        admit(knownArrivals[userId] ?: GroupCallArrival(userId, isVideoEnabled = sendsVideo))
+        admit(knownArrivals[userId] ?: discovered(userId))
         publish()
         if (GroupSignalRouting.shouldOfferToArrival(userId, selfId, primaryUserId, isInCall = true, primaryVacated)) offer(userId)
         return true
@@ -198,6 +216,7 @@ internal class GroupCallMesh(
     fun onArrivalDetails(callId: String, arrival: GroupCallArrival) {
         if (callId != this.callId || arrival.userId == selfId) return
         knownArrivals[arrival.userId] = arrival
+        if (arrival.isAudioEnabled != null || arrival.isVideoEnabled != null) mediaAsserted += arrival.userId
         if (arrival.userId !in roster) return
         roster = roster.admitting(arrival, isPrimary = arrival.userId == primaryUserId && !primaryVacated)
         publish()
@@ -245,6 +264,7 @@ internal class GroupCallMesh(
     fun onMediaToggled(callId: String, userId: String?, mediaType: String, enabled: Boolean): Boolean {
         if (callId != this.callId || !isGroupCall || userId.isNullOrBlank()) return false
         val kind = GroupCallMediaKind.fromWire(mediaType) ?: return false
+        mediaAsserted += userId
         roster = roster.applying(kind, enabled, userId)
         publish()
         return primaryVacated || userId != primaryUserId
@@ -293,6 +313,7 @@ internal class GroupCallMesh(
         groupProbeJob = null
         directory = GroupCallDirectory.EMPTY
         departedMemberIds.clear()
+        mediaAsserted.clear()
         conversationId = ""
         detector = ActiveSpeakerDetector()
         speakingUserIds = emptySet()
@@ -322,6 +343,12 @@ internal class GroupCallMesh(
         publish()
     }
 
+    /**
+     * Un membre que rien n'a annoncé : ce que la session servie dit de lui (nom, caméra, micro), sinon rien — jamais
+     * ma caméra à moi (#19650, iOS `receive` qui recopiait `isLocalVideoEnabled`). `call:media-toggled` complète.
+     */
+    private fun discovered(userId: String): GroupCallArrival = directory.names[userId] ?: GroupCallArrival(userId)
+
     /** Admet un membre, nommé par l'annuaire là où son arrivée ne l'a pas fait. */
     private fun admit(arrival: GroupCallArrival, isPrimary: Boolean = false) {
         roster = roster.admitting(arrival, isPrimary).named(directory)
@@ -341,7 +368,7 @@ internal class GroupCallMesh(
                 if (boundCall != callId) return@collect
                 directory = read
                 servedMemberIds += read.presentIds.filter { it != selfId && it !in departedMemberIds }
-                roster = roster.named(read)
+                roster = roster.named(read).withMediaFrom(read, mediaAsserted)
                 publish()
             }
         }
@@ -366,7 +393,7 @@ internal class GroupCallMesh(
         if (existing == null && signal.kind != GroupMeshSignalKind.Offer) return
         if (existing == null) {
             if (userId !in roster && roster.isFull) return
-            admit(knownArrivals[userId] ?: GroupCallArrival(userId, isVideoEnabled = sendsVideo))
+            admit(knownArrivals[userId] ?: discovered(userId))
             publish()
         }
         (existing ?: makeLink(userId))?.receive(signal)
