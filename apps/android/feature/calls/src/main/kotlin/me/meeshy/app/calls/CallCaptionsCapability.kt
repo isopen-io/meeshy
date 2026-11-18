@@ -404,16 +404,7 @@ class CallCaptionsActionHandler @Inject constructor(
     override fun perform() = captions.advance()
 }
 
-/** « Journal » in the call's row: every sentence of the call, in a sheet the screen opens. */
-@Singleton
-class CallCaptionsJournalActionHandler @Inject constructor() : CallActionHandler {
-    override fun present(state: CallUiState): CallActionPresentation? =
-        if (state.status == CallStatus.CONNECTED) CallCaptionsPresenter.journal(state.captions) else null
-
-    override fun perform() = Unit
-}
-
-/** The two buttons, pure. */
+/** The Captions button, pure. */
 object CallCaptionsPresenter {
     fun captions(chip: CallCaptionsChip): CallActionPresentation = CallActionPresentation(
         icon = MeeshyIcons.Subtitles,
@@ -428,19 +419,6 @@ object CallCaptionsPresenter {
             else -> R.string.call_captions_state_off
         },
     )
-
-    /** Absent where captions cannot exist: an end-to-end call has no journal to open. */
-    fun journal(chip: CallCaptionsChip): CallActionPresentation? =
-        if (chip.gate.allowsCaptions) {
-            CallActionPresentation(
-                MeeshyIcons.ListChecklist,
-                R.string.call_captions_journal_title,
-                hintRes = R.string.call_captions_journal_hint,
-                captionRes = R.string.call_captions_journal,
-            )
-        } else {
-            null
-        }
 }
 
 @Module
@@ -454,9 +432,4 @@ interface CallCaptionsCapabilityModule {
     @IntoMap
     @CallActionKey(CallAction.Captions)
     fun bindCaptionsHandler(impl: CallCaptionsActionHandler): CallActionHandler
-
-    @Binds
-    @IntoMap
-    @CallActionKey(CallAction.Journal)
-    fun bindJournalHandler(impl: CallCaptionsJournalActionHandler): CallActionHandler
 }

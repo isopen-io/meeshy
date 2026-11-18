@@ -242,8 +242,6 @@ class CallCaptionsControllerTest {
         assertThat(on.hintRes).isEqualTo(R.string.call_captions_state_translated)
         assertThat(invited.hintRes).isEqualTo(R.string.call_captions_peer_active)
         assertThat(sealed.hintRes).isEqualTo(R.string.call_captions_end_to_end)
-        assertThat(CallCaptionsPresenter.journal(CallCaptionsChip(gate = CallCaptionsGate.EndToEnd))).isNull()
-        assertThat(CallCaptionsPresenter.journal(CallCaptionsChip(gate = CallCaptionsGate.Open))).isNotNull()
     }
 
     @Test

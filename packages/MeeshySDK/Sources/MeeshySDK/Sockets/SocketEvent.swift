@@ -24,6 +24,7 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case callAnalytics = "call:analytics"
     case callBackgrounded = "call:backgrounded"
     case callCheckActive = "call:check-active"
+    case callConversationChanged = "call:conversation-changed"
     case callEnd = "call:end"
     case callEnded = "call:ended"
     case callError = "call:error"

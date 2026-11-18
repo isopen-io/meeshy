@@ -767,14 +767,13 @@ try {
     /** La toile redimensionnée est repeinte à sa place : sa matrice a le rapport de sa case (aucune attente à durée fixe). */
     const repainted = () => until(page, () => { const canvas = document.querySelector('canvas[data-call-live-frame-surface]'); return canvas !== null && canvas.clientWidth > 0 && Math.abs(canvas.width / canvas.height - canvas.clientWidth / canvas.clientHeight) < 0.02; });
     const near = (a, b) => a !== undefined && b !== undefined && Math.abs(a - b) <= 1.5;
-    const toggleJournal = async () => {
-      await openActions(page);
-      return page.evaluate(() => {
-        document.querySelector('[data-call-control="journal"]')?.click();
+    /* #19670 : la seule porte du journal est « Journal » au pied des sous-titres ; colonne ouverte, le même bouton la referme. */
+    const toggleJournal = async () =>
+      page.evaluate(() => {
+        document.querySelector('[data-call-control-pill] [data-call-captions-journal]')?.click();
         const moved = document.querySelector('[data-call-live-frame-bounds]')?.getAnimations() ?? [];
         return moved.flatMap((animation) => (animation.effect?.getKeyframes() ?? []).flatMap((frame) => Object.keys(frame))).filter((key) => !['offset', 'computedOffset', 'easing', 'composite', 'transform'].includes(key));
       });
-    };
     const bounded = async (rtl) => {
       const g = await geometry();
       const side = rtl ? 'à gauche' : 'à droite';
@@ -798,6 +797,10 @@ try {
       await page.keyboard.press('Escape');
       check(await vanishes(page, '[data-call-mode]'), `${label} : Échap quitte le mode Montage`);
       check(await appears(page, 'canvas[data-call-live-frame-surface]'), `${label} : le cadre gardé se peint autour des deux vidéos`);
+      await openActions(page);
+      await page.click('[data-call-rail="call"] [data-call-captions]');
+      await page.click('[data-call-more]');
+      check(await appears(page, '[data-call-control-pill] [data-call-captions-journal]'), `${label} : les sous-titres allumés portent « Journal » à leur pied`);
       await settled();
       const before = await geometry();
       check(before.bounds !== null && near(before.bounds.width, before.viewport), `${label} : colonne fermée, la surface couvre la fenêtre (${Math.round(before.bounds?.width ?? 0)} px sur ${before.viewport})`);
