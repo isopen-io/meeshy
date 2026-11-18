@@ -119,7 +119,7 @@ export function registerDeleteMessageRoute(
       );
 
       if (!existingMessage) {
-        return sendNotFound(reply, 'Message not found');
+        return sendNotFound(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
       }
 
       // Qui peut supprimer : `admitMessageDelete`, l'unique énoncé de la règle.
@@ -206,7 +206,7 @@ export function registerDeleteMessageRoute(
       // part sur le fil (#18159).
       const deletedAt = new Date();
       if (await softDeleteMessage(prisma, messageId, { translations: null, deletedAt }) === 'already-deleted') {
-        return sendNotFound(reply, 'Message not found');
+        return sendNotFound(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
       }
 
       // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
