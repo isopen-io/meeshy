@@ -10,7 +10,7 @@ struct ProfileWriteBadgeTests {
 
     private static let leo = "665f1c2ab3d4e5f6a7b8c9d0"
 
-    private static func conversation(_ id: String, type: ConversationType = .direct, unread: Int,
+    private static func conversation(_ id: String, type: MeeshyConversation.ConversationType = .direct, unread: Int,
                                      with participant: String? = Self.leo) -> MeeshyConversation {
         MeeshyConversation(id: id, identifier: id, type: type, unreadCount: unread, participantUserId: participant)
     }
@@ -90,13 +90,13 @@ struct ProfileWriteBadgeTests {
     @Test("« Écrire » porte la pastille dans « Parler » et dans « Avec Léo »")
     func sites_passTheBadgeToWrite() throws {
         let actions = try Self.source("UserProfileSheet+ActionsFace.swift")
-        #expect(actions.contains("labeledAction(.write, badge: writeBadge"))
-        #expect(actions.contains("badge: badge?.text"))
-        #expect(actions.contains("badgeLabel: badge?.spoken"))
+        #expect(actions.contains("ProfileTalkAction(operation: .write, reach: talkReach(.write), badge: writeBadge"))
         let vitrine = try Self.source("UserProfileSheet+VitrineBlocks.swift")
-        #expect(vitrine.contains("writeBadge: writeBadge"))
-        #expect(vitrine.contains("badge: badge?.text"))
-        #expect(vitrine.contains("badgeLabel: badge?.spoken"))
+        #expect(vitrine.contains("talk(.write, badge: writeBadge"))
+        #expect(vitrine.contains("ProfileTalkAction(operation: operation"))
+        let talk = try Self.source("ProfileTalkAction.swift")
+        #expect(talk.contains("badge: badge.text"))
+        #expect(talk.contains("badgeLabel: badge.spoken"))
     }
 
     private static func source(_ name: String) throws -> String {

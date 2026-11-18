@@ -47,12 +47,12 @@ extension UserProfileSheet {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: String(localized: "profile.relation.section.talk", defaultValue: "Parler", bundle: .module))
             MeeshyActionGrid {
-                labeledAction(.write, reach: talkReach(.write)) { openConversation() }
+                ProfileTalkAction(operation: .write, reach: talkReach(.write), badge: writeBadge, tint: accentTint) {
+                    openConversation()
+                }
                 if offersCall {
-                    labeledAction(.call, reach: talkReach(.call)) { requestCall(isVideo: false) }
-                        .disabled(talkReach(.call) == .needsNetwork)
-                    labeledAction(.video, reach: talkReach(.video)) { requestCall(isVideo: true) }
-                        .disabled(talkReach(.video) == .needsNetwork)
+                    ProfileTalkAction(operation: .call, reach: talkReach(.call), tint: accentTint) { requestCall(isVideo: false) }
+                    ProfileTalkAction(operation: .video, reach: talkReach(.video), tint: accentTint) { requestCall(isVideo: true) }
                 }
                 ProfileWhereSlot.of(self, .action)
             }
@@ -60,17 +60,9 @@ extension UserProfileSheet {
         }
     }
 
-    func labeledAction(_ operation: ProfileRelationAction, hint: String? = nil, reach: ProfileTalkReach = .available,
-                       action: @escaping () -> Void) -> some View {
-        MeeshyLabeledAction(
-            title: operation.title,
-            systemImage: operation.systemImage,
-            value: ProfileStatesCopy.reachMention(reach),
-            valueKind: reach == .queued ? .accent : .quiet,
-            tint: accentTint,
-            hint: hint,
-            action: action
-        )
+    /// La pastille d'« Écrire » (#19646) : rien sur ma fiche ni quand l'un de nous a bloqué l'autre.
+    var writeBadge: ProfileWriteBadge {
+        isCurrentUser || isInteractionDisabled ? .empty : writeUnread
     }
 
     /// Hors ligne (planche `Etat-HorsLigne`) : « Écrire » partira au retour du réseau, les appels l'attendent.
