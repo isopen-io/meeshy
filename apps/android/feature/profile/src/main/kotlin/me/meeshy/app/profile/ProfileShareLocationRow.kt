@@ -206,7 +206,7 @@ private fun ProblemLine(problem: SharedLocationShareProblem, onShown: () -> Unit
 /** La feuille du choix : durée et précision, la ville par défaut (on ouvre plus, jamais l'inverse). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ShareLocationChoiceSheet(
+internal fun ShareLocationChoiceSheet(
     displayName: String,
     onDismiss: () -> Unit,
     onShare: (SharedLocationPrecision, SharedLocationShareDuration) -> Unit,

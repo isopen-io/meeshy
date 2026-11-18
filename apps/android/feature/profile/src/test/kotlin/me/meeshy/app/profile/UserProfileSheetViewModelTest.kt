@@ -19,6 +19,8 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.UserUpdatedEvent
 import me.meeshy.sdk.model.profile.ProfileLoadState
 import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.network.InMemoryNetworkMonitor
+import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.profile.ProfileCacheRepository
 import me.meeshy.sdk.profile.ProfileSheetLoader
 import me.meeshy.sdk.session.SessionRepository
@@ -46,11 +48,15 @@ class UserProfileSheetViewModelTest {
         return session
     }
 
-    private fun viewModel(vararg states: ProfileLoadState, me: MeeshyUser? = null): UserProfileSheetViewModel {
+    private fun viewModel(
+        vararg states: ProfileLoadState,
+        me: MeeshyUser? = null,
+        network: NetworkMonitor = InMemoryNetworkMonitor(),
+    ): UserProfileSheetViewModel {
         every { loader.open(any(), any(), any()) } returns flowOf(*states)
         val socket = mockk<MessageSocketManager>()
         every { socket.userUpdated } returns updates
-        return UserProfileSheetViewModel(loader, cache, socket, session(me))
+        return UserProfileSheetViewModel(loader, cache, socket, session(me), network)
     }
 
     @Test
@@ -151,5 +157,110 @@ class UserProfileSheetViewModelTest {
         vm.onEvent(UserProfileSheetEvent.Open(ProfileSheetUser(userId = "64b7f0a1c2d3e4f5a6b7c8ee", username = "eve")))
         assertThat(vm.state.value.profile).isNull()
         assertThat(vm.state.value.content).isEqualTo(ProfileSheetContent.Skeleton)
+    }
+
+    @Test
+    fun `la fiche sait que l'appareil est hors ligne et le suit au retour du reseau`() = runTest(dispatcher) {
+        val network = InMemoryNetworkMonitor(initialOnline = false)
+        val vm = viewModel(ProfileLoadState(profile = bob), network = network)
+        vm.onEvent(UserProfileSheetEvent.Open(ProfileSheetUser(userId = bob.id, username = "bob")))
+        advanceUntilIdle()
+        assertThat(vm.state.value.isOffline).isTrue()
+        assertThat(vm.state.value.showsOfflineCapsule).isTrue()
+        network.simulateOnline()
+        advanceUntilIdle()
+        assertThat(vm.state.value.isOffline).isFalse()
+        assertThat(vm.state.value.showsOfflineCapsule).isFalse()
+    }
+
+    @Test
+    fun `avant toute ouverture la feuille peint le squelette et jamais Personne ici`() = runTest(dispatcher) {
+        val vm = viewModel(ProfileLoadState(profile = bob))
+        assertThat(vm.state.value.content).isEqualTo(ProfileSheetContent.Skeleton)
+    }
+
+    @Test
+    fun `une panne hors ligne se rejoue d'elle-meme au retour du reseau, comme le message le promet`() = runTest(dispatcher) {
+        val network = InMemoryNetworkMonitor(initialOnline = false)
+        val vm = viewModel(ProfileLoadState(profileLoadFailed = true), network = network)
+        vm.onEvent(UserProfileSheetEvent.Open(ProfileSheetUser(userId = bob.id, username = "bob")))
+        advanceUntilIdle()
+        assertThat(vm.state.value.content).isEqualTo(ProfileSheetContent.Failed)
+        every { loader.open(any(), any(), any()) } returns flowOf(ProfileLoadState(profile = bob))
+        network.simulateOnline()
+        advanceUntilIdle()
+        io.mockk.verify { loader.open(bob.id, "bob", true) }
+        assertThat(vm.state.value.content).isEqualTo(ProfileSheetContent.Loaded)
+    }
+
+    @Test
+    fun `le retour du reseau ne recharge pas une fiche peinte ni un refus`() = runTest(dispatcher) {
+        val network = InMemoryNetworkMonitor(initialOnline = false)
+        val painted = viewModel(ProfileLoadState(profile = bob), network = network)
+        painted.onEvent(UserProfileSheetEvent.Open(ProfileSheetUser(userId = bob.id, username = "bob")))
+        advanceUntilIdle()
+        network.simulateOnline()
+        advanceUntilIdle()
+        io.mockk.verify(exactly = 1) { loader.open(any(), any(), any()) }
+    }
+
+    @Test
+    fun `rouverte pour une autre personne la feuille peint le squelette et jamais la fiche de la precedente`() = runTest(dispatcher) {
+        val vm = viewModel(ProfileLoadState(profile = bob))
+        val bobRequest = ProfileSheetUser(userId = bob.id, username = "bob")
+        vm.onEvent(UserProfileSheetEvent.Open(bobRequest))
+        advanceUntilIdle()
+        assertThat(vm.state.value.presentedFor(bobRequest).content).isEqualTo(ProfileSheetContent.Loaded)
+
+        val alice = ProfileSheetUser(userId = "64b7f0a1c2d3e4f5a6b7c8aa", username = "alice", displayName = "Alice")
+        val firstFrame = vm.state.value.presentedFor(alice)
+        assertThat(firstFrame.content).isEqualTo(ProfileSheetContent.Skeleton)
+        assertThat(firstFrame.profile).isNull()
+        assertThat(firstFrame.user.resolvedDisplayName).isEqualTo("Alice")
+    }
+
+    @Test
+    fun `une feuille refermee sur une panne ne se recharge pas au retour du reseau`() = runTest(dispatcher) {
+        val network = InMemoryNetworkMonitor(initialOnline = false)
+        val vm = viewModel(ProfileLoadState(profileLoadFailed = true), network = network)
+        vm.onEvent(UserProfileSheetEvent.Open(ProfileSheetUser(userId = bob.id, username = "bob")))
+        advanceUntilIdle()
+        vm.onEvent(UserProfileSheetEvent.Closed)
+        network.simulateOnline()
+        advanceUntilIdle()
+        io.mockk.verify(exactly = 1) { loader.open(any(), any(), any()) }
+    }
+
+    @Test
+    fun `rouverte apres fermeture la panne hors ligne se rejoue de nouveau au retour du reseau`() = runTest(dispatcher) {
+        val network = InMemoryNetworkMonitor(initialOnline = false)
+        val request = ProfileSheetUser(userId = bob.id, username = "bob")
+        val vm = viewModel(ProfileLoadState(profileLoadFailed = true), network = network)
+        vm.onEvent(UserProfileSheetEvent.Open(request))
+        advanceUntilIdle()
+        vm.onEvent(UserProfileSheetEvent.Closed)
+        vm.onEvent(UserProfileSheetEvent.Open(request))
+        advanceUntilIdle()
+        network.simulateOnline()
+        advanceUntilIdle()
+        io.mockk.verify(exactly = 3) { loader.open(any(), any(), any()) }
+    }
+
+    @Test
+    fun `rouverte pendant son chargement depuis une autre surface la feuille suit la nouvelle demande`() = runTest(dispatcher) {
+        every { loader.open(any(), any(), any()) } returns kotlinx.coroutines.flow.flow {
+            emit(ProfileLoadState(profile = bob))
+            kotlinx.coroutines.awaitCancellation()
+        }
+        val socket = mockk<MessageSocketManager>()
+        every { socket.userUpdated } returns updates
+        val vm = UserProfileSheetViewModel(loader, cache, socket, session(), InMemoryNetworkMonitor())
+        val fromList = ProfileSheetUser(userId = bob.id, username = "bob", accentColor = "#112233")
+        val fromThread = fromList.copy(accentColor = "#445566")
+        vm.onEvent(UserProfileSheetEvent.Open(fromList))
+        advanceUntilIdle()
+        vm.onEvent(UserProfileSheetEvent.Open(fromThread))
+        advanceUntilIdle()
+        assertThat(vm.state.value.presentedFor(fromThread).content).isEqualTo(ProfileSheetContent.Loaded)
     }
 }
