@@ -15,7 +15,7 @@ import {
   decodeParticipantJoined,
   decodeParticipantLeft,
   decodeSessionMembers,
-  decodeSessionInitiator,
+  decodeSessionPlace,
   decodeSignal,
   mapServerEndReason,
   type DecodedInitiated,
@@ -24,6 +24,7 @@ import {
 import { analyticsPayload, createTelemetry, markCaptions, markConnected, markEffects, markNegotiating, markNetworkChange, markReconnecting, qualityReport, withCodec, withSample } from './call-analytics';
 import { mediaFailureOf, stopStream, type Facing, type MediaFailure } from './call-media';
 import {
+  adoptJoinedSession,
   callStore,
   isCallLive,
   meshPhase,
@@ -552,8 +553,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     }
     session.iceServers = decodeIceServers(ack.data.iceServers) ?? session.iceServers;
     for (const member of decodeSessionMembers(ack.data.callSession)) remember(member, member.participantId, member.flags);
-    const joined = { initiatorId: decodeSessionInitiator(ack.data.callSession), conversationId: decodeSessionConversation(ack.data.callSession) };
-    update((call) => adoptJoinedSession(call, joined));
+    update((call) => adoptJoinedSession(call, decodeSessionPlace(ack.data.callSession)));
     return true;
   };
 

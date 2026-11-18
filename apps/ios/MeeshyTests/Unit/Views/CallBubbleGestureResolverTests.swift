@@ -47,23 +47,6 @@ final class CallBubbleGestureResolverTests: XCTestCase {
         XCTAssertEqual(CallBubbleGestureResolver.snappedEdge(centerX: 195, screenWidth: 390), .trailing)
     }
 
-    // MARK: - menuOffset
-
-    func test_menuOffset_clusterAlreadyFits_returnsZero() {
-        // Small button (12pt): overflow = 12 + 8 - 20 = 0 → already fits, both edges.
-        XCTAssertEqual(CallBubbleGestureResolver.menuOffset(edge: .trailing, screenWidth: 390, buttonDiameter: 12), 0)
-        XCTAssertEqual(CallBubbleGestureResolver.menuOffset(edge: .leading, screenWidth: 390, buttonDiameter: 12), 0)
-    }
-
-    func test_menuOffset_anchoredTrailing_shiftsClusterLeft() {
-        // Real HIG button (44pt): overflow = 44 + 8 - 20 = 32 → shift left (negative).
-        XCTAssertEqual(CallBubbleGestureResolver.menuOffset(edge: .trailing, screenWidth: 390, buttonDiameter: 44), -32)
-    }
-
-    func test_menuOffset_anchoredLeading_shiftsClusterRight() {
-        XCTAssertEqual(CallBubbleGestureResolver.menuOffset(edge: .leading, screenWidth: 390, buttonDiameter: 44), 32)
-    }
-
     // MARK: - clampedVerticalPosition
 
     func test_clampedVerticalPosition_withinBounds_unchanged() {

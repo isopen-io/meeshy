@@ -4,6 +4,8 @@ import Foundation
 
 public protocol ActiveCallServiceProviding: Sendable {
     func activeCall(conversationId: String) async throws -> ActiveCallSession?
+    /// `GET /calls/:callId` — the session of ONE call, read by its id (#19650).
+    func callSession(callId: String) async throws -> ActiveCallSession?
 }
 
 /// The caller's OWN live call, whatever the conversation — `GET /calls/active`,
@@ -31,6 +33,18 @@ public final class ActiveCallService: ActiveCallServiceProviding, OwnActiveCallP
             ConversationsEndpoint.byConversationIdActiveCall(conversationId: conversationId)
         )
         return response.data
+    }
+
+    /// Answers a member of the conversation AND an invitee still ringing (the
+    /// gateway admits `invitedUserIds`), where the conversation-scoped route
+    /// answers 404 to anyone who is not a member (#19650). `nil` on 404.
+    public func callSession(callId: String) async throws -> ActiveCallSession? {
+        do {
+            let response: APIResponse<ActiveCallSession> = try await api.request(CallsEndpoint.byCallId(callId: callId))
+            return response.data
+        } catch APIError.serverError(404, _) {
+            return nil
+        }
     }
 
     /// `nil` when the gateway answers 404 `NO_ACTIVE_CALL` — no call to resume.

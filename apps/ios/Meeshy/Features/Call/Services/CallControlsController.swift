@@ -95,6 +95,8 @@ final class CallControlsController: ObservableObject {
     private let viewerId: () -> String?
     private let now: () -> Date
     private let wait: @MainActor (UInt64) async -> Void
+    /// #19650 — l'appel vit désormais dans le groupe des présents.
+    private let adoptConversation: @MainActor (CallConversationChangedEvent) -> Void
     private var sentReactionTimes: [Date] = []
     private var subscription: AnyCancellable?
     private var changeForwarding: AnyCancellable?
@@ -109,7 +111,8 @@ final class CallControlsController: ObservableObject {
         viewerId: (() -> String?)? = nil,
         now: (() -> Date)? = nil,
         wait: (@MainActor (UInt64) async -> Void)? = nil,
-        events: AnyPublisher<CallControlSocketEvent, Never>? = nil
+        events: AnyPublisher<CallControlSocketEvent, Never>? = nil,
+        adoptConversation: (@MainActor (CallConversationChangedEvent) -> Void)? = nil
     ) {
         let resolvedSocket = socket ?? MessageSocketManager.shared
         self.socket = resolvedSocket
@@ -117,6 +120,7 @@ final class CallControlsController: ObservableObject {
         self.viewerId = viewerId ?? { AuthManager.shared.currentUser?.id }
         self.now = now ?? Date.init
         self.wait = wait ?? { _ = await cancellableSleep(for: .nanoseconds($0)) }
+        self.adoptConversation = adoptConversation ?? { GroupCallMeshCoordinator.shared.adoptCallConversation($0) }
         subscription = (events ?? resolvedSocket.callControlEvents)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.receive(event) }
@@ -146,6 +150,8 @@ final class CallControlsController: ObservableObject {
             notice = .mutedBy(name: host?.participantName(for: muted.byUserId) ?? "")
         case .reactionReceived(let reaction):
             show(reaction.emoji, by: author(of: reaction.userId))
+        case .conversationChanged(let changed):
+            adoptConversation(changed)
         }
     }
 

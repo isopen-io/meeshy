@@ -224,9 +224,12 @@ export function decodeSessionInitiator(session: unknown): string | null {
   return isRecord(session) ? str(session.initiatorId) : null;
 }
 
-/** La conversation où vit la session rendue par `call:join` : le groupe, pour un tête-à-tête qui a invité (#19650). */
-export function decodeSessionConversation(session: unknown): string | null {
-  return isRecord(session) ? str(session.conversationId) : null;
+/**
+ * L'admin et le lieu d'une session rendue par `call:join` (#8438, #19650) —
+ * rejoint depuis le tête-à-tête d'origine, le lieu servi est le groupe.
+ */
+export function decodeSessionPlace(session: unknown): { readonly initiatorId: string | null; readonly conversationId: string | null } {
+  return { initiatorId: decodeSessionInitiator(session), conversationId: isRecord(session) ? str(session.conversationId) : null };
 }
 
 /** `call:participant-invited` (#8433) — l'invité sonne chez tous les participants. */

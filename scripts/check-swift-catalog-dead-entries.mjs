@@ -611,7 +611,7 @@ const PENDING_CLIENT_ENTRIES = {
   'E2EeEndpoint.devicesSelfVerificationsAck': { issue: 18906, reason: 'POST /e2ee/devices/self/verifications/ack — accuser les messages de comparaison lus, même lot iOS' },
 };
 
-const BASELINE_DEAD_ENTRIES = 327;
+const BASELINE_DEAD_ENTRIES = 326;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

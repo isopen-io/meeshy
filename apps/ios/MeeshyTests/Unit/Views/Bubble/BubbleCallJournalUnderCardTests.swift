@@ -193,6 +193,35 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
         XCTAssertTrue(view.contains("CallTranscriptStore.shared.transcript(for:"))
     }
 
+    // MARK: - #19687 — le journal entier, dans une zone bornée qui défile seule
+
+    func test_listHeight_shortJournal_keepsItsNaturalHeight() {
+        XCTAssertEqual(CallJournalUnderCardSizing.listHeight(natural: 120, limit: 400), 120)
+        XCTAssertFalse(CallJournalUnderCardSizing.scrolls(natural: 120, limit: 400))
+    }
+
+    func test_listHeight_longJournal_isBounded_andScrolls() {
+        XCTAssertEqual(CallJournalUnderCardSizing.listHeight(natural: 3_000, limit: 400), 400)
+        XCTAssertTrue(CallJournalUnderCardSizing.scrolls(natural: 3_000, limit: 400))
+    }
+
+    func test_listHeight_unmeasured_imposesNothing() {
+        XCTAssertNil(CallJournalUnderCardSizing.listHeight(natural: 0, limit: 400))
+    }
+
+    func test_card_boundsTheJournal_theSheetsKeepTheirNaturalHeight() throws {
+        let view = try card()
+        XCTAssertTrue(view.contains("listMaxHeight: CallJournalUnderCardSizing.listMaxHeight"), "Sous la carte, la liste est bornée.")
+        let section = AppSourceGuard.stripComments(try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift"))
+        XCTAssertTrue(section.contains("var listMaxHeight: CGFloat? = nil"), "Les feuilles, qui défilent déjà, gardent la hauteur naturelle.")
+        XCTAssertTrue(section.contains("ScrollView(.vertical)"))
+        XCTAssertTrue(section.contains("CallJournalUnderCardSizing.listHeight(natural: naturalListHeight, limit: limit)"))
+        XCTAssertFalse(section.contains(".prefix("), "Rien n'est coupé : toutes les phrases sont dans la zone.")
+        for sheet in ["Meeshy/Features/Contacts/CallDetailSheet.swift", "Meeshy/Features/Main/Views/Bubble/BubbleCallNoticeView.swift"] {
+            XCTAssertFalse(try source(sheet).contains("listMaxHeight"), "\(sheet) garde la liste entière à sa hauteur.")
+        }
+    }
+
     func test_card_loadsNothingWhileTheToggleIsClosed() throws {
         let view = try card()
         XCTAssertTrue(view.contains(".task(id:"))
