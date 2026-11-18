@@ -9,17 +9,30 @@
  * (#19650 a créé ce fichier le 2026-11-18 à ~10h37, #19525 avait fusionné à
  * ~03h05), avec la graphie NUE.
  *
- * ─── Pourquoi ce n'était PAS un piège armé ────────────────────────────────
+ * ─── Pourquoi ce n'est PAS un piège armé, et par quel chemin ──────────────
  *
  * Le seul verrou en amont est `resolveActiveCallParticipant`
  * (`socketio/call-participants.ts`), et il ne pose que la question de la
  * participation à la SESSION D'APPEL (`!p.leftAt`) — jamais celle de
- * l'appartenance à la CONVERSATION. Un membre banni PENDANT qu'il est dans
- * l'appel — le cas nominal, un modérateur bannissant en cours d'appel — garde
- * sa ligne de session et passe. Son emoji était alors persisté sur la bulle du
- * fil, diffusé en `reaction:added` à toute la room de la conversation dont il
- * venait d'être banni, et faisait remonter cette conversation en tête de la
- * liste de chaque participant.
+ * l'appartenance à la CONVERSATION.
+ *
+ * **Le chemin n'est pas « bannir pendant l'appel »**, et le dire ainsi serait
+ * faux : `resolveBanWrite` (`conversationBanState.ts`, seul écrivain de
+ * `bannedAt`) écrit `isActive: false` quand la cible est ACTIVE, donc le filtre
+ * NU refusait déjà ce cas — et le bannissement sort en prime la personne de
+ * l'appel (`endCallParticipationForDepartedMember`).
+ *
+ * L'état `isActive: true, bannedAt ≠ null` est produit par une COURSE :
+ * `REJOIN_PARTICIPANT_STATE` rallume `isActive` sans effacer `bannedAt`
+ * (délibérément : « une rentrée ne débannit personne, et les trois portes
+ * refusent un banni en amont »), et les trois portes de rentrée n'ont pas la
+ * garde que `restore-for-me` porte DANS son `where`. Un bannissement qui tombe
+ * entre la décision `rejoin` et son écriture laisse donc la ligne vivante ET
+ * bannie — #19688, qui tarit la source.
+ *
+ * Avec cette ligne, l'emoji était persisté sur la bulle du fil, diffusé en
+ * `reaction:added` à toute la room de la conversation, et faisait remonter
+ * cette conversation en tête de la liste de chaque participant.
  *
  * ─── DEUX témoins, et aucun ne subsume l'autre ────────────────────────────
  *
@@ -37,6 +50,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { reflectCallReactionOnBubble } from '../callReactionOnBubble';
 import { PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
+import { participantKeyWhere } from '../../../socketio/departed-member-participant-where';
 import { findFirstIn } from '../../../__tests__/helpers/mongo-where';
 
 const CALL = '64b7f0c2a1b2c3d4e5f60718';
@@ -46,7 +60,9 @@ const USER = '64b7f0c2a1b2c3d4e5f6071b';
 type MembershipRow = {
   readonly id: string;
   readonly conversationId: string;
-  readonly userId: string;
+  /** ABSENT pour un invité de lien : il n'a aucune ligne `User` à viser. */
+  readonly userId?: string;
+  readonly type?: string;
   readonly isActive: boolean;
   /** `undefined` = colonne ABSENTE du document, l'état de l'immense majorité. */
   readonly bannedAt?: Date | null;
@@ -63,6 +79,14 @@ const bannedButActive: MembershipRow = {
 
 /** La ligne nominale : active, jamais bannie, donc colonne ABSENTE. */
 const living: MembershipRow = { id: 'p-bob', conversationId: GROUP, userId: USER, isActive: true };
+
+/**
+ * L'INVITÉ DE LIEN : aucune colonne `userId`, et la clé que la socket remet est
+ * son propre `Participant.id`. C'est la seconde question à laquelle ce `where`
+ * répondait faux, et son symptôme était un `return false` silencieux — jamais
+ * une erreur.
+ */
+const linkGuest: MembershipRow = { id: USER, conversationId: GROUP, type: 'anonymous', isActive: true };
 
 function harness(membership: MembershipRow) {
   const emitted: Array<{ readonly room: string; readonly event: string }> = [];
@@ -98,7 +122,7 @@ function harness(membership: MembershipRow) {
 }
 
 describe('la réaction d’appel sur la bulle exige une participation VIVANTE (#19676)', () => {
-  it('COMPORTEMENT — banni mais encore dans l’appel : rien n’est posé sur la bulle, rien n’est diffusé', async () => {
+  it('COMPORTEMENT — une ligne vivante ET bannie (course de rentrée) : rien n’est posé sur la bulle, rien n’est diffusé', async () => {
     const h = harness(bannedButActive);
 
     await expect(h.reflect()).resolves.toBe(false);
@@ -115,15 +139,36 @@ describe('la réaction d’appel sur la bulle exige une participation VIVANTE (#
     );
   });
 
-  it('PROJECTION — le `where` de l’auteur PORTE la loi, mot pour mot', async () => {
+  it('COMPORTEMENT — un INVITÉ DE LIEN réagit sur la bulle : sa clé est son `Participant.id`, pas un `userId`', async () => {
+    const h = harness(linkGuest);
+
+    await expect(h.reflect()).resolves.toBe(true);
+    expect(h.reactions.addReaction).toHaveBeenCalledWith(
+      expect.objectContaining({ participantId: USER, allowCallBubble: true })
+    );
+  });
+
+  it('PROJECTION — le `where` PORTE les DEUX prédicats, composés par `AND` et non par spread', async () => {
     const h = harness(living);
 
     await h.reflect();
 
     expect(h.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { conversationId: GROUP, userId: USER, ...PARTICIPATION_VIVANTE },
+        where: { conversationId: GROUP, AND: [participantKeyWhere(USER), PARTICIPATION_VIVANTE] },
       })
     );
+  });
+
+  it('PROJECTION — aucun des deux `OR` n’écrase l’autre : le `where` émis en porte DEUX', () => {
+    // Le piège de composition, assert sur la FORME plutôt que sur un
+    // commentaire : `participantKeyWhere` et `PARTICIPATION_VIVANTE` rendent
+    // chacun une clé `OR`, et un double spread n'en laisserait qu'UNE.
+    const spread = { ...participantKeyWhere(USER), ...PARTICIPATION_VIVANTE };
+    expect(Object.keys(spread).filter((k) => k === 'OR')).toHaveLength(1);
+    expect(spread.OR).toEqual(PARTICIPATION_VIVANTE.OR);
+
+    const composed = { AND: [participantKeyWhere(USER), PARTICIPATION_VIVANTE] };
+    expect(composed.AND.filter((branch) => 'OR' in branch)).toHaveLength(2);
   });
 });

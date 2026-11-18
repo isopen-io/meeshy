@@ -210,12 +210,24 @@ function project(row: MongoDocument, select: MongoDocument): MongoDocument {
       const nested = wanted as MongoDocument & { readonly select?: MongoDocument; readonly include?: MongoDocument; readonly where?: MongoDocument; readonly take?: number };
       const unknown = Object.keys(nested).filter((arg) => !SUPPORTED_NESTED_SELECT_ARGS.has(arg));
       if (unknown.length > 0) throw new Error(`double Mongo: sélection non supportée « ${key}.${unknown.join(', ')} »`);
-      const value = has(row, key) ? row[key] : null;
+      // `where` et `take` ne sont valides que sur une relation TO-MANY : Prisma
+      // refuse les deux sur une relation to-one. C'est donc le discriminant que
+      // ce double n'avait pas — faute de schéma, il ne pouvait pas distinguer
+      // une relation absente d'un scalaire absent, et rendait `null` là où
+      // Prisma rend `[]`. Un `.some()` sur ce `null` JETTE un TypeError, ce qui
+      // rend vert tout témoin assertant un `rejects.toThrow()` sans message.
+      const declaredToMany = nested.where !== undefined || nested.take !== undefined;
+      const value = has(row, key) ? row[key] : declaredToMany ? [] : null;
       if (Array.isArray(value)) {
         const kept = (value as MongoDocument[]).filter((related) => matchesMongoWhere(related, nested.where));
         const taken = nested.take === undefined ? kept : kept.slice(0, nested.take);
         return [[key, taken.map((related) => hydrate(related, nested))]];
       }
+      // Un `where`/`take` posé sur ce qui n'est PAS une liste : Prisma refuse la
+      // requête, et le double le refusait en SILENCE en laissant passer le
+      // document entier non filtré — soit la panne exacte qu'une porte écrite
+      // sous cette forme produirait, attestée verte.
+      if (declaredToMany) throw new Error(`double Mongo: « ${key}.where/take » sur une relation qui n'est pas une liste`);
       if (!isPlainDocument(value)) return [[key, null]];
       return [[key, hydrate(value as MongoDocument, nested)]];
     })
@@ -248,12 +260,38 @@ function compareBy(orderBy: readonly MongoDocument[]) {
  *
  * Prisma refuse les deux ensemble sur un même niveau ; ce double le refuse
  * aussi, plutôt que d'en choisir un en silence.
+ *
+ * ─── Ce que `include` NE rend PAS, et pourquoi ce double doit le retirer ───
+ *
+ * Une relation TO-MANY que l'`include` ne nomme PAS est absente de ce que
+ * Prisma rend. La laisser passer rendrait ce double **plus permissif que la
+ * production** — le cas le plus coûteux pour un double qui atteste des gardes :
+ * un site qui lit une relation qu'il a oublié d'inclure obtient `undefined` en
+ * production (garde INERTE) et un tableau peuplé ici (garde appliquée, témoin
+ * VERT). Les listes de documents sont donc retirées du report, sauf celles que
+ * l'`include` nomme.
+ *
+ * **La limite qui SUBSISTE, dite parce qu'une limite qu'on ne dit pas redevient
+ * un angle mort** : faute de schéma, ce double ne peut pas distinguer une
+ * relation TO-ONE d'un type COMPOSITE embarqué (`anonymousSession`), que Prisma
+ * rend sans qu'on l'inclue. Un document embarqué non nommé par l'`include`
+ * reste donc reporté — sur-inclusif pour une relation to-one, juste pour un
+ * composite. Et un SCALAIRE absent du document reste absent au lieu de sortir
+ * `null` : `include` ne connaît pas la liste des colonnes, donc ne peut pas les
+ * null-remplir comme `project` le fait depuis son `select`.
  */
+const isDocumentList = (value: unknown): boolean =>
+  Array.isArray(value) && value.some((item) => isPlainDocument(item));
+
 function hydrate(row: MongoDocument, args: { readonly select?: MongoDocument; readonly include?: MongoDocument }): MongoDocument {
   if (args.select && args.include) throw new Error('double Mongo: `select` et `include` au même niveau');
   if (args.select) return project(row, args.select);
-  if (args.include) return { ...row, ...project(row, args.include) };
-  return { ...row };
+  if (!args.include) return { ...row };
+  const included = args.include;
+  const carried = Object.fromEntries(
+    Object.entries(row).filter(([key, value]) => !isDocumentList(value) || has(included, key))
+  );
+  return { ...carried, ...project(row, included) };
 }
 
 /**

@@ -140,9 +140,19 @@ export class ReactionService {
             // amont, et son audit a prédit qu'« un sixième transport qui
             // résoudrait son participant à la main ne rougirait nulle part ».
             // Il est arrivé trois heures plus tard (`callReactionOnBubble.ts`,
-            // #19650) et la graphie nue y était LIVE, le verrou d'appel ne
-            // posant que la question de la session (#19676). La convergence est
-            // le seul endroit qui rende le septième gratuit.
+            // #19650), le verrou d'appel ne posant que la question de la
+            // session (#19676). La convergence est le seul endroit qui rende le
+            // septième gratuit.
+            //
+            // **L'état refusé est produit par du code VIVANT**, et pas par
+            // celui qu'on croit : bannir un membre ACTIF écrit `isActive: false`
+            // (`conversationBanState.ts`, seul écrivain de la colonne), donc le
+            // filtre nu refusait déjà ce cas. Le producteur est une COURSE entre
+            // une rentrée et un bannissement — `REJOIN_PARTICIPANT_STATE`
+            // rallume `isActive` sans effacer `bannedAt`, sur la foi que « les
+            // trois portes refusent un banni en amont », ce qui ne tient pas
+            // dans la fenêtre entre la décision `rejoin` et son écriture
+            // (#19688, qui tarit la source).
             //
             // **Et le RETRAIT n'est pas touché par ce resserrement** :
             // `removeReaction` n'interroge AUCUNE ligne de participation (il

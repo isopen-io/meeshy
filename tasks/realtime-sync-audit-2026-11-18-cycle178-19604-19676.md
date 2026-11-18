@@ -77,18 +77,56 @@ const activeParticipant = callSession.participants.find(
 );
 ```
 
-Aucune question d'appartenance à la CONVERSATION. Un membre banni **pendant**
-qu'il est dans l'appel — un modérateur qui bannit en cours d'appel, le cas
-nominal — garde sa ligne de session, passe le verrou, et son emoji :
+Aucune question d'appartenance à la CONVERSATION. Avec une ligne vivante ET
+bannie, l'emoji :
 
 1. est **persisté** comme réaction sur la bulle « Appel … en cours » du fil ;
 2. part en **`reaction:added` à `conversation:<id>`** — la room de la
-   conversation dont il vient d'être banni ;
+   conversation dont la personne est bannie ;
 3. fait **remonter cette conversation en tête de liste** de chaque participant
    (`recordConversationActivity`) ;
 4. crédite l'axe d'engagement et note l'interaction de paire.
 
 Ouvert en **#19676** et livré ici.
+
+### Mesure 3 bis — et ma première explication du CHEMIN était fausse
+
+Publiée dans le commit, le commentaire de code, l'issue, la PR et la leçon :
+« un membre banni **pendant** qu'il est dans l'appel ». **Réfutée par l'audit
+adversarial du lot**, et il avait raison :
+
+```
+resolveBanWrite(participant, bannedAt)        ← conversationBanState.ts, SEUL écrivain de bannedAt
+  participant.isActive === false  ⇒ { bannedAt }
+  sinon                          ⇒ { bannedAt, isActive: false, leftAt: bannedAt }
+```
+
+Bannir un membre ACTIF écrit donc `isActive: false` : **le filtre NU refusait
+déjà ce cas**, et le bannissement appelle en prime
+`endCallParticipationForDepartedMember`, qui sort la personne de l'appel.
+
+Le producteur réel est une COURSE entre une rentrée et un bannissement, et il
+est pire que ce que j'avais écrit parce qu'il ne demande aucune ligne héritée :
+
+| t | | état de la ligne |
+|---|---|---|
+| t1 | invitation d'un ex-membre non banni ⇒ `outcome: 'rejoin'` | `isActive: false` |
+| t2 | un modérateur bannit ; la cible est lue `isActive: false` ⇒ `resolveBanWrite` n'écrit QUE `bannedAt` | `isActive: false` |
+| t3 | le bannissement commet | `isActive: false, bannedAt` |
+| t4 | l'invitation commet `{ ...REJOIN_PARTICIPANT_STATE }`, qui rallume `isActive` et n'efface PAS `bannedAt` | **`isActive: true, bannedAt ≠ null`** |
+
+`REJOIN_PARTICIPANT_STATE` laisse `bannedAt` délibérément, et sa note dit
+pourquoi : « une rentrée ne débannit personne, et les trois portes refusent un
+banni **en amont** ». C'est le pari, et il ne tient pas dans la fenêtre t1→t4 :
+les trois portes de rentrée n'ont pas la garde que `restore-for-me` porte DANS
+son `where`, dont le commentaire nomme exactement cette course. Ouvert en
+**#19688**, et c'est le lot qui TARIT la source.
+
+> **Une leçon de méthode juste, bâtie sur une instance fausse, est plus
+> dangereuse qu'une leçon absente** — c'est elle que le prochain auditeur citera
+> comme prémisse, et il la citera avec confiance parce que la méthode tient.
+> Vérifier l'instance tenait en une commande : énumérer les `data:` qui écrivent
+> la colonne. Il y en a UN.
 
 ## Le lot
 
@@ -171,8 +209,90 @@ inventaire faux transformerait une erreur de mesure en vérité de dépôt — l
 cycle 107 avait JETÉ son balayage plutôt que de le geler, et c'était le bon
 geste.
 
+## L'audit adversarial, et les trois choses qu'il a BLOQUÉES
+
+Le lot a été soumis à l'agent `auditeur-adversarial` avant fusion (directive
+#9226, un lot de contrôle d'accès). Il n'a pas bloqué le code — « les deux
+resserrements sont justes, la loi la plus étroite est le bon choix pour un `where`
+de droit d'agir, aucun consommateur du sur-ensemble n'en est affecté » — et il a
+bloqué **trois** choses, dont deux étaient du TEXTE. Les trois sont corrigées ici.
+
+### a-1 — le `where` que ce lot venait de réécrire répondait faux à une SECONDE question
+
+`input.userId` vient de `resolveActiveCallParticipant`, dont le doc-comment dit
+que ce champ **retombe sur le `Participant.id` pour un invité de lien** (pas de
+ligne `User` à viser). `where: { userId: <Participant.id> }` n'apparie donc rien,
+et le symptôme est un `return false` SILENCIEUX : **l'emoji d'un invité de lien
+n'atterrissait jamais sur la bulle du fil**, quand celui de tout inscrit y
+atterrissait. Le `CLAUDE.md` du service documente exactement ce piège (« une
+requête `Participant` sur cette clé doit choisir sa COLONNE […] le symptôme est
+une liste VIDE, pas une erreur »), et la graphie juste — `participantKeyWhere`,
+#10473 — vit à vingt lignes de là, dans le module dont ce lot cite le verrou.
+
+> **Toucher une ligne au nom d'une loi n'exempte pas de relire les AUTRES
+> questions qu'elle pose.** J'ai audité ce `where` sur l'appartenance, qui était
+> ma question, et j'ai recopié l'identité sans la lire. Un `where` répond à
+> autant de questions qu'il a de clauses.
+
+Les deux prédicats se composent par **`AND`** et jamais par double spread :
+chacun rend une clé `OR`, et le second écraserait le premier en silence. Un
+témoin assert cette forme, parce qu'un commentaire ne rougit pas.
+
+### d-1 — la primitive partagée est arrivée sans un seul témoin à elle
+
+L'audit l'a mesuré par mutation : faire que `include` se comporte comme `select`
+— détruire précisément « la différence qui décide d'un défaut d'appartenance » —
+laissait **2 047 témoins verts** sur les 101 suites consommatrices. Retirer le
+garde-fou `select` + `include` passait de même.
+
+`__tests__/helpers/mongo-where-include.test.ts` existe maintenant, et il tombe
+sous les **quatre** mutations, dont la plus coûteuse — celle du sens PERMISSIF.
+
+> **Une primitive de test est du code de production pour les témoins qui la
+> consomment.** Le dépôt l'écrit déjà dans l'autre sens (« un double de test ment
+> aussi par ce qu'il ACCEPTE ») ; la conséquence est que **ce qui atteste doit
+> être attesté**, et que « les 2 047 témoins consommateurs passent » ne mesure
+> pas la primitive — il mesure qu'aucun d'eux ne l'interroge.
+
+Et trois écarts à Prisma sont corrigés dans le même geste, par un seul
+discriminant : `where`/`take` ne sont valides que sur une relation TO-MANY. Un
+to-many absent du document rend donc `[]` et non `null` (sans quoi un `.some()`
+JETTE, ce qui rend vert tout témoin assertant un `rejects.toThrow()` sans
+message) ; un `where` posé sur une relation to-one est REFUSÉ au lieu de laisser
+passer le document non filtré ; et une relation to-many que l'`include` ne nomme
+pas n'est plus reportée — c'était le seul écart **permissif**, celui qui rend un
+témoin vert sur une garde inerte. Les deux écarts qui SUBSISTENT (composite
+indistinguable d'une to-one, scalaire absent non null-rempli) sont gelés **comme
+écarts** : un écart documenté par un témoin se relit comme une décision, un écart
+tacite comme un bug.
+
+### Ce que l'audit a trouvé À CÔTÉ, et qui ne part pas dans ce lot
+
+Quatre constats hors périmètre, chacun devenu une issue plutôt qu'une ligne de
+ce journal. Le plus instructif est **#19689** : la porte d'ENTRÉE dans l'appel
+(`call-participants.ts:38`) épelle la loi NUE, donc une ligne vivante et bannie
+**rejoint l'appel** — signalisation, média, audio et vidéo. C'est la leçon 275
+retournée contre ce lot : *j'ai mesuré la protection sur la chaîne (l'emoji) et
+pas sur ce qui voyage à côté (le flux live), dans le fichier même dont mon
+commentaire cite le verrou.*
+
+**Je ne l'ai pas corrigée ici, et la raison est celle de ce cycle.** Ce module
+déclare HUIT gardes de sévérité croissante et son doc-comment prévient que « s'en
+tromper ne lève rien » : fermer celle-là seule serait exactement le geste
+porte-par-porte dont la leçon de ce lot dit qu'il tient trois heures. La question
+de #19689 n'est pas « cette ligne est-elle juste ? » mais « **lesquelles des huit
+portent la loi ?** », et c'est un lot d'instruction.
+
 ## Suivis
 
+- **#19688** — les TROIS portes de rentrée, producteur VIVANT de l'état que toute
+  cette famille refuse. À traiter **avant** #19677 : tarir la source rend les 199
+  resserrements moins urgents, et l'inverse n'est pas vrai.
+- **#19689** — la porte d'entrée dans l'appel, et les sept autres gardes du module.
+- **#19690** — « Ensemble » inerte pour toute la population (`leftAt: null` en
+  égalité sous MongoDB), trouvé en chemin, hors périmètre.
+- **#19691** — les trois jumelles de la réaction sans loi à leur convergence : la
+  prédiction de #19604 leur est intacte.
 - **#19677** — la dette des 199 sites, triée par famille, avec son balayage dans
   le dépôt (jamais dans un journal : cycle 87 bis).
 - **#19603** reste ouverte et INTOUCHÉE, instruite ci-dessus : elle se décide aux

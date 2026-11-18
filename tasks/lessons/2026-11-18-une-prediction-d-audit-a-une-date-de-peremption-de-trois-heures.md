@@ -12,9 +12,37 @@ et elle avait raison au moment où elle l'écrivait. Le sixième transport est
 arrivé le **même jour**, trois heures plus tard, par un lot qui parlait d'autre
 chose — #19650 a créé `services/calls/callReactionOnBubble.ts` avec la graphie
 NUE `isActive: true`, et le seul verrou en amont ne pose que la question de la
-session d'appel. Un membre banni **pendant** qu'il est dans l'appel écrivait donc
-une réaction dans la conversation dont il venait d'être banni, diffusée à toute
-la room.
+session d'appel.
+
+### Et ma première rédaction de cette leçon était fausse sur son INSTANCE
+
+J'ai d'abord écrit que le chemin était « un membre banni **pendant** qu'il est
+dans l'appel ». L'audit adversarial du lot l'a réfuté, et il avait raison :
+`resolveBanWrite` (`conversationBanState.ts`, **seul écrivain de `bannedAt`**)
+écrit `isActive: false` quand la cible est ACTIVE — le filtre NU refusait donc
+déjà ce cas, et le bannissement sort en prime la personne de l'appel
+(`endCallParticipationForDepartedMember`). Le scénario que je publiais était
+**irréalisable**.
+
+Le vrai producteur est une COURSE, et il est pire : `REJOIN_PARTICIPANT_STATE`
+rallume `isActive: true` sans effacer `bannedAt`, délibérément, sur la foi d'une
+phrase écrite à côté — « une rentrée ne débannit personne, et les trois portes
+refusent un banni **en amont** ». Les trois portes de rentrée n'ont pas la garde
+que `restore-for-me` porte DANS son `where`, et dont le commentaire nomme
+exactement cette fenêtre. Un bannissement qui tombe entre la décision `rejoin` et
+son écriture laisse donc la ligne **vivante ET bannie**, par du code vivant
+(#19688).
+
+> **Une leçon de MÉTHODE juste, bâtie sur une INSTANCE fausse, est plus
+> dangereuse qu'une leçon absente** : c'est elle que le prochain auditeur citera
+> comme prémisse, et il la citera avec confiance parce que la méthode, elle,
+> tient. J'avais la bonne règle (« la qualification d'un suivi vieillit ») et je
+> l'ai illustrée par un scénario que je n'avais pas ouvert jusqu'au seul écrivain
+> de la colonne. **Le prix d'une instance non mesurée est payé par qui s'y
+> appuie, pas par qui l'écrit.**
+
+Et la vérification tenait en une commande : énumérer les `data:` qui écrivent
+`bannedAt`. Il y en a UN.
 
 ### Ce que ça change à la lecture d'un suivi
 
