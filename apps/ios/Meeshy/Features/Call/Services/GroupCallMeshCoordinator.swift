@@ -47,6 +47,8 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
     /// #11292 — le pair principal est un encodage parmi d'autres : le maillage lui
     /// pose le même plafond que ses liens ; `nil` le lui rend entier.
     private let primaryVideoCeiling: @MainActor (CallVideoBudget?) -> Void
+    /// #19650 — le nom que CallKit montre de l'appel (écran verrouillé, Récents).
+    private let systemCallName: @MainActor (String) -> Void
 
     private var links: [String: any GroupPeerLinkProviding] = [:]
     private var iceServers: [IceServer] = []
@@ -77,7 +79,8 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         activeCalls: any ActiveCallServiceProviding = ActiveCallService.shared,
         now: @escaping () -> Date = Date.init,
         samplingInterval: Duration = .milliseconds(400),
-        primaryVideoCeiling: @escaping @MainActor (CallVideoBudget?) -> Void = { CallManagerHost.shared.manager?.builtWebRTCService?.setGroupVideoCeiling($0) }
+        primaryVideoCeiling: @escaping @MainActor (CallVideoBudget?) -> Void = { CallManagerHost.shared.manager?.builtWebRTCService?.setGroupVideoCeiling($0) },
+        systemCallName: @escaping @MainActor (String) -> Void = { name in CallManagerHost.shared.manager.map { CallKitCallName.report(name, on: $0) } }
     ) {
         self.linkFactory = linkFactory
         self.signaling = signaling
@@ -85,6 +88,7 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         self.now = now
         self.samplingInterval = samplingInterval
         self.primaryVideoCeiling = primaryVideoCeiling
+        self.systemCallName = systemCallName
         self.roster = GroupCallRoster(localUserId: "")
     }
 
@@ -115,6 +119,20 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
     }
 
     private var isGroupCall: Bool { isGroupConversation(host?.groupConversationId) }
+
+    /// #19650 — l'appel lancé en tête-à-tête vit désormais dans le groupe des
+    /// présents : réactions, messages et transcription y vont. Le groupe est
+    /// marqué AVANT que l'hôte ne change de conversation : l'appel ne cesse
+    /// jamais d'être de groupe, et le maillage reste lié au même `callId`,
+    /// liens ouverts compris. Aucune navigation forcée.
+    func adoptCallConversation(_ event: CallConversationChangedEvent) {
+        guard let host, event.callId == host.groupCallId, !event.conversationId.isEmpty,
+              host.groupConversationId != event.conversationId else { return }
+        markGroupConversation(event.conversationId, title: event.conversationTitle)
+        host.groupConversationId = event.conversationId
+        syncWithHost()
+        systemCallName(roster.callTitle(groupTitle: event.conversationTitle))
+    }
 
     /// #9085 — le principal a quitté un groupe qui continue. Son siège reste
     /// vide jusqu'à la fin de l'appel : le maillage porte alors TOUS les
@@ -312,14 +330,23 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         guard existing != nil || signal.kind == .offer else { return }
         if existing == nil {
             guard roster.contains(userId) || !roster.isFull else { return }
-            // Un membre découvert par son offre n'a rien annoncé de ses médias :
-            // il suit, jusqu'à son premier `media-toggled`, la nature de l'appel.
-            let isVideoCall = host?.isLocalVideoEnabled ?? false
-            roster = roster.admitting(GroupCallArrival(userId: userId, isVideoEnabled: isVideoCall))
+            if !roster.contains(userId) { roster = roster.admitting(servedArrival(of: userId)) }
             enrichNamesIfNeeded()
         }
         guard let link = existing ?? makeLink(to: userId) else { return }
         Task { await link.receive(signal) }
+    }
+
+    /// Un membre découvert par son offre n'a rien annoncé de ses médias : la
+    /// session servie dit les SIENS (#19650) ; sans elle, caméra éteinte jusqu'à
+    /// son premier `media-toggled` — jamais MA caméra, qui ne dit rien de la sienne.
+    private func servedArrival(of userId: String) -> GroupCallArrival {
+        let served = knownSession?.participants.first { $0.userId == userId }
+        return GroupCallArrival(
+            userId: userId,
+            isAudioEnabled: served?.isMuted.map { !$0 },
+            isVideoEnabled: served?.isVideoOff.map { !$0 }
+        )
     }
 
     private func buffer(_ signal: GroupCallIncomingSignal, from userId: String) {
@@ -466,23 +493,28 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
     }
 
     /// L'appareil qui REJOINT un groupe ne reçoit aucun `participant-joined`
-    /// pour les membres déjà là : leurs noms viennent de l'appel actif (REST).
-    /// Lu UNE fois par appel, puis réappliqué à chaque membre découvert plus tard.
+    /// pour les membres déjà là : leurs noms et leurs médias viennent de la
+    /// session de l'appel, lue par son id (#19650) — `GET /calls/:id` répond à
+    /// l'invité qui n'est pas encore membre, là où la route de conversation lui
+    /// répond 404. Lue UNE fois par appel, puis ses noms se réappliquent à
+    /// chaque membre découvert plus tard.
     private func enrichNamesIfNeeded() {
         guard let callId = boundCallId else { return }
         if let knownSession, knownSession.id == callId {
-            enrich(with: knownSession, callId: callId)
+            enrich(with: knownSession, callId: callId, appliesMedia: false)
             return
         }
-        guard enrichedCallIds[callId] == nil, let conversationId = host?.groupConversationId else { return }
+        guard enrichedCallIds[callId] == nil else { return }
         enrichedCallIds[callId] = true
         Task { [weak self, activeCalls] in
-            guard let session = try? await activeCalls.activeCall(conversationId: conversationId) else { return }
-            self?.enrich(with: session, callId: callId)
+            guard let session = try? await activeCalls.callSession(callId: callId) else { return }
+            self?.enrich(with: session, callId: callId, appliesMedia: true)
         }
     }
 
-    private func enrich(with session: ActiveCallSession, callId: String) {
+    /// Les médias servis ne s'appliquent qu'à la LECTURE de la session : une
+    /// session déjà lue ne revient jamais sur un `media-toggled` plus récent.
+    private func enrich(with session: ActiveCallSession, callId: String, appliesMedia: Bool) {
         guard boundCallId == callId, session.id == callId else { return }
         knownSession = session
         session.participants
@@ -491,7 +523,13 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         roster = session.participants.reduce(roster) { current, participant in
             guard current.contains(participant.userId) else { return current }
             let name = participant.user?.displayName ?? participant.user?.username
-            return current.admitting(GroupCallArrival(userId: participant.userId, displayName: name, avatarURL: participant.user?.avatar))
+            return current.admitting(GroupCallArrival(
+                userId: participant.userId,
+                displayName: name,
+                avatarURL: participant.user?.avatar,
+                isAudioEnabled: appliesMedia ? participant.isMuted.map { !$0 } : nil,
+                isVideoEnabled: appliesMedia ? participant.isVideoOff.map { !$0 } : nil
+            ))
         }
     }
 
