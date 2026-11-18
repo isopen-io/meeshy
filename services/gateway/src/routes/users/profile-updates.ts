@@ -320,19 +320,23 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       //
       // Seul un nom qui A CHANGÉ part (#19298) : l'iOS publié renvoie les trois
       // noms inchangés à chaque enregistrement. Un REJEU repart, lui, sans
-      // comparer — la ligne lue avant lui est déjà l'écrite, et la reprise doit
-      // refaire cette propagation, qui converge (état absolu). Elle part ICI,
+      // comparer. Les instantanés Participant se réécrivent TOUJOURS (zéro ligne
+      // en régime établi) ; si la réécriture répare des lignes périmées — écriture
+      // voisine tombée, adhésion concurrente, reprise après réservation
+      // abandonnée —, la diffusion part aussi : la base diffusait à la reprise. Elle part ICI,
       // avant les écritures voisines qui peuvent lever : une reprise sans
       // rejeu, qui ne change plus rien, ne diffuserait plus.
-      if (touchesName && PUBLIC_NAME_FIELDS.some(propagates)) {
-        const publicChanges = {
-          displayName: updatedUser.displayName,
-          firstName: updatedUser.firstName,
-          lastName: updatedUser.lastName,
-          username: updatedUser.username,
-        };
-        await refreshParticipantNameSnapshots(fastify.prisma, userId!, publicChanges)
-          .catch((err: unknown) => logError(fastify.log, '[PROFILE_UPDATE] participant name refresh failed', err));
+      const publicChanges = {
+        displayName: updatedUser.displayName,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        username: updatedUser.username,
+      };
+      const repairedSnapshots = touchesName
+        ? await refreshParticipantNameSnapshots(fastify.prisma, userId!, publicChanges)
+          .catch((err: unknown) => { logError(fastify.log, '[PROFILE_UPDATE] participant name refresh failed', err); return 0; })
+        : 0;
+      if (touchesName && (PUBLIC_NAME_FIELDS.some(propagates) || repairedSnapshots > 0)) {
         fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: publicChanges })
           .catch((err: unknown) => logError(fastify.log, '[PROFILE_UPDATE] emitUserUpdated failed', err));
 

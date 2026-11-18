@@ -62,6 +62,8 @@ const stored = {
   password: 'hash',
 };
 
+let SNAPSHOT_NAME = 'Alice Cooper';
+
 const makePrisma = (written: Record<string, unknown> = {}) => ({
   userPreferences: { findMany: jest.fn<any>(async () => []) },
   userPreference: { findMany: jest.fn<any>(async () => []) },
@@ -74,7 +76,11 @@ const makePrisma = (written: Record<string, unknown> = {}) => ({
     updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
   },
   messageAttachment: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'att-own' }) },
-  participant: { updateMany: jest.fn<any>().mockResolvedValue({ count: 3 }) },
+  participant: {
+    updateMany: jest.fn<any>(async (args: { where: { displayName: { not: string } } }) => ({
+      count: SNAPSHOT_NAME === args.where.displayName.not ? 0 : 3,
+    })),
+  },
 });
 
 const build = async (prisma: ReturnType<typeof makePrisma>, route: (app: FastifyInstance) => Promise<void>) => {
@@ -97,7 +103,8 @@ const build = async (prisma: ReturnType<typeof makePrisma>, route: (app: Fastify
 };
 
 describe('PATCH /users/me — le corps publié par l’iOS (noms inchangés + bio) ne diffuse rien (#19298)', () => {
-  it('ni user:updated, ni réécriture des instantanés, ni cache de frappe', async () => {
+  it('ni user:updated, ni ligne réécrite, ni cache de frappe quand les instantanés sont cohérents', async () => {
+    SNAPSHOT_NAME = 'Alice Cooper';
     const prisma = makePrisma({ bio: 'Nouvelle bio' });
     const { app, emitUserUpdated, refreshUserTypingIdentity } = await build(prisma, updateUserProfile);
     const res = await app.inject({
@@ -107,12 +114,28 @@ describe('PATCH /users/me — le corps publié par l’iOS (noms inchangés + bi
     });
     expect(res.statusCode).toBe(200);
     expect(emitUserUpdated).not.toHaveBeenCalled();
-    expect(prisma.participant.updateMany).not.toHaveBeenCalled();
+    await expect(prisma.participant.updateMany.mock.results[0].value).resolves.toEqual({ count: 0 });
     expect(refreshUserTypingIdentity).not.toHaveBeenCalled();
     await app.close();
   });
 
+  it('des instantanés périmés réparés par un enregistrement aux noms inchangés sont rediffusés (audit B)', async () => {
+    SNAPSHOT_NAME = 'Ancien Nom';
+    const prisma = makePrisma({ bio: 'Nouvelle bio' });
+    const { app, emitUserUpdated, refreshUserTypingIdentity } = await build(prisma, updateUserProfile);
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { firstName: 'Alice', lastName: 'Cooper', displayName: 'Alice Cooper', bio: 'Nouvelle bio' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(emitUserUpdated).toHaveBeenCalledTimes(1);
+    expect(refreshUserTypingIdentity).toHaveBeenCalledWith(USER_ID);
+    await app.close();
+  });
+
   it('un vrai changement de nom diffuse toujours', async () => {
+    SNAPSHOT_NAME = 'Alice Cooper';
     const prisma = makePrisma({ displayName: 'Alicia' });
     const { app, emitUserUpdated, refreshUserTypingIdentity } = await build(prisma, updateUserProfile);
     const res = await app.inject({
