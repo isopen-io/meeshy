@@ -506,7 +506,7 @@ export async function registerMembershipRoutes(
       const member = existingMember
         ? await fastify.prisma.communityMember.update({
             where: { id: existingMember.id },
-            data: { isActive: true, leftAt: null, role: CommunityRole.MEMBER as string, joinedVia: 'invited', joinCountry: null },
+            data: { isActive: true, leftAt: null, joinedAt: new Date(), role: CommunityRole.MEMBER as string, joinedVia: 'invited', joinCountry: null },
             include: {
               user: {
                 select: {

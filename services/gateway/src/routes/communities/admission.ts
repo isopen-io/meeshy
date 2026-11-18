@@ -48,7 +48,8 @@ export type Admission = {
  * Fait entrer `userId`. Une ligne ACTIVE n'est pas réécrite (rendue telle
  * quelle, `admitted: false`) ; une ligne laissée par un départ se RÉACTIVE
  * (#5760) — créer en sa présence ferait une seconde ligne pour la paire —, et
- * le rôle repart de MEMBER.
+ * le rôle repart de MEMBER et `joinedAt` prend la date de CE retour (les
+ * statistiques d'entrée, #19429, se lisent dessus).
  */
 export async function admitCommunityMember(
   fastify: FastifyInstance,
@@ -66,7 +67,7 @@ export async function admitCommunityMember(
   const member = existing
     ? await fastify.prisma.communityMember.update({
         where: { id: existing.id },
-        data: { ...entry, isActive: true, leftAt: null },
+        data: { ...entry, isActive: true, leftAt: null, joinedAt: new Date() },
         include: { user: { select: MEMBER_USER_SELECT } }
       })
     : await fastify.prisma.communityMember.create({

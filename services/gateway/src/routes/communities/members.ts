@@ -347,6 +347,7 @@ const community = await fastify.prisma.community.findFirst({
           data: {
             isActive: true,
             leftAt: null,
+            joinedAt: new Date(),
             /* istanbul ignore next -- AddMemberSchema's `role` is `.optional().default(CommunityRole.MEMBER)`, so Zod's own parse() already guarantees a defined value here */
             role: (validatedData.role || CommunityRole.MEMBER) as string,
             joinedVia: 'invited',
