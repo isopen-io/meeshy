@@ -224,13 +224,15 @@ final class LocationMapScreensKitTests: XCTestCase {
         for word in Self.handMade { XCTAssertFalse(header.contains(word), "en-tête : \(word) posé sur place") }
     }
 
-    func test_bloodHistory_isAK44Overline_andAK34Figure_withTheStopsAsUnit() throws {
+    func test_bloodHistory_isAK44Overline_overAK44SentenceHeading_withTheStopsAtItsEnd() throws {
         let history = try slice("Features/SharedLocation/Map/BloodLocationSheet.swift",
                                 from: "private var history: some View", to: "private var dayPoints")
         XCTAssertTrue(history.contains("MeeshySectionHeader(title: BloodLocationCopy.lastDays"), "« 30 derniers jours » est un en-tête K44")
         XCTAssertTrue(history.contains("form: .overline"), "en sur-titre")
-        XCTAssertTrue(history.contains("MeeshyFigure(value: BloodLocationCopy.summary("), "le chiffre du jour est K34")
-        XCTAssertTrue(history.contains("unit: BloodLocationCopy.stops(model.stops.count)"), "« 4 arrêts » est l'unité du chiffre")
+        XCTAssertTrue(history.contains("MeeshySectionHeader(title: BloodLocationCopy.summary("),
+                      "la phrase du jour est un titre K44 : en-tête VoiceOver, et elle suit Dynamic Type")
+        XCTAssertFalse(history.contains("MeeshyFigure("), "une phrase ne se loge pas dans le chiffre K34 (taille fixe, une ligne)")
+        XCTAssertTrue(history.contains("detail: BloodLocationCopy.stops(model.stops.count)"), "« 4 arrêts » est le détail de fin de l'en-tête")
         XCTAssertTrue(history.contains("MeeshyChart(kind: .strip"), "la frise des trente jours reste")
         for word in Self.handMade { XCTAssertFalse(history.contains(word), "historique : \(word) posé sur place") }
     }
