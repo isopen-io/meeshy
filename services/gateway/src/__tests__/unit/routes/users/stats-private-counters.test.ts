@@ -169,8 +169,15 @@ describe('Un PROCHE reçoit « En chiffres » (#19371)', () => {
     userPreference: { findMany: jest.fn<any>(async () => []) },
   });
 
-  it('sert messages et traductions au Proche, jamais les fils ni les demandes reçues', async () => {
+  it('ne sert rien au Proche d\'un compte qui n\'a RIEN réglé : le défaut reste fermé tant que #19372 n\'est pas tranchée', async () => {
     const app = await monter(avecLien('CLOSE'), TIERS);
+    const data = (await lire(app)).json().data ?? {};
+    await app.close();
+    expect(PRIVES.filter((c) => c in data)).toEqual([]);
+  });
+
+  it('sert messages et traductions au Proche d\'un compte qui les a ouverts, jamais les fils ni les demandes reçues', async () => {
+    const app = await monter(avecLien('CLOSE', { showProfileFigures: true }), TIERS);
     const data = (await lire(app)).json().data ?? {};
     await app.close();
     expect(data.totalMessages).toBe(69);

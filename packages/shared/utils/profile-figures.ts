@@ -18,8 +18,13 @@
  */
 import type { ProfileCircleView } from './profile-circle-view.js';
 
-/** Le défaut d'une personne qui n'a rien réglé (provisoire, #19372). */
-export const PROFILE_FIGURES_DEFAULT = true;
+/**
+ * Le défaut d'une personne qui n'a rien réglé : FERMÉ tant que le porteur n'a pas tranché
+ * (#19372). #4161 rendait ces compteurs intimes, ils comptent tous les messages du sujet —
+ * conversations chiffrées comprises —, et aucun compte existant n'a vu le réglage : un défaut
+ * ouvert les servirait sans consentement. Seule une ouverture explicite les montre au Proche.
+ */
+export const PROFILE_FIGURES_DEFAULT = false;
 
 export const profileFiguresShared = (stored: unknown): boolean =>
   typeof stored === 'boolean' ? stored : PROFILE_FIGURES_DEFAULT;

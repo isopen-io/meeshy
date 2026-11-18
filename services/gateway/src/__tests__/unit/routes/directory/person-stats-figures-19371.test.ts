@@ -166,8 +166,13 @@ const lecture = async (viewerId: string | null, row: ReturnType<typeof lien> | n
 };
 
 describe('?expand=stats — « En chiffres » à un Proche (#19371)', () => {
-  it('un Proche reçoit messages et traductions, jamais les fils ni les demandes reçues', async () => {
-    const stats = await lecture(LECTEUR, lien('CLOSE', 'CLOSE'));
+  it('un Proche d un compte qui n a RIEN réglé ne reçoit rien : le défaut reste fermé tant que #19372 n est pas tranchée', async () => {
+    expect(CHIFFRES(await lecture(LECTEUR, lien('CLOSE', 'CLOSE')))).toEqual(ABSENTS);
+    expect(CHIFFRES(await lecture(CIBLE, null, '?as=CLOSE&expand=stats'))).toEqual(ABSENTS);
+  });
+
+  it('un Proche reçoit messages et traductions d un compte qui les a ouverts, jamais les fils ni les demandes reçues', async () => {
+    const stats = await lecture(LECTEUR, lien('CLOSE', 'CLOSE'), '?expand=stats', { privacy: { showProfileFigures: true } });
     expect(CHIFFRES(stats)).toEqual(SERVIS);
     expect(INTIMES(stats)).toEqual(FERMES);
     expect('totalConversations' in stats).toBe(false);
@@ -204,8 +209,8 @@ describe('?expand=stats — « En chiffres » à un Proche (#19371)', () => {
   });
 
   it('« Voir comme » Proche montre au propriétaire ce que ses Proches reçoivent ; « Voir comme » Ami, rien', async () => {
-    expect(CHIFFRES(await lecture(CIBLE, null, '?as=CLOSE&expand=stats'))).toEqual(SERVIS);
-    expect(CHIFFRES(await lecture(CIBLE, null, '?as=FRIEND&expand=stats'))).toEqual(ABSENTS);
+    expect(CHIFFRES(await lecture(CIBLE, null, '?as=CLOSE&expand=stats', { privacy: { showProfileFigures: true } }))).toEqual(SERVIS);
+    expect(CHIFFRES(await lecture(CIBLE, null, '?as=FRIEND&expand=stats', { privacy: { showProfileFigures: true } }))).toEqual(ABSENTS);
     expect(INTIMES(await lecture(CIBLE, null, '?as=BLOOD&expand=stats'))).toEqual(FERMES);
   });
 
@@ -220,7 +225,7 @@ describe('?expand=stats — « En chiffres » à un Proche (#19371)', () => {
 
   it('À CÔTÉ du champ gardé : un succès dont la métrique est fermée ne part pas (son `current` dirait le compte)', async () => {
     expect(succes(await lecture(LECTEUR, null))).toEqual(['fidele', 'polyglotte']);
-    expect(succes(await lecture(LECTEUR, lien('CLOSE', 'CLOSE')))).toEqual(['bavard', 'fidele', 'polyglotte', 'traducteur']);
+    expect(succes(await lecture(LECTEUR, lien('CLOSE', 'CLOSE'), '?expand=stats', { privacy: { showProfileFigures: true } }))).toEqual(['bavard', 'fidele', 'polyglotte', 'traducteur']);
     expect(succes(await lecture(CIBLE, null))).toEqual(['bavard', 'connecteur', 'fidele', 'polyglotte', 'populaire', 'traducteur']);
   });
 });

@@ -22,12 +22,12 @@ const servedAt = (granted: RelationLevel, stored?: unknown, overrides: Partial<P
 
 describe('« En chiffres » d une autre personne (#19371)', () => {
   it('s ouvre au Proche et au-dessus, jamais sous le Proche', () => {
-    expect(['PUBLIC', 'COMMUNITY', 'ACQUAINTANCE', 'FRIEND'].map((level) => servedAt(level as RelationLevel))).toEqual([false, false, false, false]);
-    expect(['CLOSE', 'BLOOD'].map((level) => servedAt(level as RelationLevel))).toEqual([true, true]);
+    expect(['PUBLIC', 'COMMUNITY', 'ACQUAINTANCE', 'FRIEND'].map((level) => servedAt(level as RelationLevel, true))).toEqual([false, false, false, false]);
+    expect(['CLOSE', 'BLOOD'].map((level) => servedAt(level as RelationLevel, true))).toEqual([true, true]);
   });
 
   it('suit le niveau EFFECTIF : un Proche accordé d un seul côté reste un Ami', () => {
-    expect(servedAt('CLOSE', undefined, { grantedByTarget: 'FRIEND' })).toBe(false);
+    expect(servedAt('CLOSE', true, { grantedByTarget: 'FRIEND' })).toBe(false);
   });
 
   it('la personne qui a coupé sa préférence ne montre rien, même au Sang', () => {
@@ -39,13 +39,19 @@ describe('« En chiffres » d une autre personne (#19371)', () => {
     expect(servedAt('CLOSE', 'oui')).toBe(PROFILE_FIGURES_DEFAULT);
   });
 
+  it('tant que #19372 n est pas tranchée, un compte qui n a RIEN réglé ne montre rien, même au Sang : #4161 rendait ces chiffres intimes, et aucun compte existant n a consenti', () => {
+    expect(PROFILE_FIGURES_DEFAULT).toBe(false);
+    expect(servedAt('CLOSE', undefined)).toBe(false);
+    expect(servedAt('BLOOD', undefined)).toBe(false);
+  });
+
   it('un blocage ou un compte désactivé ferme tout', () => {
     expect(servedAt('BLOOD', true, { blockedEitherWay: true })).toBe(false);
     expect(servedAt('BLOOD', true, { targetDeactivated: true })).toBe(false);
   });
 
   it('« Voir comme » suit la même loi pour le cercle demandé', () => {
-    const asCircle = (level: RelationLevel) => profileFiguresServed({ view: resolveProfileCircleViewAs({ level, targetId: 'target' }), showProfileFigures: undefined });
+    const asCircle = (level: RelationLevel) => profileFiguresServed({ view: resolveProfileCircleViewAs({ level, targetId: 'target' }), showProfileFigures: true });
     expect(asCircle('FRIEND')).toBe(false);
     expect(asCircle('CLOSE')).toBe(true);
   });
