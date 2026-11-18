@@ -5,6 +5,7 @@ import { registerRelationRitual } from './ritual';
 import { registerRelationSettings } from './settings';
 import { registerRelationNowPlaying } from './nowPlaying';
 import { registerRelationLocations } from './locations';
+import { registerRelationLocationRequest } from './locationRequest';
 import { registerRelationBloodLocation } from './bloodLocation';
 import { registerRelationBattery } from './battery';
 import { registerRelationPhoneReachability } from './phone-reachability';
@@ -17,6 +18,7 @@ import { registerRelationPhoneReachability } from './phone-reachability';
 export async function relationsRoutes(fastify: FastifyInstance): Promise<void> {
   registerRelationNowPlaying(fastify);
   registerRelationLocations(fastify);
+  registerRelationLocationRequest(fastify);
   registerRelationBloodLocation(fastify);
   registerRelationBattery(fastify);
   registerRelationPhoneReachability(fastify);

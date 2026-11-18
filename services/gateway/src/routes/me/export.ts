@@ -25,6 +25,9 @@ import { exportGame } from './export-game';
 import { exportReadingActivity } from './export-reading';
 import { relationsExportSchema } from './export-relations';
 import { exportRelations } from '../../services/relations/relationExport';
+import { exportSharedLocationEndsOf } from '../../services/sharedLocation/sharedLocationDeps';
+import { exportProfileLinkVisitsOf } from '../../services/profile-link-visits/profileLinkVisits';
+import { exportSentInvitationsOf } from '../../services/referrals/emailInvitations';
 import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
 import { PROFILE_ADDRESS_EXPORT_SELECT, withExportedAddresses } from './export-addresses';
 
@@ -77,10 +80,12 @@ function parseTypes(raw: string | undefined): ExportType[] {
  *
  * Exported for direct behavioural testing of the neutralization.
  */
+const isStructured = (val: unknown): boolean => typeof val === 'object' && val !== null && !(val instanceof Date);
+
 export function toCsv(headers: string[], rows: Record<string, unknown>[]): string {
   const FORMULA_TRIGGERS = /^[=+\-@\t\r]/;
   const escape = (val: unknown): string => {
-    const raw = val === null || val === undefined ? '' : String(val);
+    const raw = val === null || val === undefined ? '' : isStructured(val) ? JSON.stringify(val) : String(val);
     const str = FORMULA_TRIGGERS.test(raw) ? `'${raw}` : raw;
     return str.includes(',') || str.includes('"') || str.includes('\n')
       ? `"${str.replace(/"/g, '""')}"`
@@ -626,6 +631,8 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
               // #18862 — la ville déclarée et le cercle qui la lit.
               city: true,
               cityCircle: true,
+              // #19201 — la couleur d'accent choisie pour la vitrine.
+              profileAccentColor: true,
               avatar: true,
               banner: true,
               systemLanguage: true,
@@ -651,8 +658,14 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
           });
 
           // Les adresses de plus de 12 mois ne se servent plus, purge armée ou non.
+          // #19206 : l'agrégat des visites de son lien de profil, jour par jour.
+          // #19207 : ses invitations par e-mail, l'adresse de chaque tiers masquée.
           exportData.profile = user
-            ? await withExportedAddresses(fastify.prisma, userId, withoutExpiredConnectionTraces(user, new Date()))
+            ? {
+                ...(await withExportedAddresses(fastify.prisma, userId, withoutExpiredConnectionTraces(user, new Date()))),
+                profileLinkVisits: await exportProfileLinkVisitsOf(fastify.prisma, userId),
+                emailInvitations: await exportSentInvitationsOf(fastify.prisma, userId),
+              }
             : user;
         }
 
@@ -837,7 +850,10 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
         }
 
         if (requestedTypes.includes('relations')) {
-          exportData.relations = await exportRelations(fastify.prisma, userId, page);
+          exportData.relations = {
+            ...(await exportRelations(fastify.prisma, userId, page)),
+            sharedLocationEnds: await exportSharedLocationEndsOf(userId, (error) => logger.warn('[DataExport] fins de partage de position non lues', error)),
+          };
         }
 
         if (requestedTypes.includes('packs')) {

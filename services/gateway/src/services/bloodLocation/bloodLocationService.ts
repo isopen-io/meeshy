@@ -29,6 +29,7 @@ import {
   type BloodLocationSettingsPayload,
 } from '@meeshy/shared/types/blood-location';
 import { pairAccessAmong } from '../relations/pairAccess';
+import { writeLocationGhost } from '../sharedLocation/locationGhost';
 import { relationConsentGrantedAmong } from '../relations/relationConsent';
 import { alertBloodProximity, isPlausibleMove } from './bloodProximity';
 import { openPoint, sealPoint } from './bloodLocationSeal';
@@ -132,7 +133,7 @@ async function viewerMayRead(deps: BloodLocationDeps, viewerId: string, ownerId:
  * de l'observateur prend l'heure de cette lecture au lieu d'en ajouter une — un observateur qui lit
  * en boucle ne gonfle pas le journal (au plus seuil + 1 lignes par jour).
  */
-async function noteConsultation(deps: BloodLocationDeps, observedId: string, observerId: string): Promise<void> {
+export async function noteConsultation(deps: BloodLocationDeps, observedId: string, observerId: string): Promise<void> {
   const now = deps.now();
   const stamp = { consultedAt: new Date(now), expiresAt: new Date(now + HISTORY_MS) };
   const ofPair = { observedId, observerId };
@@ -209,7 +210,7 @@ export async function updateBloodLocationSettings(deps: BloodLocationDeps, owner
   const at = new Date(deps.now());
   if (settings.userId === undefined) {
     if (settings.ghost === undefined) return { ok: false };
-    await deps.prisma.user.update({ where: { id: ownerId }, data: { locationGhostAt: settings.ghost ? at : null } });
+    await writeLocationGhost(deps.prisma, ownerId, settings.ghost, at);
     return { ok: true };
   }
   if (settings.userId === ownerId || !(await locationMayOpenWith(deps, ownerId, settings.userId))) return { ok: false };

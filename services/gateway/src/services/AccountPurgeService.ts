@@ -17,6 +17,8 @@ import { eraseCallTelemetryOf } from './calls/callTelemetryPrivacy';
 import { eraseE2EEDataOfUser } from './e2ee/device-retirement';
 import { eraseExternalPeerHandlesOpenedBy } from './external-conversation/erase-external-peers';
 import { eraseProfileAddressesOf } from './profile-addresses/address-links';
+import { eraseProfileLinkVisitsOf } from './profile-link-visits/profileLinkVisits';
+import { eraseSentInvitationsOf } from './referrals/emailInvitations';
 import type { ShareLinkRevocationLive } from './cleanupExpiredData';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
@@ -61,6 +63,10 @@ export type AccountPurgeSummary = {
   /** Le numéro des amis d'un réseau tiers qu'il avait ouverts (#17117) : gardé pour lui seul, il ne sert plus personne. */
   readonly externalPeerHandlesDeleted: number;
   readonly profileAddressesDeleted: number;
+  /** L'agrégat des visites de son lien de profil, par jour (#19206). */
+  readonly profileLinkVisitDaysDeleted: number;
+  /** Ses invitations par e-mail (#19207) : chacune porte l'adresse d'un tiers. */
+  readonly emailInvitationsDeleted: number;
 };
 
 export type AccountPurgeOptions = {
@@ -141,7 +147,7 @@ export async function purgeAccountIsolatedData(
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
   if (!isValidObjectId(userId)) throw new Error('INVALID_USER_ID');
-  const [sessions, pushTokens, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles, profileAddresses] =
+  const [sessions, pushTokens, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles, profileAddresses, profileLinkVisitDays, emailInvitations] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
       prisma.pushToken.deleteMany({ where: { userId } }),
@@ -177,6 +183,10 @@ export async function purgeAccountIsolatedData(
       eraseExternalPeerHandlesOpenedBy(prisma, userId),
       // #18863 : ses adresses de fiche partent, et leurs liens de suivi se ferment.
       eraseProfileAddressesOf(prisma, userId),
+      // #19206 : l'agrégat des visites de son lien de profil.
+      eraseProfileLinkVisitsOf(prisma, userId),
+      // #19207 : ses invitations par e-mail, adresses de tiers comprises.
+      eraseSentInvitationsOf(prisma, userId),
       // #13937 : l'historique de position du Sang et le journal de ses consultations partent avec le compte.
       prisma.bloodLocationPoint.deleteMany({ where: { ownerId: userId } }),
       prisma.bloodLocationConsultation.deleteMany({ where: { OR: [{ observedId: userId }, { observerId: userId }] } }),
@@ -204,6 +214,8 @@ export async function purgeAccountIsolatedData(
     e2eeErased: e2ee,
     externalPeerHandlesDeleted: externalPeerHandles,
     profileAddressesDeleted: profileAddresses,
+    profileLinkVisitDaysDeleted: profileLinkVisitDays,
+    emailInvitationsDeleted: emailInvitations,
   };
 
   logger.info(
@@ -215,7 +227,7 @@ export async function purgeAccountIsolatedData(
       `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
       `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} packOwnerships=${packs.ownershipsDeleted} partnerProfiles=${packs.partnerProfilesDeleted} ` +
       `impressions=${readingTelemetry.impressions} engagements=${readingTelemetry.engagements} ` +
-      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry} externalPeerHandles=${externalPeerHandles} profileAddresses=${profileAddresses}`
+      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry} externalPeerHandles=${externalPeerHandles} profileAddresses=${profileAddresses} profileLinkVisitDays=${profileLinkVisitDays} emailInvitations=${emailInvitations}`
   );
 
   return summary;
@@ -302,6 +314,10 @@ export async function anonymizeUserIdentity(
       // #18862 — la ville DÉCLARÉE est une donnée personnelle : elle part avec le compte, et son réglage aussi.
       city: null,
       cityCircle: null,
+      // #19201 — la couleur d'accent de la vitrine se voit des autres : elle part avec le compte.
+      profileAccentColor: null,
+      // #19203 — le fantôme global de position est un réglage du compte : il part avec lui.
+      locationGhostAt: null,
       searchTokens: [],
       blockedUserIds: [],
       referralCode: null,

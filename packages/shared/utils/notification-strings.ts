@@ -41,6 +41,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'battery.criticalAction', 'battery.probablyOffAction', 'battery.backOnAction', 'battery.chargingAction', 'battery.rechargedAction',
   'battery.levelBody', 'battery.offBody',
   'unreachable.action', 'unreachable.reachableAction', 'unreachable.sinceBody', 'unreachable.batteryBody', 'unreachable.reachableBody',
+  'location.startedAction', 'location.startedBody', 'location.startedBodyMinutes', 'location.extendAction', 'location.reaskAction', 'location.requestBody',
   'game.duoInvitedAction', 'game.duoInvitedBody', 'game.duoAcceptedAction', 'game.duoAcceptedBody',
   'game.leaguePromoted', 'game.leagueStayed', 'game.leagueRelegated',
   'game.leagueCupGold', 'game.leagueCupSilver', 'game.leagueCupBronze',
