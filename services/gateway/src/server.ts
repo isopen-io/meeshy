@@ -94,6 +94,7 @@ import { agentInternalTokenConfigured } from './services/AgentHttpClient';
 import { warnPushConfiguration } from './services/push-transport-config';
 import { typedErrorResponse } from './errors/custom-errors';
 import { prismaRecipientAddressLookup, registerEmailRecipientLookup } from './services/email/recipient-policy';
+import { PRISMA_SERVED_RESULTS } from './utils/prismaServedResults';
 
 // ============================================================================
 // CONFIGURATION & ENVIRONMENT
@@ -230,20 +231,9 @@ class MeeshyServer {
       logger.info('🌐 Gateway starting in HTTP mode');
     }
 
-    const stripDataUri = (v: string | null | undefined) => (v?.startsWith('data:') ? null : v ?? null);
     this.prisma = new PrismaClient({
       log: ['warn', 'error'],
-    }).$extends({
-      result: {
-        user: {
-          avatar: { needs: { avatar: true }, compute: (u) => stripDataUri(u.avatar) },
-          banner: { needs: { banner: true }, compute: (u) => stripDataUri(u.banner) },
-        },
-        conversation: {
-          avatar: { needs: { avatar: true }, compute: (c) => stripDataUri(c.avatar) },
-        },
-      },
-    }) as unknown as PrismaClient;
+    }).$extends({ result: PRISMA_SERVED_RESULTS }) as unknown as PrismaClient;
 
     registerEmailRecipientLookup(prismaRecipientAddressLookup(this.prisma)); // #8238 — garde centrale des e-mails
     configureAtRestFileAccess(atRestFileAccessFor(this.prisma)); // #13100 — les fichiers scellés au repos s'ouvrent par ce processus
