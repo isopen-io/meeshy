@@ -170,6 +170,17 @@ describe('la poussée de fin', () => {
     expect(fins.map((f) => f.token)).toEqual([JETON]);
   });
 
+  it('le signal branché ne laisse jamais un rejet non géré : même un signal malformé est journalisé', async () => {
+    const m = monde();
+    const { push } = pousseur();
+    const reports: unknown[] = [];
+    const ended = sharedLocationEndPusherOf({ cache: m.deps.cache, push, now: m.deps.now, report: (e) => reports.push(e) });
+    const malforme = null as unknown as Parameters<typeof ended>[0];
+    expect(() => ended(malforme)).not.toThrow();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(reports).toHaveLength(1);
+  });
+
   it('la purge du compte efface ses jetons', async () => {
     const m = monde();
     await demarrer(m);

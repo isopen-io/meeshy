@@ -147,6 +147,6 @@ export async function pushSharedLocationEnd(deps: SharedLocationEndPushDeps, end
 /** Le signal `ended` du relais : synchrone pour lui, la poussée part sans être attendue. */
 export function sharedLocationEndPusherOf(deps: SharedLocationEndPushDeps): (end: SharedLocationEndSignal) => void {
   return (end) => {
-    void pushSharedLocationEnd(deps, end);
+    pushSharedLocationEnd(deps, end).catch((error: unknown) => deps.report?.(error));
   };
 }
