@@ -7,6 +7,7 @@
 import { jest } from '@jest/globals';
 import Fastify from 'fastify';
 import { relationStore, type RelationStore } from './user-relation-store';
+import { clearPrivacyPreferencesCache } from '../../services/preferences/privacy-cache';
 
 export const MOI = '507f1f77bcf86cd799439011';
 export const AUTRE = '507f1f77bcf86cd799439022';
@@ -57,6 +58,8 @@ export type AppOptions = {
   readonly cache?: Map<string, string>;
   /** Les lignes `RelationFeatureSetting` déjà écrites (consentements du rituel, réglages). */
   readonly reglages?: ReadonlyArray<Record<string, unknown>>;
+  /** Le document `UserPreferences.privacy` de chaque compte (#19362). */
+  readonly privacy?: Readonly<Record<string, Record<string, boolean>>>;
 };
 
 export type TestApp = {
@@ -78,6 +81,7 @@ export async function buildRelationApp(
   register: (app: ReturnType<typeof Fastify>) => Promise<void>,
   options: AppOptions = {},
 ): Promise<TestApp> {
+  clearPrivacyPreferencesCache();
   const store = relationStore({ friendRequests: options.demandes ?? [], relations: options.liens ?? [] });
   const emissions: Emission[] = [];
   const consents: Record<string, unknown>[] = [];
@@ -123,6 +127,13 @@ export async function buildRelationApp(
       }),
     },
     userRelation: store.prisma.userRelation,
+    userPreferences: {
+      findMany: jest.fn(async (args: { where: { userId: { in: string[] } } }) =>
+        Object.entries(options.privacy ?? {})
+          .filter(([userId]) => args.where.userId.in.includes(userId))
+          .map(([userId, privacy]) => ({ userId, privacy }))),
+    },
+    userPreference: { findMany: jest.fn(async () => []) },
     pairInteractionDay: { findMany: jest.fn(async () => jours) },
     relationFeatureSetting: {
       upsert: jest.fn(async (args: { where: { ownerId_otherId: { ownerId: string; otherId: string } }; create: Record<string, unknown>; update: Record<string, unknown> }) => {

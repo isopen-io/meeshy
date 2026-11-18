@@ -65,6 +65,7 @@ function prismaDouble(options: { hiding?: readonly string[]; amis?: readonly str
   const comptes = [CACHEE_ROW, AMIE_ROW];
   return {
     profileAddress: { findMany: async () => [] },
+    communityMember: { findMany: async () => [] },
     user: {
       findMany: jest.fn<any>(async (args: any) => (args?.where?.blockedUserIds ? [] : comptes)),
       findFirst: jest.fn<any>(async (args: any) => {

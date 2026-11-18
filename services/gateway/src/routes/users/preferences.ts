@@ -25,9 +25,16 @@ import { permissionsService } from '../../services/admin/permissions.service';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
+import { getCacheStore } from '../../services/CacheStore';
+import { isGuestViewer, sendAccountRequired, type GuestViewerContext } from '../../services/guests/guestMemberVisibility';
+import { profileFiguresOpen } from '../../services/relations/profileFigures';
+import { contentCountReaderFor } from '../../services/posts/authorContentCounts';
 import { keepDiscoverable } from '../../services/profile-discoverability';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
 import { activeMembershipOf, COMMUNITY_ACTIVE_COUNTS } from '../communities/serialization';
+import { targetHasBlockedViewer } from './profile-block-gate';
+import { ownerIsActive } from '../../services/profile-addresses/address-link-gate';
+import { computeETag, ifNoneMatchMatches } from '../../utils/etag';
 
 
 /**
@@ -408,6 +415,7 @@ export async function getUserStats(fastify: FastifyInstance) {
           }
         },
         401: errorResponseSchema,
+        403: errorResponseSchema,
         404: errorResponseSchema,
         500: errorResponseSchema
       }
@@ -417,6 +425,12 @@ export async function getUserStats(fastify: FastifyInstance) {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated) {
         return sendUnauthorized(reply, 'Authentication required');
+      }
+
+      // #10205 — un lecteur sans compte Meeshy ne lit AUCUN profil : son
+      // identifiant est celui d'un `Participant`, jamais d'un `User`.
+      if (isGuestViewer(authContext as GuestViewerContext)) {
+        return sendAccountRequired(reply, 'A Meeshy account is required to see a user profile');
       }
 
       const { userId: userIdOrUsername } = request.params;
@@ -462,8 +476,50 @@ export async function getUserStats(fastify: FastifyInstance) {
       // le filtre ne matchait RIEN. `totalTranslations` valait 0 pour tout le
       // monde sur cette route depuis sa création, et le succès « Traducteur »
       // (100 traductions) ne pouvait donc jamais s'y débloquer.
-      const stats = await computeUserStats(fastify.prisma, user.id);
+      const acteur = (request as unknown as UnifiedAuthRequest).authContext;
+      const estSoi = acteur?.userId === user.id;
+      const estAdministration = permissionsService.hasPermission(
+        (acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum,
+        'canViewUsers'
+      );
+      // La porte de la fiche (`servirProfilPublic`) : un bloqueur est INTROUVABLE, et un compte
+      // parti ne sert plus rien de lui — jamais un 200 qui distinguerait « bloqué » d'« absent ».
+      if (await targetHasBlockedViewer(fastify.prisma, request, user.id)) {
+        return sendNotFound(reply, 'User not found');
+      }
+      if (!estSoi && !estAdministration && !(await ownerIsActive(fastify.prisma, user.id))) {
+        return sendNotFound(reply, 'User not found');
+      }
+      // #19371 : « En chiffres » au Proche — même loi que `?expand=stats`.
+      const lecteurInscrit = acteur?.registeredUser?.id;
+      const audience = {
+        estSoi,
+        estAdministration,
+        chiffres:
+          !estSoi &&
+          !estAdministration &&
+          (await profileFiguresOpen(fastify.prisma, { subjectId: user.id, viewerId: lecteurInscrit })),
+      };
+      // #19368 : les compteurs de publications se comptent pour CE lecteur — même loi que `?expand=stats`.
+      const stats = await computeUserStats(
+        fastify.prisma,
+        user.id,
+        contentCountReaderFor({ subjectId: user.id, viewerId: lecteurInscrit, isAdministration: audience.estAdministration }),
+        { cache: getCacheStore() }
+      );
 
+      // La charge d'un autre dépend de la RELATION (« En chiffres » au Proche, compteurs par audience) :
+      // `no-cache` + ETag comme la fiche (#10755), pour qu'une baisse de cercle ou un blocage atteigne
+      // l'écran. Seules sa propre charge et celle de l'administration gardent un cache à durée.
+      const servi = servedUserStats(stats, audience);
+      if (!estSoi && !estAdministration) {
+        reply.header('Vary', 'Authorization');
+        reply.header('Cache-Control', 'private, no-cache');
+        const etag = computeETag({ success: true, data: servi });
+        reply.header('ETag', etag);
+        if (ifNoneMatchMatches(request.headers['if-none-match'], etag)) return reply.code(304).send();
+        return sendSuccess(reply, servi);
+      }
       reply.header('Cache-Control', 'private, max-age=300, stale-while-revalidate=3600');
 
       // L'AUTORISATION, distincte du calcul, et elle aussi à site unique
@@ -473,14 +529,7 @@ export async function getUserStats(fastify: FastifyInstance) {
       // Les quatre compteurs intimes partaient à TOUT compte authentifié, sans
       // filtre d'amitié ni préférence de confidentialité — mesuré en
       // intégration sur un viewer tiers.
-      const acteur = (request as unknown as UnifiedAuthRequest).authContext;
-      return sendSuccess(reply, servedUserStats(stats, {
-        estSoi: acteur?.userId === user.id,
-        estAdministration: permissionsService.hasPermission(
-          (acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum,
-          'canViewUsers'
-        ),
-      }));
+      return sendSuccess(reply, servi);
 
     } catch (error) {
       logError(fastify.log, '[USER_STATS] Error getting user stats', error);

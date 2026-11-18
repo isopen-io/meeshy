@@ -26,6 +26,7 @@ import { SESSION_SERVER_EVENTS } from './session-event-names.js';
 import { TALKIE_CLIENT_EVENTS, TALKIE_SERVER_EVENTS } from './talkie-event-names.js';
 import { NOW_PLAYING_CLIENT_EVENTS, NOW_PLAYING_SERVER_EVENTS } from './now-playing-event-names.js';
 import { BATTERY_CLIENT_EVENTS, BATTERY_SERVER_EVENTS } from './battery-event-names.js';
+import { LINK_ACTIVITY_SERVER_EVENTS } from './link-activity-event-names.js';
 import { PHONE_REACHABILITY_SERVER_EVENTS } from './phone-reachability-event-names.js';
 import { SHARED_LOCATION_CLIENT_EVENTS, SHARED_LOCATION_SERVER_EVENTS } from './shared-location-event-names.js';
 import { CONTACT_EXCHANGE_SERVER_EVENTS } from './contact-exchange-event-names.js';
@@ -194,6 +195,7 @@ export const SERVER_EVENTS = {
   ...TALKIE_SERVER_EVENTS,
   ...NOW_PLAYING_SERVER_EVENTS,
   ...BATTERY_SERVER_EVENTS,
+  ...LINK_ACTIVITY_SERVER_EVENTS,
   ...PHONE_REACHABILITY_SERVER_EVENTS,
   ...SHARED_LOCATION_SERVER_EVENTS,
   ...CONTACT_EXCHANGE_SERVER_EVENTS,
@@ -400,6 +402,12 @@ export const SERVER_EVENTS = {
    * system notification, emitted in parallel.
    */
   FRIEND_REQUEST_REJECTED: 'friend-request:rejected',
+  /**
+   * Emitted to the RECEIVER's user-room when the message of a pending request
+   * has just been translated (#19361), after `FRIEND_REQUEST_NEW`. A signal
+   * with no content: the client re-reads the request through the route.
+   */
+  FRIEND_REQUEST_UPDATED: 'friend-request:updated',
   /**
    * A member was ADDED to the conversation (`POST /conversations/:id/participants`).
    * The symmetric counterpart of `CONVERSATION_PARTICIPANT_LEFT`, and the ONLY
@@ -630,6 +638,10 @@ export const SERVER_EVENTS = {
   COMMUNITY_MEMBER_JOINED: 'community:member-joined',
   COMMUNITY_MEMBER_LEFT: 'community:member-left',
   COMMUNITY_MEMBER_ROLE_UPDATED: 'community:member-role-updated',
+  // La disparition d'une communauté (#19590) : supprimée par son créateur ou désactivée par l'équipe
+  COMMUNITY_DELETED: 'community:deleted',
+  // Une demande d'entrée dans une communauté qui valide chaque entrée (#19429), vers ses admins et modérateurs
+  COMMUNITY_JOIN_REQUESTED: 'community:join-requested',
 
   // --- Packs (#10148) : l'installation d'un pack, synchronisée entre les appareils du compte ---
   PACK_INSTALLATION_UPDATED: 'pack:installation-updated',
@@ -647,6 +659,10 @@ export const SERVER_EVENTS = {
 
   // --- User Profile (realtime propagation to conversation partners) ---
   USER_UPDATED: 'user:updated',
+  // --- La fiche d'un autre a changé (#19384) : signal SANS contenu, le lecteur revalide sa fiche ---
+  // Ville, adresses et décor dépendent du cercle du lecteur : rien de la fiche ne voyage ici.
+  // Le client relit `GET /directory/people/:handle` avec `If-None-Match` (304 bon marché).
+  USER_PROFILE_CHANGED: 'user:profile-changed',
 
   // --- Conversation Categories ---
   CATEGORY_CREATED: 'category:created',

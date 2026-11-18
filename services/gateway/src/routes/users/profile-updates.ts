@@ -8,7 +8,7 @@ import { servedProfileAccentColor } from '@meeshy/shared/utils/profile-accent';
 import { announceProfileAccentToPartners } from './profile-accent';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { capitalizeName, normalizeDisplayName } from '../../utils/normalize';
 import {
   updateUserProfileSchema,
@@ -38,6 +38,7 @@ import {
 } from '../../utils/auto-translate-preference';
 import { applyCategoryWriteEffects } from '../me/preferences/preference-registry';
 import { calculateProfileCompletionRate } from '../../utils/profile-completion';
+import { announceProfileChanged, touchesProfileFiche } from '../../services/notifications/profile-changed';
 import { releaseParticipantAvatarSnapshots } from '../../services/participantAvatarSnapshots';
 import { identityImageIsCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../services/attachments/identityImageOwnership';
 import { refreshParticipantNameSnapshots } from '../../services/participantNameSnapshots';
@@ -377,6 +378,13 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // (bio, ville, réglages) ne diffuse rien. L'accent (#19201) en est un.
       if (langChanged || nameChanged || accentChanged) {
         announceOwnProfileUpdated(fastify, updatedUser);
+      }
+
+      // #19384 — la fiche que les AUTRES lisent a changé (bio, ville, langues, voix) :
+      // signal sans contenu vers ses lecteurs, qui la revalident par If-None-Match.
+      if (touchesProfileFiche(body)) {
+        void announceProfileChanged(fastify, { userId: userId! })
+          .catch((error: unknown) => logWarn(fastify.log, '[PROFILE_UPDATE] profile-changed announce failed', error));
       }
 
       creditProfileMilestones(fastify, userId!, profileMilestonesReached(

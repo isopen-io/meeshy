@@ -13,6 +13,7 @@ package me.meeshy.sdk.net.routes
 
 public object ApiRoutesUsers {
     public const val BY_ID: String = "users/{id}"
+    public const val BY_ID_HIGHLIGHTS: String = "users/{id}/highlights"
     public const val BY_ID_IN_COMMON: String = "users/{id}/in-common"
     public const val BY_USER_ID_AFFILIATE_TOKEN: String = "users/{userId}/affiliate-token"
     public const val BY_USER_ID_BLOCK: String = "users/{userId}/block"
@@ -40,6 +41,9 @@ public object ApiRoutesUsers {
     public const val ME_DASHBOARD_STATS: String = "users/me/dashboard-stats"
     public const val ME_DEVICES: String = "users/me/devices"
     public const val ME_DEVICES_BY_DEVICE_ID: String = "users/me/devices/{deviceId}"
+    public const val ME_HIGHLIGHTS: String = "users/me/highlights"
+    public const val ME_HIGHLIGHTS_BY_ID: String = "users/me/highlights/{id}"
+    public const val ME_HIGHLIGHTS_ORDER: String = "users/me/highlights/order"
     public const val ME_PASSWORD: String = "users/me/password"
     public const val ME_PROFILE_LINK_STATS: String = "users/me/profile-link/stats"
     public const val ME_PUSH_TO_TALK_TOKEN: String = "users/me/push-to-talk-token"

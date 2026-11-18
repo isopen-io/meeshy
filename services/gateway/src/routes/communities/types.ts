@@ -44,7 +44,8 @@ export const UpdateCommunitySchema = z.object({
   description: z.string().optional(),
   avatar: identityImage.optional(),
   banner: identityImage.optional(),
-  isPrivate: z.boolean().optional()
+  isPrivate: z.boolean().optional(),
+  requiresJoinApproval: z.boolean().optional()
 });
 
 export const AddMemberSchema = z.object({

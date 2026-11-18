@@ -33,11 +33,18 @@ const IN_COMMON_PART_FEATURE = {
   communities: 'views.identity',
   friends: 'game.basic',
   media: 'dm.direct',
+  history: 'dm.direct',
 } as const satisfies Readonly<Record<string, RelationFeature>>;
 
 export type InCommonPart = keyof typeof IN_COMMON_PART_FEATURE;
 
 export const IN_COMMON_PARTS = Object.keys(IN_COMMON_PART_FEATURE) as readonly InCommonPart[];
+
+/**
+ * Les parties servies quand le client n'en nomme aucune. « Notre histoire »
+ * (#19378) est OPTIONNELLE : un client qui ne la connaît pas ne la reçoit pas.
+ */
+export const IN_COMMON_DEFAULT_PARTS: readonly InCommonPart[] = IN_COMMON_PARTS.filter((part) => part !== 'history');
 
 export const isInCommonPart = (value: unknown): value is InCommonPart =>
   typeof value === 'string' && (IN_COMMON_PARTS as readonly string[]).includes(value);

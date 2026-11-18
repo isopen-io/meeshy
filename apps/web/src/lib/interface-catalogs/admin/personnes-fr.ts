@@ -78,6 +78,7 @@ const f = {
   'admin.people.pref.privacy.showReadReceipts': 'Envoyer les accusés de lecture',
   'admin.people.pref.privacy.showTypingIndicator': 'Afficher l’indicateur de saisie',
   'admin.people.pref.privacy.showForwardSource': 'Afficher la source des transferts',
+  'admin.people.pref.privacy.showProfileFigures': 'Montrer mes chiffres à mes Proches',
   'admin.people.pref.privacy.allowContactRequests': 'Autoriser les demandes de contact',
   'admin.people.pref.privacy.allowGroupInvites': 'Autoriser les invitations à des groupes',
   'admin.people.pref.privacy.acceptCallsFromNonContacts': 'Accepter les appels hors contacts',

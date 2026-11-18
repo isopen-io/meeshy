@@ -68,7 +68,7 @@ export const MINIMUM_SWIFT_ROUTES = 120;
  * `ServerToClientEvents` déclare, et aux 110 que la garde Kotlin atteint. Le chiffre vit ICI pour
  * qu'une extension de la lecture ait un endroit où se voir monter, plutôt qu'une prose à vieillir.
  */
-export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 162;
+export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 165;
 
 export type SwiftProperty = {
   /** La clé du FIL : le `CodingKeys` s'il existe, sinon le nom Swift. */

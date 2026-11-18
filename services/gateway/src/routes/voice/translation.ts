@@ -9,7 +9,8 @@ import { MessageTranslationService } from '../../services/message-translation/Me
 import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
 import { gatedVoiceClone } from '../../services/voice-cloning-gate';
 import { logger } from '../../utils/logger';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../../utils/response';
+import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../../utils/response';
+import { toServedJob, toCancelOutcome, isTranslatorNotFound } from './servedJob';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   creditAcceptedTranslationRequest,
@@ -71,21 +72,13 @@ async function ensureVoiceAttachmentAccessible(
   return true;
 }
 
-function errorResponse(reply: FastifyReply, error: unknown, statusCode: number = 500) {
+function errorResponse(reply: FastifyReply, error: unknown) {
   if (error instanceof AudioTranslateError) {
-    return reply.status(statusCode).send({
-      success: false,
-      error: error.code,
-      message: error.message
-    });
+    return sendError(reply, isTranslatorNotFound(error) ? 404 : 500, error.code, { message: error.message });
   }
 
   const message = error instanceof Error ? error.message : 'Internal server error';
-  return reply.status(statusCode).send({
-    success: false,
-    error: 'INTERNAL_ERROR',
-    message: message
-  });
+  return sendError(reply, 500, 'INTERNAL_ERROR', { message });
 }
 
 export function registerTranslationRoutes(
@@ -529,7 +522,7 @@ export function registerTranslationRoutes(
     try {
       const { jobId } = request.params;
       const result = await audioTranslateService.getJobStatus(userId, jobId);
-      return sendSuccess(reply, result);
+      return sendSuccess(reply, toServedJob(result, jobId));
     } catch (error) {
       logger.error('[VoiceRoutes] Get job status error:', error);
       return errorResponse(reply, error);
@@ -601,8 +594,11 @@ export function registerTranslationRoutes(
 
     try {
       const { jobId } = request.params;
-      const result = await audioTranslateService.cancelJob(userId, jobId);
-      return sendSuccess(reply, result);
+      const outcome = toCancelOutcome(await audioTranslateService.cancelJob(userId, jobId), jobId);
+      if (outcome.kind === 'not-cancellable') {
+        return sendBadRequest(reply, 'JOB_NOT_CANCELLABLE', { message: outcome.message });
+      }
+      return sendSuccess(reply, outcome.served);
     } catch (error) {
       logger.error('[VoiceRoutes] Cancel job error:', error);
       return errorResponse(reply, error);

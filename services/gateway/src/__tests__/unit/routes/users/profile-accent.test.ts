@@ -151,7 +151,7 @@ const ligne = (over: Record<string, unknown> = {}) => ({
 
 async function lireFiche(row: Record<string, unknown>, url: string) {
   const findFirst = jest.fn<any>(async (a?: any) => (a?.where?.blockedUserIds ? null : row));
-  const prisma = { profileAddress: { findMany: async () => [] }, user: { findFirst } };
+  const prisma = { profileAddress: { findMany: async () => [] }, communityMember: { findMany: async () => [] }, user: { findFirst } };
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('authenticate', async () => {});
   app.decorate('prisma', prisma as never);

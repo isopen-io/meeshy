@@ -41,3 +41,13 @@ export interface FriendRequestRejectedEventData {
   readonly friendRequestId: string;
   readonly rejecterId: string;
 }
+
+/**
+ * Payload de `FRIEND_REQUEST_UPDATED` — émis à l'user-room du DESTINATAIRE
+ * quand le mot de la demande vient d'être traduit (#19361), après le
+ * `FRIEND_REQUEST_NEW`. Un signal SANS contenu : le client relit la demande par
+ * la route, qui lui sert le mot dans sa langue.
+ */
+export interface FriendRequestUpdatedEventData {
+  readonly friendRequestId: string;
+}

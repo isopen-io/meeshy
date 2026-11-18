@@ -226,3 +226,30 @@ describe('GET /communities/search — l aperçu de membres est gaté', () => {
     expect(community.members[0].user.lastActiveAt).toBeUndefined();
   });
 });
+
+describe('GET /communities/search — la porte d\'entrée d\'un membre ne part pas à un tiers (#19429)', () => {
+  const memberRow = {
+    id: 'mem-1', communityId: 'comm-1', userId: 'usr-a', role: 'member', isActive: true, leftAt: null,
+    joinedAt: new Date('2026-11-16T10:00:00Z'), joinedVia: 'link', joinCountry: 'FR',
+    user: { id: 'usr-a', username: 'amina', displayName: 'Amina', avatar: null, isOnline: false },
+  };
+
+  it('ni joinCountry ni joinedVia, même si la base les rend, et la lecture ne les demande pas', async () => {
+    const prisma = makePrisma();
+    prisma.community.findMany = jest.fn<any>().mockResolvedValue([{ ...mockCommunity, members: [memberRow] }]);
+    prisma.community.count = jest.fn<any>().mockResolvedValue(1);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: '/communities/search?q=amina' });
+    expect(res.statusCode).toBe(200);
+    const served = res.json().data[0].members[0];
+    expect(served.userId).toBe('usr-a');
+    expect(served).not.toHaveProperty('joinCountry');
+    expect(served).not.toHaveProperty('joinedVia');
+    expect(res.body).not.toContain('"FR"');
+    const membersRead = prisma.community.findMany.mock.calls[0][0].include.members;
+    expect(membersRead.select).toBeDefined();
+    expect(membersRead.select.joinCountry).toBeUndefined();
+    expect(membersRead.select.joinedVia).toBeUndefined();
+    await app.close();
+  });
+});

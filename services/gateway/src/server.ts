@@ -25,6 +25,7 @@ import { configureAtRestFileAccess } from './services/attachments/atRest/atRestF
 import { atRestFileAccessFor } from './services/attachments/atRest/atRestFileAccessFor';
 import { startTranslatorForget } from './services/translatorForgetBootstrap';
 import { startAtRestFileSweep } from './jobs/at-rest-file-sweep';
+import { startFriendRequestMessageTranslation } from './services/friend-requests/FriendRequestMessageTranslationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 // Extrait dans `./gateway-logger` pour que `route-registration.ts` puisse
 // logger sans importer `server.ts` (effets de bord au chargement du module —
@@ -930,6 +931,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       await this.translationService.initialize();
       startTranslatorForget({ zmq: this.translationService.getZmqClient(), redis: getCacheStore().getNativeClient() as never }); // #13102
       startAtRestFileSweep(this.prisma); // #13100
+      startFriendRequestMessageTranslation(this.server, this.prisma); // #19361 — l'écouteur du mot d'une demande, avant tout retour
       const isHealthy = await this.translationService.healthCheck();
       if (isHealthy) {
         logger.info('✓ Translation service initialized successfully');

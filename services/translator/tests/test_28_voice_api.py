@@ -168,6 +168,10 @@ def mock_translation_service():
     return service
 
 
+JOB_OWNER_ID = "user_AAAAAAAA"
+JOB_OWNER_HEADERS = {"Authorization": "Bearer owner-token-AAAAAAAA"}
+
+
 @pytest.fixture
 def mock_translation_pipeline():
     """Create mock translation pipeline service"""
@@ -196,6 +200,7 @@ def mock_translation_pipeline():
     # Mock job
     mock_job = MagicMock()
     mock_job.id = "job_123456"
+    mock_job.user_id = JOB_OWNER_ID
     mock_job.status = MagicMock(value="pending")
     mock_job.progress = 0
     mock_job.current_step = "queued"
@@ -951,7 +956,7 @@ class TestJobManagementEndpoints:
         """Test recuperation status job reussi"""
         logger.info("Test 28.26: Get job status success")
 
-        response = test_client.get("/api/v1/voice/job/job_123456")
+        response = test_client.get("/api/v1/voice/job/job_123456", headers=JOB_OWNER_HEADERS)
 
         assert response.status_code == 200
         result = response.json()
@@ -999,7 +1004,7 @@ class TestJobManagementEndpoints:
         """Test annulation job reussie"""
         logger.info("Test 28.29: Cancel job success")
 
-        response = test_client.delete("/api/v1/voice/job/job_123456")
+        response = test_client.delete("/api/v1/voice/job/job_123456", headers=JOB_OWNER_HEADERS)
 
         assert response.status_code == 200
         result = response.json()
@@ -1013,7 +1018,7 @@ class TestJobManagementEndpoints:
 
         mock_translation_pipeline.cancel_job = AsyncMock(return_value=False)
 
-        response = test_client.delete("/api/v1/voice/job/job_123456")
+        response = test_client.delete("/api/v1/voice/job/job_123456", headers=JOB_OWNER_HEADERS)
 
         assert response.status_code == 400
         assert "cannot be cancelled" in response.json()["detail"]
@@ -1701,7 +1706,7 @@ class TestErrorHandling:
         mock_job.started_at = datetime.now()
         mock_job.completed_at = datetime.now()
 
-        response = test_client.get("/api/v1/voice/job/job_123")
+        response = test_client.get("/api/v1/voice/job/job_123", headers=JOB_OWNER_HEADERS)
 
         assert response.status_code == 200
         result = response.json()
@@ -1721,7 +1726,7 @@ class TestErrorHandling:
         mock_job.started_at = datetime.now()
         mock_job.completed_at = datetime.now()
 
-        response = test_client.get("/api/v1/voice/job/job_123")
+        response = test_client.get("/api/v1/voice/job/job_123", headers=JOB_OWNER_HEADERS)
 
         assert response.status_code == 200
         result = response.json()

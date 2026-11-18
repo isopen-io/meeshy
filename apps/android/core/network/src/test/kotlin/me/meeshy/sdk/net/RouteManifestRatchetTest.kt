@@ -148,8 +148,10 @@ class RouteManifestRatchetTest {
          * chantier #18857 les portera.
          * 146 : moins `GET /users/me/addresses`, que porte `MyAddressesApi` (#18889 : la rangée « Mes adresses » de la face
          * Liens) ; création, modification, suppression et ordre restent à porter.
+         * 158 : plus les douze routes servies par la PR #19509 (contrat client du profil, #18857) — stories à la une, demandes
+         * d'entrée et entrées d'une communauté, réglages du fantôme et du Sang — servies avant leurs écrans Android.
          */
-        const val TO_PORT_CEILING = 146
+        const val TO_PORT_CEILING = 158
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

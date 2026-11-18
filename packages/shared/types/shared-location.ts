@@ -26,7 +26,15 @@
  *    Un serveur d'avant #18205 refuse la clé (`INVALID`) : le client renvoie alors la liste
  *    sans échéances ;
  * 6. `GET /relations/locations` rattrape, à la connexion, les partages servis au lecteur ;
- * 7. PLUSIEURS APPAREILS d'un même compte (#18389) : la passerelle ne connaît qu'UN partage
+ * 7. LA LISTE SEULE (#19284, #18580) : un retrait ou une échéance republie la liste SANS
+ *    `position`. La passerelle reprend la position COMPLÈTE du partage en cours, avec son
+ *    heure (le point n'est pas rafraîchi) et la maille retenue de chaque destinataire
+ *    restant : l'appareil qui retire n'envoie jamais la sienne. Une liste seule ne fait que
+ *    retirer : une personne qui n'est plus servie est ignorée, la précision ne monte pas, le
+ *    terme et les échéances ne reculent pas ; si personne ne reste, ou sans partage en cours,
+ *    `NOT_SHARING` (et le partage est arrêté). Une passerelle d'avant
+ *    refuse une charge sans position (`INVALID`) : le client renvoie alors sa position ;
+ * 8. PLUSIEURS APPAREILS d'un même compte (#18389) : la passerelle ne connaît qu'UN partage
  *    par compte, et c'est lui qui fait foi. Après chaque démarrage ou arrêt accepté, elle
  *    annonce `location:share-own-changed` à tous les appareils du compte ; chacun relit
  *    `GET /relations/locations/mine` ({@link SharedLocationOwnSnapshot}) et se recale, en
@@ -76,7 +84,8 @@ export const sharedLocationStartPayloadSchema = z
       .max(SHARED_LOCATION_RECIPIENTS_MAX)
       .refine((list) => new Set(list.map((r) => r.userId.toLowerCase())).size === list.length),
     durationMinutes: z.union([z.literal(SHARED_LOCATION_DURATIONS_MINUTES[0]), z.literal(SHARED_LOCATION_DURATIONS_MINUTES[1])]),
-    position: sharedLocationPositionSchema,
+    /** Absente : « liste seule » (#19284) — la passerelle reprend la position du partage en cours. */
+    position: sharedLocationPositionSchema.optional(),
     /**
      * « Prévenir » (#19204) : chaque destinataire servi qui n'était pas déjà dans le partage
      * remplacé reçoit `location_share_started` — un nom et une durée, jamais une position.
@@ -123,6 +132,18 @@ export type SharedLocationChangedEventData = {
   readonly circle?: SharedLocationCircle;
   readonly updatedAt: string;
   readonly expiresAt: string;
+  /**
+   * Le début du partage en cours (#19458), redit à chaque remplacement ou prolongation :
+   * « Partage pour 1 h » se lit `expiresAt - startedAt`, la fenêtre de CE lecteur. ADDITIF :
+   * absent d'un serveur antérieur ou d'un partage rangé avant lui, le libellé se masque.
+   *
+   * EXACT pour tout lecteur, flouté compris, à la différence de `updatedAt` : `expiresAt`
+   * part exact à chacun (le lecteur doit savoir quand le partage s'arrête), et la durée
+   * choisie est l'une d'une poignée de valeurs — l'arrondir ne cacherait rien que
+   * `expiresAt` ne dise déjà, et fausserait le libellé. Ce que l'arrondi de `updatedAt`
+   * brouille, c'est le RYTHME des déplacements, que le début ne porte pas.
+   */
+  readonly startedAt?: string;
 };
 
 export type SharedLocationEndedEventData = { readonly userId: string };

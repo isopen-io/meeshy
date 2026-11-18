@@ -24,7 +24,8 @@ import { applyUserPreferences, isCallPushDataType } from './push-delivery-prefer
 import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
 import { apnsThreadIdOf } from './notifications/push-thread';
 import { isBadgeSyncPush } from './notifications/badgeSyncPush';
-import { sendViaPushToTalk, type PushToTalkTokenRecord } from './talkie/pushToTalkApns';
+import { sendViaPushToTalk, type PushToTalkTransport } from './talkie/pushToTalkApns';
+import { sendViaLiveActivity, type LiveActivityEndState, type LiveActivityTarget } from './notifications/liveActivityApns';
 import {
   APNS_PERMANENT_REASONS,
   apnsFailureOutcome,
@@ -408,7 +409,7 @@ export class PushNotificationService {
           } else if (tokenRecord.type === 'voip') {
             result = await this.sendViaAPNS(tokenRecord, effectivePayload, true);
           } else if (tokenRecord.type === 'pushtotalk') {
-            result = await this.sendViaPushToTalk(tokenRecord, effectivePayload);
+            result = await sendViaPushToTalk(this.apnsTransport('sendViaPushToTalk'), tokenRecord, effectivePayload);
           } else {
             result = { success: false, tokenId: tokenRecord.id, error: `Unknown token type: ${tokenRecord.type}` };
           }
@@ -841,14 +842,19 @@ export class PushNotificationService {
     }
   }
 
-  private sendViaPushToTalk(tokenRecord: PushToTalkTokenRecord, payload: PushNotificationPayload): Promise<PushResult> {
-    return sendViaPushToTalk({
+  private apnsTransport(step: string): PushToTalkTransport {
+    return {
       hasClient: (env) => !!(env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction),
-      send: (env, notification, token, corr) => this.apnsCircuitBreaker.execute(() => performanceLogger.withTiming('push.sendViaPushToTalk',
+      send: (env, notification, token, corr) => this.apnsCircuitBreaker.execute(() => performanceLogger.withTiming(`push.${step}`,
         () => this.sendApnsWithRetry(env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction, notification, token, corr), corr)),
       defaultBundleId: config.apns.bundleId,
-      log: (event, fields) => (event === 'success' ? pushLogger.info : pushLogger.warn).call(pushLogger, `push.sendViaPushToTalk.${event}`, fields),
-    }, tokenRecord, payload);
+      log: (event, fields) => (event === 'success' ? pushLogger.info : pushLogger.warn).call(pushLogger, `push.${step}.${event}`, fields),
+    };
+  }
+
+  async sendLiveActivityEnd(target: LiveActivityTarget, state: LiveActivityEndState): Promise<PushResult> {
+    await this.initialize();
+    return !config.enabled ? { success: false, tokenId: 'live-activity', error: 'Push disabled' } : sendViaLiveActivity(this.apnsTransport('sendLiveActivityEnd'), target, state);
   }
 
   /**

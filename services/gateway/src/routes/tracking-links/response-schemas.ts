@@ -119,6 +119,24 @@ export const trackingLinkClickResponseSchema = {
   }
 } as const;
 
+/**
+ * Le lien tel que le sert une porte PUBLIQUE (le clic d'un visiteur, sans
+ * compte) : sans `targetId` — l'élément visé n'a pas à partir à côté de la
+ * redirection (#19412). `targetType` reste, il ne désigne rien.
+ */
+const { targetId: _cibleRetiree, ...publicTrackingLinkProperties } = trackingLinkSchema.properties;
+export const publicTrackingLinkSchema = { ...trackingLinkSchema, properties: publicTrackingLinkProperties } as const;
+
+/** Un lieu de visiteurs : agrégat seul, ni IP, ni empreinte, ni coordonnée (#9609, #19412). */
+const clickPlaceSchema = {
+  type: 'object',
+  properties: {
+    country: { type: 'string', description: 'ISO 3166-1 alpha-2' },
+    city: { type: 'string', nullable: true, description: 'City — null when folded into its country (k-anonymity floor) or for a profile address link' },
+    count: { type: 'number' }
+  }
+} as const;
+
 /** `200` de `GET /tracking-links/:token/stats` — agrégats seuls, aucune ligne brute. */
 export const trackingLinkStatsResponseSchema = {
   description: 'Statistics retrieved successfully',
@@ -182,7 +200,13 @@ export const trackingLinkStatsResponseSchema = {
           },
           description: 'Top referrer sources sorted by count'
         },
-        confirmedClicks: { type: 'number', description: 'Number of clicks with confirmed redirect' }
+        confirmedClicks: { type: 'number', description: 'Number of clicks with confirmed redirect' },
+        countryCount: { type: 'number', description: 'Number of distinct visitor countries' },
+        clicksByPlace: {
+          type: 'array',
+          items: clickPlaceSchema,
+          description: 'Visitor map: clicks by country and city, a city under the k-anonymity floor folded into its country'
+        }
       }
     }
   }
