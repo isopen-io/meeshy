@@ -62,6 +62,7 @@ jest.mock('../../utils/logger-enhanced', () => {
 
 import { MeeshySocketIOManager } from '../MeeshySocketIOManager';
 import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
+import { findFirstIn } from '../../__tests__/helpers/mongo-where';
 
 const CONV_ID = '507f191e810c19729de860fb';
 const AGENT_USER_ID = 'agent-user-1';
@@ -77,34 +78,18 @@ type MembershipRow = {
 };
 
 /**
- * Un double de `findFirst` qui REFUSE ce que le vrai client refuse : il applique
- * les égalités scalaires du `where` ET la disjonction que `unsetOrNull` produit.
- * Un double permissif rendrait la ligne quel que soit le `where` — « un double de
- * test ment aussi par ce qu'il ACCEPTE » (cycle 112).
+ * Le double REFUSE ce que le vrai client refuse, et il le fait par la
+ * sémantique PARTAGÉE du dépôt — `matchesMongoWhere` via `findFirstIn`
+ * (`__tests__/helpers/mongo-where.ts`), qui connaît `isSet` et traite une clé
+ * ABSENTE comme absente, jamais comme nulle.
+ *
+ * Une première rédaction de ce fichier interprétait le `where` À LA MAIN. C'est
+ * la jumelle divergente que ce dépôt proscrit — et elle était d'autant plus
+ * inutile que le helper existait : « la sémantique du `where` elle-même reste
+ * chez `matchesMongoWhere` : une seconde jumelle de cette règle serait libre de
+ * diverger de la première ». Relevé par l'audit adversarial du lot.
  */
-const strictFindFirst = (row: MembershipRow) =>
-  jest.fn<any>(async (args: any) => {
-    const where = args?.where ?? {};
-    for (const [key, expected] of Object.entries(where)) {
-      if (key === 'OR') continue;
-      if ((row as Record<string, unknown>)[key] !== expected) return null;
-    }
-    const branches: readonly Record<string, any>[] = where.OR ?? [];
-    if (branches.length > 0) {
-      const satisfied = branches.some((branch) =>
-        Object.entries(branch).every(([field, predicate]) => {
-          const value = (row as Record<string, unknown>)[field];
-          if (predicate === null) return value === null;
-          if (predicate && typeof predicate === 'object' && 'isSet' in predicate) {
-            return (predicate as { isSet: boolean }).isSet === (value !== undefined);
-          }
-          return value === predicate;
-        }),
-      );
-      if (!satisfied) return null;
-    }
-    return { id: row.id };
-  });
+const strictFindFirst = (row: MembershipRow) => jest.fn<any>(findFirstIn([row as Record<string, unknown>]));
 
 const makePrisma = (findFirst: jest.Mock<any>) =>
   ({
@@ -153,6 +138,25 @@ describe("la réaction d'un agent n'ouvre qu'à une participation VIVANTE (#1952
     expect(findFirst).toHaveBeenCalled();
     // La porte a refusé : la relecture du message visé — l'instruction qui SUIT
     // immédiatement la résolution — n'a jamais eu lieu.
+    expect(prisma.message.findUnique).not.toHaveBeenCalled();
+  });
+
+  /**
+   * L'AUTRE moitié de la loi : sans ce témoin, une loi amputée de `isActive`
+   * laissait cette suite verte (mesuré par l'audit adversarial du lot). La forme
+   * de la loi est ancrée par `fileReaderAdmission.test.ts` ; celui-ci ancre ses
+   * deux moitiés à la porte de l'agent.
+   */
+  it("refuse un agent dont la participation est SORTIE (`isActive: false`)", async () => {
+    const findFirst = strictFindFirst({
+      id: 'part-agent',
+      userId: AGENT_USER_ID,
+      conversationId: CONV_ID,
+      isActive: false,
+    });
+
+    const prisma = await callAgentReaction(findFirst);
+
     expect(prisma.message.findUnique).not.toHaveBeenCalled();
   });
 

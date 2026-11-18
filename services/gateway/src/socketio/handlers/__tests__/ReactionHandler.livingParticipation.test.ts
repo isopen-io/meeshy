@@ -52,6 +52,7 @@ import { ReactionHandler } from '../ReactionHandler';
 import { PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { findFirstIn } from '../../../__tests__/helpers/mongo-where';
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 //
@@ -135,36 +136,18 @@ const living = (overrides: Partial<MembershipRow> = {}): MembershipRow => ({
 });
 
 /**
- * Un double de `participant.findFirst` qui REFUSE ce que le vrai client refuse.
+ * Le double REFUSE ce que le vrai client refuse, et il le fait par la
+ * sémantique PARTAGÉE du dépôt — `matchesMongoWhere` via `findFirstIn`
+ * (`__tests__/helpers/mongo-where.ts`), qui connaît `isSet` et traite une clé
+ * ABSENTE comme absente, jamais comme nulle.
  *
- * Il n'invente rien : il applique les trois égalités scalaires du `where` et la
- * disjonction `OR` que `unsetOrNull` produit. Un double permissif rendrait la
- * ligne quel que soit le `where` — et c'est exactement ce qui laisse un témoin
- * de comportement passer au vert sur une porte aveugle.
+ * Une première rédaction de ce fichier interprétait le `where` À LA MAIN. C'est
+ * la jumelle divergente que ce dépôt proscrit — et elle était d'autant plus
+ * inutile que le helper existait : « la sémantique du `where` elle-même reste
+ * chez `matchesMongoWhere` : une seconde jumelle de cette règle serait libre de
+ * diverger de la première ». Relevé par l'audit adversarial du lot.
  */
-const strictFindFirst = (row: MembershipRow) =>
-  jest.fn<any>(async (args: any) => {
-    const where = args?.where ?? {};
-    const scalars: readonly [string, unknown][] = Object.entries(where).filter(([key]) => key !== 'OR');
-    for (const [key, expected] of scalars) {
-      if ((row as Record<string, unknown>)[key] !== expected) return null;
-    }
-    const branches: readonly Record<string, any>[] = where.OR ?? [];
-    if (branches.length > 0) {
-      const satisfied = branches.some((branch) =>
-        Object.entries(branch).every(([field, predicate]) => {
-          const value = (row as Record<string, unknown>)[field];
-          if (predicate === null) return value === null;
-          if (predicate && typeof predicate === 'object' && 'isSet' in predicate) {
-            return (predicate as { isSet: boolean }).isSet === (value !== undefined);
-          }
-          return value === predicate;
-        }),
-      );
-      if (!satisfied) return null;
-    }
-    return { id: row.id };
-  });
+const strictFindFirst = (row: MembershipRow) => jest.fn<any>(findFirstIn([row as Record<string, unknown>]));
 
 function makeSocket(): Socket {
   return {
@@ -253,6 +236,26 @@ describe("la porte des réactions de message n'ouvre qu'à une participation VIV
 
       expect(callback).toHaveBeenCalledWith({ success: false, error: 'Could not resolve participant' });
       expect(reactionService.getMessageReactions).not.toHaveBeenCalled();
+    });
+
+    /**
+     * L'AUTRE moitié de la loi, et elle manquait : tous mes gabarits portaient
+     * `isActive: true`, si bien qu'une loi amputée de `isActive` laissait ces
+     * suites VERTES — mesuré par l'audit adversarial du lot. La forme de la loi
+     * elle-même est ancrée ailleurs (`fileReaderAdmission.test.ts`, qui TOMBE
+     * sous cette mutation) ; ce témoin-ci ancre ses DEUX moitiés à la porte des
+     * réactions, où un membre SORTI doit être refusé autant qu'un banni.
+     */
+    it('refuse un membre SORTI de la conversation (`isActive: false`)', async () => {
+      const { handler, reactionService } = buildHandler({
+        findFirst: strictFindFirst(living({ isActive: false })),
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Could not resolve participant' });
+      expect(reactionService.addReaction).not.toHaveBeenCalled();
     });
 
     it("refuse l'invité de lien ACTIF et BANNI", async () => {

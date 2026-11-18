@@ -1,7 +1,8 @@
 # Cycle 176 — le serveur refusait de SERVIR un banni, et le laissait AGIR
 
-*2026-11-18. Branche `claude/exciting-planck-na0b87`, partie de la tête de `dev`
-(`c11ad1d149`), qu'elle contient.*
+*2026-11-18. Branche `claude/exciting-planck-na0b87`. Partie de `c11ad1d149`, puis
+`origin/dev` re-fusionnée à `765e011b6` avant la livraison — c'est CE SHA que la
+branche contient (#18654), et les gardes ont été rejouées sur l'arbre fusionné.*
 
 **Livré** : #19525 — les cinq portes des réactions de MESSAGE exigent une
 participation VIVANTE. PR #19530.
@@ -115,9 +116,11 @@ retiré au profit de la loi NOMMÉE dans l'assertion, qui se documente elle-mêm
 
 - **ROUGE avant implémentation** : 6 témoins sur 8 rouges, les 2 verts étant les
   non-régressions (elles doivent passer avant comme après) ;
-- **5 mutations ROUGES**, chacune ancrée sur un motif devant matcher exactement
-  une fois et échouant bruyamment sinon — dont M4, verte au premier relevé, qui a
-  fait écrire les témoins manquants ;
+- **7 mutations ROUGES**, chacune ancrée — et la première rédaction de ce
+  paragraphe annonçait « 5 mutations ROUGES », ce qui était **FAUX**. Voir
+  § « Ce que l'audit adversarial a cassé » : deux des trois sites REST sont
+  byte-identiques, une seule mutation les avait changés TOUS LES DEUX, et le
+  rouge unique venait du seul témoin du POST. Le DELETE n'était tenu par rien ;
 - `src/socketio` + `src/__tests__/unit/routes` : **16 848 témoins verts**,
   1 087 suites ; `src/__tests__/unit/services` + `security` + cliquets :
   **13 248 verts**, 756 suites ;
@@ -154,3 +157,93 @@ retiré au profit de la loi NOMMÉE dans l'assertion, qui se documente elle-mêm
   n'en garde qu'une, donc chaque poussée annule celle qui attendait. `dev` n'a
   pas de verdict à sa tête, et c'est le défaut d'INFRASTRUCTURE que ce cycle n'a
   pas adressé non plus.
+
+---
+
+## Ce que l'audit adversarial a cassé
+
+Le `CLAUDE.md` racine envoie tout lot de **contrôle d'accès** par
+`auditeur-adversarial` avant fusion. Il a trouvé deux défauts dans MON lot, et
+les deux sont des leçons que ce même lot s'attribuait.
+
+### Un site corrigé sans témoin — le cinquième, après que le quatrième ait servi de leçon
+
+`routes/reactions.ts:356`, la résolution du **DELETE REST**, n'était tenue par
+rien. Mesuré : remettre ce seul site au défaut laissait **892 témoins de réaction
+et 329 témoins de sécurité VERTS**.
+
+La cause est structurelle, et c'est « un double mente aussi par ce qu'il
+ACCEPTE » (cycle 112) porté au contexte d'**AUTH** :
+`reactions-routes.test.ts` donne par DÉFAUT un `participantId` à un contexte
+`registered` — **une forme que la production ne produit jamais**
+(`middleware/auth.ts` ne le pose que pour un invité de lien). Les quatorze
+témoins du bloc DELETE n'entraient donc JAMAIS dans la branche de résolution,
+et la suite ne portait que deux assertions de projection : le POST et le GET.
+
+> **Un double d'identité qui porte plus que la production rend inatteignable la
+> branche qu'on croit tester.** La question à poser à un contexte de test n'est
+> pas « est-il valide ? » mais **« la production le compose-t-elle ainsi ? »** —
+> ici un champ EN TROP, pas un champ manquant, et c'est le sens qui ne se voit
+> pas : un contexte trop riche fait passer les témoins.
+
+### Et ma preuve publiée était fausse
+
+J'ai annoncé « 5 mutations ROUGES, chacune ancrée sur un motif qui doit matcher
+EXACTEMENT une fois ». La mutation M3 portait sur un motif présent **deux fois**
+— j'avais écrit `assert s.count(old) == 2` et lu le couple comme « les deux
+écritures REST d'un coup ». Les deux sites changeaient ensemble, un seul témoin
+tombait, et j'en ai conclu que les deux étaient tenus.
+
+> **Une mutation qui change DEUX sites ne prouve qu'un seul témoin.** L'ancrage
+> « exactement une occurrence » est la discipline que je récitais dans la même
+> phrase, et le `== 2` l'annulait à voix haute. Sur des sites byte-identiques,
+> l'ancrage ne peut pas être textuel : il doit être **par LIGNE**. Les trois
+> sites REST tombent désormais séparément — l.160 : 3 échecs, l.356 : 2 échecs,
+> l.571 : 1 échec.
+
+### Mes témoins ne gardaient qu'une moitié de la loi
+
+Troisième constat, et il tenait à mes gabarits : tous portaient `isActive: true`,
+si bien qu'une loi **amputée de `isActive`** laissait les trois suites VERTES
+(mesuré : 60 témoins verts). La forme de la loi est ancrée ailleurs —
+`services/attachments/__tests__/fileReaderAdmission.test.ts`, qui TOMBE sous
+cette mutation — et c'est juste : une seule source. Mais le journal laissait
+croire que mes mutations la couvraient.
+
+Réparé aux trois portes : un gabarit `isActive: false` (le membre SORTI) tient
+désormais la seconde moitié là où la décision se prend.
+
+### Et mon double interprétait le `where` à la main
+
+Les deux suites socket recopiaient un interpréteur de `where`
+(scalaires + disjonction `isSet`). `__tests__/helpers/mongo-where.ts` existait,
+et son doc-comment dit exactement pourquoi il ne faut pas le doubler : « une
+seconde jumelle de cette règle serait libre de diverger de la première ». Les
+trois suites passent désormais par `findFirstIn`.
+
+> **Avant d'écrire un double qui interprète une sémantique, chercher le helper
+> qui la porte.** Je l'ai écrit deux fois dans le même lot sans le chercher une
+> seule — et le dépôt proscrivait nommément ce que je faisais.
+
+## Suivis ouverts par l'audit
+
+- **La RÉTRACTATION a reçu un arbitrage que le dépôt réserve au produit.**
+  `ReactionService.ts:304-318` tranche, pour l'axe CLÔTURE, qu'« un conteneur
+  mort continue d'admettre le RETRAIT de ce qu'il porte déjà » — et dit qu'étendre
+  la garde au retrait « demande un arbitrage produit et non un correctif ». Ce
+  lot l'a étendue sur l'axe BANNISSEMENT sans le dire. Le témoin qui gèle ce
+  choix n'a pas rougi parce qu'il garde l'autre axe : « une classe gardée ne
+  garde pas sa voisine », deux fois dans le même lot.
+- **`ReactionService.ts:116` et `:172` — le point de CONVERGENCE des quatre
+  transports — épelle encore `isActive: true` NU**, là où la jumelle du MESSAGE
+  applique la loi à son propre point de convergence
+  (`MessagingService.ts:180`, `:202`). Aucun trou vivant (les cinq portes
+  ferment avant), mais c'était le correctif à UN site plutôt qu'à cinq.
+- **`agent-response-bridge.ts:174`**, jumeau immédiat du site de l'agent, et
+  **huit sites qui RETAPENT `{ isActive: true, ...unsetOrNull('bannedAt') }`**
+  au lieu de la constante : la jumelle divergente exacte que la thèse du lot
+  condamne. À compter dans le relevé de #19532.
+- **La population `isActive: true ∧ bannedAt ≠ null` n'est comptée nulle part.**
+  La valeur du lot comme son risque de disponibilité reposent sur un ensemble
+  que personne n'a mesuré ; une mesure sur staging avant promotion serait
+  honnête.
