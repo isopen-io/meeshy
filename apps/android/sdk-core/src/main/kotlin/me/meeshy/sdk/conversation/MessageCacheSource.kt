@@ -3,6 +3,7 @@ package me.meeshy.sdk.conversation
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.commitOrWrite
+import me.meeshy.sdk.session.withAccountTicket
 
 import androidx.room.withTransaction
 import java.time.Instant
@@ -194,7 +195,7 @@ internal class MessageCacheSource(
         val held = heldBefore()
         val window = readWindow(ticket, held) ?: return
         val gap = if (sweeping == Sweeping.SKIPPED) GapRead(emptyList(), Sweep.Skipped) else readGap(window.messages, held)
-        fence.commitOrWrite(ticket) { persist(window, gap, held) } ?: return
+        fence.commitOrWrite(ticket) { withAccountTicket(ticket) { persist(window, gap, held) } } ?: return
         receipts?.readInFull(conversationId, held.receiptsEpoch)
     }
 

@@ -28,6 +28,12 @@ internal class CachedMessageUpdater(
     /** Le compte auquel appartient l'événement ou le geste qui écrit MAINTENANT (#13560) ; `null` sans garde. */
     suspend fun ticket(): AccountTicket? = fence?.currentTicket()
 
+    /** [write] sous [ticket], le compte de qui l'a demandé : `null` quand ce compte s'est fermé, rien n'est écrit (#19422). */
+    suspend fun <T> commit(ticket: AccountTicket?, write: suspend () -> T): T? = fence.commitOrWrite(ticket, write)
+
+    /** Le compte de [ticket] est-il encore celui qui est connecté ? Sans garde ni ticket, oui. */
+    fun isCurrent(ticket: AccountTicket?): Boolean = fence == null || ticket == null || fence.isCurrent(ticket)
+
     /** The cached message [messageId], or `null` when no row exists. */
     suspend fun find(messageId: String): ApiMessage? {
         val row = MessageIdReconciliation.locate(database, messageId) ?: return null
