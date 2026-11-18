@@ -50,6 +50,7 @@ import {
   loadSalonCommunity,
   planSalonEntry,
 } from '../../services/conversations/communityMembershipSync';
+import { communityMemberAnnouncerOverIO } from '../../services/community-member-broadcast';
 import { deferAfterResponse, type AfterResponse } from '../../utils/after-response';
 import {
   lookupArrivalCountry,
@@ -489,7 +490,7 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
   // l'IP après la réponse ; l'IP n'est écrite ni sur le participant ni dans
   // sa session anonyme (#9342).
   if (outcome.kind === 'joined' && outcome.outcome !== 'already-member') {
-    if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission);
+    if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission, communityMemberAnnouncerOverIO(prisma, params.arrivalIO));
     const participantId = outcome.participant.id;
     // #16837 — l'arrivée s'annonce aux autres membres. Un invité ne peut pas
     // en être le SUJET (contrat strict, #16838) ; il en reste DESTINATAIRE.

@@ -4,6 +4,7 @@ import { exitCommunitySalons, type SalonExitDeps } from './communitySalonExit';
 import { participationEstVivante } from '../../routes/conversations/utils/access-control';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { scheduleCommunityAddedAnnouncement } from '../notifications/community-added';
+import type { CommunityMemberAnnounce } from '../community-member-broadcast';
 
 const logger = enhancedLogger.child({ module: 'CommunitySalonAdoption' });
 
@@ -51,6 +52,7 @@ export function isBecomingPrivate(change: { readonly before: boolean; readonly r
 export async function admitSalonOccupants(
   prisma: SalonAdoptionPrisma,
   request: SalonAdoptionRequest,
+  announce: CommunityMemberAnnounce,
 ): Promise<readonly string[]> {
   const salons = await prisma.conversation.findMany({
     where: { communityId: request.communityId },
@@ -84,8 +86,8 @@ export async function admitSalonOccupants(
   await applyCommunityAdmission(prisma, request.communityId, {
     kind: 'admitted',
     reactivations: [],
-    creations: admitted.map((userId) => ({ userId, role: 'member' as const })),
-  });
+    creations: admitted.map((userId) => ({ userId, role: 'member' as const, via: 'invited' as const })),
+  }, announce);
   // #18052 — qui entre l'apprend, au nom du créateur dont l'autorité l'a fait entrer.
   scheduleCommunityAddedAnnouncement(prisma, { communityId: request.communityId, actorId: request.createdBy, recipientIds: admitted });
   return [...former, ...strangers.filter((userId) => !addable.has(userId))];
@@ -127,10 +129,10 @@ async function addableUnderCreator(
  * rejette jamais.
  */
 export async function closeSalonsAfterSwitch(
-  deps: SalonExitDeps & { readonly prisma: SalonAdoptionPrisma },
+  deps: SalonExitDeps & { readonly prisma: SalonAdoptionPrisma; readonly announce: CommunityMemberAnnounce },
   request: SalonAdoptionRequest & { readonly outsiders: readonly string[]; readonly now: Date },
 ): Promise<void> {
-  const late = await admitSalonOccupants(deps.prisma, request).catch((error: unknown) => {
+  const late = await admitSalonOccupants(deps.prisma, request, deps.announce).catch((error: unknown) => {
     logger.error('Late salon admission failed', { communityId: request.communityId, error });
     return [] as readonly string[];
   });

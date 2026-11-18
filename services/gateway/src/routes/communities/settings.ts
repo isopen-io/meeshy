@@ -19,6 +19,7 @@ import { identityImagesAreCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../servic
 import { COMMUNITY_ACTIVE_COUNTS, flattenCommunityCounts } from './serialization';
 import { admitSalonOccupants, closeSalonsAfterSwitch, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
 import { scheduleCommunityUpdatedBroadcastFrom } from '../../services/community-updated-broadcast';
+import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 import { readCommunityDeletedAudience, scheduleCommunityDeletedBroadcastFrom } from '../../services/community-deleted-broadcast';
 
 const logger = enhancedLogger.child({ module: 'CommunitySettingsRoutes' });
@@ -152,7 +153,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       // bascule ; ceux qui ne peuvent pas entrer en sortent APRÈS.
       const closesSalons = isBecomingPrivate({ before: community.isPrivate, requested: validatedData.isPrivate });
       const outsiders = closesSalons
-        ? await admitSalonOccupants(fastify.prisma, { communityId: id, createdBy: community.createdBy })
+        ? await admitSalonOccupants(fastify.prisma, { communityId: id, createdBy: community.createdBy }, communityMemberAnnouncerFrom(fastify))
         : [];
 
       const updatedCommunity = await fastify.prisma.community.update({
@@ -172,7 +173,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       });
       if (closesSalons) {
         await closeSalonsAfterSwitch(
-          { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler },
+          { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler, announce: communityMemberAnnouncerFrom(fastify) },
           { communityId: id, createdBy: community.createdBy, outsiders, now: new Date() },
         );
       }
