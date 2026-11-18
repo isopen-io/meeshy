@@ -706,6 +706,19 @@ jobs:
           cd apps/web
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
 
+      # LA VERSION DE PLAYWRIGHT EST ÉPINGLÉE AU PATCH DANS `package.json`
+      # (#19480), et c'est elle qui choisit le Chromium téléchargé ici. Le
+      # dépôt épingle Node ('22.19'), bun ('1.3.14'), pnpm ('9') et Python
+      # ('3.10') ; le NAVIGATEUR, lui, flottait — `^1.62.1` plus un
+      # `bun install` non gelé, donc une résolution au plus récent à chaque
+      # run. CE QUE LE FLOTTEMENT A COÛTÉ, mesuré le 2026-11-17 : `dev` est
+      # passé de 1.64.1 (Chrome 153) à 1.65.1 (Chrome 159) sans qu'une ligne
+      # du dépôt change, et DEUX gardes de tranche 4 ont rougi — l'une parce
+      # que 1.65 fait respecter `inert` dans ses contrôles d'actionnabilité,
+      # l'autre parce que Chrome 159 sérialise `justify-content: flex-end` en
+      # `flow-end`. Les deux témoins étaient fautifs et sont corrigés ; ce qui
+      # restait à réparer, c'est qu'un changement de navigateur arrive par une
+      # PR de dépendance RELUE, jamais par surprise un mardi soir.
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
@@ -2573,6 +2586,19 @@ jobs:
       - name: Préparer Node et les dépendances
         uses: ./.github/actions/preparer-js
 
+      # LA VERSION DE PLAYWRIGHT EST ÉPINGLÉE AU PATCH DANS `package.json`
+      # (#19480), et c'est elle qui choisit le Chromium téléchargé ici. Le
+      # dépôt épingle Node ('22.19'), bun ('1.3.14'), pnpm ('9') et Python
+      # ('3.10') ; le NAVIGATEUR, lui, flottait — `^1.62.1` plus un
+      # `bun install` non gelé, donc une résolution au plus récent à chaque
+      # run. CE QUE LE FLOTTEMENT A COÛTÉ, mesuré le 2026-11-17 : `dev` est
+      # passé de 1.64.1 (Chrome 153) à 1.65.1 (Chrome 159) sans qu'une ligne
+      # du dépôt change, et DEUX gardes de tranche 4 ont rougi — l'une parce
+      # que 1.65 fait respecter `inert` dans ses contrôles d'actionnabilité,
+      # l'autre parce que Chrome 159 sérialise `justify-content: flex-end` en
+      # `flow-end`. Les deux témoins étaient fautifs et sont corrigés ; ce qui
+      # restait à réparer, c'est qu'un changement de navigateur arrive par une
+      # PR de dépendance RELUE, jamais par surprise un mardi soir.
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 

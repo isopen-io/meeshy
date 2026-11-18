@@ -640,6 +640,27 @@ async function fullscreenInvariants(viewport) {
   await page.goto(`${BASE}/feed`, { waitUntil: 'load' });
   await page.waitForSelector('[data-feed-card-id="post-scenes-mixed"] [data-feed-scene-index="1"] [data-scene-player]');
 
+  /* LA SCÈNE 1 EST AMENÉE AU PREMIER PLAN AVANT D'ÊTRE TOUCHÉE (#19480).
+     Le carrousel rend ses pages NON COURANTES `inert` — `feed-scene-carousel.tsx`,
+     la branche `{ inert: true }` — et c'est juste : un doigt ne peut pas atteindre
+     une page hors écran, un lecteur d'écran ne doit pas l'annoncer. La page 1
+     n'est donc tapable qu'une fois AMENÉE, par la flèche que le § 2 emprunte déjà.
+     Le clic DIRECT que ce témoin portait ne mesurait aucun geste d'utilisateur :
+     il ne passait que parce que Playwright ignorait `inert` dans ses contrôles
+     d'actionnabilité. Depuis 1.65 il le fait respecter, et le témoin expirait au
+     bout de 30 s sur « element is inert » — un rouge de dev que rien, dans le
+     dépôt, n'avait changé. Mesurer le geste RÉEL vaut mieux que l'épingler à la
+     version du navigateur. */
+  await page.click('[data-feed-card-id="post-scenes-mixed"] [aria-label="Next scene"]');
+  await page.waitForFunction(
+    () => {
+      const scene = document.querySelector('[data-feed-card-id="post-scenes-mixed"] [data-feed-scene-index="1"]');
+      return scene !== null && scene.closest('[aria-current="true"]') !== null && scene.closest('[inert]') === null;
+    },
+    undefined,
+    { polling: 25 },
+  );
+
   const sceneBoxBefore = await page.evaluate(() => {
     const el = document.querySelector('[data-feed-card-id="post-scenes-mixed"] [data-feed-scene-index="1"]');
     const r = el.getBoundingClientRect();
