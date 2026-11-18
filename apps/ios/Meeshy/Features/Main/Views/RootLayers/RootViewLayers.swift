@@ -318,7 +318,7 @@ struct RootSheetsLayer: ViewModifier {
             #endif
             // La fiche d'un visiteur SANS COMPTE — son identité vit dans une
             // conversation, pas sur un profil.
-            .sheet(item: $router.participantProfileTarget) { target in
+            .profileCover(item: $router.participantProfileTarget) { target in
                 ParticipantProfileSheet(
                     conversationId: target.conversationId,
                     participantId: target.participantId

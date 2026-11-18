@@ -45,7 +45,7 @@ struct ContactlessExchangeSection: View {
 
     private var approach: some View {
         MeeshyStateBlock(kind: .empty, title: ContactlessCopy.approachTitle, message: ContactlessCopy.approachHint,
-                         art: .glyph, size: .compact, tint: accent, systemImage: "wave.3.right")
+                         art: .glyph, size: .compact, tint: accent, systemImage: ProfileGlyph.contactless)
             .accessibilityIdentifier("profile.card.contactless.approach")
     }
 
@@ -93,7 +93,7 @@ struct ContactlessExchangeSection: View {
                               allowsEmpty: true,
                               onSelect: { id in if let gift = ContactlessGift(rawValue: id) { model.toggle(gift) } })
                 .accessibilityIdentifier("profile.card.contactless.gifts")
-            MeeshyButton(ContactlessCopy.give, systemImage: "wave.3.right", kind: .primary, width: .fill, tint: accent,
+            MeeshyButton(ContactlessCopy.give, systemImage: ProfileGlyph.contactless, kind: .primary, width: .fill, tint: accent,
                          isPending: state.isGiving,
                          disabledReason: state.chosenOffers.isEmpty ? ContactlessCopy.chooseOne : nil,
                          action: { Task { await model.give() } })

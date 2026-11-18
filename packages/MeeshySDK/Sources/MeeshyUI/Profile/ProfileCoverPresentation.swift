@@ -64,8 +64,8 @@ public extension View {
 /// ne referme qu'au-delà des trois quarts de la largeur, ou sur une lancée qui l'emmènerait au bord. En deçà, le geste
 /// n'a rien fait (directive des glissements progressifs et annulables).
 public enum ProfileCoverBackSwipe {
-    /// La bande du bord gauche qui reçoit le doigt, comme le retour d'une pile.
-    public static let edgeWidth: CGFloat = 24
+    /// La bande du bord gauche qui reçoit le doigt, comme le retour d'une pile ; elle s'arrête avant le bouton « Retour ».
+    public static let edgeWidth: CGFloat = 16
     /// La part de la largeur au-delà de laquelle le doigt levé referme.
     public static let commitFraction: CGFloat = 0.75
     /// L'ombre portée par la fiche sur l'écran qu'elle découvre, au repos du geste.
@@ -97,9 +97,12 @@ struct ProfileCoverChrome: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environment(\.profilePresentationStyle, .cover)
-            .background(theme.backgroundPrimary.ignoresSafeArea())
-            .compositingGroup()
-            .shadow(color: .black.opacity(drag > 0 ? ProfileCoverBackSwipe.shadowOpacity : 0), radius: 12, x: -4)
+            .background(
+                theme.backgroundPrimary
+                    .shadow(color: .black.opacity(drag > 0 ? ProfileCoverBackSwipe.shadowOpacity : 0),
+                            radius: MeeshySpacing.md, x: -MeeshySpacing.xs)
+                    .ignoresSafeArea()
+            )
             .offset(x: drag)
             .overlay(alignment: .leading) { edge }
             .background(
@@ -137,13 +140,13 @@ struct ProfileCoverChrome: ViewModifier {
                 let commits = ProfileCoverBackSwipe.commits(translation: value.translation.width,
                                                             predictedEnd: value.predictedEndTranslation.width,
                                                             width: width)
-                commits ? leave() : settle()
+                if commits { leave() } else { settle() }
             }
     }
 
     /// Ramenée avant la fin : la fiche revient à sa place, rien n'est fermé.
     private func settle() {
-        meeshyWithAnimation(MeeshyAnimation.springFast, reduced: MeeshyMotion.reducedFade, reduceMotion: reduceMotion) {
+        meeshyWithMotion(.morph, reduceMotion: reduceMotion) {
             drag = 0
         }
     }
@@ -154,7 +157,7 @@ struct ProfileCoverChrome: ViewModifier {
         isLeaving = true
         HapticFeedback.light()
         guard #available(iOS 17, *) else { return dismissWithoutMotion() }
-        withAnimation(MeeshyMotion.animation(MeeshyAnimation.springFast, reduce: reduceMotion), completionCriteria: .logicallyComplete) {
+        withAnimation(MeeshyMotion.animation(.rise, reduce: reduceMotion), completionCriteria: .logicallyComplete) {
             drag = max(width, drag)
         } completion: {
             dismissWithoutMotion()

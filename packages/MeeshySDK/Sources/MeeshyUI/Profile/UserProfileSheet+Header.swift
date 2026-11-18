@@ -258,7 +258,10 @@ extension UserProfileSheet {
             avatarSize: context.size,
             storyRingSize: ringState == .none ? nil : context.ringSize
         )
-        .overlay { ProfileAvatarListening(userId: isBlockedByTarget || isCurrentUser ? nil : resolvedUserId) }
+        .overlay(alignment: .bottomLeading) {
+            ProfileAvatarListening(userId: isBlockedByTarget || isCurrentUser ? nil : resolvedUserId, avatarSize: size,
+                                   tint: accentTint)
+        }
         .bounceOnAppear()
         .onTapGesture {
             openFullscreenImage(url: displayUser.avatarURL, fallback: avatarName)
@@ -315,30 +318,5 @@ extension UserProfileSheet {
         let state = UserPresence(isOnline: false, lastActiveAt: date).state(now: now)
         if state == .offline { return theme.textSecondary }
         return state.dotColor
-    }
-
-    // MARK: - Close button (Liquid Glass, top-leading)
-
-    /// Floating close affordance using the adaptive Liquid Glass helper
-    /// (`glassEffect` on iOS 26+, `.ultraThinMaterial` fallback below). Sits over
-    /// the reduced banner so the sheet is always dismissible even mid-scroll.
-    var closeButton: some View {
-        Button {
-            HapticFeedback.light()
-            onDismiss?()
-            dismiss()
-        } label: {
-            Image(systemName: presentationStyle == .cover ? presentationStyle.leadingSymbol : "xmark")
-                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                .foregroundStyle(theme.textPrimary)
-                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
-                .adaptiveGlass(in: Circle())
-                .meeshyTapTarget()
-        }
-        .padding(EdgeInsets(top: MeeshySpacing.mdPlus - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular), leading: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular), bottom: 0, trailing: 0))
-        .accessibilityLabel(presentationStyle == .cover
-            ? String(localized: "common.back", defaultValue: "Retour", bundle: .module)
-            : String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
-        .accessibilityHint(String(localized: "profile.close.a11y", defaultValue: "Ferme le profil", bundle: .module))
     }
 }
