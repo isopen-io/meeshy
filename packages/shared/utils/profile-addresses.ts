@@ -143,3 +143,17 @@ export const addressesSeenAs = (own: ReadonlyArray<ServedAddress>, level: Relati
     const { circle: _circle, ...visible } = address;
     return [visible];
   });
+
+/**
+ * « Voir comme », moitié FERMÉE (loi 4) : les rangées verrouillées qu'un lecteur du cercle
+ * `level` recevrait, depuis les adresses du propriétaire (cercle connu). La MÊME loi que
+ * `lockedAddressCounts` : un lecteur synthétique atteint ses cercles, n'est pas soi.
+ */
+export const lockedAddressesSeenAs = (own: ReadonlyArray<ServedAddress>, level: RelationLevel): LockedAddressCount[] => {
+  const reader: LockedAddressReader = { isSelf: false, viewerLevel: level, reachable: true };
+  const locked = own.filter((address) => isAddressCircle(address.circle) && !addressOpensTo(address.circle, reader));
+  return RELATION_LEVELS.flatMap((circle): LockedAddressCount[] => {
+    const count = locked.filter((address) => address.circle === circle).length;
+    return count === 0 ? [] : [{ circle, count }];
+  });
+};

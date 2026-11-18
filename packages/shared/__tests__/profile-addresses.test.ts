@@ -7,6 +7,7 @@ import {
   normalizeAddressUrl,
   servedAddresses,
   addressesSeenAs,
+  lockedAddressesSeenAs,
   addressOpensTo,
   lockedAddressCounts,
   type AddressColumns,
@@ -133,6 +134,22 @@ describe('addressesSeenAs : « Voir comme » rend ce que lirait un lecteur du ce
     const vues = addressesSeenAs(own, 'FRIEND');
     expect(vues.map((v) => v.id)).toEqual(['p', 'a']);
     expect(vues.every((v) => !('circle' in v))).toBe(true);
+  });
+});
+
+describe('lockedAddressesSeenAs : « Voir comme » rend aussi les rangées verrouillées du cercle', () => {
+  it('donne, depuis les adresses du propriétaire, ce que lockedAddressCounts rend au lecteur de ce cercle', () => {
+    const rows = [
+      adresse({ id: 'p', circle: 'PUBLIC' }),
+      adresse({ id: 'pr', circle: 'CLOSE', position: 1 }),
+      adresse({ id: 's1', circle: 'BLOOD', position: 2 }),
+      adresse({ id: 's2', circle: 'BLOOD', position: 3 }),
+    ];
+    const own = servedAddresses(rows, { isSelf: true, viewerLevel: 'PUBLIC' });
+    for (const level of ['PUBLIC', 'ACQUAINTANCE', 'FRIEND', 'CLOSE', 'BLOOD'] as const) {
+      expect(lockedAddressesSeenAs(own, level)).toEqual(lockedAddressCounts(rows, { isSelf: false, viewerLevel: level, reachable: true }));
+    }
+    expect(lockedAddressesSeenAs(own, 'ACQUAINTANCE')).toEqual([{ circle: 'CLOSE', count: 1 }, { circle: 'BLOOD', count: 2 }]);
   });
 });
 

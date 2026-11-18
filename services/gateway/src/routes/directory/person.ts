@@ -14,7 +14,7 @@ import { profileFiguresOpen } from '../../services/relations/profileFigures';
 import { contentCountReaderFor } from '../../services/posts/authorContentCounts';
 import { publicProfileSchema, servirProfilPublic } from '../users/public-profile';
 import { cityAsReaderOf } from '../users/profile-city';
-import { addressesSeenAs, type ServedAddress } from '@meeshy/shared/utils/profile-addresses';
+import { addressesSeenAs, lockedAddressesSeenAs, type ServedAddress } from '@meeshy/shared/utils/profile-addresses';
 import { profileViewerId } from '../users/profile-block-gate';
 import { getOptionalAuth } from '../users/presence-gate';
 import { parseFieldList, parseTokenSet, restrictFields } from '../../utils/sparse-fieldset';
@@ -428,8 +428,17 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
         const villeVue = cityAsReaderOf({ id: String(profil.id), city: profil.city as string | undefined, cityCircle: profil.cityCircle as string | null | undefined }, voirComme);
         if (villeVue !== null) base.city = villeVue;
         delete base.addresses;
-        const adressesVues = addressesSeenAs((profil.addresses as ServedAddress[] | undefined) ?? [], voirComme);
+        delete base.lockedAddresses;
+        const adressesPropres = (profil.addresses as ServedAddress[] | undefined) ?? [];
+        const adressesVues = addressesSeenAs(adressesPropres, voirComme);
         if (adressesVues.length > 0) base.addresses = adressesVues;
+        // Loi 4 : le lecteur du cercle voit aussi ses rangées VERROUILLÉES — jamais soi.
+        const verrouillees = lockedAddressesSeenAs(adressesPropres, voirComme);
+        if (verrouillees.length > 0) base.lockedAddresses = verrouillees;
+        // Un lecteur synthétique n'est membre d'aucune communauté du propriétaire.
+        if (Array.isArray(profil.openCommunities)) {
+          base.openCommunities = (profil.openCommunities as Array<Record<string, unknown>>).map((c) => ({ ...c, isMember: false }));
+        }
       }
 
       // La présence est RETIRÉE par défaut, jamais ajoutée par ce paramètre :
