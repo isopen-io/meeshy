@@ -19,7 +19,7 @@ import {
 } from './profile';
 import { publicProfileQueryKey, type PublicProfileView } from './public-profile';
 import { holdProfileEdit, noteProfileTaken, sessionFieldsOfProfile } from './served-profile-session';
-import { boundToIdentity } from './http';
+import { boundToIdentity, IDENTITY_CHANGED } from './http';
 import { sessionIdentityKey, type SessionProfileFields, type SessionStoreApi, type SessionUser } from './session';
 
 /**
@@ -177,16 +177,40 @@ export async function performProfileEdit(params: {
   if (!validated.ok) return { status: 'invalid', field: validated.field };
   if (!deps.isOnline()) return { status: 'offline' };
 
-  const release = holdProfileEdit(deps.queryClient);
+  const owner = sessionIdentityKey(deps.session.getState().session);
+  const release = holdWhileOwnerHeld(deps, owner);
   try {
-    return await editProfile(deps, validated.patch);
+    return await editProfile(deps, validated.patch, owner);
   } finally {
     release();
   }
 }
 
-async function editProfile(deps: ProfileActionDeps, patch: ProfilePatch): Promise<ProfileEditOutcome> {
+/**
+ * LA RETENUE D'UN GESTE NE SURVIT PAS À SON COMPTE (revue de #19352). Une
+ * réponse arrivée pour un compte quitté n'est jamais rendue (`http.ts`) : le
+ * geste qui l'attend ne finit pas. La retenue du profil servi
+ * (`holdProfileEdit`) tombe donc aussi quand l'onglet quitte le compte qui l'a
+ * posée — sinon tout profil servi au compte suivant resterait retenu.
+ */
+function holdWhileOwnerHeld(deps: Pick<ProfileActionDeps, 'queryClient' | 'session'>, owner: string | null): () => void {
+  const hold = holdProfileEdit(deps.queryClient);
+  let held = true;
+  const release = (): void => {
+    if (!held) return;
+    held = false;
+    unsubscribe();
+    hold();
+  };
+  const unsubscribe = deps.session.subscribe((state) => {
+    if (sessionIdentityKey(state.session) !== owner) release();
+  });
+  return release;
+}
+
+async function editProfile(deps: ProfileActionDeps, patch: ProfilePatch, owner: string | null): Promise<ProfileEditOutcome> {
   await deps.queryClient.cancelQueries({ queryKey: MY_PROFILE_QUERY_KEY });
+  if (sessionIdentityKey(deps.session.getState().session) !== owner) return { status: 'refused', error: IDENTITY_CHANGED };
   const profileSnapshot = deps.queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY);
   const userSnapshot = heldUser(deps.session);
 
@@ -241,9 +265,9 @@ type ImageUpdateParams = {
 /** Tenue comme une édition de profil (`holdProfileEdit`) : une relecture de
  * `GET /me` servie pendant le téléversement ou le `PATCH` ne touche pas la session. */
 export async function performImageUpdate(params: ImageUpdateParams): Promise<ImageUpdateOutcome> {
-  const release = holdProfileEdit(params.deps.queryClient);
   /* Téléverser puis poser l'URL : deux requêtes, un seul compte — celui qui a lancé le geste (audit #19352, X1). */
   const owner = sessionIdentityKey(params.deps.session.getState().session);
+  const release = holdWhileOwnerHeld(params.deps, owner);
   try {
     return await updateImage({ ...params, deps: { ...params.deps, transport: boundToIdentity(params.deps.transport, owner) } });
   } finally {
