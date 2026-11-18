@@ -23,6 +23,9 @@ struct ProfileCreatedLinkTicket: View {
     let onOpen: (Route) -> Void
     /// « Lien actif » posé depuis le billet d'un lien en pause.
     let onSwitch: (Bool) -> Void
+    /// Sous le billet, ce qui le fait reconnaître dans une page de liens (sa conversation, sa campagne, ses dates) ;
+    /// `nil` sur la face Liens, qui n'en montre aucune.
+    var footnote: String? = nil
 
     @State private var opensDetail = false
     @State private var qrShareImage: QRShareImage?
@@ -54,6 +57,13 @@ struct ProfileCreatedLinkTicket: View {
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             billet
+            if let footnote {
+                Text(footnote)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundStyle(ThemeManager.shared.textMuted)
+                    .lineLimit(2)
+                    .padding(.horizontal, MeeshySpacing.xs)
+            }
             if let stoppage, Self.switchesInPlace(stoppage, family: ticket.family) {
                 activeSwitch(of: stoppage)
             } else if let stoppage {

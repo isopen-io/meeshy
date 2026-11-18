@@ -145,28 +145,28 @@ public struct LinksFaceSummary: Sendable, Equatable {
         return String(url[range.upperBound...])
     }
 
-    static func ticket(share link: MyShareLink) -> LinksFaceTicket {
+    public static func ticket(share link: MyShareLink) -> LinksFaceTicket {
         LinksFaceTicket(id: "share:\(link.id)", family: .share, title: link.displayName,
                         code: link.address.displayString, copyValue: link.address.absoluteString,
                         figure: .arrivals(link.currentUses, cap: link.maxUses), isActive: link.isActive,
                         expiresAt: link.expiresAt)
     }
 
-    static func ticket(tracking link: TrackingLink, owner: LinksFaceOwner) -> LinksFaceTicket {
+    public static func ticket(tracking link: TrackingLink, owner: LinksFaceOwner) -> LinksFaceTicket {
         LinksFaceTicket(id: "tracking:\(link.id)", family: .tracking, title: link.displayName,
                         code: withoutScheme(link.shortUrl), copyValue: link.shortUrl,
                         figure: .clicks(link.totalClicks), isActive: link.isActive, expiresAt: link.expiresAt,
                         aside: LinksFaceAside.of(tracking: link, owner: owner))
     }
 
-    static func ticket(community link: CommunityLink) -> LinksFaceTicket {
+    public static func ticket(community link: CommunityLink) -> LinksFaceTicket {
         LinksFaceTicket(id: "community:\(link.id)", family: .community, title: link.name,
                         code: withoutScheme(link.joinUrl), copyValue: link.joinUrl,
                         figure: .members(link.memberCount), isActive: link.isActive,
                         aside: LinksFaceAside.of(community: link))
     }
 
-    static func ticket(referral token: AffiliateToken) -> LinksFaceTicket {
+    public static func ticket(referral token: AffiliateToken) -> LinksFaceTicket {
         let link = token.affiliateLink ?? token.token
         return LinksFaceTicket(id: "referral:\(token.id)", family: .referral, title: token.name,
                                code: token.affiliateLink.map(withoutScheme) ?? token.token, copyValue: link,

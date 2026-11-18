@@ -243,7 +243,8 @@ final class EpureReglagesLiensTests: XCTestCase {
         let view = try code(Self.linksViews + "TrackingLinksView.swift")
         XCTAssertTrue(view.contains("tracking.links.empty.title"))
         XCTAssertFalse(view.contains("tracking.links.empty.subtitle"))
-        XCTAssertTrue(view.contains("actionLabel:"), "l'état vide porte l'action de création")
+        XCTAssertTrue(view.contains("LinksPageEmpty("), "l'état vide porte l'action de création")
+        XCTAssertTrue(view.contains("onCreate: { showCreate = true }"))
         XCTAssertFalse(view.contains("defaultValue: \"Aucun lien de tracking\""))
     }
 

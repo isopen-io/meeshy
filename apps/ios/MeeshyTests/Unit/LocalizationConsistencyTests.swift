@@ -402,7 +402,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/HashtagResultsView.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonFeedPost.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonLinkRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Links/Views/LinksPageTickets.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/ProfileVitrineSkeleton.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift",  // 1
         "apps/ios/Meeshy/Features/Stories/Views/StoryLocationReaderTapOverlay.swift",  // 1

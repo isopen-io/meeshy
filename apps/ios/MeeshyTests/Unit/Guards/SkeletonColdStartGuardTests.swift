@@ -97,15 +97,21 @@ final class SkeletonColdStartGuardTests: XCTestCase {
     }
 
     /// Aucune page de liens ne tourne de roue : sur cache vide, les billets fantômes du kit ; sur cache, la liste.
+    /// Les trois pages montent la section commune (#19601), qui porte le squelette et sa loi.
     func test_aucunePageDeLiensNeTourneDeRoue() throws {
-        for screen in ["Features/Links/Views/ShareLinksView.swift", "Features/Links/Views/TrackingLinksView.swift"] {
+        for screen in ["Features/Links/Views/ShareLinksView.swift", "Features/Links/Views/TrackingLinksView.swift",
+                       "Features/Links/Views/CommunityLinksView.swift"] {
             let source = try text(atRelativePath: screen)
             XCTAssertFalse(Self.mounts("ProgressView", in: source), "\(screen) tourne encore une roue")
-            XCTAssertTrue(Self.mounts("MeeshySkeletonColumn", in: source), "\(screen) ne monte pas les billets fantômes")
-            XCTAssertTrue(DeclarationBodyScanner.mask(source).contains("MeeshySkeletonLaw.shows("),
+            XCTAssertTrue(Self.mounts("LinksPageSection", in: source), "\(screen) ne monte pas la section des billets")
+            XCTAssertTrue(DeclarationBodyScanner.mask(source).contains("LinksPageLaw.phase("),
                           "\(screen) ne garde pas le squelette au seul cache vide")
-            XCTAssertTrue(source.contains(".ticket(cut:"), "\(screen) : le fantôme n'est pas un billet")
         }
+        let section = try text(atRelativePath: "Features/Links/Views/LinksPageTickets.swift")
+        XCTAssertTrue(Self.mounts("MeeshySkeletonColumn", in: section), "la section ne monte pas les billets fantômes")
+        XCTAssertTrue(DeclarationBodyScanner.mask(section).contains("MeeshySkeletonLaw.shows("),
+                      "la section ne garde pas le squelette au seul cache vide")
+        XCTAssertTrue(section.contains(".ticket(cut:"), "le fantôme n'est pas un billet")
     }
 
     // MARK: - Bornes
