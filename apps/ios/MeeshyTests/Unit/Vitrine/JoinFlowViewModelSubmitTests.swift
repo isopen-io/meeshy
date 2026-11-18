@@ -68,6 +68,23 @@ final class JoinFlowViewModelSubmitTests: XCTestCase {
         XCTAssertFalse(sut.isSubmitting)
     }
 
+    func test_submitJoin_lienDevenuInvalideALEnvoi410_poseLaPhaseGone_etGardeLApercu() async throws {
+        let links = MockJoinFlowLinks()
+        links.linkInfoResult = .success(try Self.info())
+        links.joinResult = .failure(MeeshyError.server(statusCode: 410, message: "Ce lien a expire"))
+        let sut = JoinFlowViewModel(identifier: "lisboa", links: links)
+        await sut.loadLinkInfo()
+        sut.firstName = "Aiko"
+        sut.lastName = "Tanaka"
+
+        await sut.submitJoin()
+
+        XCTAssertEqual(sut.phase, .gone, "un lien expiré, éteint ou plein entre l'aperçu et l'envoi n'invite pas à réessayer")
+        XCTAssertNil(sut.errorMessage)
+        XCTAssertEqual(sut.linkInfo?.linkId, "lisboa", "l'aperçu servi reste là pour dire quel lien et qui l'a créé")
+        XCTAssertFalse(sut.isSubmitting)
+    }
+
     func test_submitJoin_formulaireInvalide_neTouchePasLeReseau() async throws {
         let links = MockJoinFlowLinks()
         links.linkInfoResult = .success(try Self.info())
