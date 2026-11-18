@@ -74,16 +74,8 @@ export function ownProfileSnapshotChanged(before: OwnProfileColumns | null | und
   return OWN_PROFILE_FIELDS.some((field) => ownProfileFieldChanged(before, after, field));
 }
 
-const PUBLIC_NAME_FIELDS = ['displayName', 'firstName', 'lastName', 'username'] as const satisfies readonly OwnProfileField[];
-
-/**
- * Un des quatre composants du nom a-t-il CHANGÉ entre la ligne lue avant
- * l'écriture et la ligne écrite ? Même règle que `ownProfileSnapshotChanged`
- * (#19298) : sans ligne lue avant, rien ne prouve un changement.
- */
-export function publicNameChanged(before: OwnProfileColumns | null | undefined, after: OwnProfileColumns): boolean {
-  return PUBLIC_NAME_FIELDS.some((field) => ownProfileFieldChanged(before, after, field));
-}
+/** Les quatre composants du nom, qui voyagent en groupe vers les partenaires (`user:updated`). */
+export const PUBLIC_NAME_FIELDS = ['displayName', 'firstName', 'lastName', 'username'] as const satisfies readonly OwnProfileField[];
 
 /** Un champ de l'instantané a-t-il CHANGÉ ? Même règle : sans ligne lue avant, rien ne prouve un changement. */
 export function ownProfileFieldChanged(before: OwnProfileColumns | null | undefined, after: OwnProfileColumns, field: OwnProfileField): boolean {

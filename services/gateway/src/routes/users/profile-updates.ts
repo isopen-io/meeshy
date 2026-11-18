@@ -44,7 +44,8 @@ import { refreshParticipantNameSnapshots } from '../../services/participantNameS
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
-import { announceOwnProfileUpdated, identityImageChanged, OWN_PROFILE_SELECT, ownProfileFieldChanged, ownProfileSnapshotChanged, publicNameChanged } from './own-profile-sync';
+import { announceOwnProfileUpdated, identityImageChanged, OWN_PROFILE_SELECT, ownProfileFieldChanged, ownProfileSnapshotChanged, PUBLIC_NAME_FIELDS } from './own-profile-sync';
+import type { OwnProfileField } from '@meeshy/shared/types/own-profile-sync';
 
 /**
  * Le seuil d'une bio qui « compte » (#8959) : le MÊME que l'anneau de
@@ -300,6 +301,11 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         announceOwnProfileUpdated(fastify, updatedUser);
       }
 
+      // Ce qui part aux PARTENAIRES ne part que si la valeur a changé (#19298),
+      // sauf sur un rejeu : la ligne lue avant lui est déjà l'écrite.
+      const propagates = (field: OwnProfileField): boolean =>
+        replayed || ownProfileFieldChanged(current, updatedUser, field);
+
       // Realtime propagation to conversation partners (tasks/socketio-events-cleanup.md #6).
       // Only public-facing fields matter to other users' cached profile view.
       //
@@ -318,7 +324,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // refaire cette propagation, qui converge (état absolu). Elle part ICI,
       // avant les écritures voisines qui peuvent lever : une reprise sans
       // rejeu, qui ne change plus rien, ne diffuserait plus.
-      if (touchesName && (replayed || publicNameChanged(current, updatedUser))) {
+      if (touchesName && PUBLIC_NAME_FIELDS.some(propagates)) {
         const publicChanges = {
           displayName: updatedUser.displayName,
           firstName: updatedUser.firstName,
@@ -337,7 +343,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
       }
 
-      if (touchesAccent && (replayed || ownProfileFieldChanged(current, updatedUser, 'profileAccentColor'))) {
+      if (touchesAccent && propagates('profileAccentColor')) {
         announceProfileAccentToPartners(fastify, userId!, servedProfileAccentColor(updatedUser.profileAccentColor));
       }
 

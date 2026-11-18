@@ -19,6 +19,11 @@ jest.mock('../../../services/CacheStore', () => {
     del: jest.fn(async (key: string) => {
       store.delete(key);
     }),
+    setIfEquals: jest.fn(async (key: string, expected: string, value: string) => {
+      if (store.get(key) !== expected) return false;
+      store.set(key, value);
+      return true;
+    }),
   };
   return { getCacheStore: jest.fn(() => mockStore), __mockStoreMap: store };
 });
