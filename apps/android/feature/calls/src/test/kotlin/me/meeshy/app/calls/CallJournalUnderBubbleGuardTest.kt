@@ -24,6 +24,20 @@ class CallJournalUnderBubbleGuardTest {
     }
 
     @Test
+    fun `sous la bulle, le journal entier tient dans 400 dp et defile seul ; le detail garde sa hauteur (19687)`() {
+        val bubble = code("CallJournalUnderBubble.kt")
+        val sections = code("CallDetailSections.kt")
+
+        assertThat(bubble).contains("internal val CallJournalUnderBubbleListMaxHeight = 400.dp")
+        assertThat(bubble).contains("listMaxHeight = CallJournalUnderBubbleListMaxHeight")
+        assertThat(sections).contains("listMaxHeight: Dp? = null")
+        assertThat(sections).contains("heightIn(max = maxHeight).verticalScroll(rememberScrollState())")
+        assertThat(sections).contains(".boundedJournal(listMaxHeight)")
+        assertThat(sections).contains("state.lines.forEach { line ->")
+        assertThat(code("CallDetailSheet.kt")).doesNotContain("listMaxHeight")
+    }
+
+    @Test
     fun `le detail de l'historique et la bulle dessinent la meme section`() {
         assertThat(code("CallDetailSheet.kt")).contains("CallDetailTranscriptSection(")
     }

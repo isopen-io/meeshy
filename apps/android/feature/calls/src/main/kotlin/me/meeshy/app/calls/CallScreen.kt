@@ -34,6 +34,7 @@ import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallScreenMode
 import me.meeshy.sdk.model.call.CallScreenPanel
+import me.meeshy.sdk.model.call.CaptionsMode
 import me.meeshy.sdk.model.call.CallVerticalEdge
 import me.meeshy.sdk.model.call.CallStatusLabelLaw
 import me.meeshy.sdk.model.call.IncomingCallAnswer
@@ -162,6 +163,8 @@ fun CallScreen(
     )
     BackHandler(enabled = chromeState.layer.activeMode != null) { chrome.exitMode() }
     LaunchedEffect(captionsViewModel, chrome) { captionsViewModel.journalRequests.collect { chrome.open(CallScreenPanel.Journal) } }
+    val captionsOff = state.captions.mode == CaptionsMode.Off
+    LaunchedEffect(captionsOff) { if (captionsOff) chrome.closeJournal() }
 
     val duo = rememberCallDuoStage(
         state = state,

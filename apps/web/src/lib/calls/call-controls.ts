@@ -19,10 +19,11 @@ import { callLayout, type CallLayout } from './call-view';
  *   le navigateur sait partager, ou pour arrêter un partage en cours) ;
  * - **l'appel** — ce qui concerne tout le monde, dans l'ordre de la planche
  *   (#17327) : Sous-titres, Enregistrer (appel connecté et identifié), Ajouter
- *   des personnes (#8433), Journal (#8579), Réagir (#8439) et Capturer (une
- *   vidéo connectée — #8552). Ni la conversation de l'appel ni l'image dans
- *   l'image ne sont des actions de la liste : elles vivent dans l'en-tête
- *   (#8436, #17329).
+ *   des personnes (#8433), Réagir (#8439) et Capturer (une vidéo connectée —
+ *   #8552). Ni la conversation de l'appel ni l'image dans l'image ne sont des
+ *   actions de la liste : elles vivent dans l'en-tête (#8436, #17329). Le
+ *   Journal non plus (#19670) : il n'a de sens qu'avec les sous-titres, et sa
+ *   seule porte est « Journal » au pied de leur bande.
  *
  * Où elles se rangent dépend du nombre de participants
  * (`call-controls-disposition.ts`, #17327) : à deux, un rail par famille sur
@@ -32,7 +33,7 @@ import { callLayout, type CallLayout } from './call-view';
 
 export type MineAction = 'camera' | 'flip' | 'camera-picker' | 'effects' | 'screen';
 
-export type CallAction = 'captions' | 'journal' | 'record' | 'capture' | 'invite' | 'react';
+export type CallAction = 'captions' | 'record' | 'capture' | 'invite' | 'react';
 
 /** Ce que propose l'appareil pour changer de caméra (#9094). */
 export type CameraSwitch = 'flip' | 'picker' | 'none';
@@ -66,7 +67,6 @@ export function callControlSet(context: ControlsContext): CallControlSet {
     ...(inCall ? (['captions'] as const) : []),
     ...(context.callId !== null && context.phase.kind === 'connected' ? (['record'] as const) : []),
     ...(context.callId !== null && inCall ? (['invite'] as const) : []),
-    ...(inCall ? (['journal'] as const) : []),
     ...(context.callId !== null && inCall ? (['react'] as const) : []),
     ...(context.videoScene && context.phase.kind === 'connected' ? (['capture'] as const) : []),
   ];
