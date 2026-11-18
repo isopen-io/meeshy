@@ -194,17 +194,18 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // champ du corps en a besoin : un NOM (la borne de #13825 ne juge que les
       // noms CHANGÉS, il faut donc la valeur stockée), un des cinq champs du
       // taux de complétion (#3688 — displayName, bio ici ; avatar a sa propre
-      // route) ou une LANGUE (#18924 — `profile:updated` ne part que si
-      // l'écriture CHANGE l'instantané, comparé à cette ligne). Un corps qui ne
-      // touche ni nom, ni bio, ni langue n'ouvre aucune requête.
+      // route), une LANGUE ou l'ACCENT (#18924, #19201 — `profile:updated` ne
+      // part que si l'écriture CHANGE l'instantané, comparé à cette ligne). Un
+      // corps qui ne touche ni nom, ni bio, ni langue, ni accent n'ouvre aucune
+      // requête.
       const touchesName = body.firstName !== undefined || body.lastName !== undefined || body.displayName !== undefined;
       const touchesLanguage =
         body.systemLanguage !== undefined ||
         body.regionalLanguage !== undefined ||
         body.customDestinationLanguage !== undefined;
-      const touchesCompletion = body.displayName !== undefined || body.bio !== undefined;
       const touchesAccent = body.profileAccentColor !== undefined;
-      const current = touchesName || touchesLanguage || touchesCompletion || touchesAccent
+      const touchesCompletion = body.displayName !== undefined || body.bio !== undefined;
+      const current = touchesName || touchesLanguage || touchesAccent || touchesCompletion
         ? await fastify.prisma.user.findUnique({
             where: { id: userId },
             select: { ...OWN_PROFILE_SELECT, bio: true, phoneNumber: true, email: true },
@@ -382,6 +383,9 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
       }
 
+      // #19201 — les PARTENAIRES reçoivent l'accent par leur canal public. MES
+      // appareils le reçoivent par `profile:updated`, parti plus haut quand la
+      // ligne écrite change l'instantané (l'accent en est un champ).
       if (body.profileAccentColor !== undefined) {
         announceProfileAccentToPartners(fastify, userId!, servedProfileAccentColor(updatedUser.profileAccentColor));
       }

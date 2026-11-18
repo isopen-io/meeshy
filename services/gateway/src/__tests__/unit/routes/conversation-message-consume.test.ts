@@ -254,6 +254,19 @@ beforeEach(() => {
 });
 
 describe('POST /conversations/:id/messages/:messageId/consume', () => {
+  it('un message introuvable rend un 404 qui le dit : MESSAGE_NOT_FOUND (audit #19352, A6)', async () => {
+    const db = buildPrisma({ maxViewOnceCount: 1, statusEntries: [], participants: [{ id: VIEWER_PARTICIPANT_ID, userId: VIEWER_USER_ID }] });
+    const { app } = await buildApp(db);
+    try {
+      const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/messages/507f1f77bcf86cd7994390ff/consume` });
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({ success: false, error: 'Message not found', code: 'MESSAGE_NOT_FOUND' });
+      expect(db.messageUpdate).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
   it('la première ouverture dépense une unité et l’annonce à la room', async () => {
     // Verrou : le chemin nominal doit survivre au correctif à l'identique.
     const db = buildPrisma({

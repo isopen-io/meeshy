@@ -281,7 +281,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       // Le perdant de la course apprend ce que le rejeu séquentiel apprend
       // déjà : le message n'est plus là. Et il n'applique AUCUN effet.
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found');
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
       expect(mockOnMessageDeleted).not.toHaveBeenCalled();
       expect(mockSendInternalError).not.toHaveBeenCalled();
     });
@@ -303,7 +303,8 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getDeleteMsgHandler(fastify)(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found');
+      // Audit #19352 (A6) : le 404 DIT que le message est parti — un client ne le lit jamais comme celui d'un mandataire.
+      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
     });
 
     it('returns 403 when non-author has no elevated role', async () => {

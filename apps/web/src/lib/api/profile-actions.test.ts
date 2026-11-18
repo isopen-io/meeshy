@@ -10,7 +10,7 @@ import { MY_PROFILE_QUERY_KEY, type MyProfile } from './profile';
 import { performImageUpdate, performProfileEdit, type ProfileActionDeps } from './profile-actions';
 import { publicProfileQueryKey, type PublicProfileView } from './public-profile';
 import { served } from './prism';
-import { createSessionStore, type SessionStorage, type SessionUser } from './session';
+import { createSessionStore, sessionIdentityKey, type SessionStorage, type SessionUser } from './session';
 
 /**
  * LES GESTES DU PROFIL, OPTIMISTES (#6289) — instantané, application locale,
@@ -106,7 +106,7 @@ type Seen = { readonly url: string; readonly method: string; readonly body: unkn
 
 /** Une passerelle dont chaque réponse attend qu'on la LIBÈRE — ce qui permet
  * de regarder l'écran ENTRE le geste et la réponse. */
-const heldGateway = () => {
+const heldGateway = (identity?: () => string | null) => {
   const seen: Seen[] = [];
   const waiting: Array<(reply: Reply) => void> = [];
   const watchers: Array<{ readonly index: number; readonly wake: () => void }> = [];
@@ -127,7 +127,7 @@ const heldGateway = () => {
     });
   return {
     seen,
-    transport: createHttpTransport({ base: 'https://gate.test', fetchImpl: fetchImpl as typeof fetch, timeoutMs: 0 }),
+    transport: createHttpTransport({ base: 'https://gate.test', fetchImpl: fetchImpl as typeof fetch, timeoutMs: 0, ...(identity === undefined ? {} : { identity }) }),
     arrival: (): Promise<void> => {
       const index = awaited.count;
       awaited.count += 1;
@@ -416,6 +416,26 @@ describe('changer sa photo — recompressée avant de partir', () => {
   const uploaded = (url: string): Reply => ({
     status: 200,
     body: { success: true, data: { attachments: [{ id: 'a1', fileUrl: url, mimeType: 'image/webp', fileSize: 48_000 }] } },
+  });
+
+  test('le compte change pendant la recompression : la photo d’Ada ne part jamais au nom de Bob (audit #19352, X1)', async () => {
+    const session = signedIn();
+    const gateway = heldGateway(() => sessionIdentityKey(session.getState().session));
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(MY_PROFILE_QUERY_KEY, profileOf());
+    const switchToBob = () =>
+      session.getState().establish({ user: { id: 'u-bob', username: 'bob' }, token: 'jeton-de-bob', sessionToken: 'session-de-bob', expiresIn: 3600 });
+
+    const outcome = performImageUpdate({
+      kind: 'avatar',
+      file: heavyPhoto(),
+      deps: { ...depsOf({ transport: gateway.transport, session, queryClient }), recompress: async () => (switchToBob(), recompressed) },
+    });
+    const first = await Promise.race([gateway.arrival().then(() => 'émise' as const), outcome.then(({ status }) => status)]);
+
+    expect(gateway.seen.map((request) => request.url)).toEqual([]);
+    expect(first).not.toBe('saved');
+    expect(sessionUser(session)?.avatar ?? null).toBeNull();
   });
 
   test('les octets MONTÉS sont ceux de l’image recompressée, puis l’avatar est posé par sa route', async () => {
