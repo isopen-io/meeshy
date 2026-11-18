@@ -156,6 +156,24 @@ class MessageThreadPurgeTest {
         assertThat(harness.translationsShown(local)).isEmpty()
     }
 
+    /**
+     * #19440 — the purge of NAMED messages (the server's purge event, [MessageRepository.purgeMessages]) is a gate that
+     * removes rows too: it takes the id bridge and the ephemeral receipt with the row, by the same rule, not only the edit
+     * history and the translations it used to drop by hand.
+     */
+    @Test
+    fun `a purged message takes its edit history, its id bridge and its receipt with it`() = runHarnessTest { harness ->
+        harness.seedSynced(message("m1", T1))
+        harness.retainChildRowsOf("m1")
+
+        harness.database.withTransaction { CachedMessageUpdater.purgeInTransaction(harness.database, listOf("m1")) }
+
+        assertThat(harness.database.messageDao().find("m1")).isNull()
+        assertThat(harness.editHistoryOf("m1")).isEmpty()
+        assertThat(harness.database.pendingIdDao().byServerId("m1")).isNull()
+        assertThat(harness.database.ephemeralReceiptDao().find("m1")).isNull()
+    }
+
     private companion object {
         const val CONVERSATION = "c1"
         const val KEY = "messages:$CONVERSATION"

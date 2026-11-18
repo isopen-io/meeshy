@@ -12,6 +12,10 @@ import me.meeshy.core.database.entity.MessageTranslationEntity
 import me.meeshy.core.database.entity.PendingIdEntity
 import me.meeshy.core.database.entity.StoryEntity
 import me.meeshy.core.database.entity.SyncMetaEntity
+import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.conversation.TranslationLayer
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.StoredTextTranslation
 import me.meeshy.sdk.model.mediacache.CacheDataKind
 import me.meeshy.sdk.model.mediacache.CacheDomain
 import org.junit.After
@@ -109,5 +113,19 @@ class RoomCachePayloadStoresTest {
         assertThat(db.messageDao().find("cid_2")).isNotNull()
         assertThat(db.editRevisionDao().forMessage("cid_2")).hasSize(1)
         assertThat(db.messageTranslationDao().textsFor(listOf("cid_2"))).hasSize(1)
+    }
+
+    /** #19440 — « Vider le cache » makes the memory of the translations forget the purged rows, not only the disk. */
+    @Test
+    fun `purging the messages makes the translation memory forget them`() = runTest {
+        db.messageDao().upsertAll(listOf(row("m1")))
+        val layer = TranslationLayer.of(db)
+        layer.saveText("m1", StoredTextTranslation("m1", "fr", "traduit m1", "en", null, null), 1L)
+        val local = LocalMessage(ApiMessage(id = "m1", conversationId = "c1", content = "texte m1", originalLanguage = "en"))
+        assertThat(layer.project(local).message.translations).isNotEmpty()
+
+        stores.store(CacheDataKind.MESSAGES, CacheDomain.CONVERSATIONS)!!.clear()
+
+        assertThat(layer.project(local).message.translations).isEmpty()
     }
 }

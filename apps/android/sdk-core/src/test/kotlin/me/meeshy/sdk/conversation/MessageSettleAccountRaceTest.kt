@@ -68,7 +68,7 @@ class MessageSettleAccountRaceTest {
     /** Built on first use: [db] exists only once [setUp] has run. */
     private val erasures by lazy { PlaintextErasureLedger(db, clock) { owner.id } }
 
-    private fun repository(api: MessageApi) = MessageRepository(
+    private fun repository(api: MessageApi, erasures: PlaintextErasureLedger = this.erasures) = MessageRepository(
         api,
         mockk(relaxed = true),
         db,
@@ -112,5 +112,22 @@ class MessageSettleAccountRaceTest {
         repository(api).settleRefusedDeletion("c1", "m1", refusedAsGone = true)
 
         assertThat(erasures.pending("B", 10)).isEmpty()
+    }
+
+    /**
+     * #19422 — the erasure a settlement records is stamped with the account that ASKED for the read, never with whoever
+     * the session names when the write lands: the session's own source may already have moved on while the fence still
+     * admits the asking account.
+     */
+    @Test
+    fun `a deletion confirmed by the settlement is recorded under the account that asked for it`(): Unit = runBlocking {
+        seed(tombstoned("[Encrypted]").copy(isEncrypted = true, encryptionMode = "e2ee"))
+        val sessionAlreadyOnB = PlaintextErasureLedger(db, clock) { "B" }
+        val api = mockk<MessageApi> { coEvery { listAround("c1", "m1", any()) } throws java.io.IOException("offline") }
+
+        repository(api, sessionAlreadyOnB).settleRefusedDeletion("c1", "m1", refusedAsGone = true)
+
+        assertThat(sessionAlreadyOnB.pending("A", 10)).isNotEmpty()
+        assertThat(sessionAlreadyOnB.pending("B", 10)).isEmpty()
     }
 }

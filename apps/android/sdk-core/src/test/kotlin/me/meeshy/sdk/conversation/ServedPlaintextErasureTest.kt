@@ -165,8 +165,10 @@ class ServedPlaintextErasureTest {
     }
 
     /** [pageServing], the recent window saying whether older messages remain behind it (`pagination.hasMore`), under [limit]. */
-    private fun windowServing(hasMore: Boolean?, vararg messages: ApiMessage, limit: Int = 20): MessageApi = pageServing(*messages).also { api ->
-        val pagination = hasMore?.let { Pagination(total = messages.size, offset = 0, limit = limit, hasMore = it) }
+    private fun windowServing(hasMore: Boolean?, vararg messages: ApiMessage, limit: Int = 20): MessageApi =
+        windowPaginated(hasMore?.let { Pagination(total = messages.size, offset = 0, limit = limit, hasMore = it) }, *messages)
+
+    private fun windowPaginated(pagination: Pagination?, vararg messages: ApiMessage): MessageApi = pageServing(*messages).also { api ->
         coEvery { api.listConditional("c1", any()) } returns
             Response.success(ApiResponse(success = true, data = messages.toList(), pagination = pagination))
     }
@@ -231,6 +233,28 @@ class ServedPlaintextErasureTest {
         val erasures = ledger(harness)
 
         source(harness, theWholeHistory(hasMore = null), erasures).revalidate()
+
+        assertThat(harness.database.messageDao().find("m0")).isNotNull()
+        assertThat(erasures.keys()).isEmpty()
+    }
+
+    /**
+     * #19423 — `hasMore` DECODES to `false` when the pagination leaves it out: a pagination that counts more messages than
+     * the page serves (`total` 5, three served) proves that older ones remain, whatever it fails to say. Only a page that
+     * serves its own `total` proves the whole history.
+     */
+    @Test
+    fun `a window counting more messages than it serves keeps the older held row, its hasMore left out`() = runHarnessTest { harness ->
+        harness.holdOlderThanTheWindow()
+        val erasures = ledger(harness)
+        val api = windowPaginated(
+            Pagination(total = 5, offset = 0, limit = 20),
+            sealed("m1", "alice", at = "2026-11-01T09:00:00Z"),
+            sealed("m2", "alice", at = "2026-11-01T09:10:00Z"),
+            sealed("m3", "alice", at = "2026-11-01T09:20:00Z"),
+        )
+
+        source(harness, api, erasures).revalidate()
 
         assertThat(harness.database.messageDao().find("m0")).isNotNull()
         assertThat(erasures.keys()).isEmpty()
