@@ -23,9 +23,9 @@ extension CallManager: GroupCallHostProviding {
         return remoteUserId
     }
 
-    /// `remoteUsername` porte le TITRE du groupe chez l'appelant : ce n'est
-    /// pas le nom du pair principal.
+    /// `remoteUsername` porte le titre du groupe ou la phrase d'invitation : l'invitant se lit chez la sonnerie.
     var groupPrimaryDisplayName: String? {
+        if let invited = incomingRing.principalPeerName(for: currentCallId) { return invited }
         guard let remoteUsername, !remoteUsername.isEmpty,
               remoteUsername != GroupCallMeshCoordinator.shared.groupTitle(for: conversationId) else { return nil }
         return remoteUsername
