@@ -61,7 +61,7 @@ struct PersonLocationMapScreen: View {
                 } else {
                     mapStage.meeshyAnchoredSheet(
                         isPresented: .constant(true), height: .content, isDragDismissEnabled: false,
-                        closeLabel: nil, surface: .dark, outside: .passesThrough
+                        closeLabel: nil, surface: .glass, outside: .passesThrough
                     ) { sheetContent }
                 }
             }
