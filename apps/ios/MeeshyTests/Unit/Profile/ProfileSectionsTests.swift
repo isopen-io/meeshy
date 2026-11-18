@@ -594,16 +594,27 @@ final class ProfileSectionsTests: XCTestCase {
 
     // MARK: - Voir comme : trois crans, la voix, la pastille sur la bannière
 
-    func test_crans_arePublicFriendAndBlood_eachOpeningWhatTheLawOpens() {
+    /// Les attendus sont écrits en clair, cran par cran : la matrice (`RelationFeature.minimumLevel`) ouvre la présence
+    /// et le jeu à Ami, les étincelles et la batterie à Proche, la position en direct à Sang.
+    func test_crans_arePublicFriendAndBlood_eachOpeningWhatTheMatrixOpens() {
         let crans = VitrineCran.make(ownerRole: nil)
         XCTAssertEqual(crans.map(\.level), [.public, .friend, .blood])
-        for cran in crans {
-            let seen = VitrineSeenAs.make(view: ProfileCircleView.seenAs(cran.level))
-            let locked = Set(seen.lockedRows.map(\.row))
-            XCTAssertEqual(cran.opened, VitrineSeenAs.Row.allCases.filter { !locked.contains($0) },
-                           "le cran \(cran.level) se lit dans la loi, jamais dans une liste à la main")
-            XCTAssertEqual(cran.contact, seen.contact)
-        }
+        XCTAssertEqual(crans[0].opened, [], "le Public ne voit aucune rangée gardée")
+        XCTAssertEqual(crans[0].contact, .requestToWrite)
+        XCTAssertEqual(crans[1].opened, [.presence, .game])
+        XCTAssertFalse(crans[1].opened.contains(.device), "la batterie reste fermée à Ami")
+        XCTAssertFalse(crans[1].opened.contains(.liveLocation), "la position en direct reste fermée à Ami")
+        XCTAssertEqual(crans[1].contact, .write)
+        XCTAssertEqual(crans[2].opened, [.presence, .game, .sparks, .device, .liveLocation])
+        XCTAssertEqual(crans[2].contact, .write)
+    }
+
+    /// Mon rôle d'équipe n'ouvre rien de plus à un lecteur ordinaire : le privilège ne joue qu'entre deux comptes de
+    /// l'équipe (#16623), et « Voir comme » montre toujours un lecteur USER.
+    func test_crans_ofAnAdminOwner_openNothingMoreToAnOrdinaryReader() {
+        let crans = VitrineCran.make(ownerRole: .admin)
+        XCTAssertEqual(crans.map(\.opened), [[], [.presence, .game], [.presence, .game, .sparks, .device, .liveLocation]])
+        XCTAssertEqual(crans, VitrineCran.make(ownerRole: nil))
     }
 
     func test_crans_neverCloseWhatALowerCircleOpens() {
@@ -629,6 +640,9 @@ final class ProfileSectionsTests: XCTestCase {
         let publicVoice = MeeshyUser(id: "me", username: "aicha", voicePublic: true, voiceSampleUrl: "/v.m4a")
         XCTAssertNil(VitrineSeenAsView.publicVoice(of: privateVoice), "une voix privée ne paraît à aucun cercle")
         XCTAssertEqual(VitrineSeenAsView.publicVoice(of: publicVoice)?.url, "/v.m4a")
+        let projected = VitrinePreview.make(level: .friend, served: nil)
+        XCTAssertEqual(VitrineSeenAsView.shownUser(of: projected, owner: publicVoice).voiceSampleUrl, "/v.m4a",
+                       "sans fiche servie, l'aperçu lit la mienne")
     }
 
     /// « Voir comme » montre ma ville au cercle que j'ai choisi et au-dessus, jamais en dessous ni sans cercle (#19388).

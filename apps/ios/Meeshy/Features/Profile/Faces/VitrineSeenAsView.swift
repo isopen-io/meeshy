@@ -41,7 +41,7 @@ struct VitrineSeenAsView: View {
 
     /// Les champs que CE cercle reçoit quand le serveur les a servis ; sinon les miens, dont la Vitrine ne montre que
     /// ce qui est public (nom, pseudo, bio, langues).
-    private var shown: MeeshyUser { model.preview.profile?.user ?? user }
+    private var shown: MeeshyUser { Self.shownUser(of: model.preview, owner: user) }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -153,6 +153,10 @@ struct VitrineSeenAsView: View {
             .padding(MeeshySpacing.sm)
             .accessibilityAddTraits(.updatesFrequently)
             .accessibilityIdentifier("profile.seenAs.whatSees")
+    }
+
+    static func shownUser(of preview: VitrinePreview, owner: MeeshyUser) -> MeeshyUser {
+        preview.profile?.user ?? owner
     }
 
     /// Ma voix ne paraît dans l'aperçu que si je l'ai rendue publique : elle n'est gardée par aucun cercle.
