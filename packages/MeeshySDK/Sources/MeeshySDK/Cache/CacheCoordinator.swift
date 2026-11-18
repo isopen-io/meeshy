@@ -314,6 +314,8 @@ public actor CacheCoordinator {
         // singleton du processus, sans quoi le compte B verrait la carte
         // « membre » résolue pour le compte A.
         ConversationCardService.shared.invalidateAll()
+        // #19519 — cartes de lien de fiche : celles d'UN lecteur (cercle, présence).
+        ProfileLinkCardService.shared.invalidateAll()
         await SearchIndex.shared.clearAll()
         // No translation persist task to cancel — persistence is now incremental
         clearTranslationCacheDB()
