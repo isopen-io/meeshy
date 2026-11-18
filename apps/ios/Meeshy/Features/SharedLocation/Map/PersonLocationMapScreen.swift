@@ -167,9 +167,12 @@ struct PersonLocationMapScreen: View {
             MeeshyGlassButton(systemImage: sizeClass == .regular ? "xmark" : "chevron.down", label: LocationMapCopy.close,
                               size: .s44, action: { dismiss() })
             Spacer()
-            if let pin {
-                MeeshyBadge(.label(LocationMapCopy.view(pin.precision)), leading: .systemImage("eye"), surface: .glass,
-                            size: .s36)
+            VStack(spacing: MeeshySpacing.sm) {
+                if let pin {
+                    MeeshyBadge(.label(LocationMapCopy.view(pin.precision)), leading: .systemImage("eye"), surface: .glass,
+                                size: .s36)
+                }
+                LocationTravelPill(me: me, places: places)
             }
             Spacer()
             VStack(spacing: MeeshySpacing.sm) {
@@ -286,12 +289,17 @@ struct PersonLocationMapScreen: View {
 /// Ma position, telle que l'appareil la connaît DÉJÀ : jamais de demande d'autorisation depuis la carte (seul
 /// « Partager ma position » la demande), jamais un relevé de plus d'une heure.
 enum LocationMapOwnPosition {
-    static func lastKnown(now: Date = Date()) -> SharedLocationFix? {
-        let manager = CLLocationManager()
-        switch manager.authorizationStatus {
-        case .authorizedWhenInUse, .authorizedAlways: break
-        default: return nil
+    /// La permission est DÉJÀ accordée : la carte ne la demande jamais.
+    static var isAuthorized: Bool {
+        switch CLLocationManager().authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways: return true
+        default: return false
         }
+    }
+
+    static func lastKnown(now: Date = Date()) -> SharedLocationFix? {
+        guard isAuthorized else { return nil }
+        let manager = CLLocationManager()
         guard let location = manager.location, now.timeIntervalSince(location.timestamp) < 3_600 else { return nil }
         return SharedLocationFix(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude,
                                  accuracy: location.horizontalAccuracy)

@@ -19,21 +19,39 @@ final class LocationPlaceNamer: ObservableObject {
         names[Self.key(pin)]
     }
 
+    /// La ville de MA position (#19560), à la seule maille de la ville : elle ne sert qu'à la pilule « De passage à »
+    /// et ne quitte pas l'appareil.
+    func city(of fix: SharedLocationFix) -> String? {
+        names[Self.key(precision: .city, latitude: fix.latitude, longitude: fix.longitude)]
+    }
+
     func resolve(_ pins: [SharedLocationPin]) async {
         for pin in pins {
-            let key = Self.key(pin)
-            guard !asked.contains(key) else { continue }
-            asked.insert(key)
-            let location = CLLocation(latitude: pin.latitude, longitude: pin.longitude)
-            guard let placemark = try? await CLGeocoder().reverseGeocodeLocation(location).first else { continue }
-            guard let name = Self.name(of: placemark, precision: pin.precision) else { continue }
-            names[key] = name
-            Self.known[key] = name
+            await resolve(precision: pin.precision, latitude: pin.latitude, longitude: pin.longitude)
         }
     }
 
+    func resolveCity(of fix: SharedLocationFix) async {
+        await resolve(precision: .city, latitude: fix.latitude, longitude: fix.longitude)
+    }
+
+    private func resolve(precision: SharedLocationPrecision, latitude: Double, longitude: Double) async {
+        let key = Self.key(precision: precision, latitude: latitude, longitude: longitude)
+        guard !asked.contains(key) else { return }
+        asked.insert(key)
+        let location = CLLocation(latitude: latitude, longitude: longitude)
+        guard let placemark = try? await CLGeocoder().reverseGeocodeLocation(location).first else { return }
+        guard let name = Self.name(of: placemark, precision: precision) else { return }
+        names[key] = name
+        Self.known[key] = name
+    }
+
     private static func key(_ pin: SharedLocationPin) -> String {
-        "\(pin.precision.rawValue):\((pin.latitude * 1_000).rounded()):\((pin.longitude * 1_000).rounded())"
+        key(precision: pin.precision, latitude: pin.latitude, longitude: pin.longitude)
+    }
+
+    private static func key(precision: SharedLocationPrecision, latitude: Double, longitude: Double) -> String {
+        "\(precision.rawValue):\((latitude * 1_000).rounded()):\((longitude * 1_000).rounded())"
     }
 
     /// Le quartier n'est dit que si la précision servie le montre déjà.

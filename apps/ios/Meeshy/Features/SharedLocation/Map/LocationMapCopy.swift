@@ -31,6 +31,12 @@ enum LocationMapCopy {
                precisionWord(precision))
     }
 
+    /// La pilule de voyage (#19560) : « De passage à Lisbonne », quand ma position est loin de ma ville déclarée.
+    static func passingThrough(_ city: String) -> String {
+        String(format: String(localized: "locationMap.travel.passingThrough", defaultValue: "De passage à %@", bundle: .main),
+               city)
+    }
+
     static func view(_ precision: SharedLocationPrecision) -> String {
         switch precision {
         case .exact: return String(localized: "locationMap.view.exact", defaultValue: "Vue exacte", bundle: .main)

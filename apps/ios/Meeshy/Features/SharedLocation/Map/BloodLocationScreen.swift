@@ -12,6 +12,7 @@ struct BloodLocationScreen: View {
 
     @StateObject private var model: BloodLocationModel
     @StateObject private var people = SharedLocationsMapViewModel()
+    @StateObject private var places = LocationPlaceNamer()
     @ObservedObject private var sharing: SharedLocationSharingCenter
     @State private var viewport: LocationMapViewport?
     @State private var focus: LocationMapFocus?
@@ -97,6 +98,7 @@ struct BloodLocationScreen: View {
                                   action: { Task { await model.setGhost(!model.isGhost) } })
             }
             proximity
+            LocationTravelPill(me: me, places: places)
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.top, MeeshySpacing.sm)

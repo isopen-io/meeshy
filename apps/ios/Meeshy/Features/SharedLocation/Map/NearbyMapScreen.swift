@@ -81,6 +81,7 @@ struct NearbyMapScreen: View {
                 header
                 filters
                 sharingCapsule
+                LocationTravelPill(me: me, places: places)
             }
             .padding(.top, MeeshySpacing.sm)
             .frame(maxWidth: .infinity)

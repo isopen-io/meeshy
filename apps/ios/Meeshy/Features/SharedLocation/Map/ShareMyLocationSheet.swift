@@ -32,6 +32,9 @@ struct ShareMyLocationSheet: View {
     /// « Choisir sur la carte » (#19558) : la feuille partage le point que l'épingle désigne, jamais un relevé.
     @State private var choosingPoint = false
     @State private var pointViewport: LocationMapViewport?
+    /// Ma position déjà connue, pour la seule pilule « De passage à » (#19560) : jamais un relevé de plus.
+    @State private var me: SharedLocationFix?
+    @StateObject private var places = LocationPlaceNamer()
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
@@ -70,6 +73,7 @@ struct ShareMyLocationSheet: View {
         .adaptiveOnChange(of: scenePhase) { _, phase in
             if phase == .active { locationDenied = false }
         }
+        .task { me = LocationMapOwnPosition.lastKnown() }
     }
 
     /// Planche `Etat-Erreur` cas 5 : « Ouvrir les réglages », et « Choisir sur la carte » dès que la passerelle accepte un
@@ -97,10 +101,14 @@ struct ShareMyLocationSheet: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            Text(ShareMyLocationCopy.title)
-                .font(.title2.weight(.bold))
-                .foregroundStyle(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
+            HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.sm) {
+                Text(ShareMyLocationCopy.title)
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(theme.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 0)
+                LocationTravelPill(me: me, places: places)
+            }
             if recipients.count == 1, let only = recipients.first {
                 HStack(spacing: MeeshySpacing.sm) {
                     Text(ShareMyLocationCopy.with).foregroundStyle(theme.textSecondary)
