@@ -1,3 +1,4 @@
+import json
 import shutil
 import subprocess
 import sys
@@ -136,6 +137,32 @@ class GenerationFailureTests(unittest.TestCase):
         code, _, err = project.run()
         self.assertEqual(code, 2)
         self.assertIn("no.such.key", err)
+
+    def test_two_absent_keys_in_two_modules_are_BOTH_relevees_and_counted(self):
+        """#19707 — un vérificateur qui s'arrête au premier défaut mesure la PRÉSENCE d'une dette,
+        jamais sa TAILLE. C'est ce qui a laissé 44 entrées s'accumuler (#19654) : chaque session en
+        voyait UNE, la lisait comme un oubli isolé, et n'avait aucune raison de compter."""
+        project = Project()
+        document = project.manifest()
+        document["modules"][":feature:demo"]["entries"].append(
+            {"catalog": "app", "iosKey": "no.such.key", "status": "adopted"}
+        )
+        project.write_manifest(document)
+        second = project.android / "i18n/manifest/other.json"
+        second.write_text(json.dumps({"schemaVersion": 1, "modules": {":feature:other": {
+            "resDir": "feature/other/src/main/res",
+            "entries": [{"catalog": "app", "iosKey": "neither.this.one", "status": "adopted"}],
+        }}}, ensure_ascii=False, indent=2), encoding="utf-8")
+        (project.android / "feature" / "other").mkdir(parents=True, exist_ok=True)
+
+        code, _, err = project.run()
+
+        self.assertEqual(code, 2)
+        self.assertIn("no.such.key", err)
+        self.assertIn("neither.this.one", err)
+        self.assertIn("2 entrée(s)", err)
+        self.assertIn("2 module(s)", err)
+        self.assertFalse(project.res("values").exists())
 
     def test_unadopted_key_absent_from_the_catalog_is_tolerated(self):
         project = Project()
