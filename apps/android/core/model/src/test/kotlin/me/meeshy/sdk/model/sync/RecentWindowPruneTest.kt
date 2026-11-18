@@ -115,4 +115,29 @@ class RecentWindowPruneTest {
 
         assertThat(gone).isEmpty()
     }
+
+    /** #19423 — the page serves the WHOLE history: what is held below its cut no longer exists, an unreadable date still proves nothing. */
+    @Test
+    fun `a page that reaches the oldest message takes the held rows older than it, never a row it serves or one written during the flight`() {
+        val gone = RecentWindowPrune.gone(
+            held = listOf(held("old", 5), held("a1", 10), held("written-during", 3)),
+            heldBefore = setOf("old", "a1"),
+            page = listOf(served("a1", 10)),
+            reachesOldest = true,
+        )
+
+        assertThat(gone).containsExactly("old")
+    }
+
+    @Test
+    fun `a page that reaches the oldest message but carries an unreadable date still prunes nothing`() {
+        val gone = RecentWindowPrune.gone(
+            held = listOf(held("old", 5)),
+            heldBefore = setOf("old"),
+            page = listOf(served("a1", null)),
+            reachesOldest = true,
+        )
+
+        assertThat(gone).isEmpty()
+    }
 }
