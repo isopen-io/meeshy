@@ -65,6 +65,9 @@ public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
                 case .success:
                     successState
                         .transition(.scale.combined(with: .opacity))
+                case .gone:
+                    goneState
+                        .transition(.opacity)
                 case .error(let message):
                     errorState(message)
                         .transition(.opacity)
@@ -213,6 +216,29 @@ public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
     }
 
     // MARK: - Error
+
+    /// Le lien n'est plus valable (planche `Etat-Erreur` vue 3) : un bloc d'état K38, sans « Réessayer » — le lien ne
+    /// reviendra pas ; seule la personne qui l'a envoyé peut en donner un nouveau.
+    private var goneState: some View {
+        VStack {
+            Spacer()
+            MeeshyStateBlock(
+                kind: .denied,
+                title: JoinFlowCopy.goneTitle(in: .module),
+                message: JoinFlowCopy.goneMessage(in: .module),
+                primary: MeeshyStateBlockAction(
+                    title: String(localized: "joinFlow.error.close", defaultValue: "Fermer", bundle: .module),
+                    systemImage: "xmark",
+                    perform: { dismiss() }
+                ),
+                art: .glyph,
+                systemImage: "link"
+            )
+            .padding(.horizontal, MeeshySpacing.xl)
+            .accessibilityIdentifier("joinFlow.gone")
+            Spacer()
+        }
+    }
 
     private func errorState(_ message: String) -> some View {
         VStack(spacing: MeeshySpacing.xl) {

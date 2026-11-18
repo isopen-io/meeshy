@@ -220,11 +220,10 @@ public enum MeeshyStepperWords {
 
     public static func milestoneState(_ state: MeeshyStepperMilestoneState,
                                       bundle: Bundle? = nil, locale: Locale = .current) -> String {
-        let bundle = bundle ?? .module
         switch state {
-        case .done: return String(localized: "kit.stepper.milestone.done", defaultValue: "fait", bundle: bundle, locale: locale)
-        case .current: return String(localized: "kit.stepper.milestone.current", defaultValue: "en cours", bundle: bundle, locale: locale)
-        case .todo: return String(localized: "kit.stepper.milestone.todo", defaultValue: "à faire", bundle: bundle, locale: locale)
+        case .done: return String(localized: "kit.stepper.milestone.done", defaultValue: "fait", bundle: bundle ?? .module, locale: locale)
+        case .current: return String(localized: "kit.stepper.milestone.current", defaultValue: "en cours", bundle: bundle ?? .module, locale: locale)
+        case .todo: return String(localized: "kit.stepper.milestone.todo", defaultValue: "à faire", bundle: bundle ?? .module, locale: locale)
         }
     }
 }

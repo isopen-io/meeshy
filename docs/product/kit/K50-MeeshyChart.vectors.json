@@ -1,0 +1,327 @@
+{
+  "composant": "MeeshyChart",
+  "cle": "K50",
+  "note": "Vecteurs de parité (fiche K50 § 06, loi pure MeeshyChartScale). Une valeur négative vaut zéro ; le pic est le premier maximum strictement positif. Bulles : diamètre de 34 à 78 à aire proportionnelle à la part, chiffre de 12 à 20 selon le diamètre, centre posé par l'hôte (position, élévation) et gardé dans le tracé ; sans élévation, la bulle tient la mi-hauteur. Entonnoir : un passage (« 45 % s'inscrivent ») se montre entre deux étages s'il a un texte, jamais sous le dernier ; chacun ajoute 24 à la hauteur de tracé.",
+  "normalise": [
+    {
+      "valeurs": [],
+      "attendu": []
+    },
+    {
+      "valeurs": [
+        0,
+        0
+      ],
+      "attendu": [
+        0,
+        0
+      ]
+    },
+    {
+      "valeurs": [
+        1,
+        2,
+        4
+      ],
+      "attendu": [
+        0.25,
+        0.5,
+        1
+      ]
+    },
+    {
+      "valeurs": [
+        -3,
+        5
+      ],
+      "attendu": [
+        0,
+        1
+      ]
+    }
+  ],
+  "pic": [
+    {
+      "valeurs": [],
+      "indice": null
+    },
+    {
+      "valeurs": [
+        0,
+        0
+      ],
+      "indice": null
+    },
+    {
+      "valeurs": [
+        1,
+        9,
+        3,
+        9
+      ],
+      "indice": 1
+    },
+    {
+      "valeurs": [
+        -2,
+        -1
+      ],
+      "indice": null
+    }
+  ],
+  "graduations": [
+    {
+      "max": 0,
+      "nombre": 3,
+      "attendu": [
+        0
+      ]
+    },
+    {
+      "max": 214,
+      "nombre": 4,
+      "attendu": [
+        0,
+        100,
+        200,
+        300
+      ]
+    },
+    {
+      "max": 9,
+      "nombre": 4,
+      "attendu": [
+        0,
+        5,
+        10
+      ]
+    },
+    {
+      "max": 1,
+      "nombre": 3,
+      "attendu": [
+        0,
+        0.5,
+        1
+      ]
+    }
+  ],
+  "parts": [
+    {
+      "valeurs": [],
+      "attendu": []
+    },
+    {
+      "valeurs": [
+        0,
+        0
+      ],
+      "attendu": [
+        0,
+        0
+      ]
+    },
+    {
+      "valeurs": [
+        1,
+        1,
+        2
+      ],
+      "attendu": [
+        0.25,
+        0.25,
+        0.5
+      ]
+    },
+    {
+      "valeurs": [
+        -1,
+        3
+      ],
+      "attendu": [
+        0,
+        1
+      ]
+    }
+  ],
+  "hauteurs": [
+    {
+      "genre": "line",
+      "taille": "spark",
+      "points": 7,
+      "hauteur": 44
+    },
+    {
+      "genre": "bars",
+      "taille": "compact",
+      "points": 5,
+      "hauteur": 96
+    },
+    {
+      "genre": "line",
+      "taille": "regular",
+      "points": 5,
+      "hauteur": 128
+    },
+    {
+      "genre": "bars",
+      "taille": "large",
+      "points": 5,
+      "hauteur": 220
+    },
+    {
+      "genre": "strip",
+      "taille": "large",
+      "points": 5,
+      "hauteur": 26
+    },
+    {
+      "genre": "donut",
+      "taille": "large",
+      "points": 3,
+      "hauteur": 104
+    },
+    {
+      "genre": "funnel",
+      "taille": "regular",
+      "points": 4,
+      "hauteur": 208
+    }
+  ],
+  "bulles": [
+    {
+      "part": 0,
+      "diametre": 34.0
+    },
+    {
+      "part": 0.25,
+      "diametre": 48.8672
+    },
+    {
+      "part": 0.631,
+      "diametre": 65.3113
+    },
+    {
+      "part": 1,
+      "diametre": 78.0
+    },
+    {
+      "part": -1,
+      "diametre": 34
+    },
+    {
+      "part": 2,
+      "diametre": 78
+    }
+  ],
+  "chiffres": [
+    {
+      "diametre": 34,
+      "taille": 12.0
+    },
+    {
+      "diametre": 56,
+      "taille": 16.0
+    },
+    {
+      "diametre": 78,
+      "taille": 20.0
+    },
+    {
+      "diametre": 20,
+      "taille": 12
+    },
+    {
+      "diametre": 100,
+      "taille": 20
+    }
+  ],
+  "centres": [
+    {
+      "position": 0.5,
+      "elevation": 0.5,
+      "diametre": 40,
+      "largeur": 200,
+      "hauteur": 100,
+      "x": 100,
+      "y": 50
+    },
+    {
+      "position": 0,
+      "elevation": 0,
+      "diametre": 40,
+      "largeur": 200,
+      "hauteur": 100,
+      "x": 20,
+      "y": 20
+    },
+    {
+      "position": 1,
+      "elevation": 1,
+      "diametre": 40,
+      "largeur": 200,
+      "hauteur": 100,
+      "x": 180,
+      "y": 80
+    },
+    {
+      "position": 0.25,
+      "elevation": null,
+      "diametre": 40,
+      "largeur": 200,
+      "hauteur": 100,
+      "x": 50,
+      "y": 50
+    }
+  ],
+  "passages": [
+    {
+      "passages": [
+        "45 %",
+        "82 %",
+        null
+      ],
+      "montres": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "passages": [
+        "a",
+        null,
+        ""
+      ],
+      "montres": [
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "passages": [
+        "seul"
+      ],
+      "montres": [
+        false
+      ]
+    },
+    {
+      "passages": [],
+      "montres": []
+    }
+  ],
+  "hauteursPassages": [
+    {
+      "points": 3,
+      "passages": 2,
+      "hauteur": 204
+    },
+    {
+      "points": 3,
+      "passages": 0,
+      "hauteur": 156
+    }
+  ]
+}

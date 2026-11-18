@@ -327,7 +327,7 @@ final class EpureCerclesContactsTests: XCTestCase {
     // MARK: - Le profil dit où va chaque langue (règle 7)
 
     func test_profileLanguages_sayTheirOrderAtRest_underTheSectionTitle() throws {
-        let profile = try code("apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift")
+        let profile = try code("apps/ios/Meeshy/Features/Profile/Views/ProfilePrismLanguages.swift")
         XCTAssertTrue(profile.contains("profile.language.intro"))
         XCTAssertFalse(profile.contains("profile.language.primary.subtitle"))
         XCTAssertTrue(profile.contains("profile.language.regional.rank"))

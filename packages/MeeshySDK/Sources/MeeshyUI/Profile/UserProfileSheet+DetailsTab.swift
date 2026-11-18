@@ -3,37 +3,62 @@ import MeeshySDK
 
 // MARK: - UserProfileSheet — Details tab
 //
-// Reuses the historical "Profil" tab pieces (bioCard, languagePills,
-// ProfileCompletionRing, infoChip, e2eeBadge, actionButtons) and adds:
-//   1. a Report ("Signaler") action with a reasons confirmation dialog,
-//   2. a Voice ("Voix") card playing the public voice sample,
-//   3. a compact stats band (member-since + mini stat chips).
+// La Vitrine de la fiche d'un autre (#18870) : les pièces de l'ancien onglet
+// Détails (bio, langues, fuseau, pays, chiffrement, complétude, voix, chiffres),
+// puis « En commun » et « Publications », qui étaient deux onglets.
 
 extension UserProfileSheet {
 
+    /// La Vitrine de l'autre (loi 1) : qui il est, « Avec lui » (K32, vers la face Actions), « En direct » dès Proche,
+    /// sa voix, son jeu, ses chiffres, puis ce que les anciens onglets portaient — ce que nous avons en commun et ses
+    /// publications (loi 11). Planche `Autre-Vitrine` (#19416).
     @ViewBuilder
-    var detailsTab: some View {
-        // Même trame que les écrans de réglages : en-tête de section teinté,
-        // contenu groupé, respiration constante entre les blocs. Ici la teinte
-        // n'est pas fixe — c'est `resolvedAccent`, la couleur déterministe du
-        // profil, donc chaque fiche porte sa propre identité chromatique.
+    var vitrineFace: some View {
         VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
             aboutSection
+            withThemSection
+            liveSection
+            ProfilePendingSection.of(self)
             voiceSection
-            if !isCurrentUser { actionsSection }
+            gameSectionCard
             statsSection
+            commonSection
+            publicationsSection
+            ProfileAcquaintanceSection.of(self)
         }
-        .confirmationDialog(
-            String(localized: "profile.action.report", defaultValue: "Signaler", bundle: .module),
-            isPresented: $showReportSheet,
-            titleVisibility: .visible
+    }
+
+    // MARK: - En commun (l'ancien onglet Conversations)
+
+    /// Nos conversations, puis nos communautés, amis, médias et notre histoire (#19377, planche `Autre-Commun`).
+    /// Bloqué dans un sens ou l'autre, ou sa propre fiche : seulement les conversations, comme avant.
+    private var commonSection: some View {
+        ProfileInCommonSection(
+            userId: isCurrentUser || isInteractionDisabled ? nil : resolvedUserId,
+            source: dependencies.inCommon,
+            conversationCount: effectiveConversations.count,
+            isLoadingConversations: effectiveIsLoadingConversations,
+            tint: accentTint,
+            accentHex: resolvedAccent,
+            onFirstMessage: isCurrentUser || isInteractionDisabled ? nil : { openConversation() },
+            onOpenImage: { url in openFullscreenImage(url: url, fallback: "") }
         ) {
-            ForEach(Self.reportReasons, id: \.key) { reason in
-                Button(reason.label, role: .destructive) {
-                    submitReport(reportType: reason.key)
-                }
+            conversationsTab
+        }
+    }
+
+    // MARK: - Publications (l'ancien onglet Publications)
+
+    @ViewBuilder
+    private var publicationsSection: some View {
+        if postsContent != nil && !isCurrentUser {
+            postsTab.environment(\.meeshyProfileAccent, resolvedAccent)
+        } else {
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                MeeshySectionHeader(title: String(localized: "profile.relation.section.posts", defaultValue: "Publications", bundle: .module))
+                    .padding(.horizontal, MeeshySpacing.xl)
+                postsTab
             }
-            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         }
     }
 
@@ -74,7 +99,10 @@ extension UserProfileSheet {
                     if hasChips {
                         HStack(spacing: MeeshySpacing.sm) {
                             if let tz = displayUser.timezone {
-                                infoChip(icon: "clock.fill", text: tz)
+                                TimelineView(.everyMinute) { context in
+                                    infoChip(icon: "clock.fill", text: ProfileVitrineCopy.localTime(
+                                        timezone: tz, name: displayUser.resolvedDisplayName, now: context.date))
+                                }
                             }
                             if let country = displayUser.registrationCountry {
                                 let countryName = CountryFlag.name(for: country) ?? country
@@ -84,7 +112,7 @@ extension UserProfileSheet {
                     }
 
                     if displayUser.hasE2EE {
-                        e2eeBadge
+                        ProfileE2EEBadge()
                     }
 
                     if let completionRate = displayUser.profileCompletionRate {
@@ -111,17 +139,6 @@ extension UserProfileSheet {
         }
     }
 
-    // MARK: - Actions
-
-    private var actionsSection: some View {
-        profileSection(
-            title: String(localized: "profile.section.actions", defaultValue: "Actions", bundle: .module),
-            icon: "hand.tap.fill"
-        ) {
-            actionButtons
-        }
-    }
-
     // MARK: - Statistiques
 
     private var statsSection: some View {
@@ -130,223 +147,6 @@ extension UserProfileSheet {
             icon: "chart.bar.fill"
         ) {
             compactStatsBand
-        }
-    }
-
-    // MARK: - Action buttons (connection + block + report)
-
-    @ViewBuilder
-    var actionButtons: some View {
-        VStack(spacing: MeeshySpacing.smPlus) {
-            if offersCall {
-                callButtons
-            }
-
-            connectionContextBanner
-
-            switch connectionStatus {
-            case .none:
-                ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: displayUser.resolvedDisplayName) {
-                    profileActionButton(
-                        icon: "person.badge.plus.fill",
-                        label: String(localized: "profile.action.connectionRequest", defaultValue: "Demande de connexion", bundle: .module),
-                        color: Color(hex: resolvedAccent),
-                        action: { Task { await sendConnectionRequest() } }
-                    )
-                }
-            case .pendingSent:
-                profileActionButton(
-                    icon: "xmark.circle.fill",
-                    label: String(localized: "profile.action.cancelRequest", defaultValue: "Annuler la demande", bundle: .module),
-                    color: theme.textMuted,
-                    action: { Task { await cancelRequest() } }
-                )
-                profileActionButton(
-                    icon: "arrow.clockwise.circle.fill",
-                    label: String(localized: "profile.action.resendRequest", defaultValue: "Renvoyer la demande", bundle: .module),
-                    color: Color(hex: resolvedAccent),
-                    action: { Task { await resendRequest() } }
-                )
-            case .pendingReceived:
-                profileActionButton(
-                    icon: "checkmark.circle.fill",
-                    label: String(localized: "profile.action.acceptConnection", defaultValue: "Accepter la connexion", bundle: .module),
-                    color: MeeshyColors.success,
-                    action: { Task { await acceptRequest() } }
-                )
-                profileActionButton(
-                    icon: "xmark.circle.fill",
-                    label: String(localized: "profile.action.declineConnection", defaultValue: "Refuser la connexion", bundle: .module),
-                    color: theme.textMuted,
-                    action: { Task { await declineRequest() } }
-                )
-            case .connected:
-                ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: displayUser.resolvedDisplayName) { ProfileConnectedBadge() }
-            }
-
-            if isBlocked {
-                profileActionButton(
-                    icon: "hand.raised.slash.fill",
-                    label: String(localized: "profile.action.unblockUser", defaultValue: "Débloquer l'utilisateur", bundle: .module),
-                    color: MeeshyColors.warning,
-                    action: { Task { await unblockUser() } }
-                )
-            } else {
-                profileActionButton(
-                    icon: "hand.raised.fill",
-                    label: String(localized: "profile.action.blockUser", defaultValue: "Bloquer cet utilisateur", bundle: .module),
-                    color: theme.error,
-                    action: { Task { await blockUser() } }
-                )
-            }
-
-            // Report — placed below block.
-            profileActionButton(
-                icon: "flag.fill",
-                label: String(localized: "profile.action.report", defaultValue: "Signaler", bundle: .module),
-                color: theme.warning,
-                action: { showReportSheet = true }
-            )
-        }
-    }
-
-    /// Explanatory context shown above the connection action buttons so the
-    /// accept/decline (or cancel/resend) actions are self-explanatory even when
-    /// the originating notification is gone — answers "connexion de quoi ?".
-    @ViewBuilder
-    var connectionContextBanner: some View {
-        let name = displayUser.resolvedDisplayName
-        switch connectionStatus {
-        case .pendingReceived:
-            connectionContextRow(
-                icon: "person.crop.circle.badge.questionmark.fill",
-                text: String(
-                    localized: "profile.connection.context.received",
-                    defaultValue: "\(name) souhaite entrer en contact avec vous.",
-                    bundle: .module
-                )
-            )
-        case .pendingSent:
-            connectionContextRow(
-                icon: "paperplane.circle.fill",
-                text: String(
-                    localized: "profile.connection.context.sent",
-                    defaultValue: "Demande envoyée à \(name) · en attente",
-                    bundle: .module
-                )
-            )
-        case .none, .connected:
-            EmptyView()
-        }
-    }
-
-    private func connectionContextRow(icon: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: MeeshySpacing.sm) {
-            Image(systemName: icon)
-                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                .foregroundStyle(Color(hex: resolvedAccent))
-            Text(text)
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundStyle(theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(MeeshySpacing.md)
-        .background(theme.surface(tint: resolvedAccent, intensity: 0.1))
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-        .accessibilityElement(children: .combine)
-    }
-
-    var offersCall: Bool {
-        onCall != nil && !isCurrentUser && !isInteractionDisabled
-    }
-
-    private var callButtons: some View {
-        HStack(spacing: MeeshySpacing.smPlus) {
-            callButton(
-                isVideo: false,
-                icon: "phone.fill",
-                label: String(localized: "profile.action.call.audio", defaultValue: "Appel vocal", bundle: .module)
-            )
-            callButton(
-                isVideo: true,
-                icon: "video.fill",
-                label: String(localized: "profile.action.call.video", defaultValue: "Appel vidéo", bundle: .module)
-            )
-        }
-    }
-
-    private func callButton(isVideo: Bool, icon: String, label: String) -> some View {
-        profileActionButton(icon: icon, label: label, color: Color(hex: resolvedAccent)) {
-            guard let request = ProfileCallRequest(
-                userId: displayUser.userId,
-                displayName: displayUser.resolvedDisplayName,
-                isVideo: isVideo,
-                sharedConversations: effectiveConversations
-            ) else { return }
-            onCall?(request)
-        }
-        .frame(minHeight: 44)
-    }
-
-    func profileActionButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button {
-            HapticFeedback.medium()
-            action()
-        } label: {
-            HStack(spacing: MeeshySpacing.sm) {
-                Image(systemName: icon)
-                    .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
-                Text(label)
-                    .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
-            }
-            .foregroundStyle(color)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, MeeshySpacing.md)
-            .background(color.opacity(MeeshyOpacity.subtle))
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                    .stroke(color.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.emphasis)
-            )
-        }
-        .pressable()
-        .accessibilityLabel(label)
-    }
-
-    // MARK: - Report reasons (mapped to gateway enum)
-
-    struct ReportReason: Identifiable {
-        let key: String
-        let label: String
-        var id: String { key }
-    }
-
-    static var reportReasons: [ReportReason] {
-        [
-            ("spam", String(localized: "report.reason.spam", defaultValue: "Spam", bundle: .module)),
-            ("inappropriate", String(localized: "report.reason.inappropriate", defaultValue: "Contenu inapproprié", bundle: .module)),
-            ("harassment", String(localized: "report.reason.harassment", defaultValue: "Harcèlement", bundle: .module)),
-            ("violence", String(localized: "report.reason.violence", defaultValue: "Violence", bundle: .module)),
-            ("hate_speech", String(localized: "report.reason.hate_speech", defaultValue: "Discours haineux", bundle: .module)),
-            ("fake_profile", String(localized: "report.reason.fake_profile", defaultValue: "Faux profil", bundle: .module)),
-            ("impersonation", String(localized: "report.reason.impersonation", defaultValue: "Usurpation d'identité", bundle: .module)),
-            ("other", String(localized: "report.reason.other", defaultValue: "Autre", bundle: .module))
-        ].map { ReportReason(key: $0.0, label: $0.1) }
-    }
-
-    private func submitReport(reportType: String) {
-        guard let userId = resolvedUserId, !userId.isEmpty else { return }
-        HapticFeedback.medium()
-        Task {
-            let sent = await connectionActions.report(userId: userId, reportType: reportType)
-            postToast(
-                sent
-                    ? String(localized: "profile.toast.reportSent", defaultValue: "Signalement envoyé", bundle: .module)
-                    : String(localized: "profile.toast.reportFailed", defaultValue: "Impossible d'envoyer le signalement", bundle: .module),
-                isSuccess: sent
-            )
         }
     }
 
@@ -393,10 +193,10 @@ extension UserProfileSheet {
 
     // MARK: - Compact stats band
 
-    /// A small horizontal band of mini stat chips + member-since, replacing the
-    /// full stats stack. The figures are read with the profile when the sheet
-    /// opens (#10093) — cached first, then synchronized. Achievements grid is
-    /// dropped here for compactness.
+    /// « Membre depuis » puis la bande de chiffres du kit (K34, planche
+    /// `Autre-Vitrine` § « En chiffres »). Les chiffres sont lus avec le profil
+    /// à l'ouverture (#10093) — cache d'abord, puis synchronisés ; le squelette
+    /// du kit ne se montre que sur un cache vide.
     @ViewBuilder
     var compactStatsBand: some View {
         // Aucune marge horizontale ici : `profileSection` porte déjà celles de
@@ -411,50 +211,14 @@ extension UserProfileSheet {
                 )
             }
 
-            if let stats = effectiveUserStats {
-                HStack(spacing: MeeshySpacing.sm) {
-                    miniStatChip(icon: "paperplane.fill", value: stats.totalMessages,
-                                 label: String(localized: "profile.stats.messagesShort", defaultValue: "Messages", bundle: .module))
-                    miniStatChip(icon: "character.book.closed.fill", value: stats.totalTranslations,
-                                 label: String(localized: "profile.stats.translationsShort", defaultValue: "Traductions", bundle: .module))
-                    miniStatChip(icon: "globe", value: stats.languagesUsed,
-                                 label: String(localized: "profile.stats.languagesShort", defaultValue: "Langues", bundle: .module))
-                    miniStatChip(icon: "calendar.badge.checkmark", value: stats.memberDays,
-                                 label: String(localized: "profile.stats.daysShort", defaultValue: "Jours", bundle: .module))
-                }
-            } else if effectiveIsLoadingStats {
-                HStack(spacing: MeeshySpacing.sm) {
-                    ForEach(0..<4, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                            .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
-                            .frame(height: 56)
-                            .shimmer()
-                    }
-                }
+            if ProfileVitrineFigures.isVisible(stats: effectiveUserStats, isLoading: effectiveIsLoadingStats) {
+                MeeshyFigureBand(items: ProfileVitrineFigures.items(of: effectiveUserStats), size: .compact,
+                                 isLoading: effectiveUserStats == nil && effectiveIsLoadingStats,
+                                 emptyLabel: ProfileVitrineFigures.emptyLabel)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("profile.vitrine.figures")
             }
         }
-    }
-
-    private func miniStatChip(icon: String, value: Int, label: String) -> some View {
-        VStack(spacing: MeeshySpacing.xs) {
-            Image(systemName: icon)
-                .font(.system(size: MeeshyIconSize.sm, weight: .medium))
-                .foregroundStyle(Color(hex: resolvedAccent))
-            Text("\(value)")
-                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
-                .foregroundStyle(theme.textPrimary)
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(theme.textMuted)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, MeeshySpacing.smPlus)
-        .background(theme.surfaceGradient(tint: resolvedAccent))
-        .glassCard(cornerRadius: MeeshyRadius.lg)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String("\(value) \(label)"))
     }
 
     // MARK: - Stat card (member-since)

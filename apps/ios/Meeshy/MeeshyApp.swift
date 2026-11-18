@@ -198,6 +198,7 @@ struct MeeshyApp: App {
                 .environmentObject(AuthManager.shared)
                 .environmentObject(deepLinkRouter)
                 .meeshyMotionRoot()
+                .meeshyHardwareKeyboardHost()
                 .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
                 .meeshyThemeRoot(theme)
                 .modifier(ExternalEntryHandlers(dispatcher: LiveExternalEntryDispatcher(router: deepLinkRouter)))
@@ -521,16 +522,45 @@ struct SystemThemeDetector<Content: View>: View {
 // MARK: - Profile sheet environment
 
 struct ProfileSheetEnvironment: ViewModifier {
-    /// Le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche : ce que SA visibilité autorise,
-    /// rien sinon. Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
+    /// Le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche, et « Son jeu » dans sa Vitrine : ce que SA
+    /// visibilité autorise, rien sinon. « En direct » dès Proche (#19416). Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
     /// injection, toutes les feuilles de profil la reçoivent.
     func body(content: Content) -> some View {
         content
-            .environment(\.profileGameSection, ProfileGameSection { userId, displayName in
-                ProfileSlot.view(.banner, userId: userId, displayName: displayName)
+            .environment(\.profileGameSection, ProfileGameSection(
+                build: { userId, displayName in ProfileSlot.view(.banner, userId: userId, displayName: displayName) },
+                card: { userId, tint in ProfileSlot.view(.gameCard, userId: userId, displayName: "", tint: tint) }
+            ))
+            .environment(\.profileLiveSection, ProfileLiveSection { request in
+                ProfileSlot.view(.live, userId: request.userId, displayName: request.displayName, liveRequest: request)
             })
             .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, linked in
                 ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked)
+            })
+            .environment(\.profileRelationPill, ProfileRelationPill { userId, displayName in
+                ProfileSlot.view(.pill, userId: userId, displayName: displayName)
+            })
+            .environment(\.profileActionsParts, ProfileActionsParts { part, request in
+                ProfileSlot.view(.actions, userId: request.userId, displayName: request.displayName,
+                                 liveRequest: request, actionsPart: part)
+            })
+            .environment(\.profileLocationMap, ProfileLocationMap(
+                isOffered: { userId in ProfileWhereCard.isShown(for: userId) },
+                destination: { request in
+                    ProfileSlot.view(.locationMap, userId: request.userId, displayName: request.displayName,
+                                     mapRequest: request)
+                },
+                preview: { request, openMap in
+                    ProfileSlot.view(.whereTheyAre, userId: request.userId, displayName: request.displayName,
+                                     openMap: openMap)
+                }
+            ))
+            .environment(\.profileUnavailableExits, ProfileUnavailableExits(
+                scanner: { onOpened in ProfileSlot.view(.scanner, userId: "", displayName: "", onOpened: onOpened) }
+            ))
+            .environment(\.profileSendSheet, ProfileSendHost.sheet)
+            .environment(\.profileCommunityDoor, ProfileCommunityDoor { id in
+                DeepLinkRouter.shared.pendingDeepLink = .community(id: id)
             })
             .environment(\.profileLoading, LiveProfileLoading())
             .environment(\.avatarListeningSource, ListeningCenter.shared.source)
@@ -538,13 +568,19 @@ struct ProfileSheetEnvironment: ViewModifier {
 }
 
 /// Les emplacements opaques de la fiche de profil, effacés en UN seul point : le jeu sur la bannière et le cercle à la
-/// place de « Connectés » (#13940). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
+/// place de « Connectés » (#13940), la pilule du cercle commun sous le nom (#18870). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
 /// membre à l'autre, et le niveau du précédent ne doit jamais se peindre sous le nom du suivant.
 enum ProfileSlot {
-    case banner, relation
+    case banner, relation, pill, locationMap, whereTheyAre, scanner, gameCard, live, actions, send
 
-    static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false)) -> AnyView {
-        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked))
+    static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false),
+                     mapRequest: ProfileLocationMapRequest? = nil, openMap: (() -> Void)? = nil,
+                     onOpened: (() -> Void)? = nil, tint: Color = .clear,
+                     liveRequest: ProfileLiveRequest? = nil, actionsPart: ProfileActionsPart? = nil,
+                     send: ProfileSendHost? = nil) -> AnyView {
+        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked,
+                                   mapRequest: mapRequest, openMap: openMap, onOpened: onOpened, tint: tint,
+                                   liveRequest: liveRequest, actionsPart: actionsPart, send: send))
     }
 }
 
@@ -553,6 +589,13 @@ private struct ProfileSlotContent: View {
     let userId: String
     let displayName: String
     @Binding var linked: Bool
+    let mapRequest: ProfileLocationMapRequest?
+    let openMap: (() -> Void)?
+    let onOpened: (() -> Void)?
+    let tint: Color
+    let liveRequest: ProfileLiveRequest?
+    let actionsPart: ProfileActionsPart?
+    let send: ProfileSendHost?
 
     var body: some View {
         switch slot {
@@ -561,6 +604,31 @@ private struct ProfileSlotContent: View {
         case .relation:
             ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked)
                 .id(userId)
+        case .pill:
+            ProfileRelationPillView(userId: userId, displayName: displayName)
+                .id(userId)
+        case .locationMap:
+            PersonLocationMapScreen(userId: userId, displayName: displayName,
+                                    onWrite: mapRequest?.onWrite, onCall: mapRequest?.onCall,
+                                    profile: mapRequest?.profile)
+        case .whereTheyAre:
+            ProfileWhereCard(userId: userId, displayName: displayName, openMap: openMap ?? {})
+        case .scanner:
+            ProfileQRScannerSheet(onOpened: onOpened ?? {})
+        case .gameCard:
+            GameProfileBoardSource(userId: userId, tint: tint)
+                .id(userId)
+        case .live:
+            if let liveRequest {
+                ProfileLiveSource(request: liveRequest)
+                    .id(userId)
+            }
+        case .actions:
+            if let liveRequest, let actionsPart {
+                ProfileActionsPartContent(part: actionsPart, request: liveRequest)
+            }
+        case .send:
+            if let send { send }
         }
     }
 }

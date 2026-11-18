@@ -206,25 +206,43 @@ public struct PhoneReachabilityEmitterSettings: Codable, Sendable, Equatable {
 }
 
 /// `PhoneReachabilityPersonSettings` — `isShared` (clé `shared`) : l'autre apprend-il que MON téléphone est
-/// injoignable, selon la loi maintenant.
+/// injoignable, selon la loi maintenant. `alertsMe` (clé `alertMe`, #19433, serveur #19435) : suis-je prévenu quand
+/// SON téléphone devient injoignable ; `nil` = le serveur ne le sert pas encore, l'interrupteur n'existe pas.
 public struct PhoneReachabilityPersonSettings: Sendable, Equatable, Codable {
     public let userId: String
     public let isShared: Bool
+    public let alertsMe: Bool?
 
-    public init(userId: String, isShared: Bool) {
+    public init(userId: String, isShared: Bool, alertsMe: Bool? = nil) {
         self.userId = userId
         self.isShared = isShared
+        self.alertsMe = alertsMe
     }
 
     private enum CodingKeys: String, CodingKey {
         case userId
         case isShared = "shared"
+        case alertsMe = "alertMe"
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         userId = try c.decode(String.self, forKey: .userId)
         isShared = (try? c.decodeIfPresent(Bool.self, forKey: .isShared)) ?? false
+        alertsMe = try? c.decodeIfPresent(Bool.self, forKey: .alertsMe)
+    }
+}
+
+/// Le corps de l'alerte, écrit SEUL (#19435) : le schéma `{shared}` reste strict, les deux réglages voyagent séparés.
+public struct PhoneReachabilityAlertUpdate: Encodable, Sendable, Equatable {
+    public let alertsMe: Bool
+
+    public init(alertsMe: Bool) {
+        self.alertsMe = alertsMe
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case alertsMe = "alertMe"
     }
 }
 

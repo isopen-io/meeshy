@@ -18,6 +18,9 @@ public protocol ShareLinkManaging: Sendable {
     func fetchLinkArrivals(linkId: String, cursor: String?, limit: Int) async throws -> ShareLinkArrivalsPage
     func updateLink(linkId: String, settings: ShareLinkSettings) async throws
     func toggleLink(linkId: String, isActive: Bool) async throws
+    /// Remet le compteur d'entrées à zéro et rend celui que le serveur sert ensuite ; `nil` = serveur qui ne
+    /// connaît pas la remise (#19283).
+    func resetLinkUses(linkId: String) async throws -> Int?
     func deleteLink(linkId: String) async throws
 }
 
@@ -170,6 +173,16 @@ public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, 
             LinksEndpoint.byLinkId(linkId: linkId),
             body: ToggleBody(isActive: isActive)
         )
+    }
+
+    // MARK: - Reset Uses (authenticated, #19505)
+
+    public func resetLinkUses(linkId: String) async throws -> Int? {
+        let response: APIResponse<ShareLinkUsesReset> = try await api.patch(
+            LinksEndpoint.byLinkId(linkId: linkId),
+            body: ResetShareLinkUsesRequest()
+        )
+        return response.data.currentUses
     }
 
     // MARK: - Delete Link (authenticated)

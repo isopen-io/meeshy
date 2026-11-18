@@ -59,8 +59,8 @@ struct UserStatsView: View {
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.top, MeeshySpacing.sm)
-        .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: viewModel.errorMessage)
-        .meeshyAnimation(MeeshyAnimation.springDefault, reduced: MeeshyMotion.reducedFade, value: viewModel.timeline.isEmpty)
+        .meeshyMotion(.rise, value: viewModel.errorMessage)
+        .meeshyMotion(.rise, value: viewModel.timeline.isEmpty)
     }
 
     private func errorBanner(_ message: String) -> some View {

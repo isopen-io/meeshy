@@ -14,6 +14,20 @@ public enum SharedLocationShareDuration: Int, Sendable, Equatable, CaseIterable 
     public var interval: TimeInterval { TimeInterval(rawValue * 60) }
 }
 
+/// Combien de temps le partage court (#19616) : une des durées servies, ou « jusqu'à ce que j'arrête », réservé au Sang
+/// et ouvert seulement quand la passerelle l'annonce (`acceptsUntilStopped`). Le serveur rejuge le cercle.
+public enum SharedLocationShareTerm: Sendable, Equatable, Hashable {
+    case bounded(SharedLocationShareDuration)
+    case untilStopped
+
+    /// L'échéance d'une personne sans fin : l'instant que le client garde et que `expiresAt: null` se lit.
+    public static let openEndedDeadline = Date.distantFuture
+
+    public static func isOpenEnded(_ deadline: Date) -> Bool {
+        deadline >= openEndedDeadline
+    }
+}
+
 /// Un relevé de l'appareil, borné comme `sharedLocationPositionSchema`.
 public struct SharedLocationFix: Sendable, Equatable {
     public let latitude: Double
@@ -69,7 +83,16 @@ public struct SharedLocationRecipient: Sendable, Equatable, Hashable {
     }
 }
 
+/// D'où vient la position d'un partage : un relevé de l'appareil, suivi tant que le partage court, ou un point choisi à
+/// la main sur la carte (#19558), fixe, qui ne demande aucune permission et ne se met jamais à jour (`source: 'manual'`,
+/// #19557). Seul `manual` voyage : une passerelle d'avant n'a jamais lu la clé.
+public enum SharedLocationPositionSource: String, Sendable, Equatable {
+    case device
+    case manual
+}
+
 /// La charge de `location:share-start`. Démarrer de nouveau REMPLACE le partage : la liste est toujours entière.
+/// `notifyRecipients` (« Prévenir ») et `shareBattery` (« Partager aussi ma batterie ») ne partent que vrais (#19204).
 public struct SharedLocationStartRequest: Sendable, Equatable {
     /// `SHARED_LOCATION_RECIPIENTS_MAX`.
     public static let maxRecipients = 50
@@ -77,10 +100,26 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
     public let recipients: [SharedLocationRecipient]
     public let duration: SharedLocationShareDuration
     public let fix: SharedLocationFix
+    /// Chaque personne qui n'était pas déjà dans le partage remplacé reçoit une notification : un nom, une durée.
+    public let notifyRecipients: Bool
+    /// La batterie accompagne le partage, pour ses destinataires et jusqu'à son terme seulement.
+    public let shareBattery: Bool
+    /// Un relevé de l'appareil, ou un point choisi à la main.
+    public let source: SharedLocationPositionSource
+    /// « Jusqu'à ce que j'arrête » (#19616) : le partage n'a pas de terme ; `durationMinutes` reste pour le schéma.
+    public let untilStopped: Bool
 
     /// `nil` : aucun destinataire valide, ou plus que le plafond. Un destinataire en double garde sa DERNIÈRE précision
     /// et sa dernière échéance (le schéma serveur refuse les doublons, insensibles à la casse).
-    public init?(recipients: [SharedLocationRecipient], duration: SharedLocationShareDuration, fix: SharedLocationFix) {
+    public init?(
+        recipients: [SharedLocationRecipient],
+        duration: SharedLocationShareDuration,
+        fix: SharedLocationFix,
+        notifyRecipients: Bool = false,
+        shareBattery: Bool = false,
+        source: SharedLocationPositionSource = .device,
+        untilStopped: Bool = false
+    ) {
         let valid = recipients.filter { Self.isObjectId($0.userId) }
         let latest = Dictionary(valid.map { ($0.userId.lowercased(), $0) }, uniquingKeysWith: { _, last in last })
         var seen = Set<String>()
@@ -90,17 +129,33 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
             return SharedLocationRecipient(userId: key, precision: last.precision, expiresInSeconds: last.expiresInSeconds)
         }
         guard !ordered.isEmpty, ordered.count <= Self.maxRecipients else { return nil }
-        self.init(validated: ordered, duration: duration, fix: fix)
+        self.init(validated: ordered, duration: duration, fix: fix, notifyRecipients: notifyRecipients, shareBattery: shareBattery,
+                  source: source, untilStopped: untilStopped)
     }
 
-    private init(validated recipients: [SharedLocationRecipient], duration: SharedLocationShareDuration, fix: SharedLocationFix) {
+    private init(
+        validated recipients: [SharedLocationRecipient],
+        duration: SharedLocationShareDuration,
+        fix: SharedLocationFix,
+        notifyRecipients: Bool,
+        shareBattery: Bool,
+        source: SharedLocationPositionSource,
+        untilStopped: Bool
+    ) {
         self.recipients = recipients
         self.duration = duration
         self.fix = fix
+        self.notifyRecipients = notifyRecipients
+        self.shareBattery = shareBattery
+        self.source = source
+        self.untilStopped = untilStopped
     }
 
     /// Au moins une personne part avec sa propre échéance.
     public var carriesDeadlines: Bool { recipients.contains { $0.expiresInSeconds != nil } }
+
+    /// « Prévenir » ou la batterie partent avec ce démarrage.
+    public var carriesExtras: Bool { notifyRecipients || shareBattery }
 
     /// La même liste sans aucune échéance : une passerelle d'avant #18205 refuse la clé (`INVALID`), et le centre retire
     /// alors chacun à son échéance, comme avant.
@@ -108,16 +163,40 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
         SharedLocationStartRequest(
             validated: recipients.map { SharedLocationRecipient(userId: $0.userId, precision: $0.precision) },
             duration: duration,
-            fix: fix
+            fix: fix,
+            notifyRecipients: notifyRecipients,
+            shareBattery: shareBattery,
+            source: source,
+            untilStopped: untilStopped
         )
     }
 
+    /// La même liste sans « Prévenir » ni la batterie : une passerelle d'avant #19204 refuse ces clés (`INVALID`). La
+    /// source reste : un point choisi ne part jamais déguisé en relevé de l'appareil. Un partage sans fin le reste aussi :
+    /// il ne se dégrade jamais en partage borné que personne n'a choisi.
+    public var withoutExtras: SharedLocationStartRequest {
+        SharedLocationStartRequest(validated: recipients, duration: duration, fix: fix, notifyRecipients: false, shareBattery: false,
+                                   source: source, untilStopped: untilStopped)
+    }
+
+    /// Les charges à essayer, dans l'ordre, après un refus `INVALID` : sans les options de #19204, puis sans les
+    /// échéances de #18205. Une passerelle qui sert les options sert aussi les échéances (#18205 est antérieure).
+    public var legacyFallbacks: [SharedLocationStartRequest] {
+        let plain = withoutExtras
+        return (carriesExtras ? [plain] : []) + (carriesDeadlines ? [plain.withoutDeadlines] : [])
+    }
+
     public var wire: [String: Any] {
-        [
+        var wire: [String: Any] = [
             "recipients": recipients.map(\.wire),
             "durationMinutes": duration.rawValue,
             "position": fix.wire,
         ]
+        if notifyRecipients { wire["notifyRecipients"] = true }
+        if shareBattery { wire["shareBattery"] = true }
+        if source == .manual { wire["source"] = source.rawValue }
+        if untilStopped { wire["untilStopped"] = true }
+        return wire
     }
 
     private static func isObjectId(_ value: String) -> Bool {
@@ -151,9 +230,17 @@ public enum SharedLocationSendOutcome: String, Sendable, Equatable {
     }
 }
 
-/// `data` de l'accusé de `location:share-start` et de `location:share-update`.
+/// `data` de l'accusé de `location:share-start` et de `location:share-update`. `expiresAt: null` : le partage n'a pas de
+/// terme (#19616) ; une clé absente reste illisible.
 struct SharedLocationStartedWire: Decodable, Sendable, Equatable {
-    let expiresAt: String
+    let expiresAt: String?
+
+    private enum CodingKeys: String, CodingKey { case expiresAt }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        expiresAt = try c.decodeNil(forKey: .expiresAt) ? nil : try c.decode(String.self, forKey: .expiresAt)
+    }
 }
 
 /// Le verdict d'un démarrage ou d'une mise à jour : le terme servi, ou le refus.
@@ -164,7 +251,8 @@ public enum SharedLocationStartVerdict: Sendable, Equatable {
     static func read(_ ack: SocketAck<SharedLocationStartedWire>) -> SharedLocationStartVerdict {
         switch ack {
         case .accepted(let wire):
-            guard let expiresAt = WireDate.date(from: wire.expiresAt) else { return .refused(.failed) }
+            guard let raw = wire.expiresAt else { return .started(expiresAt: SharedLocationShareTerm.openEndedDeadline) }
+            guard let expiresAt = WireDate.date(from: raw) else { return .refused(.failed) }
             return .started(expiresAt: expiresAt)
         case .acceptedWithoutPayload, .undecodable:
             return .refused(.failed)

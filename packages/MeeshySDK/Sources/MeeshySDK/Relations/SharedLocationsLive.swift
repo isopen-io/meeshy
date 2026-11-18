@@ -9,6 +9,19 @@ public struct SharedLocationEntry: Equatable, Sendable {
     public let radiusMeters: Double
     public let updatedAt: Date
     public let deadline: Date
+    /// Le cercle servi avec la position (`nil` : non servi).
+    public let circle: RelationLevel?
+
+    public init(latitude: Double, longitude: Double, precision: SharedLocationPrecision, radiusMeters: Double,
+                updatedAt: Date, deadline: Date, circle: RelationLevel? = nil) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.precision = precision
+        self.radiusMeters = radiusMeters
+        self.updatedAt = updatedAt
+        self.deadline = deadline
+        self.circle = circle
+    }
 }
 
 /// LES POSITIONS QU'ON ME PARTAGE, SUR iOS (#16983, réception de #14109 ; iso du web `shared-locations-live.ts`, #16984).
@@ -25,17 +38,23 @@ public struct SharedLocationEntry: Equatable, Sendable {
 ///   position au lieu de la laisser jusqu'à son terme ; ce qui est arrivé pendant la demande reste.
 /// - Ma propre position (un autre de mes appareils) ne s'affiche pas ici.
 ///
+/// - Une personne en pause par son mode fantôme (#19562) n'a plus de position chez moi : elle est dans `ghosts`, avec son
+///   seul cercle. Le rattrapage du MONDE fait foi sur les fantômes ; une position reçue ou une fin efface le fantôme.
+///
 /// Le serveur a déjà jugé (niveau, consentement, blocage, précision) : ce magasin ne rejuge rien, ne rend rien plus
 /// précis que servi, et ne garde rien sur le disque.
 @MainActor
 public final class SharedLocationsLive: ObservableObject {
 
     public typealias Snapshot = @Sendable @concurrent (SharedLocationBounds?) async throws -> [SharedLocationChanged]
+    public typealias Served = @Sendable @concurrent (SharedLocationBounds?) async throws -> SharedLocationSnapshot
 
     @Published public private(set) var byUser: [String: SharedLocationEntry] = [:]
+    /// Ceux dont la position est en pause par fantôme : qui et de quel cercle, jamais où ni quand.
+    @Published public private(set) var ghosts: [String: SharedLocationGhost] = [:]
 
     private let viewerId: () -> String?
-    private let snapshot: Snapshot
+    private let snapshot: Served
     private let now: () -> Date
     private var arrivals = 0
     private var arrivedAt: [String: Int] = [:]
@@ -44,9 +63,23 @@ public final class SharedLocationsLive: ObservableObject {
 
     nonisolated deinit {}
 
-    public init(
+    /// Un rattrapage qui ne sert que des positions (aucun fantôme) : la forme d'avant #19562.
+    public convenience init(
         viewerId: @escaping () -> String?,
         snapshot: @escaping Snapshot,
+        changedEvents: AnyPublisher<SharedLocationChanged, Never> = SharedLocationEvents.changed,
+        endedEvents: AnyPublisher<SharedLocationEnded, Never> = SharedLocationEvents.ended,
+        connected: AnyPublisher<Bool, Never>,
+        now: @escaping () -> Date = { Date() }
+    ) {
+        self.init(viewerId: viewerId,
+                  served: { bounds in try await SharedLocationSnapshot(items: snapshot(bounds)) },
+                  changedEvents: changedEvents, endedEvents: endedEvents, connected: connected, now: now)
+    }
+
+    public init(
+        viewerId: @escaping () -> String?,
+        served snapshot: @escaping Served,
         changedEvents: AnyPublisher<SharedLocationChanged, Never> = SharedLocationEvents.changed,
         endedEvents: AnyPublisher<SharedLocationEnded, Never> = SharedLocationEvents.ended,
         connected: AnyPublisher<Bool, Never>,
@@ -89,13 +122,16 @@ public final class SharedLocationsLive: ObservableObject {
             precision: changed.precision,
             radiusMeters: changed.radiusMeters,
             updatedAt: changed.updatedAt,
-            deadline: deadline
+            deadline: deadline,
+            circle: changed.circle
         )
+        if ghosts[changed.userId] != nil { ghosts.removeValue(forKey: changed.userId) }
         scheduleExpiry()
     }
 
     public func clear(_ userId: String) {
         arrivedAt.removeValue(forKey: userId)
+        if ghosts[userId] != nil { ghosts.removeValue(forKey: userId) }
         guard byUser[userId] != nil else { return }
         byUser.removeValue(forKey: userId)
         scheduleExpiry()
@@ -120,6 +156,22 @@ public final class SharedLocationsLive: ObservableObject {
         items.forEach(receive)
     }
 
+    /// Le rattrapage avec ses fantômes : les positions comme ci-dessus ; un fantôme servi efface la position gardée de
+    /// la personne (sauf une position arrivée après le départ de la demande) ; le rattrapage du MONDE (`nil`) retire
+    /// les fantômes qu'il ne sert plus, celui d'une emprise n'en retire aucun (un fantôme n'a pas de lieu).
+    public func reconcile(_ snapshot: SharedLocationSnapshot, mark: Int, within bounds: SharedLocationBounds?) {
+        reconcile(snapshot.items, mark: mark, within: bounds)
+        let paused = snapshot.ghosts.filter { $0.userId != viewerId() && (arrivedAt[$0.userId] ?? 0) <= mark }
+        if bounds == nil {
+            let kept = Set(paused.map(\.userId))
+            ghosts.keys.filter { !kept.contains($0) }.forEach { ghosts.removeValue(forKey: $0) }
+        }
+        paused.forEach { ghost in
+            clear(ghost.userId)
+            ghosts[ghost.userId] = ghost
+        }
+    }
+
     /// Ce qui a passé son échéance s'éteint — le minuteur l'appelle, sans événement du serveur.
     public func expireDue() {
         let instant = now()
@@ -129,8 +181,8 @@ public final class SharedLocationsLive: ObservableObject {
     /// Le rattrapage d'une emprise : à la connexion (toute la carte), puis à chaque emprise que la carte montre.
     public func catchUp(within bounds: SharedLocationBounds?) async {
         let mark = mark()
-        guard let items = try? await snapshot(bounds) else { return }
-        reconcile(items, mark: mark, within: bounds)
+        guard let served = try? await snapshot(bounds) else { return }
+        reconcile(served, mark: mark, within: bounds)
     }
 
     // MARK: - Interne

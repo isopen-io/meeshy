@@ -704,10 +704,8 @@ struct PostDetailView: View {
                 ? String(localized: "feed.post.detail.see_less", defaultValue: "voir moins", bundle: .main)
                 : String(localized: "feed.post.detail.see_more", defaultValue: "voir plus", bundle: .main))) { toggleTextExpansion() }
 
-            // Inline secondary translation panel
-            if let content = secondaryContent, let code = secondaryLangCode {
-                PostDetailSecondaryTranslationPanel(content: content, code: code)
-            }
+            PostDetailTranslationLines(post: post, tint: Color(hex: accentColor), override: $activeDisplayLangCode,
+                                       secondaryCode: $secondaryLangCode, secondaryContent: secondaryContent)
 
             // Embed vidéo (YouTube) détecté dans le contenu du post.
             if let embeddedVideo {
