@@ -88,11 +88,13 @@ final class PlayerBannerTests: XCTestCase {
     func test_theSentenceReadsEveryPiece_inTheOrderOfTheBanner() {
         let banner = completeBanner()
         let label = PlayerBannerCopy.accessibilityLabel(for: banner)
+        let rank = GameCopy.rankLabel(banner.rank?.rank ?? .murmure, division5: banner.rank?.division, mythic: banner.rank?.mythic)
+        XCTAssertTrue(label.hasPrefix(rank), "le rang ouvre la phrase (#19705) : \(label)")
         let order = [
+            rank,
             GameText.bannerLevel(level: GameCopy.formatCount(banner.level)),
             GameCopy.tierName(banner.tier),
             GameCopy.meeshes(banner.meeshes ?? 0),
-            GameCopy.rankLabel(banner.rank?.rank ?? .murmure, division5: banner.rank?.division, mythic: banner.rank?.mythic),
             GameText.leagueName(banner.league?.league ?? .quartz),
             GameCopy.days(banner.flame?.days ?? 0),
         ]

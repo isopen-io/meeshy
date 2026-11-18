@@ -84,9 +84,9 @@ describe('seulement ce qui existe', () => {
     });
   }
 
-  test('l’ordre est fixe : anneau, jauge, puis le milieu — Flamme, Meeshes, mission, ligue — et le rang au bout (#11125)', () => {
+  test('l’ordre est fixe : le rang en tête, puis l’anneau, la jauge et le milieu — Flamme, Meeshes, mission, ligue (#19705, #17394)', () => {
     const html = markup(modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 })));
-    const order = ['ring', 'gauge', 'flame', 'meeshes', 'missions', 'league', 'rank'].map((piece) => html.indexOf(`data-player-banner-${piece}=`));
+    const order = ['rank', 'ring', 'gauge', 'flame', 'meeshes', 'missions', 'league'].map((piece) => html.indexOf(`data-player-banner-${piece}=`));
     expect(order.every((position) => position >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
@@ -187,7 +187,7 @@ describe('accessible', () => {
     expect(markup(newcomer())).toMatch(/data-player-banner=""[^>]*min-height:(4[4-9]|[5-9]\d)px/);
     const host = await mount(<PlayerBanner model={modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }))} motion={motion().value} />);
     const direct = Array.from(host.querySelectorAll('[data-player-banner] > a[data-player-banner-link]'));
-    expect(direct.map((link) => (link as HTMLElement).dataset.playerBannerLink)).toEqual(['level', 'points', 'glory']);
+    expect(direct.map((link) => (link as HTMLElement).dataset.playerBannerLink)).toEqual(['glory', 'level', 'points']);
     for (const link of direct) expect(link.getAttribute('style') ?? '').toMatch(/min-height:\s*(4[4-9]|[5-9]\d)px/);
     const rows = Array.from(host.querySelectorAll('[data-player-banner-middle] > [data-player-banner-row]')).map((row) =>
       Array.from(row.querySelectorAll('a[data-player-banner-link]')).map((link) => (link as HTMLElement).dataset.playerBannerLink),
@@ -394,6 +394,12 @@ describe('aux très grandes tailles de texte', () => {
     expect(gaugeLink?.style.order).toBe('2');
     expect(gauge?.className).toContain('basis-full');
     expect(ordered(host)).toEqual(['level', 'points']);
+  });
+
+  test('le rang reste la première pièce de la rangée en grand texte (#19705)', async () => {
+    const host = await mount(<PlayerBanner model={modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23, glory: 620 }))} motion={motion({ largeText: true }).value} />);
+    const links = Array.from(host.querySelectorAll('[data-player-banner] > a[data-player-banner-link]')).map((link) => (link as HTMLElement).dataset.playerBannerLink);
+    expect(links[0]).toBe('glory');
   });
 
   test('au texte ordinaire : la jauge reste à côté de l’anneau', async () => {
