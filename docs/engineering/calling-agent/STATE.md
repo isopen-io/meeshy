@@ -1657,7 +1657,34 @@ socket jusqu'au client.
 4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
 5. **Recentrer sur les appels eux-mêmes** dès que la dette d'effacement est soldée : latence de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
 
-## Cycle 49 — 2026-11-18 (en cours)
+## Cycle 49 — 2026-11-18
 
-- **Base** : `origin/dev` @ `6fde25b36`. #19753 (cycle 48) est fusionnée ; la CI principale (`ci.yml`, `android.yml`, `ios.yml`, `sdk-tests.yml`) est réactivée.
-- **Objectif** : #19750 — les pistes traduites d'un `PostMedia` s'effacent avec leur média, et les réponses de post ne servent plus `translations.<lang>.path`.
+- **Base** : `origin/dev` @ `6fde25b36`. #19753 (cycle 48) était fusionnée. La CI principale (`ci.yml`, `android.yml`, `ios.yml`, `sdk-tests.yml`) est réactivée ; les 21 autres workflows restent désactivés.
+- **Branche** : `claude/determined-volta-98am8h`.
+- **Objectif** : #19750. Les pistes traduites d'un `PostMedia` s'effacent avec leur média, et les réponses de post ne servent plus `translations.<lang>.path`.
+- **Livré** (passerelle seule) :
+  - `translationTrackKeys()` (`derivedAttachmentFiles.ts`) rend la clé de stockage de chaque piste, lue sur son `url` seulement. Une clé qui contient `..` ou commence par `/`, même après décodage, n'est jamais rendue. Le `path` n'est pas lu : `MediaService.delete` ne sait pas effacer un chemin absolu.
+  - `POST_MEDIA_FILE_COLUMNS` et `PostMediaFileRow` incluent `translations`. `reclaimMediaRowBytes` efface ces clés sous la même garde `Sound`. Cela vaut pour l'expiration des stories, l'édition d'un post, le balayage des médias en attente et la purge de compte.
+  - `PRISMA_SERVED_RESULTS` (`utils/prismaServedResults.ts`, nouveau) regroupe les extensions de résultat du client Prisma du serveur. On y trouve celles qui étaient déjà dans `server.ts` (avatar, bannière, avatar de conversation), et une nouvelle : `postMedia.translations` passe par `servedAttachmentTranslations`. Un seul site couvre donc REST, le socket et l'administration, relations imbriquées comprises. `server.ts` perd 10 lignes.
+- **Tests** :
+  - **Rouge** (implémenteur) : effacement `2 failed, 22 passed` ; projection `3 failed, 3 passed`, avec `"path":"/app/uploads/translated/media-1_fr.mp3"` servi.
+  - **Vert**, relancé par moi : `prismaServedResults` + `reclaimPostMediaBytes` donnent `2 suites, 23 passed`.
+  - **QA** :
+    - suites du lot `45 passed` ; `tsc --noEmit` à 0 ;
+    - suites voisines `4 failed, 417 passed` (`14 failed, 5766 passed`). Les 4 suites rouges (ExifStrip, HEIF, AVIF) échouent aussi sur le parent (`heif-convert ENOENT`, outillage natif).
+  - **Mutations** : M1 à M4 et M6 sont tuées. M7 (retirer `.$extends` en gardant la chaîne en commentaire) survit, voir #19770.
+- **Rétrocompatibilité** : seule `path` disparaît de la forme servie. Aucun client ne la lit (iOS `APIAttachmentTranslation`, Android `ApiAttachmentTranslation`, web). Aucune migration.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - **R1, élevée** : l'effacement est **sans effet en production** tant que #19749 n'est pas fait. La branche post écrit l'URL locale du traducteur (`/outputs/audio/…`), que `storageKeyFromMediaUrl` ne lit pas, et elle n'est de toute façon jamais atteinte. Les exigences sont reportées sur #19749 : persistance par `saveTranslatedTrack`, clé par `postMediaId` (R4), témoin depuis le vrai producteur.
+  - **R2** → #19769 : la projection au niveau du client rend aveugles le miroir du seau et les relectures-réécritures (`PostAudioService`).
+  - **R3** → #19770 : le témoin de branchement ne lit que le texte de `server.ts`.
+  - **R5** → #19771 : `storageKeyFromMediaUrl` accepte un hôte étranger. Le défaut est antérieur au lot.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR du cycle 49 n'est pas fusionnée, la reprendre d'abord (fusionner `origin/dev` dans la branche, rejouer les gardes, suivre la CI).
+1. **#19749** avec les exigences R1 et R4. C'est elle qui rend #19750 effective : relais `postId`/`postMediaId` rétrocompatible, persistance par `saveTranslatedTrack`, témoin de bout en bout. Puis #19769 dans le même mouvement, si la projection doit migrer vers un sérialiseur.
+2. #19702, #19673, #19735, #19751, #19770, #19771.
+3. #19520, second critère : constat sur le serveur avec `sre-infra`, dans la même séance que la mesure des journaux d'accès pour #19471.
+4. #19597, #19736, puis #19473, #18668, #18692, #19381, #19253, #19294, #19295, #19255 ; #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
+5. **Recentrer sur les appels eux-mêmes** dès que la dette d'effacement est soldée : latence de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
