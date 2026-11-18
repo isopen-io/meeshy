@@ -417,11 +417,12 @@ final class SharedLocationSharingCenter: ObservableObject {
 
     /// « Pas de partage » à une liste seule couvre aussi une session remplacée par un autre appareil pendant l'envoi : la
     /// passerelle dit ce qui court. Un partage servi ⇒ le retrait reste en attente et se rejoue (la liste seule ignore
-    /// qui n'est plus servi) ; aucun, ou une relecture qui ne conclut pas ⇒ la liste se vide, sans arrêt ni relevé.
+    /// qui n'est plus servi), comme une relecture qui ne conclut pas : vider sur la foi d'une panne laisserait la
+    /// personne servie. Seul un partage servi VIDE vide la liste, sans arrêt ni relevé.
     private func settleNotSharing() async -> SharedLocationShareProblem? {
         let truth = await served()
         guard isLive else { return .refused(.failed) }
-        if let truth, !truth.recipients.isEmpty { return .refused(.unconfirmed) }
+        guard let truth, truth.recipients.isEmpty else { return .refused(.unconfirmed) }
         wipe()
         return nil
     }

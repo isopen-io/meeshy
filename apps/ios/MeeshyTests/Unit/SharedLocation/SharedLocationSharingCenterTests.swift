@@ -552,20 +552,18 @@ final class SharedLocationSharingCenterTests: XCTestCase {
         XCTAssertNil(sut.entry(for: bob))
     }
 
-    func test_theListAloneMeetingNoShare_emptiesTheListWithoutStopping() async {
-        let store = FakeSharedLocationRosterStore()
-        let (sut, emitter, fixes, _) = makeSUT(store: store)
+    func test_theListAloneMeetingNoShare_withoutAnyRead_neverEmptiesTheListOnAFailure() async {
+        let (sut, emitter, _, _) = makeSUT()
         _ = await sut.share(with: alice, precision: .exact, duration: .eightHours)
         _ = await sut.share(with: bob, precision: .city, duration: .eightHours)
         emitter.queuedStartVerdicts = [.refused(.notSharing)]
 
         let problem = await sut.stopSharing(with: bob)
 
-        XCTAssertNil(problem)
+        XCTAssertEqual(problem, .withdrawalPending)
+        XCTAssertTrue(sut.roster.isWithdrawalPending(for: bob))
+        XCTAssertNotNil(sut.entry(for: alice))
         XCTAssertEqual(emitter.stops, 0)
-        XCTAssertTrue(sut.roster.isEmpty)
-        XCTAssertNil(store.kept)
-        XCTAssertFalse(fixes.isFollowing)
     }
 
     func test_aLostAck_keepsStopWithinReach() async {

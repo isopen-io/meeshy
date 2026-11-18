@@ -565,7 +565,7 @@ class SharedLocationSharingCenterTest {
     }
 
     @Test
-    fun `une liste seule qui ne trouve aucun partage vide la liste sans arreter ni suivre`() = runTest {
+    fun `une liste seule qui ne trouve aucun partage sans relecture possible ne vide jamais la liste sur une panne`() = runTest {
         val rig = Rig(this)
         rig.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.EIGHT_HOURS)
         rig.center.share(bob, SharedLocationPrecision.EXACT, SharedLocationShareDuration.EIGHT_HOURS)
@@ -573,9 +573,9 @@ class SharedLocationSharingCenterTest {
 
         val problem = rig.center.stopSharing(bob)
 
-        assertThat(problem).isNull()
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(rig.center.roster.value.isWithdrawalPending(bob)).isTrue()
+        assertThat(rig.center.roster.value.entry(alice)).isNotNull()
         assertThat(rig.stops).isEqualTo(0)
-        assertThat(rig.center.roster.value.isEmpty).isTrue()
-        assertThat(rig.saved["me"]).isNull()
     }
 }

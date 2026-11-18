@@ -403,6 +403,36 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertEqual(sut.fixes.asks, 0)
     }
 
+    func test_theListAloneMeetingNoShare_whileTheGatewayServesNoOne_emptiesTheListWithoutStopping() async {
+        let sut = makeSUT()
+        sut.served.snapshot = snapshot([(alice, .exact, 3600), (bob, .city, 3600)])
+        await sut.center.sync()
+        sut.emitter.queuedStartVerdicts = [.refused(.notSharing)]
+        sut.served.snapshot = snapshot([])
+
+        let problem = await sut.center.stopSharing(with: bob)
+
+        XCTAssertNil(problem)
+        XCTAssertTrue(sut.center.roster.isEmpty)
+        XCTAssertEqual(sut.emitter.stops, 0)
+        XCTAssertEqual(sut.fixes.asks, 0)
+    }
+
+    func test_theListAloneMeetingNoShare_withAFailedRead_keepsTheWithdrawalPending() async {
+        let sut = makeSUT()
+        sut.served.snapshot = snapshot([(alice, .exact, 3600), (bob, .city, 3600)])
+        await sut.center.sync()
+        sut.emitter.queuedStartVerdicts = [.refused(.notSharing)]
+        sut.served.snapshot = nil
+
+        let problem = await sut.center.stopSharing(with: bob)
+
+        XCTAssertEqual(problem, .withdrawalPending)
+        XCTAssertTrue(sut.center.roster.isWithdrawalPending(for: bob))
+        XCTAssertNotNil(sut.center.entry(for: alice))
+        XCTAssertEqual(sut.emitter.stops, 0)
+    }
+
     func test_aReceivedList_survivesARelaunch_withoutFollowing() async {
         let store = FakeSharedLocationRosterStore()
         let first = makeSUT(store: store)

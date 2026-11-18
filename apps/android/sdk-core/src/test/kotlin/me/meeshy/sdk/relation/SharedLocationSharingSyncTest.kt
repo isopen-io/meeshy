@@ -364,4 +364,40 @@ class SharedLocationSharingSyncTest {
         assertThat(device.stops).isEqualTo(0)
         assertThat(device.fixAsks).isEqualTo(0)
     }
+
+    @Test
+    fun `une liste seule sans partage quand la passerelle ne sert plus personne vide la liste sans arreter`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour, bob to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        device.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.NOT_SHARING)
+        device.servedSnapshot = served()
+
+        val problem = device.center.stopSharing(bob)
+
+        assertThat(problem).isNull()
+        assertThat(device.center.roster.value.isEmpty).isTrue()
+        assertThat(device.stops).isEqualTo(0)
+        assertThat(device.fixAsks).isEqualTo(0)
+    }
+
+    @Test
+    fun `une liste seule sans partage suivie d'une relecture en echec garde le retrait en attente`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour, bob to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        device.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.NOT_SHARING)
+        device.servedSnapshot = null
+
+        val problem = device.center.stopSharing(bob)
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(device.center.roster.value.isWithdrawalPending(bob)).isTrue()
+        assertThat(device.center.roster.value.entry(alice)).isNotNull()
+        assertThat(device.stops).isEqualTo(0)
+    }
 }
