@@ -6,7 +6,9 @@
  *   la même source, donc jamais un autre nombre que la liste.
  * - Communauté : les co-membres actifs d'une communauté active que je partage (la même lecture que
  *   « En commun », `inCommon.ts`), comptes utilisables, hors blocage dans un sens ou dans l'autre,
- *   et hors personnes déjà comptées à Connaissance ou plus : chacun se compte UNE fois.
+ *   et hors personnes déjà comptées à Connaissance ou plus : chacun se compte UNE fois. Le compte
+ *   se fait DANS LA BASE (dédoublonnage, exclusions, état du compte, puis `$count`) : exact quelle
+ *   que soit la taille des communautés, sans charger une ligne de membre.
  * - Les demandes : reçues, en attente, hors blocage (la loi des listes de demandes,
  *   `clauseHorsBlocage`).
  */
@@ -15,33 +17,53 @@ import type { RelationCirclesSummary } from '@meeshy/shared/types/relation-circl
 import type { RelationLevel } from '@meeshy/shared/types/relation';
 import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { listRelationLinks, type RelationLinksDb } from './relationLinks';
-import { ACCOUNT_STATE_SELECT, isUsableAccount } from './usableAccount';
 
 export type CirclesSummaryDb = RelationLinksDb & Pick<PrismaClient, 'community' | 'communityMember'>;
 
-/** Plafond d'une lecture de co-membres : il borne le coût d'une très grande communauté sans paginer. */
-export const MAX_COMMUNITY_PEERS = 10_000;
+const oid = (id: string) => ({ $oid: id });
 
-async function communityPeers(prisma: CirclesSummaryDb, viewerId: string): Promise<ReadonlySet<string>> {
+/** Les communautés ACTIVES où le lecteur est membre actif. */
+async function sharedCommunityIds(prisma: CirclesSummaryDb, viewerId: string): Promise<readonly string[]> {
   const own = await prisma.communityMember.findMany({ where: { userId: viewerId, isActive: true }, select: { communityId: true } });
-  if (own.length === 0) return new Set();
+  if (own.length === 0) return [];
   const open = await prisma.community.findMany({
     where: { id: { in: [...new Set(own.map((m) => m.communityId))] }, isActive: true },
     select: { id: true },
   });
-  if (open.length === 0) return new Set();
-  const peers = await prisma.communityMember.findMany({
-    where: { communityId: { in: open.map((c) => c.id) }, isActive: true },
-    select: { userId: true },
-    take: MAX_COMMUNITY_PEERS,
-  });
-  return new Set(peers.map((m) => m.userId).filter((id) => id !== viewerId));
+  return open.map((c) => c.id);
 }
 
-async function usableAmong(prisma: CirclesSummaryDb, ids: readonly string[]): Promise<number> {
-  if (ids.length === 0) return 0;
-  const rows = await prisma.user.findMany({ where: { id: { in: [...ids] } }, select: { id: true, ...ACCOUNT_STATE_SELECT } });
-  return rows.filter(isUsableAccount).length;
+/**
+ * Les personnes distinctes, membres actifs de ces communautés, hors `excluded`, dont le compte
+ * est utilisable (`isUsableAccount` : actif, ni supprimé, ni désactivé) — comptées par la base.
+ */
+async function countCommunityOnlyPeers(
+  prisma: CirclesSummaryDb,
+  communityIds: readonly string[],
+  excluded: ReadonlySet<string>,
+): Promise<number> {
+  if (communityIds.length === 0) return 0;
+  const rows = (await prisma.communityMember.aggregateRaw({
+    pipeline: [
+      { $match: { communityId: { $in: communityIds.map(oid) }, isActive: true, userId: { $nin: [...excluded].map(oid) } } },
+      { $group: { _id: '$userId' } },
+      {
+        $lookup: {
+          from: 'User',
+          localField: '_id',
+          foreignField: '_id',
+          pipeline: [{ $project: { isActive: 1, deletedAt: 1, deactivatedAt: 1 } }],
+          as: 'u',
+        },
+      },
+      { $unwind: '$u' },
+      { $match: { 'u.isActive': true, 'u.deletedAt': null, 'u.deactivatedAt': null } },
+      { $count: 'n' },
+    ],
+    options: { allowDiskUse: true },
+  })) as unknown as ReadonlyArray<{ n?: unknown }>;
+  const n = rows?.[0]?.n;
+  return typeof n === 'number' ? n : 0;
 }
 
 export async function summarizeRelationCircles(
@@ -49,16 +71,15 @@ export async function summarizeRelationCircles(
   params: { readonly viewerId: string; readonly now: Date },
 ): Promise<RelationCirclesSummary> {
   const { viewerId } = params;
-  const [links, peers, blocked] = await Promise.all([
+  const [links, communityIds, blocked] = await Promise.all([
     listRelationLinks(prisma, params),
-    communityPeers(prisma, viewerId),
+    sharedCommunityIds(prisma, viewerId),
     getBlockRelatedUserIds(prisma, viewerId),
   ]);
 
-  const linked = new Set(links.map((link) => link.userId));
-  const communityOnly = [...peers].filter((id) => !linked.has(id) && !blocked.has(id));
+  const excluded = new Set([viewerId, ...links.map((link) => link.userId), ...blocked]);
   const [community, pendingRequests] = await Promise.all([
-    usableAmong(prisma, communityOnly),
+    countCommunityOnlyPeers(prisma, communityIds, excluded),
     prisma.friendRequest.count({
       where: { AND: [{ receiverId: viewerId }, { status: 'pending' }, ...(blocked.size === 0 ? [] : [{ senderId: { notIn: [...blocked] } }])] },
     }),

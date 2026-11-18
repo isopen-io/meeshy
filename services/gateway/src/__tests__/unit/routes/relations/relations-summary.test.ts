@@ -59,6 +59,46 @@ const demande = (id: string, senderId: string, receiverId: string, status = 'pen
   id, senderId, receiverId, status, createdAt: NOW, updatedAt: NOW,
 });
 
+/**
+ * Le double de `communityMember.aggregateRaw` ÉVALUE le pipeline reçu (`$match` avec `$in`/`$nin`
+ * sur des `$oid`, `$group` par champ, `$lookup` local/étranger, `$unwind`, `$count`) : un faux qui
+ * rendrait un nombre posé verdirait sur une agrégation sans exclusion.
+ */
+type Doc = Record<string, unknown>;
+const raw = (v: unknown): unknown => (v && typeof v === 'object' && '$oid' in (v as Doc) ? (v as Doc).$oid : v);
+const champ = (doc: Doc, chemin: string): unknown => chemin.split('.').reduce<unknown>((acc, k) => (acc as Doc | undefined)?.[k], doc);
+const satisfait = (doc: Doc, cond: Doc): boolean =>
+  Object.entries(cond).every(([chemin, attendu]) => {
+    const valeur = champ(doc, chemin);
+    if (attendu === null) return valeur === null || valeur === undefined;
+    if (attendu && typeof attendu === 'object' && !('$oid' in (attendu as Doc))) {
+      const op = attendu as Doc;
+      if ('$in' in op) return new Set((op.$in as unknown[]).map(raw)).has(valeur);
+      if ('$nin' in op) return !new Set((op.$nin as unknown[]).map(raw)).has(valeur);
+    }
+    return valeur === raw(attendu);
+  });
+function evaluer(membres: ReadonlyArray<Doc>, comptes: ReadonlyArray<Doc>, pipeline: ReadonlyArray<Doc>): Doc[] {
+  const parId = new Map(comptes.map((c) => [c.id, c]));
+  return pipeline.reduce<Doc[]>((docs, etape) => {
+    if ('$match' in etape) return docs.filter((d) => satisfait(d, etape.$match as Doc));
+    if ('$group' in etape) {
+      const cle = String((etape.$group as Doc)._id).slice(1);
+      return [...new Set(docs.map((d) => d[cle]))].map((_id) => ({ _id }));
+    }
+    if ('$lookup' in etape) {
+      const l = etape.$lookup as Doc;
+      return docs.map((d) => ({ ...d, [String(l.as)]: parId.has(d[String(l.localField)]) ? [parId.get(d[String(l.localField)])] : [] }));
+    }
+    if ('$unwind' in etape) {
+      const cle = String(etape.$unwind).slice(1);
+      return docs.flatMap((d) => (d[cle] as Doc[]).map((u) => ({ ...d, [cle]: u })));
+    }
+    if ('$count' in etape) return docs.length === 0 ? [] : [{ [String(etape.$count)]: docs.length }];
+    throw new Error(`étape non évaluée : ${JSON.stringify(etape)}`);
+  }, [...membres.map((m) => ({ ...m }))]);
+}
+
 async function appli(monde: Monde) {
   const servis = monde.comptes ?? [];
   const comptes = servis.some((c) => c.id === MOI) ? servis : [compte(MOI), ...servis];
@@ -67,7 +107,10 @@ async function appli(monde: Monde) {
   const prisma = {
     user: { findMany: findManyIn(comptes).findMany, findUnique: findUniqueIn(comptes) },
     community: { findMany: findManyIn(monde.communautes ?? []).findMany },
-    communityMember: { findMany: findManyIn(monde.membres ?? []).findMany },
+    communityMember: {
+      findMany: findManyIn(monde.membres ?? []).findMany,
+      aggregateRaw: async (args: { pipeline: Doc[] }) => evaluer(monde.membres ?? [], comptes, args.pipeline),
+    },
     userRelation: store.prisma.userRelation,
     friendRequest: {
       ...store.prisma.friendRequest,
@@ -114,6 +157,19 @@ describe('#19375 — GET /relations/summary : le cercle Communauté', () => {
       counts: { COMMUNITY: 2, ACQUAINTANCE: 0, FRIEND: 0, CLOSE: 0, BLOOD: 0 },
       pendingRequests: 0,
     });
+  });
+
+  it('le compte est EXACT au-delà de toute borne : deux grandes communautés qui partagent des membres se dédoublonnent avant de compter', async () => {
+    const id = (n: number) => `70${String(n).padStart(22, '0')}`;
+    const a = Array.from({ length: 6000 }, (_, n) => id(n));
+    const b = Array.from({ length: 6000 }, (_, n) => id(n + 4000));
+    const res = await resume({
+      comptes: [...new Set([...a, ...b])].map((v) => compte(v)),
+      communautes: [communaute(COMMU), communaute(AUTRE_COMMU)],
+      membres: [membre(COMMU, MOI), membre(AUTRE_COMMU, MOI), ...a.map((v) => membre(COMMU, v)), ...b.map((v) => membre(AUTRE_COMMU, v))],
+    });
+
+    expect(res.body.data.counts.COMMUNITY).toBe(10_000);
   });
 
   it('un co-membre qui est aussi Ami se compte en Ami, jamais en Communauté', async () => {
