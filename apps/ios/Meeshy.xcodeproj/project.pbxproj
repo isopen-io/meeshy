@@ -3783,6 +3783,7 @@
 		CB69DEB192A278078C4E983D /* ProfileSectionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2AAB3F225BDB623FB93C5B9 /* ProfileSectionsTests.swift */; };
 		3F832AA2F45E30E29AC1B376 /* ContactlessExchangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A040EA9F64976D4D6170A8 /* ContactlessExchangeTests.swift */; };
 		9F02AEF4B272F6805C587F0E /* ProfileCardQRTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E97E5AD17E85303560B6A88 /* ProfileCardQRTests.swift */; };
+		678A458BAD1741B53C147814 /* ProfileLinkVisitsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB402850431CC9C7D6729041 /* ProfileLinkVisitsTests.swift */; };
 		A992B1C9E46C50B3D33CDBF7 /* ProfileActionsFaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CED37D6CF7DEDE8D49B5ABF1 /* ProfileActionsFaceTests.swift */; };
 		95C68EFD872DD8FD96DE76FF /* ProfileOtherPublicationsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F776E01997020A8B1BAA8AC2 /* ProfileOtherPublicationsTests.swift */; };
 		CB6FE9A9E9C940AF24F7C942 /* KeypadViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A16767B9BEE9022C5FA208D /* KeypadViewModel.swift */; };
@@ -7853,6 +7854,7 @@
 		A2AAB3F225BDB623FB93C5B9 /* ProfileSectionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSectionsTests.swift; sourceTree = "<group>"; };
 		E6A040EA9F64976D4D6170A8 /* ContactlessExchangeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactlessExchangeTests.swift; sourceTree = "<group>"; };
 		2E97E5AD17E85303560B6A88 /* ProfileCardQRTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileCardQRTests.swift; sourceTree = "<group>"; };
+		BB402850431CC9C7D6729041 /* ProfileLinkVisitsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileLinkVisitsTests.swift; sourceTree = "<group>"; };
 		CED37D6CF7DEDE8D49B5ABF1 /* ProfileActionsFaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileActionsFaceTests.swift; sourceTree = "<group>"; };
 		F776E01997020A8B1BAA8AC2 /* ProfileOtherPublicationsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileOtherPublicationsTests.swift; sourceTree = "<group>"; };
 		A2ADF8165B87F6C2798DD9A0 /* ConversationListDeviceTranslations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListDeviceTranslations.swift; sourceTree = "<group>"; };
@@ -10891,6 +10893,7 @@
 				A2AAB3F225BDB623FB93C5B9 /* ProfileSectionsTests.swift */,
 				E6A040EA9F64976D4D6170A8 /* ContactlessExchangeTests.swift */,
 				2E97E5AD17E85303560B6A88 /* ProfileCardQRTests.swift */,
+				BB402850431CC9C7D6729041 /* ProfileLinkVisitsTests.swift */,
 				CED37D6CF7DEDE8D49B5ABF1 /* ProfileActionsFaceTests.swift */,
 				F776E01997020A8B1BAA8AC2 /* ProfileOtherPublicationsTests.swift */,
 				9057B8887051EECFBB38DF89 /* UncachedProfileLoadingTests.swift */,
@@ -20275,6 +20278,7 @@
 				CB69DEB192A278078C4E983D /* ProfileSectionsTests.swift in Sources */,
 				3F832AA2F45E30E29AC1B376 /* ContactlessExchangeTests.swift in Sources */,
 				9F02AEF4B272F6805C587F0E /* ProfileCardQRTests.swift in Sources */,
+				678A458BAD1741B53C147814 /* ProfileLinkVisitsTests.swift in Sources */,
 				A992B1C9E46C50B3D33CDBF7 /* ProfileActionsFaceTests.swift in Sources */,
 				95C68EFD872DD8FD96DE76FF /* ProfileOtherPublicationsTests.swift in Sources */,
 				6E7D4F23DBCD02C2D776B78A /* ProfileUserPostsRealtimeSyncTests.swift in Sources */,

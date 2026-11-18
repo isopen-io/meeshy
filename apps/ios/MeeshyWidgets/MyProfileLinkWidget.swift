@@ -8,7 +8,9 @@ import CoreImage.CIFilterBuiltins
 //
 // Mon QR prêt à être montré sans ouvrir l'app, avec l'adresse courte de mon profil. L'app publie l'adresse dans le
 // groupe d'app (`WidgetDataManager.publishProfileLink`) ; sans compte ni pseudo, le widget le dit et n'invente rien.
-// Le nombre de visites du jour que la planche montre attend sa donnée : le widget s'en passe tant qu'elle manque.
+// « 57 visites aujourd'hui » (#19489) : l'app publie le chiffre du jour compté par la passerelle, avec son jour UTC et
+// l'adresse qu'il compte (`WidgetDataManager.publishProfileLinkVisits`). Le widget ne le montre que sous cette adresse
+// et ce jour-là ; sans lui, il s'en passe.
 
 struct MyProfileLinkWidget: Widget {
     let kind: String = MyProfileLinkKeys.kind
@@ -26,6 +28,7 @@ struct MyProfileLinkWidget: Widget {
 enum MyProfileLinkKeys {
     static let kind = "MyProfileLink"
     static let defaultsKey = "my_profile_link"
+    static let visitsKey = "my_profile_link_visits"
 }
 
 /// Le miroir de `WidgetProfileLink` (app) : l'adresse complète que le QR encode, et sa forme courte affichée.
@@ -34,25 +37,69 @@ struct ProfileLinkCard: Codable, Equatable {
     let displayText: String
 }
 
+/// Le miroir de `WidgetProfileLinkVisits` (app) : le chiffre du jour, le jour UTC où il a été compté, l'adresse comptée.
+struct ProfileLinkVisitsCard: Codable, Equatable {
+    let url: String
+    let today: Int
+    let day: String
+
+    /// Le chiffre, seulement sous l'adresse qu'il compte et le jour (UTC) où il a été compté.
+    func visits(for card: ProfileLinkCard, at now: Date) -> Int? {
+        url == card.url && day == Self.utcDay(now) && today >= 0 ? today : nil
+    }
+
+    static func utcDay(_ date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? TimeZone(secondsFromGMT: 0) ?? .current
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+
+    /// Minuit UTC suivant : le chiffre du jour cesse d'être vrai, le widget se redessine sans lui.
+    static func nextUTCMidnight(after date: Date) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? TimeZone(secondsFromGMT: 0) ?? .current
+        let start = calendar.startOfDay(for: date)
+        return calendar.date(byAdding: .day, value: 1, to: start) ?? date.addingTimeInterval(86_400)
+    }
+}
+
 struct MyProfileLinkEntry: TimelineEntry {
     let date: Date
     let card: ProfileLinkCard?
+    var visitsToday: Int? = nil
 
     static let sample = ProfileLinkCard(url: "https://meeshy.me/@aissa", displayText: "meeshy.me/@aissa")
 }
 
 struct MyProfileLinkProvider: TimelineProvider {
     func placeholder(in context: Context) -> MyProfileLinkEntry {
-        MyProfileLinkEntry(date: Date(), card: MyProfileLinkEntry.sample)
+        MyProfileLinkEntry(date: Date(), card: MyProfileLinkEntry.sample, visitsToday: 57)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (MyProfileLinkEntry) -> Void) {
-        let card = context.isPreview ? MyProfileLinkEntry.sample : loadCard()
-        completion(MyProfileLinkEntry(date: Date(), card: card))
+        completion(context.isPreview ? placeholder(in: context) : entry(at: Date()))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<MyProfileLinkEntry>) -> Void) {
-        completion(Timeline(entries: [MyProfileLinkEntry(date: Date(), card: loadCard())], policy: .never))
+        let now = Date()
+        let current = entry(at: now)
+        let policy: TimelineReloadPolicy = current.visitsToday == nil
+            ? .never
+            : .after(ProfileLinkVisitsCard.nextUTCMidnight(after: now))
+        completion(Timeline(entries: [current], policy: policy))
+    }
+
+    private func entry(at now: Date) -> MyProfileLinkEntry {
+        let card = loadCard()
+        let visits = card.flatMap { card in loadVisits()?.visits(for: card, at: now) }
+        return MyProfileLinkEntry(date: now, card: card, visitsToday: visits)
+    }
+
+    private func loadVisits() -> ProfileLinkVisitsCard? {
+        guard let defaults = UserDefaults(suiteName: WidgetSharedKeys.suiteName),
+              let data = defaults.data(forKey: MyProfileLinkKeys.visitsKey) else { return nil }
+        return try? JSONDecoder().decode(ProfileLinkVisitsCard.self, from: data)
     }
 
     /// Pas de repli fabriqué : une lecture morte doit se VOIR (même règle que les favoris).
@@ -114,9 +161,13 @@ struct MyProfileLinkWidgetView: View {
                     .font(.subheadline.monospaced())
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
-                Text(String(localized: "widget.myLink.hint", defaultValue: "Scan with any camera"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if let visits = entry.visitsToday {
+                    visitsLine(visits)
+                } else {
+                    Text(String(localized: "widget.myLink.hint", defaultValue: "Scan with any camera"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -156,7 +207,29 @@ struct MyProfileLinkWidgetView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// « 57 visites aujourd'hui » : le chiffre en gras, sa légende accordée.
+    private func visitsLine(_ visits: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(visits.formatted())
+                .font(.subheadline.weight(.heavy))
+                .monospacedDigit()
+            Text(Self.visitsCaption(visits))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+    }
+
+    static func visitsCaption(_ visits: Int) -> String {
+        visits == 1
+            ? String(localized: "widget.myLink.visitsToday.one", defaultValue: "visit today")
+            : String(localized: "widget.myLink.visitsToday.many", defaultValue: "visits today")
+    }
+
     private func label(_ card: ProfileLinkCard) -> String {
-        String(format: String(localized: "widget.myLink.a11y", defaultValue: "My profile QR, %@"), card.displayText)
+        let base = String(format: String(localized: "widget.myLink.a11y", defaultValue: "My profile QR, %@"), card.displayText)
+        guard let visits = entry.visitsToday else { return base }
+        return "\(base), \(visits.formatted()) \(Self.visitsCaption(visits))"
     }
 }

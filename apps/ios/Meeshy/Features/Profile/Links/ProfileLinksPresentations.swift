@@ -35,6 +35,8 @@ struct ProfileLinksPresentations: ViewModifier {
     let user: MeeshyUser?
     let link: ProfileLink?
     let accentColor: String
+    /// Les visites de mon lien ce mois (#19489), que la création « Mon profil » rappelle ; `nil` tant qu'elles manquent.
+    var profileVisits: Int? = nil
     @Binding var presented: ProfileLinksPresented?
     @Binding var sent: SharedContentWrapper?
     let onOpen: (Route) -> Void
@@ -73,7 +75,7 @@ struct ProfileLinksPresentations: ViewModifier {
         case .scanner:
             ProfileQRScannerSheet()
         case .create:
-            ProfileLinkCreateChooser(accent: Color(hex: accentColor), onPick: { pick($0) })
+            ProfileLinkCreateChooser(accent: Color(hex: accentColor), profileVisits: profileVisits, onPick: { pick($0) })
         case .createShare:
             CreateShareLinkView { _ in onCreated() }
                 .conversationListObject(conversationList)

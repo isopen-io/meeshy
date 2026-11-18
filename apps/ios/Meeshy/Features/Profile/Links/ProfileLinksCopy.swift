@@ -24,6 +24,22 @@ nonisolated enum ProfileLinksCopy {
     }
     static var copied: String { String(localized: "profile.links.copied", defaultValue: "Lien copié", bundle: .main) }
 
+    // MARK: - Visites de mon lien (#19489) — « visites », jamais « clics » : les clics sont aux liens de suivi.
+
+    /// La légende du chiffre du mois, accordée au chiffre (« 1 visite ce mois », « 1 719 visites ce mois »).
+    static func visitsThisMonth(_ count: Int) -> String {
+        count == 1
+            ? String(localized: "profile.links.visits.month.one", defaultValue: "visite ce mois", bundle: .main)
+            : String(localized: "profile.links.visits.month.many", defaultValue: "visites ce mois", bundle: .main)
+    }
+
+    /// Le chiffre et sa période d'un tenant : ce que VoiceOver lit, et ce que la création « Mon profil » montre.
+    static func visitsFigure(_ count: Int) -> String { "\(count.formatted()) \(visitsThisMonth(count))" }
+
+    static var profileLinkExists: String {
+        String(localized: "profile.links.create.profile.exists", defaultValue: "Ton lien existe déjà", bundle: .main)
+    }
+
     // MARK: - Mes adresses
 
     static var addressesTitle: String {

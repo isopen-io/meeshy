@@ -19,18 +19,20 @@ struct ProfileLinksFace: View {
 
     @StateObject private var links: ProfileLinksFaceModel
     @ObservedObject private var addresses: ProfileAddressesStore
+    @StateObject private var visits: ProfileLinkVisitsModel
     @State private var presented: ProfileLinksPresented?
     @State private var sent: SharedContentWrapper?
 
     init(user: MeeshyUser?, accentColor: String, showsHeader: Bool = true,
          links: ProfileLinksFaceModel? = nil, addresses: ProfileAddressesStore = .shared,
-         onOpen: @escaping (Route) -> Void) {
+         visits: ProfileLinkVisitsModel? = nil, onOpen: @escaping (Route) -> Void) {
         self.user = user
         self.accentColor = accentColor
         self.showsHeader = showsHeader
         self.onOpen = onOpen
         _links = StateObject(wrappedValue: links ?? ProfileLinksFaceModel())
         _addresses = ObservedObject(wrappedValue: addresses)
+        _visits = StateObject(wrappedValue: visits ?? ProfileLinkVisitsModel())
     }
 
     private var accent: Color { Color(hex: accentColor) }
@@ -46,15 +48,16 @@ struct ProfileLinksFace: View {
         }
         .task { await loadAll() }
         .modifier(ProfileLinksPresentations(
-            user: user, link: profileLink, accentColor: accentColor, presented: $presented, sent: $sent,
-            onOpen: onOpen, onCreated: { Task { await links.refresh() } }
+            user: user, link: profileLink, accentColor: accentColor, profileVisits: visits.monthVisits,
+            presented: $presented, sent: $sent, onOpen: onOpen, onCreated: { Task { await links.refresh() } }
         ))
     }
 
     private func loadAll() async {
         async let created: Void = links.load()
         async let mine: Void = addresses.load()
-        _ = await (created, mine)
+        async let counted: Void = visits.load(ownerId: user?.id, link: profileLink)
+        _ = await (created, mine, counted)
     }
 
     // MARK: - En-tête
@@ -69,18 +72,23 @@ struct ProfileLinksFace: View {
 
     // MARK: - Mon lien de profil
 
-    /// Le billet héros : « Mon lien de profil », l'adresse en chasse fixe et le QR qui s'agrandit ; sous la coupe, les
-    /// quatre gestes. Le QR ne porte que l'adresse publique, jamais une donnée de cercle.
+    /// Le billet héros : « Mon lien de profil », l'adresse en chasse fixe, « 1 719 visites ce mois » dès que la
+    /// passerelle le sert (#19489, rien sinon) et le QR qui s'agrandit ; sous la coupe, les quatre gestes. Le QR ne
+    /// porte que l'adresse publique, jamais une donnée de cercle.
     private func profileTicket(_ link: ProfileLink) -> some View {
-        MeeshyTicket(
+        let month = visits.monthVisits
+        let spoken = [ProfileLinksCopy.profileLinkTitle, link.displayText, month.map { ProfileLinksCopy.visitsFigure($0) }]
+        return MeeshyTicket(
             title: ProfileLinksCopy.profileLinkTitle,
             code: link.displayText,
             tint: accent,
+            figure: month.map { $0.formatted() },
+            figureCaption: month.map { ProfileLinksCopy.visitsThisMonth($0) },
             size: .hero,
             isFlipped: false,
             isSelected: false,
             isDragging: false,
-            label: "\(ProfileLinksCopy.profileLinkTitle), \(link.displayText)",
+            label: spoken.compactMap { $0 }.joined(separator: ", "),
             onPress: nil,
             stub: { profileActions(link) },
             leading: { EmptyView() },

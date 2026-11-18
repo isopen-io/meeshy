@@ -525,6 +525,52 @@ final class WidgetDataManagerTests: XCTestCase {
         XCTAssertTrue(source.contains("WidgetDeepLink.myLinks"), "un appui ouvre mes liens")
     }
 
+    // MARK: - #19489 — « Mon lien · 57 visites aujourd'hui »
+
+    func test_publishProfileLinkVisits_writesTodaysFigureUnderTheAddressItCounts() throws {
+        let (sut, defaults) = try makeFavoritesSUT()
+        let link = try XCTUnwrap(ProfileLink(username: "aissa"))
+
+        sut.publishProfileLinkVisits(ProfileLinkVisitsReading(today: 57, month: 1719, day: "2026-11-18"), for: link)
+
+        let data = try XCTUnwrap(defaults.data(forKey: "my_profile_link_visits"), "le widget lit cette clé")
+        let decoded = try JSONDecoder().decode(WidgetProfileLinkVisits.self, from: data)
+        XCTAssertEqual(decoded, WidgetProfileLinkVisits(url: "https://meeshy.me/@aissa", today: 57, day: "2026-11-18"))
+        let raw = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertNil(raw["month"], "le widget ne reçoit que le chiffre qu'il montre")
+    }
+
+    func test_publishProfileLinkVisits_withoutTodaysFigure_removesIt_neverShowsZero() throws {
+        let (sut, defaults) = try makeFavoritesSUT()
+        let link = try XCTUnwrap(ProfileLink(username: "aissa"))
+        sut.publishProfileLinkVisits(ProfileLinkVisitsReading(today: 57, month: 1719, day: "2026-11-18"), for: link)
+
+        sut.publishProfileLinkVisits(ProfileLinkVisitsReading(today: nil, month: 1719, day: "2026-11-18"), for: link)
+
+        XCTAssertNil(defaults.object(forKey: "my_profile_link_visits"))
+    }
+
+    func test_signingOut_dropsTheVisitsWithTheLink() throws {
+        let (sut, defaults) = try makeFavoritesSUT()
+        let link = try XCTUnwrap(ProfileLink(username: "aissa"))
+        sut.publishProfileLink(username: "aissa")
+        sut.publishProfileLinkVisits(ProfileLinkVisitsReading(today: 57, month: nil, day: "2026-11-18"), for: link)
+
+        sut.publishProfileLink(username: nil)
+
+        XCTAssertNil(defaults.object(forKey: "my_profile_link_visits"))
+    }
+
+    func test_widgetMirror_readsTheVisitsKeyAndFields() throws {
+        let widget = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("MeeshyWidgets/MyProfileLinkWidget.swift")
+        let source = try String(contentsOf: widget, encoding: .utf8)
+        XCTAssertTrue(source.contains("\"my_profile_link_visits\""))
+        XCTAssertTrue(source.contains("let today: Int"))
+        XCTAssertTrue(source.contains("let day: String"))
+    }
+
     func test_publishFavoriteContacts_writesInCorrectKey() throws {
         let (sut, defaults) = try makeFavoritesSUT()
 

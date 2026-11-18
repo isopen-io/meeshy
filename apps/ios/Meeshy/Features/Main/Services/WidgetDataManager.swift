@@ -31,6 +31,14 @@ struct WidgetProfileLink: Codable, Equatable {
     }
 }
 
+/// Les visites du jour de « Mon lien » (#19489) : le chiffre, le jour UTC où il a été compté et l'adresse qu'il compte —
+/// le widget ne le montre que sous CETTE adresse et ce jour-là. Miroir : `ProfileLinkVisitsCard` (`MyProfileLinkWidget`).
+struct WidgetProfileLinkVisits: Codable, Equatable {
+    let url: String
+    let today: Int
+    let day: String
+}
+
 struct WidgetFavoriteContact: Codable, Identifiable {
     let id: String
     let name: String
@@ -137,6 +145,7 @@ final class WidgetDataManager: NotificationWidgetSink {
     private let unreadCountKey = "unread_count"
     private let favoritesKey = "favorite_contacts"
     private let profileLinkKey = "my_profile_link"
+    private let profileLinkVisitsKey = "my_profile_link_visits"
     private var profileLinkObservation: AnyCancellable?
     private let lastUpdatedKey = "widget_last_updated"
     /// Store keyé `[id: ConversationSnapshotPayload]` — résolution Local-First
@@ -284,7 +293,7 @@ final class WidgetDataManager: NotificationWidgetSink {
     func wipeAll() {
         if let defaults = sharedDefaults {
             let accountKeys = [
-                conversationsKey, snapshotsKey, favoritesKey, profileLinkKey, lastUpdatedKey,
+                conversationsKey, snapshotsKey, favoritesKey, profileLinkKey, profileLinkVisitsKey, lastUpdatedKey,
                 unreadCountKey, WidgetActionFlusher.pendingMarkReadKey,
                 ShareDirectorySnapshot.defaultsKey,
             ]
@@ -532,6 +541,25 @@ final class WidgetDataManager: NotificationWidgetSink {
         let key = profileLinkKey
         if let link = WidgetProfileLink(username: username),
            let data = encoder.encodeOrLog(link, field: "widget profile link", logger: Logger.widgetData) {
+            writingToSharedContainer { defaults.set(data, forKey: key) }
+        } else {
+            let visitsKey = profileLinkVisitsKey
+            writingToSharedContainer {
+                defaults.removeObject(forKey: key)
+                defaults.removeObject(forKey: visitsKey)
+            }
+        }
+        WidgetCenter.shared.reloadTimelines(ofKind: "MyProfileLink")
+    }
+
+    /// « Mon lien · 57 visites aujourd'hui » : le chiffre du jour que la passerelle a servi à MON compte (#19206), rien
+    /// d'autre — ni la série, ni le mois. Sans chiffre du jour, le widget s'en passe.
+    func publishProfileLinkVisits(_ reading: ProfileLinkVisitsReading, for link: ProfileLink) {
+        guard let defaults = sharedDefaults else { return }
+        let key = profileLinkVisitsKey
+        if let today = reading.today,
+           let data = encoder.encodeOrLog(WidgetProfileLinkVisits(url: link.url.absoluteString, today: today, day: reading.day),
+                                          field: "widget profile link visits", logger: Logger.widgetData) {
             writingToSharedContainer { defaults.set(data, forKey: key) }
         } else {
             writingToSharedContainer { defaults.removeObject(forKey: key) }

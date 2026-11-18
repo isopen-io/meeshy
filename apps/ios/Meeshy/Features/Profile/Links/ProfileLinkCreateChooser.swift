@@ -48,6 +48,13 @@ nonisolated enum ProfileLinkCreation: String, CaseIterable, Identifiable, Hashab
         }
     }
 
+    /// La phrase de la rangée : « Mon profil » dit que le lien existe déjà et ses visites du mois quand elles sont connues
+    /// (planche `Lien-Suivi-Creer`, branche Mon profil) ; sinon la phrase d'orientation.
+    func rowSubtitle(profileVisits: Int?) -> String {
+        guard self == .profile, let profileVisits else { return subtitle }
+        return "\(ProfileLinksCopy.profileLinkExists) · \(ProfileLinksCopy.visitsFigure(profileVisits))"
+    }
+
     /// Ce que VoiceOver annonce : le geste, pas seulement la famille.
     var accessibilityLabel: String {
         switch self {
@@ -72,6 +79,8 @@ nonisolated enum ProfileLinkCreation: String, CaseIterable, Identifiable, Hashab
 /// les écrans de création existants, inchangés. Rangées à chevron du kit (K06) dans un verre de thème.
 struct ProfileLinkCreateChooser: View {
     let accent: Color
+    /// Les visites de mon lien ce mois (#19489) : « Mon profil » dit alors que le lien existe déjà et ce qu'il a compté.
+    var profileVisits: Int? = nil
     let onPick: (ProfileLinkCreation) -> Void
 
     var body: some View {
@@ -80,12 +89,13 @@ struct ProfileLinkCreateChooser: View {
                 MeeshySectionHeader(title: ProfileLinkCreation.heading, form: .overline)
                 VStack(spacing: 0) {
                     ForEach(Array(ProfileLinkCreation.allCases.enumerated()), id: \.element) { index, creation in
-                        MeeshyToggleRow(creation.title, systemImage: creation.systemImage, subtitle: creation.subtitle,
+                        MeeshyToggleRow(creation.title, systemImage: creation.systemImage,
+                                        subtitle: creation.rowSubtitle(profileVisits: profileVisits),
                                         accessory: .chevron,
                                         showsDivider: index < ProfileLinkCreation.allCases.count - 1,
                                         tint: accent, action: { onPick(creation) })
                             .accessibilityLabel(Text(creation.accessibilityLabel))
-                            .accessibilityHint(Text(creation.subtitle))
+                            .accessibilityHint(Text(creation.rowSubtitle(profileVisits: profileVisits)))
                     }
                 }
                 .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
