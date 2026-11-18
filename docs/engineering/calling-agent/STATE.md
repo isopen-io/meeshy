@@ -1342,3 +1342,67 @@ socket jusqu'au client.
 5. #18697, puis #18691 (mesurer d'abord sur le staging), puis #18728.
 6. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
 7. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 40 — 2026-11-17
+
+- **Base** : `origin/dev` @ `56e4bf53`. La PR du cycle 39 (#19296, #19254) était encore ouverte, avec trois jobs en file d'attente depuis 19 h 45 UTC. La QA l'avait jugée favorable. L'auto-merge n'est pas autorisé sur le dépôt, donc la fusion se fait à la main une fois la CI verte.
+- **Branche** : `claude/determined-volta-ifsl8t`, partie de la tête de `claude/determined-volta-e6lw66` puis fusionnée avec `dev`. Elle est **empilée sur #19296**, parce que les deux lots touchent `translation_pipeline_service.py`.
+- **Objectif** : #19292. L'identifiant de job de traduction vocale est opaque.
+- **Mesure de rétrocompatibilité** : rien ne lit le format, ni dans la passerelle, ni dans `packages/shared`, ni dans les clients web, iOS et Android. Le `jobId` y est un `string` sans motif ni longueur maximale. Les deux formats font 37 caractères. Les jobs vivent en mémoire et se cherchent par clé exacte.
+- **Livré** (seul le traducteur change) :
+  - `_generate_job_id()` rend `mshy_` suivi de `uuid4().hex`, soit 122 bits aléatoires, sans horodatage ni `user_id[:8]` ;
+  - l'argument `user_id` est retiré, et `submit_job` est mis à jour ;
+  - le webhook, `to_dict()`, ZMQ et la passerelle sont inchangés.
+- **Tests** : 3 témoins dans `tests/test_job_webhook_payload.py`, dont un vrai `submit_job` avec un `user_id` au format ObjectId. Les anciens témoins de `test_26` et `test_12`, qui affirmaient la fuite, vérifient maintenant le motif `mshy_[0-9a-f]{32}`.
+  - **Rouge** : `3 failed, 5 passed`. Le premier échec montre `'6553a1b2'` dans `mshy_20261117203648_6553a1b2_a3467613`.
+  - **Vert** : le fichier des témoins, relancé par moi, donne `8 passed`. Avec les gardes webhook, `test_26` et `test_12` : `1 failed, 164 passed, 4 skipped`, contre `1 failed, 156 passed` avant. L'échec est le même des deux côtés, `test_12::test_cache_behavior`, déjà connu.
+  - **Mutations QA** : 3 sur 3 tuées (`user_id` remis dans l'id, ancienne forme horodatée, `user_id` dans la charge).
+- **QA** (`auditeur-adversarial`) : favorable avec réserves, toutes antérieures au lot.
+  - **R1, élevée** : IDOR sur l'état et l'annulation d'un job, **atteignable par la passerelle par tout utilisateur authentifié**. Le traducteur ignore le `userId` que la passerelle lui transmet. La preuve est commentée sur #19293. Ce lot en réduit l'exploitation, puisque l'id ne se devine plus, mais ne la ferme pas.
+  - **R2** : #19380. `operation_handlers` déballe le `bool` de `cancel_job`, donc l'annulation par la passerelle échoue toujours.
+  - **R3 et R5** : #19381. `_generate_output_filename`, du code mort, encode `user_id[:8]`, et deux identifiants de profil vocal dérivent de l'utilisateur.
+  - **R4** : les assertions `"user" not in job_id` ne pouvaient pas échouer. Je les ai remplacées par le motif.
+
+### Cycle suivant : par où reprendre
+
+0. Fusionner #19296 si elle ne l'est pas, puis la PR de ce cycle (son diff se réduit alors à #19292).
+1. **#19293 + #19380 ensemble**, avec l'agent `auditeur-adversarial` : propriétaire vérifié sur l'état et l'annulation, `user_id` retiré de la vue, et l'annulation qui fonctionne. C'est la priorité de sécurité.
+2. #19381, puis #19253 (passerelle), #19294, #19295 et #19255.
+3. #18727, puis #18773.
+4. #18668 et #18692, les messages d'exception bruts, puis #18729 et #18774.
+5. #18697, puis #18691 (mesurer d'abord sur le staging), puis #18728.
+6. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
+7. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 41 — 2026-11-17
+
+- **Base** : `origin/dev` @ `53de788b`. La PR du cycle 39 (#19296) était fusionnée ; celle du cycle 40 (#19382, #19292) restait ouverte, CI en file d'attente (95 runs en file sur le dépôt).
+- **Branche** : `claude/determined-volta-dstzf8`, **empilée sur #19382** (même fichier `operation_handlers` voisin de `translation_pipeline_service.py`).
+- **Objectif** : #19293 (voie ZMQ) et #19380. L'état et l'annulation d'un job vocal ne servent que son propriétaire, et l'annulation par la passerelle fonctionne.
+- **Mesure de rétrocompatibilité** : la passerelle pose déjà le `userId` du JWT dans `voice_job_status` / `voice_job_cancel` (`AudioTranslateService.ts:561-585`, seuls producteurs, appelés aussi par `AttachmentTranslateService`). Le schéma passerelle `translationJobSchema` ne laissait passer que `status`, `progress`, `result`, `error` : retirer `user_id` et `webhook_url` de la vue ne change rien pour les clients. L'annulation n'avait jamais fonctionné (déballage d'un `bool`).
+- **Livré** (seul le traducteur change) :
+  - `voice_api_handler` transmet `userId` ; `operation_handlers._owned_job` refuse userId absent/vide, job inconnu ou d'autrui par la MÊME réponse `NOT_FOUND` « Job not found » (aucun oracle) ;
+  - la vue servie est `to_dict()` sans `user_id` ni `webhook_url` ;
+  - l'annulation par le propriétaire rend `{success, message}` (forme attendue par la passerelle) ; un job non en attente rend `success: False` ;
+  - messages d'erreur fixes, le journal ne porte que le type de l'exception.
+- **Tests** : `tests/test_voice_job_owner.py`, 13 témoins (10 du spécialiste, 3 cas ajoutés par la QA), par `VoiceAPIHandler.handle_request` sur un vrai `TranslationPipelineService` et un vrai `submit_job`.
+  - **Rouge** : `10 failed` (dont `cannot unpack non-iterable bool object`).
+  - **Vert** : relancé par moi, `13 passed`.
+  - **Suites voisines** (test_12, 13, 26, 28, webhooks) : même échec unique avant et après, `test_12::test_cache_behavior` ; QA : `1 failed, 148 passed`.
+  - **Mutations QA** : 10 mutants, tous tués après ses deux témoins (M2 `None == None` et M9 message constant survivaient) ; M5 équivalent.
+  - Environnement : venv Python 3.11 dans le scratchpad (pytest, pytest-asyncio, aiohttp, fastapi, prometheus_client), `-o addopts=""` faute de pytest-cov.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves, toutes antérieures au lot.
+  - #19471 : les routes HTTP FastAPI `/voice/job/{id}` restent sans authentification (exposées en dev/local seulement). **#19293 reste donc ouverte** jusqu'à cette branche.
+  - #19472 : la passerelle retire `{success, message}` à l'annulation, rend 500 au lieu de 404, et son schéma ne mappe pas le snake_case du traducteur.
+  - #19473 : `job.error = str(e)` servi au propriétaire.
+  - Limite du modèle : le PULL ZMQ n'est pas authentifié (connu, #18628).
+
+### Cycle suivant : par où reprendre
+
+0. Fusionner #19382 puis la PR de ce cycle quand la CI est verte (l'auto-merge n'est pas autorisé). Fermer à la main #19254 (fusionnée par #19296), #19292 et #19380 avec leur preuve : `Closes` ne ferme pas sur `dev`.
+1. #19471 (fermera #19293), puis #19472 (passerelle) avec un test jest.
+2. #19473, #18668 et #18692 (messages d'exception bruts), puis #19381, #19253, #19294, #19295, #19255.
+3. #18727, #18773, #18729, #18774.
+4. #18697, puis #18691 (mesurer d'abord sur le staging), puis #18728.
+5. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
+6. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
