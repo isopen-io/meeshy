@@ -1378,3 +1378,19 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 
 - `origin/dev` (d84e74a80) fusionnée sans conflit ; aucun fichier de carte ou de position client ne bougeait côté `dev`.
   Web `src/lib/shared-locations` + `relations` 180 verts, `tsc` vert sur l'arbre fusionné. iOS et Android par la CI.
+
+## 2026-11-18 — réveils de 3 h à 10 h : #19289 et #19354 fusionnées dans `dev`
+
+- Reprise : deux PR de la routine ouvertes, #19289 (liste seule, #19284) et #19354 (icône de cercle, #17013). Aucun
+  nouveau lot ouvert : le run a consisté à les mener à la fusion.
+- `origin/dev` fusionnée à la main dans les deux branches, sans conflit, à trois reprises (c11ad1d1, 5e5414d9, puis
+  47157ee64 pour #19289) ; gates locaux sur l'arbre fusionné : passerelle `sharedLocation` 188 verts (+ `deliveryFloor`,
+  197) et tsc, web `shared-locations` 140 verts, carte 40 verts, tsc web vert.
+- #19354 cédée à 07:09 UTC : une autre session de la routine y a poussé (`ff317d012`).
+- Fusion : les deux PR ont été fusionnées par le porteur le 2026-11-18 à 07:40 UTC (3031bed16 et 9b1090998). #19289 :
+  CI verte sur sa tête (23 succès, 0 échec). #19354 : les tranches du SDK iOS ont été annulées par la fusion, son verdict
+  iOS SDK est rouge par annulation, pas par un test. Le run iOS de `dev` qui suit (14404376b) rougit sur
+  `ProfilePendingActionsCard.swift` (lot profil, isolation `main actor` de `.module`) : étranger aux cercles.
+- Issues fermées avec leur preuve : #19284, #17013. Restent : #19287 (liste seule iOS + Android), #19288 (deux points
+  mineurs), #18714, #18580 ; #18351 attend la décision du porteur.
+- Prochain lot recommandé : #19287, puis #18714.
