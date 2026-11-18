@@ -238,7 +238,7 @@ export function registerEditMessagePutRoute(
         // portes d'entrée du cycle 70. Un 403 dirait « pas vous », quand le
         // sujet est « plus personne, plus jamais ».
         if (admission.reason === 'conversation-closed') {
-          return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+          return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE, { code: 'CONVERSATION_CLOSED' });
         }
         if (editRefusalCode(admission.reason) !== undefined) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
@@ -722,7 +722,7 @@ export function registerEditMessagePatchRoute(
 
       if (isEditRefused(admission)) {
         if (admission.reason === 'conversation-closed') {
-          return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+          return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE, { code: 'CONVERSATION_CLOSED' });
         }
         if (editRefusalCode(admission.reason) !== undefined) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });

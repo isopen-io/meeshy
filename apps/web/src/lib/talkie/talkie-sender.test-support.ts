@@ -63,7 +63,14 @@ export function harness({
   capture = fakeCapture(),
   socketPresent = true,
   copied = true,
-}: { readonly ack?: () => Promise<unknown>; readonly capture?: ReturnType<typeof fakeCapture>; readonly socketPresent?: boolean; readonly copied?: boolean } = {}) {
+  identity,
+}: {
+  readonly ack?: () => Promise<unknown>;
+  readonly capture?: ReturnType<typeof fakeCapture>;
+  readonly socketPresent?: boolean;
+  readonly copied?: boolean;
+  readonly identity?: () => string | null;
+} = {}) {
   const wire = fakeSocket(ack);
   const outcomes: TalkieSendOutcome[] = [];
   const timers: Array<{ readonly run: () => void; readonly ms: number; cancelled: boolean }> = [];
@@ -81,6 +88,7 @@ export function harness({
       };
     },
     onOutcome: (outcome) => outcomes.push(outcome),
+    ...(identity === undefined ? {} : { identity }),
     copier: async (copy) => {
       copies.push(copy);
       return copied;

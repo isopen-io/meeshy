@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createHttpTransport, type ApiFailure, type ApiResult } from '@/lib/api/http';
+import { IDENTITY_CHANGED, createHttpTransport, type ApiFailure, type ApiResult } from '@/lib/api/http';
 
 import { createPublicationKeyring } from './publication-mutation-key';
 import { publishStudioPlan, runStudioPublish, studioPublicationContent, type StudioPublishedEvent } from './studio-publish-flow';
@@ -112,6 +112,20 @@ describe('runStudioPublish — séquentiel, dans l’ordre, arrêt à la premiè
     const outcome = await runStudioPublish({ plan, publish });
 
     expect(outcome).toEqual({ kind: 'failed', failure: 'story.studio.failure.network', published: 0, total: 1 });
+  });
+
+  test('une publication refusée parce que le compte a changé (IDENTITY_CHANGED) arrête la séquence sans échec : elle attend son compte (audit #19352, X1)', async () => {
+    const plan = readyPlan(['page-1', 'page-2']);
+    const calls: string[] = [];
+    const publish = async (input: StudioPublication): Promise<ApiResult<{ readonly id: string }>> => {
+      calls.push(input.pageIds[0]!);
+      return input.pageIds[0] === 'page-1' ? ok('p-1') : { ok: false, status: 0, error: IDENTITY_CHANGED, code: IDENTITY_CHANGED };
+    };
+
+    const outcome = await runStudioPublish({ plan, publish });
+
+    expect(outcome).toEqual({ kind: 'aborted', published: 1, total: 2 });
+    expect(calls).toEqual(['page-1', 'page-2']);
   });
 
   test('un signal abandonné ENTRE la 1ʳᵉ et la 2ᵉ ⇒ exactement une requête émise', async () => {

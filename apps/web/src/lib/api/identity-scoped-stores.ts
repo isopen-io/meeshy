@@ -8,6 +8,7 @@ import { callBackPromptStore } from '../calls/call-back-prompt';
 import { forgetCallIdentities } from '../calls/call-notice';
 import { closeConversationPreview } from '../notifications/conversation-preview';
 import { resetInAppBanner } from '../notifications/in-app-banner';
+import { closeSendSheet } from '../send/send-sheet-store';
 
 import { sessionIdentityKey, type SessionStoreApi } from './session';
 import type { TypingState } from './typing-store';
@@ -30,6 +31,8 @@ import type { EngagementState } from './conversation-engagement';
  *    conversation d'A et marqué lu avec le jeton de B ;
  *  - l'invite « Rappeler … ? » d'A et les noms d'appel qu'A a vus (#18907) : sous B, « Appeler » aurait
  *    composé vers la conversation d'A avec la connexion de B, sous le nom qu'A voyait ;
+ *  - la FEUILLE D'ENVOI qu'A a ouverte (audit #19352) : sous B, « Envoyer » aurait envoyé le contenu, la légende
+ *    et les destinataires choisis par A, avec les ports reconstruits pour B ;
  *  - les conversations qu'A a VUES chiffrées de bout en bout (#12949) : le
  *    registre se lie au compte ouvert, dès la surveillance puis à chaque
  *    changement, et retrouve ce que CE compte a vu (il survit au rechargement).
@@ -54,6 +57,7 @@ export function resetIdentityScopedStores({ outbox, conversations, typing, engag
   closeConversationPreview();
   callBackPromptStore.setState({ request: null });
   forgetCallIdentities();
+  closeSendSheet();
 }
 
 export function watchIdentityScopedStores(stores: IdentityScopedStores): () => void {

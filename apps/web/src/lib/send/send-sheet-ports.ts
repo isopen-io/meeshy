@@ -117,10 +117,13 @@ async function downloadFile(
   }
 }
 
-/** Les ports d'UN envoi, liés au compte qui parle à leur création (audit #19352, X1) : construits pour le compte qui lance l'envoi, ou pour celui qui le reprend. */
+/** Les dépendances d'UN envoi, liées au compte qui parle à leur création (audit #19352, X1) : construites pour le compte qui lance l'envoi, ou pour celui qui le reprend. */
+export function sendSheetDepsOf(params: Pick<SendSheetPortsParams, 'deps' | 'media'>): { readonly deps: ConversationsDeps; readonly media: PostMediaUploadDeps } {
+  return { deps: params.deps ?? ownedApiDeps(), media: params.media ?? ownedPostMediaUploadDeps() };
+}
+
 export function createSendSheetPorts(params: SendSheetPortsParams): SendSheetPorts {
-  const deps = params.deps ?? ownedApiDeps();
-  const mediaDeps = params.media ?? ownedPostMediaUploadDeps();
+  const { deps, media: mediaDeps } = sendSheetDepsOf(params);
   const fetchImpl = params.fetchImpl ?? fetch;
   const prepare = params.prepare ?? browserImagePreparer;
 

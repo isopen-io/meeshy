@@ -141,3 +141,22 @@ export function purgeReaderCaches(storage?: CacheStorageLike): void {
     )
     .catch(() => undefined);
 }
+
+/**
+ * LES COMPTES DONT LA FIN EST RESTÉE À FAIRE (audit #19352) — une session
+ * refusée dont le morceau de fin (`account-end.ts`) n'a pas pu se charger finit
+ * tout de suite, et son compte est NOTÉ ici (identifiants séparés par une
+ * espace) : ce qu'il laisse sur l'appareil part au prochain chargement de ce
+ * morceau (`forgetPendingAccountEnds`). Seule la note vit dans la première
+ * peinture.
+ */
+export const PENDING_ACCOUNT_ENDS_KEY = 'meeshy.account-end.pending';
+
+export function notePendingAccountEnd(storage: SafeStorage, userId: string): void {
+  try {
+    const noted = storage.getItem(PENDING_ACCOUNT_ENDS_KEY);
+    if (noted === null || !noted.split(' ').includes(userId)) storage.setItem(PENDING_ACCOUNT_ENDS_KEY, noted === null ? userId : `${noted} ${userId}`);
+  } catch {
+    /* Stockage plein ou interdit : la session est finie quand même. */
+  }
+}

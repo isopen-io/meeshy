@@ -8,6 +8,7 @@ import { conversationPreviewStore, openConversationPreview } from '../notificati
 import type { NotificationRecord } from '../notifications/record';
 import { localMessageOf } from '../send/local-message';
 import { createOutboxStore } from '../send/outbox-store';
+import { closeSendSheet, openSendSheet, sendSheetStore } from '../send/send-sheet-store';
 
 import { watchIdentityScopedStores } from './identity-scoped-stores';
 import { createSessionStore, type SessionStoreApi } from './session';
@@ -186,6 +187,41 @@ describe('l’invite de rappel et les identités d’appel d’A ne passent pas 
 
     expect(callBackPromptStore.getState().request).toEqual(promptOfA);
     callBackPromptStore.setState({ request: null });
+    unwatch();
+  });
+});
+
+describe('la feuille d’envoi ouverte par A se ferme quand l’onglet change de compte (audit #19352)', () => {
+  const requestOfA = { payload: { kind: 'text', text: 'le lien privé de A' }, intent: 'share' } as const;
+
+  test('A → B : la feuille se ferme — « Envoyer » n’enverrait plus, sous B, ce que A a choisi', () => {
+    const { session, unwatch } = appAsA();
+    openSendSheet(requestOfA);
+
+    signIn(session, 'b');
+
+    expect(sendSheetStore.getState().request).toBeNull();
+    unwatch();
+  });
+
+  test('A → déconnecté : la feuille se ferme', () => {
+    const { session, unwatch } = appAsA();
+    openSendSheet(requestOfA);
+
+    session.getState().clearSession();
+
+    expect(sendSheetStore.getState().request).toBeNull();
+    unwatch();
+  });
+
+  test('même compte, jeton renouvelé ⇒ la feuille reste ouverte', () => {
+    const { session, unwatch } = appAsA();
+    openSendSheet(requestOfA);
+
+    signIn(session, 'a');
+
+    expect(sendSheetStore.getState().request).toEqual(requestOfA);
+    closeSendSheet();
     unwatch();
   });
 });

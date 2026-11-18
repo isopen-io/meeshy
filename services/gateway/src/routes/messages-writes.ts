@@ -213,7 +213,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         // déjà prouvé son droit d'éditer, et n'apprend rien qu'il ne pouvait
         // apprendre autrement. Lui rendre un 404 le ferait réessayer sans fin.
         if (admission.reason === 'conversation-closed') {
-          return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+          return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE, { code: 'CONVERSATION_CLOSED' });
         }
         if (editRefusalCode(admission.reason) !== undefined) {
           return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });

@@ -1,4 +1,4 @@
-import { currentIdentity, httpTransport } from './client';
+import { currentIdentity } from './client';
 import type { ConversationsDeps } from './conversations';
 import { apiDeps, postMediaUploadDeps } from './deps';
 import { boundToIdentity } from './http';
@@ -14,7 +14,12 @@ import type { PostMediaUploadDeps } from './post-media-upload';
  * peinture : seuls les envois le chargent.
  */
 export function ownedApiDeps(owner: string | null = currentIdentity()): ConversationsDeps {
-  return { ...apiDeps, transport: boundToIdentity(httpTransport, owner) };
+  return ownedDepsOf(apiDeps, owner);
+}
+
+/** Les mêmes, pour des dépendances INJECTÉES (un écran qui reçoit les siennes) : leur transport ne parle qu'au nom de `owner`. */
+export function ownedDepsOf(deps: ConversationsDeps, owner: string | null = currentIdentity()): ConversationsDeps {
+  return { ...deps, transport: boundToIdentity(deps.transport, owner) };
 }
 
 /** Un téléversement par reprise est lui-même une opération en plusieurs requêtes : la création, puis chaque tranche. */

@@ -2,7 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useStore } from 'zustand/react';
 
+import { currentIdentity } from '@/lib/api/client';
+import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
+import { ownedApiDeps } from '@/lib/api/owned-deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { relationLinksQueryOptions, type RelationDeps } from '@/lib/api/relations';
 import { watchRealtime, type WatchRealtime } from '@/lib/api/watch-realtime';
@@ -11,7 +14,7 @@ import { translateCircles, type CirclesCatalogKey } from '@/lib/i18n-circles-cat
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { SocketClient } from '@/lib/net/socket';
 import { createTalkieCapture, talkieEncodingSupportedOnce } from '@/lib/talkie/talkie-encoder';
-import { bindTalkieSender, createTalkieSender, type TalkieCaptureFactory, type TalkieSendOutcome, type TalkieSendPhase, type TalkieVoiceCopier } from '@/lib/talkie/talkie-sender';
+import { bindTalkieSender, createTalkieSender, type TalkieCaptureFactory, type TalkieSendOutcome, type TalkieSendPhase, type TalkieVoiceCopier, type TalkieVoiceCopy } from '@/lib/talkie/talkie-sender';
 import { createTalkieVoiceCopier } from '@/lib/talkie/talkie-voice-copy';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
@@ -174,8 +177,14 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   );
 });
 
+/** Les requêtes d'une copie vocale (chercher la conversation, téléverser, envoyer) parlent au nom de qui a appuyé (audit #19352, X1). */
+export const talkieCopyDeps = (copy: TalkieVoiceCopy): ConversationsDeps => ownedApiDeps(copy.owner);
+
 /** La copie vocale vivante (#16698) : passerelle de l'application, langue de l'interface prêtée à la voix. */
-export const liveTalkieCopier = (language: () => string): TalkieVoiceCopier => createTalkieVoiceCopier({ deps: apiDeps, language });
+export const liveTalkieCopier =
+  (language: () => string): TalkieVoiceCopier =>
+  (copy) =>
+    createTalkieVoiceCopier({ deps: talkieCopyDeps(copy), language })(copy);
 
 export function useTalkieSender({
   watch,
@@ -198,7 +207,7 @@ export function useTalkieSender({
   languageRef.current = language;
   const copierRef = useRef(copier ?? liveTalkieCopier(() => languageRef.current));
   const sender = useMemo(
-    () => createTalkieSender({ socket: () => socketRef.current, capture, onOutcome: (outcome) => outcomeRef.current(outcome), copier: (copy) => copierRef.current(copy) }),
+    () => createTalkieSender({ socket: () => socketRef.current, capture, onOutcome: (outcome) => outcomeRef.current(outcome), copier: (copy) => copierRef.current(copy), identity: currentIdentity }),
     [capture],
   );
   useEffect(
