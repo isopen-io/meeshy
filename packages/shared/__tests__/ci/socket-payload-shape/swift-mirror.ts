@@ -6,16 +6,25 @@
 //
 // ─── Ce qu'il y a à lire, et pourquoi c'est mécanisable ───────────────────
 //
-// Le câblage iOS n'a que DEUX idiomes, et c'est une mesure (2026-11-14) :
+// Le câblage iOS a TROIS idiomes. Il en avait deux à la mesure du 2026-11-14 ;
+// le troisième est arrivé avec les contrôles d'appel, et la garde l'a manqué
+// jusqu'à ce que son compteur de couverture baisse (#19711) :
 //
-//   · `m.route(.event, Type.self) { … }` — la route DÉCODÉE, seule forme qui
-//     nomme un type, donc la seule confrontable ;
+//   · `m.route(.event, Type.self) { … }` — la route DÉCODÉE, qui nomme un type,
+//     donc confrontable ;
+//   · `relais(.event, Type.self) { … }` — la même route, posée par un helper
+//     générique `func relais<T…>(_ e: SocketEvent, _ t: T.Type, …)` qui délègue
+//     à `route(e, t)`. Le relais est reconnu par sa SIGNATURE et par sa
+//     DÉLÉGATION (voir [routeRelayHelpers]), jamais par son nom : le prochain
+//     helper de ce genre est vu sans qu'on touche à la garde ;
 //   · `.raw(.event) { data in … }` — décodage manuel, aiguillage sur une clé.
 //
 // Les onze `socket.on(…)` du SDK portent tous `clientEvent:` (connect,
 // disconnect, reconnect, error) : ce sont les événements de Socket.IO lui-même,
-// pas des charges du contrat. Il n'y a donc pas de troisième idiome à suivre —
-// là où le miroir Kotlin en a cinq dont la garde ne voit que trois (#18123).
+// pas des charges du contrat — là où le miroir Kotlin a cinq idiomes dont la
+// garde ne voit que trois (#18123). Une énumération d'idiomes reste une
+// énumération : c'est le compteur `SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE`, pas
+// cette prose, qui dit quand un quatrième apparaît.
 //
 // ─── La règle appliquée, et son symptôme ──────────────────────────────────
 //
@@ -67,8 +76,10 @@ export const MINIMUM_SWIFT_ROUTES = 120;
  * Les événements du contrat réellement confrontés, mesurés le 2026-11-14 — à comparer aux 176 que
  * `ServerToClientEvents` déclare, et aux 110 que la garde Kotlin atteint. Le chiffre vit ICI pour
  * qu'une extension de la lecture ait un endroit où se voir monter, plutôt qu'une prose à vieillir.
+ * Remesuré le 2026-11-18 à 166 sur 205 (#19711) : les cinq contrôles d'appel que le relais avait
+ * sortis de la lecture y reviennent, plus `call:conversation-changed`, routé d'emblée par le relais.
  */
-export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 165;
+export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 166;
 
 export type SwiftProperty = {
   /** La clé du FIL : le `CodingKeys` s'il existe, sinon le nom Swift. */
@@ -266,6 +277,57 @@ const decodedTypes = (body: string, source: string): readonly string[] => {
   return [...relayed];
 };
 
+/**
+ * La signature d'un RELAIS : un helper générique dont les deux premiers paramètres, sans étiquette,
+ * sont un `SocketEvent` et un `T.Type` — donc appelable comme `route` : `NOM(.event, T.self …)`.
+ */
+const RELAY_SIGNATURE =
+  /\bfunc\s+(\w+)\s*<[^>]*>\s*\(\s*_\s+(\w+)\s*:\s*SocketEvent\s*,\s*_\s+(\w+)\s*:\s*\w+\.Type\b/g;
+
+/**
+ * Les helpers qui POSENT une route décodée en déléguant à `route(` (#19711).
+ *
+ * La signature ne suffit pas : un helper d'ÉMISSION peut avoir la même. Le relais n'en est un que
+ * si son corps appelle `route(` — ou un relais déjà reconnu — avec SES PROPRES paramètres
+ * d'événement et de type. Le point fixe suit les relais de relais sans graphe d'appels : chaque
+ * maillon doit transmettre ses deux paramètres tels quels, sinon la chaîne s'arrête.
+ */
+export const routeRelayHelpers = (sources: readonly string[]): readonly string[] => {
+  const candidates = sources.flatMap((source) =>
+    [...source.matchAll(RELAY_SIGNATURE)].flatMap((match) => {
+      const [signature, name, event, type] = match;
+      if (name === undefined || event === undefined || type === undefined) return [];
+      const openAt = source.indexOf('{', match.index + signature.length);
+      if (openAt < 0) return [];
+      return [{ name, event, type, body: source.slice(openAt + 1, closingBraceIndex(source, openAt + 1)) }];
+    }),
+  );
+  const relays = new Set<string>();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const candidate of candidates.filter((candidate) => !relays.has(candidate.name))) {
+      const callees = ['route', ...relays].join('|');
+      if (new RegExp(`\\b(?:${callees})\\(\\s*${candidate.event}\\s*,\\s*${candidate.type}\\b`).test(candidate.body)) {
+        relays.add(candidate.name);
+        grew = true;
+      }
+    }
+  }
+  return [...relays].sort();
+};
+
+/** Les routes DÉCODÉES d'une source : `route(.event, T.self` et l'appel de tout relais reconnu. */
+export const decodingRouteCalls = (
+  source: string,
+  relays: readonly string[],
+): readonly { readonly caseName: string; readonly typeName: string }[] => {
+  const callees = ['route', ...relays].join('|');
+  return [...source.matchAll(new RegExp(`\\b(?:${callees})\\(\\s*\\.(\\w+)\\s*,\\s*(\\w+)\\.self`, 'g'))].flatMap(
+    ([, caseName, typeName]) => (caseName === undefined || typeName === undefined ? [] : [{ caseName, typeName }]),
+  );
+};
+
 export const readSwift = () => {
   const files = SWIFT_ROOTS.flatMap((root) => swiftFiles(join(REPO, root)));
   const types = new Map<string, SwiftType>();
@@ -307,17 +369,19 @@ export const readSwift = () => {
     ),
   );
 
+  const sources = new Map(files.map((file) => [file, stripComments(readFileSync(file, 'utf8'))] as const));
+  const relays = routeRelayHelpers([...sources.values()]);
+
   const routes: SwiftRoute[] = [];
-  for (const file of files) {
-    const source = stripComments(readFileSync(file, 'utf8'));
-    for (const match of source.matchAll(/\broute\(\s*\.(\w+)\s*,\s*(\w+)\.self/g)) {
+  for (const [file, source] of sources) {
+    for (const call of decodingRouteCalls(source, relays)) {
       routes.push({
         file,
-        caseName: match[1],
-        event: events.get(match[1]),
-        typeName: match[2],
+        caseName: call.caseName,
+        event: events.get(call.caseName),
+        typeName: call.typeName,
         kind: 'decoding',
-        candidates: [match[2]],
+        candidates: [call.typeName],
       });
     }
     for (const match of source.matchAll(/\braw\(\s*\.(\w+)\s*\)\s*\{/g)) {

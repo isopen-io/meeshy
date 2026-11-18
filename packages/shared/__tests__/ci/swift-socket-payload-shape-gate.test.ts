@@ -233,7 +233,9 @@ describe('la FORME des charges socket — ce qu\'iOS EXIGE, ce que le contrat D�
     ].sort();
 
     expect(silentRaw).toEqual(['auth:session-revoked', 'auth:token-expired', 'heartbeat:ack', 'talkie:chunk']);
-    expect(manual.length, `types à init(from:) manuel : ${manual.join(', ')}`).toBe(31);
+    /* 32 depuis #19711 : `CallConversationChangedEvent`, revenu par le relais, décode à la main —
+       relu le 2026-11-18, il n'exige que `callId` et `conversationId`, que le contrat déclare requis. */
+    expect(manual.length, `types à init(from:) manuel : ${manual.join(', ')}`).toBe(32);
   });
   /**
    * Le SECOND niveau (#18116). Trois événements de commentaire y rendent la MÊME divergence —

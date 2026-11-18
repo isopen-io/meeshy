@@ -123,6 +123,8 @@ describe("ce que le miroir SWIFT DÉCLARE et que le contrat ne porte nulle part"
         return mirror !== undefined && mirror.customDecoder && mirror.file.includes('/Sockets/');
       })
       .sort();
-    expect(manual.length, `types de fil à init(from:) manuel : ${manual.join(', ')}`).toBe(15);
+    /* 16 depuis #19711 : `CallConversationChangedEvent`, revenu par le relais — relu le 2026-11-18,
+       ses six propriétés sont toutes déclarées par le contrat. */
+    expect(manual.length, `types de fil à init(from:) manuel : ${manual.join(', ')}`).toBe(16);
   });
 });
