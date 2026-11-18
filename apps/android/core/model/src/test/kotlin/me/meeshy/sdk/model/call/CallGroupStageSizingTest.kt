@@ -6,7 +6,7 @@ import org.junit.Test
 class CallGroupStageSizingTest {
     private val families = listOf(
         CallActionFamilyRow(CallActionFamily.MyImage, listOf(CallAction.Camera)),
-        CallActionFamilyRow(CallActionFamily.TheCall, listOf(CallAction.Captions, CallAction.Journal)),
+        CallActionFamilyRow(CallActionFamily.TheCall, listOf(CallAction.Captions, CallAction.Recording)),
     )
 
     @Test
@@ -28,7 +28,7 @@ class CallGroupStageSizingTest {
         assertThat(rows).hasSize(1)
         assertThat(rows.single().family).isNull()
         assertThat(rows.single().id).isEqualTo("folded")
-        assertThat(rows.single().actions).containsExactly(CallAction.Camera, CallAction.Captions, CallAction.Journal).inOrder()
+        assertThat(rows.single().actions).containsExactly(CallAction.Camera, CallAction.Captions, CallAction.Recording).inOrder()
         assertThat(CallGroupStageSizing.rows(emptyList(), isCompactHeight = true)).isEmpty()
     }
 

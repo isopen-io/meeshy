@@ -49,25 +49,17 @@ final class RelationLinksReachTests: XCTestCase {
         XCTAssertNil(RelationLinksReachCopy.status(of: community(members: nil), isMember: false))
     }
 
-    func test_lockedAddresses_nameTheCountOnly() {
-        let one = RelationLinksReachCopy.lockedAddresses(1)
-        let three = RelationLinksReachCopy.lockedAddresses(3)
-        XCTAssertTrue(one.contains("1"))
-        XCTAssertTrue(three.contains("3"))
-        XCTAssertNotEqual(one, three)
-    }
-
-    /// Loi 4 et loi 12 — la rangée verrouillée ne reçoit qu'un compte et un cercle (aucune adresse, aucun titre, aucun
-    /// glyphe d'adresse) ; les communautés sont des billets du kit, rien n'est dessiné sur place.
-    func test_reach_isMadeOfTheKit_andTheLockedRowCarriesNothingProtected() throws {
+    /// Loi 12 et #19674 — ce que mon cercle tient fermé ne se montre plus, pas même verrouillé ; les communautés sont
+    /// des billets du kit, rien n'est dessiné sur place.
+    func test_reach_isMadeOfTheKit_andShowsNothingLocked() throws {
         let reach = try source("RelationLinksReach.swift")
-        XCTAssertTrue(reach.contains("MeeshyLockedRow("))
+        XCTAssertFalse(reach.contains("MeeshyLockedRow("))
         XCTAssertTrue(reach.contains("MeeshyTicket("))
         XCTAssertTrue(reach.contains("MeeshyButton("))
-        XCTAssertFalse(reach.contains("ProfileAddress"), "la rangée verrouillée ne voit aucune adresse")
         XCTAssertFalse(reach.contains("RoundedRectangle("), "aucun composant redessiné sur place")
         let face = try source("UserProfileSheet+LinksFace.swift")
-        XCTAssertTrue(face.contains("RelationLockedAddressRows("))
+        XCTAssertFalse(face.contains("RelationLockedAddressRows("))
+        XCTAssertFalse(face.contains("lockedAddresses"))
         XCTAssertTrue(face.contains("RelationOpenCommunitiesSection("))
     }
 

@@ -3,8 +3,7 @@ import MeeshySDK
 
 // MARK: - Ce que la face Liens d'un autre montre au-delà de ses adresses (#19444 — planche `Autre-Liens`)
 //
-// Sous « Ses adresses » : une rangée verrouillée (K37) par cercle qui en tient d'autres fermées — un compte et le
-// cercle qui les ouvre, jamais l'adresse, son titre ni son glyphe (loi 4). Puis « Ses communautés ouvertes » : un
+// Sous « Ses adresses », ce que mon cercle tient fermé ne se montre pas (#19674). Puis « Ses communautés ouvertes » : un
 // billet de rangée (K30) par communauté publique, son adresse, ses membres, et au talon « Rejoindre » ou « Tu en fais
 // partie ». Rien n'est déduit ici : sans champ servi (#19274), rien ne se montre.
 
@@ -52,25 +51,6 @@ public extension EnvironmentValues {
     var profileCommunityDoor: ProfileCommunityDoor? {
         get { self[ProfileCommunityDoorKey.self] }
         set { self[ProfileCommunityDoorKey.self] = newValue }
-    }
-}
-
-/// Ce que mon cercle me tient fermé de ses adresses : le compte, et le cercle qui les ouvre. Rien d'autre.
-struct RelationLockedAddressRows: View {
-    let groups: [ServedLockedAddresses.Group]
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            ForEach(groups, id: \.circle) { group in
-                MeeshyLockedRow(
-                    title: RelationLinksReachCopy.lockedAddresses(group.count),
-                    requirement: ProfileRelationLockedGroup.requirement(opensAt: group.circle),
-                    tint: tint
-                )
-                .accessibilityIdentifier("profile.relation.links.locked.\(group.circle.rawValue)")
-            }
-        }
     }
 }
 
@@ -156,9 +136,6 @@ struct RelationOpenCommunitiesSection: View {
 
 /// Les mots de ce que la face Liens d'un autre montre au-delà de ses adresses (#19444).
 enum RelationLinksReachCopy {
-    static func lockedAddresses(_ count: Int) -> String {
-        String(localized: "profile.relation.links.locked", defaultValue: "\(count) adresses réservées", bundle: .module)
-    }
     static var communitiesTitle: String {
         String(localized: "profile.relation.links.communities", defaultValue: "Ses communautés ouvertes", bundle: .module)
     }

@@ -163,6 +163,7 @@ private final class LinksCacheRecorder {
     }
 }
 
+@MainActor
 private extension ProfileLinksSnapshot {
     func withFreshness(_ isFresh: Bool) -> ProfileLinksSnapshot {
         ProfileLinksSnapshot(share: share, tracking: tracking, community: community, referral: referral, isFresh: isFresh)

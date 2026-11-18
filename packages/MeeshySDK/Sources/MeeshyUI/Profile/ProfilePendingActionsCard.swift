@@ -114,7 +114,7 @@ private struct ProfilePendingGlyph: View {
 }
 
 /// Les mots du bloc.
-nonisolated enum ProfilePendingCopy {
+enum ProfilePendingCopy {
 
     static func title(_ count: Int, locale: Locale = .current) -> String {
         let format = count == 1

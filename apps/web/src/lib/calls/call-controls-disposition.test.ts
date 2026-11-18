@@ -89,8 +89,8 @@ describe('railRows — les rails du duo', () => {
     expect(railRows('rails', set({ cameraOn: false }), menu).find((row) => row.family === 'mine')?.actions).toEqual(['camera', 'screen']);
   });
 
-  test('« l’appel » : Sous-titres · Enregistrer · Ajouter · Journal · Réagir · Capture', () => {
-    expect(railRows('rails', set(), menu).find((row) => row.family === 'call')?.actions).toEqual(['captions', 'record', 'invite', 'journal', 'react', 'capture']);
+  test('« l’appel » : Sous-titres · Enregistrer · Ajouter · Réagir · Capture (#19670 : plus de Journal)', () => {
+    expect(railRows('rails', set(), menu).find((row) => row.family === 'call')?.actions).toEqual(['captions', 'record', 'invite', 'react', 'capture']);
   });
 
   test('un rail sans bouton ne sort pas : pendant la sonnerie, « l’appel » n’a rien à offrir', () => {

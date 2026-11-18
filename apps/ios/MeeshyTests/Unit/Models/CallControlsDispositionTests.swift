@@ -87,7 +87,7 @@ final class CallControlsDispositionTests: XCTestCase {
 
     func test_rails_theCall_isCaptionsRecordAddJournalReactCapture() {
         let rows = CallControlsDisposition.rails.railRows(actions(), layer: .menu)
-        XCTAssertEqual(rows.first { $0.family == .theCall }?.actions, [.captions, .recording, .addPeople, .journal, .react, .capture])
+        XCTAssertEqual(rows.first { $0.family == .theCall }?.actions, [.captions, .recording, .addPeople, .react, .capture])
     }
 
     func test_railSide_myImageLeads_theCallTrails() {
