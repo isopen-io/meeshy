@@ -93,7 +93,7 @@ const EPHEMERAL_ONLY_TYPES = [
 /** JUMEAU de `MOOD_TYPES` (#10813) : la nouvelle humeur d'un contact a sa page. */
 const MOOD_TYPES = ['friend_new_mood'];
 const REQUEST_TYPES = ['friend_request', 'contact_request'];
-const PROFILE_TYPES = ['contact_joined', 'contact_recently_active', 'device_battery', 'device_unreachable'];
+const PROFILE_TYPES = ['contact_joined', 'contact_recently_active', 'device_battery', 'device_unreachable', 'inactivity_alert'];
 /** JUMEAU de `MISSED_CALL_TYPES` (#9177) : repli d'un appel manqué sans `conversationId`. */
 const MISSED_CALL_TYPES = ['missed_call', 'CALL_MISSED', 'call_declined'];
 const PROGRESSION_TYPES = [
@@ -519,6 +519,20 @@ const REPLYABLE_TYPES = ['new_message', 'message_reply', 'reply', 'user_mentione
 const INVITE_FORMS = ['chat', 'join'];
 const SHARE_LINK_KEY = /^[A-Za-z0-9_-]{1,100}$/;
 
+/** « TOUT VA BIEN ? » (#18738) : `wellness_check` reste affichée et porte « Je vais bien » ; l'action (sans ouvrir l'app) et le toucher
+ * répondent `POST /api/v1/me/wellness/ok` au nom du compte ENREGISTRÉ. JUMEAU de `answerWellnessCheck` (`src/lib/inactivity/wellness-answer.ts`). */
+const WELLNESS_PUSH_TYPE = 'wellness_check';
+const WELLNESS_OK_ACTION = 'wellness-ok';
+const WELLNESS_OK_LABELS = { fr: 'Je vais bien', en: 'I’m OK', es: 'Estoy bien', de: 'Mir geht es gut', it: 'Sto bene', pt: 'Estou bem', ar: 'أنا بخير' };
+const questionBienEtre = (data) => (texte(data.type) === WELLNESS_PUSH_TYPE ? { action: WELLNESS_OK_ACTION, title: WELLNESS_OK_LABELS[langueDuNavigateur()] } : null);
+async function repondreBienEtre(data, action) {
+  const stocke = await lireCredential();
+  const entetes = stocke !== null && stocke.credential && stocke.credential.kind === 'registered' ? entetesCredential(stocke.credential) : null;
+  const corps = { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, entetes), body: '{}', keepalive: true };
+  if (entetes !== null) await self.fetch(texte(stocke.apiBase) + '/api/v1/me/wellness/ok', corps).catch(() => undefined);
+  if (action !== WELLNESS_OK_ACTION) await ouvrir(data);
+}
+
 function coordonnee(valeur, borne) {
   const nombre = Number(texte(valeur));
   return texte(valeur) !== '' && Number.isFinite(nombre) && Math.abs(nombre) <= borne ? nombre : null;
@@ -583,12 +597,14 @@ function offreContenu(data) {
 function montrer(banniere, notification, data) {
   const offre = rappel(data);
   const contenu = offreContenu(data);
-  const actions = offre === null ? contenu.actions : [offre.action];
+  const question = questionBienEtre(data);
+  const actions = question !== null ? [question] : offre === null ? contenu.actions : [offre.action];
   const cle = acteurSujet(data);
   const tap = { ...donneesDuTap(data), ...(cle === '' ? {} : { [ACTOR_SUBJECT_KEY]: cle }) };
   return self.registration.showNotification(banniere.titre, {
     body: banniere.corps,
     ...livraison(notification, texte(data.notificationId)),
+    ...(question === null ? {} : { requireInteraction: true }),
     icon: BANNER_ICON,
     badge: BANNER_BADGE,
     ...(contenu.image === '' ? {} : { image: contenu.image }),
@@ -1156,6 +1172,8 @@ self.addEventListener('notificationclick', (evenement) => {
       ouverture,
       texte(data.type) === TALKIE_PUSH_TYPE
         ? ouvrirTalkie(data, action)
+        : texte(data.type) === WELLNESS_PUSH_TYPE
+        ? repondreBienEtre(data, action)
         : texte(data.type) === CALL_PUSH_TYPE
         ? ouvrirAppel(data, action)
         : action === CALL_BACK_ACTION
