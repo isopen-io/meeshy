@@ -145,6 +145,7 @@ class CallCaptionsController internal constructor(
     private val notice: CallCaptionsRefusalNotice,
     private val clock: () -> Long,
     private val scope: CoroutineScope,
+    private val binding: CallConversationBinding = CallConversationBinding(),
 ) : CallFeatureController {
 
     @Inject
@@ -155,6 +156,7 @@ class CallCaptionsController internal constructor(
         session: SessionRepository,
         regime: LedgerCallConversationRegime,
         notice: ToastCallCaptionsRefusalNotice,
+        binding: CallConversationBinding = CallConversationBinding(),
     ) : this(
         wires = CallCaptionsWires(
             relayed = signals.translatedSegments,
@@ -168,6 +170,7 @@ class CallCaptionsController internal constructor(
         notice = notice,
         clock = System::currentTimeMillis,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+        binding = binding,
     )
 
     private val _state = MutableStateFlow(CallCaptionsState())
@@ -208,12 +211,13 @@ class CallCaptionsController internal constructor(
         when (next) {
             is CallState.Ended, CallState.Idle -> reset()
             else -> {
+                binding.bind(session)
                 callId = session.callId.ifBlank { callId }
                 peerName = session.config.peerName
                 peerId = session.config.peerId.ifBlank { peerId }
                 if (listening.isEmpty()) listening = listen()
                 stampCallStart(next)
-                resolveGate(session.config.conversationId)
+                resolveGate(binding.current)
             }
         }
     }
@@ -280,6 +284,9 @@ class CallCaptionsController internal constructor(
                 if (event.callId != callId) return@onEach
                 val self = session.currentUser.value?.id
                 _state.update { it.copy(listeners = it.listeners.applying(event.speakerId, event.active, self)) }
+            },
+            binding.conversationId.onEach { moved ->
+                if (moved.isNotBlank() && callId.isNotBlank()) resolveGate(moved)
             },
             wires.participantsLeft.onEach { left ->
                 if (left.callId != callId) return@onEach
