@@ -1018,6 +1018,47 @@ final class TrackingLinkInsightsTests: XCTestCase {
         XCTAssertTrue(ticket.contains("action: { onSwitch(true) }"))
     }
 
+    func test_pausedLink_saysWhatItKeeps_inTheWordsOfItsFigure() throws {
+        let french = Locale(identifier: "fr_FR")
+        XCTAssertEqual(ProfileLinksCopy.kept(.clicks(412), locale: french), String(format: String(localized: "profile.links.kept.clicks", defaultValue: "Ses %@ clics sont gardés.", bundle: .main), "412"))
+        XCTAssertNotEqual(ProfileLinksCopy.kept(.members(3), locale: french), ProfileLinksCopy.kept(.clicks(3), locale: french), "chaque chiffre se dit avec ce qu'il compte")
+        let ticket = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileCreatedLinkTicket.swift"))
+        XCTAssertTrue(ticket.contains("if let kept = ticket.keptFigure()"), "le compte gardé suit la conséquence de la pause")
+        XCTAssertTrue(ticket.contains("ProfileLinksCopy.kept(kept, locale: locale)"))
+    }
+
+    func test_createdLinks_putTheStoppedOnesUnderTheirOwnHeader() throws {
+        let face = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileLinksFaceSections.swift"))
+        XCTAssertTrue(face.contains("tickets(model.summary.serving(model.visibleTickets))"), "ceux qui servent d'abord")
+        XCTAssertTrue(face.contains("stoppedSection(model.summary.stopped(model.visibleTickets))"), "« À l'arrêt » dessous")
+        XCTAssertTrue(face.contains("MeeshySectionHeader(title: ProfileLinksCopy.stoppedTitle, count: stopped.count"))
+    }
+
+    func test_contactlessUnavailable_isAStateBlock_thenTheQRInstead_withShowMyQR() throws {
+        let card = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Links/ProfileCardView.swift"))
+        XCTAssertTrue(card.contains("MeeshyStateBlock(kind: .denied, title: ProfileLinksCopy.contactlessUnavailable"),
+                      "« Ce téléphone ne sait pas faire ça » est un bloc d'état K38")
+        XCTAssertTrue(card.contains("MeeshySectionHeader(title: ProfileLinksCopy.instead"), "« À la place »")
+        XCTAssertTrue(card.contains("action: { mode = .qr }"), "« Montrer mon QR » passe au QR")
+        XCTAssertTrue(card.contains("scannerShown = true"), "scanner celui de l'autre reste possible")
+    }
+
+    func test_trackingDetail_isMadeOfTheKit() throws {
+        let detail = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Links/Views/TrackingLinkDetailView.swift"))
+        for piece in ["MeeshyTicket(", "MeeshyCodeCard(", "MeeshyLabeledAction(", "MeeshyFigureBand(", "MeeshyChart(",
+                      "MeeshyShareBar(", "MeeshySegmented("] {
+            XCTAssertTrue(detail.contains(piece), "\(piece) : le détail d'un lien est fait du kit")
+        }
+        for drawn in ["RoundedRectangle(", "GeometryReader", "Capsule("] {
+            XCTAssertFalse(detail.contains(drawn), "\(drawn) : aucun composant redessiné sur place")
+        }
+    }
+}
+
+/// Les interrupteurs des billets créés vivent avec les autres témoins de la face Liens, qui portent leurs fabriques.
+@MainActor
+extension ProfileLinksFaceTests {
+
     func test_createdLinks_switchingAPausedShareLinkOn_appliesAtOnce_andSendsItsLinkId() async {
         let log = SwitchLog()
         let paused = shareLink("a").withActive(false)
@@ -1073,41 +1114,5 @@ final class TrackingLinkInsightsTests: XCTestCase {
         XCTAssertEqual(model.trackingLink(id: "tracking:t1")?.isActive, true)
         let sent = await log.sent
         XCTAssertEqual(sent, ["dkr-nuit:true"])
-    }
-
-    func test_pausedLink_saysWhatItKeeps_inTheWordsOfItsFigure() throws {
-        let french = Locale(identifier: "fr_FR")
-        XCTAssertEqual(ProfileLinksCopy.kept(.clicks(412), locale: french), String(format: String(localized: "profile.links.kept.clicks", defaultValue: "Ses %@ clics sont gardés.", bundle: .main), "412"))
-        XCTAssertNotEqual(ProfileLinksCopy.kept(.members(3), locale: french), ProfileLinksCopy.kept(.clicks(3), locale: french), "chaque chiffre se dit avec ce qu'il compte")
-        let ticket = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileCreatedLinkTicket.swift"))
-        XCTAssertTrue(ticket.contains("if let kept = ticket.keptFigure()"), "le compte gardé suit la conséquence de la pause")
-        XCTAssertTrue(ticket.contains("ProfileLinksCopy.kept(kept, locale: locale)"))
-    }
-
-    func test_createdLinks_putTheStoppedOnesUnderTheirOwnHeader() throws {
-        let face = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileLinksFaceSections.swift"))
-        XCTAssertTrue(face.contains("tickets(model.summary.serving(model.visibleTickets))"), "ceux qui servent d'abord")
-        XCTAssertTrue(face.contains("stoppedSection(model.summary.stopped(model.visibleTickets))"), "« À l'arrêt » dessous")
-        XCTAssertTrue(face.contains("MeeshySectionHeader(title: ProfileLinksCopy.stoppedTitle, count: stopped.count"))
-    }
-
-    func test_contactlessUnavailable_isAStateBlock_thenTheQRInstead_withShowMyQR() throws {
-        let card = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Links/ProfileCardView.swift"))
-        XCTAssertTrue(card.contains("MeeshyStateBlock(kind: .denied, title: ProfileLinksCopy.contactlessUnavailable"),
-                      "« Ce téléphone ne sait pas faire ça » est un bloc d'état K38")
-        XCTAssertTrue(card.contains("MeeshySectionHeader(title: ProfileLinksCopy.instead"), "« À la place »")
-        XCTAssertTrue(card.contains("action: { mode = .qr }"), "« Montrer mon QR » passe au QR")
-        XCTAssertTrue(card.contains("scannerShown = true"), "scanner celui de l'autre reste possible")
-    }
-
-    func test_trackingDetail_isMadeOfTheKit() throws {
-        let detail = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Links/Views/TrackingLinkDetailView.swift"))
-        for piece in ["MeeshyTicket(", "MeeshyCodeCard(", "MeeshyLabeledAction(", "MeeshyFigureBand(", "MeeshyChart(",
-                      "MeeshyShareBar(", "MeeshySegmented("] {
-            XCTAssertTrue(detail.contains(piece), "\(piece) : le détail d'un lien est fait du kit")
-        }
-        for drawn in ["RoundedRectangle(", "GeometryReader", "Capsule("] {
-            XCTAssertFalse(detail.contains(drawn), "\(drawn) : aucun composant redessiné sur place")
-        }
     }
 }

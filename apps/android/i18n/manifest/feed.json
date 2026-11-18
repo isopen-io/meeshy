@@ -517,10 +517,8 @@
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "communityLink.status",
           "androidName": "status_composer_title",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",

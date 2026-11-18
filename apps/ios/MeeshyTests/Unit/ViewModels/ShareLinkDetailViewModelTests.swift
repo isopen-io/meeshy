@@ -530,6 +530,7 @@ final class CommunityLinkDetailTests: XCTestCase {
                       memberCount: memberCount, isActive: true, createdAt: Date(timeIntervalSince1970: 1_750_000_000))
     }
 
+    @MainActor
     private final class Calls {
         var closed: [Bool] = []
         var invited: [String] = []

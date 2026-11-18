@@ -32,7 +32,7 @@ public nonisolated enum MeeshyChoiceSelection: Sendable, Equatable {
 
 /// Une option opaque : des textes déjà traduits, un glyphe, une teinte. Aucun lien,
 /// aucune durée, aucun cercle : l'hôte passe des identifiants.
-public struct MeeshyChoiceItem: Identifiable, Equatable {
+public nonisolated struct MeeshyChoiceItem: Identifiable, Equatable {
     public let id: String
     public let title: String
     public let detail: String?

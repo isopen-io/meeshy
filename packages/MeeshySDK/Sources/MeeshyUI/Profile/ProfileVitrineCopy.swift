@@ -55,7 +55,7 @@ enum ProfileVitrineCopy {
     }
 
     static var seeAllHint: String {
-        String(localized: "profile.vitrine.withThem.seeAll.hint", defaultValue: "Ouvre la face Actions", bundle: .module)
+        String(localized: "profile.vitrine.withThem.seeAll.a11y", defaultValue: "Ouvre la face Actions", bundle: .module)
     }
 
     static var withoutNetwork: String {

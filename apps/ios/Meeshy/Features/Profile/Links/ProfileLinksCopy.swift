@@ -311,14 +311,14 @@ nonisolated enum ProfileLinksCopy {
     static var qrShowsShowcase: String {
         String(localized: "profile.card.qrShows.showcase", defaultValue: "Vitrine publique", bundle: .main)
     }
-    static var qrShowsShowcaseDetail: String {
-        String(localized: "profile.card.qrShows.showcase.detail", defaultValue: "Ce que tout le monde voit de toi", bundle: .main)
-    }
     static var qrShowsInvitation: String {
         String(localized: "profile.card.qrShows.invitation", defaultValue: "Invitation à me rejoindre", bundle: .main)
     }
-    static var qrShowsInvitationDetail: String {
-        String(localized: "profile.card.qrShows.invitation.detail", defaultValue: "Scanner envoie une demande d'amis", bundle: .main)
+    static var qrShowsInvitationNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "profile.card.qrShows.invitation.question", defaultValue: "Que fait le QR d'invitation ?", bundle: .main),
+            text: String(localized: "profile.card.qrShows.invitation.note", defaultValue: "Scanner envoie une demande d'amis.", bundle: .main)
+        )
     }
     static var invitationPreparing: String {
         String(localized: "profile.card.invitation.preparing", defaultValue: "L'invitation se prépare : le QR montre ta vitrine en attendant", bundle: .main)
