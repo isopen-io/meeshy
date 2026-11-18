@@ -146,8 +146,10 @@ class RouteManifestRatchetTest {
          * e-mail (liste, relance, désinscription), statistiques du lien de profil, échange de contact sans
          * contact (création, acceptation), demande de position Sang et mode fantôme ; la fiche Android du
          * chantier #18857 les portera.
+         * 146 : moins `GET /users/me/addresses`, que porte `MyAddressesApi` (#18889 : la rangée « Mes adresses » de la face
+         * Liens) ; création, modification, suppression et ordre restent à porter.
          */
-        const val TO_PORT_CEILING = 147
+        const val TO_PORT_CEILING = 146
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 
