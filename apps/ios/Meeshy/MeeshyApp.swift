@@ -602,7 +602,7 @@ private struct ProfileSlotContent: View {
         case .banner:
             GameBannerBadge(userId: userId)
         case .relation:
-            ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked)
+            ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked, tint: tint)
                 .id(userId)
         case .pill:
             ProfileRelationPillView(userId: userId, displayName: displayName)

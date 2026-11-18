@@ -160,7 +160,7 @@ final class ProfileShareLocationLineTests: XCTestCase {
     func test_row_isMadeOfTheKit_withoutEmojiFontOrHardcodedColor() throws {
         let source = try code("Features/SharedLocation/ProfileShareLocationRow.swift")
         let row = String(source[..<(source.range(of: "enum ShareLocationWording")?.lowerBound ?? source.endIndex)])
-        XCTAssertTrue(row.contains("MeeshyToggleRowFace("), "la rangée est la face K06 du kit")
+        XCTAssertTrue(row.contains("MeeshyToggleRow(line.title"), "la rangée est la ligne K06 du kit")
         XCTAssertTrue(row.contains("MeeshyButton(ShareLocationWording.stop"), "« Arrêter » est un bouton K40")
         XCTAssertTrue(row.contains("kind: .danger"), "« Arrêter » est un bouton K40 de danger")
         XCTAssertFalse(row.contains("📍"), "aucun émoji dans la rangée")
