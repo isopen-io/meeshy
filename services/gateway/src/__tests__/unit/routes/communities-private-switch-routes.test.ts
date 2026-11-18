@@ -133,9 +133,9 @@ describe('PUT /communities/:id — le créateur rend sa communauté privée', ()
     const res = await put(app, { isPrivate: true });
 
     expect(res.statusCode).toBe(200);
-    expect(admitSalonOccupants).toHaveBeenCalledWith(prisma, { communityId: COMMUNITY, createdBy: CREATEUR });
+    expect(admitSalonOccupants).toHaveBeenCalledWith(prisma, { communityId: COMMUNITY, createdBy: CREATEUR }, expect.any(Function));
     expect(closeSalonsAfterSwitch).toHaveBeenCalledWith(
-      expect.objectContaining({ prisma }),
+      expect.objectContaining({ prisma, announce: expect.any(Function) }),
       expect.objectContaining({ communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [EXCLU] }),
     );
     expect(order).toEqual(['admit', 'update', 'exit']);
@@ -204,7 +204,7 @@ describe("PATCH /admin/communities/:id — l'administration rend une communauté
     const res = await patch(app, { isPrivate: true, reason: REASON });
 
     expect(res.statusCode).toBe(200);
-    expect(admitSalonOccupants).toHaveBeenCalledWith(prisma, { communityId: COMMUNITY, createdBy: CREATEUR });
+    expect(admitSalonOccupants).toHaveBeenCalledWith(prisma, { communityId: COMMUNITY, createdBy: CREATEUR }, expect.any(Function));
     expect(order).toEqual(['admit', 'update', 'exit']);
     await app.close();
   });

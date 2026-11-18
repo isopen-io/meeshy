@@ -32,6 +32,7 @@ import {
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import {
@@ -447,7 +448,7 @@ export function registerCreateConversationRoute(
       // Si la conversation est créée dans une communauté, ses participants y
       // entrent selon le plan admis plus haut (#16639, `planCommunityAdmission`).
       if (communityId && communityAdmission?.kind === 'admitted') {
-        await applyCommunityAdmission(prisma, communityId, communityAdmission);
+        await applyCommunityAdmission(prisma, communityId, communityAdmission, communityMemberAnnouncerFrom(fastify));
       }
 
       // Pour les DMs, pas de titre — le frontend résout le nom de l'interlocuteur

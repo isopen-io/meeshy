@@ -29,6 +29,7 @@ import { CerclesAchievements } from '../../services/achievements/CerclesAchievem
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { CommunityEngagementOptions } from './types';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 import { newMemberRefusal } from '../../services/conversations/newMemberAdmission';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
@@ -799,7 +800,7 @@ const community = await fastify.prisma.community.findFirst({
       // L'admission s'écrit AVANT le rattachement : si elle échoue, rien n'est
       // rattaché (au pire des membres en plus, jamais un salon ouvert).
       if (admission?.kind === 'admitted') {
-        await applyCommunityAdmission(fastify.prisma, id, admission);
+        await applyCommunityAdmission(fastify.prisma, id, admission, communityMemberAnnouncerFrom(fastify));
       }
 
       // Update conversation to belong to this community (allows moving between communities)
