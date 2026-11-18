@@ -126,6 +126,8 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case gameMissionsUpdated = "game:missions-updated"
     case gameUpdated = "game:updated"
     case heartbeatAck = "heartbeat:ack"
+    case inactivityAlert = "inactivity:alert"
+    case inactivityCleared = "inactivity:cleared"
     case locationLiveStart = "location:live-start"
     case locationLiveStarted = "location:live-started"
     case locationLiveStop = "location:live-stop"

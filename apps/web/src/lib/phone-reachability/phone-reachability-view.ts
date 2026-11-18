@@ -2,6 +2,7 @@ import type { PhoneReachabilityAnnouncement, PhoneReachabilityState } from '@mee
 
 import { translatePhoneReachability, type PhoneReachabilityCatalogKey } from '@/lib/i18n-phone-reachability-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { localSinceText, type ClockOptions } from '@/lib/view/local-since';
 
 /**
  * **CE QUE LE TÉLÉPHONE INJOIGNABLE DIT** (#18737, TEL-01) — lois pures : l'heure « depuis » à l'horloge LOCALE du
@@ -10,24 +11,10 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * catalogue du téléphone injoignable, que l'appelant a chargé (`usePhoneReachabilityCatalog`).
  */
 
-/** `timeZone` absent : le fuseau du lecteur. Un témoin l'épingle pour ne pas dépendre du poste. */
-export type ClockOptions = { readonly now: number; readonly timeZone?: string };
+export type { ClockOptions };
 
-const DAY_MS = 86_400_000;
-
-const zoned = (timeZone: string | undefined) => (timeZone === undefined ? {} : { timeZone });
-
-const dayOf = (language: InterfaceLanguage, at: number, timeZone: string | undefined): string =>
-  new Intl.DateTimeFormat(language, { year: 'numeric', month: '2-digit', day: '2-digit', ...zoned(timeZone) }).format(at);
-
-/** « 14:10 » aujourd'hui ; « lundi 14:10 » dans la semaine ; « 3 novembre 14:10 » au-delà. */
-export function phoneSinceText(language: InterfaceLanguage, since: string, { now, timeZone }: ClockOptions): string {
-  const at = Date.parse(since);
-  const time = { hour: '2-digit', minute: '2-digit', ...zoned(timeZone) } as const;
-  if (dayOf(language, at, timeZone) === dayOf(language, now, timeZone)) return new Intl.DateTimeFormat(language, time).format(at);
-  const day = now - at < 6 * DAY_MS ? ({ weekday: 'long' } as const) : ({ day: 'numeric', month: 'long' } as const);
-  return new Intl.DateTimeFormat(language, { ...day, ...time }).format(at);
-}
+/** « 14:10 » aujourd'hui ; « lundi 14:10 » dans la semaine ; « 3 novembre 14:10 » au-delà (`localSinceText`). */
+export const phoneSinceText = localSinceText;
 
 /**
  * La phrase d'une annonce de la pastille. `since` : l'instant du dernier signe de vie, porté par l'état servi avec

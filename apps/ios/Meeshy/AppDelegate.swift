@@ -534,7 +534,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         register(Set([
             messageCategory, mentionCategory, friendRequestCategory, socialCategory, socialCommentableCategory,
             callIncomingCategory, callMissedCategory, legacyCallCategory, LockedConversationNotificationCategory.category,
-        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle) + [bringNotificationCategory(bundle: bundle)]))
+        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle) + [bringNotificationCategory(bundle: bundle), WellnessCheckNotificationCategory.category(bundle: bundle)]))
     }
 
     /// #17442 — la bannière d'un Bring (catégorie posée par la passerelle, `BRING_PUSH_CATEGORY`) : « Arrêter » l'éteint
@@ -696,6 +696,8 @@ enum MeeshyNotificationCategory: String {
     case talkie = "MEESHY_TALKIE"
     /// #17442 — le Bring : le littéral est celui de la passerelle (`BRING_PUSH_CATEGORY`), pas un `MEESHY_*`.
     case bring = "BRING"
+    /// #18738 — « Tout va bien ? » : l'action « Je vais bien » répond sans ouvrir l'app (catégorie posée par la NSE).
+    case wellnessCheck = "MEESHY_WELLNESS_CHECK"
 }
 
 enum MeeshyNotificationAction: String {
@@ -713,6 +715,8 @@ enum MeeshyNotificationAction: String {
     case joinInvite = "MEESHY_ACTION_JOIN_INVITE"
     /// #17442 — « Arrêter » sur la bannière d'un Bring.
     case stopBring = "MEESHY_ACTION_STOP_BRING"
+    /// #18738 — « Je vais bien » sur « Tout va bien ? ».
+    case wellnessOk = "MEESHY_ACTION_WELLNESS_OK"
 }
 
 // MARK: - UNUserNotificationCenterDelegate
