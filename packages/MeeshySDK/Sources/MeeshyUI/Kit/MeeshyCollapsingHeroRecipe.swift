@@ -38,6 +38,11 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
     public static let controlInsetCollapsed: Double = 12
     public static let barCornerRadius: Double = 28
     public static let controlTarget: Double = 44
+    /// Le gabarit de l'identité au premier chargement (cache vide) : le nom et le pseudo en squelettes K38.
+    public static let loadingTitleWidth: Double = 236
+    public static let loadingTitleHeight: Double = 34
+    public static let loadingTitleRadius: Double = 10
+    public static let loadingSubtitleWidth: Double = 148
     /// Sous mouvement réduit, la part de l'avancée sur laquelle l'identité s'efface puis reparaît, de part et
     /// d'autre du passage de main.
     public static let reducedFadeShare: Double = 0.1

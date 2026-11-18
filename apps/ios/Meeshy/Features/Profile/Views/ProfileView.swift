@@ -390,15 +390,12 @@ struct ProfileView: View {
                 Color.clear.frame(height: CGFloat(ProfileOwnHeroPlan.contentTop))
 
                 VStack(spacing: MeeshySpacing.xxl) {
-                    // Cold-start placeholder: AuthManager has no cached user yet (first run, post-logout). Le squelette
-                    // cède à la fiche par `motion.reveal` (K26, #19528) : même place, fondu croisé.
-                    MeeshyRevealZone(isRevealed: !SkeletonVisibilityResolver.shouldShowSkeleton(
-                        isLoading: true,
-                        hasCachedData: user != nil
-                    )) {
+                    // Premier chargement, cache vide (AuthManager n'a encore aucun compte) : le gabarit fait du squelette
+                    // du kit (K38, #19594) cède à la fiche par `motion.reveal` (K26, #19528) : même place, fondu croisé.
+                    MeeshyRevealZone(isRevealed: !MeeshySkeletonLaw.shows(isLoading: true, hasCachedData: user != nil)) {
                         faceContent
                     } placeholder: {
-                        SkeletonProfileHeader()
+                        ProfileVitrineSkeleton()
                     }
                     Spacer().frame(height: MeeshySpacing.xxxl + 8 + (showsFaceSelector ? Self.faceSelectorRoom : 0))
                 }

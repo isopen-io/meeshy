@@ -137,9 +137,15 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
         let textX = textExpandedX + (collapsedX + MeeshyCollapsingHeroRecipe.avatarCollapsed + 10 - textExpandedX) * travel
         return ZStack(alignment: .topLeading) {
             if let avatar, avatarSize > 0 {
-                avatar(CGFloat(avatarSize))
-                    .frame(width: CGFloat(avatarSize), height: CGFloat(avatarSize))
-                    .offset(x: CGFloat(x), y: CGFloat(y))
+                Group {
+                    if isLoading {
+                        MeeshySkeleton(shape: .circle(diameter: avatarSize))
+                    } else {
+                        avatar(CGFloat(avatarSize))
+                    }
+                }
+                .frame(width: CGFloat(avatarSize), height: CGFloat(avatarSize))
+                .offset(x: CGFloat(x), y: CGFloat(y))
             }
             titleBlock(recipe: recipe, isDark: isDark, centered: centered && travel < 0.5)
                 .frame(width: CGFloat(max(width - textX - 16, 0)), alignment: centered && travel < 0.5 ? .center : .leading)
@@ -148,7 +154,16 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
         .opacity(recipe.identityOpacity)
     }
 
+    @ViewBuilder
     private func titleBlock(recipe: MeeshyCollapsingHeroRecipe, isDark: Bool, centered: Bool) -> some View {
+        if isLoading {
+            loadingTitleBlock(centered: centered)
+        } else {
+            nameBlock(recipe: recipe, isDark: isDark, centered: centered)
+        }
+    }
+
+    private func nameBlock(recipe: MeeshyCollapsingHeroRecipe, isDark: Bool, centered: Bool) -> some View {
         VStack(alignment: centered ? .center : .leading, spacing: 2) {
             Text(title)
                 .font(MeeshyKitFont.exact(recipe.titleSize, weight: .heavy, design: .rounded))
@@ -164,6 +179,19 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Premier chargement (cache vide) : le nom et le pseudo sont des squelettes K38, muets pour le lecteur d'écran.
+    private func loadingTitleBlock(centered: Bool) -> some View {
+        VStack(alignment: centered ? .center : .leading, spacing: MeeshySpacing.sm) {
+            MeeshySkeleton(shape: .card(
+                aspect: MeeshyCollapsingHeroRecipe.loadingTitleWidth / MeeshyCollapsingHeroRecipe.loadingTitleHeight,
+                radius: MeeshyCollapsingHeroRecipe.loadingTitleRadius))
+                .frame(maxWidth: CGFloat(MeeshyCollapsingHeroRecipe.loadingTitleWidth))
+            MeeshySkeleton(shape: .line(widthRatio: 1))
+                .frame(width: CGFloat(MeeshyCollapsingHeroRecipe.loadingSubtitleWidth))
+        }
+        .accessibilityHidden(true)
     }
 
     private func controls(recipe: MeeshyCollapsingHeroRecipe, top: Double) -> some View {

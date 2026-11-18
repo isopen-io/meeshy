@@ -2968,7 +2968,7 @@
 		9C8D1A755CA7DA4C8B356403 /* ComposerSceneMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AC026D7116FA36B2EAA2AB5 /* ComposerSceneMenu.swift */; };
 		9CA1E502F782B1A9A2B8E9A4 /* ShareTusClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03BBB703396CF29C7E763C19 /* ShareTusClient.swift */; };
 		9CB22CFD1C7F0B03989CC5CC /* FakeOfflineMessageQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDED9440119014E9CA1A61DF /* FakeOfflineMessageQueue.swift */; };
-		9CBC7774649EB7C9B350330B /* SkeletonProfileHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18355DB01AB70E629DA76B31 /* SkeletonProfileHeader.swift */; };
+		9CBC7774649EB7C9B350330B /* ProfileVitrineSkeleton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18355DB01AB70E629DA76B31 /* ProfileVitrineSkeleton.swift */; };
 		9CC5B7EE4B22FB9ABC4F4B2A /* PhonePromptPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34E201DC62C1AF068E16474E /* PhonePromptPolicy.swift */; };
 		9CE0E5354FAD2D5A827F5ACB /* ComposerLookStripRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4836AE95385584E84128A18F /* ComposerLookStripRule.swift */; };
 		9CE1CCE130E382DE4607B484 /* MeeshyAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 321BA3A9C59FEB4D2CD5AE62 /* MeeshyAppIntents.swift */; };
@@ -5395,7 +5395,7 @@
 		1807D1BD4B9F95C416A7DCB7 /* CallCameraZoomGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallCameraZoomGesture.swift; sourceTree = "<group>"; };
 		18132B88663B03FFC32EB261 /* MessageDaySeparator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDaySeparator.swift; sourceTree = "<group>"; };
 		1824D705B8D3AA9956308874 /* ConversationAppearanceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAppearanceSheet.swift; sourceTree = "<group>"; };
-		18355DB01AB70E629DA76B31 /* SkeletonProfileHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkeletonProfileHeader.swift; sourceTree = "<group>"; };
+		18355DB01AB70E629DA76B31 /* ProfileVitrineSkeleton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileVitrineSkeleton.swift; sourceTree = "<group>"; };
 		184B459E881DCBAA70C14BA9 /* NotificationInterfaceLanguageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationInterfaceLanguageTests.swift; sourceTree = "<group>"; };
 		184FF09F7295CBBCABD79C43 /* ConversationSocketHandlerTests+Attentes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationSocketHandlerTests+Attentes.swift"; sourceTree = "<group>"; };
 		1866016F8D9563CEB1DC28D1 /* CommentComposerMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentComposerMedia.swift; sourceTree = "<group>"; };
@@ -15690,9 +15690,9 @@
 		E4D34C0108BD3DB27436B86F /* Skeletons */ = {
 			isa = PBXGroup;
 			children = (
+				18355DB01AB70E629DA76B31 /* ProfileVitrineSkeleton.swift */,
 				B08D9FF6D41F9B96C229216D /* SkeletonFeedPost.swift */,
 				39C2176ACE0513A8483B1DC7 /* SkeletonLinkRow.swift */,
-				18355DB01AB70E629DA76B31 /* SkeletonProfileHeader.swift */,
 				D2A57B5220A3B23BFD04A391 /* SkeletonStoryThumb.swift */,
 				642D54299247CD8AA2DF1197 /* SkeletonVisibilityResolver.swift */,
 			);
@@ -18775,9 +18775,9 @@
 				5B3F8D2CEA02459D2DA98B46 /* SignupView.swift in Sources */,
 				B394FE9522E340680D72EC15 /* SignupViewModel.swift in Sources */,
 				C0476FC2EDF1C9010D48D848 /* SilentPushDurability.swift in Sources */,
+				9CBC7774649EB7C9B350330B /* ProfileVitrineSkeleton.swift in Sources */,
 				B4E847D6843A557A28D3840A /* SkeletonFeedPost.swift in Sources */,
 				B5B32600A188A206068213A2 /* SkeletonLinkRow.swift in Sources */,
-				9CBC7774649EB7C9B350330B /* SkeletonProfileHeader.swift in Sources */,
 				86096A82E2FF9B3BE165A4DA /* SkeletonStoryThumb.swift in Sources */,
 				E32C8BF135D76A58C7DC3FBD /* SkeletonVisibilityResolver.swift in Sources */,
 				3CBA06224E65FC3B89940747 /* SocialAudioTrack.swift in Sources */,

@@ -138,6 +138,26 @@ struct MeeshyCollapsingHeroTests {
         #expect(MeeshyCollapsingHeroRecipe.controlTop(safeArea: 47, topInset: .nan) == 47)
     }
 
+    @Test("en chargement, l'identité est un gabarit K38 : disque, nom et pseudo suivent les vecteurs")
+    func loading_identityFollowsTheVectors() throws {
+        let measures = try #require(try KitAtomVectors.load(Self.file)["chargement"] as? [String: Double])
+        #expect(MeeshyCollapsingHeroRecipe.loadingTitleWidth == measures["nom"])
+        #expect(MeeshyCollapsingHeroRecipe.loadingTitleHeight == measures["hauteurNom"])
+        #expect(MeeshyCollapsingHeroRecipe.loadingTitleRadius == measures["rayonNom"])
+        #expect(MeeshyCollapsingHeroRecipe.loadingSubtitleWidth == measures["pseudo"])
+    }
+
+    @Test("en chargement, aucun nom de remplacement ne s'écrit : le disque et les lignes sont des squelettes muets")
+    func loading_neverWritesAPlaceholderName() throws {
+        let view = try KitAtomVectors.code("MeeshyCollapsingHero.swift")
+        #expect(view.contains("MeeshySkeleton(shape: .circle(diameter: avatarSize))"))
+        let afterLoading = try #require(view.components(separatedBy: "private func loadingTitleBlock").dropFirst().first)
+        let loadingBody = try #require(afterLoading.components(separatedBy: "private func controls").first)
+        #expect(!loadingBody.contains("Text("))
+        #expect(loadingBody.contains("MeeshySkeleton("))
+        #expect(loadingBody.contains("accessibilityHidden(true)"))
+    }
+
     @Test("garde de source : aucun type du domaine, aucun singleton, aucun verre dessiné")
     func source_isAgnostic() throws {
         let files = ["MeeshyCollapsingHero.swift", "MeeshyCollapsingHeroRecipe.swift"]

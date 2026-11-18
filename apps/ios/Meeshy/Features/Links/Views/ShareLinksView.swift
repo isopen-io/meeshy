@@ -72,10 +72,10 @@ struct ShareLinksView: View {
                 .kerning(0.8)
                 .accessibilityAddTraits(.isHeader)
 
-            if viewModel.isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(40)
+            if MeeshySkeletonLaw.shows(isLoading: viewModel.isLoading, hasCachedData: !viewModel.links.isEmpty) {
+                // Premier chargement, cache vide : les billets fantômes du kit (K38, #19594), jamais une roue.
+                MeeshySkeletonColumn(shape: .ticket(cut: MeeshyTicketRecipe.cut(for: .row)),
+                                     loadingLabel: String(localized: "skeleton.links.loading", defaultValue: "Chargement des liens", bundle: .main))
             } else if viewModel.links.isEmpty {
                 emptyState
             } else {

@@ -71,5 +71,7 @@
     {"titre": "inline", "sousTitre": false, "montre": false},
     {"titre": "large", "sousTitre": true, "montre": false}
   ],
-  "capsule": {"hauteur": 44, "debut": 12, "fin": 16, "ecart": 8, "titre": 16}
+  "capsule": {"hauteur": 44, "debut": 12, "fin": 16, "ecart": 8, "titre": 16},
+  "chargementNote": "Premier chargement, cache vide (planche Etat-Chargement) : la bannière, le disque à la taille de l'avatar, le nom (236 × 34, rayon 10) et le pseudo (148) sont des squelettes K38 ; l'identité se tait pour le lecteur d'écran, jamais un nom de remplacement.",
+  "chargement": {"nom": 236, "hauteurNom": 34, "rayonNom": 10, "pseudo": 148}
 }
