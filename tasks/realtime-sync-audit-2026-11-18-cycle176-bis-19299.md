@@ -192,7 +192,41 @@ tranche :
   sur l'arbre livré, **TS2345** dès que la projection d'un site est réduite ;
 - `tsc --noEmit` lu comme **code de sortie**, jamais à travers un pipe ;
 - **30 suites / 450 témoins** verts sur les familles touchées (lecture, non-lus,
-  pont ✦, diffusion d'accusés), puis la suite COMPLÈTE du gateway.
+  pont ✦, diffusion d'accusés) ;
+- suite **COMPLÈTE** du gateway : **2 834 suites, 43 113 témoins**.
+
+### Les rouges de la suite complète, et ce que la comparaison a tranché
+
+Trois familles, et une seule était à moi — c'est le tri qui compte, pas le
+compte :
+
+| famille | verdict |
+|---|---|
+| 6 suites / 17 témoins de pièces jointes (HEIC, AVIF, EXIF, téléversement) | **PRÉEXISTANT, environnemental.** Le conteneur n'a ni `heif-convert` (`spawnSync … ENOENT`, binaire vérifié ABSENT) ni les codecs HEIC/AVIF de `sharp`. Même famille qu'aux cycles 173 à 175 |
+| `media-metadata-strip-failure` | **flocon de CHARGE.** Rouge dans la passe complète à **20,6 s**, VERT en isolation sur les deux arbres — c'est un délai dépassé sous parallélisme, pas un verdict |
+| `journal-one-file-per-entry-guard` | **À MOI, et réparé.** Mon fichier de leçon portait un `#` et quatre `##` ; le cliquet de #7711 exige UNE entrée par fichier — première ligne en `## `, un seul titre de ce niveau. Réparé : titre en `## `, sous-titres en `### `, **18/18 verts** |
+
+**La comparaison a été faite comme le cycle 175 bis a appris à la faire**, et
+pas comme il l'avait d'abord faite : les six chemins de production du lot
+ramenés au contenu de `dev` (`git checkout origin/dev -- …`), les trois fichiers
+neufs mis de côté, puis les SEPT suites rejouées des deux côtés.
+
+```
+arbre ramené à dev : Test Suites: 6 failed, 1 passed, 7 total · Tests: 17 failed, 44 passed
+arbre du lot       : Test Suites: 6 failed, 1 passed, 7 total · Tests: 17 failed, 44 passed
+```
+
+Et surtout : **le banc rend VERT sur l'une des sept, des deux côtés.** C'est le
+contrôle que l'erratum du cycle 175 bis exige avant de lire une égalité comme
+« le défaut préexiste » — là-bas, les deux côtés échouaient pour une raison
+(`dist` absent) qui n'appartenait à aucun des deux, et l'égalité s'était lue
+comme la conclusion la plus rassurante disponible.
+
+> **Et un cliquet m'a attrapé sur le fichier même où j'écrivais la leçon du
+> cycle.** Le journal est ce qui reste, donc le dépôt garde sa FORME par un
+> témoin et non par une convention — et la convention, je l'avais lue sans la
+> suivre. Un cliquet qui tombe sur l'auteur d'une leçon est la meilleure preuve
+> que le cliquet valait d'être écrit.
 
 ## Suivis
 

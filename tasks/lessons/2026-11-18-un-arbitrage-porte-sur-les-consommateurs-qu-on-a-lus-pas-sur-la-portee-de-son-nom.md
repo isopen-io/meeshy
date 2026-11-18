@@ -1,8 +1,8 @@
-# Un arbitrage porte sur les consommateurs qu'on a LUS, pas sur la portée de son nom
+## Un arbitrage porte sur les consommateurs qu'on a LUS, pas sur la portée de son NOM (cycle 176 bis, #19299)
 
 *2026-11-18, cycle 176 bis, #19299. Détail : `tasks/realtime-sync-audit-2026-11-18-cycle176-bis-19299.md`.*
 
-## La forme
+### La forme
 
 Un lot tranche une question — « peut-on abaisser cette borne ? » — et la
 réponse se formule naturellement comme une propriété de la VALEUR : *« élargir
@@ -15,7 +15,7 @@ qu'une propriété d'une valeur n'a pas l'air d'avoir un périmètre.
 cette valeur.** Hors de ce jeu, la phrase n'est pas « encore vraie » ou « déjà
 fausse » : elle n'a pas été posée.
 
-## Ce qui l'a mesuré
+### Ce qui l'a mesuré
 
 #19261 a tranché pour la chaîne de LIVRAISON : *le gel est write-once, donc un
 message sous le plancher est un message que le curseur DÉCLARE remis ; élargir
@@ -40,7 +40,7 @@ aucun motif de vérifier que la borne HAUTE (`until`) reste en place ; sous
 que le lecteur déclare. **La même conclusion, atteinte par le mauvais chemin,
 aurait laissé partir le lot sans sa seule protection.**
 
-## Le test
+### Le test
 
 Devant un arbitrage qu'on s'apprête à reprendre d'un lot voisin — ou à étendre
 d'un consommateur à un autre — ne pas demander *« est-il encore vrai ici ? »*,
@@ -55,7 +55,7 @@ question à reposer. Le coût est celui de lire un site ; le coût de l'inverse 
 un lot qui a l'air juste et dont la justification ne tient pas la protection
 qu'il croit porter.
 
-## Corollaires mesurés dans le même lot
+### Corollaires mesurés dans le même lot
 
 **1. Une garde structurelle garde ce qu'elle peut VOIR.** Un type dont les
 champs sont REQUIS fait rougir un site qui PROJETTE trop étroitement
