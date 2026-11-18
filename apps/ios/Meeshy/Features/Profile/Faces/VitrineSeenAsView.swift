@@ -260,7 +260,7 @@ struct VitrineSeenAsView: View {
                         .foregroundStyle(theme.textMuted)
                 })
                 MeeshyMediaGrid(label: ProfilePublicationsCopy.title,
-                                items: visible.prefix(ProfilePublicationTiles.limit).map(ProfilePublicationTiles.item(for:)),
+                                items: visible.prefix(ProfilePublicationTiles.limit).map { ProfilePublicationTiles.item(for: $0) },
                                 layout: .row, columns: 3, shape: .tall, tint: accent,
                                 onOpen: { _ in },
                                 content: { item, size in publicationThumbnail(item, in: visible, size: size) })
