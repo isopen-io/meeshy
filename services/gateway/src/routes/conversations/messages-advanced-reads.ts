@@ -11,7 +11,7 @@ import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { receiptViewerOf } from '../../socketio/readReceiptCircleGate';
+import { receiptViewerOf } from '../../utils/read-device-visibility';
 import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import {
   applyHistoryFloor,

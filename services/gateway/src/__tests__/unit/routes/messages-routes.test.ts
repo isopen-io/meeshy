@@ -12,6 +12,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { readReceiptCircleAllowing } from '../../helpers/read-receipt-circle-world';
 
 // ─── All jest.mock() calls MUST be before imports ─────────────────────────────
 
@@ -132,7 +133,15 @@ jest.mock('../../../services/messaging/postReplySnapshot', () => ({
   postReplyToFromMetadata: (...args: any[]) => mockPostReplyToFromMetadata(...args),
   POST_REPLY_SNAPSHOT_SELECT: { id: true, content: true, type: true },
 }));
+// PROLONGÉ, jamais REMPLACÉ (règle du cycle 93) : un double PARTIEL perd en
+// silence tout ce que le module GAGNE, et il ne se signale qu'au moment où le
+// module grandit. #19385 a ajouté un lecteur de `getBlockedUserIdsAmong` sur le
+// chemin de diffusion des accusés ; ce double n'exposant qu'`isBlockedBetween`,
+// la loi de cercle levait « is not a function », le fail-closed retenait TOUT
+// l'éventail, et quatre témoins de rooms tombaient sans que rien ne nomme la
+// cause. Le `requireActual` rend la vraie fonction, qui lit le prisma double.
 jest.mock('../../../utils/blocking', () => ({
+  ...(jest.requireActual('../../../utils/blocking') as object),
   isBlockedBetween: (...args: any[]) => mockIsBlockedBetween(...args),
 }));
 jest.mock('../../../services/MessageReadStatusService', () => ({
@@ -262,7 +271,21 @@ const ANON_PART_ID = '507f1f77bcf86cd799439077';
 
 // ─── Factories ─────────────────────────────────────────────────────────────────
 
+// #19385 — les trois tables de la loi de cercle que `broadcastReadStatus`
+// consulte désormais. Ce fichier exerce la VRAIE route (`applyReceipt`), donc
+// la vraie loi : sans elles la descente LÈVE, le fail-closed retient tout
+// l'éventail, et la levée survit au teardown de la suite. Le monde les déclare
+// AMIS, soit le régime d'avant ce lot — ce que ces témoins supposaient sans le
+// dire.
+//
+// Le `user` du cercle est FUSIONNÉ avec celui de la suite, jamais répandu
+// avant lui : une clé répandue puis redéclarée est PERDUE, et c'est ce qui
+// avait fait lever `peopleOf` (`user.findMany` absent) donc tout refuser.
+const circleTables = readReceiptCircleAllowing(USER_ID, [OTHER_USER_ID]);
+
 const makePrisma = () => ({
+  userRelation: circleTables.userRelation,
+  friendRequest: circleTables.friendRequest,
   message: {
     findFirst: jest.fn().mockResolvedValue(null),
     findMany: jest.fn().mockResolvedValue([]),
@@ -274,6 +297,13 @@ const makePrisma = () => ({
     findMany: jest.fn().mockResolvedValue([]),
   },
   user: {
+    // La table du monde des cercles D'ABORD (elle porte `findMany` pour l'âge
+    // et le rôle, et `findUnique` pour la liste de blocage du sujet), le
+    // `findFirst` de cette suite PAR-DESSUS : c'est lui qui sert le Prisme.
+    // Oublier `findUnique` suffisait à faire lever la loi — donc à retenir
+    // TOUT l'éventail par fail-closed, sans qu'aucune assertion ne nomme la
+    // cause.
+    ...circleTables.user,
     findFirst: jest.fn().mockResolvedValue({ systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null }),
   },
   conversation: {

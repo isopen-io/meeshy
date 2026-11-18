@@ -119,7 +119,7 @@ describe('Le statut SERVI ne retombe plus sur une horloge murale (#18701)', () =
     arrangeDrainedWithoutEmission(new Date('2026-10-01T10:00:00.000Z'));
     const service = new MessageReadStatusService(mockPrisma as any);
 
-    const status = await service.getMessageReadStatus(MESSAGE_ID, CONVERSATION_ID);
+    const status = await service.getMessageReadStatus(MESSAGE_ID, CONVERSATION_ID, null);
 
     expect(status.receivedBy).toEqual([]);
   });
@@ -138,8 +138,8 @@ describe('Le statut SERVI ne retombe plus sur une horloge murale (#18701)', () =
     arrangeDrainedWithoutEmission(new Date('2026-10-01T10:00:00.000Z'));
     const service = new MessageReadStatusService(mockPrisma as any);
 
-    const all = await service.getMessageStatusDetails(MESSAGE_ID);
-    const delivered = await service.getMessageStatusDetails(MESSAGE_ID, { filter: 'delivered' });
+    const all = await service.getMessageStatusDetails(MESSAGE_ID, null);
+    const delivered = await service.getMessageStatusDetails(MESSAGE_ID, null, { filter: 'delivered' });
 
     expect(all.statuses).toHaveLength(1);
     expect(all.statuses[0].deliveredAt).toBeNull();

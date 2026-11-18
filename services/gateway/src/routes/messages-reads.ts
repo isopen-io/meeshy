@@ -5,7 +5,7 @@
  * messages.ts.
  */
 import { signReaderAttachmentsIn, type ReaderBoundMessage, type SignableAttachment } from '../services/attachments/signedAttachmentUrls';
-import { receiptViewerOf } from '../socketio/readReceiptCircleGate';
+import { receiptViewerOf } from '../utils/read-device-visibility';
 import { readerFileUrlSignerFromEnv } from '../services/attachments/readerFileSignature';
 import { withServedEditAttribution } from '@meeshy/shared/utils/message-edit-attribution';
 import { editAttributionReaderOf } from '../services/messaging/editAttributionReader';
@@ -684,8 +684,7 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
         return sendNotFound(reply, 'Message non trouvé ou accès non autorisé');
       }
 
-      const statusDetails = await readStatusService.getMessageStatusDetails(messageId, {
-        viewerUserId: receiptViewerOf(authRequest.authContext),
+      const statusDetails = await readStatusService.getMessageStatusDetails(messageId, receiptViewerOf(authRequest.authContext), {
         offset: pageOffset,
         limit: pageLimit,
         filter,

@@ -1666,7 +1666,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.participant.findMany.mockResolvedValue(mockMembers);
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue(mockCursors);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.messageId).toBe(testMessageId);
       expect(result.totalMembers).toBe(1); // 2 members - 1 sender = 1
@@ -1680,7 +1680,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.message.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.getMessageReadStatus('nonexistent-id', testConversationId)
+        service.getMessageReadStatus('nonexistent-id', testConversationId, null)
       ).rejects.toThrow('Message nonexistent-id not found');
     });
 
@@ -1713,7 +1713,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.participant.findMany.mockResolvedValue(mockMembers);
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue(mockCursors);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       // Should only count non-sender users
       expect(result.receivedCount).toBe(1);
@@ -1763,7 +1763,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.participant.findMany.mockResolvedValue(mockMembers);
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue(mockCursors);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       // Orphan cursor must be skipped, not throw
       expect(result.receivedCount).toBe(1);
@@ -1813,7 +1813,7 @@ describe('MessageReadStatusService', () => {
         },
       ]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.receivedBy[0].receivedAt).toEqual(frozenDelivered);
       expect(result.readBy[0].readAt).toEqual(frozenRead);
@@ -1851,7 +1851,7 @@ describe('MessageReadStatusService', () => {
         },
       ]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.receivedBy).toHaveLength(1);
       expect(result.receivedBy[0].participantId).toBe(testParticipantId2);
@@ -1883,7 +1883,7 @@ describe('MessageReadStatusService', () => {
       ]);
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.notSeenBy).toHaveLength(1);
       expect(result.notSeenBy[0].participantId).toBe(testParticipantId2);
@@ -1916,7 +1916,7 @@ describe('MessageReadStatusService', () => {
         },
       ]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       // Query is scoped to this message — AUTHOR INCLUDED (user 2026-08-18 :
       // « remonter les lectures de l'audio même si c'est l'auteur qui le
@@ -1980,7 +1980,7 @@ describe('MessageReadStatusService', () => {
         },
       ]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.attachmentConsumption).toHaveLength(1);
       expect(result.attachmentConsumption[0].participants).toHaveLength(1);
@@ -2014,7 +2014,7 @@ describe('MessageReadStatusService', () => {
         },
       ]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.readBy[0].viewedLanguages).toEqual(['fr', 'en']);
       // Un lecteur qui a basculé compte dans CHAQUE version : la somme des
@@ -2044,7 +2044,7 @@ describe('MessageReadStatusService', () => {
         { participantId: testParticipantId2, deliveredAt: readAt, receivedAt: readAt, readAt, viewedLanguages: [] },
       ]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.readBy[0].viewedLanguages).toEqual([]);
       expect(result.languageBreakdown).toEqual([]);
@@ -2085,7 +2085,7 @@ describe('MessageReadStatusService', () => {
         },
       ]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
       const consumer = result.attachmentConsumption[0].participants[0];
 
       expect(consumer.listenStretchCount).toBe(2);
@@ -2123,7 +2123,7 @@ describe('MessageReadStatusService', () => {
         },
       ]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.attachmentConsumption[0].participants[0].viewCount).toBe(3);
     });
@@ -2171,7 +2171,7 @@ describe('MessageReadStatusService', () => {
         },
       ]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.attachmentConsumption[0].languageBreakdown).toEqual([
         { language: 'fr', count: 2 },
@@ -2213,7 +2213,7 @@ describe('MessageReadStatusService', () => {
         },
       ]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.attachmentConsumption).toHaveLength(1);
       expect(result.attachmentConsumption[0].participants).toHaveLength(2);
@@ -2249,7 +2249,7 @@ describe('MessageReadStatusService', () => {
         },
       ]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.attachmentConsumption).toHaveLength(0);
     });
@@ -2277,7 +2277,7 @@ describe('MessageReadStatusService', () => {
         },
       ]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.attachmentConsumption).toHaveLength(0);
     });
@@ -2297,7 +2297,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
       mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.attachmentConsumption).toEqual([]);
     });
@@ -3195,7 +3195,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.participant.findMany.mockResolvedValue(mockMembers);
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue(mockCursors);
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       expect(result.totalMembers).toBe(2); // 3 participants minus 1 sender
       expect(result.receivedBy).toHaveLength(1);
@@ -3305,7 +3305,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.message.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.getMessageReadStatus('missing-msg', testConversationId)
+        service.getMessageReadStatus('missing-msg', testConversationId, null)
       ).rejects.toThrow('Message missing-msg not found');
     });
 
@@ -4105,7 +4105,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.message.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.getMessageStatusDetails(testMessageId)
+        service.getMessageStatusDetails(testMessageId, null)
       ).rejects.toThrow('Message not found');
     });
 
@@ -4122,7 +4122,7 @@ describe('MessageReadStatusService', () => {
       });
 
       await expect(
-        service.getMessageStatusDetails(testMessageId, {
+        service.getMessageStatusDetails(testMessageId, null, {
           historyFloor: new Date('2024-06-01T00:00:00Z'),
         })
       ).rejects.toThrow('Message not found');
@@ -4136,7 +4136,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
       mockPrisma.participant.findMany.mockResolvedValue([]);
 
-      const result = await service.getMessageStatusDetails(testMessageId, {
+      const result = await service.getMessageStatusDetails(testMessageId, null, {
         historyFloor: new Date('2024-01-01T00:00:00Z'),
       });
 
@@ -4160,7 +4160,7 @@ describe('MessageReadStatusService', () => {
         { id: 'p1', displayName: 'Alice', avatar: null },
       ]);
 
-      const result = await service.getMessageStatusDetails(testMessageId);
+      const result = await service.getMessageStatusDetails(testMessageId, null);
 
       expect(result.statuses).toHaveLength(1);
       expect(result.statuses[0].displayName).toBe('Alice');
@@ -4191,7 +4191,7 @@ describe('MessageReadStatusService', () => {
         { id: 'p2', displayName: 'Bob', avatar: '   ', user: { avatar: null } },
       ]);
 
-      const result = await service.getMessageStatusDetails(testMessageId);
+      const result = await service.getMessageStatusDetails(testMessageId, null);
 
       const alice = result.statuses.find(s => s.participantId === 'p1');
       const bob = result.statuses.find(s => s.participantId === 'p2');
@@ -4221,7 +4221,7 @@ describe('MessageReadStatusService', () => {
         { participantId: 'p1', deliveredAt: frozenDeliveredAt, receivedAt: frozenDeliveredAt, readAt: frozenReadAt, readDevice: 'ios' },
       ]);
 
-      const result = await service.getMessageStatusDetails(testMessageId);
+      const result = await service.getMessageStatusDetails(testMessageId, null);
 
       // The frozen historical times win — NOT the re-advanced cursor value.
       expect(result.statuses[0].readAt).toEqual(frozenReadAt);
@@ -4251,7 +4251,7 @@ describe('MessageReadStatusService', () => {
         { participantId: 'p1', deliveredAt: frozenDeliveredAt, receivedAt: frozenDeliveredAt, readAt: frozenReadAt, readDevice: 'ios' },
       ]);
 
-      const result = await service.getMessageStatusDetails(testMessageId);
+      const result = await service.getMessageStatusDetails(testMessageId, null);
 
       expect(result.statuses).toHaveLength(1);
       expect(result.statuses[0].participantId).toBe('p1');
@@ -4275,7 +4275,7 @@ describe('MessageReadStatusService', () => {
       ]);
       mockPrisma.participant.findMany.mockResolvedValue([]);
 
-      const result = await service.getMessageStatusDetails(testMessageId);
+      const result = await service.getMessageStatusDetails(testMessageId, null);
 
       expect(result.statuses).toHaveLength(0);
     });
@@ -4295,7 +4295,7 @@ describe('MessageReadStatusService', () => {
         { id: 'p2', displayName: 'Bob', avatar: null },
       ]);
 
-      const result = await service.getMessageStatusDetails(testMessageId, { filter: 'delivered' });
+      const result = await service.getMessageStatusDetails(testMessageId, null, { filter: 'delivered' });
       expect(result.statuses).toHaveLength(1);
       expect(result.statuses[0].displayName).toBe('Alice');
     });
@@ -4315,7 +4315,7 @@ describe('MessageReadStatusService', () => {
         { id: 'p2', displayName: 'Bob', avatar: null },
       ]);
 
-      const result = await service.getMessageStatusDetails(testMessageId, { filter: 'read' });
+      const result = await service.getMessageStatusDetails(testMessageId, null, { filter: 'read' });
       expect(result.statuses).toHaveLength(1);
       expect(result.statuses[0].readAt).not.toBeNull();
     });
@@ -4335,7 +4335,7 @@ describe('MessageReadStatusService', () => {
         { id: 'p2', displayName: 'Bob', avatar: null },
       ]);
 
-      const result = await service.getMessageStatusDetails(testMessageId, { filter: 'unread' });
+      const result = await service.getMessageStatusDetails(testMessageId, null, { filter: 'unread' });
       expect(result.statuses).toHaveLength(1);
       expect(result.statuses[0].displayName).toBe('Bob');
     });
@@ -4354,7 +4354,7 @@ describe('MessageReadStatusService', () => {
         { id: 'p3', displayName: 'C', avatar: null },
       ]);
 
-      const result = await service.getMessageStatusDetails(testMessageId, { offset: 1, limit: 1 });
+      const result = await service.getMessageStatusDetails(testMessageId, null, { offset: 1, limit: 1 });
       expect(result.statuses).toHaveLength(1);
       expect(result.pagination.total).toBe(3);
       expect(result.pagination.hasMore).toBe(true);
@@ -4362,7 +4362,7 @@ describe('MessageReadStatusService', () => {
 
     it('throws when DB query fails', async () => {
       mockPrisma.message.findUnique.mockRejectedValue(new Error('DB error'));
-      await expect(service.getMessageStatusDetails(testMessageId)).rejects.toThrow('DB error');
+      await expect(service.getMessageStatusDetails(testMessageId, null)).rejects.toThrow('DB error');
     });
 
     it('returns empty statuses when no cursors found', async () => {
@@ -4372,7 +4372,7 @@ describe('MessageReadStatusService', () => {
       });
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
 
-      const result = await service.getMessageStatusDetails(testMessageId);
+      const result = await service.getMessageStatusDetails(testMessageId, null);
       expect(result.statuses).toHaveLength(0);
       expect(result.pagination.total).toBe(0);
       expect(mockPrisma.participant.findMany).not.toHaveBeenCalled();
@@ -4887,7 +4887,7 @@ describe('MessageReadStatusService', () => {
       ]);
       mockPrisma.userPreference.findMany.mockResolvedValue(optOutRows('u-optout'));
 
-      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
       // Dénominateur : 3 membres − l'expéditeur − l'opt-out = 1
       expect(result.totalMembers).toBe(1);
@@ -4933,7 +4933,7 @@ describe('MessageReadStatusService', () => {
       ]);
       mockPrisma.userPreference.findMany.mockResolvedValue(optOutRows('u-optout'));
 
-      const result = await service.getMessageStatusDetails(testMessageId);
+      const result = await service.getMessageStatusDetails(testMessageId, null);
 
       expect(result.statuses.map((s: any) => s.participantId)).toEqual(['p-normal']);
       expect(result.pagination.total).toBe(1);
@@ -5102,7 +5102,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
       mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
 
-      const status = await service.getMessageReadStatus('m1', 'c1');
+      const status = await service.getMessageReadStatus('m1', 'c1', null);
       expect(status.totalMembers).toBe(3);
     });
 
@@ -5118,7 +5118,7 @@ describe('MessageReadStatusService', () => {
       mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
       mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
 
-      const status = await service.getMessageReadStatus('m1', 'c1');
+      const status = await service.getMessageReadStatus('m1', 'c1', null);
       expect(status.totalMembers).toBe(2);
     });
   });

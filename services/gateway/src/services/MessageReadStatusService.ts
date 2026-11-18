@@ -2044,18 +2044,23 @@ export class MessageReadStatusService {
    */
   async getMessageStatusDetails(
     messageId: string,
+    /**
+     * #19385 — le lecteur à qui ces accusés NOMINATIFS sont servis. REQUIS, et
+     * POSITIONNEL plutôt que porté par `options` : glissé dans l'objet, il
+     * forçait `options` à perdre son `= {}`, et tout appelant qui n'en passait
+     * pas — plusieurs suites — explosait à l'EXÉCUTION sur la déstructuration.
+     * Le `tsconfig` du gateway excluant `__tests__`, `tsc` ne les voyait pas :
+     * un paramètre requis ne tient la règle que dans le périmètre du
+     * compilateur. En positionnel, l'exigence est la même et le défaut survit.
+     * `null` = invité de lien (aucun cercle).
+     */
+    viewerUserId: string | null,
     options: {
       offset?: number;
       limit?: number;
       filter?: "all" | "delivered" | "read" | "unread";
       historyFloor?: Date | null;
-      /**
-       * #19385 — le lecteur à qui ces accusés NOMINATIFS sont servis. REQUIS,
-       * et l'objet d'options a perdu son `= {}` pour que tout appelant doive le
-       * nommer. `null` = invité de lien (aucun cercle).
-       */
-      viewerUserId: string | null;
-    }
+    } = {}
   ): Promise<{
     statuses: Array<{
       participantId: string;
@@ -2073,7 +2078,7 @@ export class MessageReadStatusService {
       hasMore: boolean;
     };
   }> {
-    const { offset = 0, limit = 20, filter = "all", historyFloor = null, viewerUserId } = options;
+    const { offset = 0, limit = 20, filter = "all", historyFloor = null } = options;
 
     try {
       const message = await this.prisma.message.findUnique({

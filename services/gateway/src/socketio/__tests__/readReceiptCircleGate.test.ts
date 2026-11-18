@@ -21,11 +21,8 @@
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
-import {
-  readReceiptDeniedAmong,
-  readReceiptHiddenFromViewer,
-  receiptViewerOf,
-} from '../readReceiptCircleGate';
+import { readReceiptDeniedAmong, readReceiptHiddenFromViewer } from '../readReceiptCircleGate';
+import { receiptViewerOf } from '../../utils/read-device-visibility';
 import { ADULT_BIRTH, messagingWorld, type CircleLink } from '../../__tests__/helpers/messaging-circle-world';
 
 const LECTEUR = '6400000000000000000000b1';

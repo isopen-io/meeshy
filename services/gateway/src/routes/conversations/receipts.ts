@@ -31,7 +31,6 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteGenericInterface } from 'fastify';
-import { receiptViewerOf } from '../../socketio/readReceiptCircleGate';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { z } from 'zod';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
@@ -57,7 +56,7 @@ import {
 } from '../../utils/response.js';
 import { sendWithETag } from '../../utils/etag';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { readDeviceServedTo } from '../../utils/read-device-visibility';
+import { readDeviceServedTo, receiptViewerOf } from '../../utils/read-device-visibility';
 import {
   RECEIPTS_MAX_WRITE_MESSAGE_IDS,
   RECEIPTS_MAX_READ_MESSAGE_IDS,
@@ -640,8 +639,7 @@ async function readPeople(
 
   let page: Awaited<ReturnType<MessageReadStatusService['getMessageStatusDetails']>>;
   try {
-    page = await ctx.readStatusService.getMessageStatusDetails(messageIds[0], {
-      viewerUserId: receiptViewerOf(params.authContext),
+    page = await ctx.readStatusService.getMessageStatusDetails(messageIds[0], receiptViewerOf(params.authContext), {
       offset,
       limit,
       filter: params.filter ?? 'all',
@@ -668,15 +666,8 @@ async function readPeople(
         take: RECEIPTS_PEOPLE_MAX_LIMIT,
       })
     : [];
-  // #19385 — le viewer, que la loi de cercle EXIGE : sans lui la porte ne
-  // compile plus. `null` pour un invité de lien, qui n'a pas de cercle.
   const visible = new Set(
-    (
-      await ctx.readStatusService.filterReadReceiptVisible(
-        identities,
-        receiptViewerOf(params.authContext)
-      )
-    ).map((row) => row.id)
+    (await ctx.readStatusService.filterReadReceiptVisible(identities, receiptViewerOf(params.authContext))).map((row) => row.id)
   );
 
   const people: ReceiptPersonRow[] = rows
@@ -949,14 +940,7 @@ export function receiptHandlers(ctx: ReceiptContext): ReceiptHandlers {
         const floor = await reader.historyFloor();
         if (floor && message.createdAt < floor) return sendNotFound(reply, 'Message non trouvé');
 
-        sendSuccess(
-          reply,
-          await ctx.readStatusService.getMessageReadStatus(
-            messageId,
-            message.conversationId,
-            receiptViewerOf((request as UnifiedAuthRequest).authContext)
-          )
-        );
+        sendSuccess(reply, await ctx.readStatusService.getMessageReadStatus(messageId, message.conversationId, receiptViewerOf((request as UnifiedAuthRequest).authContext)));
       }),
 
     /**

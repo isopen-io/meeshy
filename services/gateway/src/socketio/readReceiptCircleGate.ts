@@ -17,8 +17,13 @@
  * | socket (`broadcastReadStatus`) | `shouldShowReadReceipts(acteur)` — un réglage GLOBAL | jamais lu |
  * | REST (`filterReadReceiptVisible`) | les retraits `showReadReceipts` des sujets | pas même un paramètre |
  *
- * C'est exactement `resolvePrefsOnly`, que la loi de PRÉSENCE a **SUPPRIMÉE**
- * (directive 2026-08-25, garde de source `presence-visibility-viewer-aware-guard.test.ts`) :
+ * C'est exactement la forme de résolution AVEUGLE AU VIEWER — « préférences
+ * seules » — que la loi de PRÉSENCE a **SUPPRIMÉE** (directive 2026-08-25). Son
+ * identifiant n'est pas écrit ici, et c'est délibéré : la garde de source
+ * `presence-visibility-viewer-aware-guard.test.ts` interdit jusqu'à sa
+ * CITATION sous `services/gateway/src/`, pour qu'un `grep` futur ne le
+ * retrouve pas et ne croie pas le site vivant. Elle a rougi sur la première
+ * version de ce doc-comment, et elle avait raison.
  * **une résolution aveugle au viewer ne PEUT PAS porter une loi par paire.** Le
  * canal des accusés avait gardé la forme que le canal de présence a retirée, et
  * la loi écrite pour lui est restée inerte faute d'un endroit où s'appliquer.
@@ -160,22 +165,3 @@ export async function readReceiptHiddenFromViewer(
 
   return new Set(ids.filter((id) => verdicts.get(id)?.allowed !== true));
 }
-
-/**
- * Le viewer de la loi, dérivé d'un contexte d'authentification — `User.id` pour
- * un inscrit, `null` pour un invité de lien.
- *
- * Nommé plutôt que retapé, et c'est la seule raison de son existence : le
- * `gateway/CLAUDE.md` avertit qu'`authContext.userId` porte un `Participant.id`
- * pour un invité de lien, et que le recopier dans un champ qui déclare un
- * `User.id` est une faute. L'idiome `isAnonymous ? null : userId` est retapé
- * une douzaine de fois dans le dépôt ; les portes d'accusés le partagent.
- *
- * Paramètre STRUCTUREL, pas le type du middleware : cette unité reste testable
- * sans construire une requête Fastify. `userId` y est OPTIONNEL parce qu'il
- * l'est sur `UnifiedAuthContext` — le déclarer requis aurait demandé un cast
- * au site d'appel, c'est-à-dire exactement la porte que ce lot ferme ailleurs.
- */
-export const receiptViewerOf = (
-  context: { readonly userId?: string; readonly isAnonymous?: boolean } | null | undefined,
-): string | null => (!context || context.isAnonymous ? null : context.userId || null);

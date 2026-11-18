@@ -100,7 +100,7 @@ describe('bascule du suivi exact (EXACT_READ_TRACKING_SINCE)', () => {
       participant: { id: testParticipantId2, displayName: 'User2' }
     }]);
 
-    const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+    const result = await service.getMessageReadStatus(testMessageId, testConversationId, null);
 
     expect(result.readCount).toBe(0);
     expect(result.readBy).toHaveLength(0);
@@ -142,7 +142,7 @@ describe('bascule du suivi exact (EXACT_READ_TRACKING_SINCE)', () => {
       { id: 'p1', displayName: 'Alice', avatar: null }
     ]);
 
-    const result = await service.getMessageStatusDetails(testMessageId);
+    const result = await service.getMessageStatusDetails(testMessageId, null);
 
     expect(result.statuses[0].readAt).toBeNull();
     // `deliveredAt` est SERVI tel quel et gouverne le filtre « delivered » :

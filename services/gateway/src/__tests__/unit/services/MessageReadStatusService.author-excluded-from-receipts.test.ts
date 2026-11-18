@@ -83,7 +83,7 @@ describe('MessageReadStatusService.getMessageStatusDetails — author excluded f
       },
     ]);
 
-    const result = await service.getMessageStatusDetails(testMessageId);
+    const result = await service.getMessageStatusDetails(testMessageId, null);
 
     expect(result.statuses.map(s => s.participantId)).toEqual(['p1']);
     expect(result.statuses.some(s => s.participantId === 'author-p')).toBe(false);
