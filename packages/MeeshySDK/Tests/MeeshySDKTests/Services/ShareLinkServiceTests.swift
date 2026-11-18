@@ -147,6 +147,23 @@ final class ShareLinkServiceTests: XCTestCase {
         XCTAssertFalse(mock.lastRequest?.bodyJSON?.keys.contains("expiresAt") ?? true, "« Jamais » n'écrit pas expiresAt: null")
     }
 
+    func test_createShareLink_allowedLanguages_travelOnlyWhenChosen() async throws {
+        let rawResponse = CreateShareLinkResponse(
+            linkId: "lk_new", conversationId: "conv1",
+            shareLink: CreateShareLinkResponse.ShareLinkDetail(
+                id: "sl_new", linkId: "lk_new", name: nil,
+                description: nil, expiresAt: nil, isActive: true
+            )
+        )
+        mock.stub("/links", result: APIResponse<CreateShareLinkResponse>(success: true, data: rawResponse, error: nil))
+
+        _ = try await service.createShareLink(request: CreateShareLinkRequest(conversationId: "conv1", allowedLanguages: ["fr", "wo"]))
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["allowedLanguages"] as? [String], ["fr", "wo"])
+
+        _ = try await service.createShareLink(request: CreateShareLinkRequest(conversationId: "conv1"))
+        XCTAssertFalse(mock.lastRequest?.bodyJSON?.keys.contains("allowedLanguages") ?? true, "Toutes les langues : la clé ne part pas")
+    }
+
     // MARK: - toggleLink
 
     func test_toggleLink_callsCorrectEndpoint() async throws {

@@ -233,6 +233,38 @@ final class TrackingLinkServiceTests: XCTestCase {
         XCTAssertNil(mock.lastRequest?.bodyJSON?["token"])
     }
 
+    func test_createLink_contentTarget_travelsTypedWithUniqueVisitorsChoice() async throws {
+        let created = try MeeshyCoders.decoder(.api).decode(
+            APIResponse<CreatedTrackingLink>.self,
+            from: Self.gatewayCreateBody(existed: nil)
+        )
+        mock.stub("/tracking-links", result: created)
+
+        _ = try await service.createLink(
+            CreateTrackingLinkRequest(originalUrl: "https://meeshy.me/reel/r1", targetType: "REEL", targetId: "r1",
+                                      countsUniqueVisitors: true)
+        )
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["targetType"] as? String, "REEL")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["targetId"] as? String, "r1")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["countsUniqueVisitors"] as? Bool, true)
+    }
+
+    func test_createLink_externalAddress_sendsNoTargetKeys() async throws {
+        let created = try MeeshyCoders.decoder(.api).decode(
+            APIResponse<CreatedTrackingLink>.self,
+            from: Self.gatewayCreateBody(existed: nil)
+        )
+        mock.stub("/tracking-links", result: created)
+
+        _ = try await service.createLink(CreateTrackingLinkRequest(originalUrl: "https://shop.example"))
+
+        let keys = mock.lastRequest?.bodyJSON?.keys.map { $0 } ?? []
+        XCTAssertFalse(keys.contains("targetType"))
+        XCTAssertFalse(keys.contains("targetId"))
+        XCTAssertFalse(keys.contains("countsUniqueVisitors"))
+    }
+
     // MARK: - fetchClicks
 
     func test_fetchClicks_success_callsCorrectEndpoint() async throws {

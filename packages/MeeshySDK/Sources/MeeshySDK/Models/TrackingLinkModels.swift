@@ -109,11 +109,17 @@ public struct CreateTrackingLinkRequest: Encodable {
     public let medium: String?
     public let token: String?
     public let expiresAt: String?
+    /// La cible typée d'un lien de contenu (`POST`, `REEL`, `STORY`, `STATUS`, `CONVERSATION`, `PROFILE`) et son
+    /// identifiant (#19503). Une passerelle antérieure les retire sans erreur : `originalUrl` dit alors seul la cible.
+    public let targetType: String?
+    public let targetId: String?
+    /// « Compter les visiteurs uniques » (#19503) ; absent ⇒ le réglage du serveur.
+    public let countsUniqueVisitors: Bool?
 
     /// Le jeton personnalisé part sous `customToken`, la clé que la passerelle
     /// déclare (`creation.ts`) : sous `token`, il était ignoré en silence.
     private enum CodingKeys: String, CodingKey {
-        case name, originalUrl, campaign, source, medium, expiresAt
+        case name, originalUrl, campaign, source, medium, expiresAt, targetType, targetId, countsUniqueVisitors
         case token = "customToken"
     }
 
@@ -124,7 +130,10 @@ public struct CreateTrackingLinkRequest: Encodable {
         source: String? = nil,
         medium: String? = nil,
         token: String? = nil,
-        expiresAt: String? = nil
+        expiresAt: String? = nil,
+        targetType: String? = nil,
+        targetId: String? = nil,
+        countsUniqueVisitors: Bool? = nil
     ) {
         self.name = name
         self.originalUrl = originalUrl
@@ -133,6 +142,9 @@ public struct CreateTrackingLinkRequest: Encodable {
         self.medium = medium
         self.token = token
         self.expiresAt = expiresAt
+        self.targetType = targetType
+        self.targetId = targetId
+        self.countsUniqueVisitors = countsUniqueVisitors
     }
 }
 

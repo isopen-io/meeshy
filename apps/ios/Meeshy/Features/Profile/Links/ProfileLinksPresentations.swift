@@ -80,7 +80,9 @@ struct ProfileLinksPresentations: ViewModifier {
             CreateShareLinkView { _ in onCreated() }
                 .conversationListObject(conversationList)
         case .createTracking:
-            CreateTrackingLinkView { _ in onCreated() }
+            CreateTrackingLinkView(owner: user.map { TrackingLinkOwner(userId: $0.id, username: $0.username) },
+                                   onCreate: { _ in onCreated() })
+                .environment(\.meeshyConversationList, conversationList)
         case .createReferral:
             AffiliateCreateView { _ in onCreated() }
                 .presentationDetents([.medium])
