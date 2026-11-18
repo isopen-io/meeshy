@@ -14,12 +14,16 @@ struct ProfileCircleSection: View {
     @ObservedObject private var sharing: SharedLocationSharingCenter
     let displayName: String
     @Binding var linked: Bool
+    /// L'accent de la fiche, qui teinte « Partager ma position » (#19637).
+    let tint: Color?
 
-    init(userId: String, displayName: String, linked: Binding<Bool>, sharing: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
+    init(userId: String, displayName: String, linked: Binding<Bool>, tint: Color? = nil,
+         sharing: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
         _viewModel = StateObject(wrappedValue: ProfileCircleModels.model(for: userId))
         _sharing = ObservedObject(wrappedValue: sharing)
         self.displayName = displayName
         _linked = linked
+        self.tint = tint
     }
 
     var body: some View {
@@ -28,7 +32,7 @@ struct ProfileCircleSection: View {
                 .padding(.bottom, viewModel.receivedProposal == nil ? 0 : MeeshySpacing.xxl)
             if showsSharedLocation {
                 ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName, circle: viewModel.toolGateLevel,
-                                        center: sharing)
+                                        tint: tint, center: sharing)
                     .padding(.bottom, MeeshySpacing.xxl)
             } else {
                 Color.clear.frame(height: 0)

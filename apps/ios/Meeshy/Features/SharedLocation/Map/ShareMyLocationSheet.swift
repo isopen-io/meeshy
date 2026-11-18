@@ -101,12 +101,9 @@ struct ShareMyLocationSheet: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.sm) {
-                Text(ShareMyLocationCopy.title)
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(theme.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: 0)
+            MeeshySectionHeader(title: ShareMyLocationCopy.title, level: 1) {
+                EmptyView()
+            } accessory: {
                 LocationTravelPill(me: me, places: places)
             }
             if recipients.count == 1, let only = recipients.first {
@@ -217,9 +214,7 @@ struct ShareMyLocationSheet: View {
                        lead: .systemImage("eye"))
             if let name = chosenNames.first, chosenNames.count == 1 {
                 MeeshyInfoNoted(note: ShareLocationWording.explainNote, openNoteID: $openNoteID) {
-                    Text(ShareLocationWording.explain(name: name))
-                        .font(.footnote)
-                        .foregroundStyle(theme.textSecondary)
+                    MeeshyNote(ShareLocationWording.explain(name: name), lead: MeeshyNoteLead.none)
                 }
             }
         }
@@ -231,7 +226,7 @@ struct ShareMyLocationSheet: View {
     @ViewBuilder
     private var optionsSection: some View {
         if center.servesShareOptions != false {
-            VStack(spacing: 0) {
+            MeeshyGroupCard(surface: .glass, layout: .group) {
                 MeeshyToggleRow(ShareMyLocationCopy.notify(names: chosenNames), systemImage: "bell",
                                 subtitle: ShareMyLocationCopy.notifyDetail(count: chosenNames.count),
                                 accessory: .toggle(isOn: notify), action: { notify.toggle() })
@@ -241,7 +236,6 @@ struct ShareMyLocationSheet: View {
                                 showsDivider: true, action: { battery.toggle() })
                     .accessibilityIdentifier("sharedLocation.share.battery")
             }
-            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
         }
     }
 
@@ -254,11 +248,8 @@ struct ShareMyLocationSheet: View {
                          action: {
                              if choosingPoint { sharePoint() } else { Task { await share() } }
                          })
-            Text(ShareMyLocationCopy.footnote)
-                .font(.footnote)
-                .foregroundStyle(theme.textMuted)
+            MeeshyNote(ShareMyLocationCopy.footnote, lead: MeeshyNoteLead.none)
                 .frame(maxWidth: .infinity)
-                .multilineTextAlignment(.center)
         }
     }
 

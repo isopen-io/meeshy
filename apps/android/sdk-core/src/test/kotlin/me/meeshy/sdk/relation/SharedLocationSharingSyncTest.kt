@@ -55,6 +55,8 @@ class SharedLocationSharingSyncTest {
         val updates = mutableListOf<SharedLocationFix>()
         var stops = 0
         var reads = 0
+        var fixAsks = 0
+        val queuedStartVerdicts = ArrayDeque<SharedLocationStartVerdict>()
         var following = 0
         val stream = MutableSharedFlow<LiveLocationFix>(extraBufferCapacity = 8)
 
@@ -62,7 +64,7 @@ class SharedLocationSharingSyncTest {
             emitter = object : SharedLocationEmitting {
                 override suspend fun start(request: SharedLocationStartRequest): SharedLocationStartVerdict {
                     starts += request
-                    return startVerdict
+                    return queuedStartVerdicts.removeFirstOrNull() ?: startVerdict
                 }
                 override suspend fun update(fix: SharedLocationFix): SharedLocationStartVerdict {
                     updates += fix
@@ -74,7 +76,10 @@ class SharedLocationSharingSyncTest {
                 }
             },
             fixes = object : LiveLocationFixSource {
-                override suspend fun currentFix() = LiveLocationFix(48.8566, 2.3522, accuracy = 8.0)
+                override suspend fun currentFix(): LiveLocationFix {
+                    fixAsks++
+                    return LiveLocationFix(48.8566, 2.3522, accuracy = 8.0)
+                }
                 override fun updates(intervalMillis: Long): Flow<LiveLocationFix> {
                     following++
                     return stream
@@ -320,5 +325,79 @@ class SharedLocationSharingSyncTest {
         assertThat(device.starts.last().recipients.map { it.userId }).containsExactly(alice)
         assertThat(device.center.roster.value.entry(bob)).isNull()
         assertThat(device.center.roster.value.hasPendingWithdrawals).isFalse()
+    }
+
+    @Test
+    fun `retirer quelqu'un d'une liste recue envoie la liste seule, sans jamais demander la position d'ici`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour, bob to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        val problem = device.center.stopSharing(bob)
+        runCurrent()
+
+        assertThat(problem).isNull()
+        assertThat(device.fixAsks).isEqualTo(0)
+        assertThat(device.starts.map { it.isListOnly }).containsExactly(true)
+        assertThat(device.starts.single().recipients.map { it.userId }).containsExactly(alice)
+        assertThat(device.following).isEqualTo(0)
+        assertThat(device.receivedMarks["me"]).isTrue()
+        assertThat(device.center.roster.value.entry(bob)).isNull()
+    }
+
+    @Test
+    fun `une liste seule sans partage alors que la passerelle sert encore quelqu'un garde le retrait en attente`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour, bob to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        device.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.NOT_SHARING)
+
+        val problem = device.center.stopSharing(bob)
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(device.center.roster.value.isWithdrawalPending(bob)).isTrue()
+        assertThat(device.center.roster.value.entry(alice)).isNotNull()
+        assertThat(device.stops).isEqualTo(0)
+        assertThat(device.fixAsks).isEqualTo(0)
+    }
+
+    @Test
+    fun `une liste seule sans partage quand la passerelle ne sert plus personne vide la liste sans arreter`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour, bob to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        device.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.NOT_SHARING)
+        device.servedSnapshot = served()
+
+        val problem = device.center.stopSharing(bob)
+
+        assertThat(problem).isNull()
+        assertThat(device.center.roster.value.isEmpty).isTrue()
+        assertThat(device.stops).isEqualTo(0)
+        assertThat(device.fixAsks).isEqualTo(0)
+    }
+
+    @Test
+    fun `une liste seule sans partage suivie d'une relecture en echec garde le retrait en attente`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.servedSnapshot = served(alice to hour, bob to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        device.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.NOT_SHARING)
+        device.servedSnapshot = null
+
+        val problem = device.center.stopSharing(bob)
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(device.center.roster.value.isWithdrawalPending(bob)).isTrue()
+        assertThat(device.center.roster.value.entry(alice)).isNotNull()
+        assertThat(device.stops).isEqualTo(0)
     }
 }

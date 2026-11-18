@@ -67,6 +67,30 @@ export type CallParticipantInvitedEvent = {
 };
 
 /**
+ * Serveur → la room de l'appel (#19650) : l'appel vit désormais dans
+ * `conversationId`, le groupe trouvé ou créé à la première invitation d'un
+ * appel lancé en tête-à-tête. Émis AVANT `call:participant-invited`. Le média
+ * continue (la signalisation est adressée par `callId`) ; un client qui ne
+ * connaît pas l'événement l'ignore et garde la conversation d'origine, qui
+ * reste intacte.
+ */
+export type CallConversationChangedEvent = {
+  readonly callId: string;
+  /** La conversation où l'appel vit désormais (groupe trouvé ou créé). */
+  readonly conversationId: string;
+  /** La conversation d'origine (le tête-à-tête), qui reste intacte. */
+  readonly previousConversationId: string;
+  readonly conversationType: 'group';
+  /** Titre du groupe, `null` pour un groupe sans titre : le client le compose depuis les membres. */
+  readonly conversationTitle: string | null;
+  /** Les membres actifs du groupe (userId), l'invité compris. */
+  readonly memberUserIds: readonly string[];
+  /** `true` quand la passerelle vient de créer le groupe. */
+  readonly created: boolean;
+  readonly reason: 'invitation';
+};
+
+/**
  * Serveur → les participants : l'invitation de `userId` s'est résolue sans
  * décroché — refusée (`call:invite-declined`) ou restée sans réponse
  * (`call:invite-expired`). Sa puce « Sonne… » s'en va et l'inviteur le lit.

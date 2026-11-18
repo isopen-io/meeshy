@@ -15,12 +15,14 @@ struct ProfileFacesPresentations: ViewModifier {
     @Binding var moodComposerShown: Bool
     let statusComposer: StatusViewModel?
     let onLogout: () -> Void
+    /// Les personnes de mes cercles, une fois servies : « Voir comme » les pose à côté de chaque cercle.
+    var circleSummary: ProfileCirclesSummary?
 
     func body(content: Content) -> some View {
         content
             .fullScreenCover(isPresented: $seenAsShown) {
                 if let user {
-                    VitrineSeenAsView(user: user, accentColor: user.profileAccentHex)
+                    VitrineSeenAsView(user: user, accentColor: user.profileAccentHex, circleSummary: circleSummary)
                         .closesForConversationOpening(.sheet)
                 }
             }

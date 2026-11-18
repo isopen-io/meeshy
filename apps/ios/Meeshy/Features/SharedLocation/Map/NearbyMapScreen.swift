@@ -100,27 +100,20 @@ struct NearbyMapScreen: View {
 
     private var recipientIds: [String] { sharing.roster.pruned(now: Date()).recipients.map(\.userId) }
 
+    /// La barre de l'écran (K28 `bar`, nue) : retour, la capsule K28 à deux lignes — « Mes proches », son étiquette
+    /// « Nouveau » le temps de la première visite, combien partagent — pleine jusqu'à l'entonnoir.
     private var header: some View {
-        HStack(spacing: MeeshySpacing.md) {
+        MeeshyCollapsingHeroBar(surface: .bare) {
             MeeshyGlassButton(systemImage: "chevron.backward", label: LocationMapCopy.back, size: .s44, action: { dismiss() })
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                ProfileNoveltyReader(feature: .closeOnesMap, accountId: AuthManager.shared.currentUser?.id) { badge in
-                    HStack(spacing: MeeshySpacing.sm) {
-                        Text(LocationMapCopy.nearbyTitle).font(.headline.weight(.bold)).foregroundStyle(Color.white)
-                        if let badge { ProfileNoveltyTag(text: badge) }
-                    }
-                }
-                Text(LocationMapCopy.nearbySubtitle(model.pins.count)).font(.caption).foregroundStyle(Color.white.opacity(0.75))
+        } title: {
+            ProfileNoveltyReader(feature: .closeOnesMap, accountId: AuthManager.shared.currentUser?.id) { badge in
+                MeeshyCollapsingHeroCapsule(LocationMapCopy.nearbyTitle,
+                                            subtitle: LocationMapCopy.nearbySubtitle(model.pins.count),
+                                            titleBadge: badge, width: .fill, tone: .deep) { EmptyView() }
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.sm)
-            .meeshyGlass(in: Capsule(), tone: .deep)
-            Spacer()
+        } trailing: {
             arrangeMenu
         }
-        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     /// L'entonnoir : l'ordre de « Autour de toi » et le cercle montré, les mêmes que les puces.

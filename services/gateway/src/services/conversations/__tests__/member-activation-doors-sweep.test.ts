@@ -32,7 +32,8 @@ type Door =
   | { readonly writes: number; readonly exempt: string };
 
 const DOORS: Readonly<Record<string, Door>> = {
-  'routes/conversations/participants-writes.ts': { writes: 2, law: 'newMemberRefusal(' },
+  // #19650 — l'ajout d'un membre, partagé par `POST …/participants` et l'invitation pendant un appel.
+  'services/conversations/memberAdmission.ts': { writes: 2, law: 'newMemberRefusal(' },
   'routes/conversations/sharing-invite.ts': { writes: 2, law: 'newMemberRefusal(' },
   'services/messaging/MessagingService.ts': { writes: 1, law: 'newMemberRefusal(' },
   'routes/conversations/link-admission.ts': { writes: 2, law: 'admitLinkEntry(' },
@@ -53,6 +54,10 @@ const DOORS: Readonly<Record<string, Door>> = {
   'routes/links/utils/share-link-mint.ts': {
     writes: 2,
     exempt: 'fait naître une conversation publique avec son créateur : ni tête-à-tête, ni externe',
+  },
+  'services/calls/callGroupConversation.ts': {
+    writes: 1,
+    exempt: 'fait naître le groupe d’un appel en tête-à-tête qui s’élargit, avec ses présents et l’invité : ni tête-à-tête, ni externe (#19650)',
   },
   'services/external-conversation/open-external-conversation.ts': {
     writes: 1,

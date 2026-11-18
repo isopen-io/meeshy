@@ -9,13 +9,13 @@ struct TrackingLinkEditSheet: View {
     let onSave: (TrackingLinkChanges) -> Void
     let onClose: () -> Void
 
-    @State private var draft: TrackingLinkDraft
+    @State private var draft: TrackingLinkEditDraft
 
     init(link: TrackingLink, onSave: @escaping (TrackingLinkChanges) -> Void, onClose: @escaping () -> Void) {
         self.link = link
         self.onSave = onSave
         self.onClose = onClose
-        _draft = State(initialValue: TrackingLinkDraft(link: link))
+        _draft = State(initialValue: TrackingLinkEditDraft(link: link))
     }
 
     var body: some View {

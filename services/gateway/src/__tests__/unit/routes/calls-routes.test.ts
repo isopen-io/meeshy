@@ -174,6 +174,9 @@ function createMockFastify(prismaOverrides?: Record<string, any>) {
     callSession: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
     },
+    conversation: {
+      findUnique: jest.fn<any>().mockResolvedValue({ activeCallId: null }),
+    },
   };
   const prisma = prismaOverrides
     ? { ...defaultPrisma, ...prismaOverrides }

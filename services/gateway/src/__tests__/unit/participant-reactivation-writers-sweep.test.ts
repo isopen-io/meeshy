@@ -39,7 +39,9 @@ const GUARDED: ReadonlyArray<Reactivation & { readonly guard: string }> = [
     guard: "resolveConversationEntry (via services/conversations/linkAdmission.ts) refuse 'banned' en 403 BANNED",
   },
   {
-    file: 'routes/conversations/participants-writes.ts',
+    // #19650 — l'ajout d'un membre vit, partagé par la route et l'appel, dans
+    // `services/conversations/memberAdmission.ts`.
+    file: 'services/conversations/memberAdmission.ts',
     marker: 'REJOIN_PARTICIPANT_STATE',
     guard: "resolveConversationEntry rend 'banned' avant toute réintégration",
   },

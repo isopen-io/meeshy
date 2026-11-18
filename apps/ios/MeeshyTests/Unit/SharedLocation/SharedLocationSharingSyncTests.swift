@@ -149,10 +149,24 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertTrue(sut.emitter.updates.isEmpty)
     }
 
-    func test_removingSomeoneFromAChosenPoint_republishesThePoint_neverTheDevice() async {
+    func test_removingSomeoneFromAChosenPoint_sendsTheListAlone_neverTheDevice() async {
         let sut = await makeManualSUT()
         _ = await sut.center.sharePoint(lisbon, with: alice, precision: .city, duration: .oneHour)
         _ = await sut.center.sharePoint(lisbon, with: bob, precision: .city, duration: .oneHour)
+
+        _ = await sut.center.stopSharing(with: alice)
+
+        XCTAssertEqual(sut.fixes.asks, 0)
+        XCTAssertEqual(sut.emitter.starts.last?.recipients.map(\.userId), [bob])
+        XCTAssertEqual(sut.emitter.starts.last?.isListOnly, true)
+        XCTAssertTrue(sut.center.roster.isFixedPoint)
+    }
+
+    func test_removingSomeoneFromAChosenPoint_onAGatewayBeforeTheListAlone_republishesThePoint_neverTheDevice() async {
+        let sut = await makeManualSUT()
+        _ = await sut.center.sharePoint(lisbon, with: alice, precision: .city, duration: .oneHour)
+        _ = await sut.center.sharePoint(lisbon, with: bob, precision: .city, duration: .oneHour)
+        sut.emitter.queuedStartVerdicts = [.refused(.invalid)]
 
         _ = await sut.center.stopSharing(with: alice)
 
@@ -356,6 +370,67 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertTrue(sut.emitter.updates.isEmpty)
         XCTAssertTrue(sut.emitter.starts.isEmpty)
         XCTAssertTrue(sut.store.received)
+    }
+
+    func test_removingSomeoneFromAReceivedList_sendsTheListAlone_withoutAskingTheDevice() async {
+        let sut = makeSUT()
+        sut.served.snapshot = snapshot([(alice, .exact, 3600), (bob, .city, 3600)])
+        await sut.center.sync()
+
+        let problem = await sut.center.stopSharing(with: bob)
+
+        XCTAssertNil(problem)
+        XCTAssertEqual(sut.fixes.asks, 0)
+        XCTAssertEqual(sut.emitter.starts.map(\.isListOnly), [true])
+        XCTAssertEqual(sut.emitter.starts.last?.recipients.map(\.userId), [alice])
+        XCTAssertFalse(sut.fixes.isFollowing)
+        XCTAssertTrue(sut.store.received)
+        XCTAssertNil(sut.center.entry(for: bob))
+    }
+
+    func test_theListAloneMeetingNoShare_whileTheGatewayStillServesSomeone_keepsTheWithdrawalPending() async {
+        let sut = makeSUT()
+        sut.served.snapshot = snapshot([(alice, .exact, 3600), (bob, .city, 3600)])
+        await sut.center.sync()
+        sut.emitter.queuedStartVerdicts = [.refused(.notSharing)]
+
+        let problem = await sut.center.stopSharing(with: bob)
+
+        XCTAssertEqual(problem, .withdrawalPending)
+        XCTAssertTrue(sut.center.roster.isWithdrawalPending(for: bob))
+        XCTAssertNotNil(sut.center.entry(for: alice))
+        XCTAssertEqual(sut.emitter.stops, 0)
+        XCTAssertEqual(sut.fixes.asks, 0)
+    }
+
+    func test_theListAloneMeetingNoShare_whileTheGatewayServesNoOne_emptiesTheListWithoutStopping() async {
+        let sut = makeSUT()
+        sut.served.snapshot = snapshot([(alice, .exact, 3600), (bob, .city, 3600)])
+        await sut.center.sync()
+        sut.emitter.queuedStartVerdicts = [.refused(.notSharing)]
+        sut.served.snapshot = snapshot([])
+
+        let problem = await sut.center.stopSharing(with: bob)
+
+        XCTAssertNil(problem)
+        XCTAssertTrue(sut.center.roster.isEmpty)
+        XCTAssertEqual(sut.emitter.stops, 0)
+        XCTAssertEqual(sut.fixes.asks, 0)
+    }
+
+    func test_theListAloneMeetingNoShare_withAFailedRead_keepsTheWithdrawalPending() async {
+        let sut = makeSUT()
+        sut.served.snapshot = snapshot([(alice, .exact, 3600), (bob, .city, 3600)])
+        await sut.center.sync()
+        sut.emitter.queuedStartVerdicts = [.refused(.notSharing)]
+        sut.served.snapshot = nil
+
+        let problem = await sut.center.stopSharing(with: bob)
+
+        XCTAssertEqual(problem, .withdrawalPending)
+        XCTAssertTrue(sut.center.roster.isWithdrawalPending(for: bob))
+        XCTAssertNotNil(sut.center.entry(for: alice))
+        XCTAssertEqual(sut.emitter.stops, 0)
     }
 
     func test_aReceivedList_survivesARelaunch_withoutFollowing() async {

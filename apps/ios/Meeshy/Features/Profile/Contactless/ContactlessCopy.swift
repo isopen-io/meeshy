@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// Les mots du partage sans contact (#19484, planche `Sans-Contact`). Le repli QR garde ceux de `ProfileLinksCopy`.
 nonisolated enum ContactlessCopy {
@@ -24,20 +25,17 @@ nonisolated enum ContactlessCopy {
     static var vitrine: String {
         String(localized: "profile.contactless.gift.vitrine", defaultValue: "Ma vitrine", bundle: .main)
     }
-    static var vitrineDetail: String {
-        String(localized: "profile.contactless.gift.vitrine.detail", defaultValue: "Ce que voit le Public", bundle: .main)
-    }
     static var friendRequest: String {
         String(localized: "profile.contactless.gift.friendRequest", defaultValue: "Une demande d'ami", bundle: .main)
-    }
-    static var friendRequestDetail: String {
-        String(localized: "profile.contactless.gift.friendRequest.detail", defaultValue: "On te répond quand on veut", bundle: .main)
     }
     static var phone: String {
         String(localized: "profile.contactless.gift.phone", defaultValue: "Mon numéro", bundle: .main)
     }
-    static var phoneDetail: String {
-        String(localized: "profile.contactless.gift.phone.detail", defaultValue: "Proches seulement", bundle: .main)
+    static var phoneNote: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "profile.contactless.gift.phone.question", defaultValue: "Pourquoi mon numéro est-il verrouillé ?", bundle: .main),
+            text: String(localized: "profile.contactless.gift.phone.note", defaultValue: "Ton numéro ne se donne qu'à tes Proches.", bundle: .main)
+        )
     }
     static var give: String {
         String(localized: "profile.contactless.give", defaultValue: "Donner", bundle: .main)

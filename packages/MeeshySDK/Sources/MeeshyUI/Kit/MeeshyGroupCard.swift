@@ -211,14 +211,27 @@ extension EnvironmentValues {
     }
 }
 
+/// **Le filet d'une carte** : celui que trace `MeeshyGroupCardRows`, offert à
+/// l'hôte dont les rangées ne sont pas une collection (un champ, une bascule, un
+/// pas-à-pas). Retrait et couleur viennent de la carte qui l'entoure ; muet.
+public struct MeeshyGroupCardDivider: View {
+    @Environment(\.meeshyGroupCardDivider) private var divider
+
+    public init() {}
+
+    public var body: some View {
+        Rectangle().fill(divider.color).frame(height: 1)
+            .padding(.leading, divider.inset)
+            .accessibilityHidden(true)
+    }
+}
+
 /// **Les rangées d'une carte** : N rangées, N − 1 filets en retrait, jamais avant
 /// la première ni après la dernière.
 public struct MeeshyGroupCardRows<Data: RandomAccessCollection, ID: Hashable, Row: View>: View {
     private let data: Data
     private let id: KeyPath<Data.Element, ID>
     private let row: (Data.Element) -> Row
-
-    @Environment(\.meeshyGroupCardDivider) private var divider
 
     public init(_ data: Data, id: KeyPath<Data.Element, ID>, @ViewBuilder row: @escaping (Data.Element) -> Row) {
         self.data = data
@@ -230,11 +243,7 @@ public struct MeeshyGroupCardRows<Data: RandomAccessCollection, ID: Hashable, Ro
         let items = Array(data)
         return VStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                if index > 0 {
-                    Rectangle().fill(divider.color).frame(height: 1)
-                        .padding(.leading, divider.inset)
-                        .accessibilityHidden(true)
-                }
+                if index > 0 { MeeshyGroupCardDivider() }
                 row(item).frame(minHeight: CGFloat(MeeshyGroupCardRecipe.rowMinHeight))
             }
         }

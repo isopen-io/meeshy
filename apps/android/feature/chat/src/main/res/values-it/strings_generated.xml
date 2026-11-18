@@ -607,7 +607,6 @@
     <string name="recentMedia_resolveFailed_multiple">Non è stato possibile preparare %1$d media — usa l\'intera libreria foto</string>
     <string name="report_message_details_header">Dettagli (facoltativo)</string>
     <string name="report_message_details_placeholder">Descrivi il problema…</string>
-    <string name="report_message_sent">Segnalazione inviata</string>
     <string name="report_message_submit">Invia la segnalazione</string>
     <string name="report_message_title">Perché segnali questo messaggio?</string>
     <string name="report_reason_harassment">Molestie</string>

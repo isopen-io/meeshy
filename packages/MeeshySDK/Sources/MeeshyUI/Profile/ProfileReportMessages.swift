@@ -107,7 +107,7 @@ enum ProfileReportAttachmentsCopy {
 
     static var encryptedConsentMessage: String {
         String(localized: "profile.report.attach.e2ee.message",
-               defaultValue: "Ce message est chiffré de bout en bout. Le joindre en confie le texte à notre équipe de modération.",
+               defaultValue: "Chiffré de bout en bout : le joindre en confie le texte aux modérateurs.",
                bundle: .module)
     }
 

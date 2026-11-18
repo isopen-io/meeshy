@@ -13,6 +13,7 @@ struct ContactlessExchangeSection: View {
     let onOpenProfile: (URL) -> Void
 
     @StateObject private var model: ContactlessExchangeModel
+    @State private var openNoteID: String?
     private var theme: ThemeManager { ThemeManager.shared }
 
     init(me: ContactlessHello?, accent: Color, accentColor: String, isUnavailable: Binding<Bool>,
@@ -84,7 +85,9 @@ struct ContactlessExchangeSection: View {
 
     private var choice: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
-            MeeshySectionHeader(title: ContactlessCopy.whatIGive, form: .overline)
+            MeeshyInfoNoted(note: ContactlessCopy.phoneNote, openNoteID: $openNoteID, tint: theme.textSecondary) {
+                MeeshySectionHeader(title: ContactlessCopy.whatIGive, form: .overline)
+            }
             MeeshyChoiceTiles(label: ContactlessCopy.whatIGive, items: giftItems,
                               selection: .multiple(Set(state.chosen.map(\.rawValue))), columns: 3, tint: accent,
                               allowsEmpty: true,
@@ -106,11 +109,10 @@ struct ContactlessExchangeSection: View {
     private var giftItems: [MeeshyChoiceItem] {
         [
             MeeshyChoiceItem(id: ContactlessGift.vitrine.rawValue, title: ContactlessCopy.vitrine,
-                             detail: ContactlessCopy.vitrineDetail, systemImage: "person.crop.square"),
+                             systemImage: "person.crop.square"),
             MeeshyChoiceItem(id: ContactlessGift.friendRequest.rawValue, title: ContactlessCopy.friendRequest,
-                             detail: ContactlessCopy.friendRequestDetail, systemImage: "hands.clap"),
-            MeeshyChoiceItem(id: ContactlessGift.phone.rawValue, title: ContactlessCopy.phone,
-                             detail: ContactlessCopy.phoneDetail, systemImage: "phone",
+                             systemImage: "hands.clap"),
+            MeeshyChoiceItem(id: ContactlessGift.phone.rawValue, title: ContactlessCopy.phone, systemImage: "phone",
                              state: .locked(key: ContactlessGift.phone.rawValue)),
         ]
     }
