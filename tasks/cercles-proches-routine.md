@@ -1352,3 +1352,29 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   COURANT, relu jusqu'à cinq fois, et lève sinon (fail-closed) ; témoin rouge prouvé. L'état provisoire d'une liste
   seule, rangé avant la prise, ne sert rien (seuil posé, pas de batterie) tant qu'il n'est pas réécrit. Reste, déjà sur
   `dev` : avec une position, la session remplacée est lue avant la prise (« prévenir » peut partir deux fois).
+## 2026-11-17 — réveil de 19 h : le marqueur de position dit de quel cercle vient la personne (#17013)
+
+- Reprise : la PR #19289 (liste seule, #19284) est ouverte et conflictuelle, mais le réveil précédent la menait encore
+  (commentaire sur la PR trois minutes avant ce réveil) : ce réveil ne l'a pas touchée (« celui qui n'a rien écrit
+  cède »). Aucune branche vivante n'écrit les cartes de positions : lot réservé avant toute écriture
+  (`claude/cercles-17013-icone-cercle`).
+- Lot : #17013, demande de Jacques du 2026-11-07 (« une icône de position distincte par cercle d'amis sur la carte »).
+  La passerelle servait déjà `circle` (#17966) ; aucun client ne le dessinait.
+  - Web : le décodeur garde `circle` s'il est connu ; l'épingle prend la teinte et l'icône du cercle (🤝, 🔥, 🩸), le
+    libellé lu et la liste disent « Nom · Proche · … ». La couleur d'un niveau vit une fois (`relationLevelTint`,
+    `lib/relations/level-labels.ts`) : la fiche d'un lien et « Mes cercles » ne la recopient plus.
+  - iOS : `SharedLocationChanged.circle` (FRIEND, CLOSE, BLOOD seulement) porté par `SharedLocationEntry` ; le marqueur
+    MapKit prend l'icône du cercle à la place des initiales et la couleur `CircleLevelColor` ; VoiceOver dit le cercle.
+  - Android : le modèle portait déjà le cercle ; `SharedLocationCircle.level` le relie au niveau du lien, l'épingle en
+    tire icône, teinte et nom (TalkBack).
+  - Sans cercle servi (passerelle antérieure), les trois marqueurs restent neutres : aucun client ne devine le cercle.
+- Gates locaux : web `bun test` (cartes, cercles, partage) 7 904 verts, `tsc --noEmit` vert ; gardes iOS texte vertes
+  (règles maison 42, cohésion, localisation, couleurs) ; `vitest packages/shared/__tests__/ci` 25 fichiers, 215 verts ;
+  `jvm-check *SharedLocation*` (voir la PR). iOS et Android se prouvent par la CI de la PR.
+- Prochain lot recommandé : finir #19289 si le réveil précédent ne l'a pas fusionnée, puis #19287 (iOS et Android
+  envoient la liste seule), #18714, #18580.
+
+## 2026-11-18 — réveil de 1 h : #19354 (icône de cercle) recalée sur dev
+
+- `origin/dev` (d84e74a80) fusionnée sans conflit ; aucun fichier de carte ou de position client ne bougeait côté `dev`.
+  Web `src/lib/shared-locations` + `relations` 180 verts, `tsc` vert sur l'arbre fusionné. iOS et Android par la CI.
