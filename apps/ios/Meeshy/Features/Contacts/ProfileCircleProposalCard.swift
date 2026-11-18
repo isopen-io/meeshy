@@ -53,6 +53,8 @@ struct ProfileCircleProposalCard: View {
     @State private var ritual: CircleRitualTarget?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private var theme: ThemeManager { ThemeManager.shared }
+    /// L'accent de la fiche ouverte : la carte prend la couleur de la personne (planche `Autre-Cercle`, #19674).
+    @Environment(\.meeshyProfileAccent) private var profileAccent
 
     var body: some View {
         Group {
@@ -71,7 +73,7 @@ struct ProfileCircleProposalCard: View {
     }
 
     private func card(_ proposal: ProfileCircleProposal) -> some View {
-        let tint = CircleLevelColor.color(for: proposal.level)
+        let tint = OurCircleTint.person(profileAccent, level: proposal.level)
         return MeeshyGroupCard(surface: .accent, layout: .prompt, tint: tint,
                                label: ProfileCircleProposalCopy.title(name: displayName, level: proposal.level)) {
             VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
@@ -106,7 +108,7 @@ struct ProfileCircleProposalCard: View {
 
     private func avatar(_ proposal: ProfileCircleProposal, tint: Color) -> some View {
         MeeshyAvatar(name: displayName, context: .conversationList,
-                     accentColor: DynamicColorGenerator.colorForName(displayName), avatarURL: proposal.avatar)
+                     accentColor: profileAccent ?? DynamicColorGenerator.colorForName(displayName), avatarURL: proposal.avatar)
             .overlay(alignment: .bottomTrailing) {
                 Image(systemName: VitrineSeenAsCopy.glyph(of: proposal.level) + ".fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .bold))
@@ -131,7 +133,7 @@ struct ProfileCircleProposalCard: View {
             secondary {
                 MeeshyButton(ProfileCircleProposalCopy.later, kind: .outline, width: .fill,
                              action: { viewModel.postponeProposal() })
-                MeeshyButton(ProfileCircleProposalCopy.decline, kind: .outline, width: .fill, isDestructive: true,
+                MeeshyButton(ProfileCircleProposalCopy.decline, kind: .danger, width: .fill, isDestructive: true,
                              action: { Task { await viewModel.declineProposal() } })
                     .accessibilityHint(ProfileCircleProposalCopy.declineHint(name: displayName))
             }

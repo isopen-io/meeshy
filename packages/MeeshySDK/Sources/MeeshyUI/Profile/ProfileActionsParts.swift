@@ -20,6 +20,9 @@ public nonisolated enum ProfileActionsPart: String, CaseIterable, Sendable, Hash
     case newsNotify
     /// « Notre cercle », rangée de « Sa fiche » qui ouvre la feuille du cercle.
     case circle
+    /// « Pour aller plus loin » d'un lien servi : les cercles qu'il reste à gagner et le chemin (#19674). Sans lien, la
+    /// fiche la pose elle-même sous la demande d'ami.
+    case nextCircle
 }
 
 /// Ce que l'app fournit : pour une section et la personne (son identifiant, son nom, sa présence servie, l'âge de la
@@ -57,7 +60,7 @@ nonisolated enum ProfileActionsSection: Hashable, Sendable {
     case safety
 
     static let order: [ProfileActionsSection] = [
-        .talk, .part(.talkie), .part(.together), .whereTheyAre, .circle, .part(.phone), .card, .safety,
+        .talk, .part(.talkie), .part(.together), .whereTheyAre, .circle, .part(.phone), .part(.nextCircle), .card, .safety,
     ]
 
     var part: ProfileActionsPart? {

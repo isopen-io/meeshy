@@ -148,7 +148,7 @@ struct ParticipantsView: View {
             ) { event in
                 participants.removeAll { $0.userId == event.userId }
             }
-            .sheet(item: Binding(
+            .profileCover(item: Binding(
                 get: { profileParticipantId.map(IdentifiedString.init) },
                 set: { profileParticipantId = $0?.value }
             )) { target in
