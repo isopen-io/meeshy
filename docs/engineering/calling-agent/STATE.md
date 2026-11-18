@@ -1516,3 +1516,46 @@ socket jusqu'au client.
 3. #19597, #19596, puis #19473, #18668 et #18692 (messages d'exception bruts), #19381, #19253, #19294, #19295, #19255.
 4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
 5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 47 — 2026-11-18
+
+- **Base** : `origin/dev` @ `2fcb40b94`, puis fusionnée avec `dev` @ `ba1f209bf`. La PR du cycle 46 (#19704, qui contient aussi le cycle 45) attendait sa CI, en file depuis 17:22 ; je n'y ai pas poussé, pour ne pas l'annuler.
+- **Branche** : `claude/determined-volta-mn4257`, partie de `dev`. Ses fichiers sont disjoints de ceux de #19704, sauf le journal.
+- **Objectif** : #19648 (une traduction vocale sans audio rend `audioUrl` null de bout en bout) et #19596 (horodatages d'un job vocal en ISO 8601 UTC avec `Z`).
+- **Livré** :
+  - **Traducteur.**
+    - `TranslatedAudioVersion.text_only_version` pose `audio_url=None` (`audio_path` reste `""` en interne).
+    - `VoiceMessageResponse.audio_url` devient `Optional`. Sans ce changement, `/voice-message` tombait en 500.
+    - `utils/served_time.py` : `served_utc()` est le site unique de formatage (forme `toISOString`, millisecondes, `Z`). Il sert `TranslationJob.to_dict()` et `/voice/job`.
+    - Les jobs sont créés en `datetime.now(timezone.utc)`. Le nettoyage normalise avant de comparer.
+  - **Passerelle.**
+    - `AudioTranslateService._saveTranslationResult` et la branche post/story de `MessageTranslationService` **omettent** `url` et `path` sans adresse, comme le chemin message depuis #16340. Avant, ils persistaient `url: ""`.
+    - La garde est en vérité : un ancien traducteur qui envoie `""` est traité comme `null`.
+  - **Partagé** : `voice-api.ts` déclare `| null` sur `audioUrl`, `audioBase64`, `voiceProfile` et `profileId`.
+- **Tests** :
+  - **Pytest** :
+    - `test_text_only…` : rouge `3 failed, 4 passed`, puis vert `7 passed` ;
+    - `test_voice_message_response…` : rouge `1 failed`, puis vert `2 passed` ;
+    - `test_job_timestamps…` : rouge `5 failed, 1 passed`, puis vert, et `7 passed` avec le témoin de la QA.
+  - **Jest** : `AudioTranslateService` et `MessageTranslationService.audio` sont rouges (`Received value: null`), puis verts.
+  - **Relancé par moi sur l'arbre fusionné avec `dev`** :
+    - passerelle : `3 suites, 91 passed`, `tsc --noEmit` à 0 ;
+    - traducteur : `83 passed` (lot et `test_28`, sous Python 3.13, alors que le projet déclare 3.10).
+  - Les échecs du traducteur sont identiques à ceux de `dev` (`18 failed, 37 errors` sur `test_23`, `test_job_webhook_guard`, `test_12`, `test_audio_pipeline_metrics`, `test_audio_url_guard`). Ils viennent de l'environnement local (QA, `git archive`).
+- **Rétrocompatibilité** (QA, en lisant chaque lecteur) :
+  - Ancienne passerelle face au nouveau traducteur : aucun lecteur n'appelle de méthode sur `audioUrl`. Les lecteurs de `translations[].url` tolèrent `null`, `""` ou l'absence.
+  - Aucune boucle de retraduction : la décision « déjà traduit » porte sur la clé de langue.
+  - iOS `url: String?`, Android `String? = null`, le web filtre `trim() !== ''`.
+  - Les jobs ne vivent qu'en mémoire : aucun `fromisoformat` ne relit `Z` (3.10).
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - Mutations : 5 tuées d'emblée. M4 et G3/G4 survivaient, et sont tuées par ses témoins (`01e798d67`). M5 est équivalente. Retirer le `| null` du type partagé n'est détecté par aucun test (simple typage, `strictNullChecks: false`).
+  - Réserves ouvertes en issues : #19734 (piste orpheline quand un texte seul suit une voix, antérieure au lot), #19735 (cache `audio_url` à `""`, témoin de la route `/voice-message`, type `PostAudioService`), #19736 (horodatages de santé et d'analyse).
+
+### Cycle suivant : par où reprendre
+
+0. Fusionner #19704 (cycles 45 et 46) puis la PR de ce cycle quand leur CI est verte (fusion à la main ; la CI des PR était en file depuis des heures). Le journal entre en conflit entre les deux : garder les deux sections, dans l'ordre 46 puis 47. Fermer à la main #19647, #19672, #19648 et #19596 avec leur preuve si `Closes` ne les ferme pas.
+1. #19734 (effacement, sécurité), puis #19702, #19673 et #19735.
+2. #19520, second critère : constat sur le serveur avec `sre-infra`, dans la même séance que la mesure des journaux d'accès pour #19471.
+3. #19597, #19736, puis #19473, #18668 et #18692 (messages d'exception bruts), #19381, #19253, #19294, #19295, #19255.
+4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
+5. **Recentrer la routine sur les appels eux-mêmes.** Les cycles 42 à 47 ont soldé la dette de la surface vocale de la passerelle. Le prochain lot sans P0 devrait viser la chaîne de traduction en direct (latence mesurée de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613).
