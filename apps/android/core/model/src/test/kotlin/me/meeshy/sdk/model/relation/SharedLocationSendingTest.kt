@@ -136,6 +136,24 @@ class SharedLocationSendingTest {
     }
 
     @Test
+    fun `une liste seule part sans position, dedoublonnee comme une charge entiere, et jamais vide`() {
+        val request = SharedLocationStartRequest.listOnly(
+            listOf(SharedLocationRecipient(bob.uppercase(), SharedLocationPrecision.CITY, expiresInSeconds = 600)),
+            SharedLocationShareDuration.EIGHT_HOURS,
+        )!!
+
+        assertThat(request.isListOnly).isTrue()
+        assertThat(request.fix).isNull()
+        assertThat(request.wire()).doesNotContainKey("position")
+        assertThat(request.wire()["durationMinutes"]).isEqualTo(480)
+        assertThat(request.recipients).containsExactly(SharedLocationRecipient(bob, SharedLocationPrecision.CITY, 600))
+        assertThat(SharedLocationStartRequest.listOnly(emptyList(), SharedLocationShareDuration.ONE_HOUR)).isNull()
+        val full = SharedLocationStartRequest.of(listOf(SharedLocationRecipient(alice, SharedLocationPrecision.EXACT)), SharedLocationShareDuration.ONE_HOUR, paris)!!
+        assertThat(full.isListOnly).isFalse()
+        assertThat(full.wire()).containsKey("position")
+    }
+
+    @Test
     fun `une echeance nulle vaut une seconde, et un doublon garde sa derniere echeance`() {
         val request = SharedLocationStartRequest.of(
             listOf(
