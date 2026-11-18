@@ -407,7 +407,7 @@ struct CommentsSheetView: View {
             hearts: $hearts,
             applyEdit: { applyCommentEdit($0) }
         ))
-        .sheet(item: $selectedProfileUser) { user in
+        .profileCover(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
                 moodEmoji: moodEmojiResolver?(user.userId ?? ""),
@@ -415,8 +415,6 @@ struct CommentsSheetView: View {
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
             )
-            .presentationDetents([.large, .medium])
-            .presentationDragIndicator(.visible)
         }
         .withStatusBubble()
         .task {

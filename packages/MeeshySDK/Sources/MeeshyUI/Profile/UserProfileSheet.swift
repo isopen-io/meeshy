@@ -84,6 +84,8 @@ public struct UserProfileSheet: View {
     @Environment(\.profileSendSheet) var sendSheet
     @Environment(\.profileLoading) private var injectedProfileLoading
     @Environment(\.dismiss) var dismiss
+    /// En plein écran (`profileCover`, #19674), la tête dit « Retour » ; en feuille, « Fermer ».
+    @Environment(\.profilePresentationStyle) var presentationStyle
     /// La face lue (loi 1, #18870) ; la Vitrine d'abord.
     @State var face: RelationFace = .vitrine
     /// L'app montre un lien d'au moins Connaissance dans l'emplacement du cercle (#14910) : le cercle commun n'est plus
@@ -244,6 +246,7 @@ public struct UserProfileSheet: View {
                 RelationFaceSelector(face: $face, writeShortcut: writeShortcut)
             }
         }
+        .environment(\.meeshyProfileAccent, profileAccent)
         .task {
             await loadDataIfNeeded()
             await loadConversationsIfNeeded()

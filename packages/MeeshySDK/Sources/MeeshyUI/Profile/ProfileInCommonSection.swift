@@ -2,9 +2,9 @@ import SwiftUI
 import MeeshySDK
 
 /// « En commun » sur la Vitrine de l'autre (#19377, planche `Autre-Commun`) : le résumé, nos conversations, puis nos
-/// communautés (K43), nos amis (K48 puis K39), nos médias (K04 + K49, un vocal par K35), notre histoire (K53) et, pour
-/// chaque partie que le cercle commun n'ouvre pas, une rangée verrouillée (K37) sans nombre ni nom. Rien en commun :
-/// le bloc d'état du kit (K38, planche `Etat-Vide` § 6). Sans donnée servie ni en cache, seules les conversations.
+/// communautés (K43), nos amis (K48 puis K39), nos médias (K04 + K49, un vocal par K35) et notre histoire (K53). Une
+/// partie que le cercle commun n'ouvre pas ne se montre pas (#19674) : « Pour aller plus loin » dit le chemin. Rien en
+/// commun : le bloc d'état du kit (K38, planche `Etat-Vide` § 6). Sans donnée servie ni en cache, seules les conversations.
 struct ProfileInCommonSection<Conversations: View>: View {
     let userId: String?
     let source: any ProfileInCommonLoading
@@ -83,7 +83,6 @@ struct ProfileInCommonSection<Conversations: View>: View {
                 art: .ghost(.tile, count: 3),
                 tint: tint
             )
-            ProfileInCommonLockedRows(locked: digest.locked, tint: tint)
         }
         .padding(.horizontal, MeeshySpacing.xl)
         .accessibilityIdentifier("profile.inCommon.empty")
@@ -119,31 +118,7 @@ private struct ProfileInCommonParts: View {
             if !digest.history.isEmpty {
                 ProfileInCommonHistory(steps: digest.history, tint: tint)
             }
-            if !digest.locked.isEmpty {
-                ProfileInCommonLockedRows(locked: digest.locked, tint: tint)
-                    .padding(.horizontal, MeeshySpacing.xl)
-            }
         }
     }
 }
 
-/// Ce que le cercle commun n'ouvre pas d'« En commun » : le nom de la partie et le cercle qui l'ouvre. Jamais un nombre,
-/// jamais un nom de communauté, d'ami ou de fichier.
-struct ProfileInCommonLockedRows: View {
-    let locked: [ProfileInCommonDigest.LockedPart]
-    let tint: Color
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            ForEach(locked, id: \.part) { item in
-                MeeshyLockedRow(
-                    title: ProfileInCommonCopy.lockedTitle(item.part),
-                    requirement: ProfileRelationLockedGroup.requirement(opensAt: item.opensAt),
-                    systemImage: ProfileInCommonCopy.lockedGlyph(item.part),
-                    tint: tint
-                )
-                .accessibilityIdentifier("profile.inCommon.locked.\(item.part.rawValue)")
-            }
-        }
-    }
-}

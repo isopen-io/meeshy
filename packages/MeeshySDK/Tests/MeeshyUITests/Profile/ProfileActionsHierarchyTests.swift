@@ -9,7 +9,7 @@ final class ProfileActionsHierarchyTests: XCTestCase {
 
     func test_sections_followThePlanche_fromTalkToSafety() {
         XCTAssertEqual(ProfileActionsSection.order, [
-            .talk, .part(.talkie), .part(.together), .whereTheyAre, .circle, .part(.phone), .card, .safety,
+            .talk, .part(.talkie), .part(.together), .whereTheyAre, .circle, .part(.phone), .part(.nextCircle), .card, .safety,
         ])
     }
 

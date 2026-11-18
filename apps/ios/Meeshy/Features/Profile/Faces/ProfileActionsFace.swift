@@ -102,7 +102,7 @@ struct ProfileActionsFace: View {
                 MeeshyLabeledAction(title: ProfileActionsCopy.scan, systemImage: "qrcode.viewfinder",
                                     tint: accent, action: { presented = .scanner })
                 if profileLink != nil {
-                    MeeshyLabeledAction(title: ProfileLinksCopy.contactless, systemImage: "wave.3.right",
+                    MeeshyLabeledAction(title: ProfileLinksCopy.contactless, systemImage: ProfileGlyph.contactless,
                                         tint: accent, action: { presented = .card(.contactless) })
                 }
                 MeeshyLabeledAction(title: ProfileActionsCopy.seenAs, systemImage: "eye",

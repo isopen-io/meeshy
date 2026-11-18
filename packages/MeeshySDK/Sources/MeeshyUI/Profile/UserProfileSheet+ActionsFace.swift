@@ -6,7 +6,8 @@ import MeeshySDK
 //
 // Ce que je peux FAIRE avec cette personne, fait du kit (loi 12), dans l'ordre de la planche `Autre-Actions` :
 // « Parler » en actions libellées (K32), Talkie et « Ensemble » (lus par l'app), « Où il est », la demande de
-// connexion tant qu'aucun lien n'est servi, « Son téléphone » (lu par l'app), « Sa fiche » en rangées (K06 : envoyer
+// connexion tant qu'aucun lien n'est servi, « Son téléphone » (lu par l'app), « Pour aller plus loin » — le chemin vers
+// le cercle suivant, jamais ce qu'il tient fermé (#19674) —, « Sa fiche » en rangées (K06 : envoyer
 // son profil, copier son lien, son QR, ses nouveautés, notre cercle), et en bas, séparés, bloquer et signaler (K40
 // destructif). Chaque section porte son propre espace : une section que l'app ne montre pas ne laisse aucun trou.
 // Rien de ce que l'ancien onglet Détails permettait ne disparaît (loi 11).
@@ -118,7 +119,7 @@ extension UserProfileSheet {
                     ProfileFriendRequestCard(tint: accentTint, unsent: requestStage == .unsent) { note in
                         Task { await sendConnectionRequest(message: note) }
                     }
-                    ProfileLockedCapabilities(level: .public, tint: accentTint)
+                    ProfileNextCircles(level: .public, name: name, tint: accentTint)
                 }
             }
         case .closed:

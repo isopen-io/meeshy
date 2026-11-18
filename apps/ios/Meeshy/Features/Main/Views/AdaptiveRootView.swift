@@ -648,7 +648,7 @@ struct DetachedWindowSheets: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(item: $router.deepLinkProfileUser) { user in
+            .profileCover(item: $router.deepLinkProfileUser) { user in
                 UserProfileSheet(
                     user: user,
                     moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,

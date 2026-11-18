@@ -416,8 +416,6 @@ extension AudioFullscreenPage {
             presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
             postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
         )
-        .presentationDetents([.large, .medium])
-        .presentationDragIndicator(.visible)
     }
 
     // MARK: - L'enregistrement
