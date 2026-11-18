@@ -85,6 +85,25 @@ struct MeeshyLabeledActionTests {
         #expect(MeeshyLabeledActionRecipe.resolve(kind: .destructive, size: .s64).diameter == 56)
     }
 
+    @Test("la pastille se dit par son libellé quand il est donné, sinon telle qu'elle se voit, après la valeur")
+    func speech_saysTheBadgeLabelInPlaceOfTheRawBadge() {
+        let labelled = MeeshyLabeledActionSpeech.value(pending: nil, value: nil, badge: "2", badgeLabel: "2 messages non lus")
+        #expect(labelled == "2 messages non lus")
+        let raw = MeeshyLabeledActionSpeech.value(pending: nil, value: nil, badge: "2", badgeLabel: nil)
+        #expect(raw == "2")
+        let full = MeeshyLabeledActionSpeech.value(pending: "En cours", value: "Sera envoyé", badge: "99+",
+                                                   badgeLabel: "150 messages non lus")
+        #expect(full == "En cours, Sera envoyé, 150 messages non lus")
+    }
+
+    @Test("sans pastille, son libellé seul ne se dit pas : rien à annoncer qui ne se voit pas")
+    func speech_dropsALabelWithoutBadge() {
+        let orphan = MeeshyLabeledActionSpeech.value(pending: nil, value: nil, badge: nil, badgeLabel: "2 messages non lus")
+        #expect(orphan.isEmpty)
+        let empty = MeeshyLabeledActionSpeech.value(pending: nil, value: "", badge: "", badgeLabel: nil)
+        #expect(empty.isEmpty)
+    }
+
     @Test("garde de source : aucun verre dessiné, aucun type du domaine, aucun singleton")
     func source_isAgnostic() throws {
         let files = ["MeeshyLabeledAction.swift", "MeeshyLabeledActionRecipe.swift"]
