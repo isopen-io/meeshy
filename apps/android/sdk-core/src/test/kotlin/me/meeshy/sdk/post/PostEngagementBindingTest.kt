@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
+import me.meeshy.sdk.model.SocketPostBookmarkedData
 import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
@@ -51,6 +52,7 @@ class PostEngagementBindingTest {
     private val commentAdded = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 8)
     private val commentDeleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 8)
     private val deleted = MutableSharedFlow<SocketPostDeletedData>(extraBufferCapacity = 8)
+    private val bookmarked = MutableSharedFlow<SocketPostBookmarkedData>(extraBufferCapacity = 8)
 
     private val socket = mockk<SocialSocketManager> {
         every { postLiked } returns liked
@@ -58,6 +60,7 @@ class PostEngagementBindingTest {
         every { commentAdded } returns this@PostEngagementBindingTest.commentAdded
         every { commentDeleted } returns this@PostEngagementBindingTest.commentDeleted
         every { postDeleted } returns deleted
+        every { postBookmarked } returns bookmarked
     }
     private val api: PostApi = mockk(relaxed = true)
     private val posts = PostRepository(api, mockk(relaxed = true), mockk(relaxed = true))
@@ -82,17 +85,20 @@ class PostEngagementBindingTest {
         posts.refresh()
         userPosts.persist("author", UserPostsSnapshot(posts = listOf(post)), ticket = null)
         userPosts.persist("someone", UserPostsSnapshot(posts = listOf(other)), ticket = null)
+        userPosts.persistBookmarks(UserPostsSnapshot(posts = listOf(post, other), nextCursor = "c1"), ticket = null)
         binding.attach()
         waitForSubscribers()
     }
 
     private suspend fun waitForSubscribers() = eventually {
-        listOf(liked, unliked, commentAdded, commentDeleted, deleted).all { it.subscriptionCount.value > 0 }
+        listOf(liked, unliked, commentAdded, commentDeleted, deleted, bookmarked).all { it.subscriptionCount.value > 0 }
     }
 
     private suspend fun eventually(condition: suspend () -> Boolean) = withContext(Dispatchers.Default) {
         withTimeout(5_000) { while (!condition()) delay(10) }
     }
+
+    private suspend fun saved(): List<ApiPost> = userPosts.cachedBookmarks().valueOrNull?.posts.orEmpty()
 
     private suspend fun grid(userId: String): List<ApiPost> = userPosts.cached(userId).valueOrNull?.posts.orEmpty()
 
@@ -140,5 +146,46 @@ class PostEngagementBindingTest {
         eventually { grid("author").isEmpty() && posts.cachedPost("p1") == null }
         assertThat(posts.cachedPost("p9")).isNotNull()
         assertThat(grid("someone").single()).isEqualTo(other)
+    }
+
+    @Test
+    fun `the saved posts cache takes the live counts like every other copy`() = runTest {
+        seeded()
+
+        liked.emit(SocketPostLikedData(postId = "p1", userId = "me", likesCount = 9))
+        commentAdded.emit(SocketCommentAddedData(postId = "p1", comment = ApiPostComment(id = "k1"), commentCount = 6))
+
+        eventually { saved().first { it.id == "p1" }.let { it.likeCount == 9 && it.isLikedByMe == true && it.commentCount == 6 } }
+        assertThat(saved().first { it.id == "p9" }).isEqualTo(other)
+    }
+
+    @Test
+    fun `a post deleted elsewhere leaves the saved posts cache, the cursor kept`() = runTest {
+        seeded()
+
+        deleted.emit(SocketPostDeletedData(postId = "p1"))
+
+        eventually { saved().map { it.id } == listOf("p9") }
+        assertThat(userPosts.cachedBookmarks().valueOrNull!!.nextCursor).isEqualTo("c1")
+    }
+
+    @Test
+    fun `a post unsaved on another device leaves the saved posts cache but stays in the feed with its heart off`() = runTest {
+        seeded()
+
+        bookmarked.emit(SocketPostBookmarkedData(postId = "p1", bookmarked = false, bookmarkCount = 0))
+
+        eventually { saved().map { it.id } == listOf("p9") && posts.cachedPost("p1")?.isBookmarkedByMe == false }
+        assertThat(grid("author").single().isBookmarkedByMe).isFalse()
+    }
+
+    @Test
+    fun `a post saved live takes the served bookmark count in every copy`() = runTest {
+        seeded()
+
+        bookmarked.emit(SocketPostBookmarkedData(postId = "p1", bookmarked = true, bookmarkCount = 4))
+
+        eventually { grid("author").single().let { it.isBookmarkedByMe == true && it.bookmarkCount == 4 } && posts.cachedPost("p1")?.isBookmarkedByMe == true }
+        assertThat(saved().map { it.id }).containsExactly("p1", "p9")
     }
 }
