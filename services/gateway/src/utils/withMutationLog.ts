@@ -90,7 +90,7 @@ export type ReplayCost =
  *                relisible, et l'op ne peut pas être rejouée sans diverger.
  */
 export type MutationOutcome<T> =
-  | { readonly status: 'applied'; readonly result: T }
+  | { readonly status: 'applied'; readonly result: T; readonly resumed?: boolean }
   | { readonly status: 'replayed'; readonly result: T }
   | { readonly status: 'gone'; readonly resultId: string | null };
 
@@ -155,8 +155,10 @@ export async function withMutationOutcome<T>(
 
   const svc: MutationLogService = fastify.mutationLogService;
 
+  let resumed = false;
   try {
-    return { status: 'applied', result: await svc.recordOrReturn({ userId, clientMutationId: cmid, kind, op }) };
+    const result = await svc.recordOrReturn({ userId, clientMutationId: cmid, kind, op, onReclaimed: () => { resumed = true; } });
+    return resumed ? { status: 'applied', result, resumed } : { status: 'applied', result };
   } catch (err) {
     if (!(err instanceof MutationLogDuplicate)) throw err;
 
@@ -206,10 +208,14 @@ export async function withMutationLog<T>(
  */
 export async function withMutationVerdict<T>(
   args: WithMutationLogArgs<T>
-): Promise<{ readonly result: T & { id: string }; readonly replayed: boolean }> {
+): Promise<{ readonly result: T & { id: string }; readonly replayed: boolean; readonly resumed: boolean }> {
   const outcome = await withMutationOutcome(args);
   if (outcome.status === 'gone') {
     throw new MutationResultGone(outcome.resultId, args.kind);
   }
-  return { result: outcome.result, replayed: outcome.status === 'replayed' };
+  return {
+    result: outcome.result,
+    replayed: outcome.status === 'replayed',
+    resumed: outcome.status === 'applied' && outcome.resumed === true,
+  };
 }

@@ -54,7 +54,7 @@ jest.mock('../../../../routes/auth/types', () => ({
 }));
 
 import { updateUserAvatar, updateUserBanner, updateUserProfile, updateUsername } from '../../../../routes/users/profile';
-import { ownProfileSnapshotChanged, ownProfileUpdatedPayload } from '../../../../routes/users/own-profile-sync';
+import { forgetOwnProfileDiffused, ownProfileSnapshotChanged, ownProfileUpdatedPayload } from '../../../../routes/users/own-profile-sync';
 import { MutationLogDuplicate } from '../../../../services/MutationLogService';
 
 const ALICE = '507f1f77bcf86cd799439011';
@@ -93,6 +93,7 @@ type Live = { readonly http: HTTPServer; readonly io: SocketIOServer; readonly c
 const opened: Live[] = [];
 
 afterEach(() => {
+  forgetOwnProfileDiffused();
   opened.splice(0).forEach(({ http, io, clients }) => {
     clients.forEach((client) => client.close());
     void io.close();

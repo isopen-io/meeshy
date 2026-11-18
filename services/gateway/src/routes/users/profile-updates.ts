@@ -44,7 +44,7 @@ import { refreshParticipantNameSnapshots } from '../../services/participantNameS
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
-import { announceOwnProfileUpdated, identityImageChanged, OWN_PROFILE_SELECT, ownProfileFieldChanged, ownProfileSnapshotChanged, PUBLIC_NAME_FIELDS } from './own-profile-sync';
+import { announceOwnProfileUpdated, identityImageChanged, OWN_PROFILE_SELECT, ownProfileFieldChanged, ownProfileFieldDivergedFromDiffused, ownProfileSnapshotChanged, PUBLIC_NAME_FIELDS } from './own-profile-sync';
 import type { OwnProfileField } from '@meeshy/shared/types/own-profile-sync';
 
 /**
@@ -255,7 +255,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // sont ce qu'une reprise après un 500 doit refaire — elles convergent,
       // `user:updated` rediffuse un état ABSOLU sans crédit ni notification
       // (suivi #9623), et les crédits de profil se paient une fois par compte.
-      const { result: updatedUser, replayed } = await withMutationVerdict({
+      const { result: updatedUser, replayed, resumed } = await withMutationVerdict({
         request,
         fastify,
         userId: userId!,
@@ -280,10 +280,16 @@ export async function updateUserProfile(fastify: FastifyInstance) {
           data: updateData,
           include: AUTO_TRANSLATE_PREFERENCE_SELECT,
         }),
-        onDuplicate: (resultId) => fastify.prisma.user.findUnique({
-          where: { id: resultId },
-          include: AUTO_TRANSLATE_PREFERENCE_SELECT,
-        }),
+        // Le journal est indexé par (compte, cmid) SANS le type de geste : un
+        // cmid emprunté à un blocage désigne l'id de la CIBLE. Seule MA ligne se
+        // relit ; toute autre valeur se tient pour illisible, et la route
+        // convergente rejoue alors son écriture (#19298, audit tour 2).
+        onDuplicate: (resultId) => resultId !== userId
+          ? Promise.resolve(null)
+          : fastify.prisma.user.findUnique({
+            where: { id: resultId },
+            include: AUTO_TRANSLATE_PREFERENCE_SELECT,
+          }),
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
@@ -297,14 +303,20 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // voisines (traduction automatique, profil vocal) : l'une d'elles peut
       // lever et répondre 500 sur une ligne DÉJÀ écrite, et la reprise du client,
       // qui ne change plus rien, ne diffuserait plus.
-      if (!replayed && ownProfileSnapshotChanged(current, updatedUser)) {
+      // Une REPRISE de réservation abandonnée n'est pas un rejeu : l'écriture a
+      // pu avoir lieu avant la mort de l'écrivain sans que rien ne parte, et la
+      // ligne lue avant elle porte déjà la nouvelle valeur — rien ne prouve donc
+      // un « inchangé ». Elle rediffuse l'état absolu, comme un rejeu.
+      if (!replayed && (resumed || ownProfileSnapshotChanged(current, updatedUser, userId!))) {
         announceOwnProfileUpdated(fastify, updatedUser);
       }
 
       // Ce qui part aux PARTENAIRES ne part que si la valeur a changé (#19298),
       // sauf sur un rejeu : la ligne lue avant lui est déjà l'écrite.
       const propagates = (field: OwnProfileField): boolean =>
-        replayed || ownProfileFieldChanged(current, updatedUser, field);
+        replayed || resumed
+        || ownProfileFieldChanged(current, updatedUser, field)
+        || ownProfileFieldDivergedFromDiffused(userId!, updatedUser, field);
 
       // Realtime propagation to conversation partners (tasks/socketio-events-cleanup.md #6).
       // Only public-facing fields matter to other users' cached profile view.
@@ -527,7 +539,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
       // #19298 — une écriture identique à la valeur stockée ne diffuse rien.
-      if (current && identityImageChanged(current.avatar, updatedUser.avatar)) {
+      if (current && (identityImageChanged(current.avatar, updatedUser.avatar) || ownProfileFieldDivergedFromDiffused(userId!, updatedUser, 'avatar'))) {
         fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { avatar: updatedUser.avatar } })
           .catch((err: unknown) => logError(fastify.log, '[AVATAR_UPDATE] emitUserUpdated failed', err));
         announceOwnProfileUpdated(fastify, updatedUser);
@@ -627,7 +639,7 @@ export async function updateUserBanner(fastify: FastifyInstance) {
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
       // #19298 — une écriture identique à la valeur stockée ne diffuse rien.
-      if (current && identityImageChanged(current.banner, updatedUser.banner)) {
+      if (current && (identityImageChanged(current.banner, updatedUser.banner) || ownProfileFieldDivergedFromDiffused(userId!, updatedUser, 'banner'))) {
         fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { banner: updatedUser.banner } })
           .catch((err: unknown) => logError(fastify.log, '[BANNER_UPDATE] emitUserUpdated failed', err));
         announceOwnProfileUpdated(fastify, updatedUser);

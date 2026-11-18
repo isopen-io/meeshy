@@ -70,8 +70,44 @@ type OwnProfileColumns = { readonly [Field in OwnProfileField]?: string | null }
  * et une langue se réécrit à l'identique. Sans ligne lue avant, rien ne prouve un
  * changement : rien ne part.
  */
-export function ownProfileSnapshotChanged(before: OwnProfileColumns | null | undefined, after: OwnProfileColumns): boolean {
-  return OWN_PROFILE_FIELDS.some((field) => ownProfileFieldChanged(before, after, field));
+export function ownProfileSnapshotChanged(before: OwnProfileColumns | null | undefined, after: OwnProfileColumns, userId?: string): boolean {
+  return OWN_PROFILE_FIELDS.some((field) =>
+    ownProfileFieldChanged(before, after, field)
+    || (userId !== undefined && ownProfileFieldDivergedFromDiffused(userId, after, field)));
+}
+
+/**
+ * Le DERNIER état diffusé par ce processus, par compte (G3, #19298). La lecture
+ * préalable n'est pas atomique avec l'écriture : deux écritures qui se croisent
+ * laissent la seconde comparer à un état périmé et se taire, alors que la base
+ * porte désormais SA valeur et que les appareils portent celle de la première.
+ * Comparer aussi à ce qui est PARTI referme ce croisement dans un processus ;
+ * entre processus, la borne reste la lecture préalable. Un compte absent de la
+ * table ne prouve rien : il ne force aucune diffusion. Borné, le plus ancien sort.
+ */
+const DIFFUSED_CAPACITY = 2000;
+const lastDiffused = new Map<string, OwnProfileColumns>();
+
+export function noteOwnProfileDiffused(userId: string, row: OwnProfileColumns): void {
+  const snapshot: Record<string, string | null> = {};
+  for (const field of OWN_PROFILE_FIELDS) snapshot[field] = row[field] ?? null;
+  lastDiffused.delete(userId);
+  lastDiffused.set(userId, snapshot);
+  if (lastDiffused.size > DIFFUSED_CAPACITY) {
+    const oldest = lastDiffused.keys().next().value;
+    if (oldest !== undefined) lastDiffused.delete(oldest);
+  }
+}
+
+export function forgetOwnProfileDiffused(): void {
+  lastDiffused.clear();
+}
+
+/** La valeur écrite s'écarte-t-elle de ce que ce processus a diffusé en dernier ? */
+export function ownProfileFieldDivergedFromDiffused(userId: string, after: OwnProfileColumns, field: OwnProfileField): boolean {
+  const diffused = lastDiffused.get(userId);
+  if (!diffused) return false;
+  return (diffused[field] ?? null) !== (after[field] ?? null);
 }
 
 /** Les quatre composants du nom, qui voyagent en groupe vers les partenaires (`user:updated`). */
@@ -84,6 +120,7 @@ export function ownProfileFieldChanged(before: OwnProfileColumns | null | undefi
 }
 
 /** Une image d'identité (avatar, bannière) a-t-elle CHANGÉ par rapport à la valeur stockée ? */
+
 export function identityImageChanged(before: string | null | undefined, after: string | null | undefined): boolean {
   return (before ?? null) !== (after ?? null);
 }
@@ -121,6 +158,7 @@ export function ownProfileUpdatedPayload(row: OwnProfileRow): ProfileUpdatedEven
  */
 export function announceOwnProfileUpdated(fastify: FastifyInstance, row: OwnProfileRow): boolean {
   try {
+    noteOwnProfileDiffused(row.id, row);
     const payload = ownProfileUpdatedPayload(row);
     if (payload === null) {
       logError(fastify.log, `[PROFILE_SYNC] row does not satisfy the profile:updated contract, nothing sent (userId=${row.id})`);

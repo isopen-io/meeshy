@@ -65,6 +65,12 @@ export interface RecordOrReturnArgs<T> {
    * can refetch it on replay.
    */
   readonly op: () => Promise<T & { id: string }>;
+  /**
+   * Appelée quand cette requête REPREND une réservation abandonnée : un
+   * écrivain est mort entre la réservation et sa conclusion, et son effet a
+   * pu avoir lieu sans que rien en aval ne soit parti.
+   */
+  readonly onReclaimed?: () => void;
 }
 
 /**
@@ -171,7 +177,7 @@ export class MutationLogService {
   async recordOrReturn<T>(
     args: RecordOrReturnArgs<T>
   ): Promise<T & { id: string }> {
-    const { userId, clientMutationId, kind, op } = args;
+    const { userId, clientMutationId, kind, op, onReclaimed } = args;
     const where = { userId_clientMutationId: { userId, clientMutationId } };
     const select = { resultId: true, kind: true, createdAt: true } as const;
 
@@ -181,11 +187,12 @@ export class MutationLogService {
       if (verdict === 'inFlight') throw new MutationInFlight(existing.kind);
       if (verdict === 'concluded') throw new MutationLogDuplicate(existing.resultId, existing.kind);
       await this.reclaim(where, kind);
+      onReclaimed?.();
     } else {
       // RÉSERVATION. L'index unique `(userId, clientMutationId)` est l'arbitre :
       // de deux requêtes concurrentes, une seule sort d'ici, l'autre part sur le
       // chemin doublon. C'est ce que la lecture seule ne pouvait pas garantir.
-      const reserved = await this.reserve({ userId, clientMutationId, kind, where, select });
+      const reserved = await this.reserve({ userId, clientMutationId, kind, where, select, onReclaimed });
       if (!reserved) {
         const winner = await this.prisma.mutationLog.findUnique({ where, select });
         if (winner && MutationLogService.verdict(winner) === 'inFlight') throw new MutationInFlight(winner.kind);
@@ -218,6 +225,7 @@ export class MutationLogService {
     kind: string;
     where: { userId_clientMutationId: { userId: string; clientMutationId: string } };
     select: { resultId: true; kind: true; createdAt: true };
+    onReclaimed?: () => void;
   }): Promise<boolean> {
     try {
       await this.prisma.mutationLog.create({
@@ -236,6 +244,7 @@ export class MutationLogService {
       const row = await this.prisma.mutationLog.findUnique({ where: args.where, select: args.select });
       if (row && MutationLogService.verdict(row) === 'abandoned') {
         await this.reclaim(args.where, args.kind);
+        args.onReclaimed?.();
         return true;
       }
       return false;

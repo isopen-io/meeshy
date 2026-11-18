@@ -9,7 +9,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
@@ -52,6 +52,7 @@ jest.mock('../../../../routes/users/presence-gate', () => ({
   },
 }));
 
+import { forgetOwnProfileDiffused } from '../../../../routes/users/own-profile-sync';
 import { getUserById, getUserByUsername, updateUserProfile } from '../../../../routes/users/profile';
 
 const USER_ID = '507f1f77bcf86cd799439011';
@@ -90,6 +91,8 @@ async function patch(payload: Record<string, unknown>, after: Record<string, unk
 }
 
 describe('PATCH /users/me — la couleur d’accent', () => {
+  beforeEach(() => { forgetOwnProfileDiffused(); });
+
   it('écrit une teinte de la liste, canonisée, et la rend au propriétaire', async () => {
     const { res, prisma } = await patch({ profileAccentColor: '#ff6b6b' }, { profileAccentColor: '#FF6B6B' });
     expect(res.statusCode).toBe(200);

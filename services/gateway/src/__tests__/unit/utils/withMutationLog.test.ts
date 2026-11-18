@@ -68,6 +68,7 @@ describe('withMutationLog', () => {
         clientMutationId: cmid,
         kind,
         op: expect.any(Function),
+        onReclaimed: expect.any(Function),
       });
     });
   });
