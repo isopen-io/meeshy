@@ -15,6 +15,7 @@ import {
   noteInactivityActivity,
   refreshInactivityBetween,
   refreshInactivityAudience,
+  refreshInactivityServedOf,
   reconcileInactivityOfAccount,
   sweepInactivity,
   type InactivityPush,
@@ -71,6 +72,8 @@ function monde(options: { readonly role?: string; readonly delai?: number | null
   const retraits: Array<{ emitterId: string; readerId: string }> = [];
   let now = T0;
   let connecte = false;
+  let batterieServie = true;
+  let pendantLaQuestion: (() => Promise<unknown>) | null = null;
   const deps: InactivityRelayDeps = {
     prisma: { ...world.prisma, relationFeatureSetting: settings } as unknown as PrismaClient,
     cache: batteryCacheInMemory(),
@@ -81,6 +84,7 @@ function monde(options: { readonly role?: string; readonly delai?: number | null
     trackedDeviceConnected: async () => connecte,
     askWellness: async (userId) => {
       questions.push(userId);
+      await pendantLaQuestion?.();
     },
     retractWellness: async (userId) => {
       questionsRetirees.push(userId);
@@ -93,7 +97,7 @@ function monde(options: { readonly role?: string; readonly delai?: number | null
       retraits.push(...pairs);
     },
     lastPositionFor: async (_emitterId, readerId) => (readerId === SANG ? { latitude: 48.85, longitude: 2.35, recordedAt: new Date(T0 - 5 * MIN).toISOString() } : null),
-    lastBatteryFor: async (_emitterId, readerId) => (readerId === SANG ? { level: 9, measuredAt: new Date(T0 - 2 * MIN).toISOString() } : null),
+    lastBatteryFor: async (_emitterId, readerId) => (readerId === SANG && batterieServie ? { level: 9, measuredAt: new Date(T0 - 2 * MIN).toISOString() } : null),
   };
   const actif = (sessionId = 's1', anyDevice = false) => noteInactivityActivity(deps, { userId: PERSONNE, sessionId, anyDevice });
   const balayer = () => sweepInactivity(deps);
@@ -122,6 +126,12 @@ function monde(options: { readonly role?: string; readonly delai?: number | null
     alerter,
     connecter: (value: boolean) => {
       connecte = value;
+    },
+    retirerBatterie: () => {
+      batterieServie = false;
+    },
+    pendantLaQuestion: (action: (() => Promise<unknown>) | null) => {
+      pendantLaQuestion = action;
     },
     poser: (otherId: string, inactivityShared: boolean) => {
       const row = settings.rows.find((r) => r.ownerId === PERSONNE && r.otherId === otherId);
@@ -155,6 +165,16 @@ describe('« Tout va bien ? » après le délai sans activité', () => {
     expect(m.questions).toEqual([PERSONNE]);
     expect(m.emissions).toEqual([]);
     expect(m.pushes).toEqual([]);
+  });
+
+  it('une activité arrivée pendant l\'envoi de la question la retire aussitôt', async () => {
+    const m = monde();
+    await m.actif();
+    m.avancer(12 * HOUR);
+    m.pendantLaQuestion(() => m.actif());
+    await m.balayer();
+    expect(m.questions).toEqual([PERSONNE]);
+    expect(m.questionsRetirees).toContain(PERSONNE);
   });
 
   it('suit le délai choisi (6 h)', async () => {
@@ -334,6 +354,18 @@ describe('le rattrapage et la perte d\'accès', () => {
     m.avancer(30 * HOUR);
     await m.balayer();
     expect(m.questions).toEqual([PERSONNE]);
+  });
+
+  it('une batterie qu\'on ne lui partage plus disparaît de l\'alerte du Sang, sans nouvelle annonce', async () => {
+    const m = monde();
+    await m.alerter();
+    m.retirerBatterie();
+    await refreshInactivityServedOf(m.deps, PERSONNE);
+    const dernier = m.vers(SANG).at(-1);
+    expect(dernier?.event).toBe(SERVER_EVENTS.INACTIVITY_ALERT);
+    expect(dernier?.data).not.toHaveProperty('announcement');
+    expect(dernier?.data.state).not.toHaveProperty('lastBattery');
+    expect(dernier?.data.state).toHaveProperty('lastPosition');
   });
 
   it('un Sang désactivé perd l\'alerte', async () => {

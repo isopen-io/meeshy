@@ -1,7 +1,7 @@
 /**
  * LES NOTIFICATIONS DE L'INACTIVITÉ (#18738) — « Tout va bien ? » à la personne, l'alerte et le
- * retour à un Sang, cadrés dans la langue du destinataire. La batterie n'est dans le corps que si
- * l'état servi la porte ; la position n'est JAMAIS dans le texte.
+ * retour à un Sang, cadrés dans la langue du destinataire. Ni la batterie ni la position ne sont
+ * JAMAIS dans le texte.
  *
  * @jest-environment node
  */
@@ -76,10 +76,11 @@ describe('l\'alerte et le retour à un Sang', () => {
     expect(m.replaced).toEqual([{ emitterId: PERSONNE, readerId: SANG }]);
   });
 
-  it('ajoute la dernière batterie quand l\'état servi la porte', async () => {
+  it('ne range jamais la batterie dans le texte, même quand l\'état servi la porte', async () => {
     const m = monde({ systemLanguage: 'en' });
     await m.push({ readerId: SANG, emitterId: PERSONNE, announcement: alerte, state: etat({ lastBattery: { level: 9, measuredAt: DEPUIS } }) });
-    expect(m.created[0]?.content).toBe('No activity for 13 h — last battery 9%');
+    expect(m.created[0]?.content).toBe('No activity for 13 h');
+    expect(JSON.stringify(m.created[0])).not.toContain('9%');
   });
 
   it('le retour dit que la personne va bien', async () => {

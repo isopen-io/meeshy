@@ -14,7 +14,7 @@ import { bloodLocationDepsOf } from '../bloodLocation/bloodLocationDeps';
 import { bloodLastPointFor } from '../bloodLocation/bloodLocationMap';
 import { isTrackedPhone, retractPairNotifications } from '../phoneReachability/phoneReachabilityDeps';
 import { inactivityPusherOf, wellnessAskerOf } from './inactivityPush';
-import type { InactivityPair, InactivityRelayDeps } from './inactivityRelay';
+import { refreshInactivityServedOf, type InactivityPair, type InactivityRelayDeps } from './inactivityRelay';
 
 export function inactivityRelayDepsOf(params: { readonly prisma: PrismaClient; readonly io: ServerEmitIO | undefined }): InactivityRelayDeps {
   const battery = batteryRelayDepsOf(params);
@@ -40,4 +40,20 @@ export function inactivityRelayDepsOf(params: { readonly prisma: PrismaClient; r
     },
     lastBatteryFor: (emitterId, readerId) => batteryLastReadingFor(battery, { readerId, emitterId }),
   };
+}
+
+/**
+ * Un partage qui accompagne l'alerte vient de changer (fantôme ou consentement de position,
+ * historique effacé, batterie coupée) : l'alerte en cours se re-juge chez chaque Sang. Best-effort,
+ * jamais levant : la route qui l'appelle a déjà fait son travail.
+ */
+export async function refreshInactivityServedAfter(
+  params: { readonly prisma: PrismaClient; readonly io: ServerEmitIO | undefined; readonly report: (error: unknown) => void },
+  emitterId: string,
+): Promise<void> {
+  try {
+    await refreshInactivityServedOf(inactivityRelayDepsOf(params), emitterId);
+  } catch (error) {
+    params.report(error);
+  }
 }

@@ -17,6 +17,7 @@
  * chacune est jugée par sa propre loi, lecteur par lecteur. Rien ne part vers un lecteur que la loi
  * refuse, pas même un effacement. JAMAIS un message de conversation.
  */
+import { INACTIVITY_CHECK_CONFIG, INACTIVITY_DELAY_HOURS } from '@meeshy/shared/types/inactivity-check';
 import type {
   InactivityAlertState,
   InactivityAnnouncement,
@@ -204,24 +205,77 @@ async function tickLocked(deps: InactivityRelayDeps, userId: string): Promise<Ti
   if (due.ask) {
     await storeInactivity(deps.cache, userId, { ...due.state, alertedTo: [] });
     const inactiveSince = previous.lastActivityAt ?? now;
-    return { alerted: false, fanOut: () => deps.askWellness(userId, { inactiveSince, delayHours }).catch(() => undefined) };
+    return { alerted: false, fanOut: () => askThenVerify(deps, userId, { inactiveSince, delayHours, askedAt: due.state.askedAt }) };
   }
   const announcement = due.announcement;
   if (!announcement) return IDLE;
   const readers = [...audience];
   const stored: StoredInactivity = { ...due.state, alertedAt: announcement.at, alertedTo: readers };
   await storeInactivity(deps.cache, userId, stored);
-  return {
-    alerted: true,
-    fanOut: async () => {
-      await Promise.all(readers.map(async (readerId) => {
-        const state = await servedStateFor(deps, userId, readerId, stored);
-        if (!state) return;
-        emitAlert(deps, readerId, state, announcement);
-        await deps.push({ readerId, emitterId: userId, announcement, state }).catch(() => false);
-      }));
-    },
-  };
+  return { alerted: true, fanOut: () => fanOutAlert(deps, userId, stored, announcement) };
+}
+
+/** L'alerte rangée est-elle encore celle-ci ? Un retour, une coupure ou une nouvelle alerte la périment. */
+const stillAlerted = (current: StoredInactivity | null, alertedAt: string | null | undefined): boolean =>
+  current !== null && current.phase === 'alerted' && current.alertedAt === alertedAt;
+
+/**
+ * La question part HORS verrou : une activité arrivée entre-temps l'a rendue périmée, et la
+ * notification posée trop tard se retire aussitôt — la personne ne garde pas une question à laquelle
+ * elle a déjà répondu.
+ */
+async function askThenVerify(deps: InactivityRelayDeps, userId: string, ask: { readonly inactiveSince: string; readonly delayHours: number; readonly askedAt: string | null }): Promise<void> {
+  if ((await readInactivity(deps.cache, userId))?.askedAt !== ask.askedAt) return;
+  await deps.askWellness(userId, ask).catch(() => undefined);
+  const current = await readInactivity(deps.cache, userId);
+  if (current?.phase !== 'asked' || current.askedAt !== ask.askedAt) await deps.retractWellness(userId).catch(() => undefined);
+}
+
+/**
+ * L'éventail de l'alerte, HORS verrou (il lit la position et la batterie de chaque Sang). Il ne part
+ * que si l'alerte est encore la sienne ; et si un « Je vais bien », une coupure ou une perte d'accès
+ * est arrivé PENDANT, le dernier mot chez chaque Sang atteint est corrigé : le retour s'il a répondu,
+ * l'effacement et le retrait de la notification sinon. Aucune fausse alerte ne survit à la réponse.
+ */
+async function fanOutAlert(deps: InactivityRelayDeps, userId: string, stored: StoredInactivity, announcement: InactivityAnnouncement): Promise<void> {
+  const served = await Promise.all(stored.alertedTo.map(async (readerId) => [readerId, await servedStateFor(deps, userId, readerId, stored)] as const));
+  const before = await readInactivity(deps.cache, userId);
+  if (!stillAlerted(before, stored.alertedAt)) return;
+  const delivered = await Promise.all(served.map(async ([readerId, state]) => {
+    if (!state || !before?.alertedTo.includes(readerId)) return null;
+    emitAlert(deps, readerId, state, announcement);
+    await deps.push({ readerId, emitterId: userId, announcement, state }).catch(() => false);
+    return readerId;
+  }));
+  await correctAfterAlert(deps, userId, stored, delivered.filter((id): id is string => id !== null));
+}
+
+async function correctAfterAlert(deps: InactivityRelayDeps, userId: string, stored: StoredInactivity, delivered: readonly string[]): Promise<void> {
+  if (delivered.length === 0) return;
+  const current = await readInactivity(deps.cache, userId);
+  if (stillAlerted(current, stored.alertedAt)) {
+    const departed = delivered.filter((id) => !current?.alertedTo.includes(id));
+    departed.forEach((readerId) => emitCleared(deps, readerId, userId));
+    await retract(deps, departed.map((readerId) => ({ emitterId: userId, readerId })));
+    return;
+  }
+  const answeredAt = current?.phase !== 'alerted' ? current?.lastActivityAt ?? null : null;
+  if (answeredAt && stored.lastActivityAt && answeredAt !== stored.lastActivityAt) {
+    const responded: InactivityAnnouncement = { kind: 'responded', inactiveSince: stored.lastActivityAt, at: answeredAt };
+    const audience = await audienceOf(deps, userId);
+    await Promise.all(delivered.map(async (readerId) => {
+      if (!audience.has(readerId)) {
+        emitCleared(deps, readerId, userId);
+        await retract(deps, [{ emitterId: userId, readerId }]);
+        return;
+      }
+      emitCleared(deps, readerId, userId, responded);
+      await deps.push({ readerId, emitterId: userId, announcement: responded }).catch(() => false);
+    }));
+    return;
+  }
+  delivered.forEach((readerId) => emitCleared(deps, readerId, userId));
+  await retract(deps, delivered.map((readerId) => ({ emitterId: userId, readerId })));
 }
 
 /**
@@ -230,12 +284,34 @@ async function tickLocked(deps: InactivityRelayDeps, userId: string): Promise<Ti
  */
 export async function sweepInactivity(deps: InactivityRelayDeps): Promise<number> {
   const users = await watchedInactivity(deps.cache);
-  const results = await Promise.all(users.map(async (userId) => {
-    const step = await withInactivityLock(deps.cache, userId, () => tickLocked(deps, userId));
-    await step.fanOut?.();
-    return step.alerted;
-  }));
-  return results.filter(Boolean).length;
+  const alerted: boolean[] = [];
+  for (let start = 0; start < users.length; start += SWEEP_CONCURRENCY) {
+    const batch = await Promise.all(users.slice(start, start + SWEEP_CONCURRENCY).map(async (userId) => {
+      if (!mayBeDue(await readInactivity(deps.cache, userId), iso(deps))) return false;
+      const step = await withInactivityLock(deps.cache, userId, () => tickLocked(deps, userId));
+      await step.fanOut?.();
+      return step.alerted;
+    }));
+    alerted.push(...batch);
+  }
+  return alerted.filter(Boolean).length;
+}
+
+/** Les personnes balayées en même temps : la passe tient sa minute sans saturer la base. */
+const SWEEP_CONCURRENCY = 50;
+const MIN_DELAY_MINUTES = Math.min(...INACTIVITY_DELAY_HOURS) * 60;
+
+/**
+ * Un pas PEUT-il être dû ? Jugé sur l'état scellé seul, sans base ni verrou, avec le plus court des
+ * délais : la grande majorité des personnes surveillées sort ici, à chaque minute. Un état illisible
+ * ou absent passe au pas verrouillé, qui sait l'oublier.
+ */
+function mayBeDue(record: StoredInactivity | null, now: string): boolean {
+  if (record === null || record.lastActivityAt === null) return true;
+  if (record.phase === 'alerted') return false;
+  const since = (from: string): number => (Date.parse(now) - Date.parse(from)) / 60_000;
+  if (record.phase === 'asked') return record.askedAt === null || since(record.askedAt) >= INACTIVITY_CHECK_CONFIG.answerWindowMinutes;
+  return since(record.lastActivityAt) >= MIN_DELAY_MINUTES;
 }
 
 /**
@@ -269,6 +345,7 @@ export async function refreshInactivityBetween(deps: InactivityRelayDeps, params
         await storeInactivity(deps.cache, emitterId, { ...stored, alertedTo: [...stored.alertedTo, readerId] });
         return stored;
       }
+      if (after && before) return stored;
       if (!after && before) {
         emitCleared(deps, readerId, emitterId);
         await storeInactivity(deps.cache, emitterId, { ...stored, alertedTo: stored.alertedTo.filter((id) => id !== readerId) });
@@ -278,6 +355,21 @@ export async function refreshInactivityBetween(deps: InactivityRelayDeps, params
     const state = gained ? await servedStateFor(deps, emitterId, readerId, gained) : null;
     if (state) emitAlert(deps, readerId, state);
   }
+}
+
+/**
+ * Ce qui accompagne l'alerte a changé (fantôme de position, consentement de position ou de batterie,
+ * historique effacé) : chaque Sang qui la voit reçoit l'état re-jugé — une position ou une batterie
+ * qu'on ne lui partage plus disparaît de son écran, sans nouvelle annonce.
+ */
+export async function refreshInactivityServedOf(deps: InactivityRelayDeps, emitterId: string): Promise<void> {
+  const stored = await readInactivity(deps.cache, emitterId);
+  if (!alertedAtOf(stored) || !stored || stored.alertedTo.length === 0) return;
+  const audience = await audienceOf(deps, emitterId);
+  await Promise.all(stored.alertedTo.filter((id) => audience.has(id)).map(async (readerId) => {
+    const state = await servedStateFor(deps, emitterId, readerId, stored);
+    if (state) emitAlert(deps, readerId, state);
+  }));
 }
 
 /**

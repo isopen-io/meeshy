@@ -5,6 +5,7 @@
  * {@link refreshSharedLocationAfter} : un échec n'arrête jamais le geste, il est
  * seulement journalisé (sans charge).
  */
+import { refreshInactivityServedAfter } from '../inactivityCheck/inactivityDeps';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../CacheStore';
 import { getPushNotificationService } from '../PushNotificationService';
@@ -153,5 +154,8 @@ export async function exportSharedLocationEndsOf(userId: string, report: (error:
  * lèvent jamais après l'écriture du compte (`setLocationGhost`).
  */
 export async function setLocationGhostAfter(params: RefreshParams, userId: string, ghost: boolean): Promise<LocationGhostState> {
-  return setLocationGhost({ db: params.prisma, relay: sharedLocationRelayDepsOf(params), report: params.report }, userId, ghost);
+  const state = await setLocationGhost({ db: params.prisma, relay: sharedLocationRelayDepsOf(params), report: params.report }, userId, ghost);
+  // #18738 — la dernière position servie dans une alerte d'inactivité suit le fantôme.
+  await refreshInactivityServedAfter(params, userId);
+  return state;
 }

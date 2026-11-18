@@ -7,6 +7,8 @@ import {
   updateBloodLocationSettings,
 } from '../../services/bloodLocation/bloodLocationService';
 import { bloodLocationDepsOf } from '../../services/bloodLocation/bloodLocationDeps';
+import { refreshInactivityServedAfter } from '../../services/inactivityCheck/inactivityDeps';
+import { relationIoOf } from '../../socketio/relationEvents';
 import { setLocationGhostAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { logError } from '../../utils/logger';
@@ -51,7 +53,9 @@ export default async function bloodLocationMeRoutes(fastify: FastifyInstance): P
     schema: { description: 'Erase my whole Blood location history.', tags: ['me'], summary: 'Erase my location history', response: { 200: sink, ...errorResponses }, security: [{ bearerAuth: [] }] },
   }, async (request, reply) => {
     try {
-      return sendSuccess(reply, await eraseBloodLocationHistory(depsOf(), request.user!.userId));
+      const erased = await eraseBloodLocationHistory(depsOf(), request.user!.userId);
+      await refreshInactivityServedAfter({ prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Inactivity not refreshed after history erase:', error) }, request.user!.userId);
+      return sendSuccess(reply, erased);
     } catch (error) {
       logError(fastify.log, 'Blood location erase error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
@@ -84,7 +88,9 @@ export default async function bloodLocationMeRoutes(fastify: FastifyInstance): P
         return sendSuccess(reply, { ok: true });
       }
       const result = await updateBloodLocationSettings(depsOf(), request.user!.userId, { ...parsed.data, ...(parsed.data.userId ? { userId: parsed.data.userId.toLowerCase() } : {}) });
-      return result.ok ? sendSuccess(reply, result) : sendBadRequest(reply, 'Réglage refusé');
+      if (!result.ok) return sendBadRequest(reply, 'Réglage refusé');
+      await refreshInactivityServedAfter({ prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Inactivity not refreshed after location settings:', error) }, request.user!.userId);
+      return sendSuccess(reply, result);
     } catch (error) {
       logError(fastify.log, 'Blood location settings error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

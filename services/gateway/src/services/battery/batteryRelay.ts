@@ -362,14 +362,13 @@ export async function batteryStateFor(deps: BatteryRelayDeps, params: { readonly
 }
 
 /**
- * Le DERNIER RELEVÉ de `emitterId` tel que `readerId` le reçoit déjà (hors épisode compris) — pour
- * l'alerte d'inactivité (#18738). La loi est jugée AVANT la lecture ; `null` quand elle refuse.
+ * La batterie de `emitterId` telle que `readerId` la reçoit DÉJÀ — pour l'alerte d'inactivité
+ * (#18738). C'est la règle de `batteryStateFor`, et elle seule : hors épisode (batterie normale),
+ * aucun niveau n'est servi, alerte comprise.
  */
 export async function batteryLastReadingFor(deps: BatteryRelayDeps, params: { readonly readerId: string; readonly emitterId: string }): Promise<{ readonly level: number; readonly measuredAt: string } | null> {
-  const access = await accessAmong(deps, { subjectId: params.emitterId, otherIds: [params.readerId], subjectIs: 'target', now: new Date(deps.now()) });
-  if (!isServed(access.get(params.readerId))) return null;
-  const reading = (await readBatteryRecord(deps.cache, params.emitterId))?.episode.lastReading ?? null;
-  return reading ? { level: reading.level, measuredAt: reading.measuredAt } : null;
+  const state = await batteryStateFor(deps, params);
+  return state ? { level: state.level, measuredAt: state.measuredAt } : null;
 }
 
 /** Ce que chaque sens d'une paire voit MAINTENANT (`émetteur>lecteur`), pour les seuls épisodes en cours. */

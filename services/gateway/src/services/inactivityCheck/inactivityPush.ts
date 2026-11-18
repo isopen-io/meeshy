@@ -4,8 +4,9 @@
  * - `wellness_check`, à la personne : « Tout va bien ? », visible, que l'action « Je vais bien » ou
  *   le toucher referment (`POST /me/wellness/ok`) ;
  * - `inactivity_alert`, à un Sang : « <nom> n'a pas répondu à « Tout va bien ? » », le corps dit
- *   depuis combien d'heures, et la dernière batterie seulement quand elle lui est déjà partagée ; la
- *   position n'est jamais dans le texte d'une bannière — l'app la lit dans l'état servi.
+ *   depuis combien d'heures. Ni la position ni la batterie ne sont dans le texte : il se range dans
+ *   la notification (72 h) et ne se rétracte pas quand un partage est retiré — l'app les lit dans
+ *   l'état servi, re-jugé à chaque changement.
  *
  * Titre et corps CADRÉS dans la langue du destinataire (`utils/recipient-language.ts`). AUCUN
  * HISTORIQUE : chaque annonce retire d'abord la précédente de la même paire (`replacePrevious`).
@@ -30,11 +31,7 @@ const hoursBetween = (from: string, to: string): number => Math.max(1, Math.roun
 
 function alertBody(lang: string, push: InactivityPush): string {
   if (push.announcement.kind === 'responded') return notificationString(lang, 'inactivity.respondedBody');
-  const count = hoursBetween(push.announcement.inactiveSince, push.announcement.at);
-  const battery = push.state?.lastBattery;
-  return battery
-    ? notificationString(lang, 'inactivity.alertBatteryBody', { count, value: String(battery.level) })
-    : notificationString(lang, 'inactivity.alertBody', { count });
+  return notificationString(lang, 'inactivity.alertBody', { count: hoursBetween(push.announcement.inactiveSince, push.announcement.at) });
 }
 
 /** « Tout va bien ? » — à la personne elle-même. */
