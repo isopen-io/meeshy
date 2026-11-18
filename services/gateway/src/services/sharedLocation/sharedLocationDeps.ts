@@ -7,7 +7,15 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../CacheStore';
-import { redisSharedLocationKv, UNAVAILABLE_SHARED_LOCATION_KV, type SharedLocationKv } from './sharedLocationKv';
+import { getSharedNotificationService } from '../notifications/notification-service-registry';
+import { sharedLocationNoticesOf } from './sharedLocationNotices';
+import type { SharedLocationRequestDeps } from './sharedLocationRequest';
+import type { LocationGhostState } from '@meeshy/shared/types/shared-location';
+import { setLocationGhost } from './locationGhost';
+import { exportSharedLocationEnds, type SharedLocationEnd } from './sharedLocationEnds';
+import { lazySharedLocationCache as lazyCache } from './sharedLocationLazyCache';
+import { refreshBatteryForReaders } from '../battery/batteryDeps';
+import { enhancedLogger } from '../../utils/logger-enhanced';
 import {
   captureSharedLocationAccess,
   endSharedLocationOfAccount,
@@ -17,34 +25,43 @@ import {
   type SharedLocationRelayDeps,
 } from './sharedLocationRelay';
 
-/**
- * Le magasin STRICT du processus, résolu à l'usage : brancher une socket n'ouvre aucune
- * connexion. Sans client Redis, chaque opération échoue — jamais de repli mémoire, qui
- * dirait « arrêté » à un seul processus pendant qu'un autre continue de diffuser.
- */
-const kv = (): SharedLocationKv => {
-  const client = getCacheStore().getNativeClient();
-  return client ? redisSharedLocationKv(client) : UNAVAILABLE_SHARED_LOCATION_KV;
-};
+const logger = enhancedLogger.child({ module: 'SharedLocationDeps' });
 
-const lazyCache: SharedLocationRelayDeps['cache'] = {
-  get: (key) => kv().get(key),
-  mget: (keys) => kv().mget(keys),
-  set: (key, value, ttlSeconds) => kv().set(key, value, ttlSeconds),
-  del: (key) => kv().del(key),
-  expire: (key, ttlSeconds) => kv().expire(key, ttlSeconds),
-  claim: (keys, args) => kv().claim(keys, args),
-  setIfCurrent: (keys, args) => kv().setIfCurrent(keys, args),
-  advance: (keys) => kv().advance(keys),
-  retiring: (key) => kv().retiring(key),
-  retired: (key, session) => kv().retired(key, session),
-  markSeen: (key, members, ttlSeconds) => kv().markSeen(key, members, ttlSeconds),
-  seenAmong: (key, members) => kv().seenAmong(key, members),
-  unmarkSeen: (key, members) => kv().unmarkSeen(key, members),
-};
+/** Un rejeu de batterie raté se journalise sans charge ; la batterie se recale au relevé suivant. */
+const reportBattery = (error: unknown): void => logger.warn('[shared-location] battery not refreshed', { error: error instanceof Error ? error.message : 'unknown' });
+
+/** Le service de notification est résolu à l'usage : le registre peut se remplir après le câblage des sockets. */
+export const noticesParams = (prisma: PrismaClient) => ({
+  prisma,
+  notifications: getSharedNotificationService() ?? null,
+  claim: (key: string, ttlSeconds: number) => getCacheStore().setnx(key, '1', ttlSeconds),
+  release: (key: string) => getCacheStore().del(key),
+});
 
 export function sharedLocationRelayDepsOf(params: { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined }): SharedLocationRelayDeps {
-  return { prisma: params.prisma, cache: lazyCache, io: params.io, now: () => Date.now() };
+  return {
+    prisma: params.prisma,
+    cache: lazyCache,
+    io: params.io,
+    now: () => Date.now(),
+    notifyStarted: (notices) => sharedLocationNoticesOf(noticesParams(params.prisma)).started(notices),
+    refreshBattery: (emitterId, readerIds) => refreshBatteryForReaders({ ...params, report: reportBattery }, emitterId, readerIds),
+  };
+}
+
+/**
+ * La demande de prolonger ou de refaire un partage (#19204) : le plafond est un `SET NX EX` du
+ * cache partagé (son repli mémoire, en panne, garde le plafond dans le processus) ; la
+ * notification passe par le service résolu à l'usage.
+ */
+export function sharedLocationRequestDepsOf(params: { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined }): SharedLocationRequestDeps {
+  return {
+    prisma: params.prisma,
+    io: params.io,
+    now: () => Date.now(),
+    claim: (key, ttlSeconds) => getCacheStore().setnx(key, '1', ttlSeconds),
+    notify: (notice) => sharedLocationNoticesOf(noticesParams(params.prisma)).requested(notice),
+  };
 }
 
 type RefreshParams = { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined; readonly report: (error: unknown) => void };
@@ -87,4 +104,26 @@ export async function endSharedLocationAfter(params: RefreshParams, accountId: s
   } catch (error) {
     params.report(error);
   }
+}
+
+/**
+ * L'export RGPD (#19202) : les fins de mes partages récents, gardées un jour. Le magasin en
+ * panne rend une liste vide et le signale : l'export ne s'arrête pas pour une donnée éphémère.
+ */
+export async function exportSharedLocationEndsOf(userId: string, report: (error: unknown) => void): Promise<readonly SharedLocationEnd[]> {
+  try {
+    return await exportSharedLocationEnds(lazyCache, userId, Date.now());
+  } catch (error) {
+    report(error);
+    return [];
+  }
+}
+
+/**
+ * Règle le fantôme global (#19203) et y fait suivre le partage temporaire en cours. La sortie
+ * est fail-closed et lève si le partage ne peut pas être retenu ; l'entrée et la batterie ne
+ * lèvent jamais après l'écriture du compte (`setLocationGhost`).
+ */
+export async function setLocationGhostAfter(params: RefreshParams, userId: string, ghost: boolean): Promise<LocationGhostState> {
+  return setLocationGhost({ db: params.prisma, relay: sharedLocationRelayDepsOf(params), report: params.report }, userId, ghost);
 }

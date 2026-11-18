@@ -99,6 +99,9 @@ export const meDevicesByDeviceId = (deviceId: string): string => `/api/v1/users/
 /** PATCH /api/v1/users/me/password */
 export const mePassword = '/api/v1/users/me/password';
 
+/** GET /api/v1/users/me/profile-link/stats */
+export const meProfileLinkStats = '/api/v1/users/me/profile-link/stats';
+
 /** POST · DELETE /api/v1/users/me/push-to-talk-token */
 export const mePushToTalkToken = '/api/v1/users/me/push-to-talk-token';
 

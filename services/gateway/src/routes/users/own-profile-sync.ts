@@ -7,7 +7,7 @@
  * | événement | audience | charge |
  * |---|---|---|
  * | `user:updated` | les PARTENAIRES (`emitUserUpdatedToPartners`) | le profil PUBLIC, filtré par `publicProfileChanges` |
- * | `profile:updated` | MES appareils (`user:<moi>`) | l'instantané PROPRE : langues, nom, photo, bannière |
+ * | `profile:updated` | MES appareils (`user:<moi>`) | l'instantané PROPRE : langues, nom, photo, bannière, accent |
  *
  * La charge propre se compose ICI, champ par champ, depuis la ligne écrite :
  * un appelant qui passerait la ligne `User` entière (`email`, `phoneNumber`,
@@ -26,11 +26,18 @@ import {
   type ProfileUpdatedEventData,
 } from '@meeshy/shared/types/own-profile-sync';
 
+import { servedProfileAccentColor } from '@meeshy/shared/utils/profile-accent';
+
 import { logError } from '../../utils/logger';
 import { broadcastToUser } from '../../utils/socket-broadcast';
 
-/** Ce que la ligne écrite doit porter pour composer l'instantané. */
+/**
+ * Ce que la ligne écrite doit porter pour composer l'instantané. `profileAccentColor` y est
+ * REQUIS (#19201) : une ligne lue sans lui ferait partir `null`, donc effacerait l'accent sur
+ * mes autres appareils — le compilateur refuse un `select` qui l'oublie.
+ */
 export type OwnProfileRow = OwnProfileSnapshot & {
+  readonly profileAccentColor: string | null;
   readonly id: string;
   readonly updatedAt: Date;
 };
@@ -50,13 +57,14 @@ export const OWN_PROFILE_SELECT = {
   username: true,
   avatar: true,
   banner: true,
+  profileAccentColor: true,
 } as const satisfies Record<OwnProfileField, true>;
 
 type OwnProfileColumns = { readonly [Field in OwnProfileField]?: string | null };
 
 /**
  * L'écriture a-t-elle CHANGÉ l'instantané ? La ligne écrite comparée à la ligne
- * lue avant l'écriture, sur les neuf champs — un champ absent vaut `null`, comme
+ * lue avant l'écriture, sur les dix champs — un champ absent vaut `null`, comme
  * dans la charge. Un champ PRÉSENT dans le corps n'en est pas un : l'iOS publié
  * renvoie prénom, nom et nom affiché inchangés à chaque enregistrement (#13825),
  * et une langue se réécrit à l'identique. Sans ligne lue avant, rien ne prouve un
@@ -82,6 +90,7 @@ export function ownProfileUpdatedPayload(row: OwnProfileRow): ProfileUpdatedEven
       username: row.username,
       avatar: row.avatar ?? null,
       banner: row.banner ?? null,
+      profileAccentColor: servedProfileAccentColor(row.profileAccentColor),
     },
   });
   return parsed.success ? parsed.data : null;
