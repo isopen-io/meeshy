@@ -366,12 +366,13 @@ export function createSharedLocationSharingCenter({
   /*
    * « Pas de partage » couvre aussi une session remplacée par un autre appareil pendant l'envoi : la passerelle dit ce
    * qui court. Un partage servi ⇒ le retrait reste en attente et se rejoue (la liste seule ignore qui n'est plus servi) ;
-   * aucun, ou une relecture qui ne conclut pas sur une passerelle muette ⇒ la liste se vide, sans arrêt ni relevé.
+   * une relecture qui ne conclut pas aussi : vider sur la foi d'une panne laisserait la personne servie. Seul un
+   * partage servi VIDE vide la liste, sans arrêt ni relevé.
    */
   const settleNotSharing = async (): Promise<SharedLocationShareProblem | null> => {
     const truth = await served().catch(() => null);
     if (!isLive()) return 'failed';
-    if (truth !== null && truth.recipients.length > 0) return 'unconfirmed';
+    if (truth === null || truth.recipients.length > 0) return 'unconfirmed';
     wipe();
     return null;
   };
