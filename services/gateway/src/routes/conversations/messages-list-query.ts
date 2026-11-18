@@ -77,7 +77,7 @@ export type { CurrentUserConsumption } from './messages-list-query-types';
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
  * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
  */
-function cleanAttachmentsForApi(
+export function cleanAttachmentsForApi(
   attachments: readonly RawMessageAttachment[] | null | undefined,
   languageFilter?: readonly string[],
   currentParticipantId?: string,
