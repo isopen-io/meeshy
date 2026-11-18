@@ -136,10 +136,16 @@ extension UserProfileSheet {
             ProfileSentRequestCard(name: name, sentAt: sentAt, tint: accentTint,
                                    onResend: { Task { await resendRequest() } },
                                    onCancel: { Task { await cancelRequest() } })
+            ProfileRelationFailureSlot(failure: relationFailure, stage: requestStage) { failed in
+                Task { await retryRelation(failed) }
+            }
         case .received(let note):
             ProfileReceivedRequestCard(name: name, note: note, tint: accentTint,
                                        onAccept: { Task { await acceptRequest() } },
                                        onDecline: { Task { await declineRequest() } })
+            ProfileRelationFailureSlot(failure: relationFailure, stage: requestStage) { failed in
+                Task { await retryRelation(failed) }
+            }
         case .accepted:
             ProfileAcceptedRequestCard(name: name, isOnline: resolvedPresence == .online, tint: accentTint,
                                        onWrite: { openConversation() })

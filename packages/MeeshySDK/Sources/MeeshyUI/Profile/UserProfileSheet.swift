@@ -43,6 +43,8 @@ public struct UserProfileSheet: View {
     @State var justAccepted = false
     /// La dernière demande n'est pas partie (planche `Etat-Erreur` vue 2) : la carte le dit et propose « Réessayer ».
     @State var requestUnsent = false
+    /// Accepter, refuser ou annuler a raté (planche `Etat-Erreur` vue 2, #19611) : la carte le dit et propose « Réessayer ».
+    @State var relationFailure: ProfileRelationMutation?
 
     public let dependencies: UserProfileDependencies
 
@@ -342,6 +344,7 @@ public struct UserProfileSheet: View {
     func sendConnectionRequest(message: String? = nil) async {
         guard let userId = resolvedUserId, !userId.isEmpty else { return }
         requestUnsent = false
+        relationFailure = nil
         guard let requestId = await connectionActions.sendRequest(to: userId, message: message) else {
             requestUnsent = true
             return
@@ -355,16 +358,13 @@ public struct UserProfileSheet: View {
 
     func cancelRequest() async {
         guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
-        let cancelled = await connectionActions.cancelRequest(requestId: requestId, userId: userId) {
+        relationFailure = nil
+        let cancelled = await connectionActions.perform(.cancel, requestId: requestId, userId: userId) {
             pendingRequestId = nil
             connectionStatus = .none
             HapticFeedback.medium()
         }
-        guard cancelled else {
-            resolveConnectionStatus()
-            postToast(String(localized: "profile.toast.cancelFailed", defaultValue: "Impossible d'annuler", bundle: .module), isSuccess: false)
-            return
-        }
+        guard cancelled else { return relationFailed(.cancel) }
         postToast(String(localized: "profile.toast.requestCancelled", defaultValue: "Demande annulée", bundle: .module), isSuccess: true)
     }
 
@@ -384,7 +384,8 @@ public struct UserProfileSheet: View {
 
     func acceptRequest() async {
         guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
-        let accepted = await connectionActions.acceptRequest(requestId: requestId, senderId: userId) {
+        relationFailure = nil
+        let accepted = await connectionActions.perform(.accept, requestId: requestId, userId: userId) {
             justAccepted = true
             connectionStatus = .connected
             pendingRequestId = nil
@@ -392,28 +393,37 @@ public struct UserProfileSheet: View {
         }
         guard accepted else {
             justAccepted = false
-            resolveConnectionStatus()
-            HapticFeedback.error()
-            postToast(String(localized: "profile.toast.acceptFailed", defaultValue: "Impossible d'accepter", bundle: .module), isSuccess: false)
-            return
+            return relationFailed(.accept)
         }
         postToast(String(localized: "profile.toast.connectionAccepted", defaultValue: "Connexion acceptée", bundle: .module), isSuccess: true)
     }
 
     func declineRequest() async {
         guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
-        let declined = await connectionActions.declineRequest(requestId: requestId, senderId: userId) {
+        relationFailure = nil
+        let declined = await connectionActions.perform(.decline, requestId: requestId, userId: userId) {
             connectionStatus = .none
             pendingRequestId = nil
             HapticFeedback.medium()
         }
-        guard declined else {
-            resolveConnectionStatus()
-            HapticFeedback.error()
-            postToast(String(localized: "profile.toast.declineFailed", defaultValue: "Impossible de refuser", bundle: .module), isSuccess: false)
-            return
-        }
+        guard declined else { return relationFailed(.decline) }
         postToast(String(localized: "profile.toast.requestDeclined", defaultValue: "Demande refusée", bundle: .module), isSuccess: true)
+    }
+
+    /// Le retour arrière a remis l'étape d'avant : la carte la repeint, et la note dit ce qui n'est pas parti.
+    private func relationFailed(_ mutation: ProfileRelationMutation) {
+        resolveConnectionStatus()
+        HapticFeedback.error()
+        relationFailure = mutation
+    }
+
+    /// « Réessayer » rejoue la même mutation, optimiste comme la première fois.
+    func retryRelation(_ mutation: ProfileRelationMutation) async {
+        switch mutation {
+        case .accept: await acceptRequest()
+        case .decline: await declineRequest()
+        case .cancel: await cancelRequest()
+        }
     }
 
     // MARK: - Block Actions
@@ -474,13 +484,8 @@ public struct UserProfileSheet: View {
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundStyle(theme.textPrimary)
         }
-        .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, MeeshySpacing.xsPlus)
-        .background(theme.surface(tint: resolvedAccent, intensity: 0.12))
-        .clipShape(Capsule())
-        .overlay(
-            Capsule().stroke(theme.border(tint: resolvedAccent, intensity: 0.2), lineWidth: 1)
-        )
+        .profileSheetCapsule(fill: theme.surface(tint: resolvedAccent, intensity: 0.12),
+                             stroke: theme.border(tint: resolvedAccent, intensity: 0.2))
     }
 
     // MARK: - Language Pills
@@ -510,45 +515,31 @@ public struct UserProfileSheet: View {
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundStyle(theme.textPrimary)
         }
-        .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, MeeshySpacing.xsPlus)
-        .background(theme.surface(tint: resolvedAccent, intensity: 0.12))
-        .clipShape(Capsule())
-        .overlay(
-            Capsule().stroke(theme.border(tint: resolvedAccent, intensity: 0.2), lineWidth: 1)
-        )
+        .profileSheetCapsule(fill: theme.surface(tint: resolvedAccent, intensity: 0.12),
+                             stroke: theme.border(tint: resolvedAccent, intensity: 0.2))
     }
 
     // MARK: - Send Message Button
 
     var sendMessageButton: some View {
-        sendMessageButtonContent(compact: false)
-    }
-
-    private func sendMessageButtonContent(compact: Bool) -> some View {
         Button {
             HapticFeedback.medium()
             openConversation()
         } label: {
-            HStack(spacing: compact ? 6 : 8) {
+            HStack(spacing: 8) {
                 Image(systemName: "paperplane.fill")
-                    .font(.system(size: compact ? 12 : 14, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                 Text(String(localized: "profile.action.sendMessage", defaultValue: "Envoyer un message", bundle: .module))
-                    .meeshyScaledFont(compact ? 13 : 15, weight: .semibold)
+                    .meeshyScaledFont(15, weight: .semibold)
             }
             .foregroundStyle(.white)
-            .frame(maxWidth: compact ? nil : .infinity)
-            .padding(.horizontal, compact ? 20 : 0)
-            .padding(.vertical, compact ? 10 : 14)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
             .background(
-                LinearGradient(
-                    colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
+                LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo400], startPoint: .leading, endPoint: .trailing)
             )
-            .clipShape(RoundedRectangle(cornerRadius: compact ? 20 : 14))
-            .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: compact ? 4 : 8, y: compact ? 2 : 4)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
         }
         .pressable()
     }
@@ -577,5 +568,16 @@ public struct UserProfileSheet: View {
     /// Sans image, rien ne s'ouvre : un plein écran de l'avatar à initiales n'a rien à montrer.
     func openFullscreenImage(url: String?, fallback: String) {
         fullscreenImage = ProfileFullscreenImage.opening(url, fallbackText: fallback)
+    }
+}
+
+private extension View {
+    /// La capsule des puces de la fiche (langues, fuseau, pays) : un fond teinté et un filet.
+    func profileSheetCapsule(fill: Color, stroke: LinearGradient) -> some View {
+        padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
+            .background(fill)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(stroke, lineWidth: 1))
     }
 }
