@@ -18,7 +18,6 @@ import { syncShellLocaleAtStart } from '@/lib/shell-locale';
 import { useRoute } from '@/lib/router';
 import { followSystem } from '@/lib/scheme';
 import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
-import { AccountScopedTree } from '@/lib/view/account-scoped-tree';
 import { useAnonymousScope } from '@/lib/view/use-anonymous-scope';
 import { installSealedExitGuard } from '@/lib/view/sealed-exit-guard';
 import { shellStartHref } from '@/lib/links/shell-start';
@@ -167,7 +166,7 @@ createRoot(root).render(
     <QueryClientProvider client={appQueryClient}>
       <InterfaceLanguageRoot>
         <MeeshyAvatarMorphScope>
-          <Router wrap={(screen) => <Shell><SessionGate><AccountScopedTree>{screen}</AccountScopedTree></SessionGate></Shell>} skeleton={<ScreenWait />} />
+          <Router wrap={(screen) => <Shell><SessionGate>{screen}</SessionGate></Shell>} skeleton={<ScreenWait />} />
         </MeeshyAvatarMorphScope>
       </InterfaceLanguageRoot>
     </QueryClientProvider>

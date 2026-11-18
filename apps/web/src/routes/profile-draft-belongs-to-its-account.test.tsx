@@ -10,16 +10,13 @@ import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { AccountScopedTree } from '@/lib/view/account-scoped-tree';
-
 import ProfileScreen from './profile';
 
 /**
  * UN BROUILLON APPARTIENT AU COMPTE QUI L'ÉCRIT (audit #19352). Ada modifie son
  * profil ; un autre onglet passe l'appareil à Bob et cet onglet le suit
- * (`session-follow.ts`). Monté comme l'application monte chaque écran (sous
- * `AccountScopedTree`), le brouillon d'Ada ne reste pas à l'écran sous Bob, et
- * « Enregistrer » ne l'écrit pas sur le compte de Bob.
+ * (`session-follow.ts`) : le brouillon d'Ada ne reste pas à l'écran sous Bob,
+ * et « Enregistrer » ne l'écrit pas sur le compte de Bob.
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
@@ -52,7 +49,7 @@ function mountNow(): HTMLDivElement {
   document.body.appendChild(container);
   const root = createRoot(container);
   mounted = { container, root };
-  act(() => root.render(<QueryClientProvider client={appQueryClient}><AccountScopedTree><ProfileScreen /></AccountScopedTree></QueryClientProvider>));
+  act(() => root.render(<QueryClientProvider client={appQueryClient}><ProfileScreen /></QueryClientProvider>));
   return container;
 }
 
