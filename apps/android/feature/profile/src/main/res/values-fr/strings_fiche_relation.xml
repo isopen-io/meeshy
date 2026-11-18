@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fiche_faces_label">Faces du profil</string>
+    <string name="fiche_face_vitrine">Vitrine</string>
+    <string name="fiche_face_links">Liens</string>
+    <string name="fiche_face_actions">Actions</string>
+    <string name="fiche_section_talk">Parler</string>
+    <string name="fiche_section_together">Ensemble</string>
+    <string name="fiche_section_where">Où il est</string>
+    <string name="fiche_section_card">Sa fiche</string>
+    <string name="fiche_section_not_open">Pas encore ouvert</string>
+    <string name="fiche_action_write">Écrire</string>
+    <string name="fiche_action_write_request">Demander à écrire</string>
+    <string name="fiche_action_call">Appeler</string>
+    <string name="fiche_action_video">Vidéo</string>
+    <string name="fiche_card_share">Envoyer son profil</string>
+    <string name="fiche_card_our_circle">Notre cercle</string>
+    <string name="fiche_links_title">Son lien de profil</string>
+    <string name="fiche_links_hint">Ouvre sa vitrine, vue Public</string>
+    <string name="fiche_links_copy">Copier le lien</string>
+    <string name="fiche_links_qr">QR</string>
+    <string name="fiche_links_send">Envoyer à un ami</string>
+    <string name="fiche_links_empty">Aucun lien à partager pour cette personne.</string>
+    <string name="fiche_circle_title">%1$s et toi</string>
+    <string name="fiche_circle_common">Votre niveau commun est le plus bas des deux.</string>
+    <string name="fiche_circle_they_grant">%1$s t\'accorde</string>
+    <string name="fiche_circle_you_grant">Tu accordes à %1$s</string>
+    <string name="fiche_circle_at_least">%1$s ou plus</string>
+    <string name="fiche_circle_opens">Ce que %1$s vous ouvre</string>
+    <string name="fiche_circle_opens_more">Avec %1$s, en plus</string>
+    <string name="fiche_circle_missing_they">Il manque : que %1$s t\'accorde %2$s</string>
+    <string name="fiche_circle_missing_you">Il manque : que tu accordes %2$s à %1$s</string>
+</resources>

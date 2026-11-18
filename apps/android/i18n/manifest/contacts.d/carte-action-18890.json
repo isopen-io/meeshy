@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:contacts": {
+      "resDir": "feature/contacts/src/main/res",
+      "entries": [
+        {
+          "androidName": "location_map_close",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_layers",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_recenter",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_view_exact",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_view_neighborhood",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_view_city",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_remaining_minutes",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_remaining_hours",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_shared_for_hour",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_shared_for_hours",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_fresh_live",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_fresh_stale",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_directions",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_write",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_call",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_share_mine",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_not_sharing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_not_sharing_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_nearby_open",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_nearby_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_nearby_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_map_nearby_empty_message",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
