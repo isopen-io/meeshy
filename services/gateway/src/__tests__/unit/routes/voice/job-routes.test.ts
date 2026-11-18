@@ -24,7 +24,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const PREFIX = '/api/v1/voice';
-const JOB_ID = 'mshy_507f1f77bcf86cd799439011_1700000000';
+const JOB_ID = 'mshy_3f2b9c1e8d4a4b7f9e6c2a1d5b8e7f40';
 
 type JobService = {
   getJobStatus: jest.Mock<(userId: string, jobId: string) => Promise<unknown>>;
