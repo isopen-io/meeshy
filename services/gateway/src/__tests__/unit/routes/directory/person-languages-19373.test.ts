@@ -38,6 +38,7 @@ type Langues = {
   readonly systemLanguage?: string | null;
   readonly regionalLanguage?: string | null;
   readonly customDestinationLanguage?: string | null;
+  readonly deactivatedAt?: Date | null;
 };
 
 const lien = (niveau: string) => ({
@@ -130,6 +131,12 @@ describe('la fiche sert les langues déclarées, dans l ordre du Prisme', () => 
   it('une langue déclarée deux fois ne part qu une fois, normalisée', async () => {
     const { data } = await lire({ langues: { systemLanguage: 'FR', regionalLanguage: 'fr', customDestinationLanguage: 'es' } });
     expect(data.languages).toEqual(['fr', 'es']);
+  });
+
+  it('un compte DÉSACTIVÉ ne sert pas ses langues : la fiche d un compte parti ne dit plus rien de lui', async () => {
+    const { data } = await lire({ langues: { systemLanguage: 'pt', regionalLanguage: 'en', deactivatedAt: new Date('2026-11-01T00:00:00Z') } });
+    expect('languages' in data).toBe(false);
+    expect(RANGS_BRUTS.filter((champ) => champ in data)).toEqual([]);
   });
 
   it('aucune langue déclarée : la clé est absente, le client garde son repli', async () => {

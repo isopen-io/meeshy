@@ -306,7 +306,7 @@ type DeclaredLanguageColumns = {
  * garde inopérante au typage.
  */
 export function buildPublicProfile<
-  T extends { voiceModel?: VoiceModelFields | null; equippedAvatarRing?: string | null; equippedBanner?: string | null; equippedBannerFrame?: string | null; profileAccentColor?: string | null } & DeclaredLanguageColumns,
+  T extends { voiceModel?: VoiceModelFields | null; equippedAvatarRing?: string | null; equippedBanner?: string | null; equippedBannerFrame?: string | null; profileAccentColor?: string | null; deactivatedAt?: Date | null } & DeclaredLanguageColumns,
 >(user: T) {
   // `autoTranslateEnabled: true` était écrit EN DUR — un champ de contrat qui
   // ne disait rien de vrai, et qu'un client pouvait croire refléter la
@@ -314,7 +314,11 @@ export function buildPublicProfile<
   // prétendaient masquer ce qu'il suffit de ne pas charger. Les trois sont
   // retirés (#4161).
   const { equippedAvatarRing, equippedBanner, equippedBannerFrame, systemLanguage, regionalLanguage, customDestinationLanguage, ...visible } = user;
-  const languages = resolveUserLanguagesOrdered({ systemLanguage, regionalLanguage, customDestinationLanguage });
+  // #19373 : la fiche d'un compte DÉSACTIVÉ ne dit plus ses langues — un compte parti
+  // ne garde pas ses préférences en vitrine.
+  const languages = visible.deactivatedAt
+    ? []
+    : resolveUserLanguagesOrdered({ systemLanguage, regionalLanguage, customDestinationLanguage });
   return {
     ...withVoiceFields(visible),
     ...(languages.length > 0 ? { languages } : {}),
