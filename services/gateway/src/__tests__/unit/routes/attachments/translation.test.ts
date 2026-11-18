@@ -388,6 +388,42 @@ describe('POST /attachments/:id/transcribe — existing transcription', () => {
   });
 });
 
+describe('POST /attachments/:id/transcribe — pistes déjà traduites (#19647)', () => {
+  it('sert les pistes sans leur chemin serveur ni les clés internes du traducteur', async () => {
+    const track = {
+      id: `${ATTACHMENT_ID}_en`,
+      targetLanguage: 'en',
+      translatedText: 'hello',
+      audioUrl: '/uploads/translated/att-001_en.mp3',
+      durationMs: 8000,
+      format: 'mp3',
+      voiceCloned: true,
+      voiceQuality: 0.82,
+      createdAt: '2026-08-22T09:00:00.000Z',
+    };
+    const translationService = makeTranslationService({
+      getAttachmentWithTranscription: jest.fn<any>().mockResolvedValue({
+        attachment: { id: ATTACHMENT_ID },
+        transcription: { text: 'hello', language: 'en' },
+        translatedAudios: [{
+          ...track,
+          audioPath: '/srv/meeshy/uploads/translated/att-001_en.mp3',
+          audio_path: '/srv/meeshy/uploads/translated/att-001_en.mp3',
+          fallback: true,
+        }],
+      }),
+    });
+    const { app } = await buildApp({ translationService });
+    const res = await app.inject({
+      method: 'POST', url: `/attachments/${ATTACHMENT_ID}/transcribe`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.translatedAudios).toEqual([track]);
+    await app.close();
+  });
+});
+
 // ─── POST /attachments/:id/transcribe — kicks off new transcription ───────────
 
 describe('POST /attachments/:id/transcribe — starts transcription', () => {
