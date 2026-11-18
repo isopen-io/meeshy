@@ -307,4 +307,85 @@ final class CommunityDetailViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.community?.name, "Alpha")
     }
+
+    // MARK: - community:member-* (#18767)
+
+    private func memberSUT(
+        reader: String = "u-mod", role: String? = "moderator", removed: @escaping @MainActor (String) async -> Void = { _ in }
+    ) -> (CommunityDetailViewModel, MockCommunityService) {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", currentUserRole: role))
+        let viewModel = CommunityDetailViewModel(
+            communityId: "c1", service: service, currentUserId: { reader },
+            communityUpdates: Empty().eraseToAnyPublisher(), memberChanges: Empty().eraseToAnyPublisher(),
+            myCommunities: MyCommunitiesWrites(add: { _ in }, remove: removed)
+        )
+        return (viewModel, service)
+    }
+
+    func test_memberChange_tiers_recopieLEffectifSansToucherAuRoleNiAuReseau() async {
+        let (viewModel, service) = memberSUT()
+        await viewModel.load()
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-other", memberCount: 14, role: .admin))
+
+        XCTAssertEqual(viewModel.community?.memberCount, 14)
+        XCTAssertEqual(viewModel.currentUserRole, .moderator, "un tiers promu ne déplace pas le rôle du lecteur")
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertEqual(service.getCallCount, 1, "aucune relance réseau")
+    }
+
+    func test_memberChange_lecteurPromu_gereAussitot() async {
+        let (viewModel, service) = memberSUT()
+        await viewModel.load()
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-mod", role: .admin))
+
+        XCTAssertEqual(viewModel.currentUserRole, .admin)
+        XCTAssertTrue(viewModel.isAdmin)
+        XCTAssertEqual(service.getCallCount, 1)
+    }
+
+    func test_memberChange_lecteurRetire_perdSesDroits_quitteMesCommunautes_etRelitLaFiche() async {
+        let removed = RemovedCommunities()
+        let (viewModel, service) = memberSUT(removed: { removed.ids.append($0) })
+        await viewModel.load()
+        service.getResult = .failure(APIError.serverError(403, nil))
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-mod", memberCount: 8, role: nil))
+
+        XCTAssertFalse(viewModel.isMember)
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertTrue(viewModel.conversations.isEmpty)
+        XCTAssertEqual(removed.ids, ["c1"])
+        XCTAssertEqual(service.getCallCount, 2, "la fiche se relit : une communauté privée cesse d'être servie")
+    }
+
+    func test_memberChange_lecteurEntreAilleurs_relitLaFiche() async {
+        let (viewModel, service) = memberSUT(reader: "u-new", role: nil)
+        await viewModel.load()
+        XCTAssertFalse(viewModel.isMember)
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", currentUserRole: "member"))
+
+        await viewModel.apply(CommunityStubs.memberChange(userId: "u-new", role: .member))
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertEqual(service.getCallCount, 2)
+    }
+
+    func test_memberChange_autreCommunaute_neTouchePasLeDetail() async {
+        let (viewModel, service) = memberSUT()
+        await viewModel.load()
+
+        await viewModel.apply(CommunityStubs.memberChange(communityId: "c2", userId: "u-mod", memberCount: 40, role: nil))
+
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertNotEqual(viewModel.community?.memberCount, 40)
+        XCTAssertEqual(service.getCallCount, 1)
+    }
+}
+
+@MainActor
+private final class RemovedCommunities {
+    var ids: [String] = []
 }

@@ -458,3 +458,27 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Cliquets partagés : Android sort de la famille « effectif d'une communauté » d'`ASYMETRIES` ; `SWEPT_EVENTS_AT_LAST_MEASURE` 131 → 134. `__tests__/ci/` 25 fichiers, 215 tests verts.
 - Gates locaux : `jvm-check -PjvmCheckModelOnly` (le mode complet bute sur `libsignal-client`, 403) : `CommunityMemberEventsTest` 12/12 et les suites `Community*` + `socket.*` de `core/model` vertes. `sdk-core` (Robolectric) ne se prouve que par `android.yml` : `CommunityMemberBindingTest` (4), `CommunityCacheRepositoryTest` (+6).
 - Prochain lot recommandé : #18767 (iOS lit l'effectif) dès que #18954 est fusionnée, puis la suppression d'une communauté (#16857).
+
+## 2026-11-17 — réveil 17:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #19266 (#18768, Android) et #18954 fusionnées, ce qui débloque #18767.
+- Lot : #18767 (iOS lit l'effectif), le dernier client. SDK : `CommunityMemberJoinedEvent` / `LeftEvent` / `RoleUpdatedEvent` (miroirs des trois charges, `Sockets/CommunityMemberChannel.swift`), lus en `CommunityMemberChange` (communauté, personne, effectif, rôle TENU ou `nil`) ; identifiant vide, effectif négatif, rôle inconnu ou `creator` ⇒ écarté. Trois routes vers `CommunityMemberChannel`, servi par `MessageSocketProviding.communityMemberChanged`. Règles d'application (`Models/CommunityMemberChange+Apply.swift`) : `MeeshyCommunity.applying` recopie l'effectif ; `APICommunity.applying(_:readerId:)` recopie l'effectif et fait suivre `currentUserRole` au seul geste du lecteur. `CacheCoordinator` réécrit `communities` sous toutes ses clés.
+- App : `CommunityDetailViewModel` (tiers ⇒ effectif ; lecteur promu ⇒ droits ; lecteur sorti ⇒ droits, canaux et publications gardées retirés, « mes communautés » allégée, fiche relue ; entré d'ailleurs ⇒ fiche relue), `CommunityListViewModel` (effectif ; le lecteur entré sans ligne ou sorti avec une ⇒ liste relue), `CommunityMembersViewModel` (liste ouverte relue), `MyCommunities` (effectif ; lecteur sorti ⇒ retiré de la bande et du cache de partage ; entré ⇒ bande relue). Flux par `OrderedEventLane.relay` (la règle maison interdit `sink { Task }`).
+- Cliquets partagés : la famille « effectif d'une communauté » quitte `ASYMETRIES` (les trois clients lisent) ; `SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE` 162 → 165. `__tests__/ci/` 25 fichiers, 215 tests verts.
+- Témoins : SDK `CommunityMemberEventsTests` (9), `SocketInboundRouteTableTests` (+1, relevé figé +3 noms), `CacheCoordinatorCommunityMemberChangesTests` (2) ; app `CommunityDetailViewModelTests` (+5), `CommunityListViewModelTests` (+3), `MyCommunitiesTests` (+2), `CommunityMembersViewModelTests` (+3). Preuve : CI iOS de la PR (pas de Swift en conteneur). Gardes iOS locales : `check_house_rules.sh` (42 règles tenues), `check_cohesion_budget.sh`, `check_test_registration.sh`, accent-color verts.
+- Prochain lot recommandé : la suppression d'une communauté (reste de #16857) ; les entrées INDIRECTES (salon rejoint via `applyCommunityAdmission`, compte supprimé) n'émettent toujours pas.
+
+## 2026-11-17 — réveil 21:38 UTC
+
+- Début du run : #19297 (#18767, iOS lit l'effectif) ouverte, dernière poussée à 19:38, donc inactive : run consacré à la mener à la fusion.
+- État trouvé : CI de `70124379f` encore en file Mac depuis 19:38 (builds app et SDK non partis) ; seul rouge, la tranche 4 des gardes navigateur web (`media-16` lit `flow-end` pour `justify-end`, plus un 404 de script) — étrangère au lot (aucun fichier web touché) et suivie par #19370.
+- `dev` (60 commits) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 215 tests verts ; `check_house_rules.sh` 42 règles tenues, `check_cohesion_budget.sh` et `check_test_registration.sh` verts, `check-accent-color-hardcoding.mjs` conforme.
+- Les runs de l'ancienne tête sont annulés, ci.yml / ios.yml / ios-sdk relancés sur la nouvelle.
+- Prochain lot recommandé : fusionner #19297 dès que la CI iOS est verte (la tranche 4 web reste rouge tant que #19370 est ouverte : fusion à faire valider par Jacques), puis la suppression d'une communauté (#16857).
+
+## 2026-11-17 — réveil 23:38 UTC
+
+- Début du run : #19297 (#18767) ouverte, dernière poussée à 21:41, donc inactive : run consacré à la mener à la fusion.
+- État trouvé : la CI iOS SDK de `8521abb25` a enfin tourné et rendu un VRAI rouge du lot : `CommunityMemberEventsTests.swift:14` — `static let joinedPayload: [String: Any]` refusé par Swift 6 (« not concurrency-safe, non-Sendable »). Corrigé en propriété calculée. Deux tranches gateway encore en file d'attente depuis 21:41.
+- `dev` (50 commits) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 215 tests verts ; `check_house_rules.sh`, `check_cohesion_budget.sh`, `check_test_registration.sh`, `check-accent-color-hardcoding.mjs` verts.
+- Prochain lot recommandé : fusionner #19297 dès que la CI iOS SDK est verte sur la nouvelle tête, puis la suppression d'une communauté (#16857).

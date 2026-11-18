@@ -33,7 +33,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "call:preview-requested", "call:preview-signal", "call:quality-alert", "call:reaction-received",
         "call:recording-requested", "call:recording-started", "call:recording-stopped", "call:screen-capture-alert",
         "call:signal", "call:transcription-active", "call:translated-segment", "categories:reordered",
-        "category:created", "community:updated", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
+        "category:created", "community:member-joined", "community:member-left", "community:member-role-updated", "community:updated", "category:deleted", "category:updated", "conversation:closed", "conversation:deleted",
         "conversation:encryption-changed", "conversation:join-error", "conversation:joined", "conversation:left", "conversation:new",
         "conversation:obsoleted",
         "conversation:participant-banned", "conversation:participant-joined", "conversation:participant-left",
@@ -324,6 +324,33 @@ final class SocketInboundRouteTableTests: XCTestCase {
                     "displayName": NSNull(), "firstName": "Alice", "lastName": "Dupont", "username": "alice",
                     "avatar": NSNull(), "banner": NSNull(),
                 ] as [String: Any],
+            ])
+        }
+    }
+
+    func test_communityMemberEvents_reachTheCommunityMemberChannel() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+
+        await expectOneValue(from: MessageSocketManager.shared.communityMemberChanged, where: {
+            $0.communityId == "c-eff" && $0.userId == "u-new" && $0.memberCount == 8 && $0.role == .moderator
+        }) {
+            registrar.deliver("community:member-joined", [
+                "communityId": "c-eff", "userId": "u-new", "role": "moderator", "via": "self",
+                "memberCount": 8, "at": "2026-11-17T10:00:00.000Z",
+            ])
+        }
+        await expectOneValue(from: MessageSocketManager.shared.communityMemberChanged, where: {
+            $0.communityId == "c-eff" && $0.userId == "u-gone" && $0.memberCount == 7 && $0.role == nil
+        }) {
+            registrar.deliver("community:member-left", [
+                "communityId": "c-eff", "userId": "u-gone", "reason": "left", "memberCount": 7, "at": "2026-11-17T10:00:00.000Z",
+            ])
+        }
+        await expectOneValue(from: MessageSocketManager.shared.communityMemberChanged, where: {
+            $0.communityId == "c-eff" && $0.userId == "u-new" && $0.role == .admin
+        }) {
+            registrar.deliver("community:member-role-updated", [
+                "communityId": "c-eff", "userId": "u-new", "role": "admin", "memberCount": 7, "at": "2026-11-17T10:00:00.000Z",
             ])
         }
     }

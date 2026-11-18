@@ -112,13 +112,6 @@ const ASYMETRIES: readonly {
     ],
   },
   {
-    absents: ['ios'],
-    raison:
-      "l'effectif d'une communauté en temps réel (#18766) : la passerelle, le web et Android (#18768) le portent ; "
-      + 'iOS (#18767) le lira sur le modèle de `community:updated` — dette mesurée, son issue.',
-    events: ['community:member-joined', 'community:member-left', 'community:member-role-updated'],
-  },
-  {
     absents: ['web', 'ios'],
     raison:
       "signaux que seul le miroir ANDROID cite : la pièce jointe prête côté SDK Kotlin et le "

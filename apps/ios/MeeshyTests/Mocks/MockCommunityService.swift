@@ -35,6 +35,10 @@ enum CommunityStubs {
         )
     }
 
+    static func memberChange(communityId: String = "c1", userId: String, memberCount: Int = 9, role: MemberRole?) -> CommunityMemberChange {
+        CommunityMemberChange(communityId: communityId, userId: userId, memberCount: memberCount, role: role)!
+    }
+
     static func page<T: Decodable>(_ items: [T], hasMore: Bool = false) -> OffsetPaginatedAPIResponse<[T]> {
         OffsetPaginatedAPIResponse(
             success: true,
@@ -68,6 +72,7 @@ final class MockCommunityService: CommunityServiceProviding, @unchecked Sendable
     private(set) var addConversationCallCount = 0
     private(set) var removeMemberCallCount = 0
     private(set) var leaveCallCount = 0
+    private(set) var getMembersCallCount = 0
 
     func list(search: String?, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APICommunity]> {
         listCallCount += 1
@@ -100,7 +105,8 @@ final class MockCommunityService: CommunityServiceProviding, @unchecked Sendable
     func delete(communityId: String) async throws { try voidResult.get() }
 
     func getMembers(communityId: String, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APICommunityMember]> {
-        try membersResult.get()
+        getMembersCallCount += 1
+        return try membersResult.get()
     }
 
     func addMember(communityId: String, userId: String, role: MemberRole) async throws -> APICommunityMember {
