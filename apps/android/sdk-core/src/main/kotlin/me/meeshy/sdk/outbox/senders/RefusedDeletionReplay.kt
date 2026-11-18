@@ -21,6 +21,8 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxOwnerSource
 import me.meeshy.sdk.outbox.OutboxState
+import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.withAccountTicket
 import me.meeshy.sdk.socket.RealtimeBinding
 import timber.log.Timber
 
@@ -83,6 +85,7 @@ public class RefusedDeletionReplay @Inject constructor(
     private val marks: RefusedDeletionMarks,
     private val handler: DeleteMessageHandler,
     @IoDispatcher private val io: CoroutineDispatcher,
+    private val fence: AccountFence? = null,
 ) : RealtimeBinding {
 
     private var scope: CoroutineScope? = null
@@ -105,14 +108,23 @@ public class RefusedDeletionReplay @Inject constructor(
         scope = null
     }
 
-    /** How many settlements were replayed. */
+    /**
+     * How many settlements were replayed. #19422 — the whole replay belongs to the account signed in when it starts: each
+     * settlement runs under that ticket, and the replay stops as soon as another account is adopted over it.
+     */
     internal suspend fun replay(): Int {
         val exhausted = outboxDao.byKind(OutboxKind.DELETE_MESSAGE.name).filter { it.state == OutboxState.EXHAUSTED.name }
         marks.keepOnly(exhausted.mapTo(HashSet()) { it.cmid })
         val signedIn = owner.currentOwnerId() ?: return 0
         val due = exhausted.filter { it.ownerId == signedIn && !marks.isSettled(it.cmid) }
-        due.forEach { handler.onExhausted(it) }
-        return due.size
+        val ticket = fence?.ticket()
+        var replayed = 0
+        for (row in due) {
+            if (ticket != null && fence?.isCurrent(ticket) == false) break
+            withAccountTicket(ticket) { handler.onExhausted(row) }
+            replayed++
+        }
+        return replayed
     }
 }
 

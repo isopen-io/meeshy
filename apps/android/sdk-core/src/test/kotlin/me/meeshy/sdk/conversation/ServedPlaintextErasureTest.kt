@@ -43,6 +43,7 @@ class ServedPlaintextErasureTest {
     /** A server holding exactly [messages]: the recent window serves them all, the forward sweep those after its cursor. */
     private fun pageServing(vararg messages: ApiMessage): MessageApi = mockk<MessageApi>().also { api ->
         coEvery { api.listConditional("c1", any()) } returns Response.success(ApiResponse(success = true, data = messages.toList()))
+        coEvery { api.list("c1", any(), any(), any()) } returns ApiResponse(success = true, data = emptyList())
         coEvery { api.listAfter("c1", any(), any()) } answers {
             val after = isoToEpochMillis(secondArg<String>())
             MessagesApiResponse(
@@ -198,6 +199,38 @@ class ServedPlaintextErasureTest {
         assertThat(harness.database.messageDao().find("m0")).isNull()
         assertThat(harness.database.messageDao().find("m1")).isNotNull()
         assertThat(erasures.keys()).containsExactly("m0", "cid_0")
+    }
+
+    /**
+     * #19423 — the page's counts say « nothing older » (19 counted, 19 served, under its limit) yet the read was cut: the
+     * gateway withdrew a due ephemeral message from the page it had counted. The confirming read before the oldest served
+     * finds the live older message, and the held row keeps its plaintext.
+     */
+    @Test
+    fun `a window whose counts claim the whole history keeps the older held row when a read before it finds one`() = runHarnessTest { harness ->
+        harness.holdOlderThanTheWindow()
+        val erasures = ledger(harness)
+        val api = theWholeHistory(hasMore = false)
+        coEvery { api.list("c1", any(), any(), "m1") } returns
+            ApiResponse(success = true, data = listOf(sealed("m0", "me", cid = "cid_0", at = "2026-11-01T08:00:00Z")))
+
+        source(harness, api, erasures).revalidate()
+
+        assertThat(harness.database.messageDao().find("m0")).isNotNull()
+        assertThat(erasures.keys()).isEmpty()
+    }
+
+    @Test
+    fun `a window whose confirming read fails keeps the older held row (fail-closed)`() = runHarnessTest { harness ->
+        harness.holdOlderThanTheWindow()
+        val erasures = ledger(harness)
+        val api = theWholeHistory(hasMore = false)
+        coEvery { api.list("c1", any(), any(), any()) } throws java.io.IOException("offline")
+
+        source(harness, api, erasures).revalidate()
+
+        assertThat(harness.database.messageDao().find("m0")).isNotNull()
+        assertThat(erasures.keys()).isEmpty()
     }
 
     @Test

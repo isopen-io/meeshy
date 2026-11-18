@@ -378,6 +378,9 @@ class MessageRepository internal constructor(
      * in REAL time ([readBackBudgetMillis], on an IO thread: a virtual clock never ends it early) — an answer that never
      * comes proves nothing ([MessageReadBack.Unknown]).
      *
+     * [authorId], when given, is the account that queued the deletion: the settlement is refused (and left unmarked) under
+     * any other account — the request would leave signed by one account about the message of another (#19422).
+     *
      * Returns whether the settlement LANDED: `false` when the account that asked for it closed or was replaced before
      * (#19422) — it decided nothing, and must not be marked settled, so the replay of that account settles it again.
      */
@@ -386,8 +389,10 @@ class MessageRepository internal constructor(
         messageId: String,
         refusedAsGone: Boolean = false,
         readBackBudgetMillis: Long = READ_BACK_BUDGET_MS,
+        authorId: String? = null,
     ): Boolean = withContext(NonCancellable) {
         val ticket = mutations.ticket()
+        if (!authorId.isNullOrBlank() && ticket != null && ticket.ownerId != authorId) return@withContext false
         val read = conversationId?.let { readBackWithin(it, messageId, readBackBudgetMillis) } ?: MessageReadBack.Unknown
         settle(ticket, messageId, read, refusedAsGone)
     }

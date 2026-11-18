@@ -3,6 +3,7 @@ package me.meeshy.sdk.conversation
 import me.meeshy.sdk.session.AccountFence
 import me.meeshy.sdk.session.AccountTicket
 import me.meeshy.sdk.session.commitOrWrite
+import me.meeshy.sdk.session.withAccountTicket
 
 import androidx.room.withTransaction
 import java.time.Instant
@@ -194,7 +195,7 @@ internal class MessageCacheSource(
         val held = heldBefore()
         val window = readWindow(ticket, held) ?: return
         val gap = if (sweeping == Sweeping.SKIPPED) GapRead(emptyList(), Sweep.Skipped) else readGap(window.messages, held)
-        fence.commitOrWrite(ticket) { persist(window, gap, held) } ?: return
+        fence.commitOrWrite(ticket) { withAccountTicket(ticket) { persist(window, gap, held) } } ?: return
         receipts?.readInFull(conversationId, held.receiptsEpoch)
     }
 
@@ -262,6 +263,20 @@ internal class MessageCacheSource(
         val limit = pagination.limit ?: return false
         val total = pagination.total ?: return false
         return !pagination.hasMore && served in total until limit
+    }
+
+    /**
+     * #19423 — the page's own counts are not proof enough: the gateway counts and reads without a shared snapshot, and it
+     * withdraws from the page the ephemeral messages due for this reader after having counted them, so a page shorter than
+     * its `limit` can still have cut a live message. The plaintext of a sealed message pruned wrongly is lost for good, so
+     * the claim is confirmed by a read that cannot be cut: one message BEFORE the oldest served (a cursor read measures
+     * `hasMore` with its own `limit + 1` row, no count). Anything but a clean empty answer proves nothing.
+     */
+    private suspend fun nothingOlderThan(served: List<ApiMessage>): Boolean {
+        val oldest = served.minByOrNull { isoToEpochMillisOrNull(it.createdAt) ?: return false } ?: return true
+        val probe = rawApiCall { messageApi.list(conversationId, limit = 1, before = oldest.id) }
+        val body = (probe as? NetworkResult.Success)?.data ?: return false
+        return body.success && body.data?.isEmpty() == true
     }
 
     /** The messages read beyond the window, and how far that read went. */
@@ -362,7 +377,7 @@ internal class MessageCacheSource(
             is ConditionalResult.Fresh -> ServedWindow(
                 result.data,
                 result.etag,
-                reachesOldest = servesWholeHistory(result.data.size, result.pagination),
+                reachesOldest = servesWholeHistory(result.data.size, result.pagination) && nothingOlderThan(result.data),
             )
             is ConditionalResult.Failure -> throw MessageSyncException(result.error.message)
         }
