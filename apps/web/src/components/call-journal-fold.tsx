@@ -13,6 +13,8 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * monter, pour arriver en fondu avec ses mots plutôt que de les faire surgir après. Il reste monté le temps
  * de son départ.
  */
+export const BOUNDED_JOURNAL_CLASS = 'max-h-[25rem] w-full overflow-y-auto overscroll-contain';
+
 const CallTranscriptPanel = lazy(() => import('./call-transcript-panel').then((module) => ({ default: module.CallTranscriptPanel })));
 
 type JournalFoldProps = {
@@ -32,7 +34,10 @@ export function CallJournalFold({ id, callId, open, restored, language, original
   if (!fold.mounted) return null;
   return (
     <div ref={fold.ref} id={id} className="flex w-full" data-call-journal-fold="" {...(open ? {} : LEAVING)}>
-      <CallTranscriptPanel callId={callId} language={language} original={original} onOriginalChange={onOriginalChange} bounded />
+      {/* #19687 : le journal ENTIER tient dans 25 rem et défile seul, sans pousser le fil (iOS `CallJournalUnderCardSizing`, Android 400 dp). */}
+      <div tabIndex={0} className={BOUNDED_JOURNAL_CLASS} data-call-transcript-scroll="">
+        <CallTranscriptPanel callId={callId} language={language} original={original} onOriginalChange={onOriginalChange} />
+      </div>
     </div>
   );
 }
