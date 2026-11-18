@@ -1036,11 +1036,22 @@ final class TrackingLinkInsightsTests: XCTestCase {
     }
 
     func test_pausedLink_ofShareOrTracking_isSwitchedBackOnFromItsTicket_theOthersOpenTheirDetail() throws {
-        XCTAssertTrue(ProfileCreatedLinkTicket.switchesInPlace(.paused, family: .share))
-        XCTAssertTrue(ProfileCreatedLinkTicket.switchesInPlace(.paused, family: .tracking))
-        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(.paused, family: .community), "aucun service ne rallume un lien de communauté")
-        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(.full, family: .share), "un lien plein se règle par sa limite")
-        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(.expired, family: .tracking))
+        func ticket(_ family: LinksFaceFamily, active: Bool, figure: LinksFaceFigure = .clicks(3),
+                    expiresAt: Date? = nil) -> LinksFaceTicket {
+            LinksFaceTicket(id: "t", family: family, title: "T", code: "c", copyValue: "c", figure: figure,
+                            isActive: active, expiresAt: expiresAt)
+        }
+        XCTAssertTrue(ProfileCreatedLinkTicket.switchesInPlace(ticket(.share, active: false)))
+        XCTAssertTrue(ProfileCreatedLinkTicket.switchesInPlace(ticket(.tracking, active: false)))
+        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(ticket(.community, active: false)), "aucun service ne rallume un lien de communauté")
+        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(ticket(.share, active: true, figure: .arrivals(5, cap: 5))), "un lien plein se règle par sa limite")
+        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(ticket(.tracking, active: true, expiresAt: .distantPast)))
+        let pausedAndExpired = ticket(.tracking, active: false, expiresAt: .distantPast)
+        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(pausedAndExpired), "rallumé, il ne mènerait toujours nulle part")
+        XCTAssertEqual(ProfileCreatedLinkTicket.lastingStoppage(pausedAndExpired), .expired, "c'est l'échéance qui se dit")
+        let pausedAndFull = ticket(.share, active: false, figure: .arrivals(5, cap: 5))
+        XCTAssertFalse(ProfileCreatedLinkTicket.switchesInPlace(pausedAndFull))
+        XCTAssertEqual(ProfileCreatedLinkTicket.lastingStoppage(pausedAndFull), .full, "« Augmenter la limite » reste offert")
         let ticket = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Faces/ProfileCreatedLinkTicket.swift"))
         XCTAssertTrue(ticket.contains("MeeshyToggleRow(ProfileLinksCopy.linkActive"), "« Lien actif » est la ligne à interrupteur du kit")
         XCTAssertTrue(ticket.contains("accessory: .toggle(isOn: false)"))

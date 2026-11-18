@@ -78,13 +78,16 @@ final class ShareLinkDetailViewModel: ObservableObject {
     /// Optimiste : la rangée part tout de suite, et revient si le serveur refuse.
     @discardableResult
     func removeArrival(participantId: String) async -> Bool {
-        guard let conversationId = link.conversation?.id, case .loaded(let snapshot) = stats else { return false }
+        guard let conversationId = link.conversation?.id, case .loaded(let snapshot) = stats,
+              let index = snapshot.recentArrivals.firstIndex(where: { $0.participantId == participantId }) else { return false }
+        let removed = snapshot.recentArrivals[index]
         stats = .loaded(snapshot.removingArrival(participantId))
         do {
             try await removeParticipant(conversationId, participantId)
             return true
         } catch {
-            stats = .loaded(snapshot)
+            // Seule CETTE arrivée revient, sur les statistiques courantes : un autre retrait accepté entre-temps tient.
+            if case .loaded(let current) = stats { stats = .loaded(current.restoringArrival(removed, at: index)) }
             return false
         }
     }

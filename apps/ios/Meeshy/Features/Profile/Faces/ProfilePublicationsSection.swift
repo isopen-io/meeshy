@@ -88,10 +88,8 @@ struct ProfilePublicationsSection: View {
         MeeshyStateBlock(kind: .empty, title: ProfilePublicationsCopy.emptyTitle,
                          primary: MeeshyStateBlockAction(title: ProfilePublicationsCopy.publish, systemImage: "plus",
                                                          perform: { router.requestFeedComposer() }),
-                         art: .glyph, tint: Color(hex: accentColor)) {
-            ProfilePublicationsGhostTiles(tint: Color(hex: accentColor))
-        }
-        .accessibilityIdentifier("profile.posts.empty")
+                         art: .ghostTiles(ProfilePublicationsCopy.emptyGhostTiles), tint: Color(hex: accentColor))
+            .accessibilityIdentifier("profile.posts.empty")
     }
 
     @ViewBuilder
@@ -126,26 +124,5 @@ struct ProfilePublicationsSection: View {
         } else {
             opening.openPost(post)
         }
-    }
-}
-
-/// Les trois tuiles fantômes du vide de « Publications » : ce qu'on peut publier. Muettes : le titre du bloc le dit.
-private struct ProfilePublicationsGhostTiles: View {
-    let tint: Color
-    private static let glyphs = ["play.rectangle", "photo", "circle.dashed"]
-
-    var body: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            ForEach(Self.glyphs, id: \.self) { glyph in
-                Image(systemName: glyph)
-                    .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .frame(width: 64, height: 84)
-                    .background(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                        .strokeBorder(Color.secondary.opacity(MeeshyOpacity.light),
-                                      style: StrokeStyle(lineWidth: MeeshyBorder.emphasis, dash: [4, 3])))
-            }
-        }
-        .accessibilityHidden(true)
     }
 }

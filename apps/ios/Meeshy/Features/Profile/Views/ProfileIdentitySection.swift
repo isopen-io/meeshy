@@ -57,17 +57,19 @@ struct ProfileIdentitySection: View {
         }
     }
 
-    /// Le pseudo, après le nom affiché (planche `Moi-Edition`, #19644). Au repos, il se lit ; en édition, il se voit
-    /// verrouillé — le cadenas du kit (K45) et « Ne se modifie pas ici » — et VoiceOver le dit non modifiable.
+    /// Le pseudo, après le nom affiché (planche `Moi-Edition`, #19644). Au repos, il se lit ; en édition, c'est UN
+    /// CHAMP du formulaire comme ses voisins (K08), désactivé : la valeur, la légende « Ne se modifie pas ici » sous elle
+    /// et le cadenas du kit (K45) en fin — et VoiceOver le dit non modifiable.
     @ViewBuilder
     private var usernameRow: some View {
         if isEditing {
-            MeeshyToggleRowFace(
-                content: ProfileUsernameRow.editingContent(username: username),
-                leading: { MeeshyToggleRowNoSlot() },
-                titleAccessory: { MeeshyToggleRowNoSlot() },
-                trailing: { MeeshyMedallion(systemImage: ProfileUsernameRow.lockGlyph, kind: .neutral, size: .s36) }
-            )
+            MeeshyField(ProfileUsernameRow.title, text: ProfileUsernameRow.value(of: username),
+                        caption: ProfileUsernameRow.lockedNote, onChange: { _ in }) {
+                MeeshyMedallion(systemImage: ProfileUsernameRow.lockGlyph, kind: .neutral, size: .s36)
+            }
+            .disabled(true)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.xs)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(ProfileUsernameRow.editingAccessibilityLabel(username: username))
             .accessibilityIdentifier("profile.username.locked")
@@ -104,11 +106,6 @@ nonisolated enum ProfileUsernameRow {
             return "—"
         }
         return "@\(trimmed)"
-    }
-
-    /// La valeur, puis la mention dessous, comme la planche.
-    static func editingContent(username: String?) -> MeeshyToggleRowContent {
-        MeeshyToggleRowContent(title: title, subtitle: "\(value(of: username))\n\(lockedNote)")
     }
 
     /// « Pseudo, @aissa, Non modifiable, Ne se modifie pas ici ».

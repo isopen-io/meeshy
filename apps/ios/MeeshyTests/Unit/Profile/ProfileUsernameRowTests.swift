@@ -22,16 +22,6 @@ final class ProfileUsernameRowTests: XCTestCase {
         XCTAssertEqual(ProfileUsernameRow.value(of: "  "), "—")
     }
 
-    func test_editingContent_isTitledPseudo_andSaysTheValueThenThatItCannotBeChangedHere() throws {
-        let content = ProfileUsernameRow.editingContent(username: "aissa")
-        XCTAssertEqual(content.title, ProfileUsernameRow.title)
-        let subtitle = try XCTUnwrap(content.subtitle)
-        let value = try XCTUnwrap(subtitle.range(of: "@aissa"))
-        let note = try XCTUnwrap(subtitle.range(of: ProfileUsernameRow.lockedNote))
-        XCTAssertLessThan(value.lowerBound, note.lowerBound, "la valeur d'abord, la mention dessous, comme la planche")
-        XCTAssertEqual(content.accessory, .none, "le cadenas est un médaillon muet, pas un accessoire actionnable")
-    }
-
     func test_accessibilityLabel_readsTheRowAsOne_andSaysItIsNotEditable() throws {
         let label = ProfileUsernameRow.editingAccessibilityLabel(username: "aissa")
         let title = try XCTUnwrap(label.range(of: ProfileUsernameRow.title))
@@ -64,8 +54,10 @@ final class ProfileUsernameRowTests: XCTestCase {
         let identity = try code("Meeshy/Features/Profile/Views/ProfileIdentitySection.swift")
         XCTAssertTrue(identity.contains("MeeshyMedallion(systemImage: ProfileUsernameRow.lockGlyph"),
                       "le cadenas est le médaillon K45")
-        XCTAssertTrue(identity.contains("ProfileUsernameRow.editingContent(username: username)"),
-                      "en édition, la rangée K06 porte la valeur et la mention")
+        XCTAssertTrue(identity.contains("caption: ProfileUsernameRow.lockedNote"),
+                      "en édition, le pseudo est un champ K08 désactivé : la valeur, la légende sous elle")
+        XCTAssertTrue(identity.contains(".disabled(true)"))
+        XCTAssertFalse(identity.contains("editingContent"), "plus de valeur et de mention collées par un saut de ligne")
         XCTAssertTrue(identity.contains("ProfileUsernameRow.editingAccessibilityLabel(username: username)"),
                       "VoiceOver lit la rangée d'un seul tenant")
         XCTAssertFalse(identity.contains("Image(systemName: \"lock"), "aucun cadenas redessiné sur place")
