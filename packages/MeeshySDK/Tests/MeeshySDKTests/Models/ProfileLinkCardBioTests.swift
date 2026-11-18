@@ -59,7 +59,7 @@ final class ProfileLinkCardBioTests: XCTestCase {
     }
 
     func test_decode_anUnlistedAccent_isDropped() throws {
-        let json = #"{"id":"u1","username":"aissa","profileAccentColor":"#123456","isSelf":true}"#
+        let json = ##"{"id":"u1","username":"aissa","profileAccentColor":"#123456","isSelf":true}"##
         let decoded = try JSONDecoder().decode(ProfileLinkCard.self, from: Data(json.utf8))
 
         XCTAssertNil(decoded.profileAccentColor)
