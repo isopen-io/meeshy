@@ -87,19 +87,9 @@ private struct ProfileNextCircleRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: MeeshySpacing.md) {
-            VStack(spacing: 0) {
-                MeeshyMedallion(systemImage: ProfileInCommonCopy.circleGlyph(step.level), tint: tint,
-                                fill: step.isNext ? .solid : .soft, decor: step.isNext ? .halo : .none, size: .s36,
-                                state: step.isNext ? .current : .normal)
-                if !isLast {
-                    Capsule()
-                        .fill(tint.opacity(MeeshyOpacity.subtle))
-                        .frame(width: MeeshyBorder.emphasis)
-                        .frame(maxHeight: .infinity)
-                        .padding(.vertical, MeeshySpacing.xs)
-                        .accessibilityHidden(true)
-                }
-            }
+            MeeshyMedallion(systemImage: ProfileInCommonCopy.circleGlyph(step.level), tint: tint,
+                            fill: step.isNext ? .solid : .soft, decor: step.isNext ? .halo : .none, size: .s36,
+                            state: step.isNext ? .current : .normal)
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(ProfileNextCirclesCopy.title(of: step.level))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
@@ -124,9 +114,28 @@ private struct ProfileNextCircleRow: View {
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.top, MeeshySpacing.sm)
+        .background(alignment: .topLeading) { connector }
         .opacity(step.isNext ? 1 : MeeshyOpacity.strong)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("profile.nextCircles.\(step.level.rawValue)")
+    }
+}
+
+private extension ProfileNextCircleRow {
+    /// Le diamètre du médaillon (`.s36`), d'où le fil part vers le cran suivant.
+    static let medallion = CGFloat(MeeshyMedallionSize.s36.rawValue)
+
+    /// Le fil qui relie ce cran au suivant : il descend du bas du médaillon jusqu'au bas de la rangée.
+    @ViewBuilder
+    var connector: some View {
+        if !isLast {
+            Capsule()
+                .fill(tint.opacity(MeeshyOpacity.medium))
+                .frame(width: MeeshyBorder.emphasis)
+                .padding(.top, MeeshySpacing.sm + Self.medallion + MeeshySpacing.xs)
+                .padding(.leading, MeeshySpacing.lg + (Self.medallion - MeeshyBorder.emphasis) / 2)
+                .accessibilityHidden(true)
+        }
     }
 }
 
