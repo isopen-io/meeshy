@@ -29,6 +29,7 @@ import me.meeshy.app.auth.LoggingOutVeil
 import me.meeshy.app.auth.guest.GuestSessionEndViewModel
 import me.meeshy.app.auth.guest.GuestSessionEndedScreen
 import me.meeshy.app.calls.CallHeaderNamesViewModel
+import me.meeshy.app.calls.CallKeepScreenOn
 import me.meeshy.app.calls.CallPill
 import me.meeshy.app.calls.CallScreenShareViewModel
 import me.meeshy.app.calls.CallPillPresenter
@@ -119,6 +120,8 @@ fun MeeshyApp(
     // lit l'etat vivant dans [MinimizedCallPill].
     val callStatus by remember(callViewModel) { callViewModel.state.map { it.status }.distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = callViewModel.state.value.status)
+    // #19695 : pas de veille tant qu'un appel vit, plein écran comme réduit (la racine lit déjà la phase seule).
+    CallKeepScreenOn(callStatus)
 
     val pendingLink = warmDeepLink != null && warmDeepLinkAwaitsAccount
     LaunchedEffect(authState.isAuthenticated, authState.isRestoringSession, pendingLink) {
