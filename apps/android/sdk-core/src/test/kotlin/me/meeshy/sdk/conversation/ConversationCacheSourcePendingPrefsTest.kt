@@ -103,6 +103,19 @@ class ConversationCacheSourcePendingPrefsTest {
     }
 
     @Test
+    fun `a pin queued offline survives the conversation served again by id`() = runTest {
+        val api = mockk<ConversationApi>()
+        coEvery { api.listConditional(any(), any(), any(), any()) } returns page(served())
+        val repository = repository(api)
+        repository.syncSilently()
+        repository.setPinnedOptimistic("c1", true)
+
+        repository.rememberServed(served())
+
+        assertThat(cachedPrefs()!!.isPinned).isTrue()
+    }
+
+    @Test
     fun `a gesture the queue gave up on returns to the served state`() = runTest {
         val api = mockk<ConversationApi>()
         coEvery { api.listConditional(any(), any(), any(), any()) } returns page(served())

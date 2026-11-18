@@ -13,6 +13,8 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.ReadReceiptPayload
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -77,6 +79,19 @@ class ConversationCacheSourcePendingReadTest {
     }
 
     @Test
+    fun `a conversation read offline keeps a zero badge when it is served again by id`() = runTest {
+        val api = mockk<ConversationApi>()
+        coEvery { api.listConditional(any(), any(), any(), any()) } returns page(served(T1, unread = 3))
+        val repository = repository(api)
+        repository.syncSilently()
+        repository.markReadOptimistic("c1")
+
+        repository.rememberServed(served(T1, unread = 3))
+
+        assertThat(cachedUnread()).isEqualTo(0)
+    }
+
+    @Test
     fun `a message newer than the one read counts again`() = runTest {
         val api = mockk<ConversationApi>()
         coEvery { api.listConditional(any(), any(), any(), any()) } returns page(served(T1, unread = 3))
@@ -103,6 +118,80 @@ class ConversationCacheSourcePendingReadTest {
         repository.syncSilently()
 
         assertThat(cachedUnread()).isEqualTo(3)
+    }
+
+    /** La seule ligne de [kind] encore en file, datée de [createdAt] — en vol si [inFlight] (le coalesceur ne l'annule plus). */
+    private suspend fun sentAt(kind: String, createdAt: Long, inFlight: Boolean = true) {
+        val row = db.outboxDao().byKind(kind).single()
+        db.outboxDao().upsert(row.copy(createdAt = createdAt, state = if (inFlight) "INFLIGHT" else row.state))
+    }
+
+    private fun caughtUpTo(at: String) = ReadReceiptPayload(
+        messageIds = listOf("m-$at"),
+        language = "fr",
+        caughtUpToMessageId = "m-$at",
+        readThroughAt = isoToEpochMillisOrNull(at),
+    )
+
+    @Test
+    fun `a declared receipt keeps the badge down only up to the message it caught up to`() = runTest {
+        val api = mockk<ConversationApi>()
+        coEvery { api.listConditional(any(), any(), any(), any()) } returns page(served(T2, unread = 2))
+        val repository = repository(api)
+        repository.syncSilently()
+        repository.acknowledgeRead("c1", caughtUpTo(T1))
+        coEvery { api.listConditional(any(), any(), any(), any()) } returns page(served(T2, unread = 1))
+
+        repository.syncSilently()
+
+        assertThat(cachedUnread()).isEqualTo(1)
+    }
+
+    @Test
+    fun `a declared receipt caught up past the row the list holds keeps the badge down`() = runTest {
+        val api = mockk<ConversationApi>()
+        coEvery { api.listConditional(any(), any(), any(), any()) } returns page(served(T1, unread = 1))
+        val repository = repository(api)
+        repository.syncSilently()
+        repository.acknowledgeRead("c1", caughtUpTo(T2))
+        coEvery { api.listConditional(any(), any(), any(), any()) } returns page(served(T2, unread = 2))
+
+        repository.syncSilently()
+
+        assertThat(cachedUnread()).isEqualTo(0)
+    }
+
+    @Test
+    fun `marked unread after a receipt already on its way, the served count is taken`() = runTest {
+        val api = mockk<ConversationApi>()
+        coEvery { api.listConditional(any(), any(), any(), any()) } returns page(served(T1, unread = 3))
+        val repository = repository(api)
+        repository.syncSilently()
+        repository.markReadOptimistic("c1")
+        sentAt("READ_RECEIPT", createdAt = 1_000)
+        repository.markUnreadOptimistic("c1")
+        sentAt("MARK_UNREAD", createdAt = 2_000, inFlight = false)
+
+        repository.syncSilently()
+
+        assertThat(cachedUnread()).isEqualTo(3)
+    }
+
+    @Test
+    fun `read again after marking unread, the badge stays down`() = runTest {
+        val api = mockk<ConversationApi>()
+        coEvery { api.listConditional(any(), any(), any(), any()) } returns page(served(T1, unread = 3))
+        val repository = repository(api)
+        repository.syncSilently()
+        repository.markReadOptimistic("c1")
+        sentAt("READ_RECEIPT", createdAt = 1_000)
+        repository.markUnreadOptimistic("c1")
+        sentAt("MARK_UNREAD", createdAt = 2_000)
+        repository.markReadOptimistic("c1")
+
+        repository.syncSilently()
+
+        assertThat(cachedUnread()).isEqualTo(0)
     }
 
     private companion object {
