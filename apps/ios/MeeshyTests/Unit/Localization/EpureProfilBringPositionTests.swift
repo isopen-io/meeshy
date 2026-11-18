@@ -115,8 +115,66 @@ final class EpureProfilBringPositionTests: XCTestCase {
     }
 
     func test_shareLocation_sheet_showsTheSentenceAtRest_andHostsTheInfoNoteInThePrecisionFooter() throws {
-        let view = try code("Features/SharedLocation/ProfileShareLocationRow.swift")
+        let view = try code("Features/SharedLocation/Map/ShareMyLocationSheet.swift")
         XCTAssertTrue(view.contains("MeeshyInfoNoted(note: ShareLocationWording.explainNote"))
-        XCTAssertTrue(view.contains("ShareLocationWording.explain(name: displayName)"))
+        XCTAssertTrue(view.contains("ShareLocationWording.explain(name: name)"))
+    }
+}
+
+/// « Partager ma position » sur la fiche d'un Ami (#19637, planche `Autre-Actions`) : une rangée du kit (K06), titrée
+/// par la personne, qui dit l'état du partage en sous-titre et porte « Arrêter » (K40) tant que le partage dure.
+@MainActor
+final class ProfileShareLocationLineTests: XCTestCase {
+
+    private static let repoRoot: URL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+
+    private func code(_ relativePath: String) throws -> String {
+        AppSourceGuard.stripComments(try String(contentsOf: Self.repoRoot.appendingPathComponent("apps/ios/Meeshy/" + relativePath), encoding: .utf8))
+    }
+
+    func test_resolve_withoutShare_namesThePerson_saysNotShared_andOffersNoStop() {
+        let line = ProfileShareLocationLine.resolve(name: "Léo", entry: nil)
+        XCTAssertEqual(line.title, LocationMapCopy.shareMineWith("Léo"))
+        XCTAssertEqual(line.subtitle, LocationMapCopy.myPosition(.notShared, name: "Léo"))
+        XCTAssertFalse(line.offersStop)
+    }
+
+    func test_resolve_whileSharing_saysWhatTheySeeUntilWhen_andOffersStop() {
+        let until = Date(timeIntervalSince1970: 1_800_000_000)
+        let entry = SharedLocationRoster.Entry(precision: .neighborhood, until: until)
+        let line = ProfileShareLocationLine.resolve(name: "Léo", entry: entry)
+        XCTAssertEqual(line.title, LocationMapCopy.shareMineWith("Léo"))
+        XCTAssertEqual(line.subtitle, ShareLocationWording.sharing(name: "Léo", precision: .neighborhood, until: until))
+        XCTAssertTrue(line.offersStop)
+    }
+
+    func test_resolve_anOpenEndedShare_saysUntilIStop() {
+        let entry = SharedLocationRoster.Entry(precision: .exact, until: SharedLocationShareTerm.openEndedDeadline)
+        let line = ProfileShareLocationLine.resolve(name: "Léo", entry: entry)
+        XCTAssertEqual(line.subtitle, ShareLocationWording.sharingUntilStopped(name: "Léo", precision: .exact))
+        XCTAssertTrue(line.offersStop)
+    }
+
+    func test_row_isMadeOfTheKit_withoutEmojiFontOrHardcodedColor() throws {
+        let source = try code("Features/SharedLocation/ProfileShareLocationRow.swift")
+        let row = String(source[..<(source.range(of: "enum ShareLocationWording")?.lowerBound ?? source.endIndex)])
+        XCTAssertTrue(row.contains("MeeshyToggleRowFace("), "la rangée est la face K06 du kit")
+        XCTAssertTrue(row.contains("MeeshyButton(ShareLocationWording.stop"), "« Arrêter » est un bouton K40")
+        XCTAssertTrue(row.contains("kind: .danger"), "« Arrêter » est un bouton K40 de danger")
+        XCTAssertFalse(row.contains("📍"), "aucun émoji dans la rangée")
+        XCTAssertFalse(row.contains("indigo500"), "aucune couleur codée en dur : la teinte vient de la fiche")
+        XCTAssertFalse(row.contains(".font("), "aucune police posée sur place")
+        XCTAssertFalse(row.contains("RoundedRectangle"), "aucun fond dessiné sur place")
+        XCTAssertTrue(row.contains("ShareMyLocationSheet("), "la feuille de choix reste")
+        XCTAssertTrue(row.contains("center.stopSharing(with: userId)"), "l'arrêt reste celui du centre")
+    }
+
+    func test_row_takesTheProfileAccent() throws {
+        let section = try code("Features/Contacts/ProfileCircleSection.swift")
+        XCTAssertTrue(section.contains("tint: tint"), "la section passe l'accent de la fiche à la rangée")
+        let app = try code("MeeshyApp.swift")
+        XCTAssertTrue(app.contains("ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked, tint: tint)"))
     }
 }
