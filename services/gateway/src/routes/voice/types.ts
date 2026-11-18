@@ -32,6 +32,28 @@ export type StatsQuery = VoiceStatsQuery;
 // OPENAPI SCHEMAS
 // ═══════════════════════════════════════════════════════════════════════════
 
+const voiceTranslationSegmentSchema = {
+  type: 'object',
+  properties: {
+    text: { type: 'string', description: 'Segment text' },
+    startMs: { type: 'number', description: 'Segment start in milliseconds' },
+    endMs: { type: 'number', description: 'Segment end in milliseconds' },
+    speakerId: { type: 'string', nullable: true, description: 'Speaker identifier (s0, s1, ...)' },
+    voiceSimilarityScore: { type: 'number', nullable: true, description: 'Similarity with the sender voice (0-1)' },
+    confidence: { type: 'number', nullable: true, description: 'Segment confidence (0-1)' },
+    language: { type: 'string', nullable: true, description: 'Segment language (ISO 639-1)' },
+    isFinal: { type: 'boolean', nullable: true, description: 'Whether the segment is final' },
+    translatedText: { type: 'string', nullable: true, description: 'Translated segment text' },
+    translatedLanguage: { type: 'string', nullable: true, description: 'Language of translatedText' }
+  }
+} as const;
+
+const voiceTranslationSegmentsSchema = {
+  type: 'array',
+  items: voiceTranslationSegmentSchema,
+  description: 'Timed segments with speakers'
+} as const;
+
 export const voiceTranslationResultSchema = {
   type: 'object',
   properties: {
@@ -42,7 +64,10 @@ export const voiceTranslationResultSchema = {
         transcription: { type: 'string', description: 'Transcribed text from audio' },
         language: { type: 'string', description: 'Detected source language' },
         durationMs: { type: 'number', description: 'Audio duration in milliseconds' },
-        confidence: { type: 'number', description: 'Transcription confidence (0-1)' }
+        confidence: { type: 'number', description: 'Transcription confidence (0-1)' },
+        segments: voiceTranslationSegmentsSchema,
+        speakerCount: { type: 'number', nullable: true, description: 'Number of detected speakers' },
+        primarySpeakerId: { type: 'string', nullable: true, description: 'Main speaker identifier' }
       }
     },
     translations: {
@@ -52,18 +77,21 @@ export const voiceTranslationResultSchema = {
         properties: {
           targetLanguage: { type: 'string', description: 'Target language code' },
           translatedText: { type: 'string', description: 'Translated text' },
-          audioBase64: { type: 'string', description: 'Generated audio in base64 (if requested)' },
-          audioUrl: { type: 'string', description: 'URL to generated audio file' },
+          audioBase64: { type: 'string', nullable: true, description: 'Generated audio in base64 (null when no audio was generated)' },
+          audioUrl: { type: 'string', nullable: true, description: 'URL to generated audio file (null when no audio was generated)' },
           durationMs: { type: 'number', description: 'Generated audio duration in milliseconds' },
           voiceCloned: { type: 'boolean', description: 'Whether voice was cloned' },
-          voiceQuality: { type: 'number', description: 'Voice clone quality score (0-1)' }
+          voiceQuality: { type: 'number', description: 'Voice clone quality score (0-1)' },
+          segments: voiceTranslationSegmentsSchema
         }
       }
     },
     voiceProfile: {
       type: 'object',
+      nullable: true,
+      description: 'Voice profile used for cloning (null when no voice was cloned)',
       properties: {
-        profileId: { type: 'string', description: 'Voice profile ID' },
+        profileId: { type: 'string', nullable: true, description: 'Voice profile ID' },
         quality: { type: 'number', description: 'Profile quality score' },
         isNew: { type: 'boolean', description: 'Whether profile was newly created' }
       }
