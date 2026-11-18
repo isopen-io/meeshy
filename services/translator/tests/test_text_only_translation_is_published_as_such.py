@@ -104,3 +104,64 @@ async def test_a_synthesised_translation_is_not_flagged_text_only():
 
     [metadata] = handler.pub_socket.metadata()
     assert metadata["translatedAudio"]["textOnly"] is False
+
+
+@pytest.mark.unit
+def test_a_text_only_translation_has_no_audio_url():
+    assert _text_only().audio_url is None
+
+
+@pytest.mark.unit
+async def test_the_progressive_event_of_a_text_only_translation_serves_a_null_audio_url():
+    handler = _handler()
+
+    await handler._publish_translation_ready("task-4", {
+        "message_id": "m1", "attachment_id": "a1", "language": "en",
+        "translation": _text_only(), "is_single_language": True,
+    })
+
+    [metadata] = handler.pub_socket.metadata()
+    assert metadata["translatedAudio"]["audioUrl"] is None
+
+
+@pytest.mark.unit
+async def test_the_final_result_serves_a_null_audio_url_for_a_text_only_language():
+    handler = _handler()
+    result = AudioMessageResult(
+        message_id="m1",
+        attachment_id="a1",
+        original=OriginalAudio(
+            audio_path="/tmp/a.wav", audio_url="", transcription="Bonjour", language="fr",
+            duration_ms=2000, confidence=0.9, source="whisper", segments=[],
+        ),
+        translations={"en": _text_only("en")},
+        voice_model_user_id="u1",
+        voice_model_quality=0.7,
+        processing_time_ms=10,
+        requested_languages=["en"],
+    )
+
+    await handler._publish_audio_result("task-5", result, 10)
+
+    [metadata] = handler.pub_socket.metadata()
+    [english] = metadata["translatedAudios"]
+    assert english["audioUrl"] is None
+    assert result.to_dict()["translations"]["en"]["audio_url"] is None
+
+
+@pytest.mark.unit
+async def test_a_synthesised_translation_keeps_its_audio_url():
+    handler = _handler()
+    voiced = TranslatedAudioVersion(
+        language="es", translated_text="Hola", audio_path="", audio_url="/tts/es.ogg",
+        duration_ms=900, format="ogg", voice_cloned=False, voice_quality=0.0, processing_time_ms=1,
+        audio_data_base64="AAAA", audio_mime_type="audio/ogg",
+    )
+
+    await handler._publish_translation_ready("task-6", {
+        "message_id": "m1", "attachment_id": "a1", "language": "es",
+        "translation": voiced, "is_single_language": True,
+    })
+
+    [metadata] = handler.pub_socket.metadata()
+    assert metadata["translatedAudio"]["audioUrl"] == "/tts/es.ogg"

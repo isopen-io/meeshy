@@ -446,6 +446,53 @@ describe('AudioTranslateService', () => {
       );
     });
 
+    it('persists a translation without audio (#19648) with neither url nor path, and keeps the voiced one', async () => {
+      prisma.messageAttachment.findUnique.mockResolvedValue({ translations: null });
+
+      const promise = service.translateSync('user-1', {
+        targetLanguages: ['fr', 'de'],
+        attachmentId: 'att-text-only',
+        saveToDatabase: true,
+      });
+      emitVoiceSuccess(zmq, {
+        ...mockTranslationResult,
+        translations: [
+          ...mockTranslationResult.translations,
+          { targetLanguage: 'de', translatedText: 'Hallo Welt', audioUrl: null, audioBase64: null, durationMs: 0, voiceCloned: false, voiceQuality: 0 },
+        ],
+        voiceProfile: null,
+      });
+      await promise;
+
+      const saved = (prisma.messageAttachment.update.mock.calls[0][0] as { data: { translations: Record<string, Record<string, unknown>> } }).data.translations;
+      expect(saved.de.transcription).toBe('Hallo Welt');
+      expect(saved.de).not.toHaveProperty('url');
+      expect(saved.de).not.toHaveProperty('path');
+      expect(saved.fr.url).toBe('https://cdn.meeshy.me/audio/fr.mp3');
+    });
+
+    it('persists an empty audioUrl from a translator of the previous version (#19648) with neither url nor path', async () => {
+      prisma.messageAttachment.findUnique.mockResolvedValue({ translations: null });
+
+      const promise = service.translateSync('user-1', {
+        targetLanguages: ['de'],
+        attachmentId: 'att-legacy-empty',
+        saveToDatabase: true,
+      });
+      emitVoiceSuccess(zmq, {
+        ...mockTranslationResult,
+        translations: [
+          { targetLanguage: 'de', translatedText: 'Hallo Welt', audioUrl: '', durationMs: 0, voiceCloned: false, voiceQuality: 0 },
+        ],
+      });
+      await promise;
+
+      const saved = (prisma.messageAttachment.update.mock.calls[0][0] as { data: { translations: Record<string, Record<string, unknown>> } }).data.translations;
+      expect(saved.de.transcription).toBe('Hallo Welt');
+      expect(saved.de).not.toHaveProperty('url');
+      expect(saved.de).not.toHaveProperty('path');
+    });
+
     it('uses VOICE_TRANSLATE_SYNC_TIMEOUT for the request', async () => {
       const promise = service.translateSync('user-1', { targetLanguages: ['fr'] });
       // Advance less than the sync timeout — should NOT timeout

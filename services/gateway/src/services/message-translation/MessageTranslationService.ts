@@ -1033,7 +1033,7 @@ export class MessageTranslationService extends EventEmitter {
     translatedAudios: Array<{
       targetLanguage: string;
       translatedText: string;
-      audioUrl: string;
+      audioUrl: string | null;  // #19648 — null sans piste (TTS en échec)
       audioPath: string;
       durationMs: number;
       voiceCloned: boolean;
@@ -1086,8 +1086,7 @@ export class MessageTranslationService extends EventEmitter {
           translations[ta.targetLanguage] = {
             type: 'audio',
             transcription: ta.translatedText,
-            path: ta.audioPath,
-            url: ta.audioUrl,
+            ...(ta.audioUrl ? { path: ta.audioPath, url: ta.audioUrl } : {}),
             durationMs: ta.durationMs,
             format: ta.audioMimeType ?? 'audio/mp3',
             cloned: ta.voiceCloned,
@@ -1659,7 +1658,7 @@ export class MessageTranslationService extends EventEmitter {
       translatedAudio: {
         targetLanguage: string;
         translatedText: string;
-        audioUrl: string;
+        audioUrl: string | null;  // #19648 — null sans piste (TTS en échec)
         audioPath: string;
         durationMs: number;
         voiceCloned: boolean;

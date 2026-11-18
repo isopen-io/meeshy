@@ -485,3 +485,25 @@ describe('GET /admin/conversations/:id/attachments — une pièce PROTÉGÉE ren
     expect(data.map((p) => p.fileUrl)).toEqual([null, null]);
   });
 });
+
+describe('GET /admin/conversations/:id/attachments — #19672 : le chemin disque des pistes traduites ne sort pas', () => {
+  it('translations.<lang>.path est retiré, la piste garde le reste', async () => {
+    const piece = await premierePiece([
+      porteurFixture({}, [
+        pieceFixture({
+          translations: {
+            en: {
+              text: 'the meeting has moved to thursday',
+              url: '/api/v1/attachments/file/uploads%2Fen.mp3',
+              path: '/app/uploads/translated/att-1_en.mp3',
+            },
+          },
+        }),
+      ]),
+    ]);
+    const en = (piece.translations as Record<string, AnyRecord>).en;
+    expect(en).toMatchObject({ url: '/api/v1/attachments/file/uploads%2Fen.mp3' });
+    expect(en).not.toHaveProperty('path');
+    expect(JSON.stringify(piece)).not.toContain('/app/uploads');
+  });
+});

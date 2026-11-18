@@ -1516,3 +1516,114 @@ socket jusqu'au client.
 3. #19597, #19596, puis #19473, #18668 et #18692 (messages d'exception bruts), #19381, #19253, #19294, #19295, #19255.
 4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
 5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 45 — 2026-11-18
+
+- **Base** : `origin/dev` @ `02c4bd697`. La PR du cycle 44 (#19649) était fusionnée. #19595 est fermée ; #19520 reste ouverte pour son second critère, le constat sur le serveur.
+- **Branche** : `claude/determined-volta-mmvigf`.
+- **Objectif** : #19647. `POST /voice/transcribe` et `POST /attachments/:id/transcribe` ne servent plus le chemin disque serveur (`audioPath`) des pistes traduites.
+- **Livré** (passerelle seule) :
+  - Les deux routes déclarent `translatedAudios: { type: 'array', items: voiceTranslatedAudioSchema }`. Le schéma du cycle 44 est réutilisé, pas dupliqué.
+  - La vue riche (`attachmentAudioRichView`) a dix clés : seule `audioPath` est retirée. Les clés internes `audio_path` et `fallback` ne passent plus non plus.
+- **Tests** :
+  - **Rouge** (`-t "chemin serveur"`, deux suites) : `2 failed, 67 skipped, 1 passed`. Le diff montrait `+ "audioPath": "/srv/meeshy/uploads/translated/…"`.
+  - **Vert** : `voice/translation` et `attachments/translation` donnent `70 passed`, relancé par moi.
+  - Suites voice et attachments : `46 suites, 771 passed`. Gardes `security/response-schema*` : `27 passed`. `tsc --noEmit` : 0.
+  - La QA a ajouté un témoin qui part du vrai producteur `attachmentAudioRichView`. Il est rouge sur la route d'avant le lot (`2 failed, 25 passed`) et vert après. Avec lui : `49 suites, 800 passed`.
+  - **Mutations QA** : ajouter `audioPath` au schéma, ou retirer `format`. Chacune fait tomber 3 tests.
+- **Rétrocompatibilité** : aucun client ne lit `translatedAudios` sur ces routes.
+  - iOS : `AttachmentService.requestTranscription` décode un `SimpleAPIResponse`, et `VoiceEndpoint.transcribe` n'a pas d'appelant.
+  - Android : `MediaApi.transcribe` décode un `JsonElement` ; `TranscribeOutcome` ne lit que `status` et `transcription`.
+  - Web : `attachment-processing.ts` ne lit que `data.transcription`.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - #19672 (**moyenne, sécurité**) : `messageAttachmentSchema` déclare `translations.<langue>.path` et `translatedAudios[].path`, et `cleanAttachmentsForApi` les recopie. Le chemin absolu (`/app/uploads/translated/…`) part donc avec toute liste de messages, sur une dizaine de routes.
+  - #19673 : `transcription.segments` n'a pas d'`items`. Dans la même issue, l'`attachment` de `/attachments/:id/transcribe` est tronqué à 6 champs.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre : fusion à la main quand la CI est verte.
+1. **#19672 d'abord** : même classe que #19647, surface large, sécurité. Vérifier qu'aucun client ne lit `path` avant de le retirer du schéma partagé, et regarder aussi le socket. Puis #19673, puis #19648.
+2. #19520, second critère : constat sur le serveur avec `sre-infra`, dans la même séance que la mesure des journaux d'accès pour #19471.
+3. #19597, #19596, puis #19473, #18668 et #18692 (messages d'exception bruts), #19381, #19253, #19294, #19295, #19255.
+4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
+5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 46 — 2026-11-18
+
+- **Base** : `origin/dev` @ `6ccc8482b`, puis fusionnée avec `dev` @ `09fc63152`. La PR du cycle 45 (#19675) était encore ouverte : sa CI était annulée à chaque mise à jour depuis `dev`, puis bloquée en file. Le cliquet de poids (#19684) passe de nouveau sur `dev` (`measure-weight.mjs` EXIT=0, mesuré).
+- **Branche** : `claude/determined-volta-5jflwy`, **empilée sur #19675**, parce que les deux cycles écrivent dans le même journal.
+- **Objectif** : #19672. Aucune route ni aucun événement socket ne sert plus le chemin disque (`path`) des pistes traduites d'une pièce jointe de message.
+- **Livré** (passerelle et schéma partagé) :
+  - `messageAttachmentSchema` ne déclare plus `translations.<lang>.path` ni `translatedAudios[].path`. Toutes les routes qui le servent sont fermées par le sérialiseur.
+  - `servedAttachmentTranslations` (`services/attachments/`) est le seul endroit qui retire `path`. Son type de sortie ne déclare plus `path`, et un cliquet `tsc` le garantit. Il est appliqué :
+    - au socket (`serializeAttachmentForSocket` : `message:new`, `message:edited`, `attachment:updated`, `ready-listener`) ;
+    - à `cleanAttachmentsForApi` ;
+    - au fil de réponses (`GET /conversations/:id/threads/:messageId`, schéma `additionalProperties: true`) ;
+    - aux deux lectures d'administration (projection souveraine, `GET /admin/messages`).
+  - La persistance n'a pas changé : `path` reste en base.
+- **Rétrocompatibilité** : aucun client ne lit `path` sur une traduction de pièce jointe (vérifié par le spécialiste puis par la QA).
+  - iOS : `APIAttachmentTranslation`, `MessageTranslatedAudio`, `TranslatedAudioInfo`.
+  - Android : `ApiAttachmentTranslation`, `TranslatedAudioPayload`.
+  - Web : aucun accès.
+- **Tests** :
+  - Rouge du premier commit : `4 failed, 15 passed` ; vert : `19 passed`.
+  - B, C et D ont chacun un témoin, rouge puis vert, qui traverse la route par `app.inject`, ou qui appelle directement `cleanAttachmentsForApi`.
+  - Sur l'arbre fusionné avec `dev` et #19675, j'ai relancé moi-même les suites security, routes/voice, routes/attachments, threads, admin et serializeAttachmentForSocket : `94 suites, 1223 passed`. `tsc --noEmit` : 0.
+  - Échecs préexistants, sans lien avec ce lot : `call-live-frame-events` (plafond d'appel de 6 à 5) et 4 suites d'images (sharp/libvips du conteneur).
+- **QA** (`auditeur-adversarial`, deux passages) :
+  - Premier passage : défavorable pour fermer l'issue. Le fil de réponses, les deux routes d'administration et `audioPath` sur les transcriptions servaient encore le chemin. Le diff était sain par ailleurs.
+  - Second passage : **favorable à la fermeture**, à condition que #19675 soit fusionnée (elle ferme `audioPath`, ce que la QA a vérifié par la vraie route).
+  - Mutations B, C1, C2 et D : chacune fait tomber un test (`1 failed, 156 passed`).
+  - Réserves : #19702 (retirer `audioPath` à la source, dans les vues audio) ; formes non-carte de `translations` laissées telles quelles (aucun producteur connu) ; médias de post non examinés.
+
+### Cycle suivant : par où reprendre
+
+0. Si #19675 ou la PR de ce cycle ne sont pas fusionnées, les reprendre : fusion à la main quand la CI est verte, #19675 d'abord. Fermer #19647 et #19672 à la main avec leur preuve si `Closes` ne les ferme pas.
+1. #19702, petite ; puis #19673, puis #19648. Examiner aussi `PostMedia.translations` (même classe de fuite, hors appels : ouvrir une issue si la fuite existe).
+2. #19520, second critère : constat sur le serveur avec `sre-infra`, dans la même séance que la mesure des journaux d'accès pour #19471.
+3. #19597, #19596, puis #19473, #18668 et #18692 (messages d'exception bruts), #19381, #19253, #19294, #19295, #19255.
+4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
+5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 47 — 2026-11-18
+
+- **Base** : `origin/dev` @ `2fcb40b94`, puis fusionnée avec `dev` @ `ba1f209bf`. La PR du cycle 46 (#19704, qui contient aussi le cycle 45) attendait sa CI, en file depuis 17:22 ; je n'y ai pas poussé, pour ne pas l'annuler.
+- **Branche** : `claude/determined-volta-mn4257`, partie de `dev`. Ses fichiers sont disjoints de ceux de #19704, sauf le journal.
+- **Objectif** : #19648 (une traduction vocale sans audio rend `audioUrl` null de bout en bout) et #19596 (horodatages d'un job vocal en ISO 8601 UTC avec `Z`).
+- **Livré** :
+  - **Traducteur.**
+    - `TranslatedAudioVersion.text_only_version` pose `audio_url=None` (`audio_path` reste `""` en interne).
+    - `VoiceMessageResponse.audio_url` devient `Optional`. Sans ce changement, `/voice-message` tombait en 500.
+    - `utils/served_time.py` : `served_utc()` est le site unique de formatage (forme `toISOString`, millisecondes, `Z`). Il sert `TranslationJob.to_dict()` et `/voice/job`.
+    - Les jobs sont créés en `datetime.now(timezone.utc)`. Le nettoyage normalise avant de comparer.
+  - **Passerelle.**
+    - `AudioTranslateService._saveTranslationResult` et la branche post/story de `MessageTranslationService` **omettent** `url` et `path` sans adresse, comme le chemin message depuis #16340. Avant, ils persistaient `url: ""`.
+    - La garde est en vérité : un ancien traducteur qui envoie `""` est traité comme `null`.
+  - **Partagé** : `voice-api.ts` déclare `| null` sur `audioUrl`, `audioBase64`, `voiceProfile` et `profileId`.
+- **Tests** :
+  - **Pytest** :
+    - `test_text_only…` : rouge `3 failed, 4 passed`, puis vert `7 passed` ;
+    - `test_voice_message_response…` : rouge `1 failed`, puis vert `2 passed` ;
+    - `test_job_timestamps…` : rouge `5 failed, 1 passed`, puis vert, et `7 passed` avec le témoin de la QA.
+  - **Jest** : `AudioTranslateService` et `MessageTranslationService.audio` sont rouges (`Received value: null`), puis verts.
+  - **Relancé par moi sur l'arbre fusionné avec `dev`** :
+    - passerelle : `3 suites, 91 passed`, `tsc --noEmit` à 0 ;
+    - traducteur : `83 passed` (lot et `test_28`, sous Python 3.13, alors que le projet déclare 3.10).
+  - Les échecs du traducteur sont identiques à ceux de `dev` (`18 failed, 37 errors` sur `test_23`, `test_job_webhook_guard`, `test_12`, `test_audio_pipeline_metrics`, `test_audio_url_guard`). Ils viennent de l'environnement local (QA, `git archive`).
+- **Rétrocompatibilité** (QA, en lisant chaque lecteur) :
+  - Ancienne passerelle face au nouveau traducteur : aucun lecteur n'appelle de méthode sur `audioUrl`. Les lecteurs de `translations[].url` tolèrent `null`, `""` ou l'absence.
+  - Aucune boucle de retraduction : la décision « déjà traduit » porte sur la clé de langue.
+  - iOS `url: String?`, Android `String? = null`, le web filtre `trim() !== ''`.
+  - Les jobs ne vivent qu'en mémoire : aucun `fromisoformat` ne relit `Z` (3.10).
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - Mutations : 5 tuées d'emblée. M4 et G3/G4 survivaient, et sont tuées par ses témoins (`01e798d67`). M5 est équivalente. Retirer le `| null` du type partagé n'est détecté par aucun test (simple typage, `strictNullChecks: false`).
+  - Réserves ouvertes en issues : #19734 (piste orpheline quand un texte seul suit une voix, antérieure au lot), #19735 (cache `audio_url` à `""`, témoin de la route `/voice-message`, type `PostAudioService`), #19736 (horodatages de santé et d'analyse).
+
+### Cycle suivant : par où reprendre
+
+0. Fusionner #19704 (cycles 45 et 46) puis la PR de ce cycle quand leur CI est verte (fusion à la main ; la CI des PR était en file depuis des heures). Le journal entre en conflit entre les deux : garder les deux sections, dans l'ordre 46 puis 47. Fermer à la main #19647, #19672, #19648 et #19596 avec leur preuve si `Closes` ne les ferme pas.
+1. #19734 (effacement, sécurité), puis #19702, #19673 et #19735.
+2. #19520, second critère : constat sur le serveur avec `sre-infra`, dans la même séance que la mesure des journaux d'accès pour #19471.
+3. #19597, #19736, puis #19473, #18668 et #18692 (messages d'exception bruts), #19381, #19253, #19294, #19295, #19255.
+4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
+5. **Recentrer la routine sur les appels eux-mêmes.** Les cycles 42 à 47 ont soldé la dette de la surface vocale de la passerelle. Le prochain lot sans P0 devrait viser la chaîne de traduction en direct (latence mesurée de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613).
