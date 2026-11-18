@@ -1,5 +1,5 @@
 import * as relationsEndpoints from '@meeshy/shared/api/endpoints/relations';
-import { SHARED_LOCATION_DEFAULT_PRECISION, SHARED_LOCATION_PRECISIONS } from '@meeshy/shared/types/shared-location-constants';
+import { SHARED_LOCATION_CIRCLES, SHARED_LOCATION_DEFAULT_PRECISION, SHARED_LOCATION_PRECISIONS } from '@meeshy/shared/types/shared-location-constants';
 import type { SharedLocationChangedEventData, SharedLocationOwnRecipient, SharedLocationOwnSnapshot } from '@meeshy/shared/types/shared-location';
 
 import { bboxQuery, type GeoBbox } from '@/lib/map/slippy';
@@ -18,7 +18,9 @@ import type { ApiResult, HttpTransport } from './http';
  * Décodé à la main (le web n'embarque pas Zod sur ce chemin), TOLÉRANT et FERMÉ :
  * - une ligne illisible se saute, elle ne fait pas tomber les autres ;
  * - une précision inconnue se lit `city`, la plus floue — jamais plus fine ;
- * - seuls les sept champs servis traversent : rien n'est fabriqué, rien ne voyage à côté.
+ * - seuls les huit champs servis traversent : rien n'est fabriqué, rien ne voyage à côté ;
+ * - le cercle (#17013, #17966) ne traverse que s'il est connu : absent ou inconnu, le marqueur
+ *   reste neutre — jamais un cercle deviné.
  */
 
 export type SharedLocation = SharedLocationChangedEventData;
@@ -46,7 +48,8 @@ export function decodeSharedLocation(raw: unknown): SharedLocation | null {
   const expiresAt = instantOf(wire.expiresAt);
   if (userId === null || latitude === null || longitude === null || radiusMeters === null || updatedAt === null || expiresAt === null) return null;
   const precision = SHARED_LOCATION_PRECISIONS.find((candidate) => candidate === wire.precision) ?? SHARED_LOCATION_DEFAULT_PRECISION;
-  return { userId, latitude, longitude, precision, radiusMeters, updatedAt, expiresAt };
+  const circle = SHARED_LOCATION_CIRCLES.find((candidate) => candidate === wire.circle);
+  return { userId, latitude, longitude, precision, radiusMeters, ...(circle === undefined ? {} : { circle }), updatedAt, expiresAt };
 }
 
 export async function loadSharedLocations(deps: SharedLocationDeps & { readonly bbox: GeoBbox; readonly signal?: AbortSignal }): Promise<ApiResult<readonly SharedLocation[]>> {

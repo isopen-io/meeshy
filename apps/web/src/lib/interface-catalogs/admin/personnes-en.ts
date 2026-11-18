@@ -75,6 +75,7 @@ const f = {
   'admin.people.pref.privacy.showReadReceipts': 'Send read receipts',
   'admin.people.pref.privacy.showTypingIndicator': 'Show typing indicator',
   'admin.people.pref.privacy.showForwardSource': 'Show the source of forwarded messages',
+  'admin.people.pref.privacy.showProfileFigures': 'Show my figures to my Close circle',
   'admin.people.pref.privacy.allowContactRequests': 'Allow contact requests',
   'admin.people.pref.privacy.allowGroupInvites': 'Allow group invitations',
   'admin.people.pref.privacy.acceptCallsFromNonContacts': 'Accept calls from non-contacts',

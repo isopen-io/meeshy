@@ -27,3 +27,19 @@ const LABEL_LANGUAGE: Readonly<Record<InterfaceLanguage, RelationLabelLanguage>>
 export const relationLevelLabel = (language: InterfaceLanguage, level: RelationLevel): string => RELATION_LEVEL_LABELS[LABEL_LANGUAGE[language]][level];
 
 export const relationLevelIcon = (level: RelationLevel): string => RELATION_LEVEL_PRESENTATION[level].icon;
+
+/**
+ * **LA COULEUR D'UN NIVEAU** (#17013) — tirée des jetons, iso `CircleLevelColor` (iOS) et
+ * `RelationLevel.tint()` (Android). Une seule table : la fiche d'un lien, « Mes cercles » et le
+ * marqueur de la carte des positions la lisent, aucune ne la recopie.
+ */
+const LEVEL_TINT: Readonly<Record<RelationLevel, string>> = {
+  BLOOD: 'var(--color-error)',
+  CLOSE: 'var(--color-warning)',
+  FRIEND: 'var(--color-success)',
+  ACQUAINTANCE: 'var(--ios-info)',
+  COMMUNITY: 'var(--color-ink-muted)',
+  PUBLIC: 'var(--color-ink-muted)',
+};
+
+export const relationLevelTint = (level: RelationLevel): string => LEVEL_TINT[level];

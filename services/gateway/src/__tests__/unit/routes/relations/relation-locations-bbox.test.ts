@@ -38,9 +38,10 @@ describe('la forme servie au rattrapage (#17966)', () => {
     circle: 'CLOSE',
     updatedAt: '2026-11-08T12:00:00.000Z',
     expiresAt: '2026-11-08T13:00:00.000Z',
+    startedAt: '2026-11-08T12:00:00.000Z',
   };
 
-  it('le cercle traverse le sérialiseur', () => {
+  it('le cercle et le début du partage (#19458) traversent le sérialiseur', () => {
     expect(JSON.parse(serialize(servie))).toEqual(servie);
   });
 

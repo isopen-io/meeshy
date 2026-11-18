@@ -55,6 +55,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case gameSeasonStepsByStepClaim(step: String)
     case gameShowcaseOrder
     case gameVisibility
+    case liveActivityTokens
     case locationBlood
     case locationBloodSettings
     case locationConsultations
@@ -130,6 +131,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .gameSeasonStepsByStepClaim(let step): return "/api/v1/me/game/season/steps/\(step)/claim"
         case .gameShowcaseOrder: return "/api/v1/me/game/showcase/order"
         case .gameVisibility: return "/api/v1/me/game/visibility"
+        case .liveActivityTokens: return "/api/v1/me/live-activity-tokens"
         case .locationBlood: return "/api/v1/me/location/blood"
         case .locationBloodSettings: return "/api/v1/me/location/blood-settings"
         case .locationConsultations: return "/api/v1/me/location/consultations"

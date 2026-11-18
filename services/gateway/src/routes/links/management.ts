@@ -326,6 +326,10 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       if (body.allowedCountries !== undefined) updateData.allowedCountries = body.allowedCountries;
       if (body.allowedLanguages !== undefined) updateData.allowedLanguages = body.allowedLanguages;
       if (body.allowedIpRanges !== undefined) updateData.allowedIpRanges = body.allowedIpRanges;
+      // #19283 — « Remettre le compteur à zéro » : un ordre, jamais une valeur.
+      // Le client ne pose pas `currentUses` lui-même ; la règle de gestion
+      // (`loadShareLinkForManagement`) l'a déjà autorisé ci-dessus.
+      if (body.resetUses === true) updateData.currentUses = 0;
 
       // #4351 — l'écriture ET sa révocation vivent dans `applyShareLinkUpdate`,
       // le site unique partagé avec `/toggle` et `/extend`.

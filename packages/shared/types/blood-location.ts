@@ -14,7 +14,10 @@
  * 5. `PUT /me/location/blood-settings` ({@link BloodLocationSettingsPayload}) : fantôme global
  *    ou ciblé, rayon de proximité par personne ;
  * 6. `location:blood-proximity` ({@link BloodProximityEventData}) part aux DEUX Sangs, sans
- *    coordonnée, au plus une fois par paire toutes les 2 h.
+ *    coordonnée, au plus une fois par paire toutes les 2 h ;
+ * 7. `location:blood-moved` ({@link BloodMovedEventData}) part, à chaque point, aux comptes qui
+ *    pourraient LIRE l'historique de l'émetteur, sans coordonnée, au plus une fois par paire et par
+ *    {@link BLOOD_MOVED_SIGNAL_SECONDS} : le client relit alors la carte (#19400).
  */
 import { z } from 'zod';
 
@@ -28,6 +31,8 @@ export const BLOOD_PROXIMITY_MAX_RADIUS_METERS = 5000;
 export const BLOOD_PROXIMITY_FRESH_MINUTES = 60;
 /** Au-delà, dans les 24 h, d'un même observateur : le journal le signale à l'observé. */
 export const BLOOD_CONSULTATION_EXCESS_PER_DAY = 20;
+/** Au plus un `location:blood-moved` par paire émetteur → lecteur dans cette fenêtre (#19400). */
+export const BLOOD_MOVED_SIGNAL_SECONDS = 60;
 
 /**
  * La carte de tous mes proches (#19202) relit le dernier point de chaque Sang à chaque
@@ -78,3 +83,36 @@ export type BloodProximityEventData = {
   readonly userId: string;
   readonly distanceMeters: 100 | 250 | 500 | 1000 | 2500 | 5000;
 };
+
+/**
+ * « La position continue de X a bougé » (#19400) : l'identité et l'heure du point, JAMAIS une
+ * coordonnée. Le lecteur relit la carte (`GET /relations/locations?include=blood`) ou l'historique ;
+ * la lecture reste la seule porte des coordonnées et du journal des consultations. Un ancien client
+ * l'ignore et garde sa relecture.
+ */
+export type BloodMovedEventData = {
+  readonly userId: string;
+  readonly at: string;
+};
+
+/**
+ * La RELECTURE de mes réglages (#19452). `GET /me/location/blood-settings?userId=` rend, pour SOI,
+ * le fantôme global, le fantôme ciblé sur `userId` et le rayon réglé pour lui (défaut
+ * {@link BLOOD_PROXIMITY_DEFAULT_RADIUS_METERS}, borné). Seules les lignes dont le lecteur est
+ * propriétaire sont lues : ce que l'autre a réglé pour lui ne part jamais.
+ */
+export const bloodLocationSettingsQuerySchema = z.object({ userId: objectId });
+export type BloodLocationSettingsQuery = z.infer<typeof bloodLocationSettingsQuerySchema>;
+
+export type BloodLocationSettingsReading = {
+  readonly userId: string;
+  readonly ghost: boolean;
+  readonly ghostFor: boolean;
+  readonly proximityRadiusMeters: number;
+};
+
+/**
+ * `GET /me/location/ghost` (#19452), hors drapeau Sang : l'état de MON fantôme global, même forme
+ * que la réponse du `PUT /me/location/ghost` ; `ghostAt` est la date d'entrée, nulle hors fantôme.
+ */
+export type LocationGhostReading = { readonly ghost: boolean; readonly ghostAt: string | null };

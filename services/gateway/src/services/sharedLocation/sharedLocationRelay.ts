@@ -33,6 +33,7 @@ import {
   SHARED_LOCATION_ERROR_CODES,
   SHARED_LOCATION_EXACT_MIN_RADIUS_METERS,
   SHARED_LOCATION_GRID_DEGREES,
+  SHARED_LOCATION_PRECISIONS,
   sharedLocationStartPayloadSchema,
   sharedLocationUpdatePayloadSchema,
   type SharedLocationAck,
@@ -80,6 +81,8 @@ export type SharedLocationDb = PairAccessDb;
 
 export type SharedLocationIo = ServerEmitIO;
 
+/** Une fin servie (#19463) : qui ne voit plus, de qui, depuis quand — jamais rien de la position. */
+export type SharedLocationEndSignal = { readonly readerId: string; readonly emitterId: string; readonly endedAt: string };
 /** « Prévenir » (#19204) : à qui, de qui, pour combien de temps — jamais une position. */
 export type SharedLocationStartedNotice = {
   readonly emitterId: string;
@@ -93,6 +96,8 @@ export type SharedLocationRelayDeps = {
   readonly cache: SharedLocationCache;
   readonly io: SharedLocationIo | undefined;
   readonly now: () => number;
+  /** Porte la fin hors de l'app (appareil suspendu) ; à chaque `location:share-ended`, jamais ailleurs. */
+  readonly ended?: (end: SharedLocationEndSignal) => void;
   /** Porte `location_share_started` (#19204) ; absente, personne n'est prévenu. Un échec n'arrête jamais le partage. */
   readonly notifyStarted?: (notices: readonly SharedLocationStartedNotice[]) => Promise<void>;
   /**
@@ -182,15 +187,16 @@ const heldSinceGhost = (state: Pick<SharedLocationState, 'updatedAt' | 'servable
  */
 export function projectSharedLocation(
   userId: string,
-  state: Pick<SharedLocationState, 'position' | 'updatedAt' | 'expiresAt' | 'recipients' | 'servableFrom'>,
+  state: Pick<SharedLocationState, 'position' | 'updatedAt' | 'expiresAt' | 'recipients' | 'startedAt' | 'servableFrom'>,
   access: SharedLocationReaderAccess,
   readerId?: string,
 ): SharedLocationChangedEventData | null {
   if (access === 'none' || heldSinceGhost(state)) return null;
   const circle = access.circle ? { circle: access.circle } : {};
+  const startedAt = state.startedAt === undefined ? {} : { startedAt: state.startedAt };
   if (access.precision === 'exact') {
     const radiusMeters = Math.max(SHARED_LOCATION_EXACT_MIN_RADIUS_METERS, Math.round(state.position.accuracy ?? 0));
-    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, ...circle, updatedAt: state.updatedAt, expiresAt: deadlineOf(state, readerId) };
+    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, ...circle, updatedAt: state.updatedAt, expiresAt: deadlineOf(state, readerId), ...startedAt };
   }
   const held = readerId === undefined ? undefined : recipientOf(state, readerId)?.cell;
   const cell = held ?? cellOf(state.position, SHARED_LOCATION_GRID_DEGREES[access.precision]);
@@ -203,6 +209,7 @@ export function projectSharedLocation(
     ...circle,
     updatedAt: roundedClock(state.updatedAt),
     expiresAt: deadlineOf(state, readerId),
+    ...startedAt,
   };
 }
 
@@ -270,8 +277,10 @@ const safely = (send: () => void): void => {
 const serve = (io: SharedLocationIo | undefined, readerId: string, data: SharedLocationChangedEventData): void =>
   safely(() => io?.to(ROOMS.user(readerId)).emit(SERVER_EVENTS.SHARED_LOCATION_CHANGED, data));
 
-const unserve = (io: SharedLocationIo | undefined, readerId: string, emitterId: string): void =>
-  safely(() => io?.to(ROOMS.user(readerId)).emit(SERVER_EVENTS.SHARED_LOCATION_ENDED, { userId: emitterId }));
+const unserve = (deps: SharedLocationRelayDeps, readerId: string, emitterId: string): void => {
+  safely(() => deps.io?.to(ROOMS.user(readerId)).emit(SERVER_EVENTS.SHARED_LOCATION_ENDED, { userId: emitterId }));
+  safely(() => deps.ended?.({ readerId, emitterId, endedAt: new Date(deps.now()).toISOString() }));
+};
 
 const failed = (code: SharedLocationErrorCode, error: string) => ({ success: false, error, code }) as const;
 const UNAVAILABLE = failed(SHARED_LOCATION_ERROR_CODES.UNAVAILABLE, 'Position momentanément indisponible');
@@ -331,7 +340,7 @@ async function closeStaleReaders(
   if (closed.length === 0) return;
   const stale = await sharedLocationSeenAmong(deps.cache, emitterId, state.sessionId, closed);
   if (stale.length === 0) return;
-  stale.forEach((readerId) => unserve(deps.io, readerId, emitterId));
+  stale.forEach((readerId) => unserve(deps, readerId, emitterId));
   await unmarkSharedLocationSeen(deps.cache, emitterId, state.sessionId, stale);
 }
 
@@ -346,7 +355,7 @@ async function revokedSince(deps: SharedLocationRelayDeps, emitterId: string, st
   const confirmed = await accessOf(deps, emitterId, state, sent);
   const revoked = sent.filter((readerId) => (confirmed.get(readerId) ?? 'none') === 'none');
   if (revoked.length === 0) return [];
-  revoked.forEach((readerId) => unserve(deps.io, readerId, emitterId));
+  revoked.forEach((readerId) => unserve(deps, readerId, emitterId));
   await unmarkSharedLocationSeen(deps.cache, emitterId, state.sessionId, revoked);
   return revoked;
 }
@@ -365,7 +374,7 @@ async function reconcile(deps: SharedLocationRelayDeps, emitterId: string, reade
   const deliveries = readers.map((readerId) => ({ readerId, projection: current ? projectSharedLocation(emitterId, current, access.get(readerId) ?? 'none', readerId) : null }));
   const ended = deliveries.filter((delivery) => delivery.projection === null).map((delivery) => delivery.readerId);
   if (current) await markSharedLocationSeen(deps.cache, emitterId, current, deliveries.filter((delivery) => delivery.projection !== null).map((delivery) => delivery.readerId), now);
-  deliveries.forEach((delivery) => (delivery.projection ? serve(deps.io, delivery.readerId, delivery.projection) : unserve(deps.io, delivery.readerId, emitterId)));
+  deliveries.forEach((delivery) => (delivery.projection ? serve(deps.io, delivery.readerId, delivery.projection) : unserve(deps, delivery.readerId, emitterId)));
   if (current && ended.length > 0) await unmarkSharedLocationSeen(deps.cache, emitterId, current.sessionId, ended);
   if (current) await revokedSince(deps, emitterId, current, deliveries.filter((delivery) => delivery.projection !== null).map((delivery) => delivery.readerId));
 }
@@ -387,12 +396,68 @@ async function drainRetiring(deps: SharedLocationRelayDeps, emitterId: string, a
   }
 }
 
+const NOT_SHARING = failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Aucun partage en cours');
+
+const coarser = (a: SharedLocationPrecision, b: SharedLocationPrecision): SharedLocationPrecision =>
+  SHARED_LOCATION_PRECISIONS.indexOf(a) >= SHARED_LOCATION_PRECISIONS.indexOf(b) ? a : b;
+
+const earlier = (a: string, b: string): string => (Date.parse(a) <= Date.parse(b) ? a : b);
+
+/**
+ * La LISTE SEULE (#19284, #18580) appliquée au partage `current` : elle ne fait que RETIRER.
+ * Une personne que `current` ne sert plus (jamais choisie, retirée ailleurs, échue) est
+ * ignorée — une liste périmée ne la fait pas revenir ; la précision ne peut que baisser ; le
+ * terme et chaque échéance ne peuvent que se rapprocher. La position, son heure et la maille
+ * retenue de qui garde sa précision viennent de `current` : le point n'est pas rafraîchi. Le
+ * seuil de sortie du fantôme (`servableFrom`) suit le point qu'il garde ; la batterie ne peut
+ * que se retirer (`shareBattery: false`), jamais s'ajouter.
+ * `null` : personne ne reste.
+ */
+function listOnlyState(
+  current: SharedLocationState,
+  wanted: { readonly recipients: SharedLocationState['recipients']; readonly shareBattery: boolean | undefined },
+  term: string,
+  now: number,
+): Omit<SharedLocationState, 'sessionId'> | null {
+  const live = new Map(liveRecipients(current, now).map((recipient) => [recipient.userId.toLowerCase(), recipient]));
+  const expiresAt = earlier(term, current.expiresAt);
+  const recipients = wanted.recipients.flatMap((recipient) => {
+    const kept = live.get(recipient.userId);
+    if (!kept) return [];
+    const precision = coarser(recipient.precision, kept.precision);
+    const deadline = earlier(earlier(recipient.expiresAt ?? expiresAt, deadlineOf(current, kept.userId)), expiresAt);
+    return [{
+      userId: recipient.userId,
+      precision,
+      ...(kept.cell !== undefined && kept.precision === precision ? { cell: kept.cell } : {}),
+      ...(Date.parse(deadline) < Date.parse(expiresAt) ? { expiresAt: deadline } : {}),
+    }];
+  });
+  if (recipients.length === 0) return null;
+  const servableFrom = current.servableFrom === undefined ? {} : { servableFrom: current.servableFrom };
+  const shareBattery = current.shareBattery === true && wanted.shareBattery !== false ? { shareBattery: true as const } : {};
+  const startedAt = current.startedAt === undefined ? {} : { startedAt: current.startedAt };
+  return { recipients, position: current.position, updatedAt: current.updatedAt, expiresAt, ...startedAt, ...servableFrom, ...shareBattery };
+}
+
+/** Plus rien à servir : la liste seule vaut un arrêt. */
+async function stoppedByListOnly(deps: SharedLocationRelayDeps, emitterId: string): Promise<SharedLocationAck> {
+  await advanceSharedLocationGeneration(deps.cache, emitterId);
+  await drainRetiring(deps, emitterId);
+  return NOT_SHARING;
+}
+
 /**
  * Démarre (ou remplace) le partage. La prise du pointeur est ATOMIQUE et conditionnée à la
  * génération lue : un arrêt survenu pendant le démarrage l'emporte. La session remplacée
  * est retirée en prévenant ceux qu'elle servait. Une fois la prise faite, le partage EST
  * courant : un échec de l'éventail ne le dément pas (le rattrapage et la position suivante
  * serviront), et l'accusé le dit.
+ *
+ * Sans position, c'est une liste seule ({@link listOnlyState}). Elle est rejouée APRÈS la
+ * prise sur la session REMPLACÉE, relue : un démarrage ou une position écrits par un autre
+ * appareil entre la première lecture et la prise ne sont ni défaits ni reculés — la session
+ * remplacée ne peut plus changer, la prise l'ayant retirée du pointeur.
  */
 export async function startSharedLocation(deps: SharedLocationRelayDeps, emitterId: string, payload: unknown): Promise<SharedLocationAck> {
   const parsed = sharedLocationStartPayloadSchema.safeParse(payload);
@@ -400,31 +465,46 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
 
   const now = deps.now();
   const term = now + parsed.data.durationMinutes * 60_000;
-  const state: SharedLocationState = {
-    sessionId: randomUUID(),
-    recipients: parsed.data.recipients
-      .filter((recipient) => recipient.userId.toLowerCase() !== emitterId.toLowerCase())
-      .map((recipient) => ({
-        userId: recipient.userId.toLowerCase(),
-        precision: recipient.precision ?? SHARED_LOCATION_DEFAULT_PRECISION,
-        ...(recipient.expiresInSeconds === undefined ? {} : { expiresAt: new Date(Math.min(term, now + recipient.expiresInSeconds * 1000)).toISOString() }),
-      })),
-    position: parsed.data.position,
-    updatedAt: new Date(now).toISOString(),
-    expiresAt: new Date(term).toISOString(),
-    ...(parsed.data.shareBattery === true ? { shareBattery: true as const } : {}),
-  };
+  const recipients: SharedLocationState['recipients'] = parsed.data.recipients
+    .filter((recipient) => recipient.userId.toLowerCase() !== emitterId.toLowerCase())
+    .map((recipient) => ({
+      userId: recipient.userId.toLowerCase(),
+      precision: recipient.precision ?? SHARED_LOCATION_DEFAULT_PRECISION,
+      ...(recipient.expiresInSeconds === undefined ? {} : { expiresAt: new Date(Math.min(term, now + recipient.expiresInSeconds * 1000)).toISOString() }),
+    }));
+  const position = parsed.data.position;
+  const termIso = new Date(term).toISOString();
+  const shareBattery = parsed.data.shareBattery;
 
+  let state: SharedLocationState;
   let previous: SharedLocationState | null;
   try {
     const generation = await sharedLocationGeneration(deps.cache, emitterId);
     if (!(await accountStates(deps.prisma, [emitterId])).usable.has(emitterId)) return STOPPED;
     previous = await readSharedLocation(deps.cache, emitterId, now);
+    const sessionId = randomUUID();
+    if (position) {
+      state = { sessionId, recipients, position, updatedAt: new Date(now).toISOString(), expiresAt: termIso, startedAt: new Date(now).toISOString(), ...(shareBattery === true ? { shareBattery: true as const } : {}) };
+    } else {
+      if (!previous) return NOT_SHARING;
+      const listed = listOnlyState(previous, { recipients, shareBattery }, termIso, now);
+      if (!listed) return await stoppedByListOnly(deps, emitterId);
+      const { shareBattery: _provisionalBattery, ...withoutBattery } = listed;
+      state = { sessionId, ...withoutBattery, servableFrom: new Date(now).toISOString() };
+    }
     await storeSharedLocation(deps.cache, emitterId, state, now);
     const claim = await claimSharedLocation(deps.cache, emitterId, generation, state, now);
     if (!claim.claimed) {
       await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
       return STOPPED;
+    }
+    if (!position) {
+      const displaced = claim.displaced === null ? null : await readSharedLocationSession(deps.cache, emitterId, claim.displaced, now);
+      const listed = displaced ? listOnlyState(displaced, { recipients, shareBattery }, termIso, now) : null;
+      if (!listed) return await stoppedByListOnly(deps, emitterId);
+      previous = displaced;
+      state = { sessionId: state.sessionId, ...listed };
+      if (!(await storeSharedLocationIfCurrent(deps.cache, emitterId, state, now))) return STOPPED;
     }
   } catch {
     return UNAVAILABLE;
@@ -436,7 +516,7 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     await drainRetiring(deps, emitterId, after.served);
     if ((await currentSharedLocationSession(deps.cache, emitterId)) === state.sessionId) {
       await noteServedEnds(deps, emitterId, state, after.served);
-      if (parsed.data.notifyRecipients === true) await notifyNewcomers(deps, emitterId, { state, previous, served: after.served });
+      if (position && parsed.data.notifyRecipients === true) await notifyNewcomers(deps, emitterId, { state, previous, served: after.served });
       await refreshBatteryOf(deps, emitterId, [previous, state]);
       return ack;
     }
@@ -462,7 +542,7 @@ export async function updateSharedLocation(deps: SharedLocationRelayDeps, emitte
   let state: SharedLocationState;
   try {
     current = await readSharedLocation(deps.cache, emitterId, now);
-    if (!current) return failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Aucun partage en cours');
+    if (!current) return NOT_SHARING;
     state = { ...current, recipients: withHeldCells(current, parsed.data), position: parsed.data, updatedAt: new Date(now).toISOString() };
     if (!(await storeSharedLocationIfCurrent(deps.cache, emitterId, state, now))) return STOPPED;
   } catch {
@@ -621,7 +701,7 @@ export async function refreshSharedLocationBetween(
       if (revoked.length === 0) await noteReaderServedEnd(deps, emitterId, state, readerId);
     }
     if (!served && (await sharedLocationSeenAmong(deps.cache, emitterId, state.sessionId, [readerId])).length > 0) {
-      unserve(deps.io, readerId, emitterId);
+      unserve(deps, readerId, emitterId);
       await unmarkSharedLocationSeen(deps.cache, emitterId, state.sessionId, [readerId]);
     }
     if (served && (await currentSharedLocationSession(deps.cache, emitterId)) !== state.sessionId) await reconcile(deps, emitterId, [readerId]);
@@ -649,7 +729,25 @@ export async function reflectSharedLocationGhost(deps: SharedLocationRelayDeps, 
     await noteSharedLocationStopped(deps.cache, emitterId, now).catch(() => undefined);
     return;
   }
-  await storeSharedLocationIfCurrent(deps.cache, emitterId, { ...state, servableFrom: new Date(now).toISOString() }, now);
+  await holdUntilNextPosition(deps, emitterId, state, now);
+}
+
+const GHOST_EXIT_HOLD_ATTEMPTS = 5;
+
+/**
+ * La sortie retient le partage COURANT, quel qu'il soit : un démarrage ou une liste seule d'un
+ * autre appareil peut prendre le pointeur entre la lecture et la retenue, et recopier un point
+ * pris en fantôme. On relit et on retient de nouveau ; à court d'essais, on lève — la sortie
+ * reste fail-closed.
+ */
+async function holdUntilNextPosition(deps: SharedLocationRelayDeps, emitterId: string, first: SharedLocationState, now: number): Promise<void> {
+  const servableFrom = new Date(now).toISOString();
+  let state: SharedLocationState | null = first;
+  for (let attempt = 0; attempt < GHOST_EXIT_HOLD_ATTEMPTS && state; attempt += 1) {
+    if (await storeSharedLocationIfCurrent(deps.cache, emitterId, { ...state, servableFrom }, now)) return;
+    state = await readSharedLocation(deps.cache, emitterId, now);
+  }
+  if (state) throw new Error('Partage non retenu à la sortie du fantôme');
 }
 
 /**
@@ -706,6 +804,18 @@ export async function ownSharedLocationFor(deps: SharedLocationRelayDeps, emitte
   return { recipients, expiresAt: state.expiresAt, shareBattery: state.shareBattery === true };
 }
 
+/**
+ * L'échéance de `readerId` dans le partage COURANT de `emitterId`, s'il en est un lecteur SERVI
+ * (noté avant l'envoi, retiré à sa fin) ; sinon `null` (#19463). Ce que le lecteur sait déjà.
+ */
+export async function servedSharedLocationDeadline(deps: SharedLocationRelayDeps, emitterId: string, readerId: string): Promise<string | null> {
+  const now = deps.now();
+  const state = await readSharedLocation(deps.cache, emitterId, now);
+  if (!state || !liveRecipients(state, now).some((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase())) return null;
+  const served = await sharedLocationSeenAmong(deps.cache, emitterId, state.sessionId, [readerId.toLowerCase()]);
+  return served.length > 0 ? deadlineOf(state, readerId) : null;
+}
+
 /** Les émetteurs à lire : les liens du lecteur dès Ami, et les collègues de l'équipe (la loi les ouvre sans lien). */
 async function snapshotCandidates(deps: SharedLocationRelayDeps, readerId: string): Promise<readonly string[]> {
   const [linked, peers] = await Promise.all([
@@ -742,7 +852,7 @@ export async function sharedLocationSnapshotFor(
   await Promise.all(opened.map(({ emitterId, state }) => markSharedLocationSeen(deps.cache, emitterId, state, [readerId], now)));
   const confirmed: ReadonlyMap<string, SharedLocationCircle | null> = opened.length > 0 ? await snapshotAllowed(deps, readerId, opened.map(({ emitterId }) => emitterId), now) : new Map();
   const lost = opened.filter(({ emitterId }) => !confirmed.has(emitterId));
-  lost.filter((entry) => seenBefore[opened.indexOf(entry)]).forEach(({ emitterId }) => unserve(deps.io, readerId, emitterId));
+  lost.filter((entry) => seenBefore[opened.indexOf(entry)]).forEach(({ emitterId }) => unserve(deps, readerId, emitterId));
   await Promise.all(lost.map(({ emitterId, state }) => unmarkSharedLocationSeen(deps.cache, emitterId, state.sessionId, [readerId])));
   const kept = opened.filter(({ emitterId }) => confirmed.has(emitterId));
   const current = await currentSharedLocationSessions(deps.cache, kept.map(({ emitterId }) => emitterId));

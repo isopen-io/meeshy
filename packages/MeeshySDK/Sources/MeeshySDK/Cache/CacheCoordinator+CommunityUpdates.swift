@@ -22,3 +22,25 @@ extension CacheCoordinator {
         await communities.repaintEverywhere { $0.applying(event) }
     }
 }
+
+// MARK: - L'effectif d'une communauté, à jour dans le cache persisté (#18767)
+
+extension CacheCoordinator {
+
+    /// `community:member-*` : `memberCount` se recopie sous TOUTES les clés qui
+    /// tiennent la ligne, et le rôle du lecteur suit un geste qui le concerne
+    /// (sorti ⇒ plus de rôle). Aucune relance réseau ; la fraîcheur appartient
+    /// au chargement.
+    func subscribeToCommunityMemberChanges() {
+        let lane = OrderedEventLane()
+        lane.store(in: &cancellables)
+        messageSocket.communityMemberChanged
+            .relay(through: lane) { [weak self] in await self?.applyCommunityMemberChange($0) }
+            .store(in: &cancellables)
+    }
+
+    func applyCommunityMemberChange(_ change: CommunityMemberChange) async {
+        let readerId = currentUserId
+        await communities.repaintEverywhere { $0.applying(change, readerId: readerId) }
+    }
+}

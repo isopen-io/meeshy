@@ -26,6 +26,7 @@ import { EngagementService } from '../../services/engagement/EngagementService';
 import { depreciee } from '../../utils/deprecation';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { registerInviteRoute } from './sharing-invite';
+import { linkActivityRelayOf } from '../../socketio/linkActivityEvents';
 
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
@@ -516,6 +517,7 @@ export function registerSharingRoutes(
         // adhésion déjà persistée (#16837).
         arrivalIO: fastify.socketIOHandler?.getManager()?.getIO?.(),
         arrivalRooms: fastify.socketIOHandler?.getManager() ?? null,
+        linkActivity: linkActivityRelayOf(fastify),
         requestIp: resolveClientIp(request),
         profile: {
           firstName: '',

@@ -14,6 +14,9 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
+// Le `CacheStore` partagé n'est pas monté ici : chaque témoin relit l'audience (#19368).
+jest.mock('../../../../services/CacheStore', () => ({ getCacheStore: () => undefined }));
+
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn(), debug: jest.fn() }) },
 }));
@@ -47,6 +50,8 @@ type Cible = {
   readonly deactivatedAt?: Date | null;
   readonly birthDate?: Date | null;
   readonly lecteurBloqueCible?: boolean;
+  readonly adresses?: ReadonlyArray<Record<string, unknown>>;
+  readonly communautes?: boolean;
 };
 
 function prismaDouble(row: ReturnType<typeof lien> | null, cible: Cible = {}) {
@@ -55,7 +60,14 @@ function prismaDouble(row: ReturnType<typeof lien> | null, cible: Cible = {}) {
       findMany: jest.fn<any>(async () => (cible.privacy ? [{ userId: CIBLE, privacy: cible.privacy }] : [])),
     },
     userPreference: { findMany: jest.fn<any>(async () => []) },
-    profileAddress: { findMany: async () => [] },
+    profileAddress: { findMany: async () => cible.adresses ?? [] },
+    trackingLink: { findMany: async () => [] },
+    userCommunityPreferences: { findMany: async () => [] },
+    community: {
+      findMany: async () => (cible.communautes
+        ? [{ id: 'c1', identifier: 'mshy_c1', name: 'Club', avatar: null, deletedAt: null, _count: { members: 12 } }]
+        : []),
+    },
     user: {
       findMany: jest.fn<any>(async (args: any) =>
         (args?.where?.blockedUserIds ? [] : args?.where?.id?.in ?? []).map((id: string) => ({
@@ -88,7 +100,7 @@ function prismaDouble(row: ReturnType<typeof lien> | null, cible: Cible = {}) {
     },
     userRelation: { findUnique: jest.fn<any>(async () => row), findMany: jest.fn<any>(async () => (row ? [row] : [])) },
     friendRequest: { findFirst: jest.fn<any>(async () => null), findMany: jest.fn<any>(async () => []), count: jest.fn<any>(async () => 0) },
-    communityMember: { findMany: jest.fn<any>(async () => []) },
+    communityMember: { findMany: jest.fn<any>(async () => (cible.communautes ? [{ communityId: 'c1' }] : [])) },
     message: { count: jest.fn<any>(async () => 0), groupBy: jest.fn<any>(async () => []) },
     participant: { findMany: jest.fn<any>(async () => []), count: jest.fn<any>(async () => 0) },
     post: { count: jest.fn<any>(async () => 0) },
@@ -194,6 +206,37 @@ describe('fuseau et pays d inscription servis selon le cercle', () => {
     const data = (await lire(app, '')).json().data as Charge;
     expect(data.registrationCountry).toBe('FR');
     expect(data.timezone).toBe('Europe/Paris');
+    await app.close();
+  });
+});
+
+describe('?as=<cercle> — l\'aperçu est FIDÈLE à ce que reçoit le cercle (loi 4, communautés)', () => {
+  const adresse = (id: string, circle: string, position: number) => ({
+    id, userId: CIBLE, title: `Lien ${id}`, url: `https://${id}.example.org/`, glyph: 'site', circle, position, isShown: true, trackingToken: null,
+  });
+
+  it('un propriétaire qui a une adresse Proche voit, comme Connaissance, la rangée verrouillée [CLOSE × 1] — sans rien de l\'adresse', async () => {
+    const app = await monter(CIBLE, null, { adresses: [adresse('pub', 'PUBLIC', 0), adresse('proche', 'CLOSE', 1)] });
+    const res = await lire(app, '?as=ACQUAINTANCE');
+    const data = res.json().data as Charge;
+    expect(data.addresses.map((a: Charge) => a.id)).toEqual(['pub']);
+    expect(data.lockedAddresses).toEqual([{ circle: 'CLOSE', count: 1 }]);
+    expect(res.body).not.toContain('proche.example.org');
+    await app.close();
+  });
+
+  it('comme Proche, rien n\'est verrouillé : la rangée est absente', async () => {
+    const app = await monter(CIBLE, null, { adresses: [adresse('pub', 'PUBLIC', 0), adresse('proche', 'CLOSE', 1)] });
+    const data = (await lire(app, '?as=CLOSE')).json().data as Charge;
+    expect(data.addresses.map((a: Charge) => a.id)).toEqual(['pub', 'proche']);
+    expect('lockedAddresses' in data).toBe(false);
+    await app.close();
+  });
+
+  it('ses communautés ouvertes se lisent comme par un lecteur qui n\'en est pas membre', async () => {
+    const app = await monter(CIBLE, null, { communautes: true });
+    const data = (await lire(app, '?as=FRIEND')).json().data as Charge;
+    expect(data.openCommunities).toEqual([expect.objectContaining({ id: 'c1', isMember: false })]);
     await app.close();
   });
 });

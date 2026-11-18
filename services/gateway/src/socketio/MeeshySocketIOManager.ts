@@ -3654,7 +3654,7 @@ export class MeeshySocketIOManager {
   }): Promise<void> {
     try {
       const participant = await this.prisma.participant.findFirst({
-        where: { userId: reaction.asUserId, conversationId: reaction.conversationId, isActive: true },
+        where: { userId: reaction.asUserId, conversationId: reaction.conversationId, ...PARTICIPATION_VIVANTE },
         select: { id: true },
       });
       if (!participant) {

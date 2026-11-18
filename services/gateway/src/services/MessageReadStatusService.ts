@@ -46,6 +46,10 @@ import {
   deliveryFloorOf,
 } from './messaging/deliveryFloor';
 import {
+  READ_FLOOR_SELECT,
+  readFloorOf,
+} from './messaging/readFloor';
+import {
   parsePlaybackTrace,
   traceCoverage,
 } from '../utils/playback-trace';
@@ -264,18 +268,19 @@ export class MessageReadStatusService {
       const [cursors, hidingByUser] = await Promise.all([
         this.prisma.conversationReadCursor.findMany({
           where: { participantId: { in: participantIds }, conversationId },
-          select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
+          select: { participantId: true, ...READ_FLOOR_SELECT },
         }),
         loadPersonalHistoryHidingByUser(this.prisma, {
           userIds: participants.map((p) => p.userId),
           conversationId,
         }),
       ]);
-      // Position CHRONOLOGIQUE du curseur, pas l'horloge murale — voir
-      // getUnreadCount. En mode exact `lastReadAt = now` déclarerait lus les
-      // messages sautés ; `lastReadMessageCreatedAt` est le vrai plancher.
+      // Plancher = la loi, pas l'idiome (#19299). Il était retapé SIX fois en
+      // production, chaque fois avec le commentaire qui l'explique — et deux
+      // sites ne l'avaient pas : le dépôt SAVAIT, et les deux sites qui
+      // comptaient ne le savaient pas.
       const cursorMap = new Map(
-        cursors.map((c) => [c.participantId, c.lastReadMessageCreatedAt ?? c.lastReadAt])
+        cursors.map((c) => [c.participantId, readFloorOf(c)])
       );
 
       const floors = participants.map((p) =>
@@ -347,18 +352,19 @@ export class MessageReadStatusService {
       const [cursors, hidingByConversation] = await Promise.all([
         this.prisma.conversationReadCursor.findMany({
           where: { participantId: { in: participantIds } },
-          select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
+          select: { participantId: true, ...READ_FLOOR_SELECT },
         }),
         loadPersonalHistoryHidingByConversation(this.prisma, {
           userId: resolvedUserId,
           conversationIds: participants.map((p) => p.conversationId),
         }),
       ]);
-      // Position CHRONOLOGIQUE du curseur, pas l'horloge murale — voir
-      // getUnreadCount. En mode exact `lastReadAt = now` déclarerait lus les
-      // messages sautés ; `lastReadMessageCreatedAt` est le vrai plancher.
+      // Plancher = la loi, pas l'idiome (#19299). Il était retapé SIX fois en
+      // production, chaque fois avec le commentaire qui l'explique — et deux
+      // sites ne l'avaient pas : le dépôt SAVAIT, et les deux sites qui
+      // comptaient ne le savaient pas.
       const cursorMap = new Map(
-        cursors.map((c) => [c.participantId, c.lastReadMessageCreatedAt ?? c.lastReadAt])
+        cursors.map((c) => [c.participantId, readFloorOf(c)])
       );
 
       // 3. Un participant par conversation dans ce chemin (résolution ci-dessus,
@@ -857,7 +863,21 @@ export class MessageReadStatusService {
       // Lecture best-effort du front précédent : sert uniquement à borner la
       // fenêtre du gel. Une erreur ici ne doit pas faire échouer le marquage
       // (on retombe sur `null` = gel depuis l'origine, lui-même résilient).
-      let prevReadAt: Date | null = null;
+      // #19299 — la POSITION du curseur de LECTURE, et ELLE SEULE : les trois
+      // consommateurs de cette borne comparent leur plage à `createdAt`.
+      // `lastReadAt` est posé à `now` par `_advanceCursor` même quand le
+      // curseur n'a franchi qu'un préfixe, si bien qu'une borne posée dessus
+      // exclut par construction tout trou situé SOUS elle — exactement le
+      // défaut que #18731 et #19261 ont retiré de la chaîne de LIVRAISON, et
+      // que la chaîne de LECTURE portait encore en double.
+      //
+      // L'arbitrage est instruit CHEZ la loi (`messaging/readFloor.ts`), parce
+      // qu'il ne se transpose pas de la livraison : « élargir est sûr » y vaut
+      // du gel write-once, et pour la lecture le dépôt écrit l'inverse du
+      // confort (`MarkReadBodySchema.caughtUpToMessageId`, la borne `until` de
+      // #16744). Les trois consommateurs répondent par trois raisons
+      // DIFFÉRENTES, et c'est ce qu'une transposition aurait manqué.
+      let prevReadPosition: Date | null = null;
       // #19261 — la POSITION du curseur de livraison, et ELLE SEULE : la plage
       // du gel se compare à `createdAt`. L'horloge n'est pas seulement
       // interdite ici, elle n'est pas DISPONIBLE.
@@ -873,13 +893,13 @@ export class MessageReadStatusService {
           where: {
             conversation_participant_cursor: { participantId, conversationId },
           },
-          select: { lastReadAt: true, ...DELIVERY_FLOOR_SELECT },
+          select: { ...READ_FLOOR_SELECT, ...DELIVERY_FLOOR_SELECT },
         });
-        prevReadAt = prevCursor?.lastReadAt ?? null;
+        prevReadPosition = readFloorOf(prevCursor);
         prevDeliveredPosition = deliveryFloorOf(prevCursor);
         cursorExists = prevCursor != null;
       } catch {
-        prevReadAt = null;
+        prevReadPosition = null;
         prevDeliveredPosition = null;
       }
 
@@ -917,7 +937,12 @@ export class MessageReadStatusService {
         frozenCount = await this.freezeMessageStatus({
           participantId,
           conversationId,
-          since: prevReadAt,
+          // INERTE aujourd'hui — `freezeMessageStatus` ignore `since` dès qu'une
+          // liste d'ids est nommée, la liste ÉTANT la borne. Il reçoit quand
+          // même la POSITION : une valeur fausse mais inexploitée est un piège
+          // armé, pas une économie (règle du cycle 84). Même traitement qu'au
+          // site EXACT de livraison, et pour la même raison.
+          since: prevReadPosition,
           at: now,
           field: "readAt",
           messageIds: exactMessageIds,
@@ -928,7 +953,15 @@ export class MessageReadStatusService {
         const cursorTarget = await this._computeExactReadCursorTarget({
           participantId,
           conversationId,
-          since: prevReadAt,
+          // #19299 — ancré sur la POSITION. Ancré sur l'horloge, le balayage
+          // partait AU-DESSUS du trou : il ne voyait jamais un message
+          // ANTÉRIEUR laissé non lu, le comptait donc comme « rien à
+          // franchir », et laissait le curseur avancer par-dessus. La
+          // contiguïté est la seule propriété capable de voir un trou
+          // antérieur, et l'horloge la calculait sur une fenêtre qui exclut le
+          // trou par construction. Descendre l'ancre est strictement
+          // CONSERVATEUR : plus de candidats, et un trou BLOQUE l'avance.
+          since: prevReadPosition,
         });
 
         // `null` = le message suivant immédiatement le curseur n'a pas été vu.
@@ -1032,7 +1065,15 @@ export class MessageReadStatusService {
         frozenCount = await this.freezeMessageStatus({
           participantId,
           conversationId,
-          since: prevReadAt,
+          // #19299 — la POSITION. Descendre le plancher de l'horloge à la
+          // position n'AJOUTE aucune affirmation : le compte de non-lus dérive
+          // du curseur par `createdAt > lastReadAt`, donc tout message vivant
+          // dans `(position, horloge]` était DÉJÀ compté lu par le badge. Le
+          // gel ne fait que rendre la vérité DURABLE par message conforme à ce
+          // que l'index affirmait déjà — et la borne HAUTE (`until`) ne bouge
+          // pas, si bien que rien au-dessus de la frontière RAPPORTÉE n'est
+          // jamais gravé.
+          since: prevReadPosition,
           at: now,
           field: "readAt",
           // Bornée sur la POSITION de la frontière rapportée. Le contrat

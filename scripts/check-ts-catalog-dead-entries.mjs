@@ -534,6 +534,24 @@ export const callersIn = (contents, nsNames) => {
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // Le jeton d'Activité en direct d'un partage de position (#19463, chantier #18857) : l'iPhone qui affiche
+  // « Léo partage sa position » le confie à la passerelle, qui clôt l'Activité si le partage finit avant son terme.
+  'me.liveActivityTokens': { issue: 19463, reason: 'POST /me/live-activity-tokens — l\'Activité en direct close par la passerelle à la fin du partage' },
+  // Les entrées d'un lien de communauté (#19429, besoin #19290, chantier #18857) : iOS les lira d'abord
+  // (fiche `Lien-Communaute`) ; le web et Android avec leur fiche de lien.
+  'communities.byIdEntriesStats': { issue: 19429, reason: 'GET /communities/:id/entries/stats — « N entrées par ce lien », « N cette semaine », la série sur 30 jours' },
+  'communities.byIdJoinRequests': { issue: 19429, reason: 'GET /communities/:id/join-requests — « En attente de validation »' },
+  'communities.byIdJoinRequestsByRequestIdAccept': { issue: 19429, reason: 'POST …/join-requests/:requestId/accept — le bouton Accepter' },
+  'communities.byIdJoinRequestsByRequestIdReject': { issue: 19429, reason: 'POST …/join-requests/:requestId/reject — le bouton Refuser' },
+  // Stories « à la une » servies par la passerelle (#19394, chantier #18857) : les clients liront le rail
+  // « À la une » de la Vitrine (K20) et l'auteur composera ses albums.
+  'users.byIdHighlights': { issue: 19394, reason: 'GET /users/:id/highlights — le rail « À la une » de la fiche, chaque story sous sa propre audience' },
+  'users.meHighlights': { issue: 19394, reason: 'GET · POST /users/me/highlights — mes albums à la une (lecture, création)' },
+  'users.meHighlightsById': { issue: 19394, reason: 'PATCH · DELETE /users/me/highlights/:id — modifier ou supprimer un album à la une' },
+  'users.meHighlightsOrder': { issue: 19394, reason: 'PUT /users/me/highlights/order — réordonner mes albums à la une' },
+  // « Mes cercles » compté par la passerelle, Communauté comprise (#19375, chantier #18857) : iOS le lira
+  // d'abord (rangée « Mes cercles » de la fiche) ; le web et Android le liront avec leur profil.
+  'relations.summary': { issue: 19375, reason: 'GET /relations/summary — le compte de chaque cercle et des demandes en attente, rangée « Mes cercles »' },
   // Le profil de la planche (#18857, PR serveur #19316) : le serveur sert avant le tour client web.
   'contactExchange.byTokenAccept': { issue: 19205, reason: 'POST /contact-exchange/:token/accept — accepter un partage sans contact (web)' },
   'me.contactExchange': { issue: 19205, reason: 'POST /me/contact-exchange — émettre le jeton du partage sans contact (web)' },

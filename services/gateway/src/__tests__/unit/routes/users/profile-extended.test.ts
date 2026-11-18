@@ -170,7 +170,7 @@ const mockUser = {
 
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
-    profileAddress: { findMany: async () => [] },
+    profileAddress: { findMany: async () => [] }, communityMember: { findMany: async () => [] },
     user: {
       findFirst:  jest.fn<any>().mockResolvedValue(mockUser),
       findUnique: jest.fn<any>().mockResolvedValue(mockUser),
@@ -412,7 +412,7 @@ describe('PATCH /users/me/password — notification catch fires on reject (line 
       createPasswordChangedNotification: jest.fn<any>().mockRejectedValue(new Error('notif fail')),
     };
     const prisma = makePrisma({
-      profileAddress: { findMany: async () => [] },
+      profileAddress: { findMany: async () => [] }, communityMember: { findMany: async () => [] },
       user: {
         findFirst:  jest.fn<any>().mockResolvedValue(mockUser),
         findUnique: jest.fn<any>().mockResolvedValue(mockUser),
@@ -470,7 +470,7 @@ describe('PATCH /users/me/username — ZodError from schema.parse (lines 725-730
 describe('PATCH /users/me/username — non-ZodError catch path (lines 729-730)', () => {
   it('returns 500 when prisma.user.update throws a plain Error', async () => {
     const prisma = makePrisma({
-      profileAddress: { findMany: async () => [] },
+      profileAddress: { findMany: async () => [] }, communityMember: { findMany: async () => [] },
       user: {
         findFirst:  jest.fn<any>().mockResolvedValue(null),   // username not taken
         findUnique: jest.fn<any>().mockResolvedValue(mockUser),

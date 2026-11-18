@@ -26,16 +26,21 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     private let postsCache: @MainActor () async -> CommunityPostsCache?
     private let myCommunities: MyCommunitiesWrites
     private var liveUpdates: AnyCancellable?
+    private var liveMembers: AnyCancellable?
+    private let memberLane = OrderedEventLane()
 
     /// `communityUpdates` : `community:updated` (#18439) réécrit l'identité
     /// affichée — nom, description, avatar, bannière, confidentialité,
     /// effectif — sans relance réseau ni toucher au rôle du lecteur.
+    /// `memberChanges` : `community:member-*` (#18767) recopie l'effectif et
+    /// fait suivre le rôle du lecteur quand le geste le concerne.
     init(
         communityId: String,
         service: CommunityServiceProviding = CommunityService.shared,
         currentUserId: @escaping @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" },
         postsCache: @escaping @MainActor () async -> CommunityPostsCache? = { nil },
         communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live,
+        memberChanges: AnyPublisher<CommunityMemberChange, Never> = CommunityMemberChannel.live,
         myCommunities: MyCommunitiesWrites = .live
     ) {
         self.communityId = communityId
@@ -46,11 +51,38 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         self.liveUpdates = communityUpdates
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.apply(event) }
+        self.liveMembers = memberChanges
+            .relay(through: memberLane) { [weak self] change in await self?.apply(change) }
     }
 
     func apply(_ event: CommunityUpdatedEvent) {
         guard let updated = community?.applying(event) else { return }
         community = updated
+    }
+
+    /// Un tiers : l'effectif seul. Le lecteur : son rôle suit — promu, il
+    /// gère ; sorti (d'un autre appareil, ou retiré), il perd ses droits, ses
+    /// canaux et les publications gardées, et la fiche se relit (une
+    /// communauté privée cesse de lui être servie) ; entré d'ailleurs, la
+    /// fiche se relit pour servir ce qu'un membre lit.
+    func apply(_ change: CommunityMemberChange) async {
+        guard change.communityId == communityId else { return }
+        if let updated = community?.applying(change) { community = updated }
+        guard change.concerns(readerId: currentUserId()) else { return }
+        let wasMember = isMember
+        adopt(role: change.role)
+        switch (wasMember, isMember) {
+        case (true, false):
+            conversations = []
+            await forgetCachedPosts()
+            await myCommunities.remove(communityId)
+            await loadServed()
+        case (false, true):
+            await forgetCachedPosts()
+            if let joined = await loadServed(), isMember { await myCommunities.add(joined) }
+        default:
+            return
+        }
     }
 
     func load() async {
@@ -96,9 +128,13 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         let creatorMatch = apiCommunity.createdBy == readerId
         let servedRole = apiCommunity.currentUserRole.flatMap(MemberRole.init(rawValue:))
         let recordRole = apiCommunity.members?.first(where: { $0.userId == readerId })?.communityRole
-        let role = servedRole ?? recordRole ?? (creatorMatch ? .admin : nil)
-
         isCreator = creatorMatch
+        adopt(role: servedRole ?? recordRole)
+    }
+
+    /// Le créateur vaut admin quand aucun rôle n'est tenu.
+    private func adopt(role served: MemberRole?) {
+        let role = served ?? (isCreator ? .admin : nil)
         isMember = role != nil
         currentUserRole = role ?? .member
         isAdmin = currentUserRole.hasMinimumRole(.admin) || isCreator

@@ -569,9 +569,21 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // `applyKnownLiveExceptions` la fait rougir (PÉRIMÉE) le jour où son appelant
 // arrive — la déclaration doit alors partir dans le même commit.
 const PENDING_CLIENT_ENTRIES = {
+  // Les entrées d'un lien de communauté (#19429, besoin #19290) : la fiche iOS `Lien-Communaute` les lira.
+  'CommunitiesEndpoint.byIdEntriesStats': { issue: 19429, reason: 'GET /communities/:id/entries/stats — « N entrées par ce lien », « N cette semaine », la série sur 30 jours' },
+  'CommunitiesEndpoint.byIdJoinRequests': { issue: 19429, reason: 'GET /communities/:id/join-requests — « En attente de validation »' },
+  'CommunitiesEndpoint.byIdJoinRequestsByRequestIdAccept': { issue: 19429, reason: 'POST …/join-requests/:requestId/accept — le bouton Accepter' },
+  'CommunitiesEndpoint.byIdJoinRequestsByRequestIdReject': { issue: 19429, reason: 'POST …/join-requests/:requestId/reject — le bouton Refuser' },
+  // Routes déjà servies par cette branche (#19375, #19394, chantier #18857), dont l'énumération Swift n'avait pas été régénérée.
+  'RelationsEndpoint.summary': { issue: 19375, reason: 'GET /relations/summary — la rangée « Mes cercles » (iOS)' },
+  'UsersEndpoint.byIdHighlights': { issue: 19394, reason: 'GET /users/:id/highlights — le rail « À la une » de la fiche (iOS)' },
+  'UsersEndpoint.meHighlights': { issue: 19394, reason: 'GET · POST /users/me/highlights — mes albums à la une (iOS)' },
+  'UsersEndpoint.meHighlightsById': { issue: 19394, reason: 'PATCH · DELETE /users/me/highlights/:id (iOS)' },
+  'UsersEndpoint.meHighlightsOrder': { issue: 19394, reason: 'PUT /users/me/highlights/order (iOS)' },
   // Le profil de la planche (#18857, PR serveur #19316) : le serveur sert avant le tour client iOS.
   'ContactExchangeEndpoint.byTokenAccept': { issue: 19205, reason: 'POST /contact-exchange/:token/accept — accepter un partage sans contact (iOS)' },
   'MeEndpoint.contactExchange': { issue: 19205, reason: 'POST /me/contact-exchange — émettre le jeton du partage sans contact (iOS)' },
+  'MeEndpoint.liveActivityTokens': { issue: 19463, reason: 'POST /me/live-activity-tokens — l\'Activité en direct iOS close par la passerelle à la fin du partage' },
   'MeEndpoint.locationGhost': { issue: 19203, reason: 'PUT /me/location/ghost — le fantôme global de position (iOS)' },
   'RelationsEndpoint.byUserIdLocationRequest': { issue: 19204, reason: 'POST /relations/:userId/location/request — prolonger ou redemander un partage (iOS)' },
   'UsersEndpoint.meProfileLinkStats': { issue: 19206, reason: 'GET /users/me/profile-link/stats — les visites de mon lien (iOS)' },

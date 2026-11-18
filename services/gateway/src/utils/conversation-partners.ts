@@ -44,3 +44,29 @@ export async function getDistinctConversationPartnerUserIds(
 
   return Array.from(seen);
 }
+
+/**
+ * Les partenaires des seules conversations DIRECTES actives de `userId`. Un signal
+ * qui trahit un geste silencieux (un réglage de fiche, un album réordonné) ne part
+ * pas vers chaque co-membre d'un groupe ou d'un salon : seule l'activité de
+ * conversation révèle qu'on est là (directive de présence du 2026-08-25).
+ */
+export async function getDirectConversationPartnerUserIds(
+  prisma: PrismaClient,
+  userId: string
+): Promise<string[]> {
+  const participantRows = await prisma.participant.findMany({
+    where: { userId, isActive: true, conversation: { is: { type: 'direct' } } },
+    select: { conversationId: true },
+  });
+  if (participantRows.length === 0) return [];
+  const partners = await prisma.participant.findMany({
+    where: {
+      conversationId: { in: participantRows.map((p) => p.conversationId) },
+      isActive: true,
+      userId: { not: userId },
+    },
+    select: { userId: true },
+  });
+  return [...new Set(partners.flatMap((p) => (p.userId ? [p.userId] : [])))];
+}

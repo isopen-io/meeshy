@@ -109,8 +109,8 @@ struct SharedLocationsMapRepresentable: UIViewRepresentable {
                 withIdentifier: MKMapViewDefaultAnnotationViewReuseIdentifier,
                 for: annotation
             ) as? MKMarkerAnnotationView
-            view?.glyphText = pin.initials
-            view?.markerTintColor = UIColor(pin.presence?.dotColor ?? MeeshyColors.indigo500)
+            view?.glyphText = pin.circleIcon ?? pin.initials
+            view?.markerTintColor = UIColor(pin.circle.map(CircleLevelColor.color(for:)) ?? pin.presence?.dotColor ?? MeeshyColors.indigo500)
             view?.titleVisibility = .adaptive
             view?.displayPriority = .required
             view?.isAccessibilityElement = true
@@ -148,13 +148,16 @@ enum SharedLocationsMapRegion {
     }
 }
 
-/// Une épingle : la position servie, le nom en titre, la précision et l'échéance en sous-titre.
+/// Une épingle : la position servie, le nom en titre, la précision et l'échéance en sous-titre ; l'icône et la couleur
+/// du cercle servi quand il y en a un (#17013), sinon les initiales sur la couleur de présence.
 private final class SharedLocationAnnotation: NSObject, MKAnnotation {
     nonisolated deinit {}
     let coordinate: CLLocationCoordinate2D
     let title: String?
     let subtitle: String?
     let initials: String
+    let circleIcon: String?
+    let circle: RelationLevel?
     let presence: PresenceState?
     let spokenLabel: String
 
@@ -163,6 +166,8 @@ private final class SharedLocationAnnotation: NSObject, MKAnnotation {
         title = pin.name
         subtitle = pin.detail
         initials = pin.initials
+        circleIcon = pin.circleIcon
+        circle = pin.circle
         presence = pin.presence
         spokenLabel = pin.accessibilityLabel
     }

@@ -3,7 +3,8 @@ import Foundation
 import MeeshySDK
 
 /// Une épingle de la carte des positions partagées : la position TELLE QUE SERVIE (jamais plus fine), le cercle de flou
-/// au rayon servi, la personne nommée par l'annuaire des cercles et sa présence servie (`nil` ⇒ aucun anneau).
+/// au rayon servi, la personne nommée par l'annuaire des cercles et sa présence servie (`nil` ⇒ aucun anneau), et le
+/// cercle d'où elle vient, tel que le SERVEUR l'a jugé pour moi (#17013) — `nil` ⇒ marqueur neutre, rien de deviné.
 struct SharedLocationPin: Identifiable, Equatable {
     let id: String
     let latitude: Double
@@ -25,7 +26,14 @@ struct SharedLocationPin: Identifiable, Equatable {
         return "\(Self.precisionLabel(precision)) · \(term)"
     }
 
-    var accessibilityLabel: String { "\(name), \(detail)" }
+    /// « Alice, Proche, Au quartier près · jusqu'à 11:30 » : le cercle s'entend comme il se voit.
+    var accessibilityLabel: String {
+        guard let circle else { return "\(name), \(detail)" }
+        return "\(name), \(CircleLevelNames.title(of: circle)), \(detail)"
+    }
+
+    /// L'icône du cercle (🤝, 🔥, 🩸) que le marqueur porte à la place des initiales ; `nil` ⇒ initiales.
+    var circleIcon: String? { circle.map(CircleLevelNames.icon(of:)) }
 
     static func precisionLabel(_ precision: SharedLocationPrecision) -> String {
         switch precision {
