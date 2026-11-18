@@ -624,10 +624,20 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   await requireRowSettled(page, MINE_GRID_ID, expect);
   const mineRow = rowOf(MINE_GRID_ID);
   if (skin === 'bulles') {
-    const mineJustify = await mineRow.evaluate((el) => getComputedStyle(el).justifyContent);
+    /* LA PRÉCONDITION LIT LA BRANCHE DE L'APPLICATION, JAMAIS LA SÉRIALISATION
+       DU NAVIGATEUR (#19480). Elle comparait
+       `getComputedStyle(el).justifyContent` au littéral `'flex-end'` ; Chrome 159
+       — celui que Playwright 1.65 télécharge — rend `flow-end` pour la MÊME
+       déclaration, et `dev` rougissait sans qu'une ligne du dépôt ait changé.
+       Le fait visé est pourtant écrit dans le code de l'application :
+       `bubble.tsx` choisit `justify-end` ou `justify-start` selon `isMine`.
+       Lire cette classe dit EXACTEMENT ce que le message annonce déjà, sous
+       tout navigateur — et si l'utilitaire est un jour renommé, la précondition
+       tombe bruyamment, ce qui est précisément son rôle. */
+    const mineClasses = await mineRow.evaluate((el) => [...el.classList]);
     expect(
-      mineJustify === 'flex-end',
-      `[${skin}/${scheme}] media-16 est bien la branche « DE MOI » (justify-end), sans quoi ce témoin mesure l'autre cas (obtenu ${mineJustify})`,
+      mineClasses.includes('justify-end'),
+      `[${skin}/${scheme}] media-16 est bien la branche « DE MOI » (justify-end), sans quoi ce témoin mesure l'autre cas (obtenu ${JSON.stringify(mineClasses)})`,
     );
   }
   const mineGridBox = await mineRow.locator('[data-media-grid]').first().boundingBox();
