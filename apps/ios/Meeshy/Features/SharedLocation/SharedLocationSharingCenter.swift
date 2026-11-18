@@ -115,6 +115,9 @@ final class SharedLocationSharingCenter: ObservableObject {
     /// La passerelle accepte-t-elle un point choisi à la main (`acceptsManualSource`, #19557) ? Tant qu'elle ne l'a pas
     /// dit, « Choisir sur la carte » n'est pas proposé (#19558).
     @Published private(set) var servesFixedPoint = false
+    /// La passerelle accepte-t-elle un partage sans fin entre Sangs (`acceptsUntilStopped`, #19616) ? Tant qu'elle ne
+    /// l'a pas dit, « Jusqu'à ce que j'arrête » reste verrouillé.
+    @Published private(set) var servesUntilStopped = false
 
     private let emitter: SharedLocationEmitting
     private let fixes: SharedLocationFixProviding
@@ -199,7 +202,21 @@ final class SharedLocationSharingCenter: ObservableObject {
         notify: Bool = false,
         battery: Bool? = nil
     ) async -> SharedLocationShareProblem? {
+        await share(with: userId, precision: precision, term: .bounded(duration), notify: notify, battery: battery)
+    }
+
+    /// Le même geste pour un terme : une durée servie, ou « jusqu'à ce que j'arrête » (#19616), refusé tant que la
+    /// passerelle ne l'annonce pas. Le cercle Sang est rejugé par elle.
+    @discardableResult
+    func share(
+        with userId: String,
+        precision: SharedLocationPrecision,
+        term: SharedLocationShareTerm,
+        notify: Bool = false,
+        battery: Bool? = nil
+    ) async -> SharedLocationShareProblem? {
         await locked {
+            guard self.accepts(term) else { return .refused(.unavailable) }
             let fix: SharedLocationFix
             switch await self.fixes.currentFix() {
             case .fix(let current): fix = current
@@ -207,7 +224,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             case .unavailable: return .locationUnavailable
             }
             guard self.isLive else { return .refused(.failed) }
-            let next = self.adding(userId, precision: precision, duration: duration, battery: battery).withFixedPoint(false)
+            let next = self.adding(userId, precision: precision, term: term, battery: battery).withFixedPoint(false)
             return await self.publish(next, fix: fix, previous: self.roster, claimsPublishing: true, notify: notify)
         }
     }
@@ -223,9 +240,21 @@ final class SharedLocationSharingCenter: ObservableObject {
         notify: Bool = false,
         battery: Bool? = nil
     ) async -> SharedLocationShareProblem? {
+        await sharePoint(point, with: userId, precision: precision, term: .bounded(duration), notify: notify, battery: battery)
+    }
+
+    @discardableResult
+    func sharePoint(
+        _ point: SharedLocationFix,
+        with userId: String,
+        precision: SharedLocationPrecision,
+        term: SharedLocationShareTerm,
+        notify: Bool = false,
+        battery: Bool? = nil
+    ) async -> SharedLocationShareProblem? {
         await locked {
-            guard self.servesFixedPoint else { return .refused(.unavailable) }
-            let next = self.adding(userId, precision: precision, duration: duration, battery: battery).withFixedPoint(true)
+            guard self.servesFixedPoint, self.accepts(term) else { return .refused(.unavailable) }
+            let next = self.adding(userId, precision: precision, term: term, battery: battery).withFixedPoint(true)
             return await self.publish(next, fix: point, previous: self.roster, claimsPublishing: true, notify: notify)
         }
     }
@@ -233,11 +262,15 @@ final class SharedLocationSharingCenter: ObservableObject {
     private func adding(
         _ userId: String,
         precision: SharedLocationPrecision,
-        duration: SharedLocationShareDuration,
+        term: SharedLocationShareTerm,
         battery: Bool?
     ) -> SharedLocationRoster {
-        let added = roster.pruned(now: now()).adding(userId: userId, precision: precision, duration: duration, now: now())
+        let added = roster.pruned(now: now()).adding(userId: userId, precision: precision, term: term, now: now())
         return battery.map { added.withBattery($0) } ?? added
+    }
+
+    private func accepts(_ term: SharedLocationShareTerm) -> Bool {
+        term != .untilStopped || servesUntilStopped
     }
 
     /// Ne plus montrer ma position à cette personne ; les autres gardent la leur. Si l'arrêt ne peut pas partir, la
@@ -283,6 +316,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             guard let truth = await self.served(), self.isLive else { return nil }
             if truth.shareBattery != nil { self.servesShareOptions = true }
             if truth.acceptsManualSource { self.servesFixedPoint = true }
+            if truth.acceptsUntilStopped { self.servesUntilStopped = true }
             let before = self.roster
             let next = before.withServed(truth, now: self.now())
             guard next != before else { return nil }
@@ -387,7 +421,7 @@ final class SharedLocationSharingCenter: ObservableObject {
         guard let request = SharedLocationStartRequest(
             recipients: recipients, duration: next.serverDuration(now: instant), fix: fix,
             notifyRecipients: notify && offersOptions, shareBattery: next.sharesBattery,
-            source: next.isFixedPoint ? .manual : .device
+            source: next.isFixedPoint ? .manual : .device, untilStopped: next.isOpenEnded
         ) else {
             return .refused(.invalid)
         }

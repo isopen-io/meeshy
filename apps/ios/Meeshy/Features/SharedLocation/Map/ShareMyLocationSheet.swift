@@ -20,7 +20,7 @@ struct ShareMyLocationSheet: View {
 
     @ObservedObject private var center: SharedLocationSharingCenter
     @State private var chosen: Set<String>
-    @State private var duration: SharedLocationShareDuration = .oneHour
+    @State private var chosenTerm: SharedLocationShareTerm = .bounded(.oneHour)
     @State private var precision: SharedLocationPrecision = .city
     @State private var openNoteID: String?
     /// « Prévenir » (planche : activé) et « Partager aussi ma batterie » (coupé, ou l'accord du partage en cours).
@@ -152,28 +152,40 @@ struct ShareMyLocationSheet: View {
             MeeshyChoiceTiles(
                 label: ShareLocationWording.durationTitle,
                 items: durationItems,
-                selection: .single(String(duration.rawValue)),
+                selection: .single(ShareMyLocationTermRule.id(of: duration)),
                 columns: 3,
                 content: .value,
                 tint: MeeshyColors.brandPrimary,
                 onSelect: { id in
-                    guard let minutes = Int(id), let picked = SharedLocationShareDuration(rawValue: minutes) else { return }
-                    duration = picked
+                    guard let picked = ShareMyLocationTermRule.term(id: id) else { return }
+                    chosenTerm = picked
                 }
             )
         }
     }
 
-    /// 1 h et 8 h : les deux durées que la passerelle sert. « Jusqu'à ce que j'arrête » reste fermé : réservé au Sang,
-    /// la passerelle ne l'accepte pas encore.
+    /// Le terme choisi tant que la règle l'autorise : un « jusqu'à ce que j'arrête » que la sélection ne permet plus
+    /// (une personne non-Sang ajoutée) redevient 1 heure.
+    private var duration: SharedLocationShareTerm {
+        ShareMyLocationTermRule.effective(chosenTerm, opens: opensUntilStopped)
+    }
+
+    private var opensUntilStopped: Bool {
+        ShareMyLocationTermRule.opensUntilStopped(served: center.servesUntilStopped,
+                                                  circles: recipients.filter { chosen.contains($0.userId) }.map(\.circle))
+    }
+
+    /// 1 h et 8 h : les deux durées bornées. « Jusqu'à ce que j'arrête » (#19616) s'ouvre quand la passerelle l'annonce
+    /// et que chaque personne choisie est Sang ; sinon la tuile reste verrouillée et dit le cercle qui l'ouvre.
     private var durationItems: [MeeshyChoiceItem] {
         [
-            MeeshyChoiceItem(id: String(SharedLocationShareDuration.oneHour.rawValue), title: ShareMyLocationCopy.hourUnit,
+            MeeshyChoiceItem(id: ShareMyLocationTermRule.id(of: .bounded(.oneHour)), title: ShareMyLocationCopy.hourUnit,
                              value: "1"),
-            MeeshyChoiceItem(id: String(SharedLocationShareDuration.eightHours.rawValue), title: ShareMyLocationCopy.hoursUnit,
+            MeeshyChoiceItem(id: ShareMyLocationTermRule.id(of: .bounded(.eightHours)), title: ShareMyLocationCopy.hoursUnit,
                              value: "8"),
-            MeeshyChoiceItem(id: "untilStopped", title: ShareMyLocationCopy.untilStopped, detail: ShareMyLocationCopy.bloodOnly,
-                             systemImage: "infinity", state: .locked(key: "untilStopped")),
+            MeeshyChoiceItem(id: ShareMyLocationTermRule.untilStoppedID, title: ShareMyLocationCopy.untilStopped,
+                             detail: ShareMyLocationCopy.bloodOnly, value: opensUntilStopped ? "∞" : nil, systemImage: "infinity",
+                             state: opensUntilStopped ? .enabled : .locked(key: ShareMyLocationTermRule.untilStoppedID)),
         ]
     }
 
@@ -284,7 +296,7 @@ struct ShareMyLocationSheet: View {
         let targets = recipients.filter { chosen.contains($0.userId) }
         let offers = center.servesShareOptions != false
         for target in targets {
-            if let problem = await center.share(with: target.userId, precision: precision, duration: duration,
+            if let problem = await center.share(with: target.userId, precision: precision, term: duration,
                                                 notify: offers && notify, battery: offers ? battery : nil) {
                 guard problem != .locationDenied else {
                     locationDenied = true
@@ -316,7 +328,7 @@ struct ShareMyLocationSheet: View {
         dismiss()
         Task { @MainActor in
             for userId in targets {
-                guard let problem = await sharing.sharePoint(point, with: userId, precision: precision, duration: duration,
+                guard let problem = await sharing.sharePoint(point, with: userId, precision: precision, term: duration,
                                                              notify: options.notify, battery: options.battery) else { continue }
                 FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
                 return
@@ -412,10 +424,12 @@ enum ShareMyLocationCopy {
         return String(localized: "locationMap.share.notify.detail", defaultValue: "Il reçoit une notification", bundle: .main)
     }
 
-    static func shareFor(_ duration: SharedLocationShareDuration) -> String {
-        switch duration {
-        case .oneHour: return String(localized: "locationMap.share.forOneHour", defaultValue: "Partager pendant 1 heure", bundle: .main)
-        case .eightHours: return String(localized: "locationMap.share.forEightHours", defaultValue: "Partager pendant 8 heures", bundle: .main)
+    static func shareFor(_ term: SharedLocationShareTerm) -> String {
+        switch term {
+        case .bounded(.oneHour): return String(localized: "locationMap.share.forOneHour", defaultValue: "Partager pendant 1 heure", bundle: .main)
+        case .bounded(.eightHours): return String(localized: "locationMap.share.forEightHours", defaultValue: "Partager pendant 8 heures", bundle: .main)
+        case .untilStopped:
+            return String(localized: "locationMap.share.forUntilStopped", defaultValue: "Partager jusqu'à ce que j'arrête", bundle: .main)
         }
     }
 
@@ -425,6 +439,32 @@ enum ShareMyLocationCopy {
             return String(format: String(localized: "locationMap.share.visibleWithin.many", defaultValue: "On te verra dans un rayon d'environ %@", bundle: .main), radius)
         }
         return String(format: String(localized: "locationMap.share.visibleWithin", defaultValue: "%1$@ te verra dans un rayon d'environ %2$@", bundle: .main), name, radius)
+    }
+}
+
+/// « Jusqu'à ce que j'arrête » (#19616), en valeurs : la tuile s'ouvre quand la passerelle l'annonce et que CHAQUE
+/// personne choisie est Sang (un cercle inconnu ne l'ouvre pas) ; la passerelle rejuge le cercle à l'envoi.
+enum ShareMyLocationTermRule {
+    static let untilStoppedID = "untilStopped"
+
+    static func opensUntilStopped(served: Bool, circles: [RelationLevel?]) -> Bool {
+        served && !circles.isEmpty && circles.allSatisfy { $0 == .blood }
+    }
+
+    static func effective(_ chosen: SharedLocationShareTerm, opens: Bool) -> SharedLocationShareTerm {
+        chosen == .untilStopped && !opens ? .bounded(.oneHour) : chosen
+    }
+
+    static func id(of term: SharedLocationShareTerm) -> String {
+        switch term {
+        case .bounded(let duration): return String(duration.rawValue)
+        case .untilStopped: return untilStoppedID
+        }
+    }
+
+    static func term(id: String) -> SharedLocationShareTerm? {
+        guard id != untilStoppedID else { return .untilStopped }
+        return Int(id).flatMap(SharedLocationShareDuration.init(rawValue:)).map { .bounded($0) }
     }
 }
 

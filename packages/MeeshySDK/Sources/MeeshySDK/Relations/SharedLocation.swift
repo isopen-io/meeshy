@@ -221,17 +221,22 @@ public struct SharedLocationOwnRecipient: Decodable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey { case userId, precision, expiresAt }
 
     /// Une précision inconnue se relit comme la ville (on ouvre plus, jamais l'inverse) ; un identifiant vide ou une
-    /// échéance illisible rend la personne illisible, et le cliché l'écarte.
+    /// échéance illisible rend la personne illisible, et le cliché l'écarte. `expiresAt: null` : un partage sans fin
+    /// (#19616), lu `SharedLocationShareTerm.openEndedDeadline` ; une clé absente reste illisible.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let userId = try c.decode(String.self, forKey: .userId).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !userId.isEmpty else {
             throw DecodingError.dataCorruptedError(forKey: .userId, in: c, debugDescription: "userId vide")
         }
+        let precision = (try? c.decode(String.self, forKey: .precision)).flatMap(SharedLocationPrecision.init(rawValue:)) ?? .city
+        guard try !c.decodeNil(forKey: .expiresAt) else {
+            self.init(userId: userId, precision: precision, expiresAt: SharedLocationShareTerm.openEndedDeadline)
+            return
+        }
         guard let expiresAt = WireDate.date(from: try c.decode(String.self, forKey: .expiresAt)) else {
             throw DecodingError.dataCorruptedError(forKey: .expiresAt, in: c, debugDescription: "instant illisible")
         }
-        let precision = (try? c.decode(String.self, forKey: .precision)).flatMap(SharedLocationPrecision.init(rawValue:)) ?? .city
         self.init(userId: userId, precision: precision, expiresAt: expiresAt)
     }
 }
@@ -248,20 +253,30 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
     /// La passerelle accepte-t-elle un point choisi à la main (`source: 'manual'`, #19557) ? Absent : non — l'écran
     /// garde alors « Ouvrir les réglages » seul.
     public let acceptsManualSource: Bool
+    /// La passerelle accepte-t-elle un partage sans fin entre Sangs (`untilStopped`, #19616) ? Absent : non — la tuile
+    /// « Jusqu'à ce que j'arrête » reste verrouillée.
+    public let acceptsUntilStopped: Bool
 
-    public init(recipients: [SharedLocationOwnRecipient], shareBattery: Bool? = nil, acceptsManualSource: Bool = false) {
+    public init(
+        recipients: [SharedLocationOwnRecipient],
+        shareBattery: Bool? = nil,
+        acceptsManualSource: Bool = false,
+        acceptsUntilStopped: Bool = false
+    ) {
         self.recipients = recipients
         self.shareBattery = shareBattery
         self.acceptsManualSource = acceptsManualSource
+        self.acceptsUntilStopped = acceptsUntilStopped
     }
 
-    private enum CodingKeys: String, CodingKey { case recipients, shareBattery, acceptsManualSource }
+    private enum CodingKeys: String, CodingKey { case recipients, shareBattery, acceptsManualSource, acceptsUntilStopped }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         recipients = try c.decode([Lenient].self, forKey: .recipients).compactMap(\.value)
         shareBattery = (try? c.decodeIfPresent(Bool.self, forKey: .shareBattery)) ?? nil
         acceptsManualSource = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsManualSource)) ?? nil) ?? false
+        acceptsUntilStopped = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsUntilStopped)) ?? nil) ?? false
     }
 
     private struct Lenient: Decodable {

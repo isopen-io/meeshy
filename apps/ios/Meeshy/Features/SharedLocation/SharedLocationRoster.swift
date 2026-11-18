@@ -35,6 +35,9 @@ struct SharedLocationRoster: Equatable, Codable {
             try c.encode(precision.rawValue, forKey: .precision)
             try c.encode(until, forKey: .until)
         }
+
+        /// « Jusqu'à ce que j'arrête » (#19616) : aucune échéance, seul « Arrêter » retire la personne.
+        var isOpenEnded: Bool { SharedLocationShareTerm.isOpenEnded(until) }
     }
 
     static let empty = SharedLocationRoster(entries: [:])
@@ -103,10 +106,22 @@ struct SharedLocationRoster: Equatable, Codable {
 
     /// Ajouter une personne, ou changer sa précision et son échéance : `now + durée`.
     func adding(userId: String, precision: SharedLocationPrecision, duration: SharedLocationShareDuration, now: Date) -> SharedLocationRoster {
+        adding(userId: userId, precision: precision, term: .bounded(duration), now: now)
+    }
+
+    /// Ajouter une personne pour un terme : `now + durée`, ou sans échéance (« jusqu'à ce que j'arrête », #19616).
+    func adding(userId: String, precision: SharedLocationPrecision, term: SharedLocationShareTerm, now: Date) -> SharedLocationRoster {
+        let until: Date = switch term {
+        case .bounded(let duration): now.addingTimeInterval(duration.interval)
+        case .untilStopped: SharedLocationShareTerm.openEndedDeadline
+        }
         var next = entries
-        next[userId.lowercased()] = Entry(precision: precision, until: now.addingTimeInterval(duration.interval))
+        next[userId.lowercased()] = Entry(precision: precision, until: until)
         return SharedLocationRoster(entries: next, withdrawals: withdrawals, battery: sharesBattery, fixedPoint: isFixedPoint)
     }
+
+    /// Au moins une personne voit ma position sans échéance : le partage serveur part sans terme.
+    var isOpenEnded: Bool { entries.values.contains { $0.isOpenEnded } }
 
     func removing(userId: String) -> SharedLocationRoster {
         var next = entries
@@ -115,12 +130,13 @@ struct SharedLocationRoster: Equatable, Codable {
     }
 
     /// « Arrêter » n'a pas pu partir : la personne sort de la liste et son retrait attend le réseau, au plus jusqu'au
-    /// terme le plus long qu'un partage serveur puisse avoir encore. Une personne absente de la liste ne change rien.
+    /// terme le plus long qu'un partage serveur puisse avoir encore — jamais lâché pour une personne sans échéance
+    /// (#19616) : le serveur la servirait sans fin. Une personne absente de la liste ne change rien.
     func withdrawing(userId: String, now: Date) -> SharedLocationRoster {
         let id = userId.lowercased()
-        guard entries[id] != nil else { return self }
+        guard let entry = entries[id] else { return self }
         var pending = withdrawals
-        pending[id] = now.addingTimeInterval(SharedLocationShareDuration.eightHours.interval)
+        pending[id] = max(now.addingTimeInterval(SharedLocationShareDuration.eightHours.interval), entry.until)
         return SharedLocationRoster(entries: entries.filter { $0.key != id }, withdrawals: pending, battery: sharesBattery,
                                     fixedPoint: isFixedPoint)
     }
@@ -173,12 +189,13 @@ struct SharedLocationRoster: Equatable, Codable {
     /// Ce que le serveur sert est-il exactement ce que je veux : aucune échéance passée, aucun retrait en attente ?
     func isSettled(now: Date) -> Bool { pruned(now: now).settled == self }
 
-    /// La plus proche des échéances : le moment où la liste change d'elle-même.
-    var nextDeadline: Date? { entries.values.map(\.until).min() }
+    /// La plus proche des échéances : le moment où la liste change d'elle-même. Une personne sans échéance n'en a pas.
+    var nextDeadline: Date? { entries.values.filter { !$0.isOpenEnded }.map(\.until).min() }
 
-    /// La durée à demander au serveur : la plus courte qui couvre la plus lointaine des échéances.
+    /// La durée à demander au serveur : la plus courte qui couvre la plus lointaine des échéances bornées (un partage
+    /// sans fin part avec `untilStopped`, la durée ne restant que pour le schéma).
     func serverDuration(now: Date) -> SharedLocationShareDuration {
-        let farthest = entries.values.map(\.until).max() ?? now
+        let farthest = entries.values.filter { !$0.isOpenEnded }.map(\.until).max() ?? now
         return farthest.timeIntervalSince(now) <= SharedLocationShareDuration.oneHour.interval ? .oneHour : .eightHours
     }
 
@@ -187,7 +204,9 @@ struct SharedLocationRoster: Equatable, Codable {
     /// au-dessus, jamais nulle ; une personne échue pendant l'attente d'un relevé ne part plus du tout.
     func deadlinedRecipients(now: Date) -> [SharedLocationRecipient] {
         let live = pruned(now: now)
-        let term = now.addingTimeInterval(live.serverDuration(now: now).interval)
+        let term = live.isOpenEnded
+            ? SharedLocationShareTerm.openEndedDeadline
+            : now.addingTimeInterval(live.serverDuration(now: now).interval)
         return live.recipients.map { recipient in
             guard let until = live.entries[recipient.userId]?.until, until < term else { return recipient }
             let seconds = max(1, Int(until.timeIntervalSince(now).rounded(.up)))

@@ -138,9 +138,19 @@ enum ShareLocationWording {
     }
 
     static func sharing(name: String, precision: SharedLocationPrecision, until: Date) -> String {
-        String(
+        guard !SharedLocationShareTerm.isOpenEnded(until) else { return sharingUntilStopped(name: name, precision: precision) }
+        return String(
             format: String(localized: "sharedLocation.share.active", defaultValue: "%1$@ voit ta position (%2$@) jusqu'à %3$@", bundle: .main),
             name, Self.precision(precision).lowercased(), until.formatted(date: .omitted, time: .shortened)
+        )
+    }
+
+    /// Un partage sans fin (#19616) : ni heure ni compte à rebours, seul « Arrêter » le termine.
+    static func sharingUntilStopped(name: String, precision: SharedLocationPrecision) -> String {
+        String(
+            format: String(localized: "sharedLocation.share.activeUntilStopped",
+                           defaultValue: "%1$@ voit ta position (%2$@) jusqu'à ce que tu arrêtes", bundle: .main),
+            name, Self.precision(precision).lowercased()
         )
     }
 
