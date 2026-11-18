@@ -125,8 +125,8 @@ final class MessageEnrichmentWriterTests: XCTestCase {
         }
     }
 
-    /// Effacer le contenu efface ce qui le doublait : supprimé pour tous, ou
-    /// éphémère échu (même écriture, `expired: true`).
+    /// Effacer le contenu efface ce qui le doublait, et les pièces avec lui : supprimé pour tous, ou
+    /// éphémère échu (même écriture, `expired: true`). Seule l'enveloppe reste.
     func test_markDeleted_erasesTheTranslationsAndThePiecesEnrichments() async throws {
         for expired in [false, true] {
             let actor = try makeActor()
@@ -136,10 +136,8 @@ final class MessageEnrichmentWriterTests: XCTestCase {
 
             try await actor.markDeleted(localId: Self.messageId, deletedAt: Date(), expired: expired)
 
-            let attachment = try storedAttachment(in: actor)
-            XCTAssertEqual(attachment?.id, "att_vocal", "la pièce reste, sans ce qui la transcrivait")
-            XCTAssertNil(attachment?.transcription, "expired=\(expired) : la transcription part avec le contenu")
-            XCTAssertNil(attachment?.audioTranslations, "expired=\(expired) : les pistes partent avec le contenu")
+            let rows = try actor.messages(for: Self.conversationId, limit: 10)
+            XCTAssertNil(rows.first?.attachmentsJson, "expired=\(expired) : la pierre tombale ne garde ni la pièce, ni son nom, ni sa transcription (#19305)")
             XCTAssertTrue(try actor.translations(for: Self.messageId).isEmpty, "expired=\(expired) : les traductions aussi")
         }
     }

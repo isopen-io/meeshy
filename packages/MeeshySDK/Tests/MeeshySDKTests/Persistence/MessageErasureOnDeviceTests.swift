@@ -143,4 +143,82 @@ final class MessageErasureOnDeviceTests: XCTestCase {
         XCTAssertNil(try dbQueue.read { db in try MessageRecord.fetchOne(db, key: id) }, "la ligne est retirée")
         XCTAssertTrue(try actor.translations(for: id).isEmpty, "ses lignes filles partent avec elle")
     }
+
+    // MARK: - La loi et l'app jugent l'échéance par la même fonction
+
+    func test_upsert_ephemeralExpiredByTheLocalDuration_erasesLikeTheAppRemovesIt() async throws {
+        let id = "m-eph-duree"
+        let extra = #","ephemeralDuration":7200"#
+        let alive = APIMessageUpsert.Context(
+            currentUserId: nil, preferredLanguages: [],
+            ephemeralLedger: ErasureTestLedger(receptions: [id: Date().addingTimeInterval(-3_600)])
+        )
+        let dead = APIMessageUpsert.Context(
+            currentUserId: nil, preferredLanguages: [],
+            ephemeralLedger: ErasureTestLedger(receptions: [id: Date().addingTimeInterval(-10_800)])
+        )
+        let api = try served(id: id, extra: extra)
+        let first = try dbQueue.write { db in try APIMessageUpsert.upsertOutcome([api], context: alive, in: db) }
+        XCTAssertEqual(try actor.translations(for: id).count, 1, "une heure sur deux : il vit, il garde sa traduction")
+        XCTAssertTrue(first.erasures.isEmpty, "rien à effacer tant qu'il vit")
+        try seedNeighbours(of: id)
+
+        let later = try dbQueue.write { db in try APIMessageUpsert.upsertOutcome([api], context: dead, in: db) }
+
+        try assertNothingReadableRemains(of: id, "éphémère échu par la durée locale, sans échéance servie")
+        XCTAssertEqual(later.erasures.map(\.messageId), [id], "les caches qui le doublaient sont prévenus")
+        XCTAssertEqual(later.changedConversationIds, [Self.conversationId], "le fil se rafraîchit")
+    }
+
+    func test_upsert_deletedElsewhere_announcesTheErasureForTheCaches() async throws {
+        let id = "m-annonce"
+        try await actor.upsertFromAPIMessages([try served(id: id)])
+        let api = try served(id: id, extra: #","deletedAt":"2026-11-17T11:00:00.000Z""#)
+        let context = APIMessageUpsert.Context(currentUserId: nil, preferredLanguages: [])
+
+        let outcome = try dbQueue.write { db in try APIMessageUpsert.upsertOutcome([api], context: context, in: db) }
+
+        XCTAssertEqual(outcome.erasures.count, 1)
+        XCTAssertEqual(outcome.erasures.first?.messageId, id)
+        XCTAssertEqual(outcome.erasures.first?.conversationId, Self.conversationId)
+        XCTAssertNotNil(outcome.erasures.first?.deletedAt)
+    }
+
+    // MARK: - Le balayage unique
+
+    func test_sweep_purgesWhatSealedRowsStillKeep_andLeavesOrdinaryRowsAlone() async throws {
+        try await actor.upsertFromAPIMessages([try served(id: "m-balai-ordinaire"), try served(id: "m-balai-supprime")])
+        try seedNeighbours(of: "m-balai-ordinaire")
+        try seedNeighbours(of: "m-balai-supprime")
+        try dbQueue.write { db in
+            try db.execute(sql: "UPDATE messages SET deletedAt = ? WHERE localId = ?", arguments: [Date(), "m-balai-supprime"])
+        }
+
+        let changed = try dbQueue.write { db in try MessageEnrichmentLaw.sweep(in: db, ledger: ErasureTestLedger(), now: Date()) }
+
+        XCTAssertEqual(changed, 1, "une seule ligne était scellée")
+        try assertNothingReadableRemains(of: "m-balai-supprime", "ligne supprimée avant la mise à jour")
+        XCTAssertEqual(try actor.translations(for: "m-balai-ordinaire").count, 1)
+        XCTAssertNotNil(try row("m-balai-ordinaire").attachmentsJson)
+        let again = try dbQueue.write { db in try MessageEnrichmentLaw.sweep(in: db, ledger: ErasureTestLedger(), now: Date()) }
+        XCTAssertEqual(again, 0, "un second balayage n'a plus rien à faire")
+    }
+
+    func test_theSweepRunsOnceAsAMigration_atTheFirstLaunchAfterTheUpdate() async throws {
+        let legacy = try DatabaseQueue()
+        var migrator = DatabaseMigrator()
+        MessageDatabaseMigrations.registerAll(in: &migrator)
+        try migrator.migrate(legacy, upTo: "conversation_contiguity")
+        let before = MessagePersistenceActor(dbWriter: legacy)
+        try await before.upsertFromAPIMessages([try served(id: "m-legacy")])
+        try legacy.write { db in
+            try db.execute(sql: "UPDATE messages SET deletedAt = ?, locationJson = ? WHERE localId = ?", arguments: [Date(), "{}", "m-legacy"])
+        }
+        XCTAssertEqual(try before.translations(for: "m-legacy").count, 1, "l'appareil d'avant la mise à jour")
+
+        try MessageDatabaseMigrations.runAll(on: legacy)
+
+        XCTAssertTrue(try before.translations(for: "m-legacy").isEmpty)
+        XCTAssertNil(try legacy.read { db in try MessageRecord.fetchOne(db, key: "m-legacy") }?.locationJson)
+    }
 }

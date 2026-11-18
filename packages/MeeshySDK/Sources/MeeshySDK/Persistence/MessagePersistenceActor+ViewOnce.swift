@@ -55,6 +55,7 @@ extension MessagePersistenceActor {
     /// `.announced` (`consumedByMe`, écho d'un autre appareil) garde le clair E2EE au coffre (#13060).
     public func markViewOnceOpened(localId: String, at date: Date = Date(), origin: PlaintextErasureOrigin) throws {
         var affectedConversationId: String?
+        var erasure: MessageContentErasure?
         try dbWriter.write { db in
             guard var record = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
@@ -64,6 +65,8 @@ extension MessagePersistenceActor {
                 return
             }
             affectedConversationId = record.conversationId
+            erasure = MessageContentErasure(
+                messageId: record.serverId ?? record.localId, conversationId: record.conversationId, viewOnceOpenedAt: date)
             record.sealAsOpenedViewOnce(at: date)
             record.updatedAt = Date()
             record.changeVersion += 1
@@ -74,5 +77,6 @@ extension MessagePersistenceActor {
         if let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])
         }
+        MessageContentErasure.announce(erasure.map { [$0] } ?? [])
     }
 }

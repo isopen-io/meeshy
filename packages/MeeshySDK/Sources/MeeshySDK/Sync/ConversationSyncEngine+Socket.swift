@@ -344,10 +344,8 @@ extension ConversationSyncEngine {
         let callId = await cache.messages.load(for: event.conversationId).snapshot()?
             .first(where: { $0.id == event.messageId })?.callSummary?.callId
         let deletedAt = Date()
-        await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
-            msg.deletedAt = deletedAt
-            msg.content = ""
-        }
+        await cache.applyErasure(MessageContentErasure(
+            messageId: event.messageId, conversationId: event.conversationId, deletedAt: deletedAt))
         await dropFromMediaIndex(conversationId: event.conversationId, messageId: event.messageId)
         await realtimeMessagePersistor?(.deleted(messageId: event.messageId, deletedAt: deletedAt))
         if let callId {
@@ -386,10 +384,8 @@ extension ConversationSyncEngine {
     /// retiré). La mort se GRAVE au registre de réception (#7552).
     private func handleExpiredMessage(_ event: MessageExpiredEvent) async {
         let expiredAt = Date()
-        await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
-            msg.deletedAt = expiredAt
-            msg.content = ""
-        }
+        await cache.applyErasure(MessageContentErasure(
+            messageId: event.messageId, conversationId: event.conversationId, deletedAt: expiredAt))
         await dropFromMediaIndex(conversationId: event.conversationId, messageId: event.messageId)
         await realtimeMessagePersistor?(.expired(messageId: event.messageId, expiredAt: expiredAt))
         EphemeralReceiptLedger.shared.noteDestruction(of: event.messageId)

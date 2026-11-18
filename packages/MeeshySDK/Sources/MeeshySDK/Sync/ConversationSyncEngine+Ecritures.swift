@@ -161,6 +161,8 @@ extension ConversationSyncEngine {
             viewOnceCount: event.viewOnceCount
         ))
         if let opened = Self.viewOnceOpenedMutation(for: event, readerId: await currentUserId()) {
+            await cache.applyErasure(MessageContentErasure(
+                messageId: event.messageId, conversationId: event.conversationId, viewOnceOpenedAt: Date()))
             await realtimeMessagePersistor?(opened)
         }
         _messagesDidChange.send(event.conversationId)

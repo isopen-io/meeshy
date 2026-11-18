@@ -6,6 +6,8 @@ enum APIMessageUpsert {
     struct Context: Sendable {
         let currentUserId: String?
         let preferredLanguages: [String]
+        /// Le registre qui juge l'échéance d'un éphémère (`EphemeralExpiry`) : le même que celui de l'app.
+        var ephemeralLedger: any EphemeralReceiptRecording = EphemeralReceiptLedger.shared
     }
 
     struct PendingMutations: Sendable {
@@ -50,16 +52,29 @@ enum APIMessageUpsert {
         let senderAvatarURL: String?
     }
 
+    /// Ce qu'un lot a changé : les conversations à rafraîchir, et les messages dont la loi (`MessageEnrichmentLaw`) a
+    /// effacé quelque chose — l'hôte purge alors les caches qui doublaient leur contenu (#19305).
+    struct Outcome: Sendable {
+        var changedConversationIds: Set<String> = []
+        var erasures: [MessageContentErasure] = []
+    }
+
     static func upsertBatch(_ apiMessages: [APIMessage], context: Context, in db: Database) throws -> Set<String> {
+        try upsertOutcome(apiMessages, context: context, in: db).changedConversationIds
+    }
+
+    static func upsertOutcome(_ apiMessages: [APIMessage], context: Context, in db: Database) throws -> Outcome {
         let pending = PendingMutations.load(db)
         let encoder = JSONEncoder()
-        var changedConversationIds: Set<String> = []
+        var outcome = Outcome()
         for api in apiMessages {
-            if let conversationId = try upsertOne(api, context: context, pending: pending, encoder: encoder, in: db) {
-                changedConversationIds.insert(conversationId)
+            let one = try upsertOne(api, context: context, pending: pending, encoder: encoder, in: db)
+            if let conversationId = one.conversationId {
+                outcome.changedConversationIds.insert(conversationId)
             }
+            if let erasure = one.erasure { outcome.erasures.append(erasure) }
         }
-        return changedConversationIds
+        return outcome
     }
 
     static func upsertOne(
@@ -68,7 +83,7 @@ enum APIMessageUpsert {
         pending: PendingMutations,
         encoder: JSONEncoder,
         in db: Database
-    ) throws -> String? {
+    ) throws -> (conversationId: String?, erasure: MessageContentErasure?) {
         let incoming = columns(for: api, context: context, encoder: encoder)
         let reply = MessagePersistenceActor.ingestedReply(
             for: api, currentUserId: context.currentUserId,
@@ -84,8 +99,11 @@ enum APIMessageUpsert {
             try persistInserted(inserted(api: api, columns: incoming, reply: reply), api: api, in: db)
             changedConversationId = api.conversationId
         }
-        try persistTranslations(for: api, in: db)
-        return changedConversationId
+        // La loi s'applique à la ligne telle que l'upsert vient de l'écrire : une transition apprise par le REST
+        // (vue unique ouverte ailleurs, suppression, échéance) efface ce que la ligne gardait (#19437).
+        let erasure = try MessageEnrichmentLaw.enforce(onMessage: api.id, in: db, ledger: context.ephemeralLedger)
+        try persistTranslations(for: api, ledger: context.ephemeralLedger, in: db)
+        return (changedConversationId ?? (erasure == nil ? nil : api.conversationId), erasure)
     }
 
     static func columns(for api: APIMessage, context: Context, encoder: JSONEncoder) -> IncomingColumns {

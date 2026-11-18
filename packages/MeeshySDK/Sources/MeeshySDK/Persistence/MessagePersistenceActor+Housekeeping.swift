@@ -29,20 +29,18 @@ extension MessagePersistenceActor {
 
     /// Delete ephemeral messages whose expiry has passed.
     public func deleteExpiredEphemeral(before: Date) async throws {
-        // Collect the affected conversationIds BEFORE the delete so we can
-        // post one targeted refresh per conversation. A single sweep may
-        // touch multiple conversations at once, and MessageStore observers
-        // filter notifications by conversationId — posting nothing leaves
-        // expired rows rendering until the conversation reloads from
-        // another path. We return the set from the write closure rather
-        // than mutating an outer var (Swift 6 strict concurrency rejects
-        // the latter inside a Sendable closure).
+        // Les conversations touchées se relèvent AVANT la suppression : une passe peut en toucher plusieurs, et les
+        // observateurs de `MessageStore` filtrent par `conversationId` — sans rafraîchissement ciblé, les lignes
+        // échues restent à l'écran. L'ensemble sort de la fermeture d'écriture (Swift 6 refuse de muter un `var`).
         let affectedConvIds: Set<String> = try await dbWriter.write { db in
             let expired = try MessageRecord
                 .filter(Column("expiresAt") != nil)
                 .filter(Column("expiresAt") <= before)
                 .fetchAll(db)
             let ids = Set(expired.map { $0.conversationId })
+            // Les lignes filles (traductions, transcriptions, pistes traduites) sont clées sur l'un ou l'autre
+            // identifiant : elles partent avec le message (#19437).
+            try MessageChildRows.delete(ofLocalIds: expired.flatMap { [$0.localId, $0.serverId].compactMap { $0 } }, in: db)
             try MessagePlaintextErasures.record(
                 rowsMatching: "expiresAt IS NOT NULL AND expiresAt <= ?", arguments: [before], cause: .expired, in: db
             )

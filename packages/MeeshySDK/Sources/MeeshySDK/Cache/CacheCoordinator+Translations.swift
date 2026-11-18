@@ -3,6 +3,10 @@ import GRDB
 import os
 
 extension CacheCoordinator {
+    public nonisolated func setTranslationAdmission(_ keeps: (@Sendable (String) async -> Bool)?) {
+        translationAdmission.mutate { $0 = keeps }
+    }
+
     public func cachedTranslations(for messageId: String) -> [TranslationData]? {
         // TTL enforcement on read: if the entry is older than 24h, drop it so
         // we don't serve stale machine output when a better translation could
@@ -63,8 +67,14 @@ extension CacheCoordinator {
 
     // MARK: - Public Cache Methods (called by ConversationSyncEngine)
 
-    public func cacheTranslation(_ event: TranslationEvent) {
+    public func cacheTranslation(_ event: TranslationEvent) async {
         let msgId = event.messageId
+        // Le cache des traductions suit la loi de la base (`MessageEnrichmentLaw`, #19305) : une vue unique ouverte, un
+        // message supprimé ou un éphémère échu ne regagne pas sa traduction par un événement tardif.
+        if let keeps = translationAdmission.read({ $0 }), !(await keeps(msgId)) {
+            invalidateTranslations(for: msgId)
+            return
+        }
         var existing = translationCache[msgId] ?? []
         let isNew = translationCache[msgId] == nil
         for translation in event.translations {

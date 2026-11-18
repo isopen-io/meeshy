@@ -118,6 +118,9 @@ public actor CacheCoordinator {
     /// hasn't reconciled yet, etc.) doesn't linger indefinitely in RAM.
     /// Matches the `messages` cache `staleTTL` window roughly.
     static let translationMaxAge: TimeInterval = 24 * 3600
+    /// La base du compte dit si le contenu d'un message se garde encore en clair (`MessageEnrichmentLaw`) : installé par
+    /// l'app, qui possède la base ; `nil` ⇒ tout se garde.
+    nonisolated let translationAdmission = Locked<(@Sendable (String) async -> Bool)?>(nil)
 
 
 

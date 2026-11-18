@@ -75,6 +75,13 @@ public enum MessageEnrichmentWriter {
         )
     }
 
+    /// Le contenu de ce message se garde-t-il encore en clair sur l'appareil ? `true` quand sa ligne n'est pas (encore)
+    /// là : un enrichissement qui arrive avant elle n'est pas condamné d'avance. Le cache des traductions s'y règle.
+    public static func keepsEnrichments(ofMessage messageId: String, in persistence: MessagePersistenceActor) async -> Bool {
+        let ruling = try? await verdict(on: messageId, in: persistence)
+        return ruling != .withheld
+    }
+
     public static func save(_ translations: [TranslationData], into persistence: MessagePersistenceActor) async throws {
         let receivedAt = Date()
         try await keep(translations.map { record(of: $0, receivedAt: receivedAt) }, on: persistence)

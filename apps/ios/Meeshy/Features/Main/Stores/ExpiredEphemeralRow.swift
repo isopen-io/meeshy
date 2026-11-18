@@ -57,17 +57,12 @@ enum ExpiredEphemeralRow {
         return candidates.min() ?? now
     }
 
+    /// Le jugement vit dans le SDK (`EphemeralExpiry`) : la loi des enrichissements (`MessageEnrichmentLaw`) et le
+    /// fil jugent l'échéance d'un éphémère par la MÊME fonction (#19437).
     static func isGone(id: String, flags: MessageEffectFlags, expiresAt: Date?, ephemeralDuration: Int?,
                        ledger: EphemeralReceiptRecording, now: Date) -> Bool {
-        guard flags.contains(.ephemeral) || expiresAt != nil || (ephemeralDuration ?? 0) > 0 else { return false }
-        let death = ledger.destruction(of: id)
-        return MessageProtectionDescriptor.resolve(
-            flags: flags,
-            servedExpiresAt: death.map { min($0, now) } ?? expiresAt,
-            ephemeralDuration: ephemeralDuration,
-            localReceivedAt: death == nil ? ledger.firstReception(of: id) : nil,
-            now: now
-        ).isExpired
+        EphemeralExpiry.isGone(id: id, flags: flags, expiresAt: expiresAt, ephemeralDuration: ephemeralDuration,
+                               ledger: ledger, now: now)
     }
 }
 

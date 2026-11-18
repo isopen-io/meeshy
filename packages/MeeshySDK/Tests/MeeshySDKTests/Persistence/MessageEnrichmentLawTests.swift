@@ -9,12 +9,16 @@ final class MessageEnrichmentLawTests: XCTestCase {
 
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
+    private let ledger = ErasureTestLedger()
+
     private func keeps(
         sealedEndToEnd: Bool = false, viewOnceOpenedAt: Date? = nil, deletedAt: Date? = nil, expiresAt: Date? = nil
     ) -> Bool {
         MessageEnrichmentLaw.keepsEnrichments(
-            sealedEndToEnd: sealedEndToEnd, viewOnceOpenedAt: viewOnceOpenedAt,
-            deletedAt: deletedAt, expiresAt: expiresAt, now: now
+            sealedEndToEnd: sealedEndToEnd, viewOnceOpenedAt: viewOnceOpenedAt, deletedAt: deletedAt,
+            expired: EphemeralExpiry.isGone(
+                id: "m-law", flags: [], expiresAt: expiresAt, ephemeralDuration: nil, ledger: ledger, now: now
+            )
         )
     }
 
@@ -43,6 +47,48 @@ final class MessageEnrichmentLawTests: XCTestCase {
 
         record.encryptionMode = E2EEWire.mode
         XCTAssertFalse(MessageEnrichmentLaw.keepsEnrichments(of: record, now: now))
+    }
+
+    // MARK: - L'échéance se juge en UN seul endroit (#19437)
+
+    /// L'app retire l'éphémère du fil dès que la réception locale plus la durée est passée, que l'échéance servie
+    /// existe ou non : la loi doit juger de même, sans quoi la ligne disparaît de l'écran et garde ses textes.
+    func test_ephemeralExpiredByTheLocalDuration_keepsNone_likeTheApp() {
+        var record = MessageRecordFactory.make(localId: "m-duree")
+        record.effectFlags = MessageEffectFlags.ephemeral.rawValue
+        record.ephemeralDuration = 60
+        let received = now.addingTimeInterval(-120)
+        let ledger = ErasureTestLedger(receptions: ["m-duree": received])
+
+        XCTAssertTrue(EphemeralExpiry.isGone(record, ledger: ledger, now: now), "l'app le tient pour mort")
+        XCTAssertFalse(MessageEnrichmentLaw.keepsEnrichments(of: record, ledger: ledger, now: now), "la loi aussi")
+        XCTAssertTrue(MessageEnrichmentLaw.contentIsGone(of: record, ledger: ledger, now: now))
+    }
+
+    func test_ephemeralStillWithinItsLocalDuration_keepsItsEnrichments() {
+        var record = MessageRecordFactory.make(localId: "m-vivant")
+        record.effectFlags = MessageEffectFlags.ephemeral.rawValue
+        record.ephemeralDuration = 600
+        let ledger = ErasureTestLedger(receptions: ["m-vivant": now.addingTimeInterval(-120)])
+
+        XCTAssertTrue(MessageEnrichmentLaw.keepsEnrichments(of: record, ledger: ledger, now: now))
+    }
+
+    func test_ephemeralDestroyedOnThisDevice_keepsNone() {
+        var record = MessageRecordFactory.make(localId: "m-detruit")
+        record.effectFlags = MessageEffectFlags.ephemeral.rawValue
+        let ledger = ErasureTestLedger(destructions: ["m-detruit": now.addingTimeInterval(-5)])
+
+        XCTAssertFalse(MessageEnrichmentLaw.keepsEnrichments(of: record, ledger: ledger, now: now))
+    }
+
+    func test_endToEndMessage_keepsNoEnrichmentButItsContentIsNotGone() {
+        var record = MessageRecordFactory.make(localId: "m-e2ee-loi")
+        record.isEncrypted = true
+        record.encryptionMode = E2EEWire.mode
+
+        XCTAssertFalse(MessageEnrichmentLaw.keepsEnrichments(of: record, ledger: ledger, now: now))
+        XCTAssertFalse(MessageEnrichmentLaw.contentIsGone(of: record, ledger: ledger, now: now), "son clair vit au coffre : rien d'autre à vider")
     }
 
     // MARK: - Le REST suit la même loi
@@ -78,4 +124,17 @@ final class MessageEnrichmentLawTests: XCTestCase {
 
         XCTAssertEqual(try actor.translations(for: "m-eph").map(\.translatedContent), ["Hello"], "le Prisme d'un éphémère vivant tient hors ligne")
     }
+}
+
+/// Un registre d'éphémères sans `UserDefaults` : le vrai vit dans le groupe d'application et ferait dépendre le
+/// témoin de l'état de la machine.
+struct ErasureTestLedger: EphemeralReceiptRecording {
+    var receptions: [String: Date] = [:]
+    var destructions: [String: Date] = [:]
+
+    func firstReception(of messageId: String) -> Date? { receptions[messageId] }
+    @discardableResult
+    func noteReception(of messageId: String, at date: Date) -> Date { receptions[messageId] ?? date }
+    func destruction(of messageId: String) -> Date? { destructions[messageId] }
+    func noteDestruction(of messageId: String, at date: Date) {}
 }

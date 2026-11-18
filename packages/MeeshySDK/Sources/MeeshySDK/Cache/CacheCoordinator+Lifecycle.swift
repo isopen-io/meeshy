@@ -65,7 +65,13 @@ extension CacheCoordinator {
             guard let self else { return }
             Task { await self.evictUnderMemoryPressure() }
         }
-        lifecycleObservers = [resign, background, terminate, memory]
+        let erased = NotificationCenter.default.addObserver(
+            forName: .messageContentErased, object: nil, queue: nil
+        ) { [weak self] notification in
+            guard let self, let erasures = notification.userInfo?["erasures"] as? [MessageContentErasure] else { return }
+            Task { for erasure in erasures { await self.applyErasure(erasure) } }
+        }
+        lifecycleObservers = [resign, background, terminate, memory, erased]
         #endif
     }
 

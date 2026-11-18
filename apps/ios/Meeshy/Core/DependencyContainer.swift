@@ -108,15 +108,25 @@ final class DependencyContainer {
             guard let session = router.session(ownedBy: ConversationSyncEngine.currentSyncOwner) else { return }
             await Self.persist(mutation, into: session.messagePersistence)
         }
+        wireMessageReaders(router: router)
+    }
 
-        // Le message précédent qui reprend la ligne de liste après une suppression relit ici ses traductions, sans
-        // réseau : le modèle de message du cache n'en porte pas.
+    /// Ce que le moteur et le cache lisent dans la base du compte, sans réseau :
+    /// - le message précédent qui reprend la ligne de liste après une suppression relit ses traductions : le modèle
+    ///   de message du cache n'en porte pas ;
+    /// - le cache des traductions (24 h, sur disque) suit la même loi que la base (`MessageEnrichmentLaw`) : il ne
+    ///   grave rien d'une vue unique ouverte, d'un message supprimé ou d'un éphémère échu (#19305).
+    private func wireMessageReaders(router: MessageStoreRouter) {
         ConversationSyncEngine.shared.messageTranslationsReader = { [router] messageId in
             guard let session = router.session(ownedBy: ConversationSyncEngine.currentSyncOwner) else { return [] }
             let persistence = session.messagePersistence
             let direct = (try? persistence.translations(for: messageId)) ?? []
             guard direct.isEmpty, let localId = try? persistence.resolveLocalId(forServerId: messageId) else { return direct }
             return (try? persistence.translations(for: localId)) ?? []
+        }
+        CacheCoordinator.shared.setTranslationAdmission { [router] messageId in
+            guard let session = router.session(ownedBy: ConversationSyncEngine.currentSyncOwner) else { return true }
+            return await MessageEnrichmentWriter.keepsEnrichments(ofMessage: messageId, in: session.messagePersistence)
         }
     }
 

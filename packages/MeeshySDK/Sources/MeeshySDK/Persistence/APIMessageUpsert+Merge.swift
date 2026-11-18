@@ -284,10 +284,12 @@ extension APIMessageUpsert {
     /// Les traductions servies se gardent selon la ligne que l'upsert vient d'écrire (`MessageEnrichmentLaw`) : une
     /// vue unique déjà ouverte (`consumedByMe` l'a scellée), un message chiffré de bout en bout, supprimé ou échu n'en
     /// garde aucune.
-    static func persistTranslations(for api: APIMessage, in db: Database) throws {
+    static func persistTranslations(
+        for api: APIMessage, ledger: any EphemeralReceiptRecording = EphemeralReceiptLedger.shared, in db: Database
+    ) throws {
         guard let apiTranslations = api.translations, !apiTranslations.isEmpty,
               let row = try MessageEnrichmentLaw.row(of: api.id, in: db),
-              MessageEnrichmentLaw.keepsEnrichments(of: row) else { return }
+              MessageEnrichmentLaw.keepsEnrichments(of: row, ledger: ledger) else { return }
         let now = Date()
         for t in apiTranslations {
             let record = TranslationRecord(

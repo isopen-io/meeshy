@@ -181,7 +181,8 @@ extension MessagePersistenceActor {
             }
             try db.execute(
                 sql: """
-                    UPDATE messages SET deletedAt = ?, content = NULL,
+                    UPDATE messages SET deletedAt = ?, content = NULL, attachmentsJson = NULL, stickerJson = NULL,
+                    locationJson = NULL, trackedLinksJson = NULL,
                     updatedAt = ?, changeVersion = changeVersion + 1
                     WHERE localId = ? OR serverId = ?
                     """,

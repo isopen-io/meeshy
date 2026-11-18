@@ -20,11 +20,8 @@ extension MessagePersistenceActor {
             currentUserId: currentUserId,
             preferredLanguages: preferredLanguages
         )
-        let changedConvIds = try await dbWriter.write { db -> Set<String> in
-            try APIMessageUpsert.upsertBatch(apiMessages, context: context, in: db)
-        }
-        if !changedConvIds.isEmpty {
-            postMessageStoreRefresh(conversationIds: changedConvIds)
-        }
+        let outcome = try await dbWriter.write { db in try APIMessageUpsert.upsertOutcome(apiMessages, context: context, in: db) }
+        if !outcome.changedConversationIds.isEmpty { postMessageStoreRefresh(conversationIds: outcome.changedConversationIds) }
+        MessageContentErasure.announce(outcome.erasures)
     }
 }
