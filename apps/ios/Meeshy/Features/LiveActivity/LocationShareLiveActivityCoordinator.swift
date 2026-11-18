@@ -46,15 +46,25 @@ final class LocationShareLiveActivityCoordinator {
     private let resolver: CirclePeopleResolving
     private let naming: LocationSharePlaceNaming
     private let now: () -> Date
+    /// Ma dernière position connue de l'appareil, pour la distance au poignet (vue 6, #19569). Jamais demandée ici :
+    /// sans autorisation, elle manque et la montre montre le lieu au lieu de la distance.
+    private let myPosition: () -> LocationShareActivityLaw.Position?
 
     init(
         resolver: CirclePeopleResolving = CirclePeopleDirectory.shared,
         naming: LocationSharePlaceNaming = GeocoderPlaceNaming(),
-        now: @escaping () -> Date = { Date() }
+        now: @escaping () -> Date = { Date() },
+        myPosition: (() -> LocationShareActivityLaw.Position?)? = nil
     ) {
         self.resolver = resolver
         self.naming = naming
         self.now = now
+        let manager = CLLocationManager()
+        self.myPosition = myPosition ?? {
+            manager.location.map {
+                LocationShareActivityLaw.Position(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
+            }
+        }
     }
 
     /// Suit le compte connecté : un compte branche SON magasin, la déconnexion ferme l'activité.
@@ -147,7 +157,8 @@ final class LocationShareLiveActivityCoordinator {
     }
 
     private func apply() {
-        let step = LocationShareActivityLaw.step(shown: shown, shares: shares, people: people, places: places, now: now())
+        let step = LocationShareActivityLaw.step(shown: shown, shares: shares, people: people, places: places,
+                                                 myPosition: myPosition(), now: now())
         let previous = shown
         shown = step.shown
         perform(step.action, previous: previous)

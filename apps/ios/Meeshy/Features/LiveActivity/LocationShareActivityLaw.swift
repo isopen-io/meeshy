@@ -21,6 +21,12 @@ enum LocationShareActivityLaw {
         let username: String?
     }
 
+    /// Ma position, telle que l'appareil la connaît déjà (jamais demandée pour l'activité).
+    struct Position: Equatable, Sendable {
+        let latitude: Double
+        let longitude: Double
+    }
+
     struct Shown: Equatable, Sendable {
         let identity: Identity
         let snapshot: LocationShareActivitySnapshot
@@ -76,6 +82,7 @@ enum LocationShareActivityLaw {
         shares: [String: SharedLocationEntry],
         people: [String: CirclePerson],
         places: [String: Place],
+        myPosition: Position? = nil,
         now: Date
     ) -> Step {
         let live = shares.filter { $0.value.deadline > now && people[$0.key] != nil }
@@ -84,7 +91,7 @@ enum LocationShareActivityLaw {
             return Step(shown: nil, action: shown == nil ? .none : .end)
         }
         let next = Shown(identity: identity(of: person, userId: leadId),
-                         snapshot: snapshot(entry, place: places[leadId]))
+                         snapshot: snapshot(entry, place: places[leadId], from: myPosition))
         guard let shown else { return Step(shown: next, action: .start(next)) }
         if shown.identity != next.identity { return Step(shown: next, action: .replace(next)) }
         return Step(shown: next, action: shown.snapshot == next.snapshot ? .none : .update(next))
@@ -121,13 +128,36 @@ enum LocationShareActivityLaw {
         )
     }
 
-    private static func snapshot(_ entry: SharedLocationEntry, place: Place?) -> LocationShareActivitySnapshot {
+    private static func snapshot(_ entry: SharedLocationEntry, place: Place?, from me: Position?) -> LocationShareActivitySnapshot {
         let named = place.flatMap { $0.names(entry) ? $0 : nil }
+        let closeOne = entry.circle.map { $0 >= .close } ?? false
         return LocationShareActivitySnapshot(
             deadline: entry.deadline,
             precision: precisionWord(entry.precision),
             place: named?.name,
-            city: named?.city
+            city: named?.city,
+            distanceMeters: closeOne ? me.map { distance(from: $0, to: entry) } : nil,
+            closeOne: closeOne
         )
+    }
+
+    /// La distance du grand cercle jusqu'à la coordonnée servie, au pas de sa précision, jamais nulle.
+    private static func distance(from me: Position, to entry: SharedLocationEntry) -> Int {
+        let radians = Double.pi / 180
+        let deltaLatitude = (entry.latitude - me.latitude) * radians
+        let deltaLongitude = (entry.longitude - me.longitude) * radians
+        let haversine = pow(sin(deltaLatitude / 2), 2)
+            + cos(me.latitude * radians) * cos(entry.latitude * radians) * pow(sin(deltaLongitude / 2), 2)
+        let meters = 2 * 6_371_000 * asin(min(1, sqrt(haversine)))
+        let step = distanceStep(entry.precision)
+        return max(step, Int((meters / Double(step)).rounded()) * step)
+    }
+
+    private static func distanceStep(_ precision: SharedLocationPrecision) -> Int {
+        switch precision {
+        case .exact: return 100
+        case .neighborhood: return 500
+        case .city: return 1_000
+        }
     }
 }

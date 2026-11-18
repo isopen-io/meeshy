@@ -14,7 +14,8 @@ final class LocationShareActivityLawTests: XCTestCase {
         minutes: Double = 40,
         precision: SharedLocationPrecision = .neighborhood,
         latitude: Double = 38.711,
-        longitude: Double = -9.13
+        longitude: Double = -9.13,
+        circle: RelationLevel? = .close
     ) -> SharedLocationEntry {
         SharedLocationEntry(
             latitude: latitude,
@@ -23,7 +24,7 @@ final class LocationShareActivityLawTests: XCTestCase {
             radiusMeters: 500,
             updatedAt: now,
             deadline: now.addingTimeInterval(minutes * 60),
-            circle: .close
+            circle: circle
         )
     }
 
@@ -36,9 +37,11 @@ final class LocationShareActivityLawTests: XCTestCase {
         shares: [String: SharedLocationEntry],
         people: [String: CirclePerson],
         places: [String: LocationShareActivityLaw.Place] = [:],
+        me: LocationShareActivityLaw.Position? = nil,
         at instant: Date? = nil
     ) -> LocationShareActivityLaw.Step {
-        LocationShareActivityLaw.step(shown: shown, shares: shares, people: people, places: places, now: instant ?? now)
+        LocationShareActivityLaw.step(shown: shown, shares: shares, people: people, places: places,
+                                      myPosition: me, now: instant ?? now)
     }
 
     func test_nothingShared_opensNothing() {
@@ -154,5 +157,69 @@ final class LocationShareActivityLawTests: XCTestCase {
         let words = Set(SharedLocationPrecision.allCases.map { LocationShareActivityLaw.precisionWord($0) })
         XCTAssertEqual(words.count, SharedLocationPrecision.allCases.count)
         XCTAssertFalse(words.contains(""))
+    }
+
+    // MARK: - Au poignet (planche `Hors-App`, vue 6, #19569)
+
+    /// 0,0216° de latitude plus au nord : 2 401,7 m.
+    private let me = LocationShareActivityLaw.Position(latitude: 38.711 - 0.0216, longitude: -9.13)
+
+    private func wrist(_ precision: SharedLocationPrecision, circle: RelationLevel? = .close,
+                       me position: LocationShareActivityLaw.Position?) -> LocationShareActivitySnapshot? {
+        let result = step(nil, shares: ["leo": entry(precision: precision, circle: circle)],
+                          people: ["leo": person("leo", "Léo", username: "leo.m")], me: position)
+        return result.shown?.snapshot
+    }
+
+    func test_aCloseOneSharing_showsHowFarAway_roundedToTheServedPrecision() {
+        XCTAssertEqual(wrist(.exact, me: me)?.distanceMeters, 2_400, "exacte : à 100 m près")
+        XCTAssertEqual(wrist(.neighborhood, me: me)?.distanceMeters, 2_500, "quartier : à 500 m près")
+        XCTAssertEqual(wrist(.city, me: me)?.distanceMeters, 2_000, "ville : au kilomètre près")
+        XCTAssertEqual(wrist(.exact, me: me)?.closeOne, true)
+    }
+
+    func test_aSharerRightNextToMe_isNeverZeroMetresAway() {
+        let here = LocationShareActivityLaw.Position(latitude: 38.711, longitude: -9.13)
+        XCTAssertEqual(wrist(.neighborhood, me: here)?.distanceMeters, 500, "jamais « à 0 m » : le pas de la précision")
+    }
+
+    func test_withoutMyPosition_noDistanceIsInvented() {
+        let snapshot = wrist(.exact, me: nil)
+        XCTAssertNotNil(snapshot)
+        XCTAssertNil(snapshot?.distanceMeters)
+        XCTAssertEqual(snapshot?.closeOne, true)
+    }
+
+    func test_belowClose_theWristShowsNothing_neitherDistanceNorTalkie() {
+        let friend = wrist(.exact, circle: .friend, me: me)
+        XCTAssertEqual(friend?.closeOne, false, "un Ami n'est pas au poignet")
+        XCTAssertNil(friend?.distanceMeters, "rien sous Proche, pas même la distance")
+
+        let unserved = wrist(.exact, circle: nil, me: me)
+        XCTAssertEqual(unserved?.closeOne, false, "un cercle non servi ne se suppose pas")
+        XCTAssertNil(unserved?.distanceMeters)
+
+        XCTAssertEqual(wrist(.exact, circle: .blood, me: me)?.closeOne, true, "le Sang est au-dessus de Proche")
+    }
+
+    func test_aStoppedShare_leavesTheWrist() {
+        let people = ["leo": person("leo", "Léo")]
+        let first = step(nil, shares: ["leo": entry()], people: people, me: me)
+        XCTAssertNotNil(first.shown?.snapshot.distanceMeters)
+
+        let second = step(first.shown, shares: [:], people: people, me: me)
+
+        XCTAssertNil(second.shown)
+        XCTAssertEqual(second.action, .end, "un partage arrêté disparaît, du poignet comme de l'iPhone")
+    }
+
+    func test_aStateEncodedBeforeTheWrist_stillDecodes() throws {
+        let legacy = Data(#"{"deadline":0,"precision":"quartier","place":"Alfama"}"#.utf8)
+
+        let decoded = try JSONDecoder().decode(LocationShareActivitySnapshot.self, from: legacy)
+
+        XCTAssertEqual(decoded.place, "Alfama")
+        XCTAssertNil(decoded.distanceMeters)
+        XCTAssertNil(decoded.closeOne)
     }
 }

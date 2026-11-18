@@ -11,7 +11,7 @@ import SwiftUI
 struct LocationShareLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: LocationShareActivityAttributes.self) { context in
-            LocationShareLockScreenView(attributes: context.attributes, state: context.state)
+            LocationShareActivityContent(attributes: context.attributes, state: context.state)
                 .activityBackgroundTint(Color.black.opacity(0.55))
                 .activitySystemActionForegroundColor(LiveActivityStyle.brand)
                 .widgetURL(WidgetDeepLink.profile(context.attributes.username))
@@ -44,6 +44,20 @@ struct LocationShareLiveActivity: Widget {
             .widgetURL(WidgetDeepLink.profile(context.attributes.username))
             .keylineTint(LiveActivityStyle.color(hex: context.attributes.accentHex))
         }
+        .onTheWrist()
+    }
+}
+
+extension WidgetConfiguration {
+    /// Au poignet (planche `Hors-App`, vue 6, #19569) : watchOS 11 pose l'activité de l'iPhone dans la pile
+    /// intelligente de la montre, en famille `.small`. Avant iOS 18, rien ne change.
+    @MainActor
+    func onTheWrist() -> some WidgetConfiguration {
+        if #available(iOS 18.0, *) {
+            return supplementalActivityFamilies([.small])
+        } else {
+            return self
+        }
     }
 }
 
@@ -55,6 +69,21 @@ enum LocationShareWording {
     static var sharingCaption: String { String(localized: "widget.locationShare.caption", defaultValue: "Sharing their location") }
     static var map: String { String(localized: "widget.locationShare.map", defaultValue: "Map") }
     static var remaining: String { String(localized: "widget.locationShare.remaining", defaultValue: "Time left") }
+    static var talkie: String { String(localized: "widget.locationShare.talkie", defaultValue: "Talkie") }
+    static var openOnPhone: String {
+        String(localized: "widget.locationShare.wrist.openOnPhone", defaultValue: "Open Meeshy on your iPhone")
+    }
+
+    static func talkieWith(_ name: String) -> String {
+        String(format: String(localized: "widget.locationShare.talkieWith", defaultValue: "Talkie with %@"), name)
+    }
+
+    /// « à 2,4 km » : la distance déjà arrondie par l'app, dans l'unité et la langue de l'appareil.
+    static func away(_ meters: Int) -> String {
+        let measure = Measurement(value: Double(meters), unit: UnitLength.meters)
+        let text = measure.formatted(.measurement(width: .abbreviated, usage: .road))
+        return String(format: String(localized: "widget.locationShare.distance", defaultValue: "%@ away"), text)
+    }
 
     /// « Alfama · quartier » dans l'îlot ; « Alfama · Lisbonne » sur l'écran verrouillé ; le mot de la précision seul
     /// tant que le lieu n'est pas nommé.
@@ -163,5 +192,99 @@ private struct LocationShareLockScreenView: View {
             LocationShareFooter(attributes: attributes, state: state, showsCity: false)
         }
         .padding(16)
+    }
+}
+
+/// L'îlot, l'écran verrouillé ou, depuis iOS 18, le poignet : la famille que le système demande choisit la vue.
+private struct LocationShareActivityContent: View {
+    let attributes: LocationShareActivityAttributes
+    let state: LocationShareActivitySnapshot
+
+    var body: some View {
+        if #available(iOS 18.0, *) {
+            LocationShareFamilyContent(attributes: attributes, state: state)
+        } else {
+            LocationShareLockScreenView(attributes: attributes, state: state)
+        }
+    }
+}
+
+@available(iOS 18.0, *)
+private struct LocationShareFamilyContent: View {
+    let attributes: LocationShareActivityAttributes
+    let state: LocationShareActivitySnapshot
+    @Environment(\.activityFamily) private var family
+
+    var body: some View {
+        switch family {
+        case .small:
+            if state.closeOne == true {
+                LocationShareWristView(attributes: attributes, state: state)
+            } else {
+                LocationShareWristClosed()
+            }
+        default:
+            LocationShareLockScreenView(attributes: attributes, state: state)
+        }
+    }
+}
+
+/// **Au poignet** (vue 6) : l'avatar, le nom, à quelle distance — ou le lieu tant qu'elle manque —, le temps restant et
+/// « Talkie », qui ouvre la vitrine du proche où la carte Talkie se maintient (le chemin du raccourci du Bouton Action).
+private struct LocationShareWristView: View {
+    let attributes: LocationShareActivityAttributes
+    let state: LocationShareActivitySnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                LocationShareAvatar(attributes: attributes, size: 30)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(attributes.name)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Label(whereabouts, systemImage: state.distanceMeters == nil ? "mappin.and.ellipse" : "location.north.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(LiveActivityStyle.color(hex: attributes.accentHex))
+                }
+                .lineLimit(1)
+                Spacer(minLength: 4)
+                LocationShareCountdown(deadline: state.deadline)
+                    .font(.caption2.weight(.semibold))
+                    .frame(maxWidth: 44)
+            }
+            .accessibilityElement(children: .combine)
+            talkie
+        }
+    }
+
+    private var whereabouts: String {
+        state.distanceMeters.map { LocationShareWording.away($0) } ?? LocationShareWording.place(state, showsCity: false)
+    }
+
+    @ViewBuilder
+    private var talkie: some View {
+        if let username = attributes.username, !username.isEmpty {
+            Button(intent: OpenVitrineIntent(username: username)) {
+                Label(LocationShareWording.talkie, systemImage: "dot.radiowaves.left.and.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(Capsule().fill(LiveActivityStyle.color(hex: attributes.accentHex)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(LocationShareWording.talkieWith(attributes.name))
+        }
+    }
+}
+
+/// Sous Proche, le poignet ne montre personne : ni nom, ni distance, ni Talkie.
+private struct LocationShareWristClosed: View {
+    var body: some View {
+        Label(LocationShareWording.openOnPhone, systemImage: "iphone")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.white)
+            .lineLimit(2)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
