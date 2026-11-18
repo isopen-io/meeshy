@@ -101,7 +101,7 @@ final class JoinFlowCopyTests: XCTestCase {
             let label = JoinFlowCopy.goneTicketLabel(title: "Studio", address: "meeshy.me/chat/s", in: bundle)
             XCTAssertTrue(label.contains("Studio") && label.contains("meeshy.me/chat/s"), "\(code) : \(label)")
             XCTAssertNotEqual(JoinFlowCopy.goneInvitation(in: bundle), "joinFlow.gone.invitation", code)
-            XCTAssertNotEqual(JoinFlowCopy.goneCreatorCaption(in: bundle), "joinFlow.gone.creatorCaption", code)
+            XCTAssertNotEqual(JoinFlowCopy.goneCreatorCaption(in: bundle), "joinFlow.gone.creatorRole", code)
         }
     }
 }

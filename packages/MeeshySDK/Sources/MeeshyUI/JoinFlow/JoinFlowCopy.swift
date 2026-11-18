@@ -88,6 +88,6 @@ public nonisolated enum JoinFlowCopy {
     }
 
     nonisolated static func goneCreatorCaption(in bundle: Bundle) -> String {
-        String(localized: "joinFlow.gone.creatorCaption", defaultValue: "a créé ce lien", bundle: bundle)
+        String(localized: "joinFlow.gone.creatorRole", defaultValue: "a créé ce lien", bundle: bundle)
     }
 }

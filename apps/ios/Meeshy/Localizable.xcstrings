@@ -13144,7 +13144,7 @@
         }
       }
     },
-    "communityLink.detail.detailsFailed": {
+    "communityLink.sheet.readFailed": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -13191,7 +13191,7 @@
         }
       }
     },
-    "communityLink.detail.openCommunity.a11y": {
+    "communityLink.sheet.openCommunity.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -345392,7 +345392,7 @@
         }
       }
     },
-    "sharedLocation.share.hint": {
+    "sharedLocation.share.choiceAccessibility": {
       "extractionState": "manual",
       "localizations": {
         "ar": {

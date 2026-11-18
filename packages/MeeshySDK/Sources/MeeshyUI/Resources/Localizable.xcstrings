@@ -88040,7 +88040,7 @@
         }
       }
     },
-    "joinFlow.gone.creatorCaption": {
+    "joinFlow.gone.creatorRole": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -93160,100 +93160,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "لم تتم إعادة إرسال طلبك"
-          }
-        }
-      }
-    },
-    "profile.relation.request.sent.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ n'a pas encore répondu."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ hasn't replied yet."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ aún no ha respondido."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ hat noch nicht geantwortet."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ non ha ancora risposto."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ ainda não respondeu."
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لم يرد %@ بعد."
-          }
-        }
-      }
-    },
-    "profile.relation.request.accepted.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ et toi pouvez maintenant vous voir en ligne."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You and %@ can now see when you're online."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tú y %@ ya podéis ver cuándo estáis en línea."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Du und %@ seht jetzt, wann ihr online seid."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tu e %@ ora potete vedere quando siete online."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Você e %@ agora podem ver quando estão online."
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يمكنك أنت و%@ الآن رؤية متى تكونان متصلين."
           }
         }
       }

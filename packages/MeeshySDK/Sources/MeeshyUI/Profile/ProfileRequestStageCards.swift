@@ -24,8 +24,6 @@ struct ProfileSentRequestCard: View {
                 sentLine,
                 form: .band,
                 lead: .systemImage("clock"),
-                detail: String(localized: "profile.relation.request.sent.detail",
-                               defaultValue: "\(name) n'a pas encore répondu.", bundle: .module),
                 tint: tint
             )
             MeeshyButtonPair {
@@ -141,9 +139,9 @@ struct ProfileClosedRequestCard: View {
     }
 }
 
-/// Étape 4 — acceptée à l'instant : « Vous êtes amis · Sofia et toi pouvez maintenant vous voir en ligne », ce qui vient
-/// de s'ouvrir, et « Écrire à Sofia ». La note monte avec le jeton `rise` de la table de mouvement (K26) ; sous mouvement
-/// réduit, la table rend un fondu (loi 7), jamais une apparition à plat.
+/// Étape 4 — acceptée à l'instant : « Vous êtes amis », ce qui vient de s'ouvrir, et « Écrire à Sofia ». La note monte
+/// avec le jeton `rise` de la table de mouvement (K26) ; sous mouvement réduit, la table rend un fondu (loi 7), jamais
+/// une apparition à plat.
 struct ProfileAcceptedRequestCard: View {
     let name: String
     let isOnline: Bool
@@ -164,9 +162,7 @@ struct ProfileAcceptedRequestCard: View {
                 String(localized: "profile.relation.request.accepted.title", defaultValue: "Vous êtes amis", bundle: .module),
                 form: .banner,
                 kind: .ok,
-                lead: .systemImage("person.2.fill"),
-                detail: String(localized: "profile.relation.request.accepted.detail",
-                               defaultValue: "\(name) et toi pouvez maintenant vous voir en ligne.", bundle: .module)
+                lead: .systemImage("person.2.fill")
             )
             .scaleEffect(hasArrived || reduceMotion ? 1 : 0.94)
             .opacity(hasArrived ? 1 : 0)

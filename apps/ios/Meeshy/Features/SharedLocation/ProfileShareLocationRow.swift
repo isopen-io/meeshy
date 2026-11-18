@@ -121,7 +121,7 @@ struct ProfileShareLocationLine: Equatable {
 enum ShareLocationWording {
     /// L'indice dit ce que fait le geste : le titre de la rangée dit déjà avec qui on partage.
     static var shareHint: String {
-        String(localized: "sharedLocation.share.hint", defaultValue: "Choisir la durée et la précision", bundle: .main)
+        String(localized: "sharedLocation.share.choiceAccessibility", defaultValue: "Choisir la durée et la précision", bundle: .main)
     }
 
     static func sheetTitle(name: String) -> String {
