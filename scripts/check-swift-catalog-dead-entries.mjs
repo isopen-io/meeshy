@@ -560,6 +560,20 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // ambiances de capture, que l'on installe et retire comme des packs). Le web les appelle ; iOS les lira dans
 // #13092 (PackStore apprend le domaine capture-frame). Entrées PRÉMATURÉES, pas des faux morts (#5427). Valeur
 // MESURÉE le 2026-10-25 en CI (Gardes iOS, run 40238145750) et en local : exactement ces quatre entrées nouvelles.
+// 328 -> 327 (#19653, 2026-11-18) : AMÉLIORATION que `dev` avait faite et n'avait pas enregistrée,
+// masquée par l'erreur PÉRIMÉE qui la précède dans l'ordre des contrôles — le script s'arrête au
+// premier, donc la seconde dérive était invisible tant que la première tenait. Mesurée sur un export
+// PROPRE de `origin/dev` (`git archive origin/dev`, `dfd1b74eb6`), avec pour seule modification le
+// retrait des six déclarations périmées : 327 des deux côtés. Et le relevé BRUT de `deadEntries()`
+// est IDENTIQUE entre cet arbre et `dev` (354 entrées, `diff` vide) — la baisse n'appartient donc à
+// aucun lot ouvert.
+//
+// Ce qui n'est PAS établi, et se dit plutôt que de s'inventer : QUELLE entrée vaut ce -1. La
+// référence 328 a été écrite sur un commit de FUSION qui portait déjà la condition périmée, donc le
+// chiffre compté à ce point n'est pas reproductible, et les dix entrées devenues mortes depuis sont
+// toutes couvertes par une déclaration en attente (donc hors du compte). Une baisse mesurée deux
+// fois sur deux arbres vaut mieux qu'une cause devinée.
+//
 // ENTRÉES EN ATTENTE DE CLIENT — déclarées, jamais comptées dans la référence.
 //
 // Une route que la passerelle sert AVANT que son client n'existe n'est pas une
@@ -581,13 +595,16 @@ const PENDING_CLIENT_ENTRIES = {
   'UsersEndpoint.meHighlightsById': { issue: 19394, reason: 'PATCH · DELETE /users/me/highlights/:id (iOS)' },
   'UsersEndpoint.meHighlightsOrder': { issue: 19394, reason: 'PUT /users/me/highlights/order (iOS)' },
   // Le profil de la planche (#18857, PR serveur #19316) : le serveur sert avant le tour client iOS.
-  'ContactExchangeEndpoint.byTokenAccept': { issue: 19205, reason: 'POST /contact-exchange/:token/accept — accepter un partage sans contact (iOS)' },
-  'MeEndpoint.contactExchange': { issue: 19205, reason: 'POST /me/contact-exchange — émettre le jeton du partage sans contact (iOS)' },
+  // SIX entrées de ce bloc sont PARTIES le 2026-11-18 (#19653) — leurs issues avaient livré leur
+  // appelant iOS et laissé la déclaration, si bien que le cliquet rougissait sur `dev` à sa tête :
+  // `ContactExchangeEndpoint.byTokenAccept` et `MeEndpoint.contactExchange` (#19205,
+  // `ContactExchangeService`), `MeEndpoint.locationGhost` (#19203, `LocationGhostService`),
+  // `RelationsEndpoint.byUserIdLocationRequest` (#19204, `RelationsService`),
+  // `UsersEndpoint.meProfileLinkStats` (#19206, `ProfileLinkVisitsService`) et
+  // `InvitationsEndpoint.emailByIdResend` (#19207, `AffiliateService`). Le lot qui SOLDE une ligne
+  // d'inventaire est le seul à savoir qu'elle est soldée : la retirer appartient à ce lot-là, et un
+  // cliquet qui rougit en retard accuse le passant.
   'MeEndpoint.liveActivityTokens': { issue: 19463, reason: 'POST /me/live-activity-tokens — l\'Activité en direct iOS close par la passerelle à la fin du partage' },
-  'MeEndpoint.locationGhost': { issue: 19203, reason: 'PUT /me/location/ghost — le fantôme global de position (iOS)' },
-  'RelationsEndpoint.byUserIdLocationRequest': { issue: 19204, reason: 'POST /relations/:userId/location/request — prolonger ou redemander un partage (iOS)' },
-  'UsersEndpoint.meProfileLinkStats': { issue: 19206, reason: 'GET /users/me/profile-link/stats — les visites de mon lien (iOS)' },
-  'InvitationsEndpoint.emailByIdResend': { issue: 19207, reason: 'POST /invitations/email/:id/resend — relancer une invitation (iOS)' },
   'InvitationsEndpoint.emailOptOut': { issue: 19321, reason: 'POST /invitations/email/opt-out — la page web de désinscription, pas un écran iOS (#19321)' },
   // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
   'ConversationsEndpoint.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (iOS)' },
@@ -617,7 +634,7 @@ const PENDING_CLIENT_ENTRIES = {
   'E2EeEndpoint.devicesSelfVerificationsAck': { issue: 18906, reason: 'POST /e2ee/devices/self/verifications/ack — accuser les messages de comparaison lus, même lot iOS' },
 };
 
-const BASELINE_DEAD_ENTRIES = 328;
+const BASELINE_DEAD_ENTRIES = 327;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
