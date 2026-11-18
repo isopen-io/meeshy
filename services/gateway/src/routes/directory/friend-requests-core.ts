@@ -1,3 +1,4 @@
+import { logWarn } from '../../utils/logger';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { withMutationVerdict } from '../../utils/withMutationLog';
@@ -188,7 +189,7 @@ export async function envoyerDemande(
       receiverId: receveurId,
       message: mot,
       sourceLanguage: langueDuMot,
-    });
+    }).catch((error: unknown) => logWarn(fastify.log, '[friend-requests] message translation trigger failed', error));
   }
 
   // La ligne ne sort JAMAIS brute : le destinataire d'une demande est, par

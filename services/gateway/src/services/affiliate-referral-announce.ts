@@ -26,6 +26,6 @@ export function affiliateReferralAnnouncer(host: {
   readonly relay: LinkActivityRelay;
 }): (joined: AffiliateReferralJoined) => void {
   return (joined) => {
-    void announceAffiliateReferral({ prisma: host.prisma, relay: host.relay, ...joined });
+    void announceAffiliateReferral({ prisma: host.prisma, relay: host.relay, ...joined }).catch(() => undefined);
   };
 }

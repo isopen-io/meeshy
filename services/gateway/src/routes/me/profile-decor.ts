@@ -17,7 +17,7 @@ import { PACK_NOT_OWNED_CODE } from '../pack-routes';
 import { PROFILE_DECOR_COLUMNS, servedProfileDecor, servedProfileDecorJsonSchema, validateProfileDecorWrite } from '../../services/appearance/profileDecor';
 import { startupPackIndex, type PackIndex } from '../../services/packs/PackIndex';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { sendError, sendForbidden, sendInternalError, sendNotFound, sendSuccess, sendUnauthorized } from '../../utils/response.js';
 import { broadcastToUser } from '../../utils/socket-broadcast';
 import { announceProfileChanged } from '../../services/notifications/profile-changed';
@@ -77,7 +77,8 @@ export default async function profileDecorRoutes(fastify: FastifyInstance, optio
         });
         const decor = servedProfileDecor(index, row);
         broadcastToUser(fastify, userId, SERVER_EVENTS.PROFILE_DECOR_UPDATED, { userId, decor, at: new Date().toISOString() });
-        void announceProfileChanged(fastify, { userId });
+        void announceProfileChanged(fastify, { userId })
+          .catch((announceError: unknown) => logWarn(fastify.log, '[me/profile-decor] profile-changed announce failed', announceError));
         return sendSuccess(reply, decor);
       } catch (error) {
         logError(fastify.log, 'Error equipping profile decor:', error);

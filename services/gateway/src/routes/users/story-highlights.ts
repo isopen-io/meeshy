@@ -30,7 +30,7 @@ import {
 import { announceProfileChanged } from '../../services/notifications/profile-changed';
 import { sendBadRequest, sendConflict, sendForbidden, sendInternalError, sendNotFound, sendSuccess, sendUnauthorized } from '../../utils/response';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { profileViewerId } from './profile-block-gate';
 
 const highlightSchema = {
@@ -72,7 +72,10 @@ function answer<T>(reply: FastifyReply, outcome: HighlightOutcome<T>, statusCode
 export async function storyHighlightRoutes(fastify: FastifyInstance) {
   const prisma = fastify.prisma;
   const announced = <T>(ownerId: string, outcome: HighlightOutcome<T>): HighlightOutcome<T> => {
-    if (outcome.ok === true) void announceProfileChanged(fastify, { userId: ownerId });
+    if (outcome.ok === true) {
+      void announceProfileChanged(fastify, { userId: ownerId })
+        .catch((error: unknown) => logWarn(fastify.log, '[users/highlights] profile-changed announce failed', error));
+    }
     return outcome;
   };
   const owner = (request: FastifyRequest, reply: FastifyReply): string | null => {

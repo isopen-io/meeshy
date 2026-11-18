@@ -8,7 +8,7 @@ import { servedProfileAccentColor } from '@meeshy/shared/utils/profile-accent';
 import { announceProfileAccentToPartners } from './profile-accent';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { logError } from '../../utils/logger';
+import { logError, logWarn } from '../../utils/logger';
 import { capitalizeName, normalizeDisplayName } from '../../utils/normalize';
 import {
   updateUserProfileSchema,
@@ -383,7 +383,8 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       // #19384 — la fiche que les AUTRES lisent a changé (bio, ville, langues, voix) :
       // signal sans contenu vers ses lecteurs, qui la revalident par If-None-Match.
       if (touchesProfileFiche(body)) {
-        void announceProfileChanged(fastify, { userId: userId!, updatedAt: updatedUser.updatedAt });
+        void announceProfileChanged(fastify, { userId: userId!, updatedAt: updatedUser.updatedAt })
+          .catch((error: unknown) => logWarn(fastify.log, '[PROFILE_UPDATE] profile-changed announce failed', error));
       }
 
       creditProfileMilestones(fastify, userId!, profileMilestonesReached(

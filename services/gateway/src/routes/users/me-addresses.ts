@@ -5,6 +5,7 @@
  * adresse qu'au cercle choisi (`profile-addresses.ts`). Toujours l'utilisateur authentifié :
  * l'identifiant d'une adresse d'autrui est un 404, jamais un 403 qui la confirmerait.
  */
+import { logWarn } from '../../utils/logger';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ADDRESS_GLYPHS, ADDRESS_TITLE_MAX_LENGTH } from '@meeshy/shared/utils/profile-addresses';
@@ -59,7 +60,10 @@ export async function meAddressRoutes(fastify: FastifyInstance) {
   const service = new ProfileAddressService(fastify.prisma);
   // #19384 — une adresse acceptée change la fiche de ses lecteurs : ils la revalident.
   const announced = <T>(userId: string, outcome: Outcome<T>): Outcome<T> => {
-    if (outcome.ok === true) void announceProfileChanged(fastify, { userId });
+    if (outcome.ok === true) {
+      void announceProfileChanged(fastify, { userId })
+        .catch((error: unknown) => logWarn(fastify.log, '[me/addresses] profile-changed announce failed', error));
+    }
     return outcome;
   };
   const guard = async (request: FastifyRequest, reply: FastifyReply): Promise<string | null> => {
