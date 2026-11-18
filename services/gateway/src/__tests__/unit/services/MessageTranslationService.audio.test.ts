@@ -1156,6 +1156,25 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       expect(translations.fr.path).toBe('/app/outputs/fr.mp3');
     });
 
+    it('persists an empty audioUrl from a translator of the previous version (#19648) with neither url nor path', async () => {
+      const data = {
+        ...makeAudioProcessCompletedData(),
+        postId: 'post-1',
+        postMediaId: 'media-1',
+        translatedAudios: [
+          makeTranslatedAudio({ targetLanguage: 'de', translatedText: 'Hallo', audioUrl: '', audioPath: '', durationMs: 0 }),
+        ]
+      };
+
+      mockZmqClient.emit('audioProcessCompleted', data);
+      await flushAsync(3);
+
+      const { translations } = mockHandleAudioTranslationsReady.mock.calls[0][0] as { translations: Record<string, Record<string, unknown>> };
+      expect(translations.de.transcription).toBe('Hallo');
+      expect(translations.de).not.toHaveProperty('url');
+      expect(translations.de).not.toHaveProperty('path');
+    });
+
     it('does not route to PostAudioService when translatedAudios is empty', async () => {
       const data = {
         ...makeAudioProcessCompletedData(),

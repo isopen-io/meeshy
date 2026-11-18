@@ -79,3 +79,14 @@ async def test_cleanup_removes_an_expired_completed_job_without_mixing_naive_and
     await pipeline.cleanup_old_jobs()
 
     assert expired.id not in pipeline._jobs
+
+
+@pytest.mark.unit
+async def test_cleanup_still_removes_an_expired_job_whose_completion_time_is_naive(pipeline):
+    expired = _job(status=JobStatus.FAILED, completed_at=datetime.now() - timedelta(days=30))
+    async with pipeline._jobs_lock:
+        pipeline._jobs[expired.id] = expired
+
+    await pipeline.cleanup_old_jobs()
+
+    assert expired.id not in pipeline._jobs
