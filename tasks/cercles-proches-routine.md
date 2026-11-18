@@ -1301,3 +1301,54 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   partage 222 verts ; `tsc --noEmit` web vert.
 - Prochain lot recommandé : #18714 (liste périmée, deux appareils qui publient, permission iOS), puis #18580 ; #18351
   attend la décision du porteur.
+
+## 2026-11-17 — réveil de 17 h : un retrait republie la liste sans position (#19284 ⊂ #18580, passerelle + web)
+
+- Reprise : la PR #19264 (#18431) a été fusionnée par le porteur ; aucune PR cercles ouverte. Aucune branche vivante
+  n'écrit `services/sharedLocation/` ni `apps/web/src/lib/shared-locations/` : lot réservé avant toute écriture
+  (`claude/cercles-19284-liste-seule`).
+- Lot : #19284, la première tranche de #18580 (et du point 3 de #18714). `location:share-start` accepte une charge SANS
+  position (« liste seule ») : la passerelle reprend le point qu'elle garde, scellé, avec son heure et la maille de
+  chacun. Une liste seule ne fait que RETIRER : qui n'est plus servi est ignoré, la précision ne monte pas, le terme et
+  les échéances ne reculent pas, une liste vide vaut un arrêt ; après la prise du pointeur, elle se rejoue sur la session
+  remplacée relue (un retrait ou une position d'un autre appareil écrits pendant l'envoi ne sont ni défaits ni reculés).
+  Web : un retrait ou une échéance envoie la liste seule, sans relevé ; une passerelle d'avant (`INVALID`) fait repartir
+  l'envoi avec position ; « pas de partage » relit la passerelle avant de vider la liste.
+- Audit adversarial avant PR : BLOQUANT au premier passage (un `INVALID` « ajoute quelqu'un » renvoyait le web vers
+  l'envoi avec position, et la vérification n'était pas atomique avec la prise du pointeur). Corrigé dans le lot, avec
+  les points non bloquants (terme prolongé, précision relevée, « pas de partage » vidé à l'aveugle). Restent ouverts en
+  #19288 : une projection inchangée resservie, et une fenêtre étroite où une position peut reculer d'un pas.
+- Gates locaux : passerelle `sharedLocation/` + porte socket 122 verts (témoins rouges prouvés par mutation), `tsc` vert ;
+  web `src/lib/shared-locations/` 140 verts + suites qui citent le partage 117 verts, `tsc` vert ; gardes
+  `packages/shared/__tests__/ci` 215 verts sur l'arbre fusionné avec `dev`.
+- Ce qui reste : iOS et Android (#19287), #18714 (points 1 et 2), #19288, #18351 (décision du porteur).
+- Prochain lot recommandé : #19287 (iOS puis Android, prouvés par leur CI).
+
+## 2026-11-17 — réveil de 23 h : mener la PR #19289 (liste seule) à la fusion
+
+- Reprise : deux PR cercles ouvertes. #19354 (icône de cercle, #17013) avait un commit poussé quatre minutes plus tôt
+  par une autre session : je lui cède. #19289 n'avait plus bougé depuis 21 h 23 et sa CI attendait des runners.
+- `origin/dev` (95ffb1dcc) fusionné à la main sans conflit (seuls le traducteur et un état d'agent d'appel bougeaient).
+  Gates rejoués sur l'arbre fusionné : passerelle `sharedLocation/` + porte socket 122 verts ; web
+  `src/lib/shared-locations/` 140 verts.
+- Prochain lot recommandé : #19287 (iOS puis Android de la liste seule), puis #18714 points 1 et 2, puis #19288.
+
+## 2026-11-18 — réveil de 1 h : #19289 recalée sur dev, la liste seule garde le fantôme et la batterie
+
+- Reprise : deux PR cercles ouvertes, aucune n'avait bougé depuis 23 h 15. #19289 était en conflit avec `dev`
+  (`sharedLocationRelay.ts`, `shared-location.ts`) : `dev` venait d'apporter le fantôme global (#19203, `servableFrom`),
+  la batterie pendant le partage et « prévenir » (#19204, `shareBattery`, `notifyRecipients`).
+- Résolution à la main, les deux côtés gardés. Le contrat garde la position facultative ET les deux clés de #19204. La
+  liste seule reprend désormais de la session remplacée son seuil de sortie du fantôme (sans lui, une liste seule faite
+  après la sortie aurait servi le point pris EN fantôme : fuite trouvée à la fusion, témoin rouge prouvé) et sa
+  batterie, qu'elle peut retirer (`shareBattery: false`) mais jamais ajouter ; « prévenir » ne part pas sur une liste
+  seule (elle n'ajoute personne) ; la batterie est rejouée à partir de la session remplacée relue.
+- Gates sur l'arbre fusionné : passerelle `sharedLocation/` 187 verts (3 témoins neufs, 2 rouges sans le correctif),
+  porte socket + relations + fantôme + blocage 195 verts, `tsc` vert ; web `src/lib/shared-locations/` 140 verts,
+  `tsc` vert ; shared `types` 1 795 verts, gardes `__tests__/ci` 215 verts.
+- Audit adversarial de la résolution : non bloquant, un défaut moyen corrigé dans le lot. Une liste seule d'un autre
+  appareil prise ENTRE la lecture et la retenue de la sortie du fantôme recopiait une session sans seuil, et le point
+  pris en fantôme repartait (même course déjà sur `dev` avec une position). La sortie retient désormais le partage
+  COURANT, relu jusqu'à cinq fois, et lève sinon (fail-closed) ; témoin rouge prouvé. L'état provisoire d'une liste
+  seule, rangé avant la prise, ne sert rien (seuil posé, pas de batterie) tant qu'il n'est pas réécrit. Reste, déjà sur
+  `dev` : avec une position, la session remplacée est lue avant la prise (« prévenir » peut partir deux fois).

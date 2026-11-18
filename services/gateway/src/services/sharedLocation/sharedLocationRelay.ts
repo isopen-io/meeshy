@@ -33,6 +33,7 @@ import {
   SHARED_LOCATION_ERROR_CODES,
   SHARED_LOCATION_EXACT_MIN_RADIUS_METERS,
   SHARED_LOCATION_GRID_DEGREES,
+  SHARED_LOCATION_PRECISIONS,
   sharedLocationStartPayloadSchema,
   sharedLocationUpdatePayloadSchema,
   type SharedLocationAck,
@@ -387,12 +388,67 @@ async function drainRetiring(deps: SharedLocationRelayDeps, emitterId: string, a
   }
 }
 
+const NOT_SHARING = failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Aucun partage en cours');
+
+const coarser = (a: SharedLocationPrecision, b: SharedLocationPrecision): SharedLocationPrecision =>
+  SHARED_LOCATION_PRECISIONS.indexOf(a) >= SHARED_LOCATION_PRECISIONS.indexOf(b) ? a : b;
+
+const earlier = (a: string, b: string): string => (Date.parse(a) <= Date.parse(b) ? a : b);
+
+/**
+ * La LISTE SEULE (#19284, #18580) appliquée au partage `current` : elle ne fait que RETIRER.
+ * Une personne que `current` ne sert plus (jamais choisie, retirée ailleurs, échue) est
+ * ignorée — une liste périmée ne la fait pas revenir ; la précision ne peut que baisser ; le
+ * terme et chaque échéance ne peuvent que se rapprocher. La position, son heure et la maille
+ * retenue de qui garde sa précision viennent de `current` : le point n'est pas rafraîchi. Le
+ * seuil de sortie du fantôme (`servableFrom`) suit le point qu'il garde ; la batterie ne peut
+ * que se retirer (`shareBattery: false`), jamais s'ajouter.
+ * `null` : personne ne reste.
+ */
+function listOnlyState(
+  current: SharedLocationState,
+  wanted: { readonly recipients: SharedLocationState['recipients']; readonly shareBattery: boolean | undefined },
+  term: string,
+  now: number,
+): Omit<SharedLocationState, 'sessionId'> | null {
+  const live = new Map(liveRecipients(current, now).map((recipient) => [recipient.userId.toLowerCase(), recipient]));
+  const expiresAt = earlier(term, current.expiresAt);
+  const recipients = wanted.recipients.flatMap((recipient) => {
+    const kept = live.get(recipient.userId);
+    if (!kept) return [];
+    const precision = coarser(recipient.precision, kept.precision);
+    const deadline = earlier(earlier(recipient.expiresAt ?? expiresAt, deadlineOf(current, kept.userId)), expiresAt);
+    return [{
+      userId: recipient.userId,
+      precision,
+      ...(kept.cell !== undefined && kept.precision === precision ? { cell: kept.cell } : {}),
+      ...(Date.parse(deadline) < Date.parse(expiresAt) ? { expiresAt: deadline } : {}),
+    }];
+  });
+  if (recipients.length === 0) return null;
+  const servableFrom = current.servableFrom === undefined ? {} : { servableFrom: current.servableFrom };
+  const shareBattery = current.shareBattery === true && wanted.shareBattery !== false ? { shareBattery: true as const } : {};
+  return { recipients, position: current.position, updatedAt: current.updatedAt, expiresAt, ...servableFrom, ...shareBattery };
+}
+
+/** Plus rien à servir : la liste seule vaut un arrêt. */
+async function stoppedByListOnly(deps: SharedLocationRelayDeps, emitterId: string): Promise<SharedLocationAck> {
+  await advanceSharedLocationGeneration(deps.cache, emitterId);
+  await drainRetiring(deps, emitterId);
+  return NOT_SHARING;
+}
+
 /**
  * Démarre (ou remplace) le partage. La prise du pointeur est ATOMIQUE et conditionnée à la
  * génération lue : un arrêt survenu pendant le démarrage l'emporte. La session remplacée
  * est retirée en prévenant ceux qu'elle servait. Une fois la prise faite, le partage EST
  * courant : un échec de l'éventail ne le dément pas (le rattrapage et la position suivante
  * serviront), et l'accusé le dit.
+ *
+ * Sans position, c'est une liste seule ({@link listOnlyState}). Elle est rejouée APRÈS la
+ * prise sur la session REMPLACÉE, relue : un démarrage ou une position écrits par un autre
+ * appareil entre la première lecture et la prise ne sont ni défaits ni reculés — la session
+ * remplacée ne peut plus changer, la prise l'ayant retirée du pointeur.
  */
 export async function startSharedLocation(deps: SharedLocationRelayDeps, emitterId: string, payload: unknown): Promise<SharedLocationAck> {
   const parsed = sharedLocationStartPayloadSchema.safeParse(payload);
@@ -400,31 +456,46 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
 
   const now = deps.now();
   const term = now + parsed.data.durationMinutes * 60_000;
-  const state: SharedLocationState = {
-    sessionId: randomUUID(),
-    recipients: parsed.data.recipients
-      .filter((recipient) => recipient.userId.toLowerCase() !== emitterId.toLowerCase())
-      .map((recipient) => ({
-        userId: recipient.userId.toLowerCase(),
-        precision: recipient.precision ?? SHARED_LOCATION_DEFAULT_PRECISION,
-        ...(recipient.expiresInSeconds === undefined ? {} : { expiresAt: new Date(Math.min(term, now + recipient.expiresInSeconds * 1000)).toISOString() }),
-      })),
-    position: parsed.data.position,
-    updatedAt: new Date(now).toISOString(),
-    expiresAt: new Date(term).toISOString(),
-    ...(parsed.data.shareBattery === true ? { shareBattery: true as const } : {}),
-  };
+  const recipients: SharedLocationState['recipients'] = parsed.data.recipients
+    .filter((recipient) => recipient.userId.toLowerCase() !== emitterId.toLowerCase())
+    .map((recipient) => ({
+      userId: recipient.userId.toLowerCase(),
+      precision: recipient.precision ?? SHARED_LOCATION_DEFAULT_PRECISION,
+      ...(recipient.expiresInSeconds === undefined ? {} : { expiresAt: new Date(Math.min(term, now + recipient.expiresInSeconds * 1000)).toISOString() }),
+    }));
+  const position = parsed.data.position;
+  const termIso = new Date(term).toISOString();
+  const shareBattery = parsed.data.shareBattery;
 
+  let state: SharedLocationState;
   let previous: SharedLocationState | null;
   try {
     const generation = await sharedLocationGeneration(deps.cache, emitterId);
     if (!(await accountStates(deps.prisma, [emitterId])).usable.has(emitterId)) return STOPPED;
     previous = await readSharedLocation(deps.cache, emitterId, now);
+    const sessionId = randomUUID();
+    if (position) {
+      state = { sessionId, recipients, position, updatedAt: new Date(now).toISOString(), expiresAt: termIso, ...(shareBattery === true ? { shareBattery: true as const } : {}) };
+    } else {
+      if (!previous) return NOT_SHARING;
+      const listed = listOnlyState(previous, { recipients, shareBattery }, termIso, now);
+      if (!listed) return await stoppedByListOnly(deps, emitterId);
+      const { shareBattery: _provisionalBattery, ...withoutBattery } = listed;
+      state = { sessionId, ...withoutBattery, servableFrom: new Date(now).toISOString() };
+    }
     await storeSharedLocation(deps.cache, emitterId, state, now);
     const claim = await claimSharedLocation(deps.cache, emitterId, generation, state, now);
     if (!claim.claimed) {
       await dropSharedLocationSession(deps.cache, emitterId, state.sessionId);
       return STOPPED;
+    }
+    if (!position) {
+      const displaced = claim.displaced === null ? null : await readSharedLocationSession(deps.cache, emitterId, claim.displaced, now);
+      const listed = displaced ? listOnlyState(displaced, { recipients, shareBattery }, termIso, now) : null;
+      if (!listed) return await stoppedByListOnly(deps, emitterId);
+      previous = displaced;
+      state = { sessionId: state.sessionId, ...listed };
+      if (!(await storeSharedLocationIfCurrent(deps.cache, emitterId, state, now))) return STOPPED;
     }
   } catch {
     return UNAVAILABLE;
@@ -436,7 +507,7 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     await drainRetiring(deps, emitterId, after.served);
     if ((await currentSharedLocationSession(deps.cache, emitterId)) === state.sessionId) {
       await noteServedEnds(deps, emitterId, state, after.served);
-      if (parsed.data.notifyRecipients === true) await notifyNewcomers(deps, emitterId, { state, previous, served: after.served });
+      if (position && parsed.data.notifyRecipients === true) await notifyNewcomers(deps, emitterId, { state, previous, served: after.served });
       await refreshBatteryOf(deps, emitterId, [previous, state]);
       return ack;
     }
@@ -462,7 +533,7 @@ export async function updateSharedLocation(deps: SharedLocationRelayDeps, emitte
   let state: SharedLocationState;
   try {
     current = await readSharedLocation(deps.cache, emitterId, now);
-    if (!current) return failed(SHARED_LOCATION_ERROR_CODES.NOT_SHARING, 'Aucun partage en cours');
+    if (!current) return NOT_SHARING;
     state = { ...current, recipients: withHeldCells(current, parsed.data), position: parsed.data, updatedAt: new Date(now).toISOString() };
     if (!(await storeSharedLocationIfCurrent(deps.cache, emitterId, state, now))) return STOPPED;
   } catch {
@@ -649,7 +720,25 @@ export async function reflectSharedLocationGhost(deps: SharedLocationRelayDeps, 
     await noteSharedLocationStopped(deps.cache, emitterId, now).catch(() => undefined);
     return;
   }
-  await storeSharedLocationIfCurrent(deps.cache, emitterId, { ...state, servableFrom: new Date(now).toISOString() }, now);
+  await holdUntilNextPosition(deps, emitterId, state, now);
+}
+
+const GHOST_EXIT_HOLD_ATTEMPTS = 5;
+
+/**
+ * La sortie retient le partage COURANT, quel qu'il soit : un démarrage ou une liste seule d'un
+ * autre appareil peut prendre le pointeur entre la lecture et la retenue, et recopier un point
+ * pris en fantôme. On relit et on retient de nouveau ; à court d'essais, on lève — la sortie
+ * reste fail-closed.
+ */
+async function holdUntilNextPosition(deps: SharedLocationRelayDeps, emitterId: string, first: SharedLocationState, now: number): Promise<void> {
+  const servableFrom = new Date(now).toISOString();
+  let state: SharedLocationState | null = first;
+  for (let attempt = 0; attempt < GHOST_EXIT_HOLD_ATTEMPTS && state; attempt += 1) {
+    if (await storeSharedLocationIfCurrent(deps.cache, emitterId, { ...state, servableFrom }, now)) return;
+    state = await readSharedLocation(deps.cache, emitterId, now);
+  }
+  if (state) throw new Error('Partage non retenu à la sortie du fantôme');
 }
 
 /**
