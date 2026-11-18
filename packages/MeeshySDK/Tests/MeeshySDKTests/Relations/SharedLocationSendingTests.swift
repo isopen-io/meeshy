@@ -106,6 +106,46 @@ struct SharedLocationSendingTests {
         #expect(recipients[0]["expiresInSeconds"] == nil)
     }
 
+    // MARK: - Prévenir, partager ma batterie (#19204, #19476)
+
+    @Test func prévenirEtLaBatterie_partentSeulementQuandIlsSontDemandés() throws {
+        let fix = try #require(SharedLocationFix(latitude: 0, longitude: 0))
+        let quiet = try #require(SharedLocationStartRequest(
+            recipients: [SharedLocationRecipient(userId: alice, precision: .city)], duration: .oneHour, fix: fix))
+        #expect(quiet.wire["notifyRecipients"] == nil)
+        #expect(quiet.wire["shareBattery"] == nil)
+        #expect(!quiet.carriesExtras)
+        let loud = try #require(SharedLocationStartRequest(
+            recipients: [SharedLocationRecipient(userId: alice, precision: .city)], duration: .oneHour, fix: fix,
+            notifyRecipients: true, shareBattery: true))
+        #expect(loud.wire["notifyRecipients"] as? Bool == true)
+        #expect(loud.wire["shareBattery"] as? Bool == true)
+        #expect(loud.carriesExtras)
+    }
+
+    @Test func pourUnePasserelleDAvant19204_lePartageRepartSansLesOptionsPuisSansÉchéances() throws {
+        let fix = try #require(SharedLocationFix(latitude: 0, longitude: 0))
+        let payload = try #require(SharedLocationStartRequest(
+            recipients: [SharedLocationRecipient(userId: alice, precision: .exact, expiresInSeconds: 600)],
+            duration: .eightHours, fix: fix, notifyRecipients: true, shareBattery: true))
+        let fallbacks = payload.legacyFallbacks
+        #expect(fallbacks.count == 2)
+        let first = try #require(fallbacks.first)
+        #expect(!first.carriesExtras)
+        #expect(first.carriesDeadlines)
+        let last = try #require(fallbacks.last)
+        #expect(!last.carriesExtras)
+        #expect(!last.carriesDeadlines)
+        #expect(payload.withoutDeadlines.shareBattery)
+    }
+
+    @Test func sansOptionNiÉchéance_aucunReplis() throws {
+        let fix = try #require(SharedLocationFix(latitude: 0, longitude: 0))
+        let payload = try #require(SharedLocationStartRequest(
+            recipients: [SharedLocationRecipient(userId: alice, precision: .city)], duration: .oneHour, fix: fix))
+        #expect(payload.legacyFallbacks.isEmpty)
+    }
+
     @Test func sansDestinataireValide_rienNePart() throws {
         let fix = try #require(SharedLocationFix(latitude: 0, longitude: 0))
         #expect(SharedLocationStartRequest(recipients: [], duration: .oneHour, fix: fix) == nil)

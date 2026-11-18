@@ -109,6 +109,9 @@ final class SharedLocationSharingCenter: ObservableObject {
 
     @Published private(set) var roster: SharedLocationRoster = .empty
     @Published private(set) var isBusy = false
+    /// La passerelle sert-elle « Prévenir » et la batterie (#19204) ? `nil` : on ne sait pas encore (on les propose) ;
+    /// `false` : elle a refusé leurs clés, l'écran ne les propose plus.
+    @Published private(set) var servesShareOptions: Bool?
 
     private let emitter: SharedLocationEmitting
     private let fixes: SharedLocationFixProviding
@@ -181,9 +184,16 @@ final class SharedLocationSharingCenter: ObservableObject {
         offered || entry(for: userId) != nil
     }
 
-    /// Montrer ma position à une personne, à cette précision et pour cette durée. `nil` : c'est parti.
+    /// Montrer ma position à une personne, à cette précision et pour cette durée. `nil` : c'est parti. `notify` la
+    /// prévient (#19204) ; `battery` accorde ou retire ma batterie pour tout le partage, `nil` garde l'accord en cours.
     @discardableResult
-    func share(with userId: String, precision: SharedLocationPrecision, duration: SharedLocationShareDuration) async -> SharedLocationShareProblem? {
+    func share(
+        with userId: String,
+        precision: SharedLocationPrecision,
+        duration: SharedLocationShareDuration,
+        notify: Bool = false,
+        battery: Bool? = nil
+    ) async -> SharedLocationShareProblem? {
         await locked {
             let fix: SharedLocationFix
             switch await self.fixes.currentFix() {
@@ -193,8 +203,9 @@ final class SharedLocationSharingCenter: ObservableObject {
             }
             guard self.isLive else { return .refused(.failed) }
             let previous = self.roster
-            let next = previous.pruned(now: self.now()).adding(userId: userId, precision: precision, duration: duration, now: self.now())
-            return await self.publish(next, fix: fix, previous: previous, claimsPublishing: true)
+            let added = previous.pruned(now: self.now()).adding(userId: userId, precision: precision, duration: duration, now: self.now())
+            let next = battery.map { added.withBattery($0) } ?? added
+            return await self.publish(next, fix: fix, previous: previous, claimsPublishing: true, notify: notify)
         }
     }
 
@@ -239,6 +250,7 @@ final class SharedLocationSharingCenter: ObservableObject {
     func sync() async {
         _ = await locked {
             guard let truth = await self.served(), self.isLive else { return nil }
+            if truth.shareBattery != nil { self.servesShareOptions = true }
             let before = self.roster
             let next = before.withServed(truth, now: self.now())
             guard next != before else { return nil }
@@ -328,17 +340,33 @@ final class SharedLocationSharingCenter: ObservableObject {
         _ wanted: SharedLocationRoster,
         fix: SharedLocationFix,
         previous: SharedLocationRoster,
-        claimsPublishing: Bool = false
+        claimsPublishing: Bool = false,
+        notify: Bool = false
     ) async -> SharedLocationShareProblem? {
-        let next = wanted.settled
+        let offersOptions = servesShareOptions != false
+        let next = wanted.settled.withBattery(wanted.sharesBattery && offersOptions)
         let instant = now()
         let recipients = next.deadlinedRecipients(now: instant)
-        guard let request = SharedLocationStartRequest(recipients: recipients, duration: next.serverDuration(now: instant), fix: fix) else {
+        guard let request = SharedLocationStartRequest(
+            recipients: recipients, duration: next.serverDuration(now: instant), fix: fix,
+            notifyRecipients: notify && offersOptions, shareBattery: next.sharesBattery
+        ) else {
             return .refused(.invalid)
         }
         guard isLive else { return .refused(.failed) }
         let verdict = await startTolerant(request)
         guard isLive else { return .refused(.failed) }
+        return settle(verdict, next: next.withBattery(next.sharesBattery && servesShareOptions != false), fix: fix,
+                      previous: previous, claimsPublishing: claimsPublishing)
+    }
+
+    private func settle(
+        _ verdict: SharedLocationStartVerdict,
+        next: SharedLocationRoster,
+        fix: SharedLocationFix,
+        previous: SharedLocationRoster,
+        claimsPublishing: Bool
+    ) -> SharedLocationShareProblem? {
         switch verdict {
         case .started:
             if claimsPublishing { markReceived(false) }
@@ -353,12 +381,23 @@ final class SharedLocationSharingCenter: ObservableObject {
         }
     }
 
-    /// Une passerelle d'avant #18205 refuse l'échéance par personne (`INVALID`) : la même liste repart sans, une fois, et
-    /// le centre retire chacun à son échéance, comme avant.
+    /// Une passerelle d'avant #19204 refuse « Prévenir » et la batterie, une d'avant #18205 l'échéance par personne
+    /// (`INVALID`) : la même liste repart sans les options, puis sans les échéances, et le centre retire chacun à son
+    /// échéance, comme avant. Ce que la passerelle a pris ou refusé des options se retient.
     private func startTolerant(_ request: SharedLocationStartRequest) async -> SharedLocationStartVerdict {
-        let verdict = await emitter.start(request)
-        guard verdict == .refused(.invalid), request.carriesDeadlines, isLive else { return verdict }
-        return await emitter.start(request.withoutDeadlines)
+        var verdict = await emitter.start(request)
+        var sent = request
+        for fallback in request.legacyFallbacks where verdict == .refused(.invalid) && isLive {
+            sent = fallback
+            verdict = await emitter.start(fallback)
+        }
+        learnOptions(asked: request, sent: sent, verdict: verdict)
+        return verdict
+    }
+
+    private func learnOptions(asked: SharedLocationStartRequest, sent: SharedLocationStartRequest, verdict: SharedLocationStartVerdict) {
+        guard isLive, asked.carriesExtras, case .started = verdict else { return }
+        servesShareOptions = sent.carriesExtras
     }
 
     private func stopAll() async -> SharedLocationShareProblem? {

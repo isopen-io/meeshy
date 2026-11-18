@@ -23,6 +23,9 @@ struct ShareMyLocationSheet: View {
     @State private var duration: SharedLocationShareDuration = .oneHour
     @State private var precision: SharedLocationPrecision = .city
     @State private var openNoteID: String?
+    /// « Prévenir » (planche : activé) et « Partager aussi ma batterie » (coupé, ou l'accord du partage en cours).
+    @State private var notify = true
+    @State private var battery: Bool
     /// La position m'est refusée par le téléphone (planche `Etat-Erreur` vue 5) : le bloc d'état remplace le formulaire
     /// jusqu'au retour dans l'app, où le formulaire revient pour un nouvel essai.
     @State private var locationDenied = false
@@ -36,6 +39,7 @@ struct ShareMyLocationSheet: View {
         self.recipients = recipients
         _center = ObservedObject(wrappedValue: center)
         _chosen = State(initialValue: recipients.count == 1 ? Set(recipients.map(\.userId)) : [])
+        _battery = State(initialValue: center.roster.sharesBattery)
     }
 
     var body: some View {
@@ -49,6 +53,7 @@ struct ShareMyLocationSheet: View {
                 } else {
                     durationSection
                     precisionSection
+                    optionsSection
                     shareButton
                 }
             }
@@ -188,6 +193,26 @@ struct ShareMyLocationSheet: View {
         }
     }
 
+    // MARK: - Prévenir, batterie (#19204, #19476)
+
+    /// Les deux interrupteurs (K06) n'existent que tant que la passerelle n'a pas dit qu'elle ne les sert pas.
+    @ViewBuilder
+    private var optionsSection: some View {
+        if center.servesShareOptions != false {
+            VStack(spacing: 0) {
+                MeeshyToggleRow(ShareMyLocationCopy.notify(names: chosenNames), systemImage: "bell",
+                                subtitle: ShareMyLocationCopy.notifyDetail(count: chosenNames.count),
+                                accessory: .toggle(isOn: notify), action: { notify.toggle() })
+                    .accessibilityIdentifier("sharedLocation.share.notify")
+                MeeshyToggleRow(ShareMyLocationCopy.battery, systemImage: "battery.50",
+                                subtitle: ShareMyLocationCopy.batteryDetail, accessory: .toggle(isOn: battery),
+                                showsDivider: true, action: { battery.toggle() })
+                    .accessibilityIdentifier("sharedLocation.share.battery")
+            }
+            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
+        }
+    }
+
     // MARK: - Partager, arrêter
 
     private var shareButton: some View {
@@ -224,8 +249,10 @@ struct ShareMyLocationSheet: View {
 
     private func share() async {
         let targets = recipients.filter { chosen.contains($0.userId) }
+        let offers = center.servesShareOptions != false
         for target in targets {
-            if let problem = await center.share(with: target.userId, precision: precision, duration: duration) {
+            if let problem = await center.share(with: target.userId, precision: precision, duration: duration,
+                                                notify: offers && notify, battery: offers ? battery : nil) {
                 guard problem != .locationDenied else {
                     locationDenied = true
                     return
@@ -234,7 +261,11 @@ struct ShareMyLocationSheet: View {
                 return
             }
         }
-        HapticFeedback.success()
+        if offers, notify || battery, center.servesShareOptions == false {
+            FeedbackToastManager.shared.showNotice(ShareMyLocationCopy.optionsUnavailable)
+        } else {
+            HapticFeedback.success()
+        }
         dismiss()
     }
 
@@ -275,6 +306,31 @@ enum ShareMyLocationCopy {
     static var exact: String { String(localized: "locationMap.share.exact", defaultValue: "Exact", bundle: .main) }
     static var footnote: String {
         String(localized: "locationMap.share.footnote", defaultValue: "Tu peux arrêter à tout moment. Rien n'est gardé après.", bundle: .main)
+    }
+
+    static var battery: String {
+        String(localized: "locationMap.share.battery", defaultValue: "Partager aussi ma batterie", bundle: .main)
+    }
+    static var batteryDetail: String {
+        String(localized: "locationMap.share.battery.detail", defaultValue: "Pendant le partage seulement", bundle: .main)
+    }
+    static var optionsUnavailable: String {
+        String(localized: "locationMap.share.optionsUnavailable",
+               defaultValue: "Ta position est partagée, mais personne n'a été prévenu et ta batterie reste privée.", bundle: .main)
+    }
+
+    static func notify(names: [String]) -> String {
+        guard names.count == 1, let name = names.first else {
+            return String(localized: "locationMap.share.notify.many", defaultValue: "Les prévenir", bundle: .main)
+        }
+        return String(format: String(localized: "locationMap.share.notify", defaultValue: "Prévenir %@", bundle: .main), name)
+    }
+
+    static func notifyDetail(count: Int) -> String {
+        guard count == 1 else {
+            return String(localized: "locationMap.share.notify.detail.many", defaultValue: "Chacun reçoit une notification", bundle: .main)
+        }
+        return String(localized: "locationMap.share.notify.detail", defaultValue: "Il reçoit une notification", bundle: .main)
     }
 
     static func shareFor(_ duration: SharedLocationShareDuration) -> String {

@@ -70,6 +70,30 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         for _ in 0..<2_000 where !condition() { await Task.yield() }
     }
 
+    // MARK: - La batterie servie (#19204, #19476)
+
+    func test_sync_adoptsTheServedBattery_andLearnsTheOptionsAreServed() async {
+        let served = Served()
+        let sut = makeSUT(served: served)
+        let people = snapshot([(alice, .city, 1800)])
+        served.snapshot = SharedLocationOwnSnapshot(recipients: people.recipients, shareBattery: true)
+
+        await sut.center.sync()
+
+        XCTAssertTrue(sut.center.roster.sharesBattery)
+        XCTAssertEqual(sut.center.servesShareOptions, true)
+    }
+
+    func test_sync_aGatewayThatSaysNothingAboutTheBattery_keepsMine() {
+        let mine = SharedLocationRoster.empty
+            .adding(userId: alice, precision: .city, duration: .eightHours, now: t0)
+            .withBattery(true)
+
+        let next = mine.withServed(snapshot([(alice, .city, 1800)]), now: t0)
+
+        XCTAssertTrue(next.sharesBattery)
+    }
+
     // MARK: - La liste servie
 
     func test_withServed_adoptsThePeopleAndDeadlinesTheGatewayServes() {
@@ -259,5 +283,103 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertTrue(store.received)
         XCTAssertFalse(sut.fixes.isFollowing)
         XCTAssertFalse(makeSUT(store: store).fixes.isFollowing)
+    }
+}
+
+/// Demander à prolonger, redemander (#19204, #19476) : la demande est optimiste, une par personne ; un refus la défait,
+/// une route non servie ou fermée retire le bouton.
+@MainActor
+final class SharedLocationAskCenterTests: XCTestCase {
+
+    private let alice = "aaaaaaaaaaaaaaaaaaaaaaaa"
+
+    @MainActor
+    private final class Flight {
+        var asked = false
+    }
+
+    private final class FakeRequester: SharedLocationRequesting, @unchecked Sendable {
+        var outcome: SharedLocationRequestOutcome = .sent
+        private(set) var asked: [(String, SharedLocationRequestKind)] = []
+        var onAsk: (@MainActor () -> Void)?
+
+        func requestSharedLocation(from userId: String, kind: SharedLocationRequestKind) async -> SharedLocationRequestOutcome {
+            asked.append((userId, kind))
+            if let onAsk { await onAsk() }
+            return outcome
+        }
+    }
+
+    func test_ask_showsAskedAtOnce_thenKeepsItWhenSent() async {
+        let requester = FakeRequester()
+        let sut = SharedLocationAskCenter(requester: requester)
+        let id = alice
+        let flight = Flight()
+        requester.onAsk = { flight.asked = sut.hasAsked(id) }
+
+        let feedback = await sut.ask(alice, kind: .extend)
+
+        XCTAssertNil(feedback)
+        XCTAssertTrue(flight.asked)
+        XCTAssertTrue(sut.hasAsked(alice))
+        XCTAssertEqual(requester.asked.first?.1, .extend)
+    }
+
+    func test_ask_twice_sendsOnce() async {
+        let requester = FakeRequester()
+        let sut = SharedLocationAskCenter(requester: requester)
+
+        _ = await sut.ask(alice, kind: .reask)
+        _ = await sut.ask(alice.uppercased(), kind: .extend)
+
+        XCTAssertEqual(requester.asked.count, 1)
+    }
+
+    func test_ask_offline_isUndone() async {
+        let requester = FakeRequester()
+        requester.outcome = .offline
+        let sut = SharedLocationAskCenter(requester: requester)
+
+        let feedback = await sut.ask(alice, kind: .reask)
+
+        XCTAssertEqual(feedback, .offline)
+        XCTAssertFalse(sut.hasAsked(alice))
+        XCTAssertTrue(sut.canAsk(alice))
+    }
+
+    func test_ask_tooSoon_staysAsked() async {
+        let requester = FakeRequester()
+        requester.outcome = .tooSoon
+        let sut = SharedLocationAskCenter(requester: requester)
+
+        let feedback = await sut.ask(alice, kind: .reask)
+
+        XCTAssertEqual(feedback, .alreadyAsked)
+        XCTAssertTrue(sut.hasAsked(alice))
+    }
+
+    func test_ask_closed_removesTheButtonForThisPersonOnly() async {
+        let requester = FakeRequester()
+        requester.outcome = .closed
+        let sut = SharedLocationAskCenter(requester: requester)
+
+        let feedback = await sut.ask(alice, kind: .extend)
+
+        XCTAssertEqual(feedback, .closed)
+        XCTAssertFalse(sut.canAsk(alice))
+        XCTAssertTrue(sut.canAsk("bbbbbbbbbbbbbbbbbbbbbbbb"))
+    }
+
+    func test_ask_notServed_removesEveryButton() async {
+        let requester = FakeRequester()
+        requester.outcome = .notServed
+        let sut = SharedLocationAskCenter(requester: requester)
+
+        let feedback = await sut.ask(alice, kind: .extend)
+
+        XCTAssertEqual(feedback, .unavailable)
+        XCTAssertFalse(sut.canAsk(alice))
+        XCTAssertFalse(sut.canAsk("bbbbbbbbbbbbbbbbbbbbbbbb"))
+        XCTAssertFalse(sut.hasAsked(alice))
     }
 }

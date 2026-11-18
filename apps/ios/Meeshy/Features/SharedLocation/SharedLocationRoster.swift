@@ -42,20 +42,24 @@ struct SharedLocationRoster: Equatable, Codable {
     private let entries: [String: Entry]
     /// Les personnes retirées que le serveur peut encore servir, et jusqu'à quand il le pourrait au plus.
     private let withdrawals: [String: Date]
+    /// « Partager aussi ma batterie » (#19204, #19476) : l'accord vaut pour le partage en cours, et s'éteint avec lui.
+    let sharesBattery: Bool
 
-    private init(entries: [String: Entry], withdrawals: [String: Date] = [:]) {
+    private init(entries: [String: Entry], withdrawals: [String: Date] = [:], battery: Bool = false) {
         self.entries = entries
         self.withdrawals = withdrawals.filter { entries[$0.key] == nil }
+        self.sharesBattery = battery && !entries.isEmpty
     }
 
-    private enum CodingKeys: String, CodingKey { case entries, withdrawals }
+    private enum CodingKeys: String, CodingKey { case entries, withdrawals, battery }
 
-    /// Une liste gardée avant #18204 n'a pas de retraits en attente.
+    /// Une liste gardée avant #18204 n'a pas de retraits en attente ; avant #19476, pas de batterie.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(
             entries: try c.decode([String: Entry].self, forKey: .entries),
-            withdrawals: try c.decodeIfPresent([String: Date].self, forKey: .withdrawals) ?? [:]
+            withdrawals: try c.decodeIfPresent([String: Date].self, forKey: .withdrawals) ?? [:],
+            battery: (try? c.decodeIfPresent(Bool.self, forKey: .battery)) ?? false
         )
     }
 
@@ -63,6 +67,12 @@ struct SharedLocationRoster: Equatable, Codable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(entries, forKey: .entries)
         if !withdrawals.isEmpty { try c.encode(withdrawals, forKey: .withdrawals) }
+        if sharesBattery { try c.encode(true, forKey: .battery) }
+    }
+
+    /// La même liste, la batterie accordée ou retirée.
+    func withBattery(_ on: Bool) -> SharedLocationRoster {
+        SharedLocationRoster(entries: entries, withdrawals: withdrawals, battery: on)
     }
 
     /// Rien à garder : personne à qui montrer ma position, aucun retrait à faire partir.
@@ -82,13 +92,13 @@ struct SharedLocationRoster: Equatable, Codable {
     func adding(userId: String, precision: SharedLocationPrecision, duration: SharedLocationShareDuration, now: Date) -> SharedLocationRoster {
         var next = entries
         next[userId.lowercased()] = Entry(precision: precision, until: now.addingTimeInterval(duration.interval))
-        return SharedLocationRoster(entries: next, withdrawals: withdrawals)
+        return SharedLocationRoster(entries: next, withdrawals: withdrawals, battery: sharesBattery)
     }
 
     func removing(userId: String) -> SharedLocationRoster {
         var next = entries
         next.removeValue(forKey: userId.lowercased())
-        return SharedLocationRoster(entries: next, withdrawals: withdrawals)
+        return SharedLocationRoster(entries: next, withdrawals: withdrawals, battery: sharesBattery)
     }
 
     /// « Arrêter » n'a pas pu partir : la personne sort de la liste et son retrait attend le réseau, au plus jusqu'au
@@ -98,11 +108,11 @@ struct SharedLocationRoster: Equatable, Codable {
         guard entries[id] != nil else { return self }
         var pending = withdrawals
         pending[id] = now.addingTimeInterval(SharedLocationShareDuration.eightHours.interval)
-        return SharedLocationRoster(entries: entries.filter { $0.key != id }, withdrawals: pending)
+        return SharedLocationRoster(entries: entries.filter { $0.key != id }, withdrawals: pending, battery: sharesBattery)
     }
 
     /// La liste que le serveur doit recevoir : la même, sans retrait en attente — l'envoyer les solde tous.
-    var settled: SharedLocationRoster { SharedLocationRoster(entries: entries) }
+    var settled: SharedLocationRoster { SharedLocationRoster(entries: entries, battery: sharesBattery) }
 
     /// Ceux de cette liste ET de `other`, `other` l'emportant pour une même personne : quand on ne sait pas laquelle des
     /// deux listes le serveur sert (accusé perdu), on garde « Arrêter » pour toutes les personnes qu'il peut servir.
@@ -110,7 +120,8 @@ struct SharedLocationRoster: Equatable, Codable {
     func union(_ other: SharedLocationRoster) -> SharedLocationRoster {
         SharedLocationRoster(
             entries: entries.merging(other.entries) { _, theirs in theirs },
-            withdrawals: withdrawals.merging(other.withdrawals) { max($0, $1) }
+            withdrawals: withdrawals.merging(other.withdrawals) { max($0, $1) },
+            battery: sharesBattery || other.sharesBattery
         )
     }
 
@@ -130,7 +141,8 @@ struct SharedLocationRoster: Equatable, Codable {
             guard recipient.expiresAt > now, withdrawals[id] == nil else { return }
             kept[id] = Entry(precision: recipient.precision, until: recipient.expiresAt)
         }
-        return SharedLocationRoster(entries: next, withdrawals: withdrawals.filter { servedIds.contains($0.key) })
+        return SharedLocationRoster(entries: next, withdrawals: withdrawals.filter { servedIds.contains($0.key) },
+                                    battery: served.shareBattery ?? sharesBattery)
     }
 
     private static func isObjectId(_ id: String) -> Bool {
@@ -139,7 +151,8 @@ struct SharedLocationRoster: Equatable, Codable {
 
     /// Sans ceux dont l'échéance est passée, ni les retraits que plus aucun partage serveur ne peut servir.
     func pruned(now: Date) -> SharedLocationRoster {
-        SharedLocationRoster(entries: entries.filter { $0.value.until > now }, withdrawals: withdrawals.filter { $0.value > now })
+        SharedLocationRoster(entries: entries.filter { $0.value.until > now }, withdrawals: withdrawals.filter { $0.value > now },
+                             battery: sharesBattery)
     }
 
     /// Ce que le serveur sert est-il exactement ce que je veux : aucune échéance passée, aucun retrait en attente ?

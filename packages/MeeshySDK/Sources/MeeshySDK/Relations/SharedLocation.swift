@@ -200,16 +200,21 @@ public struct SharedLocationOwnRecipient: Decodable, Sendable, Equatable {
 /// l'appareil garde sa liste et ses « Arrêter » (iso `decodeOwnSharedLocation` du web).
 public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
     public let recipients: [SharedLocationOwnRecipient]
+    /// La batterie accompagne-t-elle le partage (#19204) ? `nil` : la passerelle ne le dit pas (aucun partage, ou
+    /// passerelle antérieure) — jamais lu comme « non ».
+    public let shareBattery: Bool?
 
-    public init(recipients: [SharedLocationOwnRecipient]) {
+    public init(recipients: [SharedLocationOwnRecipient], shareBattery: Bool? = nil) {
         self.recipients = recipients
+        self.shareBattery = shareBattery
     }
 
-    private enum CodingKeys: String, CodingKey { case recipients }
+    private enum CodingKeys: String, CodingKey { case recipients, shareBattery }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         recipients = try c.decode([Lenient].self, forKey: .recipients).compactMap(\.value)
+        shareBattery = (try? c.decodeIfPresent(Bool.self, forKey: .shareBattery)) ?? nil
     }
 
     private struct Lenient: Decodable {

@@ -165,6 +165,80 @@ final class SharedLocationSharingCenterTests: XCTestCase {
         XCTAssertNotNil(sut.entry(for: alice))
     }
 
+    // MARK: - Prévenir, partager ma batterie (#19204, #19476)
+
+    func test_share_withNotifyAndBattery_sendsBoth_andTheBatteryOutlivesARepublish() async {
+        let emitter = FakeSharedLocationEmitter()
+        let (sut, _, _, _) = makeSUT(emitter: emitter)
+
+        _ = await sut.share(with: alice, precision: .city, duration: .oneHour, notify: true, battery: true)
+
+        XCTAssertEqual(emitter.starts.last?.notifyRecipients, true)
+        XCTAssertEqual(emitter.starts.last?.shareBattery, true)
+        XCTAssertTrue(sut.roster.sharesBattery)
+        XCTAssertEqual(sut.servesShareOptions, true)
+
+        _ = await sut.share(with: bob, precision: .city, duration: .oneHour)
+        _ = await sut.stopSharing(with: bob)
+
+        XCTAssertEqual(emitter.starts.last?.notifyRecipients, false)
+        XCTAssertEqual(emitter.starts.last?.shareBattery, true)
+    }
+
+    func test_share_withoutAsking_neitherNotifiesNorSharesTheBattery() async {
+        let emitter = FakeSharedLocationEmitter()
+        let (sut, _, _, _) = makeSUT(emitter: emitter)
+
+        _ = await sut.share(with: alice, precision: .city, duration: .oneHour)
+
+        XCTAssertEqual(emitter.starts.last?.carriesExtras, false)
+        XCTAssertFalse(sut.roster.sharesBattery)
+        XCTAssertNil(sut.servesShareOptions)
+    }
+
+    func test_share_aGatewayBefore19204_sharesWithoutTheOptions_andNeverOffersThemAgain() async {
+        let emitter = FakeSharedLocationEmitter()
+        emitter.queuedStartVerdicts = [.refused(.invalid)]
+        let (sut, _, _, _) = makeSUT(emitter: emitter)
+
+        let problem = await sut.share(with: alice, precision: .city, duration: .oneHour, notify: true, battery: true)
+
+        XCTAssertNil(problem)
+        XCTAssertEqual(emitter.starts.map(\.carriesExtras), [true, false])
+        XCTAssertEqual(sut.servesShareOptions, false)
+        XCTAssertFalse(sut.roster.sharesBattery)
+        XCTAssertNotNil(sut.entry(for: alice))
+
+        _ = await sut.share(with: bob, precision: .city, duration: .oneHour, notify: true, battery: true)
+
+        XCTAssertEqual(emitter.starts.last?.carriesExtras, false)
+        XCTAssertEqual(emitter.starts.count, 3)
+    }
+
+    func test_share_theBatteryEndsWithTheShare() async {
+        let emitter = FakeSharedLocationEmitter()
+        let (sut, _, _, _) = makeSUT(emitter: emitter)
+        _ = await sut.share(with: alice, precision: .city, duration: .oneHour, battery: true)
+
+        _ = await sut.stopSharing(with: alice)
+        _ = await sut.share(with: bob, precision: .city, duration: .oneHour)
+
+        XCTAssertEqual(emitter.starts.last?.shareBattery, false)
+        XCTAssertFalse(sut.roster.sharesBattery)
+    }
+
+    func test_roster_keepsTheBatteryAcrossALaunch_andAnOlderRosterHasNone() throws {
+        let roster = SharedLocationRoster.empty
+            .adding(userId: alice, precision: .city, duration: .oneHour, now: t0)
+            .withBattery(true)
+
+        let decoded = try JSONDecoder().decode(SharedLocationRoster.self, from: JSONEncoder().encode(roster))
+
+        XCTAssertTrue(decoded.sharesBattery)
+        let legacy = #"{"entries":{}}"#.data(using: .utf8) ?? Data()
+        XCTAssertFalse(try JSONDecoder().decode(SharedLocationRoster.self, from: legacy).sharesBattery)
+    }
+
     func test_share_anotherRefusal_isNotReplayedWithoutDeadlines() async {
         let emitter = FakeSharedLocationEmitter()
         let (sut, _, _, _) = makeSUT(emitter: emitter)

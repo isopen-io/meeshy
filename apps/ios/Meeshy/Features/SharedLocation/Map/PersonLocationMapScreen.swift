@@ -23,6 +23,7 @@ struct PersonLocationMapScreen: View {
     @StateObject private var model = SharedLocationsMapViewModel()
     @StateObject private var places = LocationPlaceNamer()
     @ObservedObject private var sharing = SharedLocationSharingHolder.center()
+    @ObservedObject private var asks = SharedLocationAskHolder.center()
     @State private var viewport: LocationMapViewport?
     @State private var focus: LocationMapFocus?
     @State private var style: LocationMapStyle = .standard
@@ -201,13 +202,15 @@ struct PersonLocationMapScreen: View {
                 .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.bottom, MeeshySpacing.lg)
         } else {
+            let shareMine = MeeshyStateBlockAction(title: LocationMapCopy.shareMine, systemImage: "mappin.and.ellipse") {
+                sharesMine = true
+            }
             MeeshyStateBlock(
                 kind: .empty,
                 title: LocationMapCopy.notSharingTitle(name: displayName),
                 message: LocationMapCopy.notSharingMessage,
-                primary: MeeshyStateBlockAction(title: LocationMapCopy.shareMine, systemImage: "mappin.and.ellipse") {
-                    sharesMine = true
-                },
+                primary: askAgainAction ?? shareMine,
+                secondary: askAgainAction == nil ? nil : shareMine,
                 art: .glyph,
                 size: .regular
             ) {
@@ -234,8 +237,29 @@ struct PersonLocationMapScreen: View {
             onCall: onCall.map { call in { dismiss(); call() } },
             onShareMine: { sharesMine = true },
             onDirections: { Self.openDirections(to: pin) },
-            onHistory: showsHistory && pin.circle == .blood ? { bloodHistoryOpen = true } : nil
+            onHistory: showsHistory && pin.circle == .blood ? { bloodHistoryOpen = true } : nil,
+            onAskExtend: asks.canAsk(userId) ? { ask(.extend) } : nil,
+            hasAskedExtend: asks.hasAsked(userId)
         )
+    }
+
+    private func ask(_ kind: SharedLocationRequestKind) {
+        Task {
+            let feedback = await asks.ask(userId, kind: kind)
+            SharedLocationAskWording.show(feedback)
+        }
+    }
+
+    /// « Lui demander » (planche Etat-Vide, vue 5) : seulement à qui a partagé avec moi il y a peu — la passerelle ne
+    /// sert pas encore la demande à quelqu'un qui n'a jamais partagé (#19369).
+    private var askAgainAction: MeeshyStateBlockAction? {
+        guard model.ended.contains(where: { $0.id.lowercased() == userId.lowercased() }), asks.canAsk(userId) else { return nil }
+        let asked = asks.hasAsked(userId)
+        return MeeshyStateBlockAction(title: asked ? SharedLocationAskWording.asked : SharedLocationAskWording.askHim,
+                                      systemImage: asked ? "checkmark" : "hand.wave") {
+            guard !asked else { return }
+            ask(.reask)
+        }
     }
 
     // MARK: - Mouvement et données

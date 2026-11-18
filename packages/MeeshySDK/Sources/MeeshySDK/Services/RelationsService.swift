@@ -105,6 +105,14 @@ public final class RelationsService: RelationsProviding, Sendable {
         return response.data
     }
 
+    private struct LocationRequestBody: Encodable {
+        let kind: String
+    }
+
+    private struct LocationRequested: Decodable {
+        let requestedAt: String?
+    }
+
     private struct LevelBody: Encodable {
         let level: String
     }
@@ -113,5 +121,19 @@ public final class RelationsService: RelationsProviding, Sendable {
         let phase: String
         let token: String?
         let consents: RelationRitualConsents?
+    }
+}
+
+extension RelationsService: SharedLocationRequesting {
+    /// `POST /relations/:userId/location/request` — `{ kind }` seul : ni position, ni message.
+    public func requestSharedLocation(from userId: String, kind: SharedLocationRequestKind) async -> SharedLocationRequestOutcome {
+        do {
+            let _: APIResponse<LocationRequested> = try await api.post(
+                RelationsEndpoint.byUserIdLocationRequest(userId: userId), body: LocationRequestBody(kind: kind.rawValue)
+            )
+            return .sent
+        } catch {
+            return SharedLocationRequestOutcome.from(error)
+        }
     }
 }

@@ -9,6 +9,9 @@ struct PersonLocationActions {
     var onShareMine: () -> Void
     var onDirections: () -> Void
     var onHistory: (() -> Void)?
+    /// « Demander à prolonger » (#19476) : absent tant que la demande n'est pas offerte pour cette personne.
+    var onAskExtend: (() -> Void)?
+    var hasAskedExtend = false
 }
 
 /// LA FICHE DEVENUE FEUILLE BASSE (#18872, planche Carte-Personne) : qui (K39 et son cercle en K41), où (le lieu
@@ -31,6 +34,7 @@ struct PersonLocationCard: View {
                 freshness(now: context.date)
                 meter(now: context.date)
                 actionsGrid
+                askExtendRow
             }
         }
     }
@@ -92,6 +96,19 @@ struct PersonLocationCard: View {
                 MeeshyLabeledAction(title: LocationMapCopy.history, systemImage: "clock.arrow.circlepath", tint: tint,
                                     action: onHistory)
             }
+        }
+    }
+
+    /// Sous les actions, une rangée K06 : le geste se voit aussitôt « Demandé », puis ne se rejoue plus.
+    @ViewBuilder
+    private var askExtendRow: some View {
+        if let onAskExtend = actions.onAskExtend {
+            MeeshyToggleRow(SharedLocationAskWording.extend, systemImage: "hourglass",
+                            accessory: actions.hasAskedExtend ? .value(SharedLocationAskWording.asked) : .chevron,
+                            tint: tint, action: onAskExtend)
+                .disabled(actions.hasAskedExtend)
+                .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl), tone: .theme)
+                .accessibilityIdentifier("locationMap.person.askExtend")
         }
     }
 

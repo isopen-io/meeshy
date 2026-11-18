@@ -9,6 +9,7 @@ import MeeshyUI
 struct NearbyMapScreen: View {
     @StateObject private var model = SharedLocationsMapViewModel()
     @ObservedObject private var sharing: SharedLocationSharingCenter
+    @ObservedObject private var asks: SharedLocationAskCenter
     @StateObject private var places = LocationPlaceNamer()
     @State private var viewport: LocationMapViewport?
     @State private var focus: LocationMapFocus?
@@ -26,8 +27,10 @@ struct NearbyMapScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(sharing: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
+    init(sharing: SharedLocationSharingCenter = SharedLocationSharingHolder.center(),
+         asks: SharedLocationAskCenter = SharedLocationAskHolder.center()) {
         _sharing = ObservedObject(wrappedValue: sharing)
+        _asks = ObservedObject(wrappedValue: asks)
     }
 
     private var shown: [SharedLocationPin] {
@@ -196,7 +199,7 @@ struct NearbyMapScreen: View {
     private func aroundList(now: Date) -> some View {
         if model.pins.isEmpty {
             MeeshyStateBlock(kind: .empty, title: LocationMapCopy.emptyTitle, message: LocationMapCopy.emptyMessage,
-                             art: .glyph, size: .compact) {
+                             secondary: askSomeoneAction, art: .glyph, size: .compact) {
                 Image(systemName: "map")
             }
         } else if shown.isEmpty {
@@ -226,10 +229,44 @@ struct NearbyMapScreen: View {
                         avatar: {
                             MeeshyAvatar(name: person.name, context: .custom(44),
                                          accentColor: DynamicColorGenerator.colorForName(person.name), avatarURL: person.avatarURL)
-                        }
+                        },
+                        trailing: { reaskButton(person) }
                     )
                 }
             }
+        }
+    }
+
+    // MARK: - Redemander (#19204, #19476)
+
+    /// « Redemander » sur un partage qui vient de finir : « Demandé » aussitôt, et plus rien à rejouer.
+    @ViewBuilder
+    private func reaskButton(_ person: SharedLocationEndedPin) -> some View {
+        if asks.canAsk(person.id) {
+            let asked = asks.hasAsked(person.id)
+            MeeshyButton(asked ? SharedLocationAskWording.asked : SharedLocationAskWording.reask, kind: .tinted, size: .s44,
+                         disabledReason: asked ? SharedLocationAskWording.askedAccessibility(name: person.name) : nil,
+                         action: { ask(person.id) })
+                .accessibilityIdentifier("locationMap.nearby.reask.\(person.id)")
+        }
+    }
+
+    /// « Demander à Léo » sous le vide (planche Etat-Vide, vue 4) : à la personne dont le partage a fini le plus
+    /// récemment — la passerelle ne sert pas la demande à qui n'a jamais partagé (#19369).
+    private var askSomeoneAction: MeeshyStateBlockAction? {
+        guard let person = model.ended.first(where: { asks.canAsk($0.id) }) else { return nil }
+        let asked = asks.hasAsked(person.id)
+        return MeeshyStateBlockAction(title: asked ? SharedLocationAskWording.asked : SharedLocationAskWording.ask(name: person.name),
+                                      systemImage: asked ? "checkmark" : "hand.wave") {
+            guard !asked else { return }
+            ask(person.id)
+        }
+    }
+
+    private func ask(_ userId: String) {
+        Task {
+            let feedback = await asks.ask(userId, kind: .reask)
+            SharedLocationAskWording.show(feedback)
         }
     }
 

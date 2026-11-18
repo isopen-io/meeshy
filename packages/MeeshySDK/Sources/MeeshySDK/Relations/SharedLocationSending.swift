@@ -70,6 +70,7 @@ public struct SharedLocationRecipient: Sendable, Equatable, Hashable {
 }
 
 /// La charge de `location:share-start`. Démarrer de nouveau REMPLACE le partage : la liste est toujours entière.
+/// `notifyRecipients` (« Prévenir ») et `shareBattery` (« Partager aussi ma batterie ») ne partent que vrais (#19204).
 public struct SharedLocationStartRequest: Sendable, Equatable {
     /// `SHARED_LOCATION_RECIPIENTS_MAX`.
     public static let maxRecipients = 50
@@ -77,10 +78,20 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
     public let recipients: [SharedLocationRecipient]
     public let duration: SharedLocationShareDuration
     public let fix: SharedLocationFix
+    /// Chaque personne qui n'était pas déjà dans le partage remplacé reçoit une notification : un nom, une durée.
+    public let notifyRecipients: Bool
+    /// La batterie accompagne le partage, pour ses destinataires et jusqu'à son terme seulement.
+    public let shareBattery: Bool
 
     /// `nil` : aucun destinataire valide, ou plus que le plafond. Un destinataire en double garde sa DERNIÈRE précision
     /// et sa dernière échéance (le schéma serveur refuse les doublons, insensibles à la casse).
-    public init?(recipients: [SharedLocationRecipient], duration: SharedLocationShareDuration, fix: SharedLocationFix) {
+    public init?(
+        recipients: [SharedLocationRecipient],
+        duration: SharedLocationShareDuration,
+        fix: SharedLocationFix,
+        notifyRecipients: Bool = false,
+        shareBattery: Bool = false
+    ) {
         let valid = recipients.filter { Self.isObjectId($0.userId) }
         let latest = Dictionary(valid.map { ($0.userId.lowercased(), $0) }, uniquingKeysWith: { _, last in last })
         var seen = Set<String>()
@@ -90,17 +101,28 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
             return SharedLocationRecipient(userId: key, precision: last.precision, expiresInSeconds: last.expiresInSeconds)
         }
         guard !ordered.isEmpty, ordered.count <= Self.maxRecipients else { return nil }
-        self.init(validated: ordered, duration: duration, fix: fix)
+        self.init(validated: ordered, duration: duration, fix: fix, notifyRecipients: notifyRecipients, shareBattery: shareBattery)
     }
 
-    private init(validated recipients: [SharedLocationRecipient], duration: SharedLocationShareDuration, fix: SharedLocationFix) {
+    private init(
+        validated recipients: [SharedLocationRecipient],
+        duration: SharedLocationShareDuration,
+        fix: SharedLocationFix,
+        notifyRecipients: Bool,
+        shareBattery: Bool
+    ) {
         self.recipients = recipients
         self.duration = duration
         self.fix = fix
+        self.notifyRecipients = notifyRecipients
+        self.shareBattery = shareBattery
     }
 
     /// Au moins une personne part avec sa propre échéance.
     public var carriesDeadlines: Bool { recipients.contains { $0.expiresInSeconds != nil } }
+
+    /// « Prévenir » ou la batterie partent avec ce démarrage.
+    public var carriesExtras: Bool { notifyRecipients || shareBattery }
 
     /// La même liste sans aucune échéance : une passerelle d'avant #18205 refuse la clé (`INVALID`), et le centre retire
     /// alors chacun à son échéance, comme avant.
@@ -108,16 +130,33 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
         SharedLocationStartRequest(
             validated: recipients.map { SharedLocationRecipient(userId: $0.userId, precision: $0.precision) },
             duration: duration,
-            fix: fix
+            fix: fix,
+            notifyRecipients: notifyRecipients,
+            shareBattery: shareBattery
         )
     }
 
+    /// La même liste sans « Prévenir » ni la batterie : une passerelle d'avant #19204 refuse ces clés (`INVALID`).
+    public var withoutExtras: SharedLocationStartRequest {
+        SharedLocationStartRequest(validated: recipients, duration: duration, fix: fix, notifyRecipients: false, shareBattery: false)
+    }
+
+    /// Les charges à essayer, dans l'ordre, après un refus `INVALID` : sans les options de #19204, puis sans les
+    /// échéances de #18205. Une passerelle qui sert les options sert aussi les échéances (#18205 est antérieure).
+    public var legacyFallbacks: [SharedLocationStartRequest] {
+        let plain = withoutExtras
+        return (carriesExtras ? [plain] : []) + (carriesDeadlines ? [plain.withoutDeadlines] : [])
+    }
+
     public var wire: [String: Any] {
-        [
+        var wire: [String: Any] = [
             "recipients": recipients.map(\.wire),
             "durationMinutes": duration.rawValue,
             "position": fix.wire,
         ]
+        if notifyRecipients { wire["notifyRecipients"] = true }
+        if shareBattery { wire["shareBattery"] = true }
+        return wire
     }
 
     private static func isObjectId(_ value: String) -> Bool {
