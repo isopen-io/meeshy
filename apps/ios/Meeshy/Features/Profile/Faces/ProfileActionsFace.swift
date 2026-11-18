@@ -33,6 +33,8 @@ struct ProfileActionsFace: View {
     let canShare: Bool
     /// Vrai là où le modèle des statuts est servi : « Mon statut » ouvre alors le composer de mood.
     var canSetMood: Bool = false
+    /// « Ma Légende » : mon niveau et mon rang en sous-titre, lus dans le cache du jeu par l'hôte (#19630).
+    var legend: ProfileLegendSummary? = nil
     let onAction: (ProfileFaceAction) -> Void
 
     @ObservedObject var prefs: UserPreferencesManager
@@ -215,7 +217,8 @@ struct ProfileActionsFace: View {
                 MeeshyToggleRow(ProfileActionsCopy.statsTitle, systemImage: "chart.bar",
                                 subtitle: ProfileActionsCopy.statsSubtitle(stats, locale: locale),
                                 accessory: .chevron, showsDivider: true, tint: accent, action: { onAction(.stats) })
-                MeeshyToggleRow(ProfileActionsCopy.legend, systemImage: "trophy", accessory: .chevron,
+                MeeshyToggleRow(ProfileActionsCopy.legend, systemImage: "trophy",
+                                subtitle: ProfileLegendSummary.subtitle(for: legend), accessory: .chevron,
                                 showsDivider: true, tint: accent, action: { onAction(.legend) })
                 MeeshyToggleRow(ProfileActionsCopy.securityTitle, systemImage: "checkmark.shield",
                                 subtitle: ProfileActionsCopy.securitySubtitle(user), accessory: .chevron,

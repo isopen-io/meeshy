@@ -133,7 +133,8 @@ final class ProfileLegendSummaryTests: XCTestCase {
 
         XCTAssertTrue(source.contains("MeeshyToggleRowFace("), "la rangée est K06")
         XCTAssertTrue(source.contains("MeeshyMeter("), "la jauge est K42")
-        XCTAssertFalse(source.contains("RoundedRectangle("), "aucune surface redessinée sur place")
+        XCTAssertFalse(source.contains("HStack("), "aucune rangée redessinée sur place")
+        XCTAssertFalse(source.contains(".fill("), "aucune surface peinte sur place : le verre du design system")
     }
 
     func test_actionsFace_legendRow_carriesTheLevelAndRankSubtitle() throws {

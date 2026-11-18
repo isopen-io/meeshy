@@ -45,6 +45,9 @@ struct ProfileView: View {
     @StateObject private var circles = ProfileCirclesViewModel()
     /// #16264 — mon décor d'un pack non embarqué se repeint dès son contrat arrivé.
     @StateObject private var servedAppearance = ServedAppearanceRefresh()
+    /// « Ma Légende » (#19630) : mon niveau, mon rang et ce qu'il manque, lus dans le cache du jeu ; rien sous « Jeu masqué ».
+    @StateObject private var legend = ProfileLegendStore()
+    @ObservedObject private var gamePrefs: GameDevicePrefsStore = .current()
 
     // Avatar
     @State private var avatarItem: PhotosPickerItem?
@@ -125,6 +128,7 @@ struct ProfileView: View {
         .onAppear { loadUserData() }
         .task { await loadStats() }
         .task { await circles.load() }
+        .task(id: gamePrefs.prefs.hidden) { await legend.activate(hidden: gamePrefs.prefs.hidden) }
         .task(id: user?.id) { await loadEncryption() }
         .sheet(isPresented: $voiceManagerShown, onDismiss: { Task { await authManager.refreshCurrentUserProfile() } }) {
             SettingsSheetContent(sheet: .voiceProfileManage(opensWizardWhenEmpty: true), authManager: authManager)
@@ -474,7 +478,7 @@ struct ProfileView: View {
             ProfileActionsFace(user: user, stats: stats, accentColor: shownAccentHex,
                                canShare: ProfileLink(username: user?.username) != nil,
                                canSetMood: statusComposer != nil,
-                               onAction: { perform($0) }, prefs: UserPreferencesManager.shared)
+                               legend: legend.summary, onAction: { perform($0) }, prefs: UserPreferencesManager.shared)
         }
     }
 
@@ -679,7 +683,7 @@ struct ProfileView: View {
     /// L'entrée du tableau de bord des streaks & badges (#5698) — sous mon activité, là où l'utilisateur cherche « où
     /// j'en suis ». #10093 — plus de carte de jeu sur le profil : le niveau et le rang vivent sur la bannière.
     private var progressionEntry: some View {
-        ProfileProgressionEntry { router.push(.progression) }
+        ProfileProgressionEntry(summary: legend.summary) { router.push(.progression) }
     }
 
     /// La bannière ou la photo, touchable quand elle s'ouvre en plein écran : elle s'enfonce sous le doigt (voile seul
