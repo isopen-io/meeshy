@@ -136,7 +136,7 @@ nonisolated final class MultipeerContactlessTransport: NSObject, ContactlessTran
     }
 }
 
-extension MultipeerContactlessTransport: MCSessionDelegate {
+nonisolated extension MultipeerContactlessTransport: MCSessionDelegate {
     nonisolated func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
         switch state {
         case .connected:
@@ -169,7 +169,7 @@ extension MultipeerContactlessTransport: MCSessionDelegate {
                              fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {}
 }
 
-extension MultipeerContactlessTransport: MCNearbyServiceAdvertiserDelegate {
+nonisolated extension MultipeerContactlessTransport: MCNearbyServiceAdvertiserDelegate {
     nonisolated func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID,
                                 withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
         answer(invitationHandler)
@@ -180,7 +180,7 @@ extension MultipeerContactlessTransport: MCNearbyServiceAdvertiserDelegate {
     }
 }
 
-extension MultipeerContactlessTransport: MCNearbyServiceBrowserDelegate {
+nonisolated extension MultipeerContactlessTransport: MCNearbyServiceBrowserDelegate {
     nonisolated func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID,
                              withDiscoveryInfo info: [String: String]?) {
         invite(peerID, from: browser)
