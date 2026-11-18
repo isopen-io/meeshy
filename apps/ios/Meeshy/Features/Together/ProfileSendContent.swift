@@ -28,6 +28,32 @@ nonisolated enum ProfileSendContentKind: String, CaseIterable, Identifiable, Has
     }
 }
 
+/// Ce que la rangée de « Lui envoyer un contenu » rend : jamais un vide avant que la première lecture ait conclu,
+/// jamais un vide quand une page de plus reste à lire (mes réels et mes stories peuvent vivre au-delà de la première
+/// page), une erreur — et non un faux vide — quand la lecture a échoué sans rien servir.
+nonisolated enum ProfileSendContentListing: Equatable, Sendable {
+    case loading
+    case failed
+    case empty
+    case choices
+
+    static func resolve(hasChoices: Bool, settled: Bool, isLoading: Bool, hasMore: Bool,
+                        pagination: PaginationState) -> ProfileSendContentListing {
+        if hasChoices { return .choices }
+        if !settled || isLoading { return .loading }
+        if case .error = pagination { return .failed }
+        if pagination == .exhausted || !hasMore { return .empty }
+        return .loading
+    }
+
+    /// Aucune vignette de ce genre sur ce qui est servi, et une page de plus reste à lire : la feuille la demande
+    /// d'elle-même. Une page en échec ne se redemande pas seule — « Réessayer » s'en charge.
+    static func pagesFurther(hasChoices: Bool, settled: Bool, isLoading: Bool, hasMore: Bool,
+                             pagination: PaginationState) -> Bool {
+        !hasChoices && settled && !isLoading && hasMore && pagination == .idle
+    }
+}
+
 /// La carte qui part : une publication ou un réel avec son lien suivi, une story avec le sien seulement si elle est
 /// PUBLIQUE (`ShareCard.mintsTrackedLink`).
 enum ProfileSendContent {
