@@ -3871,7 +3871,7 @@ export class CallEventsHandler {
     // `participantId` du client n'est jamais cru sur parole — y est écrite.
     registerCallClientReportEvents(this.clientReportDependencies(), socket, { getUserId, rememberAuth });
     registerCallRecordingEvents({ io, authority: this.callRecording, rateLimiter: this.rateLimiter, journal: this.captureJournal }, socket, getUserId);
-    registerCallControlEvents({ io, prisma: this.prisma, callService: this.callService, rateLimiter: this.rateLimiter, pushService: () => this.pushService, invitations: this.callInvitations }, socket, getUserId);
+    registerCallControlEvents({ io, prisma: this.prisma, callService: this.callService, rateLimiter: this.rateLimiter, pushService: () => this.pushService, invitations: this.callInvitations, broadcastMessage: () => this.messageBroadcaster, notificationService: () => this.notificationService }, socket, getUserId);
 
     /**
      * Handle disconnect - auto-leave any active calls
