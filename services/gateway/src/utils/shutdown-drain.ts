@@ -49,10 +49,24 @@ type TwoPhaseShutdown = {
   readonly close: () => Promise<void>;
 };
 
-export const runTwoPhaseShutdown = async ({ drain, drainMs, sleep, close }: TwoPhaseShutdown): Promise<void> => {
+const shutdownsInFlight = new WeakMap<ShutdownDrain, Promise<void>>();
+
+const shutDown = async ({ drain, drainMs, sleep, close }: TwoPhaseShutdown): Promise<void> => {
   drain.begin();
   if (drainMs > 0) {
     await sleep(drainMs).catch(() => undefined);
   }
   await close();
+};
+
+/**
+ * Un second signal (SIGTERM répété, SIGINT) pendant la vidange rejoint l'arrêt
+ * en cours : ni seconde attente, ni seconde fermeture en parallèle de la première.
+ */
+export const runTwoPhaseShutdown = (params: TwoPhaseShutdown): Promise<void> => {
+  const inFlight = shutdownsInFlight.get(params.drain);
+  if (inFlight) return inFlight;
+  const shutdown = shutDown(params);
+  shutdownsInFlight.set(params.drain, shutdown);
+  return shutdown;
 };
