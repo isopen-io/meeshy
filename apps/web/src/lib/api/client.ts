@@ -8,7 +8,7 @@ import { safeLocalStorage, type SafeStorage } from '../storage';
 
 import { notePendingAccountEnd } from './account-caches';
 import { retireDeletedAccountLater } from './account-deleted';
-import { endGuestAccess } from './guest-access-end';
+import { endGuestAccess, type GuestAccessEnd } from './guest-access-end';
 import { VIEWER_ID } from './fixtures-base';
 import { ownerCredentialOf, ownerScopeOf, type OwnerCredential } from './owner-session';
 import { sessionIdentityKey, sessionStore, type SessionState, type SessionStoreApi } from './session';
@@ -120,6 +120,9 @@ export function endRefusedSession(
 
 const endSessionOf = (store: SessionStoreApi): void => endRefusedSession(store);
 
+/** Ce que l'onglet fait quand la passerelle dit que l'accès de son invité est fini — exporté pour que le témoin passe par le câblage de l'application. */
+export const onTabGuestAccessEnded = (reason: GuestAccessEnd): void => endGuestAccess({ reason, store: sessionStore, end: endSessionOf, navigate });
+
 /** Enveloppé par la garde de l'e-mail (#8365) : un refus `EMAIL_NOT_VERIFIED`
  * ouvre la validation et la requête repart au code validé
  * (`lib/activation/email-gated-transport.ts`). */
@@ -131,7 +134,7 @@ export const httpTransport: HttpTransport = withEmailGate(
     deviceLocale: currentDeviceLocale,
     onUnauthorized: () => endSessionOf(sessionStore),
     onAccountDeleted: retireDeletedAccountLater,
-    onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endSessionOf, navigate }),
+    onGuestAccessEnded: onTabGuestAccessEnded,
   }),
   { ask: emailGate.ask, emailUnproven: () => sessionEmailUnproven(sessionStore.getState().session) },
 );
