@@ -208,6 +208,41 @@ final class CommunityListViewModelTests: XCTestCase {
 
         XCTAssertEqual(service.listCallCount, 1)
     }
+
+    // MARK: - community:deleted (#19591)
+
+    func test_disappearance_retireLaLigneSansRelancerLeReseau() async {
+        let service = MockCommunityService()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "a"), CommunityStubs.community(id: "b", name: "Beta")]))
+        let sut = memberSUT(service)
+        await sut.refresh()
+
+        sut.applyDisappearance(of: "a")
+        sut.applyDisappearance(of: "ghost")
+
+        XCTAssertEqual(sut.communities.map(\.id), ["b"])
+        XCTAssertEqual(service.listCallCount, 1)
+    }
+
+    func test_disappearance_arriveParLeFluxInjecte() async {
+        let service = MockCommunityService()
+        service.listResult = .success(CommunityStubs.page([CommunityStubs.community(id: "a"), CommunityStubs.community(id: "b", name: "Beta")]))
+        let deletions = PassthroughSubject<String, Never>()
+        let sut = CommunityListViewModel(
+            service: service, communityUpdates: Empty().eraseToAnyPublisher(),
+            memberChanges: Empty().eraseToAnyPublisher(), deletions: deletions.eraseToAnyPublisher(),
+            currentUserId: { "u-me" }
+        )
+        await sut.refresh()
+
+        deletions.send("a")
+        let deadline = Date().addingTimeInterval(2)
+        while sut.communities.count != 1, Date() < deadline {
+            try? await Task.sleep(nanoseconds: 15_000_000)
+        }
+
+        XCTAssertEqual(sut.communities.map(\.id), ["b"])
+    }
 }
 
 /// « Mes communautés » (#18935) — la source que la bande Communautés observe :
@@ -323,5 +358,29 @@ final class MyCommunitiesTests: XCTestCase {
 
         XCTAssertEqual(sut.communities.map(\.memberCount), [6])
         XCTAssertEqual(service.listCallCount, 0)
+    }
+
+    // MARK: - community:deleted (#19591)
+
+    func test_disappearance_quitteLaBandeEtLeCache() async throws {
+        let store = try await seed(["c1", "c2"])
+        let deletions = PassthroughSubject<String, Never>()
+        let sut = MyCommunities(
+            service: MockCommunityService(), communityUpdates: Empty().eraseToAnyPublisher(),
+            memberChanges: Empty().eraseToAnyPublisher(), deletions: deletions.eraseToAnyPublisher(),
+            currentUserId: { "u-me" }
+        )
+        await sut.load()
+
+        deletions.send("c1")
+        let deadline = Date().addingTimeInterval(2)
+        while sut.communities.count != 1, Date() < deadline {
+            try? await Task.sleep(nanoseconds: 15_000_000)
+        }
+
+        let cached = await store.load(for: "list").snapshot()?.map(\.id)
+        await store.invalidate(for: "list")
+        XCTAssertEqual(sut.communities.map(\.id), ["c2"])
+        XCTAssertEqual(cached, ["c2"], "la feuille de partage ne la propose plus")
     }
 }
