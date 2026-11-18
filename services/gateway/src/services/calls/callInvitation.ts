@@ -6,6 +6,10 @@ import type { CallService } from '../CallService';
 import { amitieAcceptee } from '../friendship';
 import { activeCallStanding } from './callModerationPolicy';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { isConversationClosed } from '../messaging/conversationWriteAdmission';
+import { newMemberRefusal } from '../conversations/newMemberAdmission';
+import { loadSalonCommunity, planSalonEntry, type SalonCommunity } from '../conversations/communityMembershipSync';
+import { callInvitationRoute, type CallInvitationRoute } from './callInvitationRoute';
 
 /**
  * INVITER UNE PERSONNE DANS UN APPEL EN COURS (#8433).
@@ -39,13 +43,28 @@ const GUEST_PERMISSIONS = Object.freeze({
   canViewHistory: false,
 });
 
-type InvitationPrisma = Pick<PrismaClient, 'friendRequest' | 'userRelation' | 'user' | 'participant' | 'callSession'>;
+type InvitationPrisma = Pick<
+  PrismaClient,
+  'friendRequest' | 'userRelation' | 'user' | 'participant' | 'callSession' | 'conversation' | 'community' | 'communityMember'
+>;
 
 type InvitableSession = Awaited<ReturnType<CallService['getCallSession']>>;
 
 export type CallInvitationDeps = {
   readonly prisma: InvitationPrisma;
   readonly callService: Pick<CallService, 'getCallSession'>;
+  /** Les invitées dont la sonnerie court encore (`CallInvitationLifecycle.pendingFor`) : elles comptent dans le plafond. */
+  readonly ringingInviteeIds?: (callId: string) => readonly string[];
+};
+
+/** La conversation de l'appel, telle que les gardes d'entrée la lisent. */
+export type CallInvitationConversation = {
+  readonly id: string;
+  readonly type: string;
+  readonly encryptionMode: string | null;
+  readonly isActive: boolean | null;
+  readonly closedAt: Date | null;
+  readonly communityId: string | null;
 };
 
 export type CallInvitationGrant = {
@@ -54,6 +73,13 @@ export type CallInvitationGrant = {
   readonly inviter: CallInvitedUser;
   readonly invitee: CallInvitedUser;
   readonly activeCount: number;
+  /** #19650 — où mène l'invitation (`callInvitationRoute`). */
+  readonly route: CallInvitationRoute;
+  readonly conversation: CallInvitationConversation;
+  /** La communauté privée du salon, lue une fois pour l'admission (#16695). */
+  readonly community: SalonCommunity | null;
+  /** L'invité est déjà membre actif de la conversation de l'appel : il sonne seulement. */
+  readonly inviteeIsMember: boolean;
 };
 
 export type CallInvitationRefusal = { readonly ok: false; readonly code: CallControlErrorCode };
@@ -62,6 +88,14 @@ const refuse = (code: CallControlErrorCode): CallInvitationRefusal => ({ ok: fal
 
 const isBanned = (row: { bannedAt?: Date | null } | null): boolean => Boolean(row?.bannedAt);
 
+/**
+ * Les gardes, TOUTES avant la première écriture (#19650, fail-closed) : appel
+ * vivant et inviteur connecté ; appel en tête-à-tête décroché (D5) ; plafond
+ * compté avec les invitations qui sonnent ; ami accepté ; aucun blocage avec un
+ * participant présent ; et, quand l'invité entre dans la conversation de
+ * l'appel, les gardes d'entrée de cette conversation (close, externe, banni,
+ * salon de communauté privée).
+ */
 export async function authorizeCallInvitation(
   deps: CallInvitationDeps,
   input: { readonly callId: string; readonly inviterUserId: string; readonly inviteeUserId: string }
@@ -73,8 +107,17 @@ export async function authorizeCallInvitation(
   if (input.inviteeUserId === input.inviterUserId || activeCallStanding(session, input.inviteeUserId)) {
     return refuse('ALREADY_IN_CALL');
   }
-  const activeCount = session.participants.filter((p) => !p.leftAt).length;
-  if (activeCount >= CALL_MAX_PARTICIPANTS) return refuse('MAX_PARTICIPANTS_REACHED');
+
+  const conversation = await deps.prisma.conversation.findUnique({
+    where: { id: session.conversationId },
+    select: { id: true, type: true, encryptionMode: true, isActive: true, closedAt: true, communityId: true },
+  });
+  if (!conversation || isConversationClosed(conversation)) return refuse('CALL_NOT_ACTIVE');
+  if (conversation.type === 'direct' && !session.answeredAt) return refuse('CALL_NOT_ACTIVE');
+
+  const present = session.participants.filter((p) => !p.leftAt);
+  const ringing = (deps.ringingInviteeIds?.(input.callId) ?? []).filter((id) => id !== input.inviteeUserId);
+  if (present.length + ringing.length + 1 > CALL_MAX_PARTICIPANTS) return refuse('MAX_PARTICIPANTS_REACHED');
   if (!(await amitieAcceptee(deps.prisma, input.inviterUserId, input.inviteeUserId))) return refuse('NOT_A_CONTACT');
 
   const users = await deps.prisma.user.findMany({
@@ -91,13 +134,56 @@ export async function authorizeCallInvitation(
   const invitee = toInvited(input.inviteeUserId);
   if (!inviter || !invitee) return refuse('NOT_A_CONTACT');
 
+  const presentUserIds = present.flatMap((p) => (p.participant?.userId ? [p.participant.userId] : []));
+  if (await blockedWithAnyone(deps.prisma, input.inviteeUserId, presentUserIds)) return refuse('PERMISSION_DENIED');
+
   const membership = await deps.prisma.participant.findFirst({
     where: { conversationId: session.conversationId, userId: input.inviteeUserId },
-    select: { id: true, bannedAt: true },
+    select: { id: true, bannedAt: true, isActive: true },
   });
   if (isBanned(membership)) return refuse('PERMISSION_DENIED');
 
-  return { ok: true, session, inviter, invitee, activeCount };
+  const route = callInvitationRoute(conversation);
+  const community = route === 'admit-member'
+    ? await loadSalonCommunity(deps.prisma, { communityId: conversation.communityId, actorId: input.inviterUserId })
+    : null;
+  if (route === 'admit-member') {
+    if (newMemberRefusal(conversation)) return refuse('PERMISSION_DENIED');
+    const entry = await planSalonEntry(deps.prisma, community, { kind: 'registered', userId: input.inviteeUserId });
+    if (entry.kind === 'refused') return refuse('PERMISSION_DENIED');
+  }
+
+  return {
+    ok: true,
+    session,
+    inviter,
+    invitee,
+    activeCount: present.length,
+    route,
+    conversation,
+    community,
+    inviteeIsMember: membership?.isActive === true,
+  };
+}
+
+/** Un blocage, dans un sens ou dans l'autre, entre l'invité et UN des participants présents — une lecture. */
+async function blockedWithAnyone(
+  prisma: Pick<PrismaClient, 'user'>,
+  inviteeUserId: string,
+  presentUserIds: readonly string[]
+): Promise<boolean> {
+  const others = presentUserIds.filter((id) => id !== inviteeUserId);
+  if (others.length === 0) return false;
+  const match = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { id: inviteeUserId, blockedUserIds: { hasSome: [...others] } },
+        { id: { in: [...others] }, blockedUserIds: { has: inviteeUserId } },
+      ],
+    },
+    select: { id: true },
+  });
+  return match !== null;
 }
 
 /** `true` quand l'invitation est NOUVELLE — ré-inviter la même personne n'écrit rien. */

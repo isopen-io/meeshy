@@ -124,6 +124,7 @@ import type {
   CallMutedByModeratorEvent,
   CallParticipantInvitedEvent,
   CallInviteSettledEvent,
+  CallConversationChangedEvent,
   CallReactionEvent,
   CallReactionReceivedEvent,
 } from '../call-controls.js';
@@ -405,6 +406,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_RECORDING_STARTED]: (data: CallRecordingStartedEvent) => void;
   [SERVER_EVENTS.CALL_RECORDING_STOPPED]: (data: CallRecordingStoppedEvent) => void;
   [SERVER_EVENTS.CALL_PARTICIPANT_INVITED]: (data: CallParticipantInvitedEvent) => void;
+  [SERVER_EVENTS.CALL_CONVERSATION_CHANGED]: (data: CallConversationChangedEvent) => void;
   [SERVER_EVENTS.CALL_INVITE_DECLINED]: (data: CallInviteSettledEvent) => void;
   [SERVER_EVENTS.CALL_INVITE_EXPIRED]: (data: CallInviteSettledEvent) => void;
   [SERVER_EVENTS.CALL_MUTED_BY_MODERATOR]: (data: CallMutedByModeratorEvent) => void;
