@@ -175,13 +175,22 @@ import type {
   FriendRequestCancelledEventData,
   FriendRequestNewEventData,
   FriendRequestRejectedEventData,
+  FriendRequestUpdatedEventData,
 } from './friend-request.js';
 import type { LinkMessageNewEventData } from './link.js';
 import type {
+  AffiliateReferralJoinedEventData,
+  CommunityLinkEntryEventData,
+  ShareLinkArrivalEventData,
+  TrackingLinkClickedEventData,
+} from './link-activity.js';
+import type {
+  RelationLevelLoweredEventData,
   RelationLevelRaisedEventData,
   RelationRitualCompletedEventData,
   RelationRitualProgressEventData,
   RelationRitualStartedEventData,
+  UserBlockedByMeEventData,
 } from './relation.js';
 import type { BringRingEventData, BringStoppedEventData } from '../bring.js';
 import type {
@@ -211,7 +220,7 @@ import type {
   BatteryReportAck,
 } from '../battery.js';
 import type { PhoneReachabilityChangedEventData, PhoneReachabilityClearedEventData } from '../phone-reachability.js';
-import type { BloodProximityEventData } from '../blood-location.js';
+import type { BloodMovedEventData, BloodProximityEventData } from '../blood-location.js';
 import type { ContactExchangeReceivedEventData } from '../contact-exchange.js';
 import type {
   SharedLocationAck,
@@ -283,6 +292,7 @@ import type {
 } from './participant.js';
 import type {
   CommunityDeletedEventData,
+  CommunityJoinRequestedEventData,
   CommunityMemberJoinedEventData,
   CommunityMemberLeftEventData,
   CommunityMemberRoleUpdatedEventData,
@@ -322,7 +332,7 @@ import type {
   MessageTranslationSharedEventData,
   TranslationEvent,
 } from './translation.js';
-import type { UserUpdatedEventData } from './user.js';
+import type { UserProfileChangedEventData, UserUpdatedEventData } from './user.js';
 
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
@@ -407,7 +417,11 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.FRIEND_REQUEST_NEW]: (data: FriendRequestNewEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED]: (data: FriendRequestAcceptedEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_REJECTED]: (data: FriendRequestRejectedEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_UPDATED]: (data: FriendRequestUpdatedEventData) => void;
   [SERVER_EVENTS.RELATION_LEVEL_RAISED]: (data: RelationLevelRaisedEventData) => void;
+  [SERVER_EVENTS.RELATION_LEVEL_LOWERED]: (data: RelationLevelLoweredEventData) => void;
+  [SERVER_EVENTS.USER_BLOCKED_BY_ME]: (data: UserBlockedByMeEventData) => void;
+  [SERVER_EVENTS.USER_UNBLOCKED_BY_ME]: (data: UserBlockedByMeEventData) => void;
   [SERVER_EVENTS.RELATION_RITUAL_STARTED]: (data: RelationRitualStartedEventData) => void;
   [SERVER_EVENTS.RELATION_RITUAL_PROGRESS]: (data: RelationRitualProgressEventData) => void;
   [SERVER_EVENTS.RELATION_RITUAL_COMPLETED]: (data: RelationRitualCompletedEventData) => void;
@@ -421,6 +435,10 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.BATTERY_CHANGED]: (data: BatteryChangedEventData) => void;
   [SERVER_EVENTS.BATTERY_CLEARED]: (data: BatteryClearedEventData) => void;
   [SERVER_EVENTS.BATTERY_PULL_REQUESTED]: (data: BatteryPullRequestedEventData) => void;
+  [SERVER_EVENTS.TRACKING_LINK_CLICKED]: (data: TrackingLinkClickedEventData) => void;
+  [SERVER_EVENTS.SHARE_LINK_ARRIVAL]: (data: ShareLinkArrivalEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_LINK_ENTRY]: (data: CommunityLinkEntryEventData) => void;
+  [SERVER_EVENTS.AFFILIATE_REFERRAL_JOINED]: (data: AffiliateReferralJoinedEventData) => void;
   [SERVER_EVENTS.PHONE_UNREACHABLE]: (data: PhoneReachabilityChangedEventData) => void;
   [SERVER_EVENTS.PHONE_REACHABLE]: (data: PhoneReachabilityClearedEventData) => void;
   [SERVER_EVENTS.SHARED_LOCATION_CHANGED]: (data: SharedLocationChangedEventData) => void;
@@ -429,6 +447,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.SHARED_LOCATION_REQUESTED]: (data: SharedLocationRequestedEventData) => void;
   [SERVER_EVENTS.CONTACT_EXCHANGE_RECEIVED]: (data: ContactExchangeReceivedEventData) => void;
   [SERVER_EVENTS.BLOOD_PROXIMITY]: (data: BloodProximityEventData) => void;
+  [SERVER_EVENTS.BLOOD_MOVED]: (data: BloodMovedEventData) => void;
   [SERVER_EVENTS.TOGETHER_INVITED]: (data: TogetherInvitedEventData) => void;
   [SERVER_EVENTS.TOGETHER_STARTED]: (data: TogetherStartedEventData) => void;
   [SERVER_EVENTS.TOGETHER_SYNCED]: (data: TogetherSyncedEventData) => void;
@@ -519,6 +538,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.COMMUNITY_MEMBER_LEFT]: (data: CommunityMemberLeftEventData) => void;
   [SERVER_EVENTS.COMMUNITY_MEMBER_ROLE_UPDATED]: (data: CommunityMemberRoleUpdatedEventData) => void;
   [SERVER_EVENTS.COMMUNITY_DELETED]: (data: CommunityDeletedEventData) => void;
+  [SERVER_EVENTS.COMMUNITY_JOIN_REQUESTED]: (data: CommunityJoinRequestedEventData) => void;
 
   // Packs
   [SERVER_EVENTS.PACK_INSTALLATION_UPDATED]: (data: PackInstallationUpdatedEventData) => void;
@@ -532,6 +552,7 @@ export interface ServerToClientEvents {
 
   // User Profile
   [SERVER_EVENTS.USER_UPDATED]: (data: UserUpdatedEventData) => void;
+  [SERVER_EVENTS.USER_PROFILE_CHANGED]: (data: UserProfileChangedEventData) => void;
 
   // Conversation Categories
   [SERVER_EVENTS.CATEGORY_CREATED]: (data: CategoryCreatedEventData) => void;

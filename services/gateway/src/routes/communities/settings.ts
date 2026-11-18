@@ -126,7 +126,8 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
         description: validatedData.description !== undefined ? SecuritySanitizer.sanitizeText(validatedData.description) : undefined,
         avatar: validatedData.avatar,
         banner: validatedData.banner,
-        isPrivate: validatedData.isPrivate
+        isPrivate: validatedData.isPrivate,
+        requiresJoinApproval: validatedData.requiresJoinApproval
       };
 
       // Gerer l'identifier si fourni

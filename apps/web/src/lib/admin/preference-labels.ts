@@ -96,6 +96,7 @@ const PRIVACY: Kinds<PrivacyPreference> = {
   showReadReceipts: 'flag',
   showTypingIndicator: 'flag',
   showForwardSource: 'flag',
+  showProfileFigures: 'flag',
   allowContactRequests: 'flag',
   allowGroupInvites: 'flag',
   acceptCallsFromNonContacts: 'flag',

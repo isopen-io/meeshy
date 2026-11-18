@@ -75,6 +75,7 @@ const f = {
   'admin.people.pref.privacy.showReadReceipts': 'Enviar confirmaciones de lectura',
   'admin.people.pref.privacy.showTypingIndicator': 'Mostrar el indicador de escritura',
   'admin.people.pref.privacy.showForwardSource': 'Mostrar el origen de los mensajes reenviados',
+  'admin.people.pref.privacy.showProfileFigures': 'Mostrar mis cifras a mis Cercanos',
   'admin.people.pref.privacy.allowContactRequests': 'Permitir solicitudes de contacto',
   'admin.people.pref.privacy.allowGroupInvites': 'Permitir invitaciones a grupos',
   'admin.people.pref.privacy.acceptCallsFromNonContacts': 'Aceptar llamadas de personas que no son contactos',

@@ -24,6 +24,7 @@ import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/auth
 const logger = enhancedLogger.child({ module: 'CommunityMembersRoutes' });
 import {
   communityMemberSchema,
+  communityStewardMemberSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import {
@@ -33,6 +34,7 @@ import {
 } from './types';
 import { validatePagination } from '../../utils/pagination';
 import { activeMembershipOf } from './serialization';
+import { isCommunitySteward } from '../../services/community-entries';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 
 /** #6375 — le créateur garde la main : ni rétrogradé ni retiré par un administrateur. */
@@ -70,6 +72,12 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
             description: 'Maximum number of items to return (max 100)',
             default: '20',
             pattern: '^[0-9]+$'
+          },
+          order: {
+            type: 'string',
+            enum: ['asc', 'desc'],
+            default: 'asc',
+            description: 'Order by join date: asc (oldest first, default) or desc (most recent first, #19429)'
           }
         }
       },
@@ -81,7 +89,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
             success: { type: 'boolean', example: true },
             data: {
               type: 'array',
-              items: communityMemberSchema
+              items: communityStewardMemberSchema
             },
             pagination: {
               type: 'object',
@@ -131,7 +139,7 @@ const community = await fastify.prisma.community.findFirst({
         select: {
           createdBy: true,
           isPrivate: true,
-          members: { where: { isActive: true }, select: { userId: true } }
+          members: { where: { isActive: true }, select: { userId: true, role: true } }
         }
       });
 
@@ -141,13 +149,15 @@ const community = await fastify.prisma.community.findFirst({
 
       const hasAccess = community.createdBy === userId ||
                        community.members.some(member => member.userId === userId);
+      // #19429 — la source et le pays d'une entrée ne partent qu'à qui anime ou modère la communauté.
+      const seesEntries = isCommunitySteward(community, userId);
 
       if (!hasAccess && community.isPrivate) {
         return sendForbidden(reply, 'Access denied to this community');
       }
 
       /* istanbul ignore next -- AJV `default: '0'`/`default: '20'` on the querystring schema always fill these before the handler runs */
-      const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
+      const { offset = '0', limit = '20', order = 'asc' } = request.query as { offset?: string; limit?: string; order?: 'asc' | 'desc' };
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       const [members, totalCount] = await Promise.all([
@@ -167,7 +177,7 @@ const community = await fastify.prisma.community.findFirst({
               }
             }
           },
-          orderBy: { joinedAt: 'asc' },
+          orderBy: { joinedAt: order === 'desc' ? 'desc' : 'asc' },
           skip: offsetNum,
           take: limitNum
         }),
@@ -194,11 +204,13 @@ const community = await fastify.prisma.community.findFirst({
         memberUserIds,
       );
 
-      const gatedMembers = members.map((m: { user?: MemberUser | null }) =>
-        m.user
-          ? { ...m, user: servedPerson(applyPresenceVisibilityAsOffline(m.user, presenceVis.get(m.user.id))) }
-          : m
-      );
+      const gatedMembers = members
+        .map((m) => (seesEntries ? m : { ...m, joinedVia: null, joinCountry: null }))
+        .map((m: { user?: MemberUser | null }) =>
+          m.user
+            ? { ...m, user: servedPerson(applyPresenceVisibilityAsOffline(m.user, presenceVis.get(m.user.id))) }
+            : m
+        );
 
       return sendPaginatedSuccess(reply, gatedMembers, {
         total: totalCount,
@@ -335,8 +347,11 @@ const community = await fastify.prisma.community.findFirst({
           data: {
             isActive: true,
             leftAt: null,
+            joinedAt: new Date(),
             /* istanbul ignore next -- AddMemberSchema's `role` is `.optional().default(CommunityRole.MEMBER)`, so Zod's own parse() already guarantees a defined value here */
-            role: (validatedData.role || CommunityRole.MEMBER) as string
+            role: (validatedData.role || CommunityRole.MEMBER) as string,
+            joinedVia: 'invited',
+            joinCountry: null
           },
           include: {
             user: {
@@ -358,7 +373,8 @@ const community = await fastify.prisma.community.findFirst({
             communityId: id,
             userId: validatedData.userId,
             /* istanbul ignore next -- AddMemberSchema's `role` is `.optional().default(CommunityRole.MEMBER)`, so Zod's own parse() already guarantees a defined value here */
-            role: (validatedData.role || CommunityRole.MEMBER) as string
+            role: (validatedData.role || CommunityRole.MEMBER) as string,
+            joinedVia: 'invited'
           },
           include: {
             user: {

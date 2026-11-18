@@ -37,6 +37,8 @@ import {
 import { extractUserAgent } from '../../services/GeoIPService';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import { claimLinkUse, LINK_EXHAUSTED_RACE } from './link-admission-claim';
+import { announceShareLinkArrival } from '../../services/conversations/shareLinkArrivalAnnounce';
+import { linkActivityRelayOf, type LinkActivityRelay } from '../../socketio/linkActivityEvents';
 import { joinAsGuest } from './link-admission-guest';
 import {
   resolveEntryRights,
@@ -135,6 +137,8 @@ export interface LinkJoinParams {
   /** #7797 — coutures du pays d'arrivée ; la production prend les défauts. */
   readonly afterResponse?: AfterResponse;
   readonly lookupCountry?: ArrivalCountryLookup;
+  /** #19446 — l'écho temps réel de l'arrivée chez qui gère le lien. Absent : rien n'est annoncé. */
+  readonly linkActivity?: LinkActivityRelay | null;
   /** `social.conversation_link_joined` (#8959) — le moteur partagé par défaut, un double en test. */
   readonly engagement?: LinkJoinEngagement;
 }
@@ -513,13 +517,16 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
         ),
       });
     }
+    const linkActivity = params.linkActivity;
     (params.afterResponse ?? deferAfterResponse)(
       () => recordArrivalCountry({
         prisma,
         participantId,
         requestIp,
         lookupCountry: params.lookupCountry ?? lookupArrivalCountry,
-      }),
+      }).finally(() => linkActivity
+        ? announceShareLinkArrival({ prisma, relay: linkActivity, shareLinkId: shareLink.id, participantId })
+        : undefined),
       'link-arrival-country',
     );
     creditLinkJoin({ prisma, engagement: params.engagement, creatorId: shareLink.createdBy, identity, participantId });
@@ -789,6 +796,7 @@ export function registerLinkAdmissionRoutes(
           // `getIO?.()` : l'éventail est ACCESSOIRE (#16837).
           arrivalIO: fastify.socketIOHandler?.getManager()?.getIO?.(),
           arrivalRooms: fastify.socketIOHandler?.getManager() ?? null,
+          linkActivity: linkActivityRelayOf(fastify),
           requestIp: resolveClientIp(request),
           requestUserAgent: extractUserAgent(request),
           rejectedCredential,

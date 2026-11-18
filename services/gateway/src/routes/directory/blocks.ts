@@ -5,7 +5,7 @@ import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/
 import { captureBatteryBefore, refreshBatteryAfter } from '../../services/battery/batteryDeps';
 import { captureSharedLocationBefore, refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
-import { relationIoOf } from '../../socketio/relationEvents';
+import { emitBlockedByMe, relationIoOf } from '../../socketio/relationEvents';
 import {
   sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendInternalError,
 } from '../../utils/response.js';
@@ -187,6 +187,9 @@ export async function bloquer(
     ]).catch((error: unknown) => logError(fastify.log, '[BLOCKS] Notifications not retracted after block', error));
   }
 
+  // #19366 — mes autres appareils posent le blocage ; rejoué même sur un blocage déjà posé. Jamais au bloqué.
+  emitBlockedByMe(ecoute.io, { actorId: moi, otherId: cibleId, blocked: true, at: new Date() });
+
   // `dejaBloque` remonte pour que l'ALIAS puisse rendre son 409 historique
   // SANS relire la ligne : un pré-contrôle chez l'appelant ajouterait une
   // troisième lecture avant les deux existantes. Il n'est pas déclaré au schéma
@@ -236,6 +239,8 @@ export async function debloquer(
   const position = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, '[BLOCKS] Shared location not refreshed after unblock', error) };
   refreshSharedLocationAfter(position, { userA: moi, userB: cibleId })
     .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Shared location not refreshed after unblock', error));
+  // #19366 — mes autres appareils retirent le blocage. Jamais au débloqué.
+  emitBlockedByMe(position.io, { actorId: moi, otherId: cibleId, blocked: false, at: new Date() });
 
   return { valeur: { message: 'User unblocked' } };
 }

@@ -63,10 +63,13 @@ export type AccountPurgeSummary = {
   /** Le numéro des amis d'un réseau tiers qu'il avait ouverts (#17117) : gardé pour lui seul, il ne sert plus personne. */
   readonly externalPeerHandlesDeleted: number;
   readonly profileAddressesDeleted: number;
+  readonly storyHighlightsDeleted: number;
   /** L'agrégat des visites de son lien de profil, par jour (#19206). */
   readonly profileLinkVisitDaysDeleted: number;
   /** Ses invitations par e-mail (#19207) : chacune porte l'adresse d'un tiers. */
   readonly emailInvitationsDeleted: number;
+  /** Ses demandes d'entrée en communauté (#19429) : chacune porte son pays d'arrivée. */
+  readonly communityJoinRequestsDeleted: number;
 };
 
 export type AccountPurgeOptions = {
@@ -147,7 +150,7 @@ export async function purgeAccountIsolatedData(
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
   if (!isValidObjectId(userId)) throw new Error('INVALID_USER_ID');
-  const [sessions, pushTokens, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles, profileAddresses, profileLinkVisitDays, emailInvitations] =
+  const [sessions, pushTokens, voiceProfile, relations, pairInteractionDays, relationConsents, friendRequests, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry, callTelemetry, e2ee, externalPeerHandles, profileAddresses, storyHighlights, profileLinkVisitDays, emailInvitations, communityJoinRequests] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
       prisma.pushToken.deleteMany({ where: { userId } }),
@@ -183,10 +186,14 @@ export async function purgeAccountIsolatedData(
       eraseExternalPeerHandlesOpenedBy(prisma, userId),
       // #18863 : ses adresses de fiche partent, et leurs liens de suivi se ferment.
       eraseProfileAddressesOf(prisma, userId),
+      // #19394 : ses albums « à la une » partent ; les stories qu'ils rangeaient suivent leur propre sort.
+      prisma.storyHighlight.deleteMany({ where: { ownerId: userId } }),
       // #19206 : l'agrégat des visites de son lien de profil.
       eraseProfileLinkVisitsOf(prisma, userId),
       // #19207 : ses invitations par e-mail, adresses de tiers comprises.
       eraseSentInvitationsOf(prisma, userId),
+      // #19429 : ses demandes d'entrée en communauté — son pays d'arrivée, et une demande qu'on accepterait après lui.
+      prisma.communityJoinRequest.deleteMany({ where: { userId } }),
       // #13937 : l'historique de position du Sang et le journal de ses consultations partent avec le compte.
       prisma.bloodLocationPoint.deleteMany({ where: { ownerId: userId } }),
       prisma.bloodLocationConsultation.deleteMany({ where: { OR: [{ observedId: userId }, { observerId: userId }] } }),
@@ -214,8 +221,10 @@ export async function purgeAccountIsolatedData(
     e2eeErased: e2ee,
     externalPeerHandlesDeleted: externalPeerHandles,
     profileAddressesDeleted: profileAddresses,
+    storyHighlightsDeleted: storyHighlights.count,
     profileLinkVisitDaysDeleted: profileLinkVisitDays,
     emailInvitationsDeleted: emailInvitations,
+    communityJoinRequestsDeleted: communityJoinRequests.count,
   };
 
   logger.info(
@@ -227,7 +236,7 @@ export async function purgeAccountIsolatedData(
       `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
       `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} packOwnerships=${packs.ownershipsDeleted} partnerProfiles=${packs.partnerProfilesDeleted} ` +
       `impressions=${readingTelemetry.impressions} engagements=${readingTelemetry.engagements} ` +
-      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry} externalPeerHandles=${externalPeerHandles} profileAddresses=${profileAddresses} profileLinkVisitDays=${profileLinkVisitDays} emailInvitations=${emailInvitations}`
+      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents} callTelemetry=${callTelemetry} externalPeerHandles=${externalPeerHandles} profileAddresses=${profileAddresses} storyHighlights=${storyHighlights.count} profileLinkVisitDays=${profileLinkVisitDays} emailInvitations=${emailInvitations} communityJoinRequests=${communityJoinRequests.count}`
   );
 
   return summary;

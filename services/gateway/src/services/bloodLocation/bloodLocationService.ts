@@ -12,6 +12,8 @@
  * - **Journal** : lisible du seul observé ; `excessive` quand un même observateur dépasse 20 lectures
  *   en 24 h. Au-delà, ses lectures ne s'ajoutent plus, elles datent sa dernière ligne ; et chaque
  *   observateur des 30 jours y figure, quel que soit le volume des autres.
+ * - **En direct** : `bloodMoved.ts`, à chaque point vraisemblable, un signal SANS coordonnée aux
+ *   comptes qui pourraient lire l'historique ; jamais bloquant (#19400).
  * - **Proximité** : `bloodProximity.ts`, déclenchée à l'enregistrement, jamais bloquante — et jamais
  *   pour un point arrivé à une vitesse impossible depuis le dernier point vraisemblable (rangé, marqué
  *   dans le scellé), ni pour un point sans ancre (premier point, ou premier après un effacement).
@@ -32,6 +34,7 @@ import { pairAccessAmong } from '../relations/pairAccess';
 import { writeLocationGhost } from '../sharedLocation/locationGhost';
 import { relationConsentGrantedAmong } from '../relations/relationConsent';
 import { alertBloodProximity, isPlausibleMove } from './bloodProximity';
+import { signalBloodMoved } from './bloodMoved';
 import { openPoint, sealPoint } from './bloodLocationSeal';
 import type { BloodLocationDeps } from './bloodLocationTypes';
 
@@ -73,15 +76,19 @@ export async function recordBloodLocation(deps: BloodLocationDeps, ownerId: stri
   const [hidden, anchor] = await Promise.all([ghostedBy(deps, ownerId), anchorOf(deps, ownerId)]);
   const now = deps.now();
   const plausible = isPlausibleMove(anchor, parsed.data, now);
+  const recordedAt = new Date(now);
   await deps.prisma.bloodLocationPoint.create({
     data: {
       ownerId,
       sealed: sealPoint(ownerId, { ...parsed.data, hiddenFrom: [...hidden], ...(plausible ? {} : { implausible: true as const }) }),
-      recordedAt: new Date(now),
+      recordedAt,
       expiresAt: new Date(now + HISTORY_MS),
     },
   });
-  if (plausible && anchor) await alertBloodProximity(deps, ownerId, parsed.data, hidden).catch((error: unknown) => deps.report?.(error));
+  // Le signal et l'alerte relisent liens, consentements et coupures puis réservent par lecteur : ils
+  // partent APRÈS la réponse, jamais sur le chemin du point (chaque point paierait leur coût).
+  if (plausible) void signalBloodMoved(deps, ownerId, recordedAt, hidden).catch((error: unknown) => deps.report?.(error));
+  if (plausible && anchor) void alertBloodProximity(deps, ownerId, parsed.data, hidden).catch((error: unknown) => deps.report?.(error));
   return { recorded: true };
 }
 
@@ -191,7 +198,7 @@ export async function listBloodLocationConsultations(deps: BloodLocationDeps, ob
   };
 }
 
-const clampRadius = (meters: number): number => Math.min(BLOOD_PROXIMITY_MAX_RADIUS_METERS, Math.max(BLOOD_PROXIMITY_MIN_RADIUS_METERS, meters));
+export const clampRadius = (meters: number): number => Math.min(BLOOD_PROXIMITY_MAX_RADIUS_METERS, Math.max(BLOOD_PROXIMITY_MIN_RADIUS_METERS, meters));
 
 /**
  * La loi ouvrirait-elle la position du Sang entre les deux, consentement mis à part ? Un réglage

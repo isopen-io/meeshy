@@ -2,6 +2,8 @@ import { z } from 'zod';
 import type { TrackingLink } from '@meeshy/shared/types/tracking-link';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { httpUrlSchema } from '@meeshy/shared/utils/validation';
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
+import { INTERNAL_TRACKING_TARGET_TYPES } from './internal-target';
 
 /**
  * Helper pour enrichir un TrackingLink avec l'URL complète.
@@ -10,12 +12,13 @@ import { httpUrlSchema } from '@meeshy/shared/utils/validation';
  * domaine de la requête (fallback fixe `meeshy.me`, jamais `localhost`, pour
  * qu'un lien partagé ne casse pas selon qui le rouvre).
  */
-export function enrichTrackingLink(link: TrackingLink): TrackingLink & { fullUrl?: string } {
+export function enrichTrackingLink(link: TrackingLink): TrackingLink & { fullUrl?: string; countUnique: boolean } {
   const trackingService = new TrackingLinkService(null as any);
   const fullUrl = trackingService.buildTrackingUrl(link.token);
 
   return {
     ...link,
+    countUnique: link.countUnique !== false,
     fullUrl
   };
 }
@@ -23,8 +26,16 @@ export function enrichTrackingLink(link: TrackingLink): TrackingLink & { fullUrl
 /**
  * Schémas de validation Zod
  */
+/**
+ * Une cible MEESHY (`targetType` + `targetId`, #19418) remplace l'adresse : la
+ * passerelle la compose, celle du client est ignorée. Sans cible, l'adresse
+ * externe reste exigée — le contrat d'avant, inchangé.
+ */
 export const createTrackingLinkSchema = z.object({
-  originalUrl: httpUrlSchema,
+  originalUrl: httpUrlSchema.optional(),
+  targetType: z.enum(INTERNAL_TRACKING_TARGET_TYPES).optional(),
+  targetId: z.string().regex(OBJECT_ID_REGEX).optional(),
+  countUnique: z.boolean().optional(),
   name: z.string().max(32).optional(),
   campaign: z.string().max(100).optional(),
   source: z.string().max(100).optional(),
@@ -33,6 +44,20 @@ export const createTrackingLinkSchema = z.object({
   messageId: z.string().optional(),
   expiresAt: z.iso.datetime().optional(),
   customToken: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}[a-zA-Z0-9]$/, 'Le token doit contenir 2-50 caractères alphanumériques et ne peut pas commencer ou finir par un tiret').optional()
+}).refine((body) => (body.targetType === undefined) === (body.targetId === undefined), {
+  message: 'targetType et targetId vont ensemble',
+  path: ['targetId']
+}).refine((body) => body.targetType !== undefined || body.originalUrl !== undefined, {
+  message: 'originalUrl est requis sans cible Meeshy',
+  path: ['originalUrl']
+});
+
+/** Le nom et les UTM qu'un `PATCH` peut changer (#19412) ; `null` les efface. */
+export const updateTrackingLinkLabelsSchema = z.object({
+  name: z.string().max(32).nullable().optional(),
+  campaign: z.string().max(100).nullable().optional(),
+  source: z.string().max(100).nullable().optional(),
+  medium: z.string().max(100).nullable().optional()
 });
 
 export const recordClickSchema = z.object({
@@ -123,3 +148,5 @@ export function detectDevice(userAgent: string): string {
 
   return 'desktop';
 }
+
+export type CreateTrackingLinkBody = z.infer<typeof createTrackingLinkSchema>;

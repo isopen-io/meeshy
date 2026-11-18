@@ -4,6 +4,7 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
+import { lecteurDuMot, relancerMotsPerdus, servirMot } from './friend-request-message';
 
 
 /**
@@ -103,13 +104,18 @@ export async function servirParties<T extends Record<string, unknown>>(
     })
   );
 
-  if (identifiants.length === 0) return demandes.map((demande) => masquerRefus(demande, acteurId));
+  const langues = await lecteurDuMot(fastify, acteurId, demandes);
+  relancerMotsPerdus(fastify, acteurId, demandes, langues);
+
+  if (identifiants.length === 0) {
+    return demandes.map((demande) => servirMot(masquerRefus(demande, acteurId), acteurId, langues));
+  }
 
   const carte = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(viewer, identifiants);
   const surEntreeAbsente = presenceMissingEntryPolicy(viewer);
 
   return demandes.map((demande) => {
-    const servie: Record<string, unknown> = { ...masquerRefus(demande, acteurId) };
+    const servie: Record<string, unknown> = servirMot(masquerRefus(demande, acteurId), acteurId, langues);
     for (const cle of CLES_PARTIES) {
       const partie = servie[cle] as (PartieAvecPresence & Record<string, unknown>) | null | undefined;
       if (!partie?.id) continue;

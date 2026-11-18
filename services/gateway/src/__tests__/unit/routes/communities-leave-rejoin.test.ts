@@ -97,6 +97,18 @@ async function buildMemberRoutesApp(prisma = makePrisma()): Promise<{ app: Fasti
 
 // ─── POST /communities/:id/leave ───────────────────────────────────────────
 
+
+/**
+ * Les statistiques d'entrée (#19429 : 7 et 30 jours, série, ordre récent) se lisent sur
+ * `joinedAt` : une ligne réactivée doit porter la date de CE retour, jamais celle de sa
+ * première entrée — sinon un retour d'aujourd'hui compte « via lien » sans compter à 7 jours.
+ */
+const expectEntryDatedNow = (update: { mock: { calls: Array<Array<{ data: { joinedAt?: unknown } }>> } }) => {
+  const data = update.mock.calls[0][0].data;
+  expect(data.joinedAt).toBeInstanceOf(Date);
+  expect(Date.now() - (data.joinedAt as Date).getTime()).toBeLessThan(60_000);
+};
+
 describe('POST /communities/:id/leave — pose isActive:false + leftAt, ne supprime plus', () => {
   let app: FastifyInstance;
   let prisma: ReturnType<typeof makePrisma>;
@@ -166,6 +178,7 @@ describe('POST /communities/:id/join — réactive une ligne laissée par un dé
         data: expect.objectContaining({ isActive: true, leftAt: null, role: 'member' }),
       }),
     );
+    expectEntryDatedNow(prisma.communityMember.update);
   });
 });
 
@@ -223,6 +236,7 @@ describe('POST /communities/:id/invite — réactive une ligne laissée par un d
         data: expect.objectContaining({ isActive: true, leftAt: null, role: 'member' }),
       }),
     );
+    expectEntryDatedNow(prisma.communityMember.update);
   });
 });
 
@@ -261,6 +275,7 @@ describe('POST /communities/:id/members — réactive avec le rôle demandé', (
         data: expect.objectContaining({ isActive: true, leftAt: null, role: 'moderator' }),
       }),
     );
+    expectEntryDatedNow(prisma.communityMember.update);
   });
 });
 

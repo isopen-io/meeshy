@@ -65,3 +65,6 @@ export const phoneReachability = '/api/v1/relations/phone-reachability';
 
 /** GET /api/v1/relations */
 export const root = '/api/v1/relations';
+
+/** GET /api/v1/relations/summary */
+export const summary = '/api/v1/relations/summary';

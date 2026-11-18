@@ -25,6 +25,9 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
+// Le `CacheStore` partagé n'est pas monté ici : chaque témoin relit l'audience (#19368).
+jest.mock('../../../../services/CacheStore', () => ({ getCacheStore: () => undefined }));
+
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }) },
 }));
@@ -48,7 +51,8 @@ function buildApp() {
   const prisma = {
     user: {
       findMany: jest.fn(async () => []),
-      findFirst: jest.fn<any>(async () => ({
+      // `hasBlocked` interroge `findFirst` avec `blockedUserIds` : personne n'est bloqué ici.
+      findFirst: jest.fn<any>(async (args: any) => args?.where?.blockedUserIds ? null : ({
         id: PROPRIETAIRE,
         username: 'cible',
         createdAt: new Date('2026-01-01T00:00:00Z'),
@@ -133,5 +137,62 @@ describe('Le PROPRIÉTAIRE voit tout', () => {
     expect(data.totalMessages).toBe(69);
 
     await app.close();
+  });
+});
+
+/**
+ * #19371 — un PROCHE reçoit « En chiffres » (messages, traductions) sur cette
+ * route comme sur `?expand=stats` : même loi, même préférence du sujet. Les
+ * fils et les demandes reçues restent à soi.
+ */
+describe('Un PROCHE reçoit « En chiffres » (#19371)', () => {
+  const LOW = PROPRIETAIRE < TIERS ? PROPRIETAIRE : TIERS;
+  const HIGH = PROPRIETAIRE < TIERS ? TIERS : PROPRIETAIRE;
+  const avecLien = (niveau: string, privacy?: Record<string, boolean>) => ({
+    ...buildApp(),
+    user: {
+      ...buildApp().user,
+      findMany: jest.fn<any>(async (args: any) =>
+        (args?.where?.blockedUserIds ? [] : args?.where?.id?.in ?? []).map((id: string) => ({
+          id, role: 'USER', birthDate: null, isActive: true, deletedAt: null, deactivatedAt: null,
+        })),
+      ),
+      findUnique: jest.fn<any>(async () => ({ blockedUserIds: [], createdAt: new Date('2026-01-01T00:00:00Z') })),
+    },
+    userRelation: {
+      findUnique: jest.fn<any>(async () => ({ id: 'r1', userLowId: LOW, userHighId: HIGH, grantedByLow: niveau, grantedByHigh: niveau, transitions: [] })),
+      findMany: jest.fn<any>(async () => []),
+    },
+    friendRequest: { count: jest.fn<any>(async () => 3), findFirst: jest.fn<any>(async () => null), findMany: jest.fn<any>(async () => []) },
+    communityMember: { findMany: jest.fn<any>(async () => []) },
+    userPreferences: { findMany: jest.fn<any>(async () => (privacy ? [{ userId: PROPRIETAIRE, privacy }] : [])) },
+    userPreference: { findMany: jest.fn<any>(async () => []) },
+  });
+
+  it('ne sert rien au Proche d\'un compte qui n\'a RIEN réglé : le défaut reste fermé tant que #19372 n\'est pas tranchée', async () => {
+    const app = await monter(avecLien('CLOSE'), TIERS);
+    const data = (await lire(app)).json().data ?? {};
+    await app.close();
+    expect(PRIVES.filter((c) => c in data)).toEqual([]);
+  });
+
+  it('sert messages et traductions au Proche d\'un compte qui les a ouverts, jamais les fils ni les demandes reçues', async () => {
+    const app = await monter(avecLien('CLOSE', { showProfileFigures: true }), TIERS);
+    const data = (await lire(app)).json().data ?? {};
+    await app.close();
+    expect(data.totalMessages).toBe(69);
+    expect('totalTranslations' in data).toBe(true);
+    expect(['totalConversations', 'friendRequestsReceived'].filter((c) => c in data)).toEqual([]);
+  });
+
+  it("ne sert rien à l'Ami, ni au Proche d'une personne qui a coupé sa préférence", async () => {
+    const ami = await monter(avecLien('FRIEND'), TIERS);
+    const dataAmi = (await lire(ami)).json().data ?? {};
+    await ami.close();
+    const coupe = await monter(avecLien('CLOSE', { showProfileFigures: false }), TIERS);
+    const dataCoupe = (await lire(coupe)).json().data ?? {};
+    await coupe.close();
+    expect(PRIVES.filter((c) => c in dataAmi)).toEqual([]);
+    expect(PRIVES.filter((c) => c in dataCoupe)).toEqual([]);
   });
 });
