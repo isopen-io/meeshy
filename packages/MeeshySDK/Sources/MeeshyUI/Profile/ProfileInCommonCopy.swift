@@ -111,22 +111,6 @@ enum ProfileInCommonCopy {
         }
     }
 
-    static func lockedTitle(_ part: ProfileInCommonDigest.Part) -> String {
-        switch part {
-        case .communities: return String(localized: "profile.inCommon.locked.communities", defaultValue: "Communautés en commun", bundle: .module)
-        case .friends: return friends
-        case .media: return media
-        }
-    }
-
-    static func lockedGlyph(_ part: ProfileInCommonDigest.Part) -> String {
-        switch part {
-        case .communities: return "person.3"
-        case .friends: return "person.2"
-        case .media: return "photo.on.rectangle"
-        }
-    }
-
     static func historyTitle(_ kind: InCommonHistoryKind) -> String {
         switch kind {
         case .firstMessage: return String(localized: "profile.inCommon.history.firstMessage", defaultValue: "Premier message", bundle: .module)

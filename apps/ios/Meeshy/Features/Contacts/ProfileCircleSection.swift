@@ -63,6 +63,8 @@ struct ProfileOurCircleRow: View {
     @StateObject private var viewModel: ProfileCircleViewModel
     let displayName: String
     @State private var showsOurCircle = false
+    /// L'accent de la fiche ouverte : la rangée et « Notre cercle » prennent la couleur de la personne (#19674).
+    @Environment(\.meeshyProfileAccent) private var profileAccent
 
     init(userId: String, displayName: String) {
         _viewModel = StateObject(wrappedValue: ProfileCircleModels.model(for: userId))
@@ -77,7 +79,7 @@ struct ProfileOurCircleRow: View {
                     subtitle: pendingLine,
                     accessory: .value(CircleLevelNames.title(of: level)),
                     showsDivider: true,
-                    tint: CircleLevelColor.color(for: level)
+                    tint: OurCircleTint.person(profileAccent, level: level)
                 ),
                 action: { showsOurCircle = true },
                 leading: { MeeshyToggleRowSymbol(VitrineSeenAsCopy.glyph(of: level)) },
@@ -87,7 +89,7 @@ struct ProfileOurCircleRow: View {
             .accessibilityHint(ProfileActionsWording.ourCircleHint(name: displayName))
             .accessibilityIdentifier("profile.actions.ourCircle")
             .sheet(isPresented: $showsOurCircle) {
-                OurCircleSheet(viewModel: viewModel, displayName: displayName)
+                OurCircleSheet(viewModel: viewModel, displayName: displayName, accentHex: profileAccent)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }

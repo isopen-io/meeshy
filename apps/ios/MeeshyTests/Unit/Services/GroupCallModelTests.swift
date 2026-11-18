@@ -30,13 +30,14 @@ final class GroupCallModelTests: XCTestCase {
     }
 
     func test_admitting_beyondCapacity_isIgnored() {
-        let full = (1...5).reduce(GroupCallRoster(localUserId: "me")) { $0.admitting(arrival("u\($1)")) }
+        let seats = CallRules.maxParticipants - 1
+        let full = (1...seats).reduce(GroupCallRoster(localUserId: "me")) { $0.admitting(arrival("u\($1)")) }
 
-        let overflow = full.admitting(arrival("u6"))
+        let overflow = full.admitting(arrival("late"))
 
         XCTAssertTrue(full.isFull)
-        XCTAssertEqual(overflow.members.count, 5)
-        XCTAssertFalse(overflow.contains("u6"))
+        XCTAssertEqual(overflow.members.count, seats)
+        XCTAssertFalse(overflow.contains("late"))
     }
 
     func test_capacity_defaultsToGatewayCeiling() {

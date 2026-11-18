@@ -110,6 +110,9 @@ class WebRtcCallCoordinator @Inject constructor(
         negotiator.router = mesh::claims
     }
 
+    /** L'appel vit désormais dans le groupe des présents (#19650) : le maillage y relit ses noms, le média continue. */
+    fun moveToConversation(callId: String, conversationId: String) = mesh.moveToConversation(callId, conversationId)
+
     /** Ce que la scène d'un appel de groupe lit : registre, principal, vidéo de chaque membre du maillage. */
     val groupMesh: StateFlow<GroupCallMeshUi> get() = mesh.ui
 

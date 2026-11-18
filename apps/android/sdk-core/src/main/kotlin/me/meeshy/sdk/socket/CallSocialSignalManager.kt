@@ -2,6 +2,7 @@ package me.meeshy.sdk.socket
 
 import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.SharedFlow
+import me.meeshy.sdk.model.call.CallConversationChanged
 import me.meeshy.sdk.model.call.CallInviteOutcome
 import me.meeshy.sdk.model.call.CallInviteSettled
 import me.meeshy.sdk.model.call.CallLiveFrameReply
@@ -86,7 +87,15 @@ class CallSocialSignalManager internal constructor(
     private val _transcriptionActive = SocketInboundRoute.subject<CallTranscriptionActive>()
     val transcriptionActive: SharedFlow<CallTranscriptionActive> = _transcriptionActive.exposed()
 
+    private val _conversationChanged = SocketInboundRoute.subject<CallConversationChanged>()
+
+    /** L'appel vit désormais dans le groupe des présents (#19650) : la conversation de l'appel se déplace, le média continue. */
+    val conversationChanged: SharedFlow<CallConversationChanged> = _conversationChanged.exposed()
+
     fun attach() {
+        route(SocketEventNames.CALL_CONVERSATION_CHANGED) { raw ->
+            CallSocialEventParser.conversationChanged(raw)?.let(_conversationChanged::emitArrived)
+        }
         route(SocketEventNames.CALL_PARTICIPANT_INVITED) { raw -> CallSocialEventParser.participantInvited(raw)?.let(_participantInvited::emitArrived) }
         route(SocketEventNames.CALL_INVITE_DECLINED) { raw ->
             CallSocialEventParser.inviteSettled(raw, CallInviteOutcome.DECLINED)?.let(_inviteSettled::emitArrived)
