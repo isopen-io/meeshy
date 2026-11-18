@@ -1,4 +1,5 @@
 import Testing
+import SwiftUI
 import Foundation
 @testable import MeeshyUI
 
@@ -94,6 +95,85 @@ struct MeeshySegmentedTests {
         let textOnly = MeeshySegmentedOption(id: 3, title: "Actions")
         #expect(textOnly.glyph(isCurrent: true) == nil)
         #expect(textOnly.glyph(isCurrent: false) == nil)
+    }
+
+    @Test("le contenu suit l'ordre des faces : vers une face plus loin il avance, vers une plus proche il recule")
+    func travel_vectors() throws {
+        for vector in try Self.vectors("travel") {
+            let raw = try #require(vector["expected"] as? String)
+            let expected = try #require(MeeshySegmentedTravel(rawValue: raw), "sens inconnu \(raw)")
+            let from = vector["from"] as? Int
+            let to = vector["to"] as? Int
+            #expect(MeeshySegmentedLaw.travel(from: from, to: to) == expected, "\(String(describing: from)) → \(String(describing: to))")
+        }
+    }
+
+    @Test("en avançant le contenu entre par le bord de fin et sort par celui de début ; en reculant, l'inverse")
+    func travel_edgesFollowTheGesture() {
+        #expect(MeeshySegmentedTravel.forward.insertionEdge == .trailing)
+        #expect(MeeshySegmentedTravel.forward.removalEdge == .leading)
+        #expect(MeeshySegmentedTravel.backward.insertionEdge == .leading)
+        #expect(MeeshySegmentedTravel.backward.removalEdge == .trailing)
+        #expect(MeeshySegmentedTravel.none.insertionEdge == nil)
+        #expect(MeeshySegmentedTravel.none.removalEdge == nil)
+    }
+
+    @Test("au relâcher, la face choisie est celle sous le doigt, ou la plus proche hors de la piste")
+    func dragTarget_vectors() throws {
+        for vector in try Self.vectors("dragTarget") {
+            let x = try #require(vector["x"] as? Double)
+            let raw = try #require(vector["spans"] as? [[Double]])
+            let spans = raw.map { MeeshySegmentedSpan(minX: $0[0], maxX: $0[1]) }
+            let expected = vector["expected"] as? Int
+            #expect(MeeshySegmentedLaw.dragTarget(x: x, spans: spans) == expected, "x=\(x)")
+        }
+    }
+
+    @Test("le glissé ne vise une face que si la piste tient sur une seule rangée")
+    func isSingleRow_onlyForOneRow() {
+        #expect(MeeshySegmentedLaw.isSingleRow(tops: [0, 0, 0]))
+        #expect(MeeshySegmentedLaw.isSingleRow(tops: [4, 4.2]))
+        #expect(!MeeshySegmentedLaw.isSingleRow(tops: [0, 0, 44]))
+        #expect(!MeeshySegmentedLaw.isSingleRow(tops: []))
+    }
+
+    @Test("la goutte : le bord avant part en tête, l'arrière suit, puis elle se rétracte sur la face choisie")
+    func drop_vectors() throws {
+        for vector in try Self.vectors("drop") {
+            let from = try #require(vector["from"] as? [Double])
+            let to = try #require(vector["to"] as? [Double])
+            let progress = try #require(vector["progress"] as? Double)
+            let expected = try #require(vector["expected"] as? [Double])
+            let span = MeeshySegmentedLaw.dropSpan(
+                from: MeeshySegmentedSpan(minX: from[0], maxX: from[1]),
+                to: MeeshySegmentedSpan(minX: to[0], maxX: to[1]),
+                progress: progress
+            )
+            let rounded = [span.minX, span.maxX].map { ($0 * 100).rounded() / 100 }
+            #expect(rounded == expected, "\(from) → \(to) à \(progress)")
+        }
+    }
+
+    @Test("à mi-course la goutte est plus large que les deux faces qu'elle relie")
+    func drop_stretchesBetweenFaces() {
+        let span = MeeshySegmentedLaw.dropSpan(
+            from: MeeshySegmentedSpan(minX: 0, maxX: 80),
+            to: MeeshySegmentedSpan(minX: 200, maxX: 300),
+            progress: 0.5
+        )
+        #expect(span.width > 100)
+    }
+
+    @Test("chaque changement part de la face montrée ; sous mouvement réduit la goutte ne voyage pas")
+    func dropState_advances() {
+        let resting = MeeshySegmentedDropState.resting(at: 0)
+        #expect(MeeshySegmentedLaw.dropProgress(phase: 0, generation: resting.generation) == 1)
+        let moved = resting.advanced(to: 2, reduce: false)
+        #expect(moved == MeeshySegmentedDropState(from: 0, to: 2, generation: 1))
+        #expect(MeeshySegmentedLaw.dropProgress(phase: 0, generation: moved.generation) == 0)
+        #expect(MeeshySegmentedLaw.dropProgress(phase: 1, generation: moved.generation) == 1)
+        let reduced = moved.advanced(to: 1, reduce: true)
+        #expect(reduced == MeeshySegmentedDropState(from: 1, to: 1, generation: 2))
     }
 
     static func vectors(_ key: String) throws -> [[String: Any]] {
