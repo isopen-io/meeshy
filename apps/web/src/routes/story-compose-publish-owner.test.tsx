@@ -23,13 +23,16 @@ const BOB = { user: { id: 'u-bob', username: 'bob' }, token: 'jwt-bob', sessionT
 
 type Sent = { readonly kind: 'upload' | 'post'; readonly auth: string | null };
 
-function bench() {
+function bench({ holdCreation = false }: { readonly holdCreation?: boolean } = {}) {
   const sent: Sent[] = [];
   const held: Array<() => void> = [];
   const uploadFetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
     sent.push({ kind: 'upload', auth: new Headers(init?.headers).get('Authorization') });
-    if (init?.method === 'POST') return new Response(null, { status: 201, headers: { Location: uploadsEndpoints.byWildcard('up-1') } });
-    await new Promise<void>((resolve) => held.push(resolve));
+    if (init?.method === 'POST') {
+      if (holdCreation) await new Promise<void>((resolve) => held.push(resolve));
+      return new Response(null, { status: 201, headers: { Location: uploadsEndpoints.byWildcard('up-1') } });
+    }
+    if (!holdCreation) await new Promise<void>((resolve) => held.push(resolve));
     return new Response(JSON.stringify({ success: true, data: { attachment: { id: 'pm-1', fileUrl: '2026/11/u/f.jpg', mimeType: 'image/jpeg' } } }), {
       status: 200,
       headers: { 'Upload-Offset': '3' },
@@ -49,7 +52,8 @@ function bench() {
 }
 
 describe('la publication du studio reste au compte qui a touché Publier (audit #19352, X1)', () => {
-  test.each<PublicationKind>(['STORY', 'POST'])('%s : l’appareil passe à Bob pendant la dernière tranche — rien ne part sous Bob, l’intention attend Ada', async (kind) => {
+  const kinds: readonly PublicationKind[] = ['STORY', 'POST'];
+  for (const kind of kinds) test(`${kind} : l’appareil passe à Bob pendant la dernière tranche — rien ne part sous Bob, l’intention attend Ada`, async () => {
     const { sent, held, deps } = bench();
     const el = mount(deps, kind);
     typeText(el, 'Le secret d’Ada');
@@ -64,6 +68,30 @@ describe('la publication du studio reste au compte qui a touché Publier (audit 
     await flush();
     held.shift()!();
     await flush(() => sent.some((request) => request.kind === 'post'));
+    await flush();
+
+    expect(sent.filter((request) => request.auth === 'Bearer jwt-bob')).toEqual([]);
+    expect(sent.filter((request) => request.kind === 'post')).toEqual([]);
+    expect((await deps.outbox!.load(VIEWER_ID))?.intent?.state).toBe('armed');
+  });
+});
+
+describe('la montée refusée parce que le compte a changé laisse l’intention attendre son compte (audit #19352, X1)', () => {
+  test('l’appareil passe à Bob avant la tranche : aucune tranche ni publication sous Bob, l’intention reste armée pour Ada', async () => {
+    const { sent, held, deps } = bench({ holdCreation: true });
+    const el = mount(deps, 'STORY');
+    typeText(el, 'Le secret d’Ada');
+    selectFile(el, 'visual', image());
+    await flush(() => held.length === 1);
+
+    act(() => publishButton(el)!.click());
+    await flush();
+    act(() => {
+      sessionStore.getState().establish(BOB);
+    });
+    await flush();
+    held.shift()!();
+    await flush();
     await flush();
 
     expect(sent.filter((request) => request.auth === 'Bearer jwt-bob')).toEqual([]);

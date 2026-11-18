@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
+import { createAccountCacheShelf } from './account-caches';
 import { endRevokedSession, forgetPendingAccountEnds } from './account-end';
 import { endRefusedSession } from './client';
 import { createSessionStore, heldAccountOf, type SessionStorage, type SessionUser } from './session';
+import { bindDeviceFollow } from './session-follow';
 
 /**
  * UN 401 FERME LA SESSION MÊME QUAND LE MORCEAU DE FIN NE SE CHARGE PAS (audit
@@ -88,5 +90,23 @@ describe('la fin d’une session refusée ne dépend pas du chargement de son mo
 
     expect(ended).toEqual([tab]);
     expect(tab.getState().session.status).toBe('anonymous');
+  });
+
+  test('la purge restée à faire part quand l’application branche le suivi de l’appareil (le prochain chargement)', async () => {
+    const storage = fakeStorage();
+    const tab = createSessionStore({ storage, now: () => NOW });
+    tab.getState().establish({ user: ADA, token: 'jwt-ada', sessionToken: 'sess-ada', expiresIn: 3600 });
+    endRefusedSession(tab, { load: unloadable, storage });
+    await settle();
+
+    const erased: string[] = [];
+    const unbind = bindDeviceFollow(tab, {
+      shelf: createAccountCacheShelf(storage),
+      target: { addEventListener: () => undefined, removeEventListener: () => undefined },
+      purge: quietDevice(storage, erased),
+    });
+    unbind();
+
+    expect(erased).toEqual(['u-ada']);
   });
 });

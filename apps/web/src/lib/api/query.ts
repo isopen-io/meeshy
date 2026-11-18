@@ -459,7 +459,7 @@ export function rowAction(conversationId: string, action: RowFlagActionId): void
  * pas `useOnline()` (un hook), c'est `use-send.ts` qui le fournit.
  */
 /** Un envoi du fil téléverse puis envoie : ses requêtes restent au compte qui l'a lancé (audit #19352, X1). */
-const ownedSendDeps = (online: boolean): SendDeps => ({
+export const ownedSendDeps = (online: boolean): SendDeps => ({
   ...ownedApiDeps(),
   queryClient: appQueryClient,
   outbox: outboxStore,
