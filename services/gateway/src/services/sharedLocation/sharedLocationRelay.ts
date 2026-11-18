@@ -480,7 +480,8 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
       if (!previous) return NOT_SHARING;
       const listed = listOnlyState(previous, { recipients, shareBattery }, termIso, now);
       if (!listed) return await stoppedByListOnly(deps, emitterId);
-      state = { sessionId, ...listed };
+      const { shareBattery: _provisionalBattery, ...withoutBattery } = listed;
+      state = { sessionId, ...withoutBattery, servableFrom: new Date(now).toISOString() };
     }
     await storeSharedLocation(deps.cache, emitterId, state, now);
     const claim = await claimSharedLocation(deps.cache, emitterId, generation, state, now);
@@ -719,7 +720,25 @@ export async function reflectSharedLocationGhost(deps: SharedLocationRelayDeps, 
     await noteSharedLocationStopped(deps.cache, emitterId, now).catch(() => undefined);
     return;
   }
-  await storeSharedLocationIfCurrent(deps.cache, emitterId, { ...state, servableFrom: new Date(now).toISOString() }, now);
+  await holdUntilNextPosition(deps, emitterId, state, now);
+}
+
+const GHOST_EXIT_HOLD_ATTEMPTS = 5;
+
+/**
+ * La sortie retient le partage COURANT, quel qu'il soit : un démarrage ou une liste seule d'un
+ * autre appareil peut prendre le pointeur entre la lecture et la retenue, et recopier un point
+ * pris en fantôme. On relit et on retient de nouveau ; à court d'essais, on lève — la sortie
+ * reste fail-closed.
+ */
+async function holdUntilNextPosition(deps: SharedLocationRelayDeps, emitterId: string, first: SharedLocationState, now: number): Promise<void> {
+  const servableFrom = new Date(now).toISOString();
+  let state: SharedLocationState | null = first;
+  for (let attempt = 0; attempt < GHOST_EXIT_HOLD_ATTEMPTS && state; attempt += 1) {
+    if (await storeSharedLocationIfCurrent(deps.cache, emitterId, { ...state, servableFrom }, now)) return;
+    state = await readSharedLocation(deps.cache, emitterId, now);
+  }
+  if (state) throw new Error('Partage non retenu à la sortie du fantôme');
 }
 
 /**

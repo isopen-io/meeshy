@@ -260,3 +260,36 @@ describe('la liste seule garde ce que la session remplacée retenait (fusion ave
     expect(await accordes(jamais)).toEqual([]);
   });
 });
+
+describe('une liste seule qui croise la sortie du fantôme (revue adversariale)', () => {
+  it('une liste seule prise entre la lecture et la retenue de la sortie ne sert pas le point pris en fantôme', async () => {
+    const m = monde();
+    const db = m.deps.prisma as unknown as LocationGhostDb;
+    await setLocationGhost({ db, relay: m.deps, report: () => undefined }, EMETTEUR, true);
+    await demarrer(m);
+    m.avancer(MINUTE);
+    await updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN);
+    m.avancer(MINUTE);
+    let croisee = false;
+    const relay = {
+      ...m.deps,
+      cache: new Proxy(m.deps.cache, {
+        get: (target, prop) => {
+          if (prop !== 'setIfCurrent' || croisee) return Reflect.get(target, prop);
+          return async (...args: unknown[]) => {
+            croisee = true;
+            await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }], durationMinutes: 60 });
+            return (Reflect.get(target, prop) as (...a: unknown[]) => unknown).apply(target, args);
+          };
+        },
+      }),
+    };
+    m.emissions.length = 0;
+
+    await setLocationGhost({ db, relay, report: () => undefined }, EMETTEUR, false);
+
+    expect(croisee).toBe(true);
+    expect(changes(m, AMI)).toEqual([]);
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toEqual([]);
+  });
+});

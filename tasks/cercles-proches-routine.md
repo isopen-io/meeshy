@@ -1346,3 +1346,9 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates sur l'arbre fusionné : passerelle `sharedLocation/` 187 verts (3 témoins neufs, 2 rouges sans le correctif),
   porte socket + relations + fantôme + blocage 195 verts, `tsc` vert ; web `src/lib/shared-locations/` 140 verts,
   `tsc` vert ; shared `types` 1 795 verts, gardes `__tests__/ci` 215 verts.
+- Audit adversarial de la résolution : non bloquant, un défaut moyen corrigé dans le lot. Une liste seule d'un autre
+  appareil prise ENTRE la lecture et la retenue de la sortie du fantôme recopiait une session sans seuil, et le point
+  pris en fantôme repartait (même course déjà sur `dev` avec une position). La sortie retient désormais le partage
+  COURANT, relu jusqu'à cinq fois, et lève sinon (fail-closed) ; témoin rouge prouvé. L'état provisoire d'une liste
+  seule, rangé avant la prise, ne sert rien (seuil posé, pas de batterie) tant qu'il n'est pas réécrit. Reste, déjà sur
+  `dev` : avec une position, la session remplacée est lue avant la prise (« prévenir » peut partir deux fois).
