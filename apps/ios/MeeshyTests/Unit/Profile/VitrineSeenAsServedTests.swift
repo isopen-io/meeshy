@@ -3,6 +3,16 @@ import SwiftUI
 import MeeshySDK
 @testable import Meeshy
 
+/// La fiche que le serveur sert à chaque cercle ; un cercle sans fiche échoue au réseau.
+private nonisolated struct SeenAsServiceDouble: ProfileSeenAsProviding {
+    let profiles: [RelationLevel: PublicProfile]
+
+    func vitrine(handle: String, seenAs level: RelationLevel) async throws -> PublicProfile {
+        guard let profile = profiles[level] else { throw URLError(.notConnectedToInternet) }
+        return profile
+    }
+}
+
 /// « Voir comme » (#18869) se lit dans la fiche SERVIE à chaque cercle dès qu'elle existe : les langues qu'elle sert,
 /// les crans qu'elle décide, les publications que le cercle voit, les personnes de chaque cercle.
 @MainActor
@@ -42,6 +52,76 @@ final class VitrineSeenAsServedTests: XCTestCase {
         XCTAssertEqual(crans.first?.level, .public)
         XCTAssertEqual(crans.first?.contact, .unavailable)
         XCTAssertEqual(VitrineCran.make(ownerRole: nil).first?.contact, .requestToWrite, "la projection, elle, l'ouvrait")
+    }
+
+    /// Une fiche servie qui ferme le jeu à Ami (version de la loi, âge du propriétaire) : le cran Ami le dit fermé.
+    func test_crans_ofAServedFriendProfile_openOnlyWhatItServesOpen() throws {
+        let friend = try served("""
+        {"id":"me","username":"aicha","viewAs":"FRIEND","circle":{"level":"FRIEND","capabilities":{
+         "presence":{"state":"open"},"game":{"state":"locked","circle":"CLOSE"},
+         "directMessage":{"state":"open"}}}}
+        """)
+        let crans = VitrineCran.make(ownerRole: nil, served: [.friend: friend])
+        XCTAssertEqual(crans[1].opened, [.presence], "le jeu fermé par la fiche servie ne s'ouvre pas au cran Ami")
+        XCTAssertEqual(crans[1].contact, .write)
+        XCTAssertEqual(crans[0].opened, [], "le Public non servi reste lu dans la loi")
+    }
+
+    private func waitUntil(_ condition: @MainActor () -> Bool) async {
+        for _ in 0..<200 where !condition() { try? await Task.sleep(nanoseconds: 10_000_000) }
+    }
+
+    private func seenAsService() throws -> SeenAsServiceDouble {
+        let common = #""username":"aicha","voicePublic":true,"voiceSampleUrl":"/v.m4a","languages":["fr","en"],"isOnline":true"#
+        let publicProfile = try served("""
+        {"id":"me",\(common),"viewAs":"PUBLIC","circle":{"level":"PUBLIC","capabilities":{
+         "presence":{"state":"locked","circle":"FRIEND"},"messageRequest":{"state":"open"}}}}
+        """)
+        let friendProfile = try served("""
+        {"id":"me",\(common),"viewAs":"FRIEND","circle":{"level":"FRIEND","capabilities":{
+         "presence":{"state":"open"},"game":{"state":"open"},"directMessage":{"state":"open"}}}}
+        """)
+        return SeenAsServiceDouble(profiles: [.public: publicProfile, .friend: friendProfile])
+    }
+
+    /// De bout en bout : la fiche servie garde ma voix publique et mes langues, et « En ligne » ne s'allume qu'au cran
+    /// dont la vue servie ouvre la présence — jamais au Public, même si la charge porte `isOnline`.
+    func test_seenAsModel_keepsVoiceAndLanguages_andLightsOnlineOnlyWhereTheServedViewOpensPresence() async throws {
+        let owner = MeeshyUser(id: "me", username: "aicha", systemLanguage: "es")
+        let service = try seenAsService()
+        let model = VitrineSeenAsViewModel(handle: "aicha", ownerRole: nil, initial: .public, service: service)
+
+        model.start()
+        await waitUntil { model.preview.source == .served }
+
+        XCTAssertEqual(model.preview.level, .public)
+        let publicUser = VitrineSeenAsView.shownUser(of: model.preview, owner: owner)
+        XCTAssertEqual(VitrineSeenAsView.publicVoice(of: publicUser)?.url, "/v.m4a", "ma voix publique reste servie")
+        XCTAssertEqual(VitrineSeenAsView.shownLanguages(of: model.preview, owner: owner).codes, ["fr", "en"])
+        XCTAssertFalse(model.preview.isOnline, "le Public ne lit pas ma présence")
+
+        model.select(.friend)
+        await waitUntil { model.preview.level == .friend && model.preview.source == .served }
+
+        XCTAssertEqual(model.preview.source, .served)
+        XCTAssertTrue(model.preview.isOnline, "Ami ouvre la présence, et le serveur l'a servie")
+        let friendUser = VitrineSeenAsView.shownUser(of: model.preview, owner: owner)
+        XCTAssertEqual(VitrineSeenAsView.publicVoice(of: friendUser)?.url, "/v.m4a")
+        XCTAssertEqual(VitrineSeenAsView.shownLanguages(of: model.preview, owner: owner).codes, ["fr", "en"])
+    }
+
+    /// Sans réponse du serveur, le cran reste projeté : aucune présence inventée, mes langues lues dans mes rangs.
+    func test_seenAsModel_withoutAServedProfile_inventsNoPresence() async {
+        let owner = MeeshyUser(id: "me", username: "aicha", systemLanguage: "fr", regionalLanguage: "en")
+        let model = VitrineSeenAsViewModel(handle: "aicha", ownerRole: nil, initial: .blood,
+                                           service: SeenAsServiceDouble(profiles: [:]))
+
+        model.start()
+        await waitUntil { model.preview.source == .served }
+
+        XCTAssertEqual(model.preview.source, .projected)
+        XCTAssertFalse(model.preview.isOnline, "la projection n'invente aucune présence")
+        XCTAssertEqual(VitrineSeenAsView.shownLanguages(of: model.preview, owner: owner).codes, ["fr", "en"])
     }
 
     func test_crans_sitSideBySide_untilAnAccessibilitySize() {
