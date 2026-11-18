@@ -24,7 +24,7 @@ class CallJournalUnderBubbleGuardTest {
     }
 
     @Test
-    fun `sous la bulle, le journal entier tient dans 400 dp et defile seul ; le detail garde sa hauteur (19687)`() {
+    fun `sous la bulle, le journal entier tient dans 400 dp et defile seul, le detail garde sa hauteur (19687)`() {
         val bubble = code("CallJournalUnderBubble.kt")
         val sections = code("CallDetailSections.kt")
 
