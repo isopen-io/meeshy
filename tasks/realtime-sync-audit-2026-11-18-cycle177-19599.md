@@ -201,7 +201,7 @@ d'`origin/dev` (`git archive`), jamais déduit.
 | rouge | verdict | issue |
 |---|---|---|
 | cliquet du catalogue Swift : six déclarations « en attente de client » périmées + une amélioration non enregistrée derrière | **corrigé ici** | #19653 |
-| cliquet de verbosité natif : `ios:Meeshy/profile` 18 libellés pour un budget de 7, `ios:MeeshyUI/profile` 9 pour 3 | à l'épure, pas à moi | #18062 |
+| cliquet de verbosité natif : **CINQ** refus sur **QUATRE** familles — `ios:Meeshy/circles` 11 pour 8, `ios:Meeshy/links` 9 pour 4, `ios:Meeshy/profile` 18 pour 7, `ios:MeeshyUI/profile` 9 pour 3 et un libellé de plus de 80 caractères | à l'épure, pas à moi | #18062 |
 | manifeste i18n Android : **44 entrées** pointent une clé iOS absente des sept catalogues | à ses lots, pas à moi | #19654 |
 
 ### Ce que les deux rouges non corrigés ont en commun, et pourquoi je ne les ai pas pris
@@ -214,6 +214,25 @@ manifeste CHANGE le texte Android — mesuré sur un cas, `report_message_sent` 
 « Signalement envoyé » là où la clé iOS plausible dit « Merci. C'est entre nos
 mains. » Prendre l'un de ces remèdes « en passant » aurait livré une décision
 de produit sous l'étiquette d'un correctif de CI.
+
+### Et j'ai publié une mesure TRONQUÉE par mon propre instrument
+
+Le premier relevé de ce rouge disait « trois refus, les écrans de profil ». Il y
+en a **cinq, sur quatre familles** — `circles` et `links` en plus. Les deux
+journaux de la comparaison portaient bien les cinq lignes depuis le début (et la
+comparaison dev ↔ branche, elle, était juste) : ce qui a tronqué, c'est le
+harnais avec lequel j'ai LU le résultat — une boucle de vérification qui
+affichait `tail -3` du journal d'une étape en échec. J'ai recopié ces trois
+lignes dans l'issue, dans la PR, dans ce journal et dans le compte rendu au
+porteur, et il a fallu que la CI rende cinq lignes pour que l'écart se voie.
+
+> C'est la même famille que « ne jamais passer un gate par un pipe quand c'est
+> son code de sortie qu'on interroge » (cycle 107), déplacée du CODE DE RETOUR
+> au CORPS du verdict : **un gate dont on lit une fenêtre rend une mesure de la
+> fenêtre.** Et un relevé destiné à être CITÉ — dans une issue, dans un compte
+> rendu — se prend en entier, jamais par sa queue. Le `diff` qui a prouvé
+> « identique de part et d'autre » était, lui, posé sur les journaux COMPLETS :
+> la conclusion n'a pas bougé, seul le chiffre que j'en ai tiré était faux.
 
 ### Le défaut d'OUTIL que le troisième a révélé
 
