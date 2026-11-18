@@ -181,6 +181,10 @@ final class ProfileUserPostsViewModel: ObservableObject {
 
         let cached = await CacheCoordinator.shared.feed.load(for: cacheKey)
         switch cached {
+        case .fresh(let data, _) where data.isEmpty:
+            // Un vide caché repasse toujours par le réseau : sinon « Rien de publié » survivait à la publication
+            // faite ailleurs pendant toute la fenêtre de fraîcheur.
+            break
         case .fresh(let data, _):
             posts = data
             // `touch` re-fraîchit la fenêtre SWR à chaque visite : ne le faire
@@ -194,7 +198,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
             return
         case .stale(let data, _):
             posts = data
-            Task { [weak self] in await self?.fetchFromNetwork() }
+            // La revalidation relit la TÊTE (page 1), jamais la page d'après le curseur profond : c'est la tête que la
+            // Vitrine montre comme « mes trois dernières ».
+            Task { [weak self] in await self?.fetchFromNetwork(cursor: nil) }
             return
         case .expired, .empty:
             break
@@ -202,7 +208,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
 
         isLoading = true
         defer { isLoading = false }
-        _ = await fetchFromNetwork()
+        _ = await fetchFromNetwork(cursor: nil)
     }
 
     /// Charge les stats backend du profil pour les compteurs exacts du bandeau
@@ -263,7 +269,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
         paginationState = .loadingMore
         defer { isLoadingMore = false }
         let countBefore = posts.count
-        let succeeded = await fetchFromNetwork()
+        let succeeded = await fetchFromNetwork(cursor: nextCursor)
         // Garde zéro-progrès : une page entièrement dupliquée (curseur qui ne
         // progresse pas) laisserait `hasMore == true` avec une liste inchangée
         // → boucle réseau infinie sur le déclencheur auto-ré-armé. On déclare
@@ -275,10 +281,12 @@ final class ProfileUserPostsViewModel: ObservableObject {
         }
     }
 
+    /// `cursor == nil` lit la page 1 (la tête) ; sur une liste déjà servie dont la pagination est connue, elle la
+    /// FUSIONNE sans toucher au curseur profond, que seule la page suivante fait avancer.
     @discardableResult
-    private func fetchFromNetwork() async -> Bool {
+    private func fetchFromNetwork(cursor: String?) async -> Bool {
         do {
-            let response = try await postService.getUserPosts(userId: userId, cursor: nextCursor, limit: 20)
+            let response = try await postService.getUserPosts(userId: userId, cursor: cursor, limit: 20)
             let preferred = preferredLanguages
             let payload = response.data
             // Decode off the main actor — toFeedPost decodes media / comments /
@@ -287,9 +295,11 @@ final class ProfileUserPostsViewModel: ObservableObject {
                 payload.map { $0.toFeedPost(preferredLanguages: preferred) }
             }.value
 
-            if nextCursor == nil, posts.isEmpty {
+            let paginationKnown = nextCursor != nil || !hasMore
+            let keepsPagination = cursor == nil && !posts.isEmpty && paginationKnown
+            if cursor == nil, posts.isEmpty {
                 posts = fetched
-            } else if nextCursor == nil {
+            } else if cursor == nil {
                 // Recovery « page 1 » par-dessus une liste cachée : FUSIONNER,
                 // jamais remplacer — un remplacement faisait rétrécir 100
                 // cartes en 20 sous le doigt de l'utilisateur (et
@@ -303,11 +313,13 @@ final class ProfileUserPostsViewModel: ObservableObject {
                 let existing = Set(posts.map(\.id))
                 posts.append(contentsOf: fetched.filter { !existing.contains($0.id) })
             }
-            nextCursor = response.pagination?.nextCursor
-            // Défaut sûr quand le bloc pagination est strippé de la réponse :
-            // un curseur présent vaut « il y a une suite » (forme ReelsViewModel)
-            // — `?? false` figeait la pagination définitivement sans recours.
-            hasMore = response.pagination?.hasMore ?? (response.pagination?.nextCursor != nil)
+            if !keepsPagination {
+                nextCursor = response.pagination?.nextCursor
+                // Défaut sûr quand le bloc pagination est strippé de la réponse :
+                // un curseur présent vaut « il y a une suite » (forme ReelsViewModel)
+                // — `?? false` figeait la pagination définitivement sans recours.
+                hasMore = response.pagination?.hasMore ?? (response.pagination?.nextCursor != nil)
+            }
             paginationState = hasMore ? .idle : .exhausted
 
             // Drop any override / share delta whose value now matches server
@@ -331,7 +343,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
             // Persisté À CÔTÉ de la page (même clé) : la prochaine instance du
             // VM reprend au curseur profond au lieu de se coincer sur un cache
             // `.fresh` sans curseur.
-            await CacheCoordinator.shared.feed.saveCursor(nextCursor: nextCursor, hasMore: hasMore, for: cacheKey)
+            if !keepsPagination {
+                await CacheCoordinator.shared.feed.saveCursor(nextCursor: nextCursor, hasMore: hasMore, for: cacheKey)
+            }
             return true
         } catch {
             // Échec réseau : `hasMore`/`nextCursor` restent intacts (retenter la
@@ -348,7 +362,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
         paginationState = .idle
         renderWindow = Self.initialRenderWindow
         await CacheCoordinator.shared.feed.invalidate(for: cacheKey)
-        await fetchFromNetwork()
+        await fetchFromNetwork(cursor: nil)
     }
 
     // MARK: - Engagement actions (optimistic, crash-free)
@@ -539,6 +553,41 @@ final class ProfileUserPostsViewModel: ObservableObject {
     // ouverte et disparaissait à la réouverture — la signature exacte d'un
     // « compteur qui ne se synchronise pas ».
 
+    /// Une publication de CE profil (publication ou réel, ce que la liste sert) entre en tête dès sa création : le
+    /// vide « Rien de publié » et « mes trois dernières » la montrent sans attendre la fin de la fraîcheur du cache.
+    /// L'écho d'une publication optimiste (identifiant = cmid) la remplace sur place.
+    private func admitCreated(_ payload: SocketPostCreatedData) {
+        let kind = (payload.post.type ?? "POST").uppercased()
+        guard payload.post.author.id == userId, kind == "POST" || kind == "REEL" else { return }
+        let created = payload.post.toFeedPost(preferredLanguages: preferredLanguages)
+        if let cmid = payload.clientMutationId, let index = posts.firstIndex(where: { $0.id == cmid }) {
+            posts[index] = created
+        } else if !posts.contains(where: { $0.id == created.id }) {
+            posts.insert(created, at: 0)
+        } else {
+            return
+        }
+        persistHead()
+    }
+
+    /// Ma dernière publication supprimée sur une liste épuisée rend le vide, pas le silence.
+    private func removeDeleted(_ postId: String) {
+        guard posts.contains(where: { $0.id == postId }) else { return }
+        posts.removeAll { $0.id == postId }
+        if posts.isEmpty, !hasMore { paginationState = .exhausted }
+        persistHead()
+    }
+
+    private func persistHead() {
+        let head = Array(posts.prefix(100))
+        let key = cacheKey
+        Task {
+            await bestEffort("profileUserPostsViewModel.feed.save", category: .cache) {
+                try await CacheCoordinator.shared.feed.save(head, for: key)
+            }
+        }
+    }
+
     private func subscribeToSocketUpdates() {
         // Idempotent — garantit que le socket social est monté quand la feuille
         // de profil est ouverte hors du feed.
@@ -597,9 +646,14 @@ final class ProfileUserPostsViewModel: ObservableObject {
             .sink { [weak self] data in self?.applyRepost(data) }
             .store(in: &cancellables)
 
+        socialSocket.postCreated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in self?.admitCreated(payload) }
+            .store(in: &cancellables)
+
         socialSocket.postDeleted
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] postId in self?.posts.removeAll { $0.id == postId } }
+            .sink { [weak self] postId in self?.removeDeleted(postId) }
             .store(in: &cancellables)
 
         socialSocket.postUpdated
