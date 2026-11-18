@@ -64,11 +64,14 @@ extension UserProfileSheet {
         )
     }
 
-    /// « Fermer », un bouton de verre du kit (K02) ; la feuille joue son propre retour haptique.
+    /// « Retour » (‹) en plein écran, « Fermer » (⌄) en feuille : un bouton de verre du kit (K02) ; la feuille joue son
+    /// propre retour haptique.
     var heroCloseButton: some View {
         MeeshyGlassButton(
-            systemImage: "chevron.down",
-            label: String(localized: "common.close", defaultValue: "Fermer", bundle: .module),
+            systemImage: presentationStyle.leadingSymbol,
+            label: presentationStyle == .cover
+                ? String(localized: "common.back", defaultValue: "Retour", bundle: .module)
+                : String(localized: "common.close", defaultValue: "Fermer", bundle: .module),
             hint: String(localized: "profile.close.a11y", defaultValue: "Ferme le profil", bundle: .module),
             haptic: .none,
             action: { closeSheet() }
@@ -325,7 +328,7 @@ extension UserProfileSheet {
             onDismiss?()
             dismiss()
         } label: {
-            Image(systemName: "xmark")
+            Image(systemName: presentationStyle == .cover ? presentationStyle.leadingSymbol : "xmark")
                 .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
                 .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
@@ -333,7 +336,9 @@ extension UserProfileSheet {
                 .meeshyTapTarget()
         }
         .padding(EdgeInsets(top: MeeshySpacing.mdPlus - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular), leading: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular), bottom: 0, trailing: 0))
-        .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
+        .accessibilityLabel(presentationStyle == .cover
+            ? String(localized: "common.back", defaultValue: "Retour", bundle: .module)
+            : String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
         .accessibilityHint(String(localized: "profile.close.a11y", defaultValue: "Ferme le profil", bundle: .module))
     }
 }

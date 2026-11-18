@@ -366,7 +366,7 @@ struct StoryHeaderView: View {
         .adaptiveOnChange(of: currentStory?.id, initial: true) { _, _ in
             composableSlide = resolveComposableSlide()
         }
-        .sheet(item: $selectedProfileUser) { user in
+        .profileCover(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
                 moodEmoji: moodEmojiResolver?(user.userId ?? ""),
@@ -374,8 +374,6 @@ struct StoryHeaderView: View {
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
             )
-            .presentationDetents([.large, .medium])
-            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showReportSheet) {
             ReportMessageSheet(accentColor: currentGroup?.avatarColor ?? "FF2D55") { type, reason in

@@ -34,7 +34,7 @@ struct GlobalSearchView: View {
             }
         }
         .onAppear(after: .milliseconds(100)) { isSearchFieldFocused = true }
-        .sheet(item: $selectedProfileUser) { user in
+        .profileCover(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
                 moodEmoji: moodEmojiResolver?(user.userId ?? ""),
@@ -49,8 +49,6 @@ struct GlobalSearchView: View {
                     }))
                 }, dependencies: .live
             )
-            .presentationDetents([.large, .medium])
-            .presentationDragIndicator(.visible)
         }
         .withStatusBubble()
         .closesForConversationOpening(.search)

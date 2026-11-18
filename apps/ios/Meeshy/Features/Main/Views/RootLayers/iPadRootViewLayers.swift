@@ -160,7 +160,7 @@ struct iPadSheetsLayer: ViewModifier {
                     participantId: target.participantId
                 )
             }
-            .sheet(item: $router.deepLinkProfileUser) { user in
+            .profileCover(item: $router.deepLinkProfileUser) { user in
                 UserProfileSheet(
                     user: user,
                     moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
@@ -182,8 +182,6 @@ struct iPadSheetsLayer: ViewModifier {
                         }
                     }, dependencies: .live
                 )
-                .presentationDetents([.large, .medium])
-                .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showSharePicker) {
                 if let shared = router.pendingShareContent {

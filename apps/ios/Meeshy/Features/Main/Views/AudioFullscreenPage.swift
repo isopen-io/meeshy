@@ -223,7 +223,7 @@ struct AudioFullscreenPage: View, Equatable {
         // continuer (mini-player + carte système) — le moteur est
         // coordinator-owned, plus cette page (ni stop, ni unregister ici).
         .sheet(isPresented: $showTranslationSheet) { translationSheet }
-        .sheet(item: $selectedProfileUser) { user in profileSheet(user) }
+        .profileCover(item: $selectedProfileUser) { user in profileSheet(user) }
         // Transcription serveur (long-press) : le résultat revient par socket.
         .onReceive(
             MessageSocketManager.shared.transcriptionReady
