@@ -182,8 +182,9 @@ const heldSinceGhost = (state: Pick<SharedLocationState, 'updatedAt' | 'servable
 
 /**
  * La projection d'UN destinataire : la position à sa précision, le rayon de son flou, son
- * cercle, rien d'autre. Un lecteur flouté reçoit la maille que `state` retient pour lui (`readerId`) et
- * une heure arrondie.
+ * cercle, rien d'autre. Un lecteur flouté reçoit la maille que `state` retient pour lui (`readerId`), une
+ * heure et un début arrondis au quart d'heure (#19682) ; `state` garde l'instant exact, qu'une montée vers
+ * l'exact ressert aussitôt.
  */
 export function projectSharedLocation(
   userId: string,
@@ -209,7 +210,7 @@ export function projectSharedLocation(
     ...circle,
     updatedAt: roundedClock(state.updatedAt),
     expiresAt: deadlineOf(state, readerId),
-    ...startedAt,
+    ...(state.startedAt === undefined ? {} : { startedAt: roundedClock(state.startedAt) }),
   };
 }
 

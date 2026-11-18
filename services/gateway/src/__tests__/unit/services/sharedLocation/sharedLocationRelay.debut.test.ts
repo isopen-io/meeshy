@@ -86,9 +86,10 @@ describe('chaque destinataire reçoit le début du partage, à la finesse de sa 
     m.avancer(40 * MINUTE);
     await demarrer(m, 480);
 
-    expect(changes(m, PROCHE).map((e) => e.data.startedAt)).toEqual([iso(T0), iso(T0 + 40 * MINUTE)]);
+    expect(changes(m, PROCHE).map((e) => e.data.startedAt)).toEqual([iso(T0), iso(T0 + 30 * MINUTE)]);
     const [item] = (await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items;
-    expect(item?.startedAt).toBe(iso(T0 + 40 * MINUTE));
+    expect(item?.startedAt).toBe(iso(T0 + 30 * MINUTE));
+    expect(changes(m, AMI).at(-1)?.data.startedAt).toBe(iso(T0 + 40 * MINUTE));
   });
 
   it('une remontée de cercle sert aussi le début', async () => {
@@ -101,21 +102,16 @@ describe('chaque destinataire reçoit le début du partage, à la finesse de sa 
     expect(changes(m, PROCHE).at(-1)?.data.startedAt).toBe(iso(T0));
   });
 
-  it('une montée vers l\'exact fait remonter l\'instant gardé, une baisse le recoupe, sans nouvel envoi de position', async () => {
+  it('une liste seule qui baisse l\'exact en flouté recoupe aussitôt l\'instant gardé', async () => {
     const m = monde();
     m.avancer(11 * MINUTE + 5_000);
     await demarrer(m);
-    const debut = iso(T0 + 11 * MINUTE + 5_000);
-    const liste = (precision: 'exact' | 'city') =>
-      startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }, { userId: PROCHE, precision }], durationMinutes: 60 });
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items[0]?.startedAt).toBe(iso(T0 + 11 * MINUTE + 5_000));
 
-    await liste('exact');
-    expect(changes(m, PROCHE).at(-1)?.data.startedAt).toBe(debut);
-    expect((await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items[0]?.startedAt).toBe(debut);
+    await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'city' }], durationMinutes: 60 });
 
-    await liste('city');
-    expect(changes(m, PROCHE).at(-1)?.data.startedAt).toBe(iso(T0));
-    expect((await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items[0]?.startedAt).toBe(iso(T0));
+    expect(changes(m, AMI).at(-1)?.data.startedAt).toBe(iso(T0));
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items[0]?.startedAt).toBe(iso(T0));
   });
 
   it('aucune charge d\'un flouté ne porte un début plus fin que le quart d\'heure, ni au direct, ni aux mises à jour', async () => {
