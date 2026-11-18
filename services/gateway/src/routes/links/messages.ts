@@ -66,7 +66,7 @@ function sendWriteRefusal(reply: FastifyReply, refusal: ConversationWriteRefused
     return sendError(reply, 429, message, { code: response.code });
   }
 
-  if (response.status === 410) return sendError(reply, 410, message);
+  if (response.status === 410) return sendError(reply, 410, message, { code: response.code });
   return 'code' in response ? sendForbidden(reply, message, { code: response.code }) : sendForbidden(reply, message);
 }
 
@@ -324,11 +324,11 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       }
 
       if (!participantShareLink.isActive) {
-        return sendError(reply, 410, 'Ce lien n\'est plus actif');
+        return sendError(reply, 410, 'Ce lien n\'est plus actif', { code: 'LINK_INACTIVE' });
       }
 
       if (participantShareLink.expiresAt && new Date() > participantShareLink.expiresAt) {
-        return sendError(reply, 410, 'Ce lien a expiré');
+        return sendError(reply, 410, 'Ce lien a expiré', { code: 'LINK_EXPIRED' });
       }
 
       // #10470 — la garde commune d'un invité (`guestAccessEnd`) : révocation
