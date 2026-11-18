@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createAccountCacheShelf } from '@/lib/api/account-caches';
 import { setDeviceFollower } from '@/lib/api/account-end';
 import { credentialFromSession } from '@/lib/api/client';
-import { boundToIdentity, createHttpTransport, type ApiResult } from '@/lib/api/http';
+import { IDENTITY_CHANGED, boundToIdentity, createHttpTransport, type ApiResult } from '@/lib/api/http';
 import { createSessionStore, sessionIdentityKey, type SessionStorage, type SessionUser } from '@/lib/api/session';
 import { followDeviceSession, watchDeviceSession } from '@/lib/api/session-follow';
 
@@ -98,5 +98,56 @@ describe('un envoi en plusieurs requêtes reste au compte qui l’a lancé (audi
     expect(after.status === 'authenticated' ? after.user.id : null).toBe('u-bob');
     expect(sent).toEqual(sent.filter((request) => request.auth === 'Bearer jwt-ada'));
     expect(run.getState().statuses).toEqual({ famille: { state: 'queued' }, fil: { state: 'queued' } });
+  });
+});
+
+describe('une étape refusée parce que le compte a changé attend son compte, jamais l’échec (audit #19352, X1)', () => {
+  const unused = async (): Promise<ApiResult<never>> => ({ ok: false, status: 0, error: 'non utilisé' });
+  const refusedUnderOtherAccount = async (): Promise<ApiResult<never>> => ({ ok: false, status: 0, error: IDENTITY_CHANGED, code: IDENTITY_CHANGED });
+  const portsWith = (overrides: Partial<SendSheetPorts>): SendSheetPorts => ({
+    online: () => true,
+    openDirect: unused,
+    openGroup: unused,
+    forward: unused as unknown as SendSheetPorts['forward'],
+    sendMessage: unused,
+    uploadFiles: unused,
+    fetchFile: async () => null,
+    uploadMedia: unused,
+    publishMedia: unused,
+    publishFromAttachment: unused,
+    repost: unused,
+    createTextPost: unused,
+    newClientMessageId: () => 'cm-1',
+    ...overrides,
+  });
+
+  test('un transfert de messages : la cible reste en file', async () => {
+    const run = createSendRun({
+      entries: [
+        {
+          key: 'famille',
+          target: { kind: 'conversation', conversationId: 'c-famille', label: 'Famille' },
+          steps: [{ kind: 'forward', sourceConversationId: 'c-source', messages: [{ id: 'm-1', content: 'Salut', originalLanguage: 'fr' }] }],
+        },
+      ],
+      payload: { kind: 'text', text: 'Salut' },
+      language: 'fr',
+      ports: portsWith({ forward: refusedUnderOtherAccount as unknown as SendSheetPorts['forward'] }),
+    });
+    await run.start();
+
+    expect(run.getState().statuses).toEqual({ famille: { state: 'queued' } });
+  });
+
+  test('un message : la cible reste en file', async () => {
+    const run = createSendRun({
+      entries: [{ key: 'famille', target: { kind: 'conversation', conversationId: 'c-famille', label: 'Famille' }, steps: [{ kind: 'text', text: 'Salut' }] }],
+      payload: { kind: 'text', text: 'Salut' },
+      language: 'fr',
+      ports: portsWith({ sendMessage: refusedUnderOtherAccount }),
+    });
+    await run.start();
+
+    expect(run.getState().statuses).toEqual({ famille: { state: 'queued' } });
   });
 });

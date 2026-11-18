@@ -1,5 +1,5 @@
 import { type AccountCacheShelf } from './account-caches';
-import { setDeviceFollower } from './account-end';
+import { forgetPendingAccountEnds, setDeviceFollower } from './account-end';
 import { heldAccountOf, heldSessionKey, SESSION_STORAGE_KEY, type SessionState, type SessionStoreApi } from './session';
 
 /**
@@ -88,9 +88,11 @@ export function watchDeviceSession(
  */
 export function bindDeviceFollow(
   store: SessionStoreApi,
-  options: { readonly shelf: AccountCacheShelf; readonly target?: DeviceSessionTarget },
+  options: { readonly shelf: AccountCacheShelf; readonly target?: DeviceSessionTarget; readonly purge?: Parameters<typeof forgetPendingAccountEnds>[1] },
 ): () => void {
   setDeviceFollower(followDeviceSession);
+  /* Ce qu'une fin restée à faire laisse sur l'appareil part maintenant (audit #19352). */
+  forgetPendingAccountEnds(store, options.purge);
   const unwatch = watchDeviceSession(store, options);
   return () => {
     unwatch();

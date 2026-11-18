@@ -1,5 +1,5 @@
 import type { ConversationsDeps } from '@/lib/api/conversations';
-import type { ApiResult } from '@/lib/api/http';
+import { IDENTITY_CHANGED, type ApiResult } from '@/lib/api/http';
 import { publishStory, type PublishStoryResult } from '@/lib/api/stories-publish';
 
 import type { ChoosableAudience } from './publication-audience';
@@ -59,6 +59,8 @@ export async function runStudioPublish(params: {
     if (stopped()) return { kind: 'aborted', published: postIds.length, total };
     const result = await params.publish(publication);
     if (!result.ok && result.code === 'ABORTED' && stopped()) return { kind: 'aborted', published: postIds.length, total };
+    /* Le compte a changé avant l'émission (audit #19352, X1) : rien n'est parti, rien n'a échoué — la séquence s'arrête et attend son compte. */
+    if (!result.ok && result.code === IDENTITY_CHANGED) return { kind: 'aborted', published: postIds.length, total };
     if (!result.ok) {
       return { kind: 'failed', failure: studioFailureKey(result, 'publish') ?? 'story.studio.failure.network', published: postIds.length, total };
     }
