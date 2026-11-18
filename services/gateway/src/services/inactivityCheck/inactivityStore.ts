@@ -21,6 +21,8 @@ export type StoredInactivity = InactivityCheckRecord & {
   readonly alertedAt?: string | null;
   /** Les Sangs à qui l'alerte a été servie : eux seuls reçoivent le retour, ou l'effacement. */
   readonly alertedTo: readonly string[];
+  /** Ceux parmi `alertedTo` à qui l'alerte a VRAIMENT été émise : eux seuls reçoivent « va bien ». */
+  readonly deliveredTo?: readonly string[];
 };
 
 const id = (userId: string): string => userId.toLowerCase();
@@ -44,6 +46,7 @@ function parse(raw: string): StoredInactivity | null {
     askedAt: text(value.askedAt),
     alertedAt: text(value.alertedAt),
     alertedTo: Array.isArray(value.alertedTo) ? value.alertedTo.filter((v): v is string => text(v) !== null) : [],
+    deliveredTo: Array.isArray(value.deliveredTo) ? value.deliveredTo.filter((v): v is string => text(v) !== null) : [],
   };
 }
 

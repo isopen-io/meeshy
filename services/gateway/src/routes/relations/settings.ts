@@ -248,8 +248,9 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       // #13934 — un accord fait remonter l'écoute en cours chez l'autre ; un retrait l'efface chez qui la voyait.
       if ((granting && close) || teamGrant || cutsListening) await refreshNowPlayingAfter(ecoute, { userA: ownerId, userB: userId, before: ecouteAvant });
       if ((blocking && !linked) || (granting && !close)) return sendNotFound(reply, 'Personne introuvable');
-      // #18738 — un consentement de position changé re-juge la dernière position d'une alerte d'inactivité en cours.
-      await refreshInactivityServedAfter({ prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Inactivity not refreshed after relation settings:', error) }, ownerId);
+      // #18738 — un consentement de POSITION changé re-juge la dernière position d'une alerte d'inactivité
+      // en cours ; un autre réglage n'y touche pas (ni ré-émission, ni consultation notée au journal).
+      if (shares.some((share) => share === 'locationShared' || share === 'locationHistoryShared')) await refreshInactivityServedAfter({ prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Inactivity not refreshed after relation settings:', error) }, ownerId);
 
       return sendSuccess(reply, servedSettings(userId, await readSettings(fastify.prisma, ownerId, userId)));
     } catch (error) {

@@ -53,7 +53,7 @@ class InactivityRosterTest {
     }
 
     @Test
-    fun `l'etat range se relit a l'identique, batterie et position comprises, pour le meme compte seulement`() {
+    fun `l'etat range se relit avec sa batterie mais jamais sa position, pour le meme compte seulement`() {
         val held = state(
             userId = "jacques",
             since = now - hour,
@@ -66,7 +66,8 @@ class InactivityRosterTest {
             InactivityRosterSnapshot.of("me", InactivityRoster().receive(held)),
         )
         val snapshot = json.decodeFromString(InactivityRosterSnapshot.serializer(), stored)
-        assertThat(snapshot.restore("me", now).stateOf("jacques")).isEqualTo(held)
+        assertThat(stored).doesNotContain("48.85")
+        assertThat(snapshot.restore("me", now).stateOf("jacques")).isEqualTo(held.copy(lastPosition = null))
         assertThat(snapshot.restore("other", now).byUser).isEmpty()
         assertThat(snapshot.restore(null, now).byUser).isEmpty()
     }

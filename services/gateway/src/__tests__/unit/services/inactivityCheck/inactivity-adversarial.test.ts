@@ -85,7 +85,8 @@ describe('course : une alerte en vol ne contredit pas le « Je vais bien » déj
     const pushedKinds = pushes.filter((p) => p.readerId === SANG).map((p) => p.announcement.kind);
     // Ce que le Sang voit EN DERNIER doit être le retour, pas l'alerte.
     expect(toSang[toSang.length - 1]).toBe(SERVER_EVENTS.INACTIVITY_CLEARED);
-    expect(pushedKinds[pushedKinds.length - 1]).toBe('responded');
+    // L'alerte n'était pas encore partie : ni alerte, ni « va bien » pour une alerte jamais reçue (audit 2).
+    expect(pushedKinds).toEqual([]);
   });
 });
 

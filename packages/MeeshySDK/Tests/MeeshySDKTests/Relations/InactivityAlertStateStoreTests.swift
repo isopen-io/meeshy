@@ -46,6 +46,16 @@ final class InactivityAlertStateStoreTests: XCTestCase {
         XCTAssertEqual(persistence.saved.map(\.userId), ["u1"])
     }
 
+    func test_applyAlert_neverPersistsThePosition_butServesItInMemory() {
+        let (sut, persistence) = makeSUT()
+        let position = InactivityLastPosition(latitude: 48.85, longitude: 2.35, recordedAt: clock)
+        let alert = InactivityAlertState(userId: "u1", inactiveSince: clock.addingTimeInterval(-43_200), alertedAt: clock, lastPosition: position)
+        sut.apply(InactivityAlertRaised(userId: "u1", state: alert))
+        XCTAssertNotNil(sut.state(for: "u1")?.lastPosition)
+        XCTAssertEqual(persistence.saved.map(\.userId), ["u1"])
+        XCTAssertNil(persistence.saved.first?.lastPosition)
+    }
+
     func test_applyAlert_olderThanTheHeldAlert_isIgnored() {
         let (sut, _) = makeSUT(cached: [state("u1", battery: 40)])
         sut.apply(InactivityAlertRaised(userId: "u1", state: state("u1", alertedAt: -600, battery: 9)))

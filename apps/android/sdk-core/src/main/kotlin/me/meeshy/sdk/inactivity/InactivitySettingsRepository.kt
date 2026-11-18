@@ -122,9 +122,10 @@ class WellnessReporter internal constructor(
 
 /**
  * Les annonces d'un push `inactivity_alert` reçu app ouverte : la SyncPill les rend À LA PLACE de la bannière, sans
- * doublon. [id] est celui de la notification, pour qu'un même push ne défile qu'une fois.
+ * doublon. [id] est celui de la notification, pour qu'un même push ne défile qu'une fois ; [personKey] est la
+ * personne restée inactive, la MÊME clé que l'annonce du socket : la pastille n'affiche qu'une ligne par personne.
  */
-data class InactivityForegroundNotice(val id: String, val label: String)
+data class InactivityForegroundNotice(val id: String, val label: String, val personKey: String = id)
 
 @Singleton
 class InactivityForegroundNotices @Inject constructor() {

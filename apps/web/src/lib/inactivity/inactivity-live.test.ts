@@ -11,7 +11,7 @@ import { INACTIVITY_STATE_TTL_MS, bindInactivityLive, clearInactivityState, inac
 
 /**
  * L'ALERTE D'INACTIVITÉ D'UN SANG, REÇUE SUR CET ONGLET (#18738) — `inactivity:alert` range l'état servi dans le
- * cache persisté, `inactivity:cleared` le retire, une alerte trop ancienne n'est plus servie, le rattrapage
+ * cache en mémoire (hors disque, #16984), `inactivity:cleared` le retire, une alerte trop ancienne n'est plus servie, le rattrapage
  * rejoue l'état à chaque socket accrochée, et l'annonce part à la pastille — jamais au fil.
  */
 

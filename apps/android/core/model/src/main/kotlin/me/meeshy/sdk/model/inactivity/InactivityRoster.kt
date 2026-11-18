@@ -86,11 +86,14 @@ public data class InactivityRosterSnapshot(
 
 private fun Long.iso(): String = Instant.ofEpochMilli(this).toString()
 
-/** La forme rangée d'un état servi. */
+/**
+ * La forme rangée d'un état servi. La dernière POSITION n'est jamais rangée sur le disque (#16984) :
+ * elle vit en mémoire, et le rattrapage de la connexion la rend.
+ */
 public fun InactivityAlertState.stored(): InactivityStoredState = InactivityStoredState(
     userId = userId,
     inactiveSince = inactiveSinceMillis.iso(),
     alertedAt = alertedAtMillis.iso(),
-    lastPosition = lastPosition?.let { InactivityLastPositionWire(it.latitude, it.longitude, it.accuracy, it.recordedAtMillis.iso()) },
+    lastPosition = null,
     lastBattery = lastBattery?.let { InactivityLastBatteryWire(it.level, it.measuredAtMillis.iso()) },
 )

@@ -33,6 +33,6 @@ class InactivityPushHandler @Inject constructor(
             .joinToString(" · ")
         if (label.isEmpty()) return false
         val id = "inactivity:push:${push.payload.notificationId ?: label}"
-        return notices.offer(InactivityForegroundNotice(id, label))
+        return notices.offer(InactivityForegroundNotice(id, label, personKey = push.payload.senderId ?: id))
     }
 }

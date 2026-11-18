@@ -21,6 +21,7 @@ class InactivityPushHandlerTest {
     private val alert = push(
         "type" to "inactivity_alert",
         "notificationId" to "n1",
+        "senderId" to "jacques",
         "title" to "Jacques n'a pas répondu à « Tout va bien ? »",
         "body" to "Aucune activité depuis 12 h",
     )
@@ -35,7 +36,11 @@ class InactivityPushHandlerTest {
         assertThat(handler.handle(alert)).isTrue()
         runCurrent()
         assertThat(received).isEqualTo(
-            InactivityForegroundNotice("inactivity:push:n1", "Jacques n'a pas répondu à « Tout va bien ? » · Aucune activité depuis 12 h"),
+            InactivityForegroundNotice(
+                "inactivity:push:n1",
+                "Jacques n'a pas répondu à « Tout va bien ? » · Aucune activité depuis 12 h",
+                personKey = "jacques",
+            ),
         )
         job.cancel()
     }

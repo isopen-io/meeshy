@@ -89,7 +89,8 @@ export const MINIMUM_SWIFT_ROUTES = 120;
  */
 // 166 le 2026-11-18 : les six contrôles d'appel passent par le relais `relayCallControl` (#19650), que `routeRelays` lit —
 // les cinq anciens y étaient sortis du balayage en silence (165 → 160), `call:conversation-changed` est neuf.
-export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 166;
+// 168 le 2026-11-18 : `inactivity:alert` et `inactivity:cleared` (#18738).
+export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 168;
 
 export type SwiftProperty = {
   /** La clé du FIL : le `CodingKeys` s'il existe, sinon le nom Swift. */

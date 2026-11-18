@@ -1,3 +1,4 @@
+import { HORS_DISQUE_PREFIXE } from '@/lib/api/souverain';
 import type { QueryClient } from '@tanstack/react-query';
 
 import type { InactivityAlertState, InactivityAnnouncement } from '@meeshy/shared/types/inactivity-check';
@@ -24,7 +25,11 @@ import type { SocketClient } from '@/lib/net/socket';
  * alerte ne s'affiche jamais ici.
  */
 
-export const INACTIVITY_STATES_QUERY_KEY = ['relations', 'inactivity'] as const;
+/**
+ * HORS DISQUE (#16984) : l'état porte la dernière POSITION d'un Sang — comme les partages de position,
+ * il vit en mémoire seulement, et le rattrapage de la connexion le reconstitue.
+ */
+export const INACTIVITY_STATES_QUERY_KEY = [HORS_DISQUE_PREFIXE, 'relations', 'inactivity'] as const;
 
 /** `INACTIVITY_CHECK_CONFIG.stateTtlSeconds` (72 h), écrit en littéral : le contrat importe `zod` classique. */
 export const INACTIVITY_STATE_TTL_MS = 259_200_000;

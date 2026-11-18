@@ -73,7 +73,7 @@ function avecSessions(app: BringTestApp) {
 }
 
 const alerte = (alertedTo: readonly string[] = [AUTRE]) =>
-  storeInactivity(memoire, MOI, { lastActivityAt: DEPUIS, phase: 'alerted', askedAt: new Date(NOW.getTime() - 60 * 60_000).toISOString(), alertedAt: ALERTE, alertedTo });
+  storeInactivity(memoire, MOI, { lastActivityAt: DEPUIS, phase: 'alerted', askedAt: new Date(NOW.getTime() - 60 * 60_000).toISOString(), alertedAt: ALERTE, alertedTo, deliveredTo: alertedTo });
 
 beforeEach(() => { cache.clear(); sets.clear(); freezeClock(NOW); });
 afterEach(() => thawClock());

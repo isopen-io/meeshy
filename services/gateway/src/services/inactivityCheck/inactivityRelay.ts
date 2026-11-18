@@ -133,12 +133,20 @@ async function dropWatch(deps: InactivityRelayDeps, userId: string): Promise<voi
   await watchInactivity(deps.cache, userId, false);
 }
 
-async function fanOutResponded(deps: InactivityRelayDeps, emitterId: string, announcement: InactivityAnnouncement, alertedTo: readonly string[]): Promise<void> {
+/**
+ * Le retour : « va bien » (annonce + notification) à ceux qui ont REÇU l'alerte et la voient encore ;
+ * un effacement silencieux à tous les autres de `alertedTo` — un Sang dont l'alerte était encore en
+ * vol n'apprend pas un retour qu'il n'a jamais su attendre, et l'éventail en retard le corrige s'il
+ * l'a atteint entre-temps (`fanOutAlert`).
+ */
+async function fanOutResponded(deps: InactivityRelayDeps, emitterId: string, announcement: InactivityAnnouncement, previous: StoredInactivity): Promise<void> {
   const audience = await audienceOf(deps, emitterId);
-  const departed = alertedTo.filter((id) => !audience.has(id));
-  departed.forEach((readerId) => emitCleared(deps, readerId, emitterId));
-  await retract(deps, departed.map((readerId) => ({ emitterId, readerId })));
-  await Promise.all(alertedTo.filter((id) => audience.has(id)).map(async (readerId) => {
+  const delivered = new Set(previous.deliveredTo ?? []);
+  const told = previous.alertedTo.filter((id) => audience.has(id) && delivered.has(id));
+  const silent = previous.alertedTo.filter((id) => !told.includes(id));
+  silent.forEach((readerId) => emitCleared(deps, readerId, emitterId));
+  await retract(deps, silent.filter((id) => !audience.has(id)).map((readerId) => ({ emitterId, readerId })));
+  await Promise.all(told.map(async (readerId) => {
     emitCleared(deps, readerId, emitterId, announcement);
     await deps.push({ readerId, emitterId, announcement }).catch(() => false);
   }));
@@ -162,12 +170,13 @@ export async function noteInactivityActivity(
     }
     const previous = await readInactivity(deps.cache, params.userId);
     const { state, announcement } = inactivityCheckStep(previous, { kind: 'activity', at });
-    await storeInactivity(deps.cache, params.userId, { ...state, alertedTo: announcement ? [] : previous?.alertedTo ?? [] });
+    const kept = announcement ? { alertedTo: [], deliveredTo: [] } : { alertedTo: previous?.alertedTo ?? [], deliveredTo: previous?.deliveredTo ?? [] };
+    await storeInactivity(deps.cache, params.userId, { ...state, ...kept });
     await watchInactivity(deps.cache, params.userId, true);
-    return { wasAsked: previous !== null && previous.phase !== 'idle' && state.phase === 'idle', announcement, alertedTo: previous?.alertedTo ?? [] };
+    return { wasAsked: previous !== null && previous.phase !== 'idle' && state.phase === 'idle', announcement, previous };
   });
   if (outcome?.wasAsked) await deps.retractWellness(params.userId).catch(() => undefined);
-  if (outcome?.announcement) await fanOutResponded(deps, params.userId, outcome.announcement, outcome.alertedTo);
+  if (outcome?.announcement && outcome.previous) await fanOutResponded(deps, params.userId, outcome.announcement, outcome.previous);
   return true;
 }
 
@@ -210,7 +219,7 @@ async function tickLocked(deps: InactivityRelayDeps, userId: string): Promise<Ti
   const announcement = due.announcement;
   if (!announcement) return IDLE;
   const readers = [...audience];
-  const stored: StoredInactivity = { ...due.state, alertedAt: announcement.at, alertedTo: readers };
+  const stored: StoredInactivity = { ...due.state, alertedAt: announcement.at, alertedTo: readers, deliveredTo: [] };
   await storeInactivity(deps.cache, userId, stored);
   return { alerted: true, fanOut: () => fanOutAlert(deps, userId, stored, announcement) };
 }
@@ -241,25 +250,35 @@ async function fanOutAlert(deps: InactivityRelayDeps, userId: string, stored: St
   const served = await Promise.all(stored.alertedTo.map(async (readerId) => [readerId, await servedStateFor(deps, userId, readerId, stored)] as const));
   const before = await readInactivity(deps.cache, userId);
   if (!stillAlerted(before, stored.alertedAt)) return;
-  const delivered = await Promise.all(served.map(async ([readerId, state]) => {
+  const delivered = (await Promise.all(served.map(async ([readerId, state]) => {
     if (!state || !before?.alertedTo.includes(readerId)) return null;
     emitAlert(deps, readerId, state, announcement);
     await deps.push({ readerId, emitterId: userId, announcement, state }).catch(() => false);
     return readerId;
-  }));
-  await correctAfterAlert(deps, userId, stored, delivered.filter((id): id is string => id !== null));
-}
-
-async function correctAfterAlert(deps: InactivityRelayDeps, userId: string, stored: StoredInactivity, delivered: readonly string[]): Promise<void> {
+  }))).filter((id): id is string => id !== null);
   if (delivered.length === 0) return;
-  const current = await readInactivity(deps.cache, userId);
-  if (stillAlerted(current, stored.alertedAt)) {
-    const departed = delivered.filter((id) => !current?.alertedTo.includes(id));
-    departed.forEach((readerId) => emitCleared(deps, readerId, userId));
-    await retract(deps, departed.map((readerId) => ({ emitterId: userId, readerId })));
+  const after = await withInactivityLock(deps.cache, userId, async () => {
+    const current = await readInactivity(deps.cache, userId);
+    if (!current || !stillAlerted(current, stored.alertedAt)) return { current, departed: [] as readonly string[] };
+    const reached = delivered.filter((id) => current.alertedTo.includes(id));
+    await storeInactivity(deps.cache, userId, { ...current, deliveredTo: [...new Set([...(current.deliveredTo ?? []), ...reached])] });
+    return { current, departed: delivered.filter((id) => !current.alertedTo.includes(id)) };
+  });
+  if (after.current && stillAlerted(after.current, stored.alertedAt)) {
+    after.departed.forEach((readerId) => emitCleared(deps, readerId, userId));
+    await retract(deps, after.departed.map((readerId) => ({ emitterId: userId, readerId })));
     return;
   }
-  const answeredAt = current?.phase !== 'alerted' ? current?.lastActivityAt ?? null : null;
+  await correctAfterAlert(deps, userId, stored, delivered, after.current);
+}
+
+/**
+ * L'alerte est partie, mais un « Je vais bien », une coupure ou une perte d'accès l'a périmée PENDANT
+ * l'envoi — et ces Sangs-là n'étaient pas encore dans `deliveredTo`, donc le retour ne les a pas
+ * comptés : le dernier mot chez eux est corrigé ici, une seule fois.
+ */
+async function correctAfterAlert(deps: InactivityRelayDeps, userId: string, stored: StoredInactivity, delivered: readonly string[], current: StoredInactivity | null): Promise<void> {
+  const answeredAt = current && current.phase !== 'alerted' ? current.lastActivityAt : null;
   if (answeredAt && stored.lastActivityAt && answeredAt !== stored.lastActivityAt) {
     const responded: InactivityAnnouncement = { kind: 'responded', inactiveSince: stored.lastActivityAt, at: answeredAt };
     const audience = await audienceOf(deps, userId);
@@ -276,6 +295,18 @@ async function correctAfterAlert(deps: InactivityRelayDeps, userId: string, stor
   }
   delivered.forEach((readerId) => emitCleared(deps, readerId, userId));
   await retract(deps, delivered.map((readerId) => ({ emitterId: userId, readerId })));
+}
+
+/**
+ * Un ÉTAT (sans annonce) vers un Sang, hors verrou : il ne part que si l'alerte est encore la même
+ * et que ce Sang la voit encore, et s'il a été périmé PENDANT l'envoi, l'effacement le suit — un
+ * rafraîchissement ne ressuscite jamais une alerte à laquelle la personne a répondu.
+ */
+async function emitStateIfStillAlerted(deps: InactivityRelayDeps, userId: string, readerId: string, alertedAt: string | null | undefined, state: InactivityAlertState): Promise<void> {
+  const fresh = (record: StoredInactivity | null): boolean => stillAlerted(record, alertedAt) && Boolean(record?.alertedTo.includes(readerId));
+  if (!fresh(await readInactivity(deps.cache, userId))) return;
+  emitAlert(deps, readerId, state);
+  if (!fresh(await readInactivity(deps.cache, userId))) emitCleared(deps, readerId, userId);
 }
 
 /**
@@ -353,7 +384,7 @@ export async function refreshInactivityBetween(deps: InactivityRelayDeps, params
       return null;
     });
     const state = gained ? await servedStateFor(deps, emitterId, readerId, gained) : null;
-    if (state) emitAlert(deps, readerId, state);
+    if (state && gained) await emitStateIfStillAlerted(deps, emitterId, readerId, gained.alertedAt, state);
   }
 }
 
@@ -368,7 +399,7 @@ export async function refreshInactivityServedOf(deps: InactivityRelayDeps, emitt
   const audience = await audienceOf(deps, emitterId);
   await Promise.all(stored.alertedTo.filter((id) => audience.has(id)).map(async (readerId) => {
     const state = await servedStateFor(deps, emitterId, readerId, stored);
-    if (state) emitAlert(deps, readerId, state);
+    if (state) await emitStateIfStillAlerted(deps, emitterId, readerId, stored.alertedAt, state);
   }));
 }
 

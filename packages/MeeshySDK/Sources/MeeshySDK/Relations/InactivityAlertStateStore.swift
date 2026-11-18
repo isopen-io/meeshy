@@ -76,12 +76,12 @@ public final class InactivityAlertStateStore: ObservableObject {
         var next = states
         change(&next)
         states = next
-        persistence.save(Array(next.values))
+        persistence.save(next.values.map(\.withoutPosition))
     }
 }
 
-/// La persistance par défaut : un JSON dans `UserDefaults`, borné à trois jours — un instant, et ce que le Sang reçoit
-/// déjà par ailleurs (dernière position, dernière batterie).
+/// La persistance par défaut : un JSON dans `UserDefaults`, borné à trois jours. La dernière POSITION n'y entre
+/// jamais (#16984) : elle vit en mémoire, et le rattrapage de la connexion la rend.
 public struct UserDefaultsInactivityAlertStatePersistence: InactivityAlertStatePersisting {
     private let key: String
     private let suiteName: String?

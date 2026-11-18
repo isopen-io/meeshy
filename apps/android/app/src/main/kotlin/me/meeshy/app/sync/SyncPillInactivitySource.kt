@@ -51,7 +51,7 @@ class StoreSyncPillInactivitySource @Inject constructor(
         store.notices.map { notice ->
             SyncPillInactivityItem(InactivityPillAnnouncements.idOf(notice.userId, notice.announcement), notice.userId, label(notice))
         },
-        foreground.notices.map { SyncPillInactivityItem(it.id, it.id, it.label) },
+        foreground.notices.map { SyncPillInactivityItem(it.id, it.personKey, it.label) },
     )
 
     private suspend fun label(notice: InactivityNotice): String {

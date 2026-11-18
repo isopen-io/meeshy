@@ -126,6 +126,11 @@ public struct InactivityAlertState: Sendable, Equatable, Codable {
         now.timeIntervalSince(alertedAt) > InactivityCheckContract.stateTtl
     }
 
+    /// Ce qui peut se ranger au repos : tout, sauf la dernière position (#16984).
+    public var withoutPosition: InactivityAlertState {
+        InactivityAlertState(userId: userId, inactiveSince: inactiveSince, alertedAt: alertedAt, lastBattery: lastBattery)
+    }
+
     private enum CodingKeys: String, CodingKey { case userId, inactiveSince, alertedAt, lastPosition, lastBattery }
 
     public init(from decoder: Decoder) throws {
