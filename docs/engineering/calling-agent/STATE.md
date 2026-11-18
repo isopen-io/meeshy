@@ -1473,3 +1473,46 @@ socket jusqu'au client.
 5. #18697, puis #18691 (mesurer d'abord sur le staging), puis #18728.
 6. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
 7. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 44 — 2026-11-18
+
+- **Base** : `origin/dev` @ `14404376`. Les PR #19521 et #19598 des cycles 42 et 43 avaient été fusionnées le 2026-11-18 à 07:40. #19472 est fermée ; #19471 reste ouverte (retrait des routes HTTP ou #18728).
+- **Branche** : `claude/determined-volta-i6uufl`.
+- **Objectif** : deux issues, #19520 et #19595, toutes deux dans la passerelle, sur des fichiers disjoints.
+  - **#19520** : une garde échoue si le traducteur publie un port en staging ou en prod, s'il est routé par Traefik, ou s'il déclare un `network_mode`.
+  - **#19595** : le résultat d'un job vocal garde ses `null` et ses `segments`.
+- **Livré** :
+  - **Garde `__tests__/unit/config/translator-never-published.test.ts`.** Elle couvre toute composition déployante de `infrastructure/docker/compose/`, c'est-à-dire tout ce qui n'est ni `dev`, ni `local`, ni `local-https`. Elle reconnaît le service traducteur à son nom ou à son image. Elle refuse :
+    - un `ports:` non vide ;
+    - `traefik.enable=true` ou un routeur Traefik ;
+    - **tout** `network_mode` (`host`, `service:`, `container:`, variable, commentaire en fin de ligne) ;
+    - `<<:` et `extends:` ;
+    - un service traducteur attendu introuvable, et une composition sans bloc de service reconnu (pas de vert vide).
+  - **Schéma `routes/voice/types.ts`.**
+    - Il déclare les segments en liste fermée, en suivant `TranscriptionSegment`.
+    - `audioUrl`, `audioBase64`, `voiceProfile`, `profileId` et `confidence` sont nullables.
+    - `voiceTranslationItemSchema` est extrait. `translatedAudios` de `POST /voice/translate` reçoit `items: voiceTranslatedAudioSchema`, ce qui ferme une fuite antérieure : `audioPath` (chemin disque serveur) et les clés internes `audio_path` et `fallback` partaient à côté de `result`.
+- **Tests** :
+  - **Garde** : `33 passed`. Elle avait d'abord `22 passed` ; les réserves de la QA y ont ajouté des témoins, rouges à `11 failed, 22 passed`. Les mutations des vrais compose de prod et de staging sont toutes tuées (ports, Traefik, renommage, `network_mode: host # …`, `services: # …`, `Services:`).
+  - **#19595** : rouge `5 failed, 12 passed`, que j'ai relancé moi-même en remettant l'ancien `types.ts` ; vert `17 passed`. Les réserves de la QA ont ajouté les témoins de `translatedAudios`, de `confidence` et de nullabilité.
+  - **Gates finaux, relancés par moi** :
+    - `translator-never-published`, `routes/voice` et `security/response-schema` : `15 suites, 307 passed` ;
+    - `tsc --noEmit` : 0 erreur.
+- **Rétrocompatibilité** : aucun client ne lit ces champs.
+  - Android garde `result` en `JsonElement?` (avec `explicitNulls = false` et `coerceInputValues`), et `VoiceApi.translate` rend du `JsonElement` sans appelant.
+  - iOS déclare les routes sans les décoder.
+  - Le web n'a aucun consommateur.
+  - Un `""` ou un `{}` devient `null`.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves. Le premier passage a trouvé 6 mutants survivants dans le schéma, et le mutant `network_mode: host # …` survivait sur le vrai compose de prod. Il a aussi relevé le vert vide de `services: # …` et la fuite de `translatedAudios`. Tout a été corrigé dans ce cycle, sauf :
+  - #19647 : la même fuite d'`audioPath` sur `POST /voice/transcribe` et sur la traduction de pièce jointe ;
+  - #19648 : le traducteur rend `audio_url=""` sur le chemin texte seul, et le type partagé n'a pas de `| null`.
+  - **Non vérifié** : le compose réellement déployé sur le serveur, injoignable depuis le conteneur. C'est le second critère de #19520, qui reste donc ouverte.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre : fusion à la main quand la CI est verte.
+1. #19647, petite et de sécurité, puis #19648.
+2. #19520, second critère : constat sur le serveur avec `sre-infra` (`docker port meeshy-translator`, `docker inspect … NetworkMode`), dans la même séance que la mesure des journaux d'accès pour #19471.
+3. #19597, #19596, puis #19473, #18668 et #18692 (messages d'exception bruts), #19381, #19253, #19294, #19295, #19255.
+4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
+5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.

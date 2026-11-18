@@ -18,6 +18,7 @@ import {
 } from '../../services/messaging/translationRequestCredit';
 import {
   voiceTranslationResultSchema,
+  voiceTranslatedAudioSchema,
   translationJobSchema,
   voiceAttachmentSchema,
   voiceTranscriptionSchema,
@@ -161,7 +162,7 @@ export function registerTranslationRoutes(
                 status: { type: 'string', description: 'Processing status', enum: ['completed', 'processing'] },
                 attachment: voiceAttachmentSchema,
                 transcription: voiceTranscriptionSchema,
-                translatedAudios: { type: 'array' },
+                translatedAudios: { type: 'array', items: voiceTranslatedAudioSchema },
                 result: voiceTranslationResultSchema
               }
             }
