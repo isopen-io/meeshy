@@ -47,9 +47,6 @@ export function pillSwipeOutcome({ travelled, sharing }: { readonly travelled: n
 const MARGIN = 12;
 const TAP_SLOP = 8;
 const KEY_STEP = 0.1;
-/** La barre de la bulle (micro, image dans l'image, sortie, raccrocher) : des cibles de 44. */
-export const BUBBLE_BAR = 48;
-const TARGET = 44;
 /** iOS : 25 % de zoom parcourt un palier (`magnificationSensitivity`). */
 const PINCH_SENSITIVITY = 4;
 /** Ctrl + molette : ce cumul de `deltaY` fait un palier (un pincement de pavé tactile en émet beaucoup de petits). */
@@ -61,15 +58,10 @@ const FRAME: Readonly<Record<BubbleTier, { readonly width: number; readonly vide
   large: { width: 216, video: 284, portrait: 152 },
 };
 
-/** Les rangées de la barre : autant de cibles de 44 par rangée que la largeur en porte. */
-export function bubbleBarRows(width: number, controls: number): number {
-  return Math.max(1, Math.ceil(controls / Math.max(1, Math.floor(width / TARGET))));
-}
-
-/** Vidéo : un cadre portrait ; audio : un carré pour l'avatar. La barre de commandes est comprise. */
-export function bubbleSize(kind: 'video' | 'portrait', tier: BubbleTier = 'small', controls = 3): Size {
+/** Vidéo : un cadre portrait ; audio : un carré pour l'avatar. #19696 — aucune barre de commandes : la personne et la durée seules. */
+export function bubbleSize(kind: 'video' | 'portrait', tier: BubbleTier = 'small'): Size {
   const frame = FRAME[tier];
-  return { width: frame.width, height: frame[kind] + bubbleBarRows(frame.width, controls) * BUBBLE_BAR };
+  return { width: frame.width, height: frame[kind] };
 }
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
@@ -178,7 +170,3 @@ export function writeBubblePlacement(storage: Pick<Storage, 'setItem'> | null, p
   }
 }
 
-/** « Sortie » dans la bulle (#9097) : là seulement où l'on choisit la sortie — `setSinkId` du navigateur, ou les routes natives de la coque. */
-export function offersOutputChoice(env: { readonly shell: boolean; readonly sinks: boolean }): boolean {
-  return env.shell || env.sinks;
-}

@@ -7,15 +7,15 @@ import MeeshySDK
 // fixe, et les gestes du billet en actions libellées (K32) — copier, QR, envoyer son profil, sans contact. Puis « Ses
 // adresses » : celles que la fiche me SERT, et seulement elles — le serveur filtre par cercle, rien n'est déduit ici.
 // Ouvrir une adresse dit d'abord qu'on quitte Meeshy. Sans pseudo, il n'a pas d'adresse : l'état vide (K38) le dit et
-// ramène à sa Vitrine (loi 8 : un état vide a toujours une sortie). Sous ses adresses, ce que mon cercle tient fermé, en
-// rangées verrouillées, puis « Ses communautés ouvertes » (#19444, `RelationLinksReach.swift`).
+// ramène à sa Vitrine (loi 8 : un état vide a toujours une sortie). Sous ses adresses, « Ses communautés ouvertes »
+// (#19444, `RelationLinksReach.swift`). Ce que mon cercle tient fermé ne se montre pas (#19674).
 
 extension RelationLinksFace {
     static func of(_ sheet: UserProfileSheet) -> RelationLinksFace {
         let profile = sheet.loader.profile
         return RelationLinksFace(
             link: ProfileLink(username: sheet.displayUser.username), name: sheet.displayUser.resolvedDisplayName,
-            addresses: profile?.addresses?.items ?? [], lockedAddresses: profile?.lockedAddresses?.groups ?? [],
+            addresses: profile?.addresses?.items ?? [],
             communities: profile?.openCommunities?.items ?? [], tint: sheet.accentTint,
             sendRoute: ProfileSendRoute.of(sheet), sendSheet: sheet.sendSheet, onLeave: { sheet.dismiss() },
             onCopy: { sheet.copyProfileLink($0) }, onShowVitrine: { sheet.face = .vitrine },
@@ -47,7 +47,6 @@ struct RelationLinksFace: View {
     let link: ProfileLink?
     let name: String
     let addresses: [ProfileAddress]
-    let lockedAddresses: [ServedLockedAddresses.Group]
     let communities: [ProfileOpenCommunity]
     let tint: Color
     let sendRoute: ProfileSendRoute?
@@ -80,7 +79,7 @@ struct RelationLinksFace: View {
                 }
             }
             .meeshyCascade(rank: 0)
-            if !addresses.isEmpty || !lockedAddresses.isEmpty { addressesSection.meeshyCascade(rank: 1) }
+            if !addresses.isEmpty { addressesSection.meeshyCascade(rank: 1) }
             if !communities.isEmpty {
                 RelationOpenCommunitiesSection(communities: communities, tint: tint, join: joinCommunity,
                                                onOpen: communityOpening)
@@ -172,10 +171,11 @@ struct RelationLinksFace: View {
             MeeshyLabeledAction(
                 title: ProfileRelationAction.sendProfile.title,
                 systemImage: ProfileRelationAction.sendProfile.systemImage,
+                isFeatured: true,
                 tint: tint,
                 action: { sharesProfile = true }
             )
-            MeeshyLabeledAction(title: RelationLinksCopy.contactless, systemImage: "wave.3.right", tint: tint,
+            MeeshyLabeledAction(title: RelationLinksCopy.contactless, systemImage: ProfileGlyph.contactless, tint: tint,
                                 action: { showsCode = .contactless })
         }
     }
@@ -184,9 +184,8 @@ struct RelationLinksFace: View {
 
     private var addressesSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            MeeshySectionHeader(title: RelationLinksCopy.addressesTitle, count: addresses.isEmpty ? nil : addresses.count)
-            if !addresses.isEmpty { servedAddresses }
-            RelationLockedAddressRows(groups: lockedAddresses, tint: tint)
+            MeeshySectionHeader(title: RelationLinksCopy.addressesTitle, count: addresses.count)
+            servedAddresses
         }
         .accessibilityIdentifier("profile.relation.links.addresses")
     }
@@ -235,7 +234,7 @@ struct RelationLinksCodeSheet: View {
                            caption: link.displayText, tint: tint, size: .large)
             MeeshyNote(link.displayText, lead: .systemImage("link"), tint: tint)
             if mode == .contactless {
-                MeeshyNote(RelationLinksCopy.noChip, form: .band, lead: .systemImage("wave.3.right"), tint: tint)
+                MeeshyNote(RelationLinksCopy.noChip, form: .band, lead: .systemImage(ProfileGlyph.contactless), tint: tint)
             }
             Spacer(minLength: 0)
         }

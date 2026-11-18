@@ -87,13 +87,13 @@ describe('je partage mon écran : l’appel réduit en capsule (#16664)', () => 
 });
 
 describe('la bulle', () => {
-  test('remplace la pastille : revenir, micro, raccrocher — et la consigne clavier pour la déplacer', () => {
+  test('remplace la pastille : la personne et la durée, revenir — aucun bouton d’appel (#19696) — et la consigne clavier pour la déplacer', () => {
     expect(overlay(call({ display: 'bubble' }))).toBe('');
     const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />);
     expect(html).toContain('data-call-bubble="right"');
     expect(html).toContain('aria-label="Revenir à l’appel"');
-    expect(html).toContain('data-call-bubble-control="mic"');
-    expect(html).toContain('data-call-bubble-control="hangup"');
+    expect(html).toContain('data-call-bubble-caption=""');
+    expect(html).not.toContain('data-call-bubble-control');
     expect(html).toContain('Les flèches déplacent la bulle');
     expect(html).not.toContain('data-call-screen');
     expect(html).not.toContain('aria-modal');
@@ -104,8 +104,10 @@ describe('la bulle', () => {
     expect(overlay(call({ display: 'bubble', phase: { kind: 'ended', reason: 'remote', detail: null } }))).toContain('data-call-screen="ended"');
   });
 
-  test('sans vidéo, le navigateur n’a rien à faire flotter : pas de bouton image dans l’image', () => {
-    expect(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />)).not.toContain('data-call-bubble-control="pip"');
+  test('#19696 — même avec une vidéo et une sortie au choix, la bulle ne porte ni micro, ni sortie, ni image dans l’image, ni raccrocher', () => {
+    const html = withSinks(true, () => renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', members: { 'u-a': peer({ cameraOn: true }) }, remoteStreams: { 'u-a': liveVideo } })} />));
+    expect(html).not.toContain('data-call-bubble-control');
+    expect(html).toContain('data-call-bubble-caption=""');
   });
 });
 
@@ -138,16 +140,6 @@ describe('un écran partagé dans la bulle (#8164)', () => {
     expect(sharing).toContain('data-call-stream="contain"');
     const camera = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', members: { 'u-a': peer({ cameraOn: true }) }, remoteStreams: { 'u-a': liveVideo } })} />);
     expect(camera).toContain('data-call-stream="cover"');
-  });
-});
-
-describe('la sortie audio depuis la bulle (#9097)', () => {
-  test('« Sortie audio » est dans la bulle là où le navigateur choisit la sortie ; absent sinon', () => {
-    const offered = withSinks(true, () => renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />));
-    expect(offered).toContain('data-call-bubble-control="output"');
-    expect(offered).toContain('aria-label="Sortie audio"');
-    expect(offered).toContain('aria-haspopup="dialog"');
-    expect(withSinks(false, () => renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />))).not.toContain('data-call-bubble-control="output"');
   });
 });
 

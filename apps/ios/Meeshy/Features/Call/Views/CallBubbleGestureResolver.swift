@@ -103,17 +103,6 @@ enum CallBubbleGestureResolver {
         return circleRadius + (rectangleCornerRadius - circleRadius) * clamped
     }
 
-    /// Opacité de la barre de contrôle persistante (mute/speaker/hangup) aux
-    /// paliers rectangle : invisible tant qu'on est encore proche du cercle
-    /// (`progress <= 0.5`), fondu progressif jusqu'à pleine opacité à
-    /// `progress == 1`.
-    static func controlBarOpacity(progress: CGFloat) -> Double {
-        let clamped = min(max(progress, 0), CGFloat(CallBubbleSizeTier.allCases.count - 1))
-        guard clamped > 0.5 else { return 0 }
-        guard clamped < 1 else { return 1 }
-        return Double((clamped - 0.5) / 0.5)
-    }
-
     /// Progression continue (0...3) correspondant à l'échelle cumulée d'un
     /// `MagnificationGesture` en cours, ancrée sur le palier de départ du
     /// geste. `scale == 1` (aucun pinch) retombe exactement sur

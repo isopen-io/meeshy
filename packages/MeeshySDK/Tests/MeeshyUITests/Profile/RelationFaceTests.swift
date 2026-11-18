@@ -65,16 +65,23 @@ final class RelationFaceTests: XCTestCase {
         XCTAssertFalse(RelationFace.writesARequest(linked: false, connection: .connected))
     }
 
-    /// Loi 12 — la face Actions est faite du kit : actions libellées K32, boutons K40, rangées verrouillées K37 ; plus
-    /// aucun bouton dessiné sur place, plus d'onglets en haut.
+    /// Loi 12 — la face Actions est faite du kit : actions libellées K32, boutons K40, l'échelle « Pour aller plus loin »
+    /// en médaillons K45 ; plus aucun bouton dessiné sur place, plus d'onglets en haut. Plus aucune rangée verrouillée
+    /// (#19674) : la fiche d'un autre ne montre pas ce que le cercle tient fermé, elle dit le chemin.
     func test_faces_areMadeOfTheKit() throws {
         let actions = try source("UserProfileSheet+ActionsFace.swift")
         XCTAssertTrue(actions.contains("MeeshyActionGrid"))
         XCTAssertTrue(actions.contains("ProfileTalkAction("))
-        XCTAssertTrue(actions.contains("ProfileLockedCapabilities("))
+        XCTAssertTrue(actions.contains("ProfileNextCircles("))
+        XCTAssertFalse(actions.contains("ProfileLockedCapabilities("))
         XCTAssertTrue(try source("ProfileTalkAction.swift").contains("MeeshyLabeledAction("))
         XCTAssertTrue(try source("ProfileActionsFaceParts.swift").contains("MeeshyButton("))
-        XCTAssertTrue(try source("ProfileLockedCapabilities.swift").contains("MeeshyLockedRow("))
+        XCTAssertTrue(try source("ProfileNextCircles.swift").contains("MeeshyMedallion("))
+        for file in ["UserProfileSheet+ActionsFace.swift", "UserProfileSheet+LinksFace.swift", "ProfileInCommonSection.swift",
+                     "ProfileNextCircles.swift"] {
+            XCTAssertFalse(try source(file).contains("MeeshyLockedRow("), "\(file)")
+            XCTAssertFalse(try source(file).contains("LockedRows("), "\(file)")
+        }
         XCTAssertTrue(try source("UserProfileSheet+LinksFace.swift").contains("MeeshyTicket("))
         let sheet = try source("UserProfileSheet.swift")
         XCTAssertTrue(sheet.contains("RelationFaceSelector(face: $face"))

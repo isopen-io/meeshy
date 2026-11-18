@@ -108,22 +108,6 @@ final class CallBubbleGestureResolverTests: XCTestCase {
         XCTAssertEqual(CallBubbleGestureResolver.interpolatedCornerRadius(progress: 0.5), 24)
     }
 
-    // MARK: - controlBarOpacity(progress:)
-
-    func test_controlBarOpacity_belowHalf_isZero() {
-        XCTAssertEqual(CallBubbleGestureResolver.controlBarOpacity(progress: 0), 0)
-        XCTAssertEqual(CallBubbleGestureResolver.controlBarOpacity(progress: 0.5), 0)
-    }
-
-    func test_controlBarOpacity_fadesInBetweenHalfAndOne() {
-        XCTAssertEqual(CallBubbleGestureResolver.controlBarOpacity(progress: 0.75), 0.5, accuracy: 0.0001)
-    }
-
-    func test_controlBarOpacity_atOrPastFirstRectangleTier_isFullyOpaque() {
-        XCTAssertEqual(CallBubbleGestureResolver.controlBarOpacity(progress: 1), 1)
-        XCTAssertEqual(CallBubbleGestureResolver.controlBarOpacity(progress: 2.5), 1)
-    }
-
     // MARK: - progress(startingTier:scale:)
 
     func test_progress_noScaleChange_returnsStartingTierRawValue() {
