@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { isForeignAddressLink, mayManageTrackingLink } from './link-ownership';
 import { TrackingLinkService, resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import {
-  TRACKING_TARGET_CARRIES_EMAIL_SECRET,
   TrackingTargetCarriesEmailSecretError,
   isServableTrackingTarget,
   servedTrackingLinkTarget
@@ -25,20 +24,18 @@ import {
 import {
   createTrackingLinkSchema,
   type CreateTrackingLinkBody,
-  enrichTrackingLink,
-  updateTrackingLinkLabelsSchema
+  enrichTrackingLink
 } from './types';
 
-/** Un libellé fourni est nettoyé ; `null` (effacer) et l'absence passent tels quels. */
-const propre = (v: string | null | undefined) => (v ? SecuritySanitizer.sanitizeText(v) : v);
 import { refuserAccesConversation, verdictAccesConversation, type MessagesDeRefusDAcces } from '../conversations/utils/access-control';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { validatePagination } from '../../utils/pagination';
 import { SecuritySanitizer } from '../../utils/sanitize';
-import { isHttpUrl } from '@meeshy/shared/utils/validation';
 import { permissionsService } from '../../services/admin/permissions.service';
 import { resolveLinkSharer } from './link-sharer';
 import { registerCheckTokenRoute } from './check-token';
+import { registerUpdateRoute } from './update-route';
+import { refuserCibleSecrete } from './secret-target-refusal';
 import { UserRoleEnum } from '@meeshy/shared/types';
 
 /**
@@ -48,16 +45,6 @@ import { UserRoleEnum } from '@meeshy/shared/types';
  * — et son schéma ne déclare que `200 · 201 · 400 · 500` : Fastify sérialise
  * donc ses refus SANS schéma, corps complet (le défaut de #4689). MESURÉ.
  */
-/**
- * Une cible porteuse d'un secret de lien d'e-mail (connexion, vérification,
- * réinitialisation…) est refusée en 400 typé (#10871). La réponse ne recopie
- * jamais l'adresse : elle porte le jeton.
- */
-const refuserCibleSecrete = (reply: FastifyReply) =>
-  sendBadRequest(reply, 'Cette adresse ne peut pas être la cible d\'un lien suivi', {
-    code: TRACKING_TARGET_CARRIES_EMAIL_SECRET
-  });
-
 /** Le nom, les UTM, l'échéance et le choix des visiteurs uniques — nettoyés, communs aux deux formes. */
 const linkLabels = (body: CreateTrackingLinkBody) => ({
   name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
@@ -896,180 +883,6 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
     }
   });
 
-  /**
-   * 10. Mettre à jour un lien de tracking
-   * PATCH /api/tracking-links/:token
-   */
-  fastify.patch('/tracking-links/:token', {
-    onRequest: [authRequired],
-    schema: {
-      description: 'Update tracking link properties. Only the creator can update their links. Allows changing the original URL, expiration date, active status, or even the token itself. All fields are optional - only provided fields will be updated.',
-      tags: ['tracking-links'],
-      summary: 'Update tracking link',
-      params: {
-        type: 'object',
-        required: ['token'],
-        properties: {
-          token: {
-            type: 'string',
-            pattern: '^[a-zA-Z0-9_-]{2,50}$',
-            description: 'Current unique alphanumeric tracking token (2-50 chars)'
-          }
-        }
-      },
-      body: {
-        type: 'object',
-        properties: {
-          originalUrl: {
-            type: 'string',
-            format: 'uri',
-            description: 'New original URL to redirect to'
-          },
-          expiresAt: {
-            type: 'string',
-            format: 'date-time',
-            nullable: true,
-            description: 'New expiration date (null to remove expiration)'
-          },
-          isActive: {
-            type: 'boolean',
-            description: 'Whether the link is active'
-          },
-          name: { type: 'string', maxLength: 32, nullable: true, description: 'Link display name (null clears it)' },
-          campaign: { type: 'string', maxLength: 100, nullable: true, description: 'UTM campaign (null clears it)' },
-          source: { type: 'string', maxLength: 100, nullable: true, description: 'UTM source (null clears it)' },
-          medium: { type: 'string', maxLength: 100, nullable: true, description: 'UTM medium (null clears it)' },
-          newToken: {
-            type: 'string',
-            pattern: '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}[a-zA-Z0-9]$',
-            description: 'New token (2-50 chars, cannot start or end with dash)'
-          }
-        }
-      },
-      response: {
-        200: {
-          description: 'Tracking link updated successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                trackingLink: {
-                  ...trackingLinkSchema,
-                  properties: {
-                    ...trackingLinkSchema.properties,
-                    fullUrl: { type: 'string', description: 'Complete tracking URL' }
-                  }
-                }
-              }
-            },
-            message: { type: 'string', example: 'Lien mis à jour avec succès' }
-          }
-        },
-        400: {
-          description: 'Invalid request data (bad URL or token format)',
-          ...errorResponseSchema
-        },
-        403: {
-          description: 'Access denied - only creator can update',
-          ...errorResponseSchema
-        },
-        404: {
-          description: 'Tracking link not found',
-          ...errorResponseSchema
-        },
-        409: {
-          description: 'Conflict - new token already exists',
-          ...errorResponseSchema
-        },
-        500: {
-          description: 'Internal server error',
-          ...errorResponseSchema
-        }
-      }
-    }
-  }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
-    try {
-      const { token } = request.params as { token: string };
-      const body = request.body as {
-        originalUrl?: string;
-        expiresAt?: string | null;
-        isActive?: boolean;
-        newToken?: string;
-      };
-      const libelles = updateTrackingLinkLabelsSchema.safeParse(body ?? {});
-      if (!libelles.success) {
-        return sendBadRequest(reply, 'Nom (32 caractères) ou UTM (100 caractères) invalide');
-      }
-
-      if (!isRegisteredUser(request.authContext)) {
-        return sendForbidden(reply, 'Utilisateur enregistré requis');
-      }
-
-      const userId = request.authContext.registeredUser!.id;
-
-      const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
-
-      if (!trackingLink || isForeignAddressLink(trackingLink, request.authContext)) {
-        return sendNotFound(reply, 'Lien de tracking non trouvé');
-      }
-
-      if (!mayManageTrackingLink(trackingLink, { id: userId, role: request.authContext.registeredUser!.role })) {
-        return sendForbidden(reply, 'Seul le créateur peut modifier ce lien');
-      }
-
-      if (body.newToken && !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}[a-zA-Z0-9]$/.test(body.newToken)) {
-        return sendBadRequest(reply, 'Le token doit contenir 2-50 caractères alphanumériques et ne peut pas commencer ou finir par un tiret');
-      }
-
-      const isPrivileged = permissionsService.hasPermission(
-        request.authContext.registeredUser!.role as UserRoleEnum, 'canModerateContent'
-      );
-      if (body.newToken && body.newToken.length < 5 && !isPrivileged) {
-        return sendBadRequest(reply, 'Le token doit contenir au moins 5 caractères');
-      }
-
-      // `new URL()` ne fait que parser : `javascript:` et `data:` passaient,
-      // et l'édition rouvrait donc le vecteur que la création interdit.
-      if (body.originalUrl && !isHttpUrl(body.originalUrl)) {
-        return sendBadRequest(reply, 'URL invalide : http(s) uniquement');
-      }
-      if (body.originalUrl !== undefined && !isServableTrackingTarget(body.originalUrl)) {
-        return refuserCibleSecrete(reply);
-      }
-
-      const updatedLink = await trackingLinkService.updateTrackingLink({
-        token,
-        originalUrl: body.originalUrl,
-        expiresAt: body.expiresAt === null ? null : (body.expiresAt ? new Date(body.expiresAt) : undefined),
-        isActive: body.isActive,
-        newToken: body.newToken,
-        name: propre(libelles.data.name),
-        campaign: propre(libelles.data.campaign),
-        source: propre(libelles.data.source),
-        medium: propre(libelles.data.medium)
-      });
-
-      return sendSuccess(reply, { trackingLink: enrichTrackingLink(updatedLink) }, { message: 'Lien mis à jour avec succès' });
-
-    } catch (error) {
-      if (error instanceof TrackingTargetCarriesEmailSecretError) {
-        return refuserCibleSecrete(reply);
-      }
-      if (error instanceof Error) {
-        if (error.message === 'Tracking link not found') {
-          return sendNotFound(reply, 'Lien de tracking non trouvé');
-        }
-        if (error.message === 'Token already exists') {
-          return sendConflict(reply, 'Ce token existe déjà');
-        }
-      }
-
-      logError(fastify.log, 'Update tracking link error:', error);
-      return sendInternalError(reply, 'Erreur interne du serveur');
-    }
-  });
-
+  registerUpdateRoute({ fastify, trackingLinkService, authRequired });
   registerCheckTokenRoute({ fastify, trackingLinkService, authRequired });
 }

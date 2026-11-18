@@ -28,6 +28,8 @@ import {
   type TrackingLinkClickedEventData,
 } from '@meeshy/shared/types/socketio-events';
 import type { ServerEmitIO } from './serverEmit';
+import { logger } from '../utils/logger';
+import { guardedTimeout } from '../utils/guarded-timer';
 
 export type LinkActivityScheduler = {
   readonly defer: (run: () => void) => void;
@@ -36,7 +38,7 @@ export type LinkActivityScheduler = {
 
 const realScheduler: LinkActivityScheduler = {
   defer: (run) => { setImmediate(run); },
-  after: (ms, run) => { setTimeout(run, ms).unref?.(); },
+  after: (ms, run) => { guardedTimeout({ name: 'link-activity-window', afterMs: ms, logger, run }).unref?.(); },
 };
 
 export const LINK_ACTIVITY_WINDOW_MS = 1000;
