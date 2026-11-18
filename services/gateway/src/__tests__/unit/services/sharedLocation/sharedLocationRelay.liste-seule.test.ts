@@ -19,6 +19,8 @@ import {
   startSharedLocation,
   updateSharedLocation,
 } from '../../../../services/sharedLocation/sharedLocationRelay';
+import { setLocationGhost, type LocationGhostDb } from '../../../../services/sharedLocation/locationGhost';
+import { sharedBatteryGrantsAmong } from '../../../../services/sharedLocation/sharedLocationBattery';
 import { AMI, CONNAISSANCE, EMETTEUR, HEURE, monde, NON_CHOISI, PARIS, PLUS_LOIN, PROCHE, SANG, T0 } from '../../../helpers/shared-location-relay-world';
 
 const MINUTE = 60_000;
@@ -205,5 +207,56 @@ describe('la troncature tient à travers la liste seule', () => {
     await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: CONNAISSANCE });
 
     expect(changes(m, CONNAISSANCE).map((e) => [e.data.latitude, e.data.updatedAt])).toEqual([[PARIS.latitude, iso(T0)]]);
+  });
+});
+
+describe('la liste seule garde ce que la session remplacée retenait (fusion avec #19203 et #19204)', () => {
+  it('après la sortie du fantôme, une liste seule ne sert pas la position prise en fantôme', async () => {
+    const m = monde();
+    const regler = (ghost: boolean) =>
+      setLocationGhost({ db: m.deps.prisma as unknown as LocationGhostDb, relay: m.deps, report: () => undefined }, EMETTEUR, ghost);
+    await regler(true);
+    await demarrer(m);
+    m.avancer(MINUTE);
+    await updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN);
+    m.avancer(MINUTE);
+    await regler(false);
+    m.emissions.length = 0;
+
+    const ack = await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }, { userId: PROCHE, precision: 'neighborhood' }], durationMinutes: 60 });
+
+    expect(ack.success).toBe(true);
+    expect(changes(m, AMI)).toEqual([]);
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toEqual([]);
+    m.avancer(MINUTE);
+    await updateSharedLocation(m.deps, EMETTEUR, PARIS);
+    expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items.map((item) => item.latitude)).toEqual([PARIS.latitude]);
+  });
+
+  const avecBatterie = async (m: ReturnType<typeof monde>, shareBattery: boolean) => {
+    await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }, { userId: PROCHE }], durationMinutes: 60, position: PARIS, shareBattery });
+    m.avancer(MINUTE);
+  };
+  const accordes = async (m: ReturnType<typeof monde>) => [...((await sharedBatteryGrantsAmong(m.deps.cache, [EMETTEUR], m.deps.now())).get(EMETTEUR) ?? [])].sort();
+
+  it('une liste seule sans la clé garde la batterie aux restants', async () => {
+    const m = monde();
+    await avecBatterie(m, true);
+
+    await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }], durationMinutes: 60 });
+
+    expect(await accordes(m)).toEqual([AMI]);
+  });
+
+  it('une liste seule peut retirer la batterie, jamais l\'ajouter', async () => {
+    const retiree = monde();
+    await avecBatterie(retiree, true);
+    await startSharedLocation(retiree.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }], durationMinutes: 60, shareBattery: false });
+    expect(await accordes(retiree)).toEqual([]);
+
+    const jamais = monde();
+    await avecBatterie(jamais, false);
+    await startSharedLocation(jamais.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }], durationMinutes: 60, shareBattery: true });
+    expect(await accordes(jamais)).toEqual([]);
   });
 });

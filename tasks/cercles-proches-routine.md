@@ -1332,3 +1332,17 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   Gates rejoués sur l'arbre fusionné : passerelle `sharedLocation/` + porte socket 122 verts ; web
   `src/lib/shared-locations/` 140 verts.
 - Prochain lot recommandé : #19287 (iOS puis Android de la liste seule), puis #18714 points 1 et 2, puis #19288.
+
+## 2026-11-18 — réveil de 1 h : #19289 recalée sur dev, la liste seule garde le fantôme et la batterie
+
+- Reprise : deux PR cercles ouvertes, aucune n'avait bougé depuis 23 h 15. #19289 était en conflit avec `dev`
+  (`sharedLocationRelay.ts`, `shared-location.ts`) : `dev` venait d'apporter le fantôme global (#19203, `servableFrom`),
+  la batterie pendant le partage et « prévenir » (#19204, `shareBattery`, `notifyRecipients`).
+- Résolution à la main, les deux côtés gardés. Le contrat garde la position facultative ET les deux clés de #19204. La
+  liste seule reprend désormais de la session remplacée son seuil de sortie du fantôme (sans lui, une liste seule faite
+  après la sortie aurait servi le point pris EN fantôme : fuite trouvée à la fusion, témoin rouge prouvé) et sa
+  batterie, qu'elle peut retirer (`shareBattery: false`) mais jamais ajouter ; « prévenir » ne part pas sur une liste
+  seule (elle n'ajoute personne) ; la batterie est rejouée à partir de la session remplacée relue.
+- Gates sur l'arbre fusionné : passerelle `sharedLocation/` 187 verts (3 témoins neufs, 2 rouges sans le correctif),
+  porte socket + relations + fantôme + blocage 195 verts, `tsc` vert ; web `src/lib/shared-locations/` 140 verts,
+  `tsc` vert ; shared `types` 1 795 verts, gardes `__tests__/ci` 215 verts.

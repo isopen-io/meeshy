@@ -29,6 +29,14 @@ export const BLOOD_PROXIMITY_FRESH_MINUTES = 60;
 /** Au-delà, dans les 24 h, d'un même observateur : le journal le signale à l'observé. */
 export const BLOOD_CONSULTATION_EXCESS_PER_DAY = 20;
 
+/**
+ * La carte de tous mes proches (#19202) relit le dernier point de chaque Sang à chaque
+ * rafraîchissement : une lecture n'écrit au journal que si aucune consultation de ce Sang
+ * par ce lecteur n'y figure depuis ce délai. Une carte ouverte une heure laisse quatre lignes,
+ * pas une par rafraîchissement.
+ */
+export const BLOOD_MAP_CONSULTATION_WINDOW_MINUTES = 15;
+
 export const bloodLocationPayloadSchema = z.object({
   latitude: z.number().finite().min(-90).max(90),
   longitude: z.number().finite().min(-180).max(180),
