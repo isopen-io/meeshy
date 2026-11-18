@@ -43,6 +43,8 @@ struct ProfileLinksPresentations: ViewModifier {
     @Environment(\.meeshyConversationList) private var conversationList
     /// « Mon profil » choisi dans « Nouveau lien » : la carte s'ouvre une fois la feuille partie.
     @State private var opensCardAfterSheet = false
+    /// « Mettre en story » choisi sur la carte : le composer s'ouvre semé une fois la carte partie.
+    @State private var storyAfterCard = DeferredSheetFollowUp<UIImage>()
 
     private var card: Binding<ProfileCardMode?> {
         Binding(get: { presented?.cardMode }, set: { mode in presented = mode.map { .card($0) } })
@@ -54,9 +56,10 @@ struct ProfileLinksPresentations: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .fullScreenCover(item: card) { mode in
+            .fullScreenCover(item: card, onDismiss: { openStoryIfAsked() }) { mode in
                 if let link {
-                    ProfileCardView(user: user, link: link, accentColor: accentColor, mode: mode)
+                    ProfileCardView(user: user, link: link, accentColor: accentColor, mode: mode,
+                                    onStory: { image in storyAfterCard.schedule(image) })
                         .closesForConversationOpening(.sheet)
                 }
             }
@@ -83,6 +86,11 @@ struct ProfileLinksPresentations: ViewModifier {
         case .card:
             EmptyView()
         }
+    }
+
+    private func openStoryIfAsked() {
+        guard let image = storyAfterCard.consume() else { return }
+        NotificationCenter.default.post(name: .openStoryComposerSeeded, object: image)
     }
 
     private func openCardIfAsked() {

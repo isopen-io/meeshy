@@ -358537,43 +358537,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يعرض رمز QR هذا واجهتي العامة"
+            "value": "يعرض رمز QR هذا"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieser QR-Code zeigt meine öffentliche Vitrine"
+            "value": "Dieser QR-Code zeigt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This QR code shows my public showcase"
+            "value": "This QR code shows"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este QR muestra mi escaparate público"
+            "value": "Este QR muestra"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce QR montre ma vitrine publique"
+            "value": "Ce QR montre"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo QR mostra la mia vetrina pubblica"
+            "value": "Questo QR mostra"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este QR mostra minha vitrine pública"
+            "value": "Este QR mostra"
           }
         }
       }
@@ -365828,6 +365828,476 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sem o chip"
+          }
+        }
+      }
+    },
+    "profile.card.story": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ضعها في قصة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In die Story"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to story"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Poner en historia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre en story"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metti nella storia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pôr no story"
+          }
+        }
+      }
+    },
+    "profile.card.qrShows.showcase": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الواجهة العامة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffentliche Vitrine"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Public showcase"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escaparate público"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vitrine publique"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vetrina pubblica"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vitrine pública"
+          }
+        }
+      }
+    },
+    "profile.card.qrShows.showcase.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما يراه الجميع منك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was alle von dir sehen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What everyone sees of you"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo que todos ven de ti"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce que tout le monde voit de toi"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ciò che tutti vedono di te"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que todo mundo vê de você"
+          }
+        }
+      }
+    },
+    "profile.card.qrShows.invitation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دعوة للانضمام إليّ"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einladung zu mir"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invitation to join me"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invitación a unirte a mí"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invitation à me rejoindre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invito a raggiungermi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convite para me encontrar"
+          }
+        }
+      }
+    },
+    "profile.card.qrShows.invitation.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المسح يرسل طلب صداقة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scannen sendet eine Freundschaftsanfrage"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanning sends a friend request"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escanear envía una solicitud de amistad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanner envoie une demande d'amis"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scansionare invia una richiesta di amicizia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escanear envia um pedido de amizade"
+          }
+        }
+      }
+    },
+    "profile.card.invitation.preparing": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدعوة قيد التحضير: يعرض الرمز واجهتك في الأثناء"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Einladung wird vorbereitet: Bis dahin zeigt der QR-Code deine Vitrine"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The invitation is being prepared: the QR code shows your showcase meanwhile"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La invitación se está preparando: mientras tanto, el QR muestra tu escaparate"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'invitation se prépare : le QR montre ta vitrine en attendant"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'invito è in preparazione: nel frattempo il QR mostra la tua vetrina"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O convite está sendo preparado: enquanto isso, o QR mostra sua vitrine"
+          }
+        }
+      }
+    },
+    "profile.card.invitation.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الدعوة غير متاحة: يعرض الرمز واجهتك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Einladung ist nicht verfügbar: Der QR-Code zeigt deine Vitrine"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The invitation isn't available: the QR code shows your showcase"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La invitación no está disponible: el QR muestra tu escaparate"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'invitation n'est pas disponible : le QR montre ta vitrine"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'invito non è disponibile: il QR mostra la tua vetrina"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O convite não está disponível: o QR mostra sua vitrine"
+          }
+        }
+      }
+    },
+    "profile.card.invitation.live": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صالحة بضع دقائق، وتتجدد ما دامت البطاقة مفتوحة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einige Minuten gültig, erneuert, solange die Karte offen bleibt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valid for a few minutes, renewed while the card stays open"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Válida unos minutos, se renueva mientras la tarjeta siga abierta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valable quelques minutes, renouvelée tant que la carte reste ouverte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valido qualche minuto, rinnovato finché la scheda resta aperta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Válido por alguns minutos, renovado enquanto o cartão ficar aberto"
+          }
+        }
+      }
+    },
+    "profile.scanner.invitation.sent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُرسل طلب الصداقة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freundschaftsanfrage gesendet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Friend request sent"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solicitud de amistad enviada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demande d'ami envoyée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Richiesta di amicizia inviata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pedido de amizade enviado"
+          }
+        }
+      }
+    },
+    "profile.scanner.invitation.expired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تعد هذه الدعوة صالحة: إليك واجهته"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Einladung ist nicht mehr gültig: Hier ist die Vitrine"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This invitation is no longer valid: here is the showcase"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta invitación ya no es válida: aquí está su escaparate"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette invitation n'est plus valable : voici sa vitrine"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo invito non è più valido: ecco la sua vetrina"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este convite não é mais válido: aqui está a vitrine"
           }
         }
       }

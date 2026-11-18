@@ -6,6 +6,7 @@ import MeeshyUI
 /// « Scanner un QR » (planches `Moi-Liens`, `Carte-Profil`, `Sans-Contact`) : la caméra lit un QR ; un lien Meeshy —
 /// `meeshy.me/@pseudo`, un lien de partage, de communauté, de suivi — s'ouvre dans l'app, par le même routeur que les
 /// liens universels. Un QR qui ne mène pas à Meeshy le dit, et la caméra reprend : rien ne part vers un site inconnu.
+/// Une invitation (`meeshy.me/@pseudo?ce=<jeton>`, #19487) ouvre la fiche et accepte le jeton : la demande d'ami part.
 struct ProfileQRScannerSheet: View {
     var onOpened: () -> Void = {}
 
@@ -72,7 +73,15 @@ struct ProfileQRScannerSheet: View {
         HapticFeedback.success()
         dismiss()
         onOpened()
-        _ = DeepLinkRouter.shared.handle(url: url)
+        guard let invitation = ProfileInvitationLink.invitation(in: url) else {
+            _ = DeepLinkRouter.shared.handle(url: url)
+            return
+        }
+        _ = DeepLinkRouter.shared.handle(url: invitation.profile)
+        Task { @MainActor in
+            let outcome = await ProfileInvitationAcceptance.accept(invitation.token)
+            ProfileInvitationAcceptance.announce(outcome)
+        }
     }
 
     private func openSettings() {

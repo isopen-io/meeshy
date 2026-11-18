@@ -20,7 +20,8 @@ nonisolated enum ProfileCardMode: String, Hashable, Identifiable, CaseIterable {
 
 /// Ma carte de profil en plein écran (#18871, planches `Carte-Profil` et `Sans-Contact`) : sans sélecteur de faces
 /// (loi 5). Le QR (K31) suit l'inclinaison du téléphone et pousse la luminosité ; l'adresse se lit dessous en texte,
-/// jamais seulement dans le code. Le QR ne montre que ma vitrine publique.
+/// jamais seulement dans le code. « Ce QR montre » (K47, #19487) choisit sa charge : ma vitrine publique, ou une
+/// invitation dont le jeton bref fait partir une demande d'ami au scan. « Mettre en story » sème la carte dans le composer.
 ///
 /// Le sans contact (#19484) : les deux téléphones se trouvent de proche en proche (`ContactlessExchangeSection`),
 /// chacun choisit ce qu'il donne, et le jeton bref de la passerelle porte le choix. Sous le parcours, « Sans la puce »
@@ -31,8 +32,11 @@ struct ProfileCardView: View {
     let link: ProfileLink
     let accentColor: String
     @State var mode: ProfileCardMode
+    /// « Mettre en story » : l'image de la carte, remise à l'hôte qui ouvre le composer une fois la carte partie.
+    var onStory: (UIImage) -> Void = { _ in }
 
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var qr = ProfileCardQRModel()
     @State private var scannerShown = false
     @State private var sent: SharedContentWrapper?
     @State private var exported: ProfileCardExport?
@@ -61,6 +65,7 @@ struct ProfileCardView: View {
         .sheet(isPresented: $scannerShown) { ProfileQRScannerSheet(onOpened: { dismiss() }) }
         .sheet(item: $exported) { export in ShareSheet(activityItems: export.items) }
         .modifier(MeeshySendSheet(sent: $sent, onOpenConversation: { dismiss() }))
+        .task(id: qr.state.shows) { await qr.keepInvitationFresh() }
         .accessibilityIdentifier("profile.card")
     }
 
@@ -88,12 +93,35 @@ struct ProfileCardView: View {
             MeeshyNote(link.displayText, lead: .systemImage("link"), tint: accent)
             MeeshyNote(ProfileLinksCopy.tiltHint, lead: .systemImage("iphone.radiowaves.left.and.right"))
             actions
-            MeeshyNote(ProfileLinksCopy.qrShows, lead: .systemImage("globe"))
+            qrShowsChoice
         }
     }
 
+    /// « Ce QR montre » (K47) : la vitrine, ou l'invitation dont la charge porte le jeton bref. Tant que l'invitation
+    /// n'est pas servie, le QR garde la vitrine et la note le dit.
+    private var qrShowsChoice: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            MeeshySectionHeader(title: ProfileLinksCopy.qrShows, form: .overline)
+            MeeshyChoiceTiles(label: ProfileLinksCopy.qrShows, items: ProfileCardQRShows.allCases.map { $0.choiceItem },
+                              selection: .single(qr.state.shows.rawValue), columns: 1, format: .wide, tint: accent,
+                              onSelect: { id in if let shows = ProfileCardQRShows(rawValue: id) { qr.choose(shows) } })
+                .accessibilityIdentifier("profile.card.qrShows")
+            if let note = invitationNote {
+                MeeshyNote(note.text, kind: note.kind, lead: .systemImage("person.badge.plus"), announces: true)
+                    .accessibilityIdentifier("profile.card.qrShows.note")
+            }
+        }
+    }
+
+    private var invitationNote: (text: String, kind: MeeshyNoteKind)? {
+        if qr.state.isInvitationUnavailable { return (ProfileLinksCopy.invitationUnavailable, .warn) }
+        if qr.state.isPreparingInvitation { return (ProfileLinksCopy.invitationPreparing, .neutral) }
+        if qr.state.carriesInvitation(for: link) { return (ProfileLinksCopy.invitationLive, .neutral) }
+        return nil
+    }
+
     private func codeCard(size: MeeshyCodeCardSize) -> some View {
-        MeeshyCodeCard(payload: link.url.absoluteString, label: ProfileLinksCopy.qrLabel, caption: link.displayText,
+        MeeshyCodeCard(payload: qr.state.payload(for: link).absoluteString, label: ProfileLinksCopy.qrLabel, caption: link.displayText,
                        tint: accent, size: size, center: { avatar(32) }, header: { identity })
     }
 
@@ -115,20 +143,41 @@ struct ProfileCardView: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// Les actions de la planche, dans son ordre. Elles portent l'adresse de ma VITRINE, qui dure : le jeton de
+    /// l'invitation ne vit que le temps de la carte et ne part ni dans une image, ni dans une story.
     private var actions: some View {
-        MeeshyActionGrid(columns: .fixed(4)) {
+        MeeshyActionGrid(columns: .adaptive(max: ProfileCardAction.allCases.count)) {
+            ForEach(ProfileCardAction.offered(canSend: user != nil), id: \.self) { action in
+                labeledAction(action)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func labeledAction(_ action: ProfileCardAction) -> some View {
+        switch action {
+        case .copy:
             MeeshyLabeledAction(title: ProfileLinksCopy.copyAddress, systemImage: "doc.on.doc", tint: accent,
                                 hint: link.displayText,
                                 action: { LinksClipboard.copy(link.url.absoluteString, message: ProfileLinksCopy.copied) })
-            if let user {
-                MeeshyLabeledAction(title: ProfileLinksCopy.sendInConversation, systemImage: "paperplane", tint: accent,
-                                    action: { sent = SharedContentWrapper(subject: .card(ProfileLinksShare.card(of: user, link: link))) })
-            }
+        case .send:
+            MeeshyLabeledAction(title: ProfileLinksCopy.sendInConversation, systemImage: "paperplane", tint: accent,
+                                action: { sendCard() })
+        case .story:
+            MeeshyLabeledAction(title: ProfileLinksCopy.putInStory, systemImage: "plus.circle", tint: accent,
+                                action: { putInStory() })
+        case .save:
             MeeshyLabeledAction(title: ProfileLinksCopy.saveImage, systemImage: "square.and.arrow.down", tint: accent,
                                 action: { Task { await saveImage() } })
+        case .more:
             MeeshyLabeledAction(title: ProfileLinksCopy.more, systemImage: "ellipsis", tint: accent,
                                 action: { exported = ProfileCardExport(items: [link.url]) })
         }
+    }
+
+    private func sendCard() {
+        guard let user else { return }
+        sent = SharedContentWrapper(subject: .card(ProfileLinksShare.card(of: user, link: link)))
     }
 
     // MARK: - Sans contact
@@ -179,6 +228,20 @@ struct ProfileCardView: View {
         } else {
             exported = ProfileCardExport(items: [image])
         }
+    }
+
+    /// La carte en scène 9:16 : l'hôte la sème dans le composer une fois la carte refermée.
+    private func putInStory() {
+        let renderer = ImageRenderer(content: storyScene)
+        renderer.scale = 3
+        guard let image = renderer.uiImage else { return }
+        HapticFeedback.light()
+        onStory(image)
+        dismiss()
+    }
+
+    private var storyScene: some View {
+        ProfileCardStoryScene(link: link, displayName: user?.displayName, accent: accent)
     }
 
     private var plate: some View {

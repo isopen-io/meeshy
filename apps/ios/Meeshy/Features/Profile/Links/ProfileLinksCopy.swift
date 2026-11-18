@@ -210,8 +210,32 @@ nonisolated enum ProfileLinksCopy {
         String(localized: "profile.card.saved", defaultValue: "Image enregistrée", bundle: .main)
     }
     static var more: String { String(localized: "profile.card.more", defaultValue: "Plus", bundle: .main) }
+    static var putInStory: String {
+        String(localized: "profile.card.story", defaultValue: "Mettre en story", bundle: .main)
+    }
     static var qrShows: String {
-        String(localized: "profile.card.qrShows", defaultValue: "Ce QR montre ma vitrine publique", bundle: .main)
+        String(localized: "profile.card.qrShows", defaultValue: "Ce QR montre", bundle: .main)
+    }
+    static var qrShowsShowcase: String {
+        String(localized: "profile.card.qrShows.showcase", defaultValue: "Vitrine publique", bundle: .main)
+    }
+    static var qrShowsShowcaseDetail: String {
+        String(localized: "profile.card.qrShows.showcase.detail", defaultValue: "Ce que tout le monde voit de toi", bundle: .main)
+    }
+    static var qrShowsInvitation: String {
+        String(localized: "profile.card.qrShows.invitation", defaultValue: "Invitation à me rejoindre", bundle: .main)
+    }
+    static var qrShowsInvitationDetail: String {
+        String(localized: "profile.card.qrShows.invitation.detail", defaultValue: "Scanner envoie une demande d'amis", bundle: .main)
+    }
+    static var invitationPreparing: String {
+        String(localized: "profile.card.invitation.preparing", defaultValue: "L'invitation se prépare : le QR montre ta vitrine en attendant", bundle: .main)
+    }
+    static var invitationUnavailable: String {
+        String(localized: "profile.card.invitation.unavailable", defaultValue: "L'invitation n'est pas disponible : le QR montre ta vitrine", bundle: .main)
+    }
+    static var invitationLive: String {
+        String(localized: "profile.card.invitation.live", defaultValue: "Valable quelques minutes, renouvelée tant que la carte reste ouverte", bundle: .main)
     }
     static var qrLabel: String { String(localized: "profile.card.qrLabel", defaultValue: "QR de mon profil", bundle: .main) }
     static var orScan: String {
@@ -240,5 +264,11 @@ nonisolated enum ProfileLinksCopy {
     }
     static var scannerForeign: String {
         String(localized: "profile.scanner.foreign", defaultValue: "Ce QR ne mène pas à Meeshy", bundle: .main)
+    }
+    static var invitationSent: String {
+        String(localized: "profile.scanner.invitation.sent", defaultValue: "Demande d'ami envoyée", bundle: .main)
+    }
+    static var invitationExpired: String {
+        String(localized: "profile.scanner.invitation.expired", defaultValue: "Cette invitation n'est plus valable : voici sa vitrine", bundle: .main)
     }
 }
