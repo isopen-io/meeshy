@@ -8,6 +8,8 @@ import { useGamePrefs } from '@/lib/game/preferences';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { ACT_ADVANCE_ARMED_MS, ACT_ADVANCE_SHOWN_MS, actAdvanceLabel, watchActAdvance } from '@/lib/view/act-advance';
 
+import { MeeshyGlass } from './kit/meeshy-glass-tone';
+
 type ProgressSource = {
   readonly read: () => unknown;
   readonly subscribe: (listener: () => void) => () => void;
@@ -66,14 +68,17 @@ export function ActAdvancePill({
   if (advance === null || hidden) return null;
   return (
     <div className="thread-act-pill pointer-events-none absolute inset-x-0 z-10 flex justify-center">
-      <span
+      <MeeshyGlass
+        as="span"
         role="status"
+        tone="theme"
+        tint="card"
         data-act-advance={advance.difficulty}
-        className="glass glass-card rounded-chip px-3 py-1.5 text-time font-semibold"
+        className="rounded-chip px-3 py-1.5 text-time font-semibold"
         style={{ color: 'var(--color-day-ink)', border: '0.5px solid var(--color-day-hairline)' }}
       >
         {actAdvanceLabel(advance, language ?? currentInterfaceLanguage())}
-      </span>
+      </MeeshyGlass>
     </div>
   );
 }
