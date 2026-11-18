@@ -5,8 +5,11 @@ struct ProfileConnectionActions {
     let relationships: any ProfileRelationshipStateProviding
     let social: any ProfileSocialActionsProviding
 
-    func sendRequest(to userId: String) async -> String? {
-        guard let request = try? await social.sendFriendRequest(to: userId) else { return nil }
+    /// Le mot facultatif part rogné ; vide, il ne part pas.
+    func sendRequest(to userId: String, message: String? = nil) async -> String? {
+        let note = message?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sent = (note?.isEmpty ?? true) ? nil : note
+        guard let request = try? await social.sendFriendRequest(to: userId, message: sent) else { return nil }
         relationships.didSendRequest(to: userId, requestId: request.id)
         return request.id
     }
@@ -21,6 +24,10 @@ struct ProfileConnectionActions {
             relationships.didSendRequest(to: userId, requestId: requestId)
             return false
         }
+    }
+
+    func pendingRequest(_ requestId: String) async -> FriendRequest? {
+        await social.pendingFriendRequest(requestId)
     }
 
     func discardRequest(_ requestId: String) async {
@@ -59,8 +66,17 @@ struct ProfileConnectionActions {
         (try? await social.unblockUser(userId)) != nil
     }
 
-    func report(userId: String, reportType: String) async -> Bool {
-        (try? await social.reportUser(userId, reportType: reportType)) != nil
+    /// Le brouillon de la feuille « Signaler » : son motif, son mot et ses messages joints. Rien ne part sans motif.
+    func report(userId: String, draft: ProfileReportDraft) async -> Bool {
+        guard let reason = draft.reason else { return false }
+        return await report(userId: userId, reportType: reason.rawValue, reason: draft.sentDetails,
+                            attachedMessageIds: draft.sentMessageIds)
+    }
+
+    /// `reason` : le mot facultatif du signalement, `nil` sans mot ; `attachedMessageIds` : les messages joints.
+    func report(userId: String, reportType: String, reason: String?, attachedMessageIds: [String] = []) async -> Bool {
+        (try? await social.reportUser(userId, reportType: reportType, reason: reason,
+                                      attachedMessageIds: attachedMessageIds)) != nil
     }
 }
 

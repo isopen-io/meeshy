@@ -25,11 +25,11 @@ final class MeeshyLivePresenceTests: XCTestCase {
         XCTAssertNil(refresh)
     }
 
-    func test_profileHeader_bothAvatarsRepaintOnTheHeartbeat() throws {
+    func test_profileHeader_theTravellingAvatarRepaintsOnTheHeartbeat() throws {
         let code = try source("Profile/UserProfileSheet+Header.swift")
         XCTAssertEqual(
-            code.components(separatedBy: "MeeshyLivePresence {").count - 1, 2,
-            "le grand avatar et celui de la barre compacte se repeignent tous deux"
+            code.components(separatedBy: "MeeshyLivePresence {").count - 1, 1,
+            "un seul avatar voyage du héros à la barre repliée (K28, #19410), et il se repeint"
         )
     }
 

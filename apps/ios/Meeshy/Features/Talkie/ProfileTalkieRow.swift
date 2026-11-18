@@ -3,10 +3,12 @@ import MeeshySDK
 import MeeshyUI
 
 /// « Maintenir pour parler » sur la fiche d'un Proche ou d'un Sang (#16927, iso `user-profile-talkie.tsx`) : on
-/// MAINTIENT, on parle, on relâche — la voix sort chez l'autre sans qu'il ait à décrocher (D-4).
+/// MAINTIENT, on parle, on relâche — la voix sort chez l'autre sans qu'il ait à décrocher (D-4). Sur la face Actions,
+/// c'est la carte « Talkie » de la planche `Autre-Actions` (#19433) : l'étiquette, le gros bouton rond, « Maintenir
+/// pour parler · Ta voix part en direct », puis la phrase qui dit ce qu'il est et son (i).
 ///
 /// - Présent dès Proche (`ProfileCircleViewModel.offersTalkie`) ; la passerelle rejuge à chaque appui et un
-///   `TALKIE_NOT_ALLOWED` retire la ligne, ni grisée ni expliquée.
+///   `TALKIE_NOT_ALLOWED` retire la carte, ni grisée ni expliquée.
 /// - Relâcher, glisser hors du doigt ou quitter la fiche termine la prise de parole.
 /// - Les refus se disent sans fuite : un blocage et un repli rendent la même INFORMATION, jamais en rouge — la voix part
 ///   en message vocal dans la conversation la plus récente (#17141).
@@ -15,14 +17,17 @@ struct ProfileTalkieRow: View {
     @StateObject private var sender: TalkieSender
     let userId: String
     let displayName: String
+    var tint: Color = MeeshyColors.brandPrimary
     @State private var holding = false
     @State private var withdrawn = false
+    @ScaledMetric(relativeTo: .title) private var holdDiameter: CGFloat = MeeshyControlSize.tapTarget * 2
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(userId: String, displayName: String) {
+    init(userId: String, displayName: String, tint: Color = MeeshyColors.brandPrimary) {
         _sender = StateObject(wrappedValue: TalkieSender())
         self.userId = userId
         self.displayName = displayName
+        self.tint = tint
     }
 
     var body: some View {
@@ -30,19 +35,7 @@ struct ProfileTalkieRow: View {
             if withdrawn {
                 Color.clear.frame(height: 0)
             } else {
-                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                    Text(ProfileTalkieWording.explain(name: displayName))
-                        .font(.footnote)
-                        .foregroundStyle(theme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: MeeshySpacing.xs) {
-                        holdButton
-                        TalkieInfoButton()
-                    }
-                }
-                .padding(MeeshySpacing.md)
-                .background(MeeshyColors.brandPrimary.opacity(MeeshyOpacity.subtle))
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+                card.padding(.bottom, MeeshySpacing.xxl)
             }
         }
         .adaptiveOnChange(of: sender.notice) { _, new in
@@ -54,6 +47,38 @@ struct ProfileTalkieRow: View {
             }
             ProfileTalkieWording.present(new)
         }
+    }
+
+    private var card: some View {
+        VStack(spacing: MeeshySpacing.md) {
+            HStack {
+                MeeshyBadge(.label(ProfileTalkieWording.tag), leading: .systemImage("dot.radiowaves.left.and.right"),
+                            kind: .accent, tint: tint, size: .s28)
+                Spacer(minLength: 0)
+                TalkieInfoButton(tint: tint)
+            }
+            holdButton
+            VStack(spacing: MeeshySpacing.xs) {
+                Text(label)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                    .foregroundStyle(theme.textPrimary)
+                Text(ProfileTalkieWording.live)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                    .foregroundStyle(theme.textSecondary)
+            }
+            .multilineTextAlignment(.center)
+            .accessibilityHidden(true)
+            Text(ProfileTalkieWording.explain(name: displayName))
+                .font(.footnote)
+                .foregroundStyle(theme.textSecondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(MeeshySpacing.lg)
+        .frame(maxWidth: .infinity)
+        .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("talkie.card")
     }
 
     private var label: String {
@@ -68,26 +93,20 @@ struct ProfileTalkieRow: View {
 
     private var holdButton: some View {
         let live = holding || sender.isActive
-        return HStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: live ? "waveform" : "mic.fill")
-                .accessibilityHidden(true)
-            Text(label)
-        }
-        .font(.subheadline.weight(.bold))
-        .foregroundStyle(live ? Color.white : MeeshyColors.brandPrimary)
-        .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.tapTarget)
-        .background(
-            Capsule().fill(live ? MeeshyColors.brandPrimary : Color.clear)
-        )
-        .overlay(Capsule().stroke(MeeshyColors.brandPrimary, lineWidth: 1.5))
-        .contentShape(Capsule())
-        .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(ProfileTalkieWording.holdA11y(name: displayName))
-        .accessibilityValue(live ? label : "")
-        .accessibilityHint(ProfileTalkieWording.holdHint)
-        .accessibilityAddTraits([.isButton, .updatesFrequently])
-        .accessibilityIdentifier("talkie.send")
+        return Image(systemName: live ? "waveform" : "mic.fill")
+            .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .bold))
+            .foregroundStyle(live ? Color.white : tint)
+            .frame(width: holdDiameter, height: holdDiameter)
+            .background(Circle().fill(live ? tint : tint.opacity(MeeshyOpacity.subtle)))
+            .overlay(Circle().stroke(tint, lineWidth: MeeshyBorder.emphasis))
+            .contentShape(Circle())
+            .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(ProfileTalkieWording.holdA11y(name: displayName))
+            .accessibilityValue(live ? label : "")
+            .accessibilityHint(ProfileTalkieWording.holdHint)
+            .accessibilityAddTraits([.isButton, .updatesFrequently])
+            .accessibilityIdentifier("talkie.send")
     }
 }
 
@@ -98,6 +117,10 @@ enum ProfileTalkieWording {
     }
 
     static var hold: String { String(localized: "talkie.send.hold", defaultValue: "Maintenir pour parler", bundle: .main) }
+
+    static var tag: String { String(localized: "talkie.card.tag", defaultValue: "Talkie", bundle: .main) }
+
+    static var live: String { String(localized: "talkie.card.live", defaultValue: "Ta voix part en direct", bundle: .main) }
 
     static func holdA11y(name: String) -> String {
         String(format: String(localized: "talkie.send.hold.a11y", defaultValue: "Maintenir pour parler à %@", bundle: .main), name)

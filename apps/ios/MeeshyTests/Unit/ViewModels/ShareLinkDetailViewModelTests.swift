@@ -39,6 +39,7 @@ final class ShareLinkDetailViewModelTests: XCTestCase {
         let sut = ShareLinkDetailViewModel(
             link: link ?? makeLink(),
             service: service,
+            removeParticipant: { _, _ in },
             onLinkChanged: { recorder.changes.append($0) },
             onLinkDeleted: { recorder.deletedIds.append($0) }
         )
@@ -164,6 +165,63 @@ final class ShareLinkDetailViewModelTests: XCTestCase {
         XCTAssertEqual(recorder.changes.map(\.isActive), [false, true])
     }
 
+    // MARK: - Remettre le compteur à zéro (#19505)
+
+    func test_resetUses_dropsTheCounterAtOnce_andKeepsWhatTheServerServes() async {
+        let (sut, service, recorder) = makeSUT(link: makeLink(currentUses: 12))
+        service.resetLinkUsesResult = .success(0)
+        XCTAssertTrue(sut.canResetUses)
+
+        let done = await sut.resetUses()
+
+        XCTAssertTrue(done)
+        XCTAssertEqual(sut.link.currentUses, 0)
+        XCTAssertEqual(recorder.changes.first?.currentUses, 0, "the counter drops before the server answers")
+        XCTAssertEqual(service.resetLinkUsesCallCount, 1)
+        XCTAssertFalse(sut.canResetUses)
+    }
+
+    func test_resetUses_refused_bringsTheCounterBack() async {
+        let (sut, service, recorder) = makeSUT(link: makeLink(currentUses: 12))
+        service.resetLinkUsesResult = .failure(ProbeError.offline)
+
+        let done = await sut.resetUses()
+
+        XCTAssertFalse(done)
+        XCTAssertEqual(sut.link.currentUses, 12)
+        XCTAssertEqual(recorder.changes.map(\.currentUses), [0, 12])
+    }
+
+    func test_resetUses_olderServerThatIgnoresTheReset_bringsTheCounterBack() async {
+        let (sut, service, _) = makeSUT(link: makeLink(currentUses: 12))
+        service.resetLinkUsesResult = .success(nil)
+
+        let done = await sut.resetUses()
+
+        XCTAssertFalse(done, "a server that does not serve the counter has not reset it")
+        XCTAssertEqual(sut.link.currentUses, 12)
+    }
+
+    func test_resetUses_keepsTheEditedSettings_whileTheServerAnswers() async {
+        let (sut, service, _) = makeSUT(link: makeLink(maxUses: 100, currentUses: 12))
+        service.resetLinkUsesResult = .success(0)
+
+        _ = await sut.resetUses()
+
+        XCTAssertEqual(sut.link.maxUses, 100)
+        XCTAssertEqual(sut.link.isActive, true)
+    }
+
+    func test_resetUses_atZero_isNotOffered_andSendsNothing() async {
+        let (sut, service, _) = makeSUT(link: makeLink(currentUses: 0))
+
+        XCTAssertFalse(sut.canResetUses)
+        let done = await sut.resetUses()
+
+        XCTAssertFalse(done)
+        XCTAssertEqual(service.resetLinkUsesCallCount, 0)
+    }
+
     // MARK: - Deletion
 
     func test_delete_success_marksDeletedAndTellsTheList() async {
@@ -185,6 +243,226 @@ final class ShareLinkDetailViewModelTests: XCTestCase {
         XCTAssertFalse(done)
         XCTAssertFalse(sut.isDeleted)
         XCTAssertEqual(recorder.deletedIds, [])
+    }
+}
+
+/// La fiche d'un lien de partage faite du kit (planche `Lien-Partage`, #18871) : la jauge des entrées,
+/// l'échéance, « Qui peut entrer », les arrivées par pays, et le retrait optimiste d'un arrivant.
+@MainActor
+final class ShareLinkEntrySummaryTests: XCTestCase {
+
+    private enum ProbeError: Error { case refused }
+
+    private actor RemovalRecorder {
+        private(set) var calls: [String] = []
+        func record(_ conversationId: String, _ key: String) { calls.append("\(conversationId)/\(key)") }
+    }
+
+    private func settings(requireAccount: Bool = false, nickname: Bool = false, email: Bool = false,
+                          history: Bool = true, files: Bool = false, concurrent: Int? = nil,
+                          languages: [String] = []) -> ShareLinkSettings {
+        ShareLinkSettings(name: "Studio", description: "", expiresAt: nil, maxUses: 50, maxConcurrentUsers: concurrent,
+                          requireAccount: requireAccount, requireNickname: nickname, requireEmail: email,
+                          requireBirthday: false, allowedLanguages: languages,
+                          guestRights: ShareLinkGuestRights(messages: true, images: true, files: files, history: history))
+    }
+
+    private func arrival(_ id: String, anonymous: Bool) -> ShareLinkArrivalStats.Arrival {
+        ShareLinkArrivalStats.Arrival(participantId: id, displayName: id, isAnonymous: anonymous,
+                                      joinedAt: Date(timeIntervalSince1970: 1_763_000_000))
+    }
+
+    private func linkWithConversation(_ conversationId: String?) -> MyShareLink {
+        MyShareLink(id: "row-1", linkId: "mshy_studio", identifier: nil, name: "Studio — invités",
+                    isActive: true, currentUses: 23, maxUses: 50, expiresAt: nil,
+                    createdAt: Date(timeIntervalSince1970: 1_762_000_000), conversationTitle: "Studio",
+                    conversation: conversationId.map { ShareLinkConversationSummary(id: $0, title: "Studio") })
+    }
+
+    // MARK: - La jauge
+
+    func test_quota_23of50_reads46PercentAnd27PlacesLeft() {
+        let quota = ShareLinkEntryQuota(used: 23, limit: 50)
+
+        XCTAssertEqual(quota.percent, 46)
+        XCTAssertEqual(quota.remaining, 27)
+        XCTAssertFalse(quota.isFull)
+    }
+
+    func test_quota_overTheLimit_isFullAndNeverOverflows() {
+        let quota = ShareLinkEntryQuota(used: 60, limit: 50)
+
+        XCTAssertEqual(quota.fraction, 1)
+        XCTAssertEqual(quota.remaining, 0)
+        XCTAssertTrue(quota.isFull)
+    }
+
+    func test_quota_withoutLimit_hasNoShareNorRemainder() {
+        let quota = ShareLinkEntryQuota(used: 12, limit: nil)
+
+        XCTAssertNil(quota.fraction)
+        XCTAssertNil(quota.remaining)
+        XCTAssertFalse(quota.isFull)
+    }
+
+    // MARK: - L'échéance
+
+    func test_expiry_sixDaysAhead_isSoon() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        let now = Date(timeIntervalSince1970: 1_763_380_800)
+        let expiry = ShareLinkExpiry.resolve(expiresAt: now.addingTimeInterval(6 * 86_400), now: now, calendar: calendar)
+
+        XCTAssertEqual(expiry, .inDays(6))
+        XCTAssertTrue(expiry.isSoon)
+    }
+
+    func test_expiry_inThePast_isExpired_andWithoutDate_isNever() {
+        let now = Date(timeIntervalSince1970: 1_763_380_800)
+
+        XCTAssertEqual(ShareLinkExpiry.resolve(expiresAt: now.addingTimeInterval(-60), now: now, calendar: .current), .expired)
+        XCTAssertEqual(ShareLinkExpiry.resolve(expiresAt: nil, now: now, calendar: .current), .never)
+    }
+
+    // MARK: - Qui peut entrer
+
+    func test_rules_openLink_saysGuestsTheirRightsAndAllLanguages() {
+        let rules = ShareLinkEntryRule.rules(for: settings(nickname: true))
+
+        XCTAssertEqual(rules, [.guestsWithoutAccount, .askedFields, .historyVisible, .guestMessages, .guestImages,
+                               .allLanguages])
+    }
+
+    func test_rules_accountRequired_neverListsGuestRights() {
+        let rules = ShareLinkEntryRule.rules(for: settings(requireAccount: true, history: false, files: true,
+                                                           concurrent: 20, languages: ["fr", "pt"]))
+
+        XCTAssertEqual(rules, [.accountRequired, .concurrentLimit(20), .languages(["fr", "pt"])])
+    }
+
+    // MARK: - Arrivées par pays
+
+    func test_countryShares_keepTheFourLargest_theFirstBarFull() {
+        let counts = [("FR", 6), ("SN", 11), ("PT", 3), ("CI", 3), ("BE", 1), ("DE", 0)]
+            .map { ShareLinkArrivalStats.CountryCount(country: $0.0, count: $0.1) }
+
+        let shares = ShareLinkCountryShare.top(counts)
+
+        XCTAssertEqual(shares.map(\.country), ["SN", "FR", "CI", "PT"])
+        XCTAssertEqual(shares.first?.share, 1)
+        XCTAssertEqual(ShareLinkCountryShare.countryCount(counts), 5)
+    }
+
+    // MARK: - Retirer un arrivant
+
+    func test_removeArrival_leavesAtOnce_andCountsDrop() async {
+        let recorder = RemovalRecorder()
+        let service = MockShareLinkManager()
+        let sut = ShareLinkDetailViewModel(link: linkWithConversation("conv-1"), service: service,
+                                           removeParticipant: { conversationId, key in
+                                               await recorder.record(conversationId, key)
+                                           })
+        service.fetchLinkStatsResult = .success(ShareLinkArrivalStats(
+            visits: 40, arrivals: 2, anonymousArrivals: 1,
+            recentArrivals: [arrival("kora", anonymous: true), arrival("mina", anonymous: false)]))
+        await sut.loadStats()
+
+        let removed = await sut.removeArrival(participantId: "kora")
+
+        XCTAssertTrue(removed)
+        guard case .loaded(let stats) = sut.stats else { return XCTFail("stats chargées") }
+        XCTAssertEqual(stats.recentArrivals.map(\.participantId), ["mina"])
+        XCTAssertEqual(stats.arrivals, 1)
+        XCTAssertEqual(stats.anonymousArrivals, 0)
+        let calls = await recorder.calls
+        XCTAssertEqual(calls, ["conv-1/kora"])
+    }
+
+    func test_removeArrival_refused_bringsTheRowBack() async {
+        let service = MockShareLinkManager()
+        let sut = ShareLinkDetailViewModel(link: linkWithConversation("conv-1"), service: service,
+                                           removeParticipant: { _, _ in throw ProbeError.refused })
+        let served = ShareLinkArrivalStats(visits: 40, arrivals: 1, anonymousArrivals: 1,
+                                           recentArrivals: [arrival("kora", anonymous: true)])
+        service.fetchLinkStatsResult = .success(served)
+        await sut.loadStats()
+
+        let removed = await sut.removeArrival(participantId: "kora")
+
+        XCTAssertFalse(removed)
+        XCTAssertEqual(sut.stats, .loaded(served))
+    }
+
+    func test_removeArrival_withoutConversation_isNotOffered() async {
+        let sut = ShareLinkDetailViewModel(link: linkWithConversation(nil), service: MockShareLinkManager(),
+                                           removeParticipant: { _, _ in })
+
+        XCTAssertFalse(sut.canRemoveArrivals)
+        let removed = await sut.removeArrival(participantId: "kora")
+        XCTAssertFalse(removed)
+    }
+
+    // MARK: - La pile de l'en-tête (#19496)
+
+    func test_headFaces_waitForTheStats_thenShowTheThreeLatestArrivals() async {
+        let service = MockShareLinkManager()
+        let sut = ShareLinkDetailViewModel(link: linkWithConversation("conv-1"), service: service,
+                                           removeParticipant: { _, _ in })
+        XCTAssertEqual(sut.headFaces, [])
+        service.fetchLinkStatsResult = .success(ShareLinkArrivalStats(
+            visits: 9, arrivals: 4, anonymousArrivals: 1,
+            recentArrivals: ["mina", "tomas", "ana", "kora"].map { arrival($0, anonymous: $0 == "kora") }))
+
+        await sut.loadStats()
+
+        XCTAssertEqual(sut.headFaces.map(\.id), ["mina", "tomas", "ana"])
+        XCTAssertEqual(sut.headFaces.first?.name, "mina")
+    }
+}
+
+/// L'en-tête du détail d'un lien de communauté (#19496, planche `Lien-Communaute`) : la pile des visages se peint
+/// depuis la liste (cache d'abord), puis suit les entrées lues.
+@MainActor
+final class CommunityLinkHeadFacesTests: XCTestCase {
+
+    private func link(previews: [LinksFaceMember]?) -> CommunityLink {
+        CommunityLink(id: "c1", name: "Beatmakers Dakar", identifier: "beatmakers", baseUrl: "https://meeshy.me",
+                      memberCount: 342, isActive: true, createdAt: Date(timeIntervalSince1970: 0),
+                      memberPreviews: previews)
+    }
+
+    private func entry(_ id: String, minutesAgo: Double) -> CommunityLinkEntry {
+        CommunityLinkEntry(id: "m-\(id)", userId: id, name: id.capitalized, username: id, avatar: nil,
+                           joinedAt: Date(timeIntervalSince1970: 1_763_000_000 - minutesAgo * 60))
+    }
+
+    private func makeSUT(previews: [LinksFaceMember]?, entries: [CommunityLinkEntry]) -> CommunityLinkDetailViewModel {
+        CommunityLinkDetailViewModel(
+            link: link(previews: previews),
+            viewerId: "me",
+            loadDetails: { _ in
+                CommunityLinkDetails(isPrivate: false, role: "admin", memberCount: 342, avatar: nil,
+                                     settingsCommunity: nil)
+            },
+            loadEntries: { _ in entries },
+            setPrivate: { _, _ in }
+        )
+    }
+
+    func test_headFaces_beforeTheEntries_showTheFacesTheListServed() {
+        let sut = makeSUT(previews: [LinksFaceMember(id: "an", name: "Ana")], entries: [])
+
+        XCTAssertEqual(sut.headFaces.map(\.id), ["an"])
+    }
+
+    func test_headFaces_onceRead_showTheThreeLatestEntriesWithoutMe() async {
+        let sut = makeSUT(previews: nil, entries: [entry("ns", minutesAgo: 30), entry("me", minutesAgo: 1),
+                                                   entry("kb", minutesAgo: 10), entry("sk", minutesAgo: 300),
+                                                   entry("an", minutesAgo: 60)])
+
+        await sut.load()
+
+        XCTAssertEqual(sut.headFaces.map(\.id), ["kb", "ns", "an"])
     }
 }
 
@@ -224,5 +502,301 @@ final class ShareLinksReloadLawTests: XCTestCase {
     func test_linksAfterFetch_aFailedFetchKeepsTheListShown() {
         let shown = [makeLink(id: "a"), makeLink(id: "b")]
         XCTAssertEqual(ShareLinksReloadLaw.linksAfterFetch(current: shown, fetched: nil), shown)
+    }
+}
+
+/// La fiche d'un lien de communauté (planche `Lien-Communaute`, #18871) : les entrées se lisent sur la date
+/// d'arrivée des membres, la fiche s'ouvre sur le lien déjà connu, et « Fermer les entrées » est optimiste.
+@MainActor
+final class CommunityLinkDetailTests: XCTestCase {
+
+    private enum ProbeError: Error { case offline }
+
+    private static let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        return calendar
+    }()
+
+    private static let now = Date(timeIntervalSince1970: 1_763_380_800)
+
+    private func entry(_ id: String, daysAgo days: Double, userId: String? = nil) -> CommunityLinkEntry {
+        CommunityLinkEntry(id: id, userId: userId ?? "user-\(id)", name: "Membre \(id)", username: id, avatar: nil,
+                           joinedAt: Self.now.addingTimeInterval(-days * 86_400))
+    }
+
+    private func makeLink(memberCount: Int = 342) -> CommunityLink {
+        CommunityLink(id: "c-1", name: "Beatmakers Dakar", identifier: "beatmakers", baseUrl: "https://meeshy.me",
+                      memberCount: memberCount, isActive: true, createdAt: Date(timeIntervalSince1970: 1_750_000_000))
+    }
+
+    private final class Calls {
+        var closed: [Bool] = []
+        var invited: [String] = []
+    }
+
+    private func details(isPrivate: Bool = false, role: String? = "admin",
+                         linkEntryCount: Int? = nil) -> CommunityLinkDetails {
+        CommunityLinkDetails(isPrivate: isPrivate, role: role, memberCount: 350, avatar: nil, settingsCommunity: nil,
+                             linkEntryCount: linkEntryCount)
+    }
+
+    private func friend(_ id: String) -> CommunityInviteCandidate {
+        CommunityInviteCandidate(id: id, name: "Ami \(id)", avatar: nil)
+    }
+
+    private func makeSUT(
+        details: Result<CommunityLinkDetails, Error> = .success(CommunityLinkDetails(isPrivate: false, role: "admin",
+                                                                                     memberCount: 350, avatar: nil,
+                                                                                     settingsCommunity: nil)),
+        entries: Result<[CommunityLinkEntry], Error> = .success([]),
+        setPrivate: Result<Void, Error> = .success(()),
+        friends: [CommunityInviteCandidate] = [],
+        refusedInvitees: Set<String> = []
+    ) -> (CommunityLinkDetailViewModel, Calls) {
+        let calls = Calls()
+        let sut = CommunityLinkDetailViewModel(
+            link: makeLink(),
+            viewerId: "me",
+            loadDetails: { _ in try details.get() },
+            loadEntries: { _ in try entries.get() },
+            setPrivate: { _, closed in
+                await MainActor.run { calls.closed.append(closed) }
+                try setPrivate.get()
+            },
+            loadFriends: { friends },
+            invite: { _, userId in
+                await MainActor.run { calls.invited.append(userId) }
+                if refusedInvitees.contains(userId) { throw ProbeError.offline }
+            }
+        )
+        return (sut, calls)
+    }
+
+    // MARK: - Les entrées
+
+    func test_entries_areRecentFirst_andLeaveTheViewerOut() {
+        let entries = CommunityLinkEntries(entries: [entry("a", daysAgo: 3), entry("b", daysAgo: 1),
+                                                     entry("me", daysAgo: 0, userId: "me")],
+                                           excludingUserId: "me")
+        XCTAssertEqual(entries.recent.map(\.id), ["b", "a"])
+    }
+
+    func test_recent_keepsOnlyTheFiveLatest() {
+        let entries = CommunityLinkEntries(entries: (0..<8).map { entry("m\($0)", daysAgo: Double($0)) },
+                                           excludingUserId: nil)
+        XCTAssertEqual(entries.recent.map(\.id), ["m0", "m1", "m2", "m3", "m4"])
+    }
+
+    func test_weekCount_countsTheArrivalsOfTheLastSevenDays() {
+        let entries = CommunityLinkEntries(entries: [entry("a", daysAgo: 0.2), entry("b", daysAgo: 6),
+                                                     entry("c", daysAgo: 7.5), entry("d", daysAgo: 40)],
+                                           excludingUserId: nil)
+        XCTAssertEqual(entries.count(lastDays: 7, now: Self.now, calendar: Self.calendar), 2)
+        XCTAssertEqual(entries.count(lastDays: 30, now: Self.now, calendar: Self.calendar), 3)
+    }
+
+    func test_days_drawThirtyDays_withTheArrivalsOfEachDay() {
+        let entries = CommunityLinkEntries(entries: [entry("a", daysAgo: 0), entry("b", daysAgo: 0),
+                                                     entry("c", daysAgo: 2)],
+                                           excludingUserId: nil)
+        let days = entries.days(now: Self.now, calendar: Self.calendar)
+        XCTAssertEqual(days.count, 30)
+        XCTAssertEqual(days.last?.count, 2)
+        XCTAssertEqual(days[days.count - 3].count, 1)
+    }
+
+    func test_dailyAverage_isTheThirtyDayCountOverThirty() {
+        let entries = CommunityLinkEntries(entries: (0..<60).map { entry("m\($0)", daysAgo: Double($0) / 2) },
+                                           excludingUserId: nil)
+        XCTAssertEqual(entries.dailyAverage(now: Self.now, calendar: Self.calendar), 2, accuracy: 0.01)
+    }
+
+    func test_latestPageOffset_readsTheLastPage_becauseTheServerSortsTheOldestFirst() {
+        XCTAssertNil(CommunityLinkEntries.latestPageOffset(total: 40, pageSize: 100))
+        XCTAssertNil(CommunityLinkEntries.latestPageOffset(total: nil, pageSize: 100))
+        XCTAssertEqual(CommunityLinkEntries.latestPageOffset(total: 342, pageSize: 100), 242)
+    }
+
+    // MARK: - Les règles et le rôle
+
+    func test_rules_sayWhetherTheEntryIsFreeOrByInvitation() {
+        XCTAssertEqual(CommunityEntryRule.rules(isPrivate: false), [.open, .roleMember, .everyCountry, .noExpiry])
+        XCTAssertEqual(CommunityEntryRule.rules(isPrivate: true).first, .invitationOnly)
+    }
+
+    func test_stewardship_followsTheViewerRole() {
+        XCTAssertEqual(CommunityLinkStewardship(role: "admin"), .animates)
+        XCTAssertEqual(CommunityLinkStewardship(role: "creator"), .animates)
+        XCTAssertEqual(CommunityLinkStewardship(role: "moderator"), .moderates)
+        XCTAssertEqual(CommunityLinkStewardship(role: nil), .member)
+    }
+
+    // MARK: - La fiche
+
+    func test_init_showsTheKnownLinkAtOnce_andWaitsForTheEntries() {
+        let (sut, _) = makeSUT()
+        XCTAssertEqual(sut.link.name, "Beatmakers Dakar")
+        XCTAssertEqual(sut.memberCount, 342)
+        XCTAssertEqual(sut.entries, .loading)
+        XCTAssertNil(sut.isClosed)
+    }
+
+    func test_load_servesTheDetails_andTheEntries() async {
+        let (sut, _) = makeSUT(entries: .success([entry("a", daysAgo: 1)]))
+        await sut.load()
+        XCTAssertEqual(sut.memberCount, 350)
+        XCTAssertEqual(sut.isClosed, false)
+        XCTAssertEqual(sut.stewardship, .animates)
+        XCTAssertEqual(sut.entries, .loaded(CommunityLinkEntries(entries: [entry("a", daysAgo: 1)], excludingUserId: "me")))
+    }
+
+    func test_load_aFailedEntriesFetch_saysSo_withoutLosingTheDetails() async {
+        let (sut, _) = makeSUT(entries: .failure(ProbeError.offline))
+        await sut.load()
+        XCTAssertEqual(sut.entries, .failed)
+        XCTAssertEqual(sut.isClosed, false)
+    }
+
+    func test_closeEntries_isOptimistic_andTellsTheServer() async {
+        let (sut, calls) = makeSUT()
+        await sut.load()
+        let succeeded = await sut.setEntriesClosed(true)
+        XCTAssertTrue(succeeded)
+        XCTAssertEqual(sut.isClosed, true)
+        XCTAssertEqual(calls.closed, [true])
+    }
+
+    func test_closeEntries_comesBack_whenTheServerRefuses() async {
+        let (sut, _) = makeSUT(setPrivate: .failure(ProbeError.offline))
+        await sut.load()
+        let succeeded = await sut.setEntriesClosed(true)
+        XCTAssertFalse(succeeded)
+        XCTAssertEqual(sut.isClosed, false)
+    }
+
+    func test_closeEntries_beforeTheDetailsAreKnown_doesNothing() async {
+        let (sut, calls) = makeSUT()
+        let succeeded = await sut.setEntriesClosed(true)
+        XCTAssertFalse(succeeded)
+        XCTAssertTrue(calls.closed.isEmpty)
+    }
+
+    // MARK: - En attente de validation (#19505)
+
+    func test_pendingEntry_isListed_butNeverCountedAsAnEntry() {
+        let pending = CommunityLinkEntry(id: "ns", userId: "user-ns", name: "Nadia", username: "nadia.snd",
+                                         avatar: nil, joinedAt: Self.now, isPending: true)
+        let entries = CommunityLinkEntries(entries: [pending, entry("a", daysAgo: 1)], excludingUserId: nil)
+
+        XCTAssertEqual(entries.recent.map(\.id), ["ns", "a"])
+        XCTAssertEqual(entries.count(lastDays: 7, now: Self.now, calendar: Self.calendar), 1)
+        XCTAssertEqual(entries.days(now: Self.now, calendar: Self.calendar).last?.count, 0)
+    }
+
+    private func member(status: String?) throws -> APICommunityMember {
+        let statusField = status.map { #","status":"\#($0)""# } ?? ""
+        let json = #"{"id":"m","communityId":"c-1","userId":"u","role":"member","joinedAt":0,"user":null"#
+            + statusField + "}"
+        return try JSONDecoder().decode(APICommunityMember.self, from: Data(json.utf8))
+    }
+
+    func test_entryFromMember_readsTheServedPendingStatus_andAbsentMeansJoined() throws {
+        let joined = CommunityLinkEntry(member: try member(status: nil))
+        let pending = CommunityLinkEntry(member: try member(status: "pending"))
+
+        XCTAssertEqual(joined?.isPending, false)
+        XCTAssertEqual(pending?.isPending, true)
+    }
+
+    // MARK: - Entrées par ce lien (#19505)
+
+    func test_linkEntryCount_isShownOnlyWhenServed() async {
+        let (served, _) = makeSUT(details: .success(details(linkEntryCount: 58)))
+        let (olderServer, _) = makeSUT()
+
+        await served.load()
+        await olderServer.load()
+
+        XCTAssertEqual(served.linkEntryCount, 58)
+        XCTAssertNil(olderServer.linkEntryCount)
+    }
+
+    // MARK: - Envoyer l'invitation (#19505)
+
+    func test_canInvite_followsWhoTheServerLetsInvite() async {
+        let (closedAdmin, _) = makeSUT(details: .success(details(isPrivate: true, role: "admin")))
+        let (closedMember, _) = makeSUT(details: .success(details(isPrivate: true, role: "member")))
+        let (openMember, _) = makeSUT(details: .success(details(isPrivate: false, role: "member")))
+        let (notYetKnown, _) = makeSUT()
+
+        await closedAdmin.load()
+        await closedMember.load()
+        await openMember.load()
+
+        XCTAssertTrue(closedAdmin.canInvite)
+        XCTAssertFalse(closedMember.canInvite)
+        XCTAssertTrue(openMember.canInvite)
+        XCTAssertFalse(notYetKnown.canInvite, "nothing is offered before the community is read")
+    }
+
+    func test_inviteCandidates_areMyFriends_withoutKnownMembersNorMe() async {
+        let (sut, _) = makeSUT(entries: .success([entry("a", daysAgo: 1, userId: "kb")]),
+                               friends: [friend("kb"), friend("leo"), friend("me"), friend("mina")])
+
+        await sut.load()
+
+        XCTAssertEqual(sut.inviteCandidates.map(\.id), ["leo", "mina"])
+    }
+
+    func test_toggleInvitee_choosesThenUnchooses_inTheOrderOfTheTaps() async {
+        let (sut, _) = makeSUT(friends: [friend("leo"), friend("mina"), friend("kwame")])
+        await sut.load()
+
+        sut.toggleInvitee("kwame")
+        sut.toggleInvitee("leo")
+        sut.toggleInvitee("mina")
+        sut.toggleInvitee("kwame")
+
+        XCTAssertEqual(sut.chosenInviteeIds, ["leo", "mina"])
+    }
+
+    func test_inviteChosen_leavesTheRailAtOnce_andTellsTheServerForEachPerson() async {
+        let (sut, calls) = makeSUT(friends: [friend("leo"), friend("mina"), friend("kwame")])
+        await sut.load()
+        sut.toggleInvitee("leo")
+        sut.toggleInvitee("kwame")
+
+        let outcome = await sut.inviteChosen()
+
+        XCTAssertEqual(outcome, CommunityInviteOutcome(sent: 2, failed: 0))
+        XCTAssertEqual(Set(calls.invited), ["leo", "kwame"])
+        XCTAssertEqual(sut.inviteCandidates.map(\.id), ["mina"])
+        XCTAssertTrue(sut.chosenInviteeIds.isEmpty)
+    }
+
+    func test_inviteChosen_aRefusedPerson_comesBackChosen() async {
+        let (sut, _) = makeSUT(friends: [friend("leo"), friend("mina")], refusedInvitees: ["mina"])
+        await sut.load()
+        sut.toggleInvitee("leo")
+        sut.toggleInvitee("mina")
+
+        let outcome = await sut.inviteChosen()
+
+        XCTAssertEqual(outcome, CommunityInviteOutcome(sent: 1, failed: 1))
+        XCTAssertEqual(sut.inviteCandidates.map(\.id), ["mina"])
+        XCTAssertEqual(sut.chosenInviteeIds, ["mina"])
+    }
+
+    func test_inviteChosen_whenTheViewerCannotInvite_sendsNothing() async {
+        let (sut, calls) = makeSUT(details: .success(details(isPrivate: true, role: "member")),
+                                   friends: [friend("leo")])
+        await sut.load()
+        sut.toggleInvitee("leo")
+
+        let outcome = await sut.inviteChosen()
+
+        XCTAssertEqual(outcome, CommunityInviteOutcome(sent: 0, failed: 0))
+        XCTAssertTrue(calls.invited.isEmpty)
     }
 }

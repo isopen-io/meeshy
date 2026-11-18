@@ -559,7 +559,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // which doesn't port voicePublic (self-only /auth/me payload shape);
         // re-apply the locally-held value before persisting so a background
         // token refresh can't silently flip the toggle back off.
-        let user = OwnProfileSync.reconciled(user, holding: currentUser).withProfileChanges(voicePublic: currentUser?.voicePublic)
+        let user = OwnProfileSync.reconciled(user, holding: currentUser)
+            .withProfileChanges(voicePublic: currentUser?.voicePublic)
+            .carryingDeclaredCity(from: currentUser)
         saveUserToKeychain(user, userId: userId)
         let now = String(Date().timeIntervalSince1970)
         do {
@@ -644,7 +646,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // U3 — the revalidated /auth/me user doesn't port voicePublic (self-only
         // response shape); re-apply the locally-held value before persisting so
         // the throttled background revalidation can't silently flip it back off.
-        let user = OwnProfileSync.reconciled(user, holding: currentUser).withProfileChanges(voicePublic: currentUser?.voicePublic)
+        let user = OwnProfileSync.reconciled(user, holding: currentUser)
+            .withProfileChanges(voicePublic: currentUser?.voicePublic)
+            .carryingDeclaredCity(from: currentUser)
         saveUserToKeychain(user, userId: userId)
         // U3 — don't clobber an in-flight optimistic profile edit with the
         // revalidated server user; re-apply it (and drop the guard once the

@@ -39,7 +39,7 @@ struct SharedLocationTests {
         payload["exactLatitude"] = 48.853_41
         let decoded = try #require(decode(SharedLocationChanged.self, payload))
         let mirror = Mirror(reflecting: decoded).children.compactMap(\.label)
-        #expect(Set(mirror) == ["userId", "latitude", "longitude", "precision", "radiusMeters", "updatedAt", "expiresAt"])
+        #expect(Set(mirror) == ["userId", "latitude", "longitude", "precision", "radiusMeters", "updatedAt", "expiresAt", "circle"])
         #expect(decoded.radiusMeters == 25)
     }
 
@@ -71,6 +71,52 @@ struct SharedLocationTests {
     func snapshot_isLenient() throws {
         let snapshot = try #require(decode(SharedLocationSnapshot.self, ["items": [wire(userId: "a"), wire(latitude: 400), wire(userId: "b")]]))
         #expect(snapshot.items.map(\.userId) == ["a", "b"])
+    }
+
+    // MARK: - En pause par fantôme (#19562)
+
+    @Test("un élément en pause par fantôme se lit comme un fantôme : qui et de quel cercle, rien d'autre")
+    func ghost_decodesWhoAndCircleOnly() throws {
+        let kwame: [String: Any] = ["userId": "kwame", "paused": "ghost", "circle": "BLOOD"]
+        let mina: [String: Any] = ["userId": "mina", "ghost": true]
+        let items: [[String: Any]] = [wire(userId: "a"), kwame, mina]
+        let snapshot = try #require(decode(SharedLocationSnapshot.self, ["items": items]))
+        #expect(snapshot.items.map(\.userId) == ["a"])
+        #expect(snapshot.ghosts == [SharedLocationGhost(userId: "kwame", circle: .blood), SharedLocationGhost(userId: "mina")])
+        let fields = Set(Mirror(reflecting: snapshot.ghosts[0]).children.compactMap(\.label))
+        #expect(fields == ["userId", "circle"])
+    }
+
+    @Test("un fantôme servi AVEC des coordonnées ne devient jamais une position")
+    func ghostWithCoordinates_isNeverAPosition() throws {
+        var payload = wire(userId: "kwame")
+        payload["paused"] = "ghost"
+        #expect(decode(SharedLocationChanged.self, payload) == nil)
+        let snapshot = try #require(decode(SharedLocationSnapshot.self, ["items": [payload]]))
+        #expect(snapshot.items.isEmpty)
+        #expect(snapshot.ghosts.map(\.userId) == ["kwame"])
+    }
+
+    @Test("sans champ de pause, personne n'est en fantôme ; un cercle hors des trois se lit comme absent")
+    func noPauseField_noGhost() throws {
+        let other: [String: Any] = ["userId": "b", "paused": "other"]
+        let items: [[String: Any]] = [wire(userId: "a"), other]
+        let snapshot = try #require(decode(SharedLocationSnapshot.self, ["items": items]))
+        #expect(snapshot.ghosts.isEmpty)
+        let outside: [String: Any] = ["userId": "c", "paused": "ghost", "circle": "PUBLIC"]
+        let ghost = try #require(decode(SharedLocationGhost.self, outside))
+        #expect(ghost.circle == nil)
+    }
+
+    @Test("une personne servie en position ET en fantôme est un fantôme")
+    func pauseWins() {
+        let snapshot = SharedLocationSnapshot(
+            items: [SharedLocationChanged(userId: "k", latitude: 1, longitude: 1, precision: .city, radiusMeters: 8000,
+                                          updatedAt: Date(), expiresAt: Date().addingTimeInterval(60))],
+            ghosts: [SharedLocationGhost(userId: "k")]
+        )
+        #expect(snapshot.items.isEmpty)
+        #expect(snapshot.ghosts.map(\.userId) == ["k"])
     }
 
     @Test("l'emprise part dans l'ordre que lit la passerelle, et une emprise inversée n'existe pas")

@@ -50,7 +50,7 @@ struct MeeshySkeletonTests {
 
     @Test("le squelette est caché au lecteur d'écran : il ne dit rien et ne contient aucun texte ni icône")
     func source_isASilentShape() throws {
-        for file in ["MeeshySkeleton.swift", "MeeshySkeletonRecipe.swift"] {
+        for file in ["MeeshySkeleton.swift", "MeeshySkeletonRecipe.swift", "MeeshySkeletonColumn.swift"] {
             let source = try KitAtomVectors.code(file)
             for forbidden in ["Text(", "Image(", ".shared", "MeeshyUser", "ThemeManager", "Color(hex:", ".shadow(", ".blur("] {
                 #expect(!source.contains(forbidden), "\(file) contient \(forbidden)")
@@ -58,6 +58,29 @@ struct MeeshySkeletonTests {
         }
         let view = try KitAtomVectors.code("MeeshySkeleton.swift")
         #expect(view.contains("accessibilityHidden(true)"))
+    }
+
+    @Test("une liste au premier chargement répète la même silhouette : trois par défaut, bornée de 1 à 6, écart 8")
+    func column_followsTheVectors() throws {
+        let column = try #require(try KitAtomVectors.load(Self.file)["colonne"] as? [String: Double])
+        let lower = try #require(column["min"])
+        let upper = try #require(column["max"])
+        #expect(Double(MeeshySkeletonRecipe.defaultColumnCount) == column["defaut"])
+        #expect(Double(MeeshySkeletonRecipe.columnCount(0)) == lower)
+        #expect(Double(MeeshySkeletonRecipe.columnCount(-3)) == lower)
+        #expect(Double(MeeshySkeletonRecipe.columnCount(40)) == upper)
+        #expect(MeeshySkeletonRecipe.columnCount(4) == 4)
+        #expect(MeeshySkeletonRecipe.columnSpacing == column["ecart"])
+    }
+
+    @Test("la colonne n'est faite que de l'atome : aucune roue, aucune forme redessinée")
+    func column_isMadeOfTheAtom() throws {
+        let source = try KitAtomVectors.code("MeeshySkeletonColumn.swift")
+        #expect(source.contains("MeeshySkeleton(shape: shape)"))
+        #expect(source.contains("MeeshySkeletonRecipe.columnCount(count)"))
+        for forbidden in ["ProgressView", "RoundedRectangle", "Capsule(", "Circle("] {
+            #expect(!source.contains(forbidden), "la colonne contient \(forbidden)")
+        }
     }
 
     private static func shape(_ row: [String: Any]) throws -> MeeshySkeletonShape {

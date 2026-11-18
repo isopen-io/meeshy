@@ -24,6 +24,17 @@ final class JoinFlowViewModelSubmitTests: XCTestCase {
         XCTAssertEqual(sut.errorMessage, message)
     }
 
+    func test_loadLinkInfo_lienPlusValable410_poseLaPhaseGone_sansMessageAReessayer() async {
+        let links = MockJoinFlowLinks()
+        links.linkInfoResult = .failure(MeeshyError.server(statusCode: 410, message: "Ce lien a expire"))
+        let sut = JoinFlowViewModel(identifier: "expire", links: links)
+
+        await sut.loadLinkInfo()
+
+        XCTAssertEqual(sut.phase, .gone, "un lien expiré, éteint ou plein n'est pas une panne à réessayer")
+        XCTAssertNil(sut.errorMessage)
+    }
+
     func test_submitJoin_succes_passeEnPhaseSuccess() async throws {
         let links = MockJoinFlowLinks()
         links.linkInfoResult = .success(try Self.info())

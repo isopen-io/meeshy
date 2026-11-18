@@ -221,4 +221,69 @@ final class SharedLocationsLiveTests: XCTestCase {
         XCTAssertEqual(asked.bounds, [nil])
         XCTAssertTrue(sut.byUser.isEmpty)
     }
+
+    // MARK: - En pause par fantôme (#19562)
+
+    private func ghostRig(_ snapshot: @escaping SharedLocationsLive.Served) -> SharedLocationsLive {
+        SharedLocationsLive(
+            viewerId: { "me" },
+            served: snapshot,
+            changedEvents: Empty().eraseToAnyPublisher(),
+            endedEvents: Empty().eraseToAnyPublisher(),
+            connected: Empty().eraseToAnyPublisher(),
+            now: { Date(timeIntervalSince1970: 1_800_000_000) }
+        )
+    }
+
+    func test_catchUp_aServedGhost_replacesTheKeptPosition_andKeepsOnlyWhoAndCircle() async {
+        let sut = ghostRig { _ in SharedLocationSnapshot(items: [], ghosts: [SharedLocationGhost(userId: "kwame", circle: .blood)]) }
+        sut.receive(served("kwame"))
+
+        await sut.catchUp(within: paris)
+
+        XCTAssertNil(sut.byUser["kwame"])
+        XCTAssertEqual(sut.ghosts["kwame"], SharedLocationGhost(userId: "kwame", circle: .blood))
+    }
+
+    func test_aPositionReceived_orAnEnd_clearsTheGhost() async {
+        let sut = ghostRig { _ in SharedLocationSnapshot(items: [], ghosts: [SharedLocationGhost(userId: "kwame"), SharedLocationGhost(userId: "mina")]) }
+        await sut.catchUp(within: nil)
+
+        sut.receive(served("kwame"))
+        sut.clear("mina")
+
+        XCTAssertNil(sut.ghosts["kwame"])
+        XCTAssertNotNil(sut.byUser["kwame"])
+        XCTAssertNil(sut.ghosts["mina"])
+    }
+
+    func test_theWorldCatchUp_dropsAGhostNoLongerServed_aBoundedOneDoesNot() async {
+        final class Board: @unchecked Sendable { var ghosts = [SharedLocationGhost(userId: "kwame")] }
+        let board = Board()
+        let sut = ghostRig { _ in SharedLocationSnapshot(items: [], ghosts: board.ghosts) }
+        await sut.catchUp(within: nil)
+        board.ghosts = []
+
+        await sut.catchUp(within: paris)
+        XCTAssertNotNil(sut.ghosts["kwame"])
+
+        await sut.catchUp(within: nil)
+        XCTAssertNil(sut.ghosts["kwame"])
+    }
+
+    func test_aServerWithoutGhosts_showsNobodyInGhost() async {
+        let rig = makeRig(snapshot: { _ in [] })
+
+        await rig.sut.catchUp(within: nil)
+
+        XCTAssertTrue(rig.sut.ghosts.isEmpty)
+    }
+
+    func test_myOwnGhost_isNotShownToMe() {
+        let sut = ghostRig { _ in SharedLocationSnapshot(items: []) }
+
+        sut.reconcile(SharedLocationSnapshot(items: [], ghosts: [SharedLocationGhost(userId: "me")]), mark: sut.mark(), within: nil)
+
+        XCTAssertTrue(sut.ghosts.isEmpty)
+    }
 }
