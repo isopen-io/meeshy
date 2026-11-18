@@ -184,9 +184,7 @@ final class CallScreenClearer: CallScreenClearing {
 
     func clearForCall() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        let windows = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
+        let windows = (DeviceLayout.activeWindowScene?.windows ?? [])
             .filter { !($0 is CallPassthroughWindow) && $0.windowLevel < CallReturnPoint.windowLevel }
         windows.forEach { window in
             window.endEditing(true)

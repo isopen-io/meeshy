@@ -38,11 +38,13 @@ import { z } from 'zod';
 import {
   SHARED_LOCATION_DURATIONS_MINUTES,
   SHARED_LOCATION_PRECISIONS,
+  SHARED_LOCATION_REQUEST_KINDS,
   SHARED_LOCATION_RECIPIENT_DEADLINE_MAX_SECONDS,
   SHARED_LOCATION_RECIPIENTS_MAX,
   type SharedLocationCircle,
   type SharedLocationErrorCode,
   type SharedLocationPrecision,
+  type SharedLocationRequestKind,
 } from './shared-location-constants.js';
 
 export * from './shared-location-constants.js';
@@ -75,6 +77,19 @@ export const sharedLocationStartPayloadSchema = z
       .refine((list) => new Set(list.map((r) => r.userId.toLowerCase())).size === list.length),
     durationMinutes: z.union([z.literal(SHARED_LOCATION_DURATIONS_MINUTES[0]), z.literal(SHARED_LOCATION_DURATIONS_MINUTES[1])]),
     position: sharedLocationPositionSchema,
+    /**
+     * « Prévenir » (#19204) : chaque destinataire servi qui n'était pas déjà dans le partage
+     * remplacé reçoit `location_share_started` — un nom et une durée, jamais une position.
+     * Absent ou faux : rien ne part, comme avant. Un serveur d'avant #19204 refuse la clé
+     * (`INVALID`) : le client renvoie alors le partage sans elle.
+     */
+    notifyRecipients: z.boolean().optional(),
+    /**
+     * « Partager aussi ma batterie — pendant le partage seulement » (#19204) : l'accord de
+     * l'émetteur pour la batterie, borné aux destinataires vivants et au terme du partage. La
+     * loi de la batterie (`device.battery`, dès Proche, sans blocage) reste le plafond.
+     */
+    shareBattery: z.boolean().optional(),
   })
   .strict();
 export type SharedLocationStartPayload = z.infer<typeof sharedLocationStartPayloadSchema>;
@@ -112,8 +127,36 @@ export type SharedLocationChangedEventData = {
 
 export type SharedLocationEndedEventData = { readonly userId: string };
 
-/** `GET /relations/locations` : les partages servis au lecteur, déjà tronqués. */
-export type SharedLocationSnapshot = { readonly items: readonly SharedLocationChangedEventData[] };
+/**
+ * Le dernier point d'un Sang qui m'a consenti sa position continue (#19202), tel que
+ * l'historique le servirait : la position exacte qu'il a consentie, sa date, son cercle.
+ */
+export type SharedLocationBloodItem = {
+  readonly userId: string;
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly accuracy?: number;
+  readonly recordedAt: string;
+  readonly circle?: SharedLocationCircle;
+};
+
+/** Un partage qui me visait, terminé depuis moins d'un jour (#19202) : qui, quand, son cercle — jamais une position. */
+export type SharedLocationEndedItem = {
+  readonly userId: string;
+  readonly endedAt: string;
+  readonly circle?: SharedLocationCircle;
+};
+
+/**
+ * `GET /relations/locations` : les partages servis au lecteur, déjà tronqués. `blood` et
+ * `ended` ne sont présents que si `include` les demande (#19202) : un ancien client lit la
+ * même réponse qu'avant.
+ */
+export type SharedLocationSnapshot = {
+  readonly items: readonly SharedLocationChangedEventData[];
+  readonly blood?: readonly SharedLocationBloodItem[];
+  readonly ended?: readonly SharedLocationEndedItem[];
+};
 
 /** `location:share-own-changed` : sans charge — l'appareil relit son partage. */
 export type SharedLocationOwnChangedEventData = Readonly<Record<string, never>>;
@@ -133,4 +176,30 @@ export type SharedLocationOwnRecipient = {
 export type SharedLocationOwnSnapshot = {
   readonly recipients: readonly SharedLocationOwnRecipient[];
   readonly expiresAt: string | null;
+  /** La batterie accompagne-t-elle le partage en cours (#19204) ? Absent d'un serveur antérieur : non. */
+  readonly shareBattery?: boolean;
 };
+
+/**
+ * « Demander à prolonger » / « Redemander » (#19204) — `POST /api/v1/relations/:userId/location/request`,
+ * adressée à l'émetteur. Aucun effet automatique : l'émetteur relance ou prolonge lui-même.
+ */
+export const sharedLocationRequestPayloadSchema = z.object({ kind: z.enum(SHARED_LOCATION_REQUEST_KINDS) }).strict();
+export type SharedLocationRequestPayload = z.infer<typeof sharedLocationRequestPayloadSchema>;
+
+/** `location:share-requested`, à l'émetteur seul : qui demande, quoi, quand — jamais une position. */
+export type SharedLocationRequestedEventData = {
+  readonly userId: string;
+  readonly kind: SharedLocationRequestKind;
+  readonly requestedAt: string;
+};
+
+/**
+ * Le fantôme global de position (#19203) — `PUT /api/v1/me/location/ghost`, hors drapeau Sang :
+ * plus personne ne voit ma position, ni par un partage temporaire, ni par la position du Sang.
+ */
+export const locationGhostPayloadSchema = z.object({ ghost: z.boolean() }).strict();
+export type LocationGhostPayload = z.infer<typeof locationGhostPayloadSchema>;
+
+/** L'état réglé : `ghostAt` est la date d'entrée, nulle hors fantôme. */
+export type LocationGhostState = { readonly ghost: boolean; readonly ghostAt: string | null };

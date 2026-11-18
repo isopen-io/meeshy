@@ -1,7 +1,12 @@
 import type { FastifyInstance } from 'fastify';
-import { SHARED_LOCATION_CIRCLES } from '@meeshy/shared/types/shared-location';
+import { parseSharedLocationIncludes, SHARED_LOCATION_CIRCLES } from '@meeshy/shared/types/shared-location';
+import { readRestVersionClaim, upgradeRequirementFor } from '../../middleware/app-version-floor';
+import { bloodLocationDepsOf } from '../../services/bloodLocation/bloodLocationDeps';
+import { bloodLocationEnabledFor } from '../../services/bloodLocation/bloodLocationFlag';
+import { bloodLocationMapFor } from '../../services/bloodLocation/bloodLocationMap';
+import { composeRelativesMap } from '../../services/sharedLocation/relativesMap';
 import { sharedLocationRelayDepsOf } from '../../services/sharedLocation/sharedLocationDeps';
-import { ownSharedLocationFor, sharedLocationSnapshotFor, type SharedLocationBbox } from '../../services/sharedLocation/sharedLocationRelay';
+import { ownSharedLocationFor, sharedLocationEndedFor, sharedLocationSnapshotFor, type SharedLocationBbox } from '../../services/sharedLocation/sharedLocationRelay';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendInternalError, sendSuccess } from '../../utils/response';
 import { errorResponses, relationLimiter } from './shared';
@@ -25,6 +30,45 @@ export const sharedLocationItemSchema = {
   },
 } as const;
 
+/** Le dernier point d'un Sang (#19202), déclaré champ par champ : ni scellé, ni masque, ni marque de vraisemblance. */
+export const sharedLocationBloodItemSchema = {
+  type: 'object',
+  properties: {
+    userId: { type: 'string' },
+    latitude: { type: 'number' },
+    longitude: { type: 'number' },
+    accuracy: { type: 'number' },
+    recordedAt: { type: 'string' },
+    circle: { type: 'string', enum: [...SHARED_LOCATION_CIRCLES] },
+  },
+} as const;
+
+/** Un partage terminé (#19202) : qui, quand, son cercle — aucune position ne peut partir à côté. */
+export const sharedLocationEndedItemSchema = {
+  type: 'object',
+  properties: {
+    userId: { type: 'string' },
+    endedAt: { type: 'string' },
+    circle: { type: 'string', enum: [...SHARED_LOCATION_CIRCLES] },
+  },
+} as const;
+
+/** La réponse de `GET /relations/locations` : `blood` et `ended` n'y figurent que si `include` les demande. */
+export const relationLocationsResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    data: {
+      type: 'object',
+      properties: {
+        items: { type: 'array', items: sharedLocationItemSchema },
+        blood: { type: 'array', items: sharedLocationBloodItemSchema },
+        ended: { type: 'array', items: sharedLocationEndedItemSchema },
+      },
+    },
+  },
+} as const;
+
 /**
  * MON partage, relu par chacun de mes appareils (#18389) : à qui, à quelle précision, jusqu'à
  * quand. Déclaré champ par champ : aucune position, aucune maille ne peut partir à côté.
@@ -40,6 +84,7 @@ export const ownSharedLocationSchema = {
       },
     },
     expiresAt: { type: ['string', 'null'] },
+    shareBattery: { type: 'boolean' },
   },
 } as const;
 
@@ -56,10 +101,23 @@ export function parseBbox(raw: unknown): SharedLocationBbox | undefined | null {
 }
 
 /**
+ * Le point Sang de la carte (#19202) : le drapeau de la position du Sang pour le lecteur ET le
+ * plancher de version des routes de cercles. Sous le plancher, le champ manque ; la carte reste servie.
+ */
+export function relativesMapAdmitsBlood(readerId: string, headers: Parameters<typeof readRestVersionClaim>[0]): boolean {
+  return bloodLocationEnabledFor(readerId) && upgradeRequirementFor(readRestVersionClaim(headers)) === null;
+}
+
+/**
  * Le RATTRAPAGE du partage temporaire de position (#14109, #16980) :
  * `GET /relations/locations?bbox=` rend les partages en cours qui me sont destinés,
  * chacun à la précision que son émetteur m'a donnée, filtrés par l'emprise de la carte
  * sur la position SERVIE. Le direct passe ensuite par `location:share-changed`.
+ *
+ * `include=blood,ended` (#19202, additif) en fait la carte de tous mes proches en UN appel : le
+ * dernier point de chaque Sang qui me l'a consenti (derrière le drapeau de la position du Sang et
+ * le plancher de version des routes de cercles, jugé comme l'historique — sous le plancher, le
+ * champ manque au lieu de refuser toute la carte) et les partages qui me visaient, terminés depuis moins d'un jour.
  */
 export function registerRelationLocations(fastify: FastifyInstance): void {
   const reads = relationLimiter(fastify, 'rel:locations:u', 120);
@@ -71,19 +129,30 @@ export function registerRelationLocations(fastify: FastifyInstance): void {
       description: 'Locations my links are sharing with me right now, each at the precision they gave me, within the visible map area.',
       tags: ['relations'],
       summary: 'Shared locations of my links',
-      querystring: { type: 'object', properties: { bbox: { type: 'string' } } },
+      querystring: { type: 'object', properties: { bbox: { type: 'string' }, include: { type: 'string' } } },
       response: {
-        200: { type: 'object', properties: { success: { type: 'boolean' }, data: { type: 'object', properties: { items: { type: 'array', items: sharedLocationItemSchema } } } } },
+        200: relationLocationsResponseSchema,
         ...errorResponses,
       },
       security: [{ bearerAuth: [] }],
     },
   }, async (request, reply) => {
     try {
-      const bbox = parseBbox((request.query as { bbox?: unknown } | undefined)?.bbox);
+      const query = request.query as { bbox?: unknown; include?: unknown } | undefined;
+      const bbox = parseBbox(query?.bbox);
       if (bbox === null) return sendBadRequest(reply, 'Emprise illisible');
-      const snapshot = await sharedLocationSnapshotFor(sharedLocationRelayDepsOf({ prisma: fastify.prisma, io: undefined }), request.user!.userId, { bbox });
-      return sendSuccess(reply, snapshot);
+      const readerId = request.user!.userId;
+      const relay = sharedLocationRelayDepsOf({ prisma: fastify.prisma, io: undefined });
+      const map = await composeRelativesMap(
+        {
+          snapshot: () => sharedLocationSnapshotFor(relay, readerId, { bbox }),
+          blood: () => bloodLocationMapFor(bloodLocationDepsOf({ prisma: fastify.prisma, io: undefined }), readerId),
+          ended: () => sharedLocationEndedFor(relay, readerId),
+          bloodEnabled: relativesMapAdmitsBlood(readerId, request.headers),
+        },
+        { bbox, include: parseSharedLocationIncludes(query?.include) },
+      );
+      return sendSuccess(reply, map);
     } catch (error) {
       logError(fastify.log, 'Shared locations snapshot error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
