@@ -24,7 +24,11 @@ import {
   isCommunitySteward,
   type CommunityJoinVia
 } from '../../services/community-entries';
-import { scheduleCommunityMemberBroadcastFrom } from '../../services/community-member-broadcast';
+import { EngagementService } from '../../services/engagement/EngagementService';
+import { ACCOUNT_STATE_SELECT, isUsableAccount } from '../../services/relations/usableAccount';
+import { getBlockRelatedUserIds, isBlockedBetween } from '../../utils/blocking.js';
+import { admitCommunityMember } from './admission';
+import type { CommunityEngagementOptions } from './types';
 
 const logger = enhancedLogger.child({ module: 'CommunityEntryRoutes' });
 
@@ -61,9 +65,19 @@ function viewerIdOf(request: unknown): string | null {
 
 const joinViaOf = (stored: string | null | undefined): CommunityJoinVia => (stored === 'link' ? 'link' : 'self');
 
-export async function registerEntryRoutes(fastify: FastifyInstance) {
+type Stewarded = { readonly id: string; readonly createdBy: string };
+
+const servedRequest = <T extends { user?: (Record<string, unknown> & { id: string }) | null }>(row: T) => {
+  if (!row.user) return row;
+  const { isActive: _a, deletedAt: _d, deactivatedAt: _x, ...user } = row.user;
+  return { ...row, user };
+};
+
+export async function registerEntryRoutes(fastify: FastifyInstance, options: CommunityEngagementOptions = {}) {
+  const engagement = options.engagement ?? new EngagementService(fastify.prisma);
+
   /** La communauté ACTIVE que le lecteur anime ou modère, ou rien (⇒ 404 générique). */
-  async function stewardedCommunity(id: string, viewerId: string): Promise<{ id: string } | null> {
+  async function stewardedCommunity(id: string, viewerId: string): Promise<Stewarded | null> {
     const community = await fastify.prisma.community.findFirst({
       where: { id, isActive: true },
       select: {
@@ -72,20 +86,20 @@ export async function registerEntryRoutes(fastify: FastifyInstance) {
         members: { where: { userId: viewerId, isActive: true }, select: { userId: true, role: true } }
       }
     });
-    return community && isCommunitySteward(community, viewerId) ? { id: community.id } : null;
+    return community && isCommunitySteward(community, viewerId) ? { id: community.id, createdBy: community.createdBy } : null;
   }
 
   async function guarded(
     request: unknown,
     reply: FastifyReply,
     id: string,
-    then: (viewerId: string) => Promise<unknown>
+    then: (viewerId: string, community: Stewarded) => Promise<unknown>
   ): Promise<unknown> {
     const viewerId = viewerIdOf(request);
     if (!viewerId) return sendUnauthorized(reply, 'User must be authenticated', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
     const community = await stewardedCommunity(id, viewerId);
     if (!community) return sendNotFound(reply, NOT_FOUND);
-    return then(viewerId);
+    return then(viewerId, community);
   }
 
   fastify.get('/communities/:id/entries/stats', {
@@ -145,14 +159,22 @@ export async function registerEntryRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
     try {
-      return await guarded(request, reply, id, async () => {
-        const requests = await fastify.prisma.communityJoinRequest.findMany({
-          where: { communityId: id, status: 'pending' },
-          orderBy: { createdAt: 'desc' },
-          take: 100,
-          include: { user: { select: REQUESTER_SELECT } }
-        });
-        return sendSuccess(reply, requests);
+      return await guarded(request, reply, id, async (viewerId) => {
+        const [requests, blocked] = await Promise.all([
+          fastify.prisma.communityJoinRequest.findMany({
+            where: { communityId: id, status: 'pending' },
+            orderBy: { createdAt: 'desc' },
+            take: 100,
+            include: { user: { select: { ...REQUESTER_SELECT, ...ACCOUNT_STATE_SELECT } } }
+          }),
+          getBlockRelatedUserIds(fastify.prisma, viewerId)
+        ]);
+        // Ni un demandeur bloqué avec cet intendant (dans un sens ou l'autre),
+        // ni un compte qui n'est plus utilisable : l'état du compte ne part pas.
+        const served = requests
+          .filter((r) => isUsableAccount(r.user) && !blocked.has(r.userId))
+          .map(servedRequest);
+        return sendSuccess(reply, served);
       });
     } catch (error) {
       logger.error('Error listing community join requests', error as Error);
@@ -160,11 +182,27 @@ export async function registerEntryRoutes(fastify: FastifyInstance) {
     }
   });
 
-  async function pendingRequest(id: string, requestId: string) {
-    return fastify.prisma.communityJoinRequest.findFirst({
+  /**
+   * La demande EN ATTENTE que CET intendant peut trancher : un demandeur au
+   * compte utilisable, sans blocage entre eux. Tout le reste est le 404 générique.
+   */
+  async function decidableRequest(id: string, requestId: string, viewerId: string) {
+    const pending = await fastify.prisma.communityJoinRequest.findFirst({
       where: { id: requestId, communityId: id, status: 'pending' },
-      select: { id: true, userId: true, via: true, country: true }
+      select: { id: true, userId: true, via: true, country: true, user: { select: { id: true, ...ACCOUNT_STATE_SELECT } } }
     });
+    if (!pending || !isUsableAccount(pending.user)) return null;
+    if (await isBlockedBetween(fastify.prisma, viewerId, pending.userId)) return null;
+    return pending;
+  }
+
+  /** Bascule ATOMIQUE `pending` → décision : deux décisions concurrentes, une seule gagne. */
+  async function decide(id: string, requestId: string, viewerId: string, status: 'accepted' | 'rejected'): Promise<boolean> {
+    const flipped = await fastify.prisma.communityJoinRequest.updateMany({
+      where: { id: requestId, communityId: id, status: 'pending' },
+      data: { status, decidedAt: new Date(), decidedBy: viewerId }
+    });
+    return flipped.count === 1;
   }
 
   fastify.post('/communities/:id/join-requests/:requestId/accept', {
@@ -182,34 +220,29 @@ export async function registerEntryRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { id, requestId } = request.params as { id: string; requestId: string };
     try {
-      return await guarded(request, reply, id, async (viewerId) => {
-        const pending = await pendingRequest(id, requestId);
+      return await guarded(request, reply, id, async (viewerId, community) => {
+        const pending = await decidableRequest(id, requestId, viewerId);
         if (!pending) return sendNotFound(reply, NOT_FOUND);
-        const via = joinViaOf(pending.via);
-        const entry = { role: 'member', joinedVia: via, joinCountry: pending.country ?? null };
-        const existing = await fastify.prisma.communityMember.findFirst({
-          where: { communityId: id, userId: pending.userId },
-          select: { id: true, isActive: true }
-        });
-        // Une ligne laissée par un départ se RÉACTIVE (#5760) ; une ligne active n'est pas réécrite.
-        const member = existing?.isActive
-          ? existing
-          : existing
-            ? await fastify.prisma.communityMember.update({
-                where: { id: existing.id },
-                data: { ...entry, isActive: true, leftAt: null }
-              })
-            : await fastify.prisma.communityMember.create({
-                data: { communityId: id, userId: pending.userId, ...entry }
-              });
-        await fastify.prisma.communityJoinRequest.update({
-          where: { id: pending.id },
-          data: { status: 'accepted', decidedAt: new Date(), decidedBy: viewerId }
-        });
-        if (!existing?.isActive) {
-          scheduleCommunityMemberBroadcastFrom(fastify, { kind: 'joined', communityId: id, userId: pending.userId, role: 'member', via });
+        if (!(await decide(id, pending.id, viewerId, 'accepted'))) return sendNotFound(reply, NOT_FOUND);
+        try {
+          const { member } = await admitCommunityMember(fastify, engagement, {
+            communityId: id,
+            userId: pending.userId,
+            via: joinViaOf(pending.via),
+            joinCountry: pending.country ?? null,
+            createdBy: community.createdBy
+          });
+          return sendSuccess(reply, member);
+        } catch (error) {
+          // L'entrée n'a pas eu lieu : la demande redevient tranchable.
+          await fastify.prisma.communityJoinRequest
+            .updateMany({
+              where: { id: pending.id, status: 'accepted', decidedBy: viewerId },
+              data: { status: 'pending', decidedAt: null, decidedBy: null }
+            })
+            .catch((rollback: unknown) => logger.warn('join request rollback failed', { requestId: pending.id, rollback }));
+          throw error;
         }
-        return sendSuccess(reply, member);
       });
     } catch (error) {
       logger.error('Error accepting community join request', error as Error);
@@ -239,12 +272,9 @@ export async function registerEntryRoutes(fastify: FastifyInstance) {
     const { id, requestId } = request.params as { id: string; requestId: string };
     try {
       return await guarded(request, reply, id, async (viewerId) => {
-        const pending = await pendingRequest(id, requestId);
+        const pending = await decidableRequest(id, requestId, viewerId);
         if (!pending) return sendNotFound(reply, NOT_FOUND);
-        await fastify.prisma.communityJoinRequest.update({
-          where: { id: pending.id },
-          data: { status: 'rejected', decidedAt: new Date(), decidedBy: viewerId }
-        });
+        if (!(await decide(id, pending.id, viewerId, 'rejected'))) return sendNotFound(reply, NOT_FOUND);
         return sendSuccess(reply, { id: pending.id, status: 'rejected' });
       });
     } catch (error) {

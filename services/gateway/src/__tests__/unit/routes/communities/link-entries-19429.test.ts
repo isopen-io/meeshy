@@ -35,7 +35,7 @@ import { registerMembershipRoutes } from '../../../../routes/communities/members
 import { registerMemberRoutes } from '../../../../routes/communities/members';
 import { registerEntryRoutes } from '../../../../routes/communities/entries';
 import { computeCommunityEntryStats } from '../../../../services/community-entries';
-import { joinRequestedAudience } from '../../../../services/community-join-request-broadcast';
+import { broadcastCommunityJoinRequested, joinRequestedAudience } from '../../../../services/community-join-request-broadcast';
 
 const VIEWER = '507f1f77bcf86cd799430011';
 const CREATOR = '507f1f77bcf86cd799430022';
@@ -53,7 +53,9 @@ const authAs = (userId: string) => ({
 
 type Role = 'admin' | 'moderator' | 'member' | null;
 
-function makePrisma(options: { viewerRole?: Role; requiresJoinApproval?: boolean; isPrivate?: boolean; request?: Record<string, unknown> | null } = {}) {
+const USABLE = { isActive: true, deletedAt: null, deactivatedAt: null };
+
+function makePrisma(options: { viewerRole?: Role; requiresJoinApproval?: boolean; isPrivate?: boolean; request?: Record<string, unknown> | null; rejected?: Record<string, unknown> | null } = {}) {
   const viewerRole = options.viewerRole === undefined ? 'moderator' : options.viewerRole;
   const members = viewerRole ? [{ userId: VIEWER, role: viewerRole }] : [];
   const rows = [{
@@ -76,30 +78,40 @@ function makePrisma(options: { viewerRole?: Role; requiresJoinApproval?: boolean
       update: jest.fn<any>(async ({ data }: any) => ({ id: ROW, ...data })),
     },
     communityJoinRequest: {
-      findFirst: jest.fn<any>().mockResolvedValue(options.request === undefined ? null : options.request),
-      findMany: jest.fn<any>().mockResolvedValue([{
+      findFirst: jest.fn<any>(async ({ where }: any) =>
+        where.status === 'rejected'
+          ? (options.rejected ?? null)
+          : (options.request === undefined ? null : options.request)),
+      findMany: jest.fn<any>(async ({ where }: any) => (where.userId ? [{ id: REQUEST }] : [{
         id: REQUEST, communityId: COMM, userId: ARRIVANT, status: 'pending', via: 'link', country: 'SN',
         createdAt: new Date('2026-11-16T09:00:00Z'),
-        user: { id: ARRIVANT, username: 'nadia', displayName: 'Nadia', avatar: null },
-      }]),
+        user: { id: ARRIVANT, username: 'nadia', displayName: 'Nadia', avatar: null, ...USABLE },
+      }])),
       count: jest.fn<any>().mockResolvedValue(1),
       create: jest.fn<any>(async ({ data }: any) => ({ id: REQUEST, status: 'pending', createdAt: new Date(), ...data })),
       update: jest.fn<any>(async ({ data }: any) => ({ id: REQUEST, ...data })),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
-    user: { findFirst: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+    user: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
     friendRequest: { findMany: jest.fn<any>().mockResolvedValue([]) },
     userRelation: { findMany: jest.fn<any>().mockResolvedValue([]) },
   } as any;
 }
 
 const apps: FastifyInstance[] = [];
+const engagement = { recordActivity: jest.fn<any>().mockResolvedValue(undefined) };
 async function build(prisma: any, userId = VIEWER): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('authenticate', async (req: any) => { req.authContext = authAs(userId); });
   app.decorate('prisma', prisma);
-  await registerMembershipRoutes(app, { engagement: { recordActivity: jest.fn<any>().mockResolvedValue(undefined) } });
+  await registerMembershipRoutes(app, { engagement });
   await registerMemberRoutes(app);
-  await registerEntryRoutes(app);
+  await registerEntryRoutes(app, { engagement });
   await app.ready();
   apps.push(app);
   return app;
@@ -109,6 +121,7 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((a) => a.close()));
   broadcasts.splice(0);
   joinRequested.splice(0);
+  engagement.recordActivity.mockClear();
 });
 
 describe('computeCommunityEntryStats — la série et les fenêtres', () => {
@@ -234,10 +247,10 @@ describe('POST /communities/:id/join — la source et le pays de l\'entrée', ()
   });
 
   it('« Valider chaque entrée » : une DEMANDE en attente (202), aucune adhésion, les admins prévenus', async () => {
-    const prisma = makePrisma({ viewerRole: null, requiresJoinApproval: true, isPrivate: true });
+    const prisma = makePrisma({ viewerRole: null, requiresJoinApproval: true });
     const app = await build(prisma);
     const res = await app.inject({
-      method: 'POST', url: `/communities/${COMM}/join`, headers: { 'cf-ipcountry': 'SN' }, payload: { via: 'link' },
+      method: 'POST', url: `/communities/${COMM}/join`, headers: { 'cf-ipcountry': 'SN' }, payload: { via: 'link', acceptsPending: true },
     });
     expect(res.statusCode).toBe(202);
     expect(res.json().data).toEqual(expect.objectContaining({ status: 'pending', requestId: REQUEST }));
@@ -254,14 +267,66 @@ describe('POST /communities/:id/join — la source et le pays de l\'entrée', ()
       request: { id: REQUEST, communityId: COMM, userId: VIEWER, status: 'pending', createdAt: new Date() },
     });
     const app = await build(prisma);
-    const res = await app.inject({ method: 'POST', url: `/communities/${COMM}/join` });
+    const res = await app.inject({ method: 'POST', url: `/communities/${COMM}/join`, payload: { acceptsPending: true } });
     expect(res.statusCode).toBe(202);
     expect(prisma.communityJoinRequest.create).not.toHaveBeenCalled();
+    expect(joinRequested).toEqual([]);
+  });
+
+  it('ANCIEN client (sans corps) : une erreur métier qu\'il sait afficher (409 COMMUNITY_JOIN_PENDING), jamais un 2xx de forme inconnue — la demande est bien posée', async () => {
+    const prisma = makePrisma({ viewerRole: null, requiresJoinApproval: true });
+    const app = await build(prisma);
+    const res = await app.inject({ method: 'POST', url: `/communities/${COMM}/join` });
+    expect(res.statusCode).toBe(409);
+    const body = res.json();
+    expect(body.success).toBe(false);
+    expect(typeof body.error).toBe('string');
+    expect(body.code).toBe('COMMUNITY_JOIN_PENDING');
+    expect(body).not.toHaveProperty('data');
+    expect(prisma.communityJoinRequest.create).toHaveBeenCalledTimes(1);
+    expect(prisma.communityMember.create).not.toHaveBeenCalled();
+  });
+
+  it('une communauté PRIVÉE reste sur invitation, même si elle valide chaque entrée : 403, aucune demande, personne prévenu', async () => {
+    const prisma = makePrisma({ viewerRole: null, requiresJoinApproval: true, isPrivate: true });
+    const app = await build(prisma);
+    const res = await app.inject({ method: 'POST', url: `/communities/${COMM}/join`, payload: { acceptsPending: true } });
+    expect(res.statusCode).toBe(403);
+    expect(prisma.communityJoinRequest.create).not.toHaveBeenCalled();
+    expect(joinRequested).toEqual([]);
+  });
+
+  it('après un refus récent, une nouvelle demande attend (403 COMMUNITY_JOIN_COOLDOWN) : les intendants ne sont pas relancés', async () => {
+    const prisma = makePrisma({
+      viewerRole: null, requiresJoinApproval: true,
+      rejected: { id: REQUEST, decidedAt: new Date(Date.now() - 3_600_000) },
+    });
+    const app = await build(prisma);
+    const res = await app.inject({ method: 'POST', url: `/communities/${COMM}/join`, payload: { acceptsPending: true } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('COMMUNITY_JOIN_COOLDOWN');
+    expect(prisma.communityJoinRequest.create).not.toHaveBeenCalled();
+    expect(joinRequested).toEqual([]);
+    const rejectedLookup = prisma.communityJoinRequest.findFirst.mock.calls.find((c: any) => c[0].where.status === 'rejected');
+    expect(rejectedLookup[0].where.decidedAt.gte).toBeInstanceOf(Date);
+  });
+
+  it('deux demandes simultanées convergent sur UNE : la plus ancienne reste, la seconde s\'efface sans prévenir personne', async () => {
+    const prisma = makePrisma({ viewerRole: null, requiresJoinApproval: true });
+    const MINE = '507f1f77bcf86cd799430077';
+    prisma.communityJoinRequest.create.mockResolvedValue({ id: MINE });
+    prisma.communityJoinRequest.findMany.mockResolvedValue([{ id: REQUEST }, { id: MINE }]);
+    const app = await build(prisma);
+    const res = await app.inject({ method: 'POST', url: `/communities/${COMM}/join`, payload: { acceptsPending: true } });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().data.requestId).toBe(REQUEST);
+    expect(prisma.communityJoinRequest.deleteMany).toHaveBeenCalledWith({ where: { id: MINE, status: 'pending' } });
+    expect(joinRequested).toEqual([]);
   });
 });
 
 describe('Les demandes en attente', () => {
-  const pending = { id: REQUEST, communityId: COMM, userId: ARRIVANT, status: 'pending', via: 'link', country: 'SN' };
+  const pending = { id: REQUEST, communityId: COMM, userId: ARRIVANT, status: 'pending', via: 'link', country: 'SN', user: { id: ARRIVANT, ...USABLE } };
 
   it('GET liste les demandes à un MODÉRATEUR, récentes d\'abord, avec le pays', async () => {
     const prisma = makePrisma({ viewerRole: 'moderator' });
@@ -272,6 +337,27 @@ describe('Les demandes en attente', () => {
     expect(prisma.communityJoinRequest.findMany.mock.calls[0][0]).toEqual(expect.objectContaining({
       where: { communityId: COMM, status: 'pending' }, orderBy: { createdAt: 'desc' },
     }));
+  });
+
+  it('GET écarte les demandeurs bloqués avec l\'intendant et ceux dont le compte n\'est plus utilisable — sans servir l\'état du compte', async () => {
+    const BLOQUE = '507f1f77bcf86cd799430088';
+    const PARTI = '507f1f77bcf86cd799430099';
+    const prisma = makePrisma({ viewerRole: 'moderator' });
+    const row = (id: string, userId: string, state = USABLE) => ({
+      id, communityId: COMM, userId, status: 'pending', via: 'self', country: 'SN', createdAt: new Date(),
+      user: { id: userId, username: userId, displayName: null, avatar: null, ...state },
+    });
+    prisma.communityJoinRequest.findMany.mockResolvedValue([
+      row(REQUEST, ARRIVANT),
+      row('507f1f77bcf86cd7994300a1', BLOQUE),
+      row('507f1f77bcf86cd7994300a2', PARTI, { isActive: true, deletedAt: new Date(), deactivatedAt: null } as any),
+    ]);
+    prisma.user.findUnique.mockResolvedValue({ blockedUserIds: [BLOQUE] });
+    const app = await build(prisma);
+    const res = await app.inject({ method: 'GET', url: `/communities/${COMM}/join-requests` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.map((r: any) => r.userId)).toEqual([ARRIVANT]);
+    expect(res.body).not.toContain('deactivatedAt');
   });
 
   it('GET rend un 404 générique à un MEMBRE simple', async () => {
@@ -290,11 +376,42 @@ describe('Les demandes en attente', () => {
     expect(prisma.communityMember.create.mock.calls[0][0].data).toEqual(expect.objectContaining({
       communityId: COMM, userId: ARRIVANT, role: 'member', joinedVia: 'link', joinCountry: 'SN',
     }));
-    expect(prisma.communityJoinRequest.update.mock.calls[0][0]).toEqual({
-      where: { id: REQUEST },
+    expect(prisma.communityJoinRequest.updateMany.mock.calls[0][0]).toEqual({
+      where: { id: REQUEST, communityId: COMM, status: 'pending' },
       data: expect.objectContaining({ status: 'accepted', decidedBy: VIEWER, decidedAt: expect.any(Date) }),
     });
     expect(broadcasts).toEqual([expect.objectContaining({ kind: 'joined', userId: ARRIVANT, via: 'link' })]);
+    expect(engagement.recordActivity).toHaveBeenCalledWith(ARRIVANT, 'social.community_joined', expect.objectContaining({ targetId: COMM }));
+    expect(res.json().data.joinCountry).toBe('SN');
+  });
+
+  it('deux décisions concurrentes : celle qui ne bascule pas la demande (count 0) rend 404 et n\'écrit AUCUN membre', async () => {
+    const prisma = makePrisma({ viewerRole: 'moderator', request: pending });
+    prisma.communityJoinRequest.updateMany.mockResolvedValue({ count: 0 });
+    const app = await build(prisma);
+    const res = await app.inject({ method: 'POST', url: `/communities/${COMM}/join-requests/${REQUEST}/accept` });
+    expect(res.statusCode).toBe(404);
+    expect(prisma.communityMember.create).not.toHaveBeenCalled();
+    expect(prisma.communityMember.update).not.toHaveBeenCalled();
+    expect(broadcasts).toEqual([]);
+  });
+
+  it('un demandeur dont le compte n\'est plus utilisable ne s\'accepte pas : 404, la demande reste intacte', async () => {
+    const prisma = makePrisma({ viewerRole: 'moderator', request: { ...pending, user: { id: ARRIVANT, isActive: false, deletedAt: null, deactivatedAt: new Date() } } });
+    const app = await build(prisma);
+    const res = await app.inject({ method: 'POST', url: `/communities/${COMM}/join-requests/${REQUEST}/accept` });
+    expect(res.statusCode).toBe(404);
+    expect(prisma.communityJoinRequest.updateMany).not.toHaveBeenCalled();
+    expect(prisma.communityMember.create).not.toHaveBeenCalled();
+  });
+
+  it('un intendant bloqué avec le demandeur (dans un sens ou l\'autre) ne tranche pas sa demande : 404', async () => {
+    const prisma = makePrisma({ viewerRole: 'moderator', request: pending });
+    prisma.user.findFirst.mockResolvedValue({ id: ARRIVANT });
+    const app = await build(prisma);
+    const res = await app.inject({ method: 'POST', url: `/communities/${COMM}/join-requests/${REQUEST}/accept` });
+    expect(res.statusCode).toBe(404);
+    expect(prisma.communityJoinRequest.updateMany).not.toHaveBeenCalled();
   });
 
   it('accepter réactive une ligne laissée par un départ au lieu d\'en créer une seconde', async () => {
@@ -315,7 +432,10 @@ describe('Les demandes en attente', () => {
     const res = await app.inject({ method: 'POST', url: `/communities/${COMM}/join-requests/${REQUEST}/reject` });
     expect(res.statusCode).toBe(200);
     expect(prisma.communityMember.create).not.toHaveBeenCalled();
-    expect(prisma.communityJoinRequest.update.mock.calls[0][0].data).toEqual(expect.objectContaining({ status: 'rejected' }));
+    expect(prisma.communityJoinRequest.updateMany.mock.calls[0][0]).toEqual({
+      where: { id: REQUEST, communityId: COMM, status: 'pending' },
+      data: expect.objectContaining({ status: 'rejected', decidedBy: VIEWER }),
+    });
   });
 
   it('un MEMBRE simple qui accepte reçoit un 404 générique, rien n\'est écrit', async () => {
@@ -324,7 +444,7 @@ describe('Les demandes en attente', () => {
     const res = await app.inject({ method: 'POST', url: `/communities/${COMM}/join-requests/${REQUEST}/accept` });
     expect(res.statusCode).toBe(404);
     expect(prisma.communityMember.create).not.toHaveBeenCalled();
-    expect(prisma.communityJoinRequest.update).not.toHaveBeenCalled();
+    expect(prisma.communityJoinRequest.updateMany).not.toHaveBeenCalled();
   });
 
   it('une demande inconnue ou déjà tranchée rend 404', async () => {
@@ -345,5 +465,24 @@ describe('community:join-requested — l\'audience', () => {
       stewards: [{ userId: VIEWER, role: 'moderator' }, { userId: CREATOR, role: 'admin' }, { userId: ROW, role: 'member' }],
     });
     expect([...audience].sort()).toEqual([VIEWER, CREATOR].sort());
+  });
+
+  it('un intendant bloqué avec le demandeur (dans un sens ou l\'autre) n\'est pas prévenu ; les autres le sont', async () => {
+    const MOD = '507f1f77bcf86cd7994300b1';
+    const prisma = {
+      community: { findFirst: jest.fn<any>().mockResolvedValue({ createdBy: CREATOR }) },
+      communityMember: { findMany: jest.fn<any>().mockResolvedValue([{ userId: VIEWER, role: 'moderator' }, { userId: MOD, role: 'admin' }]) },
+      communityJoinRequest: { count: jest.fn<any>().mockResolvedValue(1) },
+      user: {
+        findMany: jest.fn<any>().mockResolvedValue([{ id: MOD }]),
+        findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [CREATOR] }),
+      },
+    };
+    const sent: string[] = [];
+    await broadcastCommunityJoinRequested(
+      { prisma: prisma as any, deliver: (userId) => { sent.push(userId); } },
+      { communityId: COMM, requestId: REQUEST, userId: ARRIVANT },
+    );
+    expect(sent).toEqual([VIEWER]);
   });
 });

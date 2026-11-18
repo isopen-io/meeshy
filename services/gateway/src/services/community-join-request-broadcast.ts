@@ -2,7 +2,9 @@
  * `community:join-requested` (#19429) — une demande d'entrée annoncée à ceux
  * qui peuvent l'accepter ou la refuser : les administrateurs, les modérateurs
  * ACTIFS et le créateur de la communauté, une fois chacun. Jamais un membre
- * simple, jamais la personne qui demande (elle a déjà la réponse 202).
+ * simple, jamais la personne qui demande (elle a déjà la réponse 202), jamais
+ * un intendant bloqué avec elle dans un sens ou l'autre — la liste des demandes
+ * le lui cache aussi.
  *
  * La charge ne nomme la personne que par son identifiant : son profil et son
  * pays se relisent par `GET /communities/:id/join-requests`, sous les gardes
@@ -15,6 +17,7 @@ import { SERVER_EVENTS, type CommunityJoinRequestedEventData } from '@meeshy/sha
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { deferAfterResponse } from '../utils/after-response.js';
 import { broadcastToUser } from '../utils/socket-broadcast';
+import { getBlockRelatedUserIds } from '../utils/blocking.js';
 
 const logger = enhancedLogger.child({ module: 'CommunityJoinRequestBroadcast' });
 
@@ -35,7 +38,7 @@ export function joinRequestedAudience(input: {
 }
 
 export type CommunityJoinRequestedDeps = {
-  readonly prisma: Pick<PrismaClient, 'community' | 'communityMember' | 'communityJoinRequest'>;
+  readonly prisma: Pick<PrismaClient, 'community' | 'communityMember' | 'communityJoinRequest' | 'user'>;
   readonly deliver: (userId: string, payload: CommunityJoinRequestedEventData) => void;
   readonly now?: () => Date;
 };
@@ -49,12 +52,13 @@ export async function broadcastCommunityJoinRequested(
     select: { createdBy: true },
   });
   if (!community) return 0;
-  const [stewards, pendingCount] = await Promise.all([
+  const [stewards, pendingCount, blocked] = await Promise.all([
     deps.prisma.communityMember.findMany({
       where: { communityId: change.communityId, isActive: true, role: { in: ['admin', 'moderator'] } },
       select: { userId: true, role: true },
     }),
     deps.prisma.communityJoinRequest.count({ where: { communityId: change.communityId, status: 'pending' } }),
+    getBlockRelatedUserIds(deps.prisma, change.userId),
   ]);
   const payload: CommunityJoinRequestedEventData = {
     ...change,
@@ -62,7 +66,7 @@ export async function broadcastCommunityJoinRequested(
     at: (deps.now ?? (() => new Date()))().toISOString(),
   };
   const audience = [...joinRequestedAudience({ createdBy: community.createdBy, stewards })].filter(
-    (userId) => userId !== change.userId,
+    (userId) => userId !== change.userId && !blocked.has(userId),
   );
   return audience
     .map((userId) => {
