@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import MeeshySDK
 @testable import Meeshy
 
@@ -176,6 +177,15 @@ final class ProfileShareLocationLineTests: XCTestCase {
         XCTAssertTrue(section.contains("tint: tint"), "la section passe l'accent de la fiche à la rangée")
         let app = try code("MeeshyApp.swift")
         XCTAssertTrue(app.contains("ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked, tint: tint)"))
+        XCTAssertTrue(app.contains("ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked, tint: tint)"),
+                      "l'emplacement du cercle relaie l'accent que la fiche lui remet")
+        XCTAssertFalse(app.contains("tint: Color = .clear"), "aucune teinte transparente ne passe pour l'accent de la fiche")
+    }
+
+    func test_row_withoutProfileAccent_takesTheCommonCircleColor() {
+        XCTAssertEqual(ProfileShareLocationRow.accent(tint: nil, circle: .close), LocationMapTint.color(for: .close))
+        XCTAssertEqual(ProfileShareLocationRow.accent(tint: nil, circle: nil), LocationMapTint.color(for: nil))
+        XCTAssertEqual(ProfileShareLocationRow.accent(tint: .orange, circle: .close), .orange)
     }
 }
 

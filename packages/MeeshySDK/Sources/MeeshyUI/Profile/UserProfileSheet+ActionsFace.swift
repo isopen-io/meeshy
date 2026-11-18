@@ -113,7 +113,7 @@ extension UserProfileSheet {
         switch requestStage {
         case .open, .unsent:
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
-                                linked: $relationLinked) {
+                                linked: $relationLinked, tint: accentTint) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     ProfileFriendRequestCard(tint: accentTint, unsent: requestStage == .unsent) { note in
                         Task { await sendConnectionRequest(message: note) }
@@ -123,7 +123,7 @@ extension UserProfileSheet {
             }
         case .closed:
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
-                                linked: $relationLinked) {
+                                linked: $relationLinked, tint: accentTint) {
                 ProfileClosedRequestCard(name: name)
             }
         case .sent(let sentAt):
@@ -144,10 +144,10 @@ extension UserProfileSheet {
             ProfileAcceptedRequestCard(name: name, isOnline: resolvedPresence == .online, tint: accentTint,
                                        onWrite: { openConversation() })
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
-                                linked: $relationLinked) { EmptyView() }
+                                linked: $relationLinked, tint: accentTint) { EmptyView() }
         case .connected:
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
-                                linked: $relationLinked) { ProfileConnectedBadge() }
+                                linked: $relationLinked, tint: accentTint) { ProfileConnectedBadge() }
         }
     }
 

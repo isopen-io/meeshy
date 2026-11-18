@@ -79,7 +79,12 @@ struct ProfileShareLocationRow: View {
         }
     }
 
-    private var accent: Color { tint ?? LocationMapTint.color(for: circle) }
+    private var accent: Color { Self.accent(tint: tint, circle: circle) }
+
+    /// L'accent de la fiche quand elle en remet un, sinon la couleur du cercle commun.
+    static func accent(tint: Color?, circle: RelationLevel?) -> Color {
+        tint ?? LocationMapTint.color(for: circle)
+    }
 
     private func stop() async {
         switch await center.stopSharing(with: userId) {
