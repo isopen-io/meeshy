@@ -33,10 +33,18 @@ type Door =
 
 const DOORS: Readonly<Record<string, Door>> = {
   // #19650 — l'ajout d'un membre, partagé par `POST …/participants` et l'invitation pendant un appel.
-  'services/conversations/memberAdmission.ts': { writes: 2, law: 'newMemberRefusal(' },
-  'routes/conversations/sharing-invite.ts': { writes: 2, law: 'newMemberRefusal(' },
+  // #19688 — chacune de ces trois portes avait DEUX écritures activantes (la
+  // création et la rentrée) ; la rentrée est passée chez
+  // `rejoinParticipantWrite.ts`, qui la commet pour les trois sous la garde de
+  // bannissement. Il leur reste leur `create`.
+  'services/conversations/memberAdmission.ts': { writes: 1, law: 'newMemberRefusal(' },
+  'routes/conversations/sharing-invite.ts': { writes: 1, law: 'newMemberRefusal(' },
   'services/messaging/MessagingService.ts': { writes: 1, law: 'newMemberRefusal(' },
-  'routes/conversations/link-admission.ts': { writes: 2, law: 'admitLinkEntry(' },
+  'routes/conversations/link-admission.ts': { writes: 1, law: 'admitLinkEntry(' },
+  'services/conversations/rejoinParticipantWrite.ts': {
+    writes: 1,
+    exempt: 'commet la RENTRÉE des trois portes (#19688) — sa charge est un PARAMÈTRE, la loi d’entrée a déjà jugé chez l’appelant (deux lois différentes, donc aucun `decidedBy` ne la nomme), et c’est la seule écriture activante du dépôt qui porte `unsetOrNull(bannedAt)` dans son `where` : elle ne peut pas activer une ligne bannie',
+  },
   'routes/conversations/link-admission-guest.ts': {
     writes: 1,
     law: 'admitLinkEntry(',

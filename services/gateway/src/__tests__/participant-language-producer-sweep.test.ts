@@ -202,16 +202,50 @@ describe('chaque inventaire gelé PORTE quelque chose', () => {
   // #4713 a extrait le noyau des deux gestes de bannissement ; les deux
   // écritures opaques ont suivi dans `participant-ban-core.ts`, inchangées.
   // Seule la CLÉ change — ce gel est indexé par FICHIER.
-  it('le gel des écritures OPAQUES couvre le noyau du bannissement, et le dit', () => {
-    expect(Object.keys(ECRITURES_OPAQUES)).toEqual(['routes/conversations/participant-ban-core.ts']);
+  //
+  // #19688 en a ajouté une seconde : l'unité partagée qui COMMET les rentrées
+  // reçoit sa charge en paramètre. Les deux gels disent la même chose sous deux
+  // formes — « la valeur n'est pas dans ce fichier » — et aucune n'absout : les
+  // trois portes de rentrée sont jugées à LEUR appel, où elles sortent
+  // `conforme`.
+  it('le gel des écritures OPAQUES couvre le noyau du bannissement et le commit de rentrée, et le dit', () => {
+    expect(Object.keys(ECRITURES_OPAQUES).sort()).toEqual([
+      'routes/conversations/participant-ban-core.ts',
+      'services/conversations/rejoinParticipantWrite.ts',
+    ]);
     expect(ECRITURES_OPAQUES['routes/conversations/participant-ban-core.ts']).toContain('conversationBanState');
+    expect(ECRITURES_OPAQUES['services/conversations/rejoinParticipantWrite.ts']).toContain('PARAMÈTRE');
 
     const sansGel = ecrituresNonResolues(SRC, {});
 
     expect(sansGel.length).toBeGreaterThan(0);
     for (const nomme of sansGel) {
-      expect(nomme).toContain('routes/conversations/participant-ban-core.ts');
+      expect(Object.keys(ECRITURES_OPAQUES).some((gele) => nomme.includes(gele))).toBe(true);
     }
+  });
+
+  /**
+   * #19688 — la garde qui empêche le verdict FAUX de revenir.
+   *
+   * Un `data` posé en RACCOURCI (`{ where, data }`) n'a pas de valeur dans
+   * l'objet : `valeurDeCle` rend `undefined`, et le balayage concluait
+   * « aucun objet de données » ⇒ `sans-langue`, soit « ce site n'écrit pas la
+   * colonne ». C'est un VERDICT là où il n'y a qu'une ignorance, et il tombe du
+   * côté qui ABSOUT — exactement ce que l'en-tête du balayage interdit.
+   */
+  it('un `data` en RACCOURCI rend `non-resolue`, jamais `sans-langue`', () => {
+    const racine = bacAvec({
+      'services/raccourci.ts': [
+        "export async function ecrire(prisma: never, id: string, data: Record<string, unknown>) {",
+        '  return prisma.participant.update({ where: { id }, data });',
+        '}',
+      ].join('\n'),
+    });
+
+    expect(ecrituresNonResolues(racine, {})).toEqual([
+      expect.stringContaining('services/raccourci.ts'),
+    ]);
+    expect(fichiersSansLangue(racine)).toEqual([]);
   });
 });
 

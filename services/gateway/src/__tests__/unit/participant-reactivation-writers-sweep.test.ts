@@ -18,8 +18,17 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join, relative } from 'path';
+import {
+  REACTIVATION_MARKERS,
+  callBodies,
+  nudeWriteBodies,
+  productionFiles,
+  reactivationSites,
+  writtenPart,
+  REJOIN_COMMIT_FILE,
+} from '../helpers/participant-reactivation-scan';
 
 const SRC = join(__dirname, '..', '..');
 
@@ -57,69 +66,19 @@ const GUARDED: ReadonlyArray<Reactivation & { readonly guard: string }> = [
   },
 ];
 
-const MARKERS = ['isActive: true', 'REJOIN_PARTICIPANT_STATE', 'unban.data'] as const;
+const MARKERS = REACTIVATION_MARKERS;
 
 const ENTRY_DECIDER: Readonly<Record<string, string>> = {
   'routes/conversations/link-admission.ts': 'services/conversations/linkAdmission.ts',
 };
 
-function productionFiles(dir: string): string[] {
-  return readdirSync(dir).flatMap((name) => {
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) {
-      return name === '__tests__' || name === 'node_modules' ? [] : productionFiles(path);
-    }
-    return name.endsWith('.ts') && !name.endsWith('.test.ts') && !name.endsWith('.d.ts') ? [path] : [];
-  });
-}
-
 /**
- * #19688 — l'opener voit DEUX formes, et la seconde n'est pas une commodité.
- *
- * Quand les trois portes de rentrée sont passées par
- * `commitParticipantRejoin`, leur écriture a cessé d'être un
- * `prisma.participant.update(` : ce balayage, qui ne cherchait que cette
- * graphie, les a toutes les trois perdues d'un coup — inventaire vert, et
- * PLUS AUCUNE porte de rentrée sous surveillance. Centraliser une écriture
- * déplace donc la frontière que le cliquet garde, sans qu'une ligne de
- * l'inventaire bouge.
- *
- * > **Un cliquet qui cherche une graphie mesure cette graphie, pas la
- * > propriété.** C'est la règle du cycle 105 — chercher une forme par son NOM
- * > de déclaration manque tous les sites qui l'obtiennent autrement — prise
- * > par le bon bout : ici, c'est la RÉPARATION qui a rendu le site invisible.
+ * #19688 — le scanner vit dans `helpers/participant-reactivation-scan.ts`,
+ * partagé avec le cliquet frère (#16964). Il y était recopié, et les deux
+ * copies sont devenues aveugles ENSEMBLE le jour où les trois portes de
+ * rentrée sont passées par une unité partagée. L'en-tête du helper le mesure.
  */
-function callBodies(source: string): string[] {
-  const opener = /\.participant\.(update|updateMany|upsert)\(|commitParticipantRejoin(?:<[^>]*>)?\(/g;
-  const bodies: string[] = [];
-  for (let match = opener.exec(source); match; match = opener.exec(source)) {
-    const start = match.index + match[0].length;
-    let depth = 1;
-    let end = start;
-    while (end < source.length && depth > 0) {
-      if (source[end] === '(') depth += 1;
-      if (source[end] === ')') depth -= 1;
-      end += 1;
-    }
-    bodies.push(source.slice(start, end));
-  }
-  return bodies;
-}
-
-/** Ce que l'appel ÉCRIT : un `isActive: true` du `where` filtre, il ne rallume rien. */
-function writtenPart(body: string): string {
-  const written = /\b(data|update)\s*:/.exec(body);
-  return written ? body.slice(written.index) : body;
-}
-
-function sweepReactivations(): Reactivation[] {
-  return productionFiles(SRC).flatMap((path) => {
-    const file = relative(SRC, path);
-    return callBodies(readFileSync(path, 'utf8')).map(writtenPart).flatMap((written) =>
-      MARKERS.filter((marker) => written.includes(marker)).map((marker) => ({ file, marker }))
-    );
-  });
-}
+const sweepReactivations = (): Reactivation[] => reactivationSites(SRC);
 
 const key = (r: Reactivation) => `${r.file} :: ${r.marker}`;
 
@@ -212,34 +171,16 @@ describe('les écritures qui rallument une participation sont toutes inventorié
    * — c'est la seule réparation, jamais une ligne d'inventaire.
    */
   it('aucune porte ne commet une rentrée par un update NU — toutes passent par commitParticipantRejoin', () => {
-    const nudeOpener = /\.participant\.(update|updateMany|upsert)\(/g;
-    const nudeBodies = (source: string): string[] => {
-      const bodies: string[] = [];
-      for (let match = nudeOpener.exec(source); match; match = nudeOpener.exec(source)) {
-        const start = match.index + match[0].length;
-        let depth = 1;
-        let end = start;
-        while (end < source.length && depth > 0) {
-          if (source[end] === '(') depth += 1;
-          if (source[end] === ')') depth -= 1;
-          end += 1;
-        }
-        bodies.push(source.slice(start, end));
-      }
-      return bodies;
-    };
-
     const nus = productionFiles(SRC)
-      .filter((path) => relative(SRC, path) !== 'services/conversations/rejoinParticipantWrite.ts')
-      .flatMap((path) => {
-        const file = relative(SRC, path);
-        return nudeBodies(readFileSync(path, 'utf8'))
+      .filter((path) => relative(SRC, path) !== REJOIN_COMMIT_FILE)
+      .filter((path) =>
+        nudeWriteBodies(readFileSync(path, 'utf8'))
           .map(writtenPart)
-          .filter((written) => written.includes('REJOIN_PARTICIPANT_STATE'))
-          .map(() => file);
-      });
+          .some((written) => written.includes('REJOIN_PARTICIPANT_STATE'))
+      )
+      .map((path) => relative(SRC, path));
 
-    expect([...new Set(nus)].sort()).toEqual([]);
+    expect(nus.sort()).toEqual([]);
   });
 
   it('la rentrée se commet par une unité UNIQUE, qui porte la garde dans son where', () => {
