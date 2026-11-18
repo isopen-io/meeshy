@@ -85,6 +85,16 @@ struct MeeshyLabeledActionTests {
         #expect(MeeshyLabeledActionRecipe.resolve(kind: .destructive, size: .s64).diameter == 56)
     }
 
+    @Test("la voix suit les vecteurs : attente, valeur, puis la pastille par son libellé, telle qu'elle se voit sinon")
+    func speech_followsTheVectors() throws {
+        for row in try KitAtomVectors.rows(Self.file, "voix") {
+            let said = MeeshyLabeledActionSpeech.value(pending: row["attente"] as? String, value: row["valeur"] as? String,
+                                                       badge: row["pastille"] as? String,
+                                                       badgeLabel: row["libellePastille"] as? String)
+            #expect(said == row["dit"] as? String, "\(row)")
+        }
+    }
+
     @Test("garde de source : aucun verre dessiné, aucun type du domaine, aucun singleton")
     func source_isAgnostic() throws {
         let files = ["MeeshyLabeledAction.swift", "MeeshyLabeledActionRecipe.swift"]

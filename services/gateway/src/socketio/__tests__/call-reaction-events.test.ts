@@ -12,6 +12,7 @@ type Harness = {
   readonly allowed?: boolean;
   readonly participant?: { participantId: string; userId: string } | null;
   readonly recordFails?: boolean;
+  readonly reflectFails?: boolean;
 };
 
 const harness = (overrides: Harness = {}) => {
@@ -20,6 +21,9 @@ const harness = (overrides: Harness = {}) => {
   const checkLimit = jest.fn(async (_userId: string, _config: unknown) => overrides.allowed ?? true);
   const recordReaction = jest.fn(async (_callId: string, _emoji: string) => {
     if (overrides.recordFails) throw new Error('mongo down');
+  });
+  const reflectOnBubble = jest.fn(async (_callId: string, _userId: string, _emoji: string) => {
+    if (overrides.reflectFails) throw new Error('mongo down');
   });
   const resolveActiveCallParticipant = jest.fn(async (_userId: string, _callId: string) =>
     'participant' in overrides ? overrides.participant ?? null : { participantId: 'p-alice', userId: 'alice' }
@@ -37,7 +41,7 @@ const harness = (overrides: Harness = {}) => {
     }),
   };
   registerCallReactionEvents(
-    { rateLimiter: { checkLimit }, resolveActiveCallParticipant, recordReaction, now: () => AT },
+    { rateLimiter: { checkLimit }, resolveActiveCallParticipant, recordReaction, reflectOnBubble, now: () => AT },
     socket as never,
     () => ('userId' in overrides ? overrides.userId : 'alice')
   );
@@ -46,7 +50,7 @@ const harness = (overrides: Harness = {}) => {
     await handlers.get(CLIENT_EVENTS.CALL_REACTION)?.(raw, (r) => acks.push(r));
     return acks[0];
   };
-  return { send, relayed, recordReaction, checkLimit, resolveActiveCallParticipant };
+  return { send, relayed, recordReaction, reflectOnBubble, checkLimit, resolveActiveCallParticipant };
 };
 
 describe('call:reaction — une réaction part vers les autres participants de l’appel (#8439)', () => {
@@ -102,5 +106,26 @@ describe('call:reaction — une réaction part vers les autres participants de l
 
     expect(await h.send({ callId: CALL, emoji: '❤️' })).toEqual({ success: true });
     expect(h.relayed).toHaveLength(1);
+  });
+});
+
+describe('call:reaction — la réaction se pose aussi sur la bulle de l’appel (#19650, D4)', () => {
+  it('après le relais, au nom de l’émetteur résolu', async () => {
+    const h = harness();
+    expect(await h.send({ callId: CALL, emoji: '🎉' })).toEqual({ success: true });
+    expect(h.reflectOnBubble).toHaveBeenCalledWith(CALL, 'alice', '🎉');
+    expect(h.relayed).toHaveLength(1);
+  });
+
+  it('une bulle en panne ne retient ni la réaction ni l’accusé', async () => {
+    const h = harness({ reflectFails: true });
+    expect(await h.send({ callId: CALL, emoji: '🎉' })).toEqual({ success: true });
+    expect(h.relayed).toHaveLength(1);
+  });
+
+  it('un non-participant ne réagit pas sur la bulle non plus', async () => {
+    const h = harness({ participant: null });
+    await h.send({ callId: CALL, emoji: '🎉' });
+    expect(h.reflectOnBubble).not.toHaveBeenCalled();
   });
 });

@@ -108,6 +108,19 @@ struct MeeshyStateBlockTests {
         #expect(MeeshyStateBlockRecipe.ghostCount(9) == 4)
     }
 
+    @Test("les tuiles fantômes légendées : au plus quatre, sans légende vide, selon les vecteurs de parité")
+    func ghostTiles_followTheVectors() throws {
+        for row in try KitAtomVectors.rows(Self.file, "tuilesFantomes") {
+            let asked = try #require(row["demandees"] as? Int)
+            let blank = try #require(row["legendesVides"] as? Int)
+            let shown = try #require(row["montrees"] as? Int)
+            let tiles = (0..<asked).map { index in
+                MeeshyStateGhostTile(systemImage: "photo", caption: index < blank ? "" : "t\(index)")
+            }
+            #expect(MeeshyStateBlockRecipe.shownGhostTiles(tiles).count == shown, "\(row)")
+        }
+    }
+
     @Test("un bloc qui CHANGE de genre sur place annonce le nouveau genre s'il annonce, jamais le même deux fois")
     func announce_onKindChange() {
         #expect(MeeshyStateBlockRecipe.announcesTransition(from: .empty, to: .error))

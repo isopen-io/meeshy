@@ -168,3 +168,13 @@ public nonisolated struct MeeshyActionGridRecipe: Sendable, Equatable {
         }
     }
 }
+
+/// Ce que l'action libellée dit après son nom : l'attente, la valeur, puis la pastille — par son libellé quand l'hôte en
+/// donne un (« 2 messages non lus »), telle qu'elle se voit sinon. Un libellé sans pastille ne se dit pas.
+public nonisolated enum MeeshyLabeledActionSpeech {
+    public static func value(pending: String?, value: String?, badge: String?, badgeLabel: String?) -> String {
+        let shownBadge = badge.flatMap { $0.isEmpty ? nil : $0 }
+        let spokenBadge = shownBadge.map { shown in badgeLabel.flatMap { $0.isEmpty ? nil : $0 } ?? shown }
+        return [pending, value, spokenBadge].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+}

@@ -93,13 +93,16 @@ public enum SharedLocationPositionSource: String, Sendable, Equatable {
 
 /// La charge de `location:share-start`. Démarrer de nouveau REMPLACE le partage : la liste est toujours entière.
 /// `notifyRecipients` (« Prévenir ») et `shareBattery` (« Partager aussi ma batterie ») ne partent que vrais (#19204).
+/// Sans `fix`, c'est une LISTE SEULE (#19284, #19287) : la passerelle reprend le point qu'elle garde, scellé, avec son
+/// heure, et la liste ne fait que retirer — l'appareil qui retire quelqu'un n'envoie jamais sa position.
 public struct SharedLocationStartRequest: Sendable, Equatable {
     /// `SHARED_LOCATION_RECIPIENTS_MAX`.
     public static let maxRecipients = 50
 
     public let recipients: [SharedLocationRecipient]
     public let duration: SharedLocationShareDuration
-    public let fix: SharedLocationFix
+    /// `nil` : liste seule, la passerelle reprend la position du partage en cours.
+    public let fix: SharedLocationFix?
     /// Chaque personne qui n'était pas déjà dans le partage remplacé reçoit une notification : un nom, une durée.
     public let notifyRecipients: Bool
     /// La batterie accompagne le partage, pour ses destinataires et jusqu'à son terme seulement.
@@ -120,7 +123,30 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
         source: SharedLocationPositionSource = .device,
         untilStopped: Bool = false
     ) {
-        let valid = recipients.filter { Self.isObjectId($0.userId) }
+        guard let ordered = Self.ordered(recipients) else { return nil }
+        self.init(validated: ordered, duration: duration, fix: fix, notifyRecipients: notifyRecipients, shareBattery: shareBattery,
+                  source: source, untilStopped: untilStopped)
+    }
+
+    /// La LISTE SEULE (#19287) : un retrait ou une échéance, sans position. Ni « Prévenir » (elle n'ajoute personne) ni
+    /// source (le point gardé reste celui du partage) ; la batterie ne part que vraie, une clé absente la laissant
+    /// telle que la passerelle la tient. `nil` : aucun destinataire valide, ou plus que le plafond.
+    public init?(
+        listOnly recipients: [SharedLocationRecipient],
+        duration: SharedLocationShareDuration,
+        shareBattery: Bool = false,
+        untilStopped: Bool = false
+    ) {
+        guard let ordered = Self.ordered(recipients) else { return nil }
+        self.init(validated: ordered, duration: duration, fix: nil, notifyRecipients: false, shareBattery: shareBattery,
+                  source: .device, untilStopped: untilStopped)
+    }
+
+    /// Une liste seule ne porte aucune position.
+    public var isListOnly: Bool { fix == nil }
+
+    private static func ordered(_ recipients: [SharedLocationRecipient]) -> [SharedLocationRecipient]? {
+        let valid = recipients.filter { isObjectId($0.userId) }
         let latest = Dictionary(valid.map { ($0.userId.lowercased(), $0) }, uniquingKeysWith: { _, last in last })
         var seen = Set<String>()
         let ordered = valid.compactMap { recipient -> SharedLocationRecipient? in
@@ -128,15 +154,14 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
             guard seen.insert(key).inserted, let last = latest[key] else { return nil }
             return SharedLocationRecipient(userId: key, precision: last.precision, expiresInSeconds: last.expiresInSeconds)
         }
-        guard !ordered.isEmpty, ordered.count <= Self.maxRecipients else { return nil }
-        self.init(validated: ordered, duration: duration, fix: fix, notifyRecipients: notifyRecipients, shareBattery: shareBattery,
-                  source: source, untilStopped: untilStopped)
+        guard !ordered.isEmpty, ordered.count <= maxRecipients else { return nil }
+        return ordered
     }
 
     private init(
         validated recipients: [SharedLocationRecipient],
         duration: SharedLocationShareDuration,
-        fix: SharedLocationFix,
+        fix: SharedLocationFix?,
         notifyRecipients: Bool,
         shareBattery: Bool,
         source: SharedLocationPositionSource,
@@ -181,7 +206,10 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
 
     /// Les charges à essayer, dans l'ordre, après un refus `INVALID` : sans les options de #19204, puis sans les
     /// échéances de #18205. Une passerelle qui sert les options sert aussi les échéances (#18205 est antérieure).
+    /// Une liste seule n'en a aucune : une passerelle qui la connaît connaît les options et les échéances, et une
+    /// passerelle d'avant la refuse pour son absence de position — le centre repart alors avec une position.
     public var legacyFallbacks: [SharedLocationStartRequest] {
+        guard !isListOnly else { return [] }
         let plain = withoutExtras
         return (carriesExtras ? [plain] : []) + (carriesDeadlines ? [plain.withoutDeadlines] : [])
     }
@@ -190,11 +218,11 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
         var wire: [String: Any] = [
             "recipients": recipients.map(\.wire),
             "durationMinutes": duration.rawValue,
-            "position": fix.wire,
         ]
+        if let fix { wire["position"] = fix.wire }
         if notifyRecipients { wire["notifyRecipients"] = true }
         if shareBattery { wire["shareBattery"] = true }
-        if source == .manual { wire["source"] = source.rawValue }
+        if source == .manual, fix != nil { wire["source"] = source.rawValue }
         if untilStopped { wire["untilStopped"] = true }
         return wire
     }

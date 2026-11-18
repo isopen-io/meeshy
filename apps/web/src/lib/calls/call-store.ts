@@ -147,6 +147,42 @@ export function liveCallIn(state: CallStoreState, conversationId: string): Activ
   return isCallLive(state.call) && state.call?.conversationId === conversationId ? state.call : null;
 }
 
+/** Ce qui rattache un appel à une autre conversation (`call:conversation-changed`, #19650). */
+export type CallConversationSwitch = { readonly callId: string; readonly conversationId: string; readonly title: string | null };
+
+const presentNames = (call: ActiveCall): string | null => {
+  const names = Object.values(call.members).map((member) => member.name.trim()).filter((name) => name !== '');
+  return names.length === 0 ? null : names.join(', ');
+};
+
+/**
+ * L'APPEL CHANGE DE LIEU, PAS DE MÉDIA (#19650) — un tête-à-tête qui invite est
+ * rattaché au groupe des présents : l'appel devient de groupe et porte le titre
+ * du groupe, ou les noms des présents s'il n'en a pas. Un autre appel : rien.
+ */
+export function rebranchCall(call: ActiveCall, change: CallConversationSwitch): ActiveCall {
+  if (call.callId !== change.callId) return call;
+  return { ...call, conversationId: change.conversationId, isGroup: true, peerKey: null, title: change.title ?? presentNames(call) ?? call.title };
+}
+
+/**
+ * Ce que la session rendue par `call:join` apprend à l'appel : son admin, et
+ * son lieu. Rejoint depuis le tête-à-tête d'origine, la passerelle sert l'appel
+ * du groupe (#19650) : la conversation servie, si elle diffère, est ce groupe.
+ */
+export function adoptJoinedSession(call: ActiveCall, session: { readonly initiatorId: string | null; readonly conversationId: string | null }): ActiveCall {
+  const { callId } = call;
+  const served = session.conversationId;
+  const placed = callId !== null && served !== null && call.conversationId !== '' && served !== call.conversationId ? rebranchCall(call, { callId, conversationId: served, title: null }) : call;
+  return session.initiatorId === null ? placed : { ...placed, initiatorId: session.initiatorId };
+}
+
+export function switchCallConversation(state: CallStoreState, change: CallConversationSwitch): CallStoreState {
+  if (state.call === null) return state;
+  const call = rebranchCall(state.call, change);
+  return call === state.call ? state : { ...state, call };
+}
+
 /** `formattedDuration` d'iOS : `M:SS`, `H:MM:SS` passé une heure. */
 export function formatCallClock(seconds: number): string {
   const safe = Math.max(0, Math.floor(seconds));

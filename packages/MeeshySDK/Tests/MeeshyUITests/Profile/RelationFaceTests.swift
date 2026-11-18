@@ -69,10 +69,11 @@ final class RelationFaceTests: XCTestCase {
     /// aucun bouton dessiné sur place, plus d'onglets en haut.
     func test_faces_areMadeOfTheKit() throws {
         let actions = try source("UserProfileSheet+ActionsFace.swift")
-        XCTAssertTrue(actions.contains("MeeshyLabeledAction("))
         XCTAssertTrue(actions.contains("MeeshyActionGrid"))
-        XCTAssertTrue(actions.contains("MeeshyButton("))
+        XCTAssertTrue(actions.contains("ProfileTalkAction("))
         XCTAssertTrue(actions.contains("ProfileLockedCapabilities("))
+        XCTAssertTrue(try source("ProfileTalkAction.swift").contains("MeeshyLabeledAction("))
+        XCTAssertTrue(try source("ProfileActionsFaceParts.swift").contains("MeeshyButton("))
         XCTAssertTrue(try source("ProfileLockedCapabilities.swift").contains("MeeshyLockedRow("))
         XCTAssertTrue(try source("UserProfileSheet+LinksFace.swift").contains("MeeshyTicket("))
         let sheet = try source("UserProfileSheet.swift")

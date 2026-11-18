@@ -65,9 +65,9 @@ export const MINIMUM_ROUTES = 100;
  * extension de l'extracteur ait un endroit où se voir monter : il est passé de 110 à 125 quand les
  * deux derniers idiomes de routage ont rejoint la lecture (#18123), puis à 126 quand Android a lu
  * `community:updated` (#18439, 2026-11-15), puis à 129 quand il a lu les trois `battery:*` (#14147, sur 181 déclarés), puis à 131 avec `phone:unreachable` et `phone:reachable` (#18737, sur 183), puis à 134 quand Android a lu les trois
- * `community:member-*` (#18768, 2026-11-17), puis à 135 avec `profile:updated` (#18924, 2026-11-17).
+ * `community:member-*` (#18768, 2026-11-17), puis à 135 avec `profile:updated` (#18924, 2026-11-17), puis à 136 avec `community:deleted` (#19592, 2026-11-18).
  */
-export const SWEPT_EVENTS_AT_LAST_MEASURE = 135;
+export const SWEPT_EVENTS_AT_LAST_MEASURE = 136;
 
 export type KotlinField = {
   readonly name: string;

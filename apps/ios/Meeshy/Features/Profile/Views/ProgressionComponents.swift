@@ -9,7 +9,7 @@ import MeeshyUI
 // passées en `let` — la règle « Zero Unnecessary Re-render » des Instant App
 // Principles. Le thème se lit par une propriété calculée, jamais observée.
 
-/// Une carte teintée — la même surface que `UserStatsView.statCard` et les
+/// Une carte teintée — la même surface que les
 /// sections de `SettingsView` : dégradé du thème dans la teinte, filet 1 pt.
 struct ProgressionCard<Content: View>: View {
     let tint: Color

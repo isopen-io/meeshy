@@ -25,7 +25,7 @@ type Broadcaster = (message: unknown, conversationId: string) => Promise<void>;
 const CONVERSATION_ID = '507f1f77bcf86cd799439011';
 const INITIATOR_USER_ID = '507f1f77bcf86cd799439022';
 
-function wire(overrides: { broadcastMessage?: Broadcaster; broadcastMessageEdited?: Broadcaster } = {}) {
+function wire(overrides: { broadcastMessage?: Broadcaster; broadcastMessageEdited?: Broadcaster; mirrorOnOrigin?: (message: unknown) => Promise<{ conversationId: string; message: unknown } | null> } = {}) {
   const installed: { created?: Broadcaster; updated?: Broadcaster } = {};
   const handler = {
     setMessageBroadcaster: (b: Broadcaster) => { installed.created = b; },
@@ -41,6 +41,7 @@ function wire(overrides: { broadcastMessage?: Broadcaster; broadcastMessageEdite
     getIO: () => io as never,
     broadcastMessage,
     broadcastMessageEdited,
+    ...(overrides.mirrorOnOrigin ? { mirrorOnOrigin: overrides.mirrorOnOrigin as never } : {}),
   });
   return { installed, io, prisma, broadcastMessage, broadcastMessageEdited };
 }
@@ -108,5 +109,52 @@ describe('wireCallMessageBroadcasters — un appel remonte la conversation pour 
 
     await expect(installed.updated!(callMessage(), CONVERSATION_ID)).resolves.toBeUndefined();
     await flush();
+  });
+});
+
+describe('wireCallMessageBroadcasters — la bulle du tête-à-tête d’origine finit avec l’appel (#19650)', () => {
+  const ORIGIN_ID = '507f1f77bcf86cd799439099';
+
+  beforeEach(() => {
+    mockAnnounce.mockReset();
+    mockAnnounce.mockResolvedValue(undefined);
+  });
+
+  it('le résumé posé dans le groupe édite aussi la bulle d’origine, diffusée en édition au tête-à-tête', async () => {
+    const mirrored = { ...callMessage(), id: 'm-origin', conversationId: ORIGIN_ID };
+    const mirrorOnOrigin = jest.fn(async (_message: unknown) => ({ conversationId: ORIGIN_ID, message: mirrored }));
+    const { installed, broadcastMessageEdited } = wire({ mirrorOnOrigin });
+
+    await installed.updated!(callMessage(), CONVERSATION_ID);
+    await flush();
+
+    expect(mirrorOnOrigin).toHaveBeenCalledWith(callMessage());
+    expect(broadcastMessageEdited).toHaveBeenCalledWith(mirrored, ORIGIN_ID);
+    expect(mockAnnounce.mock.calls.map(([args]) => args.conversationId)).toEqual([CONVERSATION_ID, ORIGIN_ID]);
+  });
+
+  it('un résumé CRÉÉ dans le groupe aussi', async () => {
+    const mirrored = { ...callMessage(), id: 'm-origin', conversationId: ORIGIN_ID };
+    const { installed, broadcastMessageEdited } = wire({ mirrorOnOrigin: async () => ({ conversationId: ORIGIN_ID, message: mirrored }) });
+
+    await installed.created!(callMessage(), CONVERSATION_ID);
+    await flush();
+
+    expect(broadcastMessageEdited).toHaveBeenCalledWith(mirrored, ORIGIN_ID);
+  });
+
+  it('rien de plus sans origine, et une panne du miroir ne touche pas la diffusion du groupe', async () => {
+    const { installed, broadcastMessageEdited } = wire({ mirrorOnOrigin: async () => null });
+    await installed.updated!(callMessage(), CONVERSATION_ID);
+    expect(broadcastMessageEdited).toHaveBeenCalledTimes(1);
+
+    const released = wire({ mirrorOnOrigin: async () => ({ conversationId: ORIGIN_ID, message: null }) });
+    await released.installed.updated!(callMessage(), CONVERSATION_ID);
+    expect(released.broadcastMessageEdited).toHaveBeenCalledTimes(1);
+
+    const failing = wire({ mirrorOnOrigin: async () => { throw new Error('db'); } });
+    await expect(failing.installed.updated!(callMessage(), CONVERSATION_ID)).resolves.toBeUndefined();
+    await flush();
+    expect(failing.broadcastMessageEdited).toHaveBeenCalledTimes(1);
   });
 });

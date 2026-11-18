@@ -106,6 +106,43 @@ struct SharedLocationSendingTests {
         #expect(recipients[0]["expiresInSeconds"] == nil)
     }
 
+    // MARK: - La liste seule (#19287)
+
+    @Test func uneListeSeule_partSansPosition_niSource_niPrévenir() throws {
+        let request = try #require(SharedLocationStartRequest(
+            listOnly: [SharedLocationRecipient(userId: bob.uppercased(), precision: .city, expiresInSeconds: 600)],
+            duration: .eightHours,
+            shareBattery: true
+        ))
+        #expect(request.isListOnly)
+        #expect(request.fix == nil)
+        #expect(request.wire["position"] == nil)
+        #expect(request.wire["source"] == nil)
+        #expect(request.wire["notifyRecipients"] == nil)
+        #expect(request.wire["shareBattery"] as? Bool == true)
+        #expect(request.wire["durationMinutes"] as? Int == 480)
+        #expect(request.recipients == [SharedLocationRecipient(userId: bob, precision: .city, expiresInSeconds: 600)])
+    }
+
+    @Test func uneListeSeule_naAucunRepliPourUnePasserelleDAvant_niListeVide() throws {
+        let request = try #require(SharedLocationStartRequest(
+            listOnly: [SharedLocationRecipient(userId: alice, precision: .exact, expiresInSeconds: 600)],
+            duration: .oneHour,
+            shareBattery: true
+        ))
+        #expect(request.legacyFallbacks.isEmpty)
+        #expect(SharedLocationStartRequest(listOnly: [], duration: .oneHour) == nil)
+    }
+
+    @Test func unDémarrageAvecPosition_nEstPasUneListeSeule() throws {
+        let fix = try #require(SharedLocationFix(latitude: 1, longitude: 2))
+        let request = try #require(SharedLocationStartRequest(
+            recipients: [SharedLocationRecipient(userId: alice, precision: .exact)], duration: .oneHour, fix: fix, source: .manual))
+        #expect(!request.isListOnly)
+        #expect(request.wire["position"] != nil)
+        #expect(request.wire["source"] as? String == "manual")
+    }
+
     // MARK: - Prévenir, partager ma batterie (#19204, #19476)
 
     @Test func prévenirEtLaBatterie_partentSeulementQuandIlsSontDemandés() throws {
