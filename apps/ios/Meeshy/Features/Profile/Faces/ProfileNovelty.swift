@@ -45,6 +45,9 @@ final class UserDefaultsProfileNoveltyStorage: ProfileNoveltyStorageProviding {
         self.defaults = defaults
     }
 
+    /// Une deinit isolée au MainActor tue xctest au démontage (iOS 18.4+/26, Swift #85663, #9694).
+    nonisolated deinit {}
+
     static func key(accountId: String) -> String { "profile.novelty.seen.\(accountId)" }
 
     func seen(accountId: String) -> Set<ProfileNovelty> {
@@ -68,6 +71,8 @@ final class ProfileNoveltyLedger {
     init(storage: ProfileNoveltyStorageProviding) {
         self.storage = storage
     }
+
+    nonisolated deinit {}
 
     func claim(_ feature: ProfileNovelty, accountId: String?) -> Bool {
         let seen = accountId.map { storage.seen(accountId: $0) } ?? []
