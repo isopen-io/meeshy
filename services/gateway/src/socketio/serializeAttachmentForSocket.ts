@@ -1,4 +1,5 @@
 import { servedDescription } from '../services/attachments/mediaSideContent';
+import { servedAttachmentTranslations } from '../services/attachments/servedAttachmentTranslations';
 import {
   attachmentProtectionOf,
   type AttachmentProtectionField,
@@ -250,7 +251,7 @@ export function serializeAttachmentForSocket(
     createdAt: raw.createdAt as Date | string,
     // Prisme Linguistique — null = pas encore enrichi, présent = serialize tel quel
     transcription: raw.transcription ?? null,
-    translations: raw.translations ?? null,
+    translations: servedAttachmentTranslations(raw.translations ?? null),
     ...servedDescription(raw as Parameters<typeof servedDescription>[0]),
     reactionSummary,
     // La clé n'existe que si un lecteur était NOMMÉ — voir le champ. En

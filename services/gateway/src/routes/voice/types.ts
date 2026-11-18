@@ -69,7 +69,8 @@ export const voiceTranslationItemSchema = {
 } as const;
 
 /**
- * Une piste de `translatedAudios` (`POST /voice/translate`). Deux producteurs :
+ * Une piste de `translatedAudios` (`POST /voice/translate`, `POST /voice/transcribe`,
+ * `POST /attachments/:id/transcribe`). Deux producteurs :
  * `translateSync` rend la traduction de `voiceTranslationResultSchema`, et la
  * vue d'une pièce déjà traduite y ajoute `id`, `format` et `createdAt` — déclarés
  * ici pour ne rien retirer à ce chemin. Son `audioPath` (chemin disque serveur)

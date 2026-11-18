@@ -10,6 +10,7 @@ import {
 } from './types';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
+import { servedAttachmentTranslations } from '../../services/attachments/servedAttachmentTranslations';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { requirePermission } from '../../middleware/authorize';
@@ -455,7 +456,8 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
               // au-dessus vient de retirer. `metadata` est libre par contrat
               // (EXIF, analyse IA) : on ferme, on ne parie pas.
               transcription: protege ? null : attachment.transcription,
-              translations: protege ? null : attachment.translations,
+              // #19672 — la piste sort sans son chemin disque (`path`), que la base garde.
+              translations: protege ? null : servedAttachmentTranslations(attachment.translations),
               imageVariants: protege ? null : attachment.imageVariants,
               avifVariants: protege ? null : attachment.avifVariants,
               renditions: protege ? null : attachment.renditions,

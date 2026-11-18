@@ -340,7 +340,7 @@ export const messageAttachmentSchema = {
             description: 'Type de traduction'
           },
           transcription: { type: 'string', description: 'Texte traduit' },
-          path: { type: 'string', nullable: true, description: 'Chemin fichier local' },
+          // `path` (chemin disque serveur) n'est jamais servi : la base le garde, le fil non (#19672).
           url: { type: 'string', nullable: true, description: 'URL accessible' },
           // Spécifique audio/video
           durationMs: { type: 'number', nullable: true, description: 'Durée (ms) - audio/video' },
@@ -393,7 +393,7 @@ export const messageAttachmentSchema = {
           targetLanguage: { type: 'string', description: 'Langue cible (ISO 639-1)' },
           translatedText: { type: 'string', description: 'Texte traduit' },
           url: { type: 'string', description: 'URL du fichier traduit' },
-          path: { type: 'string', nullable: true, description: 'Chemin serveur' },
+          // `path` (chemin disque serveur) n'est jamais servi (#19672).
           // Spécifique audio/video
           durationMs: { type: 'number', nullable: true, description: 'Durée en millisecondes (audio/video)' },
           format: { type: 'string', nullable: true, description: 'Format fichier (mp3, mp4, pdf, png...)' },

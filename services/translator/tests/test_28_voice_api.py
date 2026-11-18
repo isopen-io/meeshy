@@ -32,7 +32,7 @@ import struct
 import base64
 import shutil
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, AsyncMock, patch, PropertyMock
 from typing import Dict, Any
 
@@ -1714,6 +1714,20 @@ class TestErrorHandling:
         assert result["progress"] == 100
         assert result["result"] is not None
         logger.info("Job complete avec resultat OK")
+
+    def test_job_times_are_served_in_utc_with_z(self, test_client, mock_translation_pipeline):
+        """#19596 — la route HTTP sert les horodatages du job en ISO 8601 UTC, suffixe Z"""
+        moment = datetime(2026, 11, 18, 10, 0, 0, 123456, tzinfo=timezone.utc)
+        mock_job = mock_translation_pipeline.get_job.return_value
+        mock_job.created_at = moment
+        mock_job.started_at = moment
+        mock_job.completed_at = moment
+
+        result = test_client.get("/api/v1/voice/job/job_123", headers=JOB_OWNER_HEADERS).json()
+
+        assert result["created_at"] == "2026-11-18T10:00:00.123Z"
+        assert result["started_at"] == "2026-11-18T10:00:00.123Z"
+        assert result["completed_at"] == "2026-11-18T10:00:00.123Z"
 
     def test_job_failed_with_error(self, test_client, mock_translation_pipeline):
         """Test job echoue avec erreur"""
