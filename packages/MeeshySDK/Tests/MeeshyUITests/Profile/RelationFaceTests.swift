@@ -10,6 +10,17 @@ final class RelationFaceTests: XCTestCase {
         XCTAssertEqual(RelationFace.allCases, [.vitrine, .links, .actions])
     }
 
+    func test_faceChange_contentSlidesInTheOrderOfTheFaces() {
+        let order = RelationFace.allCases
+        func travel(_ from: RelationFace, _ to: RelationFace) -> MeeshySegmentedTravel {
+            MeeshySegmentedLaw.travel(from: order.firstIndex(of: from), to: order.firstIndex(of: to))
+        }
+        XCTAssertEqual(travel(.vitrine, .links), .forward)
+        XCTAssertEqual(travel(.links, .actions), .forward)
+        XCTAssertEqual(travel(.actions, .vitrine), .backward)
+        XCTAssertEqual(travel(.vitrine, .vitrine), MeeshySegmentedTravel.none)
+    }
+
     func test_selector_showsOnTheProfileOfAnother() {
         XCTAssertTrue(RelationFace.showsSelector(isCurrentUser: false, isBlocked: false, loadFailed: false))
     }

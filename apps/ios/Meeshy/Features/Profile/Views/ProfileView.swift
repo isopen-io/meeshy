@@ -400,7 +400,6 @@ struct ProfileView: View {
                     Spacer().frame(height: MeeshySpacing.xxxl + 8 + (showsFaceSelector ? Self.faceSelectorRoom : 0))
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
-                .meeshyMotion(.morph, value: face)
             }
             // Le haut de ce qui défile, lu dans l'espace du défilement : son minY vaut −contentOffset (iOS 16–17 ;
             // iOS 18 passe par `trackScrollContentOffset`). Seul le lecteur du héros se re-rend au fil du défilement.
@@ -456,9 +455,16 @@ struct ProfileView: View {
         }
     }
 
-    @ViewBuilder
+    /// La face montrée glisse dans le sens du geste sur le sélecteur (Vitrine < Liens < Actions, #19606).
     private var faceContent: some View {
-        switch ProfileFace.shown(face, isEditing: isEditing) {
+        MeeshySegmentedPages(selection: ProfileFace.shown(face, isEditing: isEditing), order: ProfileFace.allCases) { shown in
+            facePage(shown)
+        }
+    }
+
+    @ViewBuilder
+    private func facePage(_ shown: ProfileFace) -> some View {
+        switch shown {
         case .vitrine:
             vitrineFace
         case .links:

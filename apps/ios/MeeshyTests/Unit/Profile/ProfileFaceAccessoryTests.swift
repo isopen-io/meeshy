@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Le bouton à côté du sélecteur de faces (#19553, planches `Main`, `Moi-Liens`, `Moi-Actions`) : partager ma vitrine
@@ -53,5 +54,23 @@ final class ProfileFaceAccessoryTests: XCTestCase {
         let links = try code("Meeshy/Features/Profile/Faces/ProfileLinksFace.swift")
         XCTAssertTrue(links.contains("presented = .create"), "la même présentation que « Créer un lien » de la face")
         XCTAssertTrue(links.contains("createRequested.wrappedValue = false"), "la demande se consomme une fois")
+    }
+
+    func test_faceChange_contentSlidesInTheOrderOfTheFaces_vitrineThenLinksThenActions() {
+        let order = ProfileFace.allCases
+        func travel(_ from: ProfileFace, _ to: ProfileFace) -> MeeshySegmentedTravel {
+            MeeshySegmentedLaw.travel(from: order.firstIndex(of: from), to: order.firstIndex(of: to))
+        }
+        XCTAssertEqual(travel(.vitrine, .links), .forward)
+        XCTAssertEqual(travel(.vitrine, .actions), .forward)
+        XCTAssertEqual(travel(.actions, .links), .backward)
+        XCTAssertEqual(travel(.links, .vitrine), .backward)
+        XCTAssertEqual(travel(.links, .links), MeeshySegmentedTravel.none)
+    }
+
+    func test_faceContent_isPagedByTheKit_andNoLongerMorphedWithoutDirection() throws {
+        let view = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
+        XCTAssertTrue(view.contains("MeeshySegmentedPages(selection: ProfileFace.shown(face, isEditing: isEditing)"))
+        XCTAssertFalse(view.contains(".meeshyMotion(.morph, value: face)"))
     }
 }

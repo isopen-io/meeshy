@@ -69,7 +69,10 @@ public nonisolated struct MeeshySegmentedPalette: Sendable, Equatable {
 }
 
 /// Un choix exclusif entre deux à quatre options dans une même piste. Il ne porte
-/// ni verre ni ombre : il se pose dans un hôte opaque ou de verre dense.
+/// ni verre ni ombre : il se pose dans un hôte opaque ou de verre dense. On choisit
+/// en touchant une option OU en glissant sur la piste : la pastille suit le doigt
+/// et l'option sous le doigt est choisie au relâcher ; elle voyage en goutte sous
+/// le ressort `morph` de K26 (#19606). L'accessibilité garde l'ajustable natif.
 public struct MeeshySegmented<ID: Hashable & Sendable>: View {
     private let label: String
     private let selection: Binding<ID>
@@ -81,7 +84,13 @@ public struct MeeshySegmented<ID: Hashable & Sendable>: View {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.layoutDirection) private var layoutDirection
-    @Namespace private var pillSpace
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+
+    @State private var frames: [Int: CGRect] = [:]
+    @State private var dragIndex: Int?
+    @State private var drop: MeeshySegmentedDropState
+    @State private var dropPhase: Double = 0
 
     public init(
         _ label: String,
@@ -97,6 +106,8 @@ public struct MeeshySegmented<ID: Hashable & Sendable>: View {
         self.role = role
         self.tone = tone
         self.pressed = pressed
+        let current = MeeshySegmentedLaw.currentIndex(selection: selection.wrappedValue, in: options.map(\.id))
+        _drop = State(initialValue: .resting(at: current))
     }
 
     public var body: some View {
@@ -109,17 +120,40 @@ public struct MeeshySegmented<ID: Hashable & Sendable>: View {
         MeeshySegmentedLaw.currentIndex(selection: selection.wrappedValue, in: options.map(\.id))
     }
 
+    /// L'option que montre la pastille : celle sous le doigt pendant un glissé, la
+    /// sélection sinon.
+    private var shownIndex: Int? {
+        dragIndex ?? currentIndex
+    }
+
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
     private var track: some View {
         let palette = MeeshySegmentedPalette(tone: tone, isDark: colorScheme == .dark)
-        let current = currentIndex
+        let shown = shownIndex
         return MeeshySegmentedLayout {
             ForEach(Array(MeeshySegmentedLaw.rendered(options).enumerated()), id: \.element.id) { index, option in
-                segment(option, index: index, isCurrent: current == index, palette: palette)
+                segment(option, index: index, isCurrent: shown == index, palette: palette)
+            }
+        }
+        .background(alignment: .topLeading) { dropPill(fill: palette.pill) }
+        .coordinateSpace(name: meeshySegmentedTrackSpace)
+        .onPreferenceChange(MeeshySegmentFramesKey.self) { measured in
+            if frames != measured { frames = measured }
+        }
+        .simultaneousGesture(slide, including: isEnabled ? .all : .subviews)
+        .adaptiveOnChange(of: shown) { _, next in
+            let advanced = drop.advanced(to: next, reduce: reduceMotion)
+            meeshyWithMotion(.morph, reduceMotion: reduceMotion) {
+                drop = advanced
+                dropPhase = Double(advanced.generation)
             }
         }
         .padding(MeeshySpacing.xs)
         .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl).fill(palette.track))
-        .meeshyAnimation(MeeshyAnimation.springFast, value: current)
+        .meeshyAnimation(MeeshyAnimation.springFast, value: shown)
         .opacity(isEnabled ? 1 : MeeshyGlassButtonRecipe.disabledOpacity)
         .modifier(MeeshySegmentedKeyboard(isEnabled: isEnabled, move: move))
         .accessibilityRepresentation {
@@ -145,18 +179,65 @@ public struct MeeshySegmented<ID: Hashable & Sendable>: View {
             MeeshySegmentFace(
                 title: option.title,
                 glyph: option.glyph(isCurrent: isCurrent),
-                ink: isCurrent ? palette.currentInk : palette.restInk,
-                pill: isCurrent ? palette.pill : nil,
-                pillSpace: pillSpace
+                ink: isCurrent ? palette.currentInk : palette.restInk
             )
             .equatable()
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: MeeshySegmentFramesKey.self,
+                    value: [index: proxy.frame(in: .named(meeshySegmentedTrackSpace))]
+                )
+            }
         }
         .buttonStyle(MeeshySegmentButtonStyle(
             forcedPressed: pressed == option.id && !isCurrent,
             fill: palette.pressedFill
         ))
         .accessibilityLabel(option.spokenName)
-        .accessibilityAddTraits(isCurrent ? .isSelected : [])
+        .accessibilityAddTraits(currentIndex == index ? .isSelected : [])
+    }
+
+    /// La pastille, dessinée une fois sous les segments : elle voyage en goutte de
+    /// la face quittée vers la face montrée, et paraît en fondu sous mouvement réduit.
+    @ViewBuilder
+    private func dropPill(fill: Color) -> some View {
+        if let target = drop.to, let to = frames[target] {
+            MeeshySegmentedDropShape(
+                from: drop.from.flatMap { frames[$0] } ?? to,
+                to: to,
+                phase: dropPhase,
+                generation: drop.generation
+            )
+            .fill(fill)
+            .id(reduceMotion ? drop.generation : 0)
+            .transition(.opacity)
+            .allowsHitTesting(false)
+        }
+    }
+
+    /// Le glissé sur la piste : la pastille suit l'option sous le doigt, et le
+    /// relâcher la choisit (haptique léger s'il change quelque chose).
+    private var slide: some Gesture {
+        DragGesture(minimumDistance: MeeshySpacing.sm, coordinateSpace: .named(meeshySegmentedTrackSpace))
+            .onChanged { value in
+                dragIndex = slideTarget(x: value.location.x)
+            }
+            .onEnded { value in
+                let target = slideTarget(x: value.location.x)
+                dragIndex = nil
+                if let target { choose(index: target) }
+            }
+    }
+
+    private func slideTarget(x: CGFloat) -> Int? {
+        let measured = options.indices.compactMap { frames[$0] }
+        guard isEnabled, measured.count == options.count,
+              MeeshySegmentedLaw.isSingleRow(tops: measured.map { Double($0.minY) })
+        else { return nil }
+        let spans = measured.map { MeeshySegmentedSpan(minX: Double($0.minX), maxX: Double($0.maxX)) }
+        return MeeshySegmentedLaw.dragTarget(x: Double(x), spans: spans)
     }
 
     private func choose(index: Int) {
@@ -179,7 +260,7 @@ public struct MeeshySegmented<ID: Hashable & Sendable>: View {
     }
 }
 
-/// Le texte d'un segment et, pour le courant, la pastille qui glisse : une vue
+/// Le texte d'un segment (la pastille est dessinée par la piste) : une vue
 /// feuille, égale à elle-même tant que ses paramètres ne bougent pas. Elle prend
 /// la part que la piste lui donne ; le texte ne passe à la ligne que si une
 /// option seule dépasse la piste (grande police) : jamais tronqué, jamais débordant.
@@ -187,12 +268,6 @@ private struct MeeshySegmentFace: View, Equatable {
     let title: String
     let glyph: String?
     let ink: Color
-    let pill: Color?
-    let pillSpace: Namespace.ID
-
-    static func == (lhs: MeeshySegmentFace, rhs: MeeshySegmentFace) -> Bool {
-        lhs.title == rhs.title && lhs.glyph == rhs.glyph && lhs.ink == rhs.ink && lhs.pill == rhs.pill
-    }
 
     var body: some View {
         HStack(spacing: MeeshySpacing.xs) {
@@ -209,13 +284,6 @@ private struct MeeshySegmentFace: View, Equatable {
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, MeeshySpacing.smPlus)
             .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.regular, maxHeight: .infinity)
-            .background {
-                if let pill {
-                    Capsule()
-                        .fill(pill)
-                        .matchedGeometryEffect(id: "pill", in: pillSpace)
-                }
-            }
             .contentShape(Capsule())
     }
 }
@@ -339,5 +407,44 @@ private struct MeeshySegmentedLayout: Layout {
             state.top += height
         }
         return (CGSize(width: CGFloat(available), height: laid.top), laid.slots)
+    }
+}
+
+/// L'espace de la piste : les étendues des segments, le doigt et la pastille s'y
+/// lisent ensemble (le retournement en lecture de droite à gauche les touche tous).
+private let meeshySegmentedTrackSpace = "meeshy.segmented.track"
+
+private struct MeeshySegmentFramesKey: PreferenceKey {
+    static let defaultValue: [Int: CGRect] = [:]
+    static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) {
+        value.merge(nextValue()) { _, next in next }
+    }
+}
+
+/// La goutte : une capsule dont les deux bords suivent `dropSpan` ; seule la
+/// phase s'anime, de `generation - 1` à `generation`.
+nonisolated private struct MeeshySegmentedDropShape: Shape {
+    let from: CGRect
+    let to: CGRect
+    var phase: Double
+    let generation: Int
+
+    var animatableData: Double {
+        get { phase }
+        set { phase = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let progress = MeeshySegmentedLaw.dropProgress(phase: phase, generation: generation)
+        let span = MeeshySegmentedLaw.dropSpan(
+            from: MeeshySegmentedSpan(minX: Double(from.minX), maxX: Double(from.maxX)),
+            to: MeeshySegmentedSpan(minX: Double(to.minX), maxX: Double(to.maxX)),
+            progress: progress
+        )
+        let settled = CGFloat(min(max(progress, 0), 1))
+        let top = from.minY + (to.minY - from.minY) * settled
+        let height = from.height + (to.height - from.height) * settled
+        let drawn = CGRect(x: CGFloat(span.minX), y: top, width: CGFloat(max(span.width, 0)), height: height)
+        return Path(roundedRect: drawn, cornerRadius: min(drawn.height, drawn.width) / 2)
     }
 }

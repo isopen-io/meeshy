@@ -247,7 +247,7 @@ public struct UserProfileSheet: View {
         }
     }
 
-    /// La face lue — chacune dans son extension. Le squelette seulement sur cache vide (loi 8), cédant par `motion.reveal`.
+    /// La face lue — chacune dans son extension, glissant dans le sens du geste (#19606). Squelette sur cache vide (loi 8).
     @ViewBuilder
     var faceContent: some View {
         switch phase {
@@ -256,13 +256,13 @@ public struct UserProfileSheet: View {
         case .failed(let failure):
             ProfileFailedState(failure: failure, onRetry: { retryFromState() })
         case .shown, .unavailable, .blockedByMe:
-            switch RelationFace.shown(face, isCurrentUser: isCurrentUser) {
-            case .vitrine:
-                vitrineFace
-            case .links:
-                RelationLinksFace.of(self)
-            case .actions:
-                actionsFace
+            MeeshySegmentedPages(selection: RelationFace.shown(face, isCurrentUser: isCurrentUser),
+                                 order: RelationFace.allCases) { shown in
+                switch shown {
+                case .vitrine: vitrineFace
+                case .links: RelationLinksFace.of(self)
+                case .actions: actionsFace
+                }
             }
         }
     }
