@@ -22,9 +22,10 @@ nonisolated enum ProfileCardMode: String, Hashable, Identifiable, CaseIterable {
 /// (loi 5). Le QR (K31) suit l'inclinaison du téléphone et pousse la luminosité ; l'adresse se lit dessous en texte,
 /// jamais seulement dans le code. Le QR ne montre que ma vitrine publique.
 ///
-/// Le sans contact : un iPhone ne laisse pas deux apps s'échanger un profil par la puce NFC. La planche prévoit ce cas
-/// (« Sans la puce ») : on montre son QR, ou on scanne celui de l'autre — le même geste, sans rien donner d'autre que
-/// l'adresse publique.
+/// Le sans contact (#19484) : les deux téléphones se trouvent de proche en proche (`ContactlessExchangeSection`),
+/// chacun choisit ce qu'il donne, et le jeton bref de la passerelle porte le choix. Sous le parcours, « Sans la puce »
+/// garde le QR : on montre le sien, ou on scanne celui de l'autre — le même geste. Un téléphone qui ne peut pas le dit
+/// en bloc d'état, et le QR reste.
 struct ProfileCardView: View {
     let user: MeeshyUser?
     let link: ProfileLink
@@ -35,6 +36,7 @@ struct ProfileCardView: View {
     @State private var scannerShown = false
     @State private var sent: SharedContentWrapper?
     @State private var exported: ProfileCardExport?
+    @State private var contactlessUnavailable = false
 
     private var accent: Color { Color(hex: accentColor) }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -131,15 +133,22 @@ struct ProfileCardView: View {
 
     // MARK: - Sans contact
 
-    /// Le sans contact indisponible (planche `Etat-Erreur` vue 6) : le téléphone le dit en bloc d'état (K38), et « À la
-    /// place » montre le QR qui fait le même geste, avec « Montrer mon QR » qui passe au QR plein écran.
+    /// Le parcours (approche, choix, reçu), puis le repli QR. Indisponible (planche `Etat-Erreur` vue 6) : le téléphone
+    /// le dit en bloc d'état (K38), et « À la place » montre le QR qui fait le même geste.
     private var contactlessContent: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-            MeeshyStateBlock(kind: .denied, title: ProfileLinksCopy.contactlessUnavailable,
-                             message: ProfileLinksCopy.qrDoesTheSame, art: .glyph, size: .compact, tint: accent,
-                             systemImage: "wave.3.right")
-                .accessibilityIdentifier("profile.card.contactless.unavailable")
-            MeeshySectionHeader(title: ProfileLinksCopy.instead, form: .overline)
+            ContactlessExchangeSection(me: ContactlessHello(displayName: user?.displayName, username: link.username),
+                                       accent: accent, accentColor: accentColor,
+                                       isUnavailable: $contactlessUnavailable,
+                                       onOpenProfile: { url in openProfile(url) })
+            if contactlessUnavailable {
+                MeeshyStateBlock(kind: .denied, title: ProfileLinksCopy.contactlessUnavailable,
+                                 message: ProfileLinksCopy.qrDoesTheSame, art: .glyph, size: .compact, tint: accent,
+                                 systemImage: "wave.3.right")
+                    .accessibilityIdentifier("profile.card.contactless.unavailable")
+            }
+            MeeshySectionHeader(title: contactlessUnavailable ? ProfileLinksCopy.instead : ContactlessCopy.withoutChip,
+                                form: .overline)
             codeCard(size: .compact)
                 .frame(maxWidth: .infinity)
             MeeshyNote(ProfileLinksCopy.anyCamera, lead: .systemImage("camera"))
@@ -150,6 +159,12 @@ struct ProfileCardView: View {
             MeeshyButton(ProfileLinksCopy.scan, systemImage: "qrcode.viewfinder", kind: .outline, width: .fill,
                          tint: accent, action: { scannerShown = true })
         }
+    }
+
+    /// « Voir sa vitrine » : la carte se ferme, et la fiche s'ouvre par le même routeur que les liens universels.
+    private func openProfile(_ url: URL) {
+        dismiss()
+        _ = DeepLinkRouter.shared.handle(url: url)
     }
 
     // MARK: - Enregistrer l'image
