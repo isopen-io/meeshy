@@ -10,9 +10,21 @@ struct ProfileFriendRequestCard: View {
 
     let tint: Color
     var unsent = false
+    /// La demande est en route : le bouton le montre et ne répond plus (un second appui ne repart pas).
+    var isSending = false
     let onSend: (String) -> Void
-    @State private var note = ""
+    @State private var note: String
     @State private var openNoteID: String?
+
+    /// `draft` : le mot d'une demande qui n'est pas partie, repris dans le champ pour que « Réessayer » le renvoie.
+    init(tint: Color, unsent: Bool = false, isSending: Bool = false, draft: String? = nil,
+         onSend: @escaping (String) -> Void) {
+        self.tint = tint
+        self.unsent = unsent
+        self.isSending = isSending
+        self.onSend = onSend
+        _note = State(initialValue: String((draft ?? "").prefix(Self.noteLimit)))
+    }
 
     /// Ce que l'amitié change, derrière le (i) du titre (épure #17584).
     static var whatChanges: MeeshyInfoNote {
@@ -43,8 +55,10 @@ struct ProfileFriendRequestCard: View {
                 systemImage: "person.badge.plus",
                 width: .fill,
                 tint: tint,
+                isPending: isSending,
                 action: { onSend(note) }
             )
+            .disabled(isSending)
             if unsent { unsentNotice }
         }
     }

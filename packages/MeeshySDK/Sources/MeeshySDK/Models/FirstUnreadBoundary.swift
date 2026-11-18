@@ -124,6 +124,17 @@ public enum FirstUnreadBoundary {
     ///   (`caughtUpToMessageId`) quels que soient les messages sautés : il
     ///   devient la frontière, et rien n'était non lu à cet instant. Absent
     ///   de la fenêtre, il ne déplace rien.
+    ///
+    /// **Miroir Kotlin depuis #19662** : `FirstUnreadBoundary.remainingUnread`
+    /// (`apps/android/core/model/.../FirstUnreadBoundary.kt`), les dix cas de
+    /// `FirstUnreadRemainingTests` rejoués un pour un. Il n'a encore AUCUN
+    /// appelant côté Android, et pour une raison qui n'est pas un oubli de
+    /// câblage : Android poste à l'OUVERTURE un `caughtUpToMessageId`
+    /// inconditionnel (`ReadReceiptLanguages.declare`, appelé par
+    /// `markConversationReadOnOpening`), donc le curseur serveur saute au
+    /// message le plus récent de la fenêtre sans aucune preuve d'affichage et
+    /// il ne RESTE rien à restituer. iOS ne pose ce champ que quand le lot VU
+    /// contient le plus récent (`ConversationCatchUpLaw`). Suivi : #19703.
     public static func remainingUnread(
         messages: [FirstUnreadCandidateMessage],
         lastReadMessageId: String?,

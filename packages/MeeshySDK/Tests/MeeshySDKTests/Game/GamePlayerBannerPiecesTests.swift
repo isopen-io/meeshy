@@ -20,13 +20,14 @@ struct GamePlayerBannerPiecesTests {
         #expect(GamePlayerBanner.Piece.allCases.count == 11)
     }
 
-    @Test("seulement les pièces qui existent, dans l'ordre du bandeau")
+    @Test("seulement les pièces qui existent, dans l'ordre du bandeau : le rang en tête")
     func onlyThePiecesThatExist() {
         let full = GamePlayerBanner(level: 12, tier: .lueur, progress: 0.4, score: 900, nextLevel: 13, pointsToNext: 200,
                                     meeshes: 3, rank: .init(rank: .voix, division: .ii), league: .init(league: .jade, place: 4),
                                     flame: .init(form: .braise, days: 5), trophies: 2,
                                     dailyMission: .init(done: 1, total: 3), season: .init(number: 1), treasury: .coffre)
-        #expect(full.pieces == [.level, .sparks, .meesh, .rank, .league, .flame, .trophies, .mission, .treasury, .season])
+        #expect(full.pieces == [.rank, .level, .sparks, .meesh, .league, .flame, .trophies, .mission, .treasury, .season],
+                "le rang ouvre le bandeau, le niveau suit (#19705, #17394)")
 
         let ready = GamePlayerBanner(level: 12, tier: .lueur, progress: 0.4, score: 900, nextLevel: 13, pointsToNext: 200,
                                      dailyMission: .init(done: 3, total: 3), treasury: .coffre,

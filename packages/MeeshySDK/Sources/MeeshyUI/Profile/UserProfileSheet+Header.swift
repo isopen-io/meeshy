@@ -78,12 +78,22 @@ extension UserProfileSheet {
         )
     }
 
-    /// La pilule de relation rejoint la barre repliée, une fois la barre maîtresse de l'identité.
+    /// La pilule de relation rejoint la barre repliée, une fois la barre maîtresse de l'identité. Je l'ai bloqué : la
+    /// barre dit « Bloqué » (planche `Etat-Bloque`), une pastille du kit (K41) en sens erreur.
     @ViewBuilder
     func heroTrailing(progress: Double) -> some View {
-        if ProfileHeroPlan.barShowsRelation(progress: progress) {
+        if phase == .blockedByMe {
+            MeeshyBadge(.label(ProfileStatesCopy.blockedChip), leading: .systemImage("nosign"), surface: .glass,
+                        kind: .err, size: .s28)
+                .accessibilityIdentifier("profile.header.blocked")
+        } else if ProfileHeroPlan.barShowsRelation(progress: progress) {
             relationPillSlot
         }
+    }
+
+    /// Bloqué dans un sens ou l'autre : l'identité se grise (planche `Etat-Bloque`).
+    var isIdentityMuted: Bool {
+        ProfileHeroPlan.isIdentityMuted(isBlocked: isBlocked, isBlockedByTarget: isBlockedByTarget)
     }
 
     // MARK: - Banner
@@ -107,7 +117,7 @@ extension UserProfileSheet {
 
     @ViewBuilder
     func heroBannerPaint(progress: Double) -> some View {
-        switch ProfileHeroPlan.banner(shownBannerPaint, isBlockedByTarget: isBlockedByTarget) {
+        switch ProfileHeroPlan.banner(shownBannerPaint, isMuted: isIdentityMuted) {
         case .design(let design):
             // #10632, #10933 — la bannière de design ne se peint qu'en l'absence de photo ; décorative, rien ne s'ouvre.
             BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: profileAccent)
@@ -117,7 +127,7 @@ extension UserProfileSheet {
             // CachedAsyncImage (DiskCacheStore persistant) : téléchargée une fois par installation. Échec silencieux
             // (D2, no-retry-on-avatars) : la bannière vivante prend sa place, sans bouton « Réessayer ».
             CachedAsyncImage(url: bannerURL, showsStatusOverlays: false) {
-                livingBanner(isMuted: isBlockedByTarget, progress: progress)
+                livingBanner(isMuted: false, progress: progress)
             }
             .scaledToFill()
             .frame(height: CGFloat(ProfileHeroPlan.bannerHeight(progress: progress)))
@@ -144,7 +154,7 @@ extension UserProfileSheet {
     /// L'adresse de la photo de bannière, quand il y en a une à ouvrir : K28 tait sa bannière au lecteur d'écran,
     /// l'avatar offre donc l'action.
     var bannerPhotoURL: String? {
-        if case .photo(let url) = ProfileHeroPlan.banner(shownBannerPaint, isBlockedByTarget: isBlockedByTarget) {
+        if case .photo(let url) = ProfileHeroPlan.banner(shownBannerPaint, isMuted: isIdentityMuted) {
             return url
         }
         return nil
@@ -164,35 +174,41 @@ extension UserProfileSheet {
 
     /// Ce que la bannière peint (#10933) : la photo gagne toujours, le design équipé ne vient qu'à son défaut.
     var shownBannerPaint: ProfileBannerPaint {
-        ProfileDecorResolver.bannerPaint(photo: displayUser.bannerURL, decor: isBlockedByTarget ? nil : displayUser.profileDecor?.banner)
+        ProfileDecorResolver.bannerPaint(photo: displayUser.bannerURL, decor: isIdentityMuted ? nil : displayUser.profileDecor?.banner)
     }
 
     /// Le cadre de bannière équipé (#10935) ; `nil` ⇒ la bannière d'avant. Masqué comme le reste du décor.
     var shownBannerFrame: BannerFrameDesign? {
-        isBlockedByTarget ? nil : ProfileDecorResolver.bannerFrame(displayUser.profileDecor?.bannerFrame)
+        isIdentityMuted ? nil : ProfileDecorResolver.bannerFrame(displayUser.profileDecor?.bannerFrame)
     }
 
     /// Le contour d'avatar équipé ; `nil` ⇒ avatar nu, comme avant.
     var shownAvatarRing: AvatarRingDesign? {
-        isBlockedByTarget ? nil : ProfileDecorResolver.ring(displayUser.profileDecor?.avatarRing)
+        isIdentityMuted ? nil : ProfileDecorResolver.ring(displayUser.profileDecor?.avatarRing)
     }
 
     // MARK: - Identity
 
     /// Sous l'identité de K28 : sa ville déclarée et sa présence datée, telles que le serveur me les a servies
-    /// (planches `Autre-Inconnu`, `Etat-HorsLigne`), puis la pilule de relation. Rien de servi ⇒ la ligne s'en passe.
+    /// (planches `Autre-Inconnu`, `Etat-HorsLigne`), la pilule de relation, puis sa bio et ses puces (planche
+    /// `Autre-Vitrine`). Rien de servi ⇒ la ligne s'en passe ; grisée (bloqué), l'identité ne dit rien de plus.
     var heroDetails: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             heroStatusLine
             relationPillSlot
+            if !isIdentityMuted {
+                ProfileIdentityChips(user: displayUser)
+                    .padding(.top, MeeshySpacing.xs)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, MeeshySpacing.xl)
     }
 
+    /// Grisée (bloqué), l'identité ne dit ni sa ville ni sa présence datée.
     @ViewBuilder
     var heroStatusLine: some View {
-        if displayUser.city != nil || displayUser.lastActiveAt != nil {
+        if !isIdentityMuted, displayUser.city != nil || displayUser.lastActiveAt != nil {
             HStack(spacing: MeeshySpacing.xs) {
                 if let city = displayUser.city {
                     Image(systemName: "mappin")
@@ -223,20 +239,25 @@ extension UserProfileSheet {
     var relationPillSlot: some View {
         if RelationFace.showsRelationPill(isCurrentUser: isCurrentUser, isBlocked: isBlocked || isBlockedByTarget),
            let relationPill, let userId = resolvedUserId, !userId.isEmpty {
-            relationPill.build(userId, displayUser.resolvedDisplayName)
+            relationPill.build(userId, displayUser.resolvedDisplayName, $relationStanding)
         }
     }
 
     /// Une photo à ouvrir en plein écran — sans elle, toucher l'avatar à initiales n'ouvre rien (#10093).
     var hasAvatarPhoto: Bool {
-        ProfileFullscreenImage.opening(displayUser.avatarURL, fallbackText: "") != nil
+        ProfileFullscreenImage.opening(shownAvatarURL, fallbackText: "") != nil
+    }
+
+    /// Grisée (bloqué), l'identité garde ses initiales : aucune photo ne se peint ni ne s'ouvre.
+    var shownAvatarURL: String? {
+        isIdentityMuted ? nil : displayUser.avatarURL
     }
 
     /// L'avatar du héros, à la taille que K28 lui donne : grand sous la bannière, mini dans la barre repliée. L'anneau
     /// de story ne tient que sur le grand ; toucher la photo l'ouvre en plein écran.
     func heroAvatar(size: CGFloat) -> some View {
         let avatarName = displayUser.resolvedDisplayName
-        let showRing = !isBlockedByTarget && !isBlocked
+        let showRing = !isIdentityMuted
         // App câblée → état réel (pas d'anneau sans story active) ; legacy (nil) → anneau décoratif historique.
         let ringState = ProfileHeroPlan.storyRing(showRing ? (storyRingState ?? .read) : .none, avatarSize: Double(size))
         let context = AvatarContext.custom(size)
@@ -245,11 +266,11 @@ extension UserProfileSheet {
         return MeeshyLivePresence { MeeshyAvatar(
             name: avatarName,
             context: context,
-            accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : profileAccent,
-            avatarURL: displayUser.avatarURL,
+            accentColor: isIdentityMuted ? MeeshyColors.blockedNeutralHex : profileAccent,
+            avatarURL: shownAvatarURL,
             storyState: ringState,
             moodEmoji: shownMoodEmoji,
-            presenceState: isBlockedByTarget ? nil : resolvedPresence,
+            presenceState: ProfileHeroPlan.presence(resolvedPresence, isMuted: isIdentityMuted),
             onViewStory: ringState != .none ? onViewStory : nil,
             onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
         ) }
@@ -259,18 +280,18 @@ extension UserProfileSheet {
             storyRingSize: ringState == .none ? nil : context.ringSize
         )
         .overlay(alignment: .bottomLeading) {
-            ProfileAvatarListening(userId: isBlockedByTarget || isCurrentUser ? nil : resolvedUserId, avatarSize: size,
+            ProfileAvatarListening(userId: isIdentityMuted || isCurrentUser ? nil : resolvedUserId, avatarSize: size,
                                    tint: accentTint)
         }
         .bounceOnAppear()
         .onTapGesture {
-            openFullscreenImage(url: displayUser.avatarURL, fallback: avatarName)
+            openFullscreenImage(url: shownAvatarURL, fallback: avatarName)
         }
         // Expose the avatar tap to VoiceOver (a raw onTapGesture isn't) — seulement quand une photo s'ouvre.
         .accessibilityAddTraits(hasAvatarPhoto ? .isButton : [])
         .accessibilityHint(hasAvatarPhoto ? photoHint : "")
         .accessibilityAction {
-            openFullscreenImage(url: displayUser.avatarURL, fallback: avatarName)
+            openFullscreenImage(url: shownAvatarURL, fallback: avatarName)
         }
         .accessibilityActions {
             if let bannerURL = bannerPhotoURL {
@@ -290,7 +311,7 @@ extension UserProfileSheet {
     }
 
     var shownMoodEmoji: String? {
-        Self.shownMood(moodEmoji, isBlockedByTarget: isBlockedByTarget)
+        Self.shownMood(moodEmoji, isBlockedByTarget: isIdentityMuted)
     }
 
     /// Présence affichée sur l'avatar (grand header + barre compacte).

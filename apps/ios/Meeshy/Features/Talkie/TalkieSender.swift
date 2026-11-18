@@ -57,6 +57,11 @@ final class TalkieSender: ObservableObject {
     @Published private(set) var waking = false
     /// Les temps de la dernière prise de parole dont un fragment est parti.
     private(set) var lastLatency: TalkieLatency?
+    /// Le temps de la prise de parole en cours, que la carte décompte (#19732) ; `nil` hors parole.
+    @Published private(set) var talkWindow: TalkieTalkWindow?
+    /// La dernière prise de parole close et son issue (#19732) : une voix partie, un repli ou un refus.
+    @Published private(set) var lastSettled: TalkieSettled?
+    private var settledCount = 0
 
     /// Une prise de parole, de l'appui à sa fin.
     @MainActor
@@ -124,7 +129,7 @@ final class TalkieSender: ObservableObject {
         lane.store(in: &cancellables)
         // #17255 — une copie que la file d'envoi abandonne après coup se dit, comme celle qui ne part pas.
         self.copier.failures
-            .sink { [weak self] in self?.notice = .failed }
+            .sink { [weak self] in self?.report(.failed) }
             .store(in: &cancellables)
     }
 
@@ -147,7 +152,7 @@ final class TalkieSender: ObservableObject {
     func press(toUserId: String) {
         guard session == nil else { return }
         guard emitter.isConnected else {
-            notice = .offline
+            report(.offline)
             return
         }
         let current = Session(toUserId: toUserId, pressedAt: now())
@@ -202,7 +207,7 @@ final class TalkieSender: ObservableObject {
         let kept = awaitingJoin.remove(at: index)
         guard joined == false else { return }
         let sent = await copier.send(kept.frames, toUserId: kept.toUserId, conversationId: nil)
-        notice = sent ? .voice : .failed
+        report(sent ? .voice : .failed)
     }
 
     /// Un verdict pour la voix réveillée encore en cours de fermeture : il l'attend.
@@ -259,6 +264,7 @@ final class TalkieSender: ObservableObject {
         guard !current.finishing else { return }
         phase = .talking(toUserId: current.toUserId, talkieId: opened.talkieId)
         waking = opened.delivery == .waking
+        talkWindow = TalkieTalkWindow(startedAt: now(), maxDuration: opened.maxDuration)
         current.cancelDeadline = schedule(opened.maxDuration) { [weak self] in
             Task { await self?.finish(current, outcome: .limit) }
         }
@@ -351,6 +357,7 @@ final class TalkieSender: ObservableObject {
             return
         }
         phase = .recordingCopy(toUserId: current.toUserId)
+        talkWindow = TalkieTalkWindow(startedAt: now(), maxDuration: TalkieContract.maxDuration)
         current.cancelDeadline = schedule(TalkieContract.maxDuration) { [weak self] in
             Task { await self?.finishCopy(current) }
         }
@@ -376,7 +383,17 @@ final class TalkieSender: ObservableObject {
             session = nil
             phase = .idle
             waking = false
+            talkWindow = nil
         }
+        guard outcome != nil || current.opened != nil else { return }
+        report(outcome)
+    }
+
+    /// Dit l'issue d'une prise de parole : `notice` pour les surfaces qui l'annoncent en bandeau, `lastSettled` pour
+    /// la carte et le retour au toucher.
+    private func report(_ outcome: TalkieSendOutcome?) {
         if let outcome { notice = outcome }
+        settledCount += 1
+        lastSettled = TalkieSettled(id: settledCount, outcome: outcome)
     }
 }

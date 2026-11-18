@@ -203,6 +203,10 @@ public struct MeeshyToggleRowFace<Leading: View, TitleAccessory: View, Trailing:
             Image(systemName: "chevron.forward")
                 .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
                 .foregroundStyle(recipe.accessoryColor)
+        case .external:
+            Image(systemName: "arrow.up.right.square")
+                .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
+                .foregroundStyle(recipe.accessoryColor)
         case .value(let text):
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular))

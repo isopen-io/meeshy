@@ -83,5 +83,35 @@ final class ConversationListPersister {
         }
         await store.saveCursor(nextCursor: cursor, hasMore: hasMore, for: "list")
         retired.subtract(retiring)
+        ConversationListCacheSignal.shared.ping()
+    }
+}
+
+/// Le cache de la liste des conversations vient d'être réécrit : qui le lit (la pastille d'« Écrire » d'une fiche
+/// ouverte, #18857) le relit, sans réseau. Une annonce par abonné, retirée quand il cesse d'écouter.
+@MainActor
+final class ConversationListCacheSignal {
+    nonisolated deinit {}
+
+    static let shared = ConversationListCacheSignal()
+
+    private var listeners: [UUID: AsyncStream<Void>.Continuation] = [:]
+
+    func changes() -> AsyncStream<Void> {
+        let id = UUID()
+        return AsyncStream { continuation in
+            listeners[id] = continuation
+            continuation.onTermination = { _ in
+                Task { @MainActor in ConversationListCacheSignal.shared.stopListening(id) }
+            }
+        }
+    }
+
+    func ping() {
+        listeners.values.forEach { $0.yield() }
+    }
+
+    private func stopListening(_ id: UUID) {
+        listeners[id] = nil
     }
 }

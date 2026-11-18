@@ -11,6 +11,8 @@ struct ProfileSentRequestCard: View {
     let name: String
     let sentAt: Date?
     let tint: Color
+    /// La demande est en route (envoi ou renvoi) : ses gestes attendent son identifiant servi.
+    var isPending = false
     let onResend: () -> Void
     let onCancel: () -> Void
 
@@ -27,7 +29,8 @@ struct ProfileSentRequestCard: View {
             MeeshyButtonPair {
                 MeeshyButton(
                     String(localized: "profile.relation.request.resend", defaultValue: "Renvoyer", bundle: .module),
-                    systemImage: "arrow.clockwise", kind: .outline, size: .s44, width: .fill, action: onResend
+                    systemImage: "arrow.clockwise", kind: .outline, size: .s44, width: .fill, isPending: isPending,
+                    action: onResend
                 )
             } secondary: {
                 MeeshyButton(
@@ -35,6 +38,7 @@ struct ProfileSentRequestCard: View {
                     systemImage: "xmark", kind: .outline, size: .s44, width: .fill, action: onCancel
                 )
             }
+            .disabled(isPending)
         }
     }
 
@@ -135,8 +139,9 @@ struct ProfileClosedRequestCard: View {
     }
 }
 
-/// Étape 4 — acceptée à l'instant : « Vous êtes amis », ce qui vient de s'ouvrir, et « Écrire à Sofia ». La note
-/// monte avec le jeton `rise` de la table de mouvement (K26), à plat sous mouvement réduit.
+/// Étape 4 — acceptée à l'instant : « Vous êtes amis », ce qui vient de s'ouvrir, et « Écrire à Sofia ». La note monte
+/// avec le jeton `rise` de la table de mouvement (K26) ; sous mouvement réduit, la table rend un fondu (loi 7), jamais
+/// une apparition à plat.
 struct ProfileAcceptedRequestCard: View {
     let name: String
     let isOnline: Bool
@@ -160,7 +165,7 @@ struct ProfileAcceptedRequestCard: View {
                 lead: .systemImage("person.2.fill")
             )
             .scaleEffect(hasArrived || reduceMotion ? 1 : 0.94)
-            .opacity(hasArrived || reduceMotion ? 1 : 0)
+            .opacity(hasArrived ? 1 : 0)
             badges
             MeeshyButton(
                 String(localized: "profile.relation.request.accepted.write", defaultValue: "Écrire à \(name)", bundle: .module),
@@ -168,27 +173,33 @@ struct ProfileAcceptedRequestCard: View {
             )
         }
         .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(MeeshyMotion.animation(.rise, reduce: false)) { hasArrived = true }
+            withAnimation(MeeshyMotion.animation(.rise, reduce: reduceMotion)) { hasArrived = true }
         }
     }
 
+    /// En ligne quand les trois tiennent, empilées aux tailles d'accessibilité (Dynamic Type) : jamais tronquées.
     private var badges: some View {
-        HStack(spacing: MeeshySpacing.sm) {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: MeeshySpacing.sm) { badgeItems }
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) { badgeItems }
+        }
+    }
+
+    @ViewBuilder
+    private var badgeItems: some View {
+        MeeshyBadge(
+            .label(String(localized: "profile.relation.request.accepted.connected", defaultValue: "Connectés", bundle: .module)),
+            leading: .systemImage("person.fill.checkmark"), kind: .ok
+        )
+        MeeshyBadge(
+            .label(String(localized: "profile.relation.request.accepted.friend", defaultValue: "Ami", bundle: .module)),
+            leading: .systemImage("hands.clap"), tint: tint
+        )
+        if isOnline {
             MeeshyBadge(
-                .label(String(localized: "profile.relation.request.accepted.connected", defaultValue: "Connectés", bundle: .module)),
-                leading: .systemImage("person.fill.checkmark"), kind: .ok
+                .label(String(localized: "profile.relation.request.accepted.online", defaultValue: "En ligne", bundle: .module)),
+                leading: .dot, kind: .ok
             )
-            MeeshyBadge(
-                .label(String(localized: "profile.relation.request.accepted.friend", defaultValue: "Ami", bundle: .module)),
-                leading: .systemImage("hands.clap"), tint: tint
-            )
-            if isOnline {
-                MeeshyBadge(
-                    .label(String(localized: "profile.relation.request.accepted.online", defaultValue: "En ligne", bundle: .module)),
-                    leading: .dot, kind: .ok
-                )
-            }
         }
     }
 }

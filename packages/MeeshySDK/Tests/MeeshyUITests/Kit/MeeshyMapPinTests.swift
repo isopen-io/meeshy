@@ -137,4 +137,29 @@ struct MeeshyMapPinTests {
             }
         }
     }
+
+    @Test("le point de présence mesure 14, cerclé de 2 ; mon épingle et le point sont des pièces agnostiques du kit")
+    func parts_areKitPieces() throws {
+        #expect(MeeshyMapPinPartsRecipe.presenceDotDiameter == 14)
+        #expect(MeeshyMapPinPartsRecipe.presenceRimWidth == 2)
+        try KitAssemblyGuards.assertAgnostic(["MeeshyMapPinParts.swift"])
+        let source = try KitAtomVectors.code("MeeshyMapPinParts.swift")
+        #expect(!source.contains("PresenceState"), "la loi de présence reste chez l'hôte")
+    }
+
+    @Test("garde de source (loi 12) : les cartes posent « moi » et la présence par les pièces du kit, sans les redessiner")
+    func sites_useTheKitPieces() throws {
+        let sites = [
+            "apps/ios/Meeshy/Features/SharedLocation/Map/LocationMapPinsLayer.swift",
+            "apps/ios/Meeshy/Features/SharedLocation/Map/ShareMyLocationSheet.swift",
+        ]
+        for path in sites {
+            let code = try String(contentsOf: KitAtomVectors.repositoryRoot.appendingPathComponent(path), encoding: .utf8)
+            #expect(code.contains("MeeshyMapPinOwnContent()"), "\(path) ne pose pas MeeshyMapPinOwnContent")
+            #expect(!code.contains("Image(systemName: \"person.fill\")"), "\(path) redessine mon épingle")
+        }
+        let layer = try String(contentsOf: KitAtomVectors.repositoryRoot
+            .appendingPathComponent(sites[0]), encoding: .utf8)
+        #expect(layer.contains("MeeshyMapPinPresenceDot(color:"), "le point de présence vient du kit")
+    }
 }

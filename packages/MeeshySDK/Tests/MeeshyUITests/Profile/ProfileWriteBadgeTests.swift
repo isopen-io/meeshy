@@ -85,6 +85,26 @@ struct ProfileWriteBadgeTests {
         #expect(none.count == 0)
     }
 
+    @MainActor
+    @Test("une réécriture du cache de la liste repeint la pastille, sans changer de personne")
+    func updates_followTheListCache() async {
+        let host = ChangingListHost(list: [Self.conversation("direct", unread: 2)])
+        var iterator = ProfileDirectDigest.updates(for: Self.leo, from: host).makeAsyncIterator()
+        let first = await iterator.next()
+        host.change(to: [Self.conversation("direct", unread: 0)])
+        let second = await iterator.next()
+        #expect(first?.badge.count == 2)
+        #expect(second?.badge.count == 0)
+    }
+
+    @Test("une directe connue dans le cache est dite ; sans elle, aucune")
+    func digest_knowsWhetherADirectExists() {
+        let known = ProfileDirectDigest.resolve(in: [Self.conversation("direct", unread: 0)], with: Self.leo)
+        let unknown = ProfileDirectDigest.resolve(in: [Self.conversation("group", type: .group, unread: 1)], with: Self.leo)
+        #expect(known.knowsDirect)
+        #expect(!unknown.knowsDirect)
+    }
+
     // MARK: Les sites
 
     @Test("« Écrire » porte la pastille dans « Parler » et dans « Avec Léo »")
@@ -124,5 +144,30 @@ private final class CachedListHost: ProfileDirectUnreadProviding {
     func cachedConversationList() async -> [MeeshyConversation] {
         reads += 1
         return list
+    }
+}
+
+@MainActor
+private final class ChangingListHost: ProfileDirectUnreadProviding {
+    nonisolated deinit {}
+
+    private var list: [MeeshyConversation]
+    private var continuation: AsyncStream<Void>.Continuation?
+
+    init(list: [MeeshyConversation]) {
+        self.list = list
+    }
+
+    func cachedConversationList() async -> [MeeshyConversation] {
+        list
+    }
+
+    func conversationListChanges() -> AsyncStream<Void> {
+        AsyncStream { continuation in self.continuation = continuation }
+    }
+
+    func change(to list: [MeeshyConversation]) {
+        self.list = list
+        continuation?.yield()
     }
 }

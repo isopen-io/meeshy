@@ -22,19 +22,25 @@ nonisolated enum TalkieHoldLook: Equatable {
     }
 }
 
-/// Maintenir pour parler, partagé par la fiche et l'en-tête : le doigt posé enfonce et vibre aussitôt, la voix qui
-/// part vibre une seconde fois, relâcher ou quitter l'écran termine ; un simple toucher rappelle le geste.
+/// Maintenir pour parler, partagé par la fiche, l'en-tête et le bandeau : le doigt posé enfonce et vibre aussitôt, la
+/// voix qui part vibre une seconde fois, relâcher ou quitter l'écran termine ; un simple toucher rappelle le geste. Une
+/// voix partie vibre « réussi » et sonne doucement (coupé par le mode silencieux) ; un refus vibre sans bruit (#19732).
 struct TalkieHoldModifier: ViewModifier {
     @ObservedObject var sender: TalkieSender
     let userId: String
     @Binding var pressed: Bool
     @State private var pressedAt: Date?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
 
     func body(content: Content) -> some View {
         content
             .scaleEffect(pressed && !reduceMotion ? 0.88 : 1)
-            .animation(.spring(response: 0.16, dampingFraction: 0.6), value: pressed)
+            .animation(reduceMotion ? nil : .spring(response: 0.16, dampingFraction: 0.6), value: pressed)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -45,6 +51,10 @@ struct TalkieHoldModifier: ViewModifier {
             .adaptiveOnChange(of: sender.phase) { old, new in
                 guard case .talking = new, old != new else { return }
                 HapticFeedback.rigid()
+            }
+            .adaptiveOnChange(of: sender.lastSettled) { _, settled in
+                guard let settled else { return }
+                TalkieCuePlayer.play(TalkieCueLaw.afterRelease(TalkieAftermath.of(settled.outcome)))
             }
     }
 

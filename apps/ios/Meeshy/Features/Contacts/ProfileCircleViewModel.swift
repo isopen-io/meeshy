@@ -29,6 +29,8 @@ final class ProfileCircleViewModel: ObservableObject {
     @Published private(set) var toolLevel: RelationLevel?
     /// La proposition de cercle que CETTE personne m'a faite, au-dessus du commun (#19449) ; `nil` sinon.
     @Published private(set) var receivedProposal: ProfileCircleProposal?
+    /// Un lien ou un verdict a été lu (cache, liste, détail), ou la lecture s'est achevée : le niveau d'outil est résolu.
+    @Published private(set) var hasReadRelation = false
 
     /// Les propositions répondues ou remises à plus tard ici : une relecture ne les ramène pas.
     private var setAside: Set<String> = []
@@ -94,7 +96,7 @@ final class ProfileCircleViewModel: ObservableObject {
     }
 
     /// Le talkie se PROPOSE dès Proche (D-4), par le lien affiché ou par le verdict servi. La passerelle rejuge à chaque
-    /// appui ; un `TALKIE_NOT_ALLOWED` retire la ligne (#16927).
+    /// appui ; un `TALKIE_NOT_ALLOWED` se dit sur la carte, qui ne disparaît plus (#16927, #19732).
     var offersTalkie: Bool {
         max(shownLevel ?? .public, toolLevel ?? .public) >= .close
     }
@@ -138,6 +140,12 @@ final class ProfileCircleViewModel: ObservableObject {
     /// Le cercle auquel la face Actions juge ce qui reste fermé (#18870) : le même que celui qui PROPOSE les outils,
     /// pour qu'une opération ne soit jamais à la fois offerte et verrouillée.
     var toolGateLevel: RelationLevel { effectiveToolLevel }
+
+    /// Ce que la fiche apprend du cercle (#18870) : le lien montré et le niveau d'outil, `nil` avant toute lecture. La
+    /// fiche y juge si écrire part en demande — au niveau qui propose les outils.
+    var standing: ProfileRelationStanding {
+        ProfileRelationStanding(linked: claimsTheSlot, toolLevel: hasReadRelation ? toolGateLevel : nil)
+    }
 
     /// « Partager ma position » se PROPOSE dès Ami (feature `location.temporary`, #16983), par le lien affiché ou par le
     /// verdict servi. La passerelle rejuge la loi à chaque envoi et ne sert rien sous Ami.
@@ -202,12 +210,14 @@ final class ProfileCircleViewModel: ObservableObject {
         let apply: @MainActor @Sendable ([RelationLink]) -> Void = { [weak self] served in
             guard let self, self.servedLinkMayApply(since: edits) else { return }
             self.link = served.first { $0.userId == userId }
+            self.hasReadRelation = true
         }
         let revalidation = await loader.load(fetch: fetch, setLoadState: { _ in }, apply: apply)
         let cached = await cachedReceived()
         paintProposal(from: cached)
         await revalidation?.value
         await loadServedDetail(since: edits)
+        hasReadRelation = true
         await loadPendingRequest(since: edits)
         await loadReceivedProposal(cached: cached)
     }
@@ -226,22 +236,33 @@ final class ProfileCircleViewModel: ObservableObject {
         linkEditsInFlight -= 1
     }
 
-    /// `GET /relations/:userId` : le blocage de montée quand la passerelle le sert, et le lien lui-même quand la liste
-    /// ne le portait pas encore. Un échec garde ce qui est affiché.
+    /// `GET /relations/:userId` : le niveau commun, le blocage de montée et le verdict d'outil, lus APRÈS la liste —
+    /// le détail gagne sur une liste en cache dont la revalidation a échoué (une baisse silencieuse, RG-07) et
+    /// invalide alors le cache des liens. Le lien lui-même quand la liste ne le portait pas. Un échec garde l'affiché.
     private func loadServedDetail(since edits: Int) async {
         guard let served = await servedDetail(), servedLinkMayApply(since: edits) else { return }
         toolLevel = served.toolLevel
+        hasReadRelation = true
         guard let current = link else {
             if served.effectiveLevel >= .acquaintance { link = served }
             return
         }
-        link = RelationLink(
+        link = Self.merged(current, with: served)
+        guard served.effectiveLevel != current.effectiveLevel else { return }
+        await linksStore().invalidate(for: CirclesViewModel.cacheKey)
+    }
+
+    /// Le lien de la liste, corrigé par le détail servi : son niveau commun, son blocage et son verdict d'outil ; sur un
+    /// niveau qui a changé, la progression et le cran atteint sont ceux du détail, jamais ceux de l'ancien cercle.
+    private static func merged(_ current: RelationLink, with served: RelationLink) -> RelationLink {
+        let agrees = served.effectiveLevel == current.effectiveLevel
+        return RelationLink(
             userId: current.userId,
-            effectiveLevel: current.effectiveLevel,
+            effectiveLevel: served.effectiveLevel,
             grantedByMe: current.grantedByMe,
             since: current.since,
-            progress: current.progress,
-            eligibleFor: current.eligibleFor,
+            progress: agrees ? current.progress : served.progress,
+            eligibleFor: agrees ? current.eligibleFor : served.eligibleFor,
             raiseBlockedUntil: served.raiseBlockedUntil ?? current.raiseBlockedUntil,
             canRaise: served.canRaise ?? current.canRaise,
             accessLevel: served.accessLevel ?? current.accessLevel

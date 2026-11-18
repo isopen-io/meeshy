@@ -81,6 +81,17 @@ final class ProfileSheetPhaseTests: XCTestCase {
         XCTAssertEqual(ProfileLoadFailure.classify(URLError(.badServerResponse)), .unreachable)
     }
 
+    /// Planche `Etat-Erreur` vue 1 — une passerelle tombée dit « Serveur injoignable » par les deux chemins : l'erreur
+    /// brute du transport et la même normalisée par le pipeline.
+    func test_classify_aRawTransportErrorAndItsPipelineForm_agree() {
+        XCTAssertEqual(ProfileLoadFailure.classify(URLError(.cannotConnectToHost)),
+                       ProfileLoadFailure.classify(MeeshyError.network(.serverUnreachable)))
+        XCTAssertEqual(ProfileLoadFailure.classify(URLError(.cannotFindHost)), .unreachable)
+        XCTAssertEqual(ProfileLoadFailure.classify(URLError(.dnsLookupFailed)), .unreachable)
+        XCTAssertEqual(ProfileLoadFailure.classify(URLError(.timedOut)),
+                       ProfileLoadFailure.classify(MeeshyError.network(.timeout)))
+    }
+
     /// Planche `Etat-Vide` — un vide a toujours une sortie quand il y en a une : « Envoyer un premier message » sous
     /// « Aucune conversation en commun », et chez un autre, « Léo n'a encore rien publié ». Le tout fait du kit (K38).
     func test_emptyStates_areStateBlocksOfTheKit_withAnExit() throws {
@@ -115,33 +126,44 @@ final class ProfileSharedConversationAccessTests: XCTestCase {
     }
 }
 
-/// #18873 — planche `Etat-Introuvable` : « Chercher quelqu'un » puis « Scanner un QR » quand l'app les offre,
-/// « Retour » sinon ; jamais un écran sans sortie.
+/// #18873 — planche `Etat-Introuvable` : « Chercher quelqu'un » puis « Scanner un QR » quand l'app les offre, et
+/// toujours « Retour » en dernier ; jamais un écran sans sortie.
 final class ProfileUnavailableExitTests: XCTestCase {
 
-    func test_resolve_lesDeuxOfferts_chercherPuisScanner() {
-        let exits = ProfileUnavailableExit.resolve(canSearch: true, canScan: true)
-
-        XCTAssertEqual(exits.primary, .search)
-        XCTAssertEqual(exits.secondary, .scan)
+    func test_resolve_lesDeuxOfferts_chercherScannerPuisRetour() {
+        XCTAssertEqual(ProfileUnavailableExit.resolve(canSearch: true, canScan: true), [.search, .scan, .back])
     }
 
-    func test_resolve_unSeulOffert_retourEnSecond() {
-        let searchOnly = ProfileUnavailableExit.resolve(canSearch: true, canScan: false)
-        let scanOnly = ProfileUnavailableExit.resolve(canSearch: false, canScan: true)
-
-        XCTAssertEqual(searchOnly.primary, .search)
-        XCTAssertEqual(searchOnly.secondary, .back)
-        XCTAssertEqual(scanOnly.primary, .scan)
-        XCTAssertEqual(scanOnly.secondary, .back)
+    func test_resolve_unSeulOffert_retourEnDernier() {
+        XCTAssertEqual(ProfileUnavailableExit.resolve(canSearch: true, canScan: false), [.search, .back])
+        XCTAssertEqual(ProfileUnavailableExit.resolve(canSearch: false, canScan: true), [.scan, .back])
     }
 
     func test_resolve_rienDOffert_retourSeulement() {
-        let exits = ProfileUnavailableExit.resolve(canSearch: false, canScan: false)
-
-        XCTAssertEqual(exits.primary, .back)
-        XCTAssertNil(exits.secondary)
+        XCTAssertEqual(ProfileUnavailableExit.resolve(canSearch: false, canScan: false), [.back])
     }
+
+    /// « Tu cherchais peut-être » : la fiche se ferme d'abord, la suggestion s'ouvre ensuite — sinon la fermeture
+    /// efface la personne qu'on vient de poser sur la même liaison (lien profond).
+    @MainActor
+    func test_suggestion_fermeDAbordPuisOuvreLaPersonneSuggeree() async throws {
+        let router = SuggestionRouterSpy()
+        let exits = ProfileUnavailableExits(openSuggestion: { router.shown = $0.username })
+        let person = UserSearchResult(id: "u-leo", username: "leo.marchetti", displayName: "Léo")
+
+        exits.openSuggestionClosingFirst(person, close: { router.shown = nil }, delay: .zero)
+        let afterClose = router.shown
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertNil(afterClose)
+        XCTAssertEqual(router.shown, "leo.marchetti")
+    }
+}
+
+@MainActor
+private final class SuggestionRouterSpy {
+    nonisolated deinit {}
+    var shown: String? = "leo.m"
 }
 
 /// #18873 — planche `Etat-HorsLigne` : hors ligne, « Écrire » reste offert (le message part au retour du réseau),
@@ -160,6 +182,31 @@ final class ProfileTalkReachTests: XCTestCase {
     func test_resolve_horsLigne_appelsFermes() {
         XCTAssertEqual(ProfileTalkReach.resolve(.call, isOffline: true), .needsNetwork)
         XCTAssertEqual(ProfileTalkReach.resolve(.video, isOffline: true), .needsNetwork)
+    }
+
+    /// Hors ligne, « Écrire » ne promet « sera envoyé » que pour une conversation directe déjà connue.
+    func test_resolve_horsLigne_premiereConversation_attendLeReseau() {
+        XCTAssertEqual(ProfileTalkReach.resolve(.write, isOffline: true, knowsDirect: true), .queued)
+        XCTAssertEqual(ProfileTalkReach.resolve(.write, isOffline: true, knowsDirect: false), .needsNetwork)
+        XCTAssertEqual(ProfileTalkReach.resolve(.write, isOffline: false, knowsDirect: false), .available)
+    }
+
+    /// La connectivité observée par l'app prime sur le dernier chargement : réseau rétabli ⇒ les appels rouvrent.
+    func test_isOffline_suitLaConnectiviteObservee() {
+        let offlineFallback = ProfileSheetPhase.shown(fallback: ProfileCacheFallback(failure: .offline, age: 60))
+
+        XCTAssertEqual(ProfileTalkReach.resolve(.call, isOffline: ProfileTalkReach.isOffline(offlineFallback, network: false)),
+                       .available)
+        XCTAssertTrue(ProfileTalkReach.isOffline(.shown(fallback: nil), network: true))
+        XCTAssertTrue(ProfileTalkReach.isOffline(offlineFallback, network: nil))
+    }
+
+    func test_reloadsOnReconnect_seulementAuRetourDuReseauSurUneFicheLueDuCache() {
+        let offlineFallback = ProfileSheetPhase.shown(fallback: ProfileCacheFallback(failure: .offline, age: 60))
+
+        XCTAssertTrue(ProfileTalkReach.reloadsOnReconnect(from: true, to: false, phase: offlineFallback))
+        XCTAssertFalse(ProfileTalkReach.reloadsOnReconnect(from: false, to: true, phase: offlineFallback))
+        XCTAssertFalse(ProfileTalkReach.reloadsOnReconnect(from: true, to: false, phase: .shown(fallback: nil)))
     }
 
     func test_isOffline_seulementQuandLaFicheVientDuCacheFauteDeReseau() {

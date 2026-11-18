@@ -383,6 +383,51 @@ final class CommunityDetailViewModelTests: XCTestCase {
         XCTAssertNotEqual(viewModel.community?.memberCount, 40)
         XCTAssertEqual(service.getCallCount, 1)
     }
+
+    // MARK: - community:deleted (#19591)
+
+    func test_disappearance_rendLaFicheIndisponible_sansGeste_etQuitteMesCommunautes() async {
+        let removed = RemovedCommunities()
+        let (viewModel, service) = memberSUT(reader: "u-creator", role: "admin", removed: { removed.ids.append($0) })
+        await viewModel.load()
+        service.getResult = .failure(APIError.serverError(404, nil))
+
+        await viewModel.applyDisappearance(of: "c1")
+
+        XCTAssertNil(viewModel.community)
+        XCTAssertEqual(viewModel.loadFailure, .refused, "l'écran dit que la communauté n'est plus disponible")
+        XCTAssertFalse(viewModel.isMember)
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertFalse(viewModel.isCreator, "plus aucun geste de créateur n'est offert")
+        XCTAssertTrue(viewModel.conversations.isEmpty)
+        XCTAssertFalse(viewModel.isLoading, "la relecture est silencieuse")
+        XCTAssertEqual(removed.ids, ["c1"])
+        XCTAssertEqual(service.getCallCount, 2, "la fiche se relit")
+    }
+
+    func test_disappearance_uneFicheEncoreServie_revient() async {
+        let (viewModel, _) = memberSUT()
+        await viewModel.load()
+
+        await viewModel.applyDisappearance(of: "c1")
+
+        XCTAssertNotNil(viewModel.community)
+        XCTAssertNil(viewModel.loadFailure)
+        XCTAssertEqual(viewModel.currentUserRole, .moderator)
+    }
+
+    func test_disappearance_autreCommunaute_neTouchePasLeDetail() async {
+        let removed = RemovedCommunities()
+        let (viewModel, service) = memberSUT(removed: { removed.ids.append($0) })
+        await viewModel.load()
+
+        await viewModel.applyDisappearance(of: "c2")
+
+        XCTAssertNotNil(viewModel.community)
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertTrue(removed.ids.isEmpty)
+        XCTAssertEqual(service.getCallCount, 1)
+    }
 }
 
 @MainActor

@@ -36,7 +36,7 @@ final class DeepLinkRouterHashtagTests: XCTestCase {
 @MainActor
 final class DeepLinkShortProfileAddressTests: XCTestCase {
     func test_parse_shortProfileAddress_opensTheProfile() {
-        guard case .userProfile(let username) = DeepLinkParser.parse(URL(string: "https://meeshy.me/@aissa")!) else {
+        guard case .userProfile(let username, _) = DeepLinkParser.parse(URL(string: "https://meeshy.me/@aissa")!) else {
             return XCTFail("expected .userProfile for meeshy.me/@pseudo")
         }
         XCTAssertEqual(username, "aissa")

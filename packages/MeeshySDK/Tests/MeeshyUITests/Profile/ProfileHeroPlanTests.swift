@@ -61,6 +61,17 @@ final class ProfileHeroPlanTests: XCTestCase {
                        .photo("https://x/b.jpg"))
     }
 
+    /// Planche `Etat-Bloque` — je l'ai bloqué : ni photo ni décor de bannière, aucune présence.
+    func test_blockedByMe_mutesTheIdentity_noDecorNoPresence() {
+        let muted = ProfileHeroPlan.isIdentityMuted(isBlocked: true, isBlockedByTarget: false)
+
+        XCTAssertTrue(muted)
+        XCTAssertEqual(ProfileHeroPlan.banner(.photo("https://x/b.jpg"), isMuted: muted), .living(isMuted: true))
+        XCTAssertNil(ProfileHeroPlan.presence(.online, isMuted: muted))
+        XCTAssertEqual(ProfileHeroPlan.presence(.online, isMuted: false), .online)
+        XCTAssertEqual(ProfileHeroPlan.banner(.photo("https://x/b.jpg"), isMuted: false), .photo("https://x/b.jpg"))
+    }
+
     func test_storyRing_isKeptOnTheBigAvatar_andDroppedInTheBar() {
         XCTAssertEqual(ProfileHeroPlan.storyRing(.unread, avatarSize: MeeshyCollapsingHeroRecipe.avatarExpanded), .unread)
         XCTAssertEqual(ProfileHeroPlan.storyRing(.read, avatarSize: MeeshyCollapsingHeroRecipe.avatarCollapsed), .none)

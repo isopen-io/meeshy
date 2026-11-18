@@ -72,4 +72,22 @@ public nonisolated enum JoinFlowCopy {
     nonisolated static func goneMessage(in bundle: Bundle) -> String {
         String(localized: "joinFlow.gone.message", defaultValue: "Demande un nouveau lien à la personne qui te l'a envoyé.", bundle: bundle)
     }
+
+    /// « Demande un nouveau lien à Aïssa. » quand l'aperçu a nommé son créateur ; la phrase anonyme sinon.
+    nonisolated static func goneMessage(creatorFirstName: String?, in bundle: Bundle) -> String {
+        guard let name = creatorFirstName else { return goneMessage(in: bundle) }
+        return String(localized: "joinFlow.gone.messageNamed", defaultValue: "Demande un nouveau lien à \(name).", bundle: bundle)
+    }
+
+    nonisolated static func goneInvitation(in bundle: Bundle) -> String {
+        String(localized: "joinFlow.gone.invitation", defaultValue: "Invitation", bundle: bundle)
+    }
+
+    nonisolated static func goneTicketLabel(title: String, address: String, in bundle: Bundle) -> String {
+        String(localized: "joinFlow.gone.ticketLabel", defaultValue: "\(title), \(address), lien qui n'est plus valable", bundle: bundle)
+    }
+
+    nonisolated static func goneCreatorCaption(in bundle: Bundle) -> String {
+        String(localized: "joinFlow.gone.creatorRole", defaultValue: "a créé ce lien", bundle: bundle)
+    }
 }

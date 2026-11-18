@@ -105,4 +105,16 @@ struct MeeshySectionHeaderTests {
         let emptyBadge = MeeshySectionHeaderRecipe.spokenTitle(title: "Mes adresses", count: 0, titleBadge: "")
         #expect(emptyBadge == "Mes adresses")
     }
+
+    @Test("le détail de fin (« 4 arrêts ») suit Dynamic Type en 12,5 secondaire, et se dit après le titre")
+    func detail_isRelativeSecondary_andSpokenAfterTheTitle() throws {
+        #expect(MeeshySectionHeaderRecipe.detailFontSize == 12.5)
+        let spoken = MeeshySectionHeaderRecipe.spokenRow(spokenTitle: "Aujourd'hui, 6,4 km", detail: "4 arrêts")
+        #expect(spoken == "Aujourd'hui, 6,4 km, 4 arrêts")
+        let silent = MeeshySectionHeaderRecipe.spokenRow(spokenTitle: "Aujourd'hui, 6,4 km", detail: "")
+        #expect(silent == "Aujourd'hui, 6,4 km")
+        let code = try KitAtomVectors.code("MeeshySectionHeader.swift")
+        #expect(code.contains("MeeshyFont.relative(CGFloat(MeeshySectionHeaderRecipe.detailFontSize)"))
+        #expect(code.contains("MeeshyColors.textSecondary(isDark: isDark)"))
+    }
 }

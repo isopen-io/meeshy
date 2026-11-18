@@ -20,6 +20,8 @@ export const TRANSLATED_TRACK_NOT_WRITTEN = 'TRANSLATED_TRACK_NOT_WRITTEN';
 
 export type TrackLocation = { readonly path?: string; readonly url?: string };
 
+type TrackedEntry = TrackLocation & { readonly deletedAt?: Date | string | null };
+
 /**
  * Fusionne les traductions entrantes dans celles qui sont inscrites. Une
  * entrée dont la piste n'a pas pu s'écrire (ni `path` ni `url`) GARDE la
@@ -27,7 +29,10 @@ export type TrackLocation = { readonly path?: string; readonly url?: string };
  * disque, et c'est cette référence qui le fera effacer avec la pièce (vue
  * unique, éphémère, suppression). Sans elle, il deviendrait orphelin.
  */
-export function mergeTranslationEntries(existing: AttachmentTranslations, incoming: AttachmentTranslations): AttachmentTranslations {
+export function mergeTranslationEntries<T extends TrackedEntry = AttachmentTranslations[string]>(
+  existing: Readonly<Record<string, T>>,
+  incoming: Readonly<Record<string, NoInfer<T>>>
+): Record<string, T> {
   const kept = Object.fromEntries(
     Object.entries(incoming).map(([language, entry]) => {
       const previous = existing[language];
