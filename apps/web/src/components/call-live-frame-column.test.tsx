@@ -99,10 +99,9 @@ const keepFrame = async (view: ReturnType<typeof mount>) => {
   for (let tries = 0; tries < 40 && view.find('[data-call-live-frame-surface]') === null; tries += 1) await view.settle();
 };
 
+/* #19670 : « Journal » au pied des sous-titres l'ouvre ; ouvert, le même bouton (ou celui du pied du journal) le referme. */
 const toggleJournal = async (view: ReturnType<typeof mount>) => {
-  view.press('[data-call-more]');
-  await view.settle();
-  view.press('[data-call-control="journal"]');
+  view.press('[data-call-captions-journal], [data-call-journal-toggle]');
   await view.settle();
 };
 

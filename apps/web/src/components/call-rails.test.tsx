@@ -276,18 +276,18 @@ describe('CallScreen — sous « Réduire les animations », les rails entrent e
     view.done();
   });
 
-  test('un bouton touché pendant la sortie du rail répond : « Journal » ouvre le journal', async () => {
+  test('un bouton touché pendant la sortie du rail répond : « Réagir » ouvre ses réactions', async () => {
     const view = mount();
     act(() => (view.host.querySelector('[data-call-more]') as HTMLElement).click());
-    const journal = view.host.querySelector<HTMLElement>('[data-call-rail-side="trailing"] [data-call-control="journal"]');
-    expect(journal).not.toBeNull();
-    expect(journal?.closest('[inert], [aria-hidden="true"]')).toBeNull();
-    expect(view.host.querySelector('[data-call-journal-panel]')).toBeNull();
+    const react = view.host.querySelector<HTMLElement>('[data-call-rail-side="trailing"] [data-call-control="react"]');
+    expect(react).not.toBeNull();
+    expect(react?.closest('[inert], [aria-hidden="true"]')).toBeNull();
+    expect(view.host.querySelector('[data-call-rail-side="trailing"] [data-call-control="journal"]')).toBeNull();
     await act(async () => {
-      journal?.click();
+      react?.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(view.host.querySelector('[data-call-journal-panel]')).not.toBeNull();
+    expect(view.host.querySelector('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('panel');
     view.done();
   });
 });
@@ -306,8 +306,11 @@ describe('CallScreen — colonne du journal ouverte (W1), le rail de fin longe m
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
-    act(() => root.render(<CallScreen call={call({ localStream: stream(), remoteStreams: { 'u-peer': stream() } })} canShare initiallyExpanded wide />));
-    act(() => host.querySelector<HTMLElement>('[data-call-control="journal"]')?.click());
+    act(() => root.render(<CallScreen call={call({ localStream: stream(), remoteStreams: { 'u-peer': stream() }, captionsMode: 'translated' })} canShare wide />));
+    await act(async () => {
+      await import('./call-captions-panel');
+    });
+    act(() => host.querySelector<HTMLElement>('[data-call-control-pill] [data-call-captions-journal]')?.click());
     await act(async () => {});
     if (host.querySelector('[data-call-more]')?.getAttribute('aria-expanded') !== 'true') act(() => host.querySelector<HTMLElement>('[data-call-more]')?.click());
     await act(async () => {});
