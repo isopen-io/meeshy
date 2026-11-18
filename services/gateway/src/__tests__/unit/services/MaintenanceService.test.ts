@@ -135,6 +135,9 @@ function makePrisma(overrides: {
     storyHighlight: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    communityJoinRequest: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     friendRequest: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },

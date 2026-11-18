@@ -47,6 +47,7 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     trackingLinkClick: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // Les albums « à la une » (#19394) : un compte qui n'en a composé aucun.
     storyHighlight: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    communityJoinRequest: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // Les visites de son lien de profil (#19206) : aucune.
     profileLinkVisitDay: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // Ses invitations par e-mail (#19207) : aucune.
@@ -212,6 +213,13 @@ describe('purgeAccountIsolatedData', () => {
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(prisma.storyHighlight.deleteMany).toHaveBeenCalledWith({ where: { ownerId: USER_ID } });
     expect(summary.storyHighlightsDeleted).toBe(4);
+  });
+
+  it("efface ses demandes d'entrée en communauté (#19429) : ni son pays ne reste servi, ni une demande ne s'accepte après lui", async () => {
+    const prisma = fakePrisma({ communityJoinRequest: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 2 }) } });
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
+    expect(prisma.communityJoinRequest.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    expect(summary.communityJoinRequestsDeleted).toBe(2);
   });
 
   it("efface l'agrégat des visites de son lien de profil (#19206)", async () => {
