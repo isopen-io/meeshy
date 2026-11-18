@@ -67,19 +67,6 @@ extension CallView {
         CallPillText.resolve(isCaptionsEnabled: showTranscript, layer: layer, isChromeRevealed: isChromeVisible)
     }
 
-    func journalActionButton(captioned: Bool, diameter: CGFloat) -> some View {
-        CallPillButton(
-            symbol: "list.bullet.rectangle",
-            kind: layer.openPanel == .journal ? .active : .normal,
-            label: CallCaptionsCopy.journalTitle,
-            caption: captioned ? CallCaptionsCopy.journal : nil,
-            hint: CallCaptionsCopy.journalHint,
-            diameter: diameter
-        ) {
-            togglePanel(.journal)
-        }
-    }
-
     /// #17343 — le journal s'ouvre DANS la pilule, à la place des sous-titres, et y
     /// défile ; sa hauteur est une part de la fenêtre (`CallJournalSizing`).
     var journalPanelRows: some View {
@@ -149,6 +136,7 @@ extension CallView {
         case .off:
             showOriginalText = false
             showTranscript = false
+            layer = layer.closingJournal()
             revealedCaptions = CallCaptionsReveals()
             transcriptionService.isShowingOverlay = false
             callManager.toggleTranscription()

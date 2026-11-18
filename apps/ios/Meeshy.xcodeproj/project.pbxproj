@@ -289,6 +289,7 @@
 		0C8CCC8DB7CB97820E8659BC /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60C3889D242EDB1DC4AB7E37 /* DependencyContainer.swift */; };
 		0C8F1CA3EBB188F1E52C7D29 /* UnencryptedMessageMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A17FBCA72FB51A226C4C498E /* UnencryptedMessageMarker.swift */; };
 		0C9064D4A21708E980C6EBDE /* GameLeagueViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7029606A22BE8D5A388E55EE /* GameLeagueViews.swift */; };
+		E369D61BFA81BD2702729DD0 /* CallReducedControlsLaw.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D401A11CF074826FF2E85FC /* CallReducedControlsLaw.swift */; };
 		0C9128642CD77A1BB0632AD7 /* CallReducedRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = D30AEB07BC1BD1DD3EC24519 /* CallReducedRule.swift */; };
 		0C9693D24F166268EF3D1190 /* MediaGalleryPlayPauseFadeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0D09E2BBCBD9166F3C81BA3 /* MediaGalleryPlayPauseFadeTests.swift */; };
 		0CA0AEBE0C4C4316159C242A /* CommentRowPartsGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C75AED4EE09C7D257AB89FF /* CommentRowPartsGuardTests.swift */; };
@@ -8839,6 +8840,7 @@
 		D2E346201A96EBFF6E518083 /* CallFrameRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallFrameRendererTests.swift; sourceTree = "<group>"; };
 		D2E9D9F147489D464DA6B635 /* MockMessageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockMessageService.swift; sourceTree = "<group>"; };
 		D2F60AC23D6EDC20560A6D90 /* WorldGuestEntryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorldGuestEntryViewModel.swift; sourceTree = "<group>"; };
+		5D401A11CF074826FF2E85FC /* CallReducedControlsLaw.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallReducedControlsLaw.swift; sourceTree = "<group>"; };
 		D30AEB07BC1BD1DD3EC24519 /* CallReducedRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallReducedRule.swift; sourceTree = "<group>"; };
 		D31FD97014016A56E7DC95F9 /* CallManager+AudioQuality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+AudioQuality.swift"; sourceTree = "<group>"; };
 		D3397276448BC17060DDA394 /* ConversationOptionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationOptionsViewModel.swift; sourceTree = "<group>"; };
@@ -12745,6 +12747,7 @@
 				E144C65A21B601914B22F2C0 /* CallPillMotion.swift */,
 				0E501502ABED179BB399F00C /* CallPillText.swift */,
 				CC3A8B00A453CE869B99BB52 /* CallPipMorph.swift */,
+				5D401A11CF074826FF2E85FC /* CallReducedControlsLaw.swift */,
 				D30AEB07BC1BD1DD3EC24519 /* CallReducedRule.swift */,
 				74F0FE17753ECA22A6FCACBA /* CallRemoteVideoSurface.swift */,
 				8F35946408DE5AD04EFA2FB1 /* CallScreenLayer.swift */,
@@ -16927,6 +16930,7 @@
 				3D117A4C77D2DD6923640604 /* CallRecordingService.swift in Sources */,
 				F5FDA971D9231E157B2B9BCF /* CallReducedCaption.swift in Sources */,
 				D905E6EFD85EC7D6DE68E886 /* CallReducedPresence.swift in Sources */,
+				E369D61BFA81BD2702729DD0 /* CallReducedControlsLaw.swift in Sources */,
 				0C9128642CD77A1BB0632AD7 /* CallReducedRule.swift in Sources */,
 				321B1ECDC4BF5F68EF2D2EDA /* CallRefusalMessage.swift in Sources */,
 				AB4F55BAA3B8E51F9A448064 /* CallReliabilityMonitor.swift in Sources */,
