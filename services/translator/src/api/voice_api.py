@@ -24,6 +24,7 @@ from pathlib import Path
 from datetime import datetime
 from enum import Enum
 
+from utils.served_time import served_utc
 from utils.voice_cache_guard import (
     INVALID_USER_ID_DETAIL,
     VoiceCacheIdRejected,
@@ -451,7 +452,7 @@ def create_voice_api_router(
                 status=job.status.value,
                 progress=job.progress,
                 current_step=job.current_step,
-                created_at=job.created_at.isoformat()
+                created_at=served_utc(job.created_at)
             )
 
         except Exception as e:
@@ -481,9 +482,9 @@ def create_voice_api_router(
             current_step=job.current_step,
             result=job.result,
             error=job.error,
-            created_at=job.created_at.isoformat(),
-            started_at=job.started_at.isoformat() if job.started_at else None,
-            completed_at=job.completed_at.isoformat() if job.completed_at else None
+            created_at=served_utc(job.created_at),
+            started_at=served_utc(job.started_at),
+            completed_at=served_utc(job.completed_at)
         )
 
     @router.delete("/voice/job/{job_id}")
