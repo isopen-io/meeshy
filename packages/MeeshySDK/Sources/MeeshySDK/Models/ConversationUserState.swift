@@ -186,6 +186,13 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         return merged
     }
 
+    /// Les préférences locales gagnent sur la ligne servie `incoming` quand elles sont plus récentes, OU quand un geste
+    /// est encore en file sous une version non dépassée (#19307) : l'accusé d'un autre geste ramène la version à la
+    /// valeur servie, et à version égale la ligne servie effaçait sinon le geste en file et les champs de l'appareil.
+    func holdsLocalPreferences(over incoming: ConversationUserState) -> Bool {
+        version > incoming.version || (pendingMutationCount > 0 && version >= incoming.version)
+    }
+
     // MARK: - La ligne de conversation (#7198, #18925)
 
     /// Ce que la ligne de `GET /conversations` et `GET /conversations/:id` sert de l'état du lecteur, projeté
