@@ -20,6 +20,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +54,13 @@ import me.meeshy.ui.component.FeedbackToastRequest
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.people.BlockConfirmDialog
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
+import me.meeshy.ui.component.kit.MeeshyStateArt
+import me.meeshy.ui.component.kit.MeeshyStateBlock
+import me.meeshy.ui.component.kit.MeeshyStateBlockAction
+import me.meeshy.ui.component.kit.MeeshyStateBlockKind
+import me.meeshy.ui.component.kit.MeeshyStatusCapsule
+import me.meeshy.ui.component.kit.MeeshyStatusCapsuleEdge
+import me.meeshy.ui.component.kit.MeeshyStatusCapsuleKind
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -85,7 +93,9 @@ fun UserProfileSheet(
     sharedConversationsViewModel: ProfileSharedConversationsViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(user) { viewModel.onEvent(UserProfileSheetEvent.Open(user)) }
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    DisposableEffect(viewModel) { onDispose { viewModel.onEvent(UserProfileSheetEvent.Closed) } }
+    val served by viewModel.state.collectAsStateWithLifecycle()
+    val state = served.presentedFor(user)
     val actionsState by actionsViewModel.state.collectAsStateWithLifecycle()
     val catalog by bannerViewModel.catalog.collectAsStateWithLifecycle()
     val sharedConversations by sharedConversationsViewModel.state.collectAsStateWithLifecycle()
@@ -103,11 +113,6 @@ fun UserProfileSheet(
     LaunchedEffect(sharedId) { sharedId?.let(sharedConversationsViewModel::load) }
     val servedDecor = state.profile?.servedDecor
     LaunchedEffect(servedDecor, catalog) { servedDecor?.let(bannerViewModel::request) }
-    LaunchedEffect(state.content) {
-        // L'état VIVANT, pas l'instantané composé : une fiche précédente fermée ne referme pas la suivante.
-        if (viewModel.state.value.content == ProfileSheetContent.Close) close()
-    }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -146,10 +151,13 @@ fun UserProfileSheet(
                 )
             }
             if (reportChoiceOpen) {
-                ProfileReportQuickDialog(
-                    onReason = { reason ->
+                ProfileReportSheet(
+                    displayName = state.profile?.let { it.displayName ?: it.username } ?: state.user.resolvedDisplayName,
+                    alreadyBlocked = actionsState.plan?.canBlock != true,
+                    onSend = { submission ->
                         reportChoiceOpen = false
-                        actionsViewModel.report(reason)
+                        actionsViewModel.report(submission.reason)
+                        if (submission.alsoBlock) actionsViewModel.block()
                     },
                     onMoreDetails = {
                         reportChoiceOpen = false
@@ -221,9 +229,9 @@ private fun ProfileActionsViewModel.callbacks(
 
 /**
  * Le corps de la feuille, projection mince de [UserProfileSheetUiState] : squelette sur cache vide,
- * échec + Réessayer, refus sans Réessayer, ou la fiche peinte — chacun en UN SEUL défilement. Le
+ * échec + Réessayer, « Personne ici » + Retour, ou la fiche peinte — chacun en UN SEUL défilement. Le
  * bouton Fermer reste au-dessus de tout (barre compacte comprise), en haut au début ; la feuille
- * porte le nom de la personne comme titre de volet (TalkBack).
+ * porte le nom de la personne comme titre de volet (TalkBack), sauf « Personne ici », qui ne nomme personne.
  */
 @Composable
 internal fun UserProfileSheetBody(
@@ -238,7 +246,11 @@ internal fun UserProfileSheetBody(
     sharedConversations: ProfileSharedConversationsState = ProfileSharedConversationsState(),
 ) {
     val accent = hexColor(state.accentHex, MeeshyPalette.Indigo500)
-    val title = state.profile?.let { it.displayName ?: it.username } ?: state.user.resolvedDisplayName
+    val title = if (state.content == ProfileSheetContent.Nobody) {
+        stringResource(R.string.profile_state_nobody_title)
+    } else {
+        state.profile?.let { it.displayName ?: it.username } ?: state.user.resolvedDisplayName
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -246,9 +258,10 @@ internal fun UserProfileSheetBody(
     ) {
         when (state.content) {
             ProfileSheetContent.Skeleton -> ProfileSheetPlaceholderList { ProfileSheetSkeleton() }
-            ProfileSheetContent.Failed -> ProfileSheetPlaceholderList { ProfileSheetUnavailable(state.user, accent, onRetry) }
-            ProfileSheetContent.Refused -> ProfileSheetPlaceholderList { ProfileSheetUnavailable(state.user, accent, onRetry = null) }
-            ProfileSheetContent.Close -> Unit
+            ProfileSheetContent.Failed -> ProfileSheetPlaceholderList {
+                ProfileSheetFailed(state.user, accent, isOffline = state.isOffline, onRetry = onRetry)
+            }
+            ProfileSheetContent.Nobody -> ProfileSheetPlaceholderList { ProfileSheetNobody(onBack = onClose) }
             ProfileSheetContent.Loaded -> ProfileSheetLoadedContent(
                 state = state,
                 actionsState = actionsState,
@@ -258,6 +271,18 @@ internal fun UserProfileSheetBody(
                 isExpanded = isExpanded,
                 actions = actions,
                 sharedConversations = sharedConversations,
+            )
+        }
+        if (state.content == ProfileSheetContent.Loaded && state.showsOfflineCapsule) {
+            MeeshyStatusCapsule(
+                message = stringResource(R.string.profile_state_cached_message),
+                icon = MeeshyIcons.WifiOff,
+                kind = MeeshyStatusCapsuleKind.Info,
+                edge = MeeshyStatusCapsuleEdge.Top,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .then(if (isExpanded) Modifier.statusBarsPadding() else Modifier)
+                    .padding(top = MeeshySpacing.xs, start = MeeshyMinTapTarget + MeeshySpacing.xs, end = MeeshySpacing.md),
             )
         }
         ProfileSheetCloseButton(
@@ -285,9 +310,9 @@ private fun ProfileSheetPlaceholderList(content: @Composable ColumnScope.() -> U
     }
 }
 
-/** La fiche sans profil (panne ou refus) : ce que la surface d'origine savait, puis le message. */
+/** La fiche qui n'a pas pu se charger sur cache vide : ce que l'on sait de la personne, puis le bloc d'état. */
 @Composable
-private fun ProfileSheetUnavailable(user: ProfileSheetUser, accent: Color, onRetry: (() -> Unit)?) {
+private fun ProfileSheetFailed(user: ProfileSheetUser, accent: Color, isOffline: Boolean, onRetry: () -> Unit) {
     Box(Modifier.height(ProfileSheetLayout.TOP_CLEARANCE))
     MeeshyAvatar(
         name = user.resolvedDisplayName,
@@ -296,7 +321,30 @@ private fun ProfileSheetUnavailable(user: ProfileSheetUser, accent: Color, onRet
         imageUrl = user.avatarUrl,
     )
     ProfileSheetIdentity(user)
-    ProfileLoadFailure(accent = accent, onRetry = onRetry)
+    MeeshyStateBlock(
+        kind = if (isOffline) MeeshyStateBlockKind.Offline else MeeshyStateBlockKind.Error,
+        title = stringResource(if (isOffline) R.string.profile_state_offline_title else R.string.profile_state_error_title),
+        message = stringResource(if (isOffline) R.string.profile_state_offline_message else R.string.profile_state_error_message),
+        primary = MeeshyStateBlockAction(title = stringResource(R.string.common_retry), perform = onRetry),
+        art = MeeshyStateArt.Glyph,
+        tint = accent,
+    )
+}
+
+/**
+ * « Personne ici » : un profil introuvable, privé ou qui nous a bloqués ont le même écran — rien n'y dit pourquoi, et
+ * aucune identité n'y reste. La seule sortie est « Retour ».
+ */
+@Composable
+private fun ProfileSheetNobody(onBack: () -> Unit) {
+    Box(Modifier.height(ProfileSheetLayout.TOP_CLEARANCE))
+    MeeshyStateBlock(
+        kind = MeeshyStateBlockKind.Denied,
+        title = stringResource(R.string.profile_state_nobody_title),
+        message = stringResource(R.string.profile_state_nobody_message),
+        primary = MeeshyStateBlockAction(title = stringResource(R.string.profile_state_nobody_back), perform = onBack),
+        art = MeeshyStateArt.Glyph,
+    )
 }
 
 /**

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        {
+          "androidName": "location_map_open",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
