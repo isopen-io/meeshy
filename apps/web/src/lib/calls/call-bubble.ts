@@ -94,8 +94,36 @@ export function bubbleTranslate({ origin, drag }: { readonly origin: { readonly 
   return `${origin.left + (drag?.x ?? 0)}px calc(${origin.top + (drag?.y ?? 0)}px + env(safe-area-inset-top))`;
 }
 
-/** L'aimantation au bord ne joue que `translate`, au tempo d'avant (#11314) ; le glissé et le pincement n'en ont pas. */
-export const BUBBLE_SETTLE_TRANSITION = 'translate 180ms ease-out';
+/** L'aimantation au bord ne joue que `translate` (#11314) ; le glissé et le pincement n'en ont pas. #19701 — assez longue et
+    freinée en fin de course pour qu'on VOIE la vignette glisser jusqu'à son bord, comme le ressort d'iOS
+    (`CallBubbleGestureResolver.glideResponse`). « Réduire les animations » la coupe (règle générale d'`app.css`). */
+export const BUBBLE_SETTLE_TRANSITION = 'translate 420ms cubic-bezier(0.22, 1, 0.36, 1)';
+
+/** #19701 — l'élan : la vitesse des derniers instants du doigt (px/ms) se projette sur cette durée. */
+export const GLIDE_PROJECTION_MS = 180;
+/** Le plus long chemin que l'élan ajoute au geste, par axe (`CallBubbleGestureResolver.maxGlide` d'iOS). */
+export const MAX_GLIDE = 320;
+/** Les échantillons plus vieux que ceci ne disent plus la vitesse du lâcher. */
+const VELOCITY_WINDOW_MS = 100;
+
+export type PointerSample = Point & { readonly t: number };
+
+/** La vitesse du doigt au lâcher (px/ms), lue sur les échantillons des derniers instants ; immobile ou trop ancien ⇒ nulle. */
+export function releaseVelocity(samples: readonly PointerSample[]): Point {
+  const last = samples.at(-1);
+  if (last === undefined) return { x: 0, y: 0 };
+  const recent = samples.filter((sample) => last.t - sample.t <= VELOCITY_WINDOW_MS);
+  const first = recent[0];
+  if (first === undefined || last.t <= first.t) return { x: 0, y: 0 };
+  const elapsed = last.t - first.t;
+  return { x: (last.x - first.x) / elapsed, y: (last.y - first.y) / elapsed };
+}
+
+/** Au lâcher, la vignette poursuit sa course selon l'élan, borné : c'est ce point qu'on aimante ensuite au bord le plus proche. */
+export function glideBubble(moved: Point, velocity: Point): Point {
+  const glide = (speed: number): number => Math.max(-MAX_GLIDE, Math.min(MAX_GLIDE, speed * GLIDE_PROJECTION_MS));
+  return { x: moved.x + glide(velocity.x), y: moved.y + glide(velocity.y) };
+}
 
 /** Le centre au lâcher → le bord le plus proche et la hauteur gardée. */
 export function snapBubble(center: Point, viewport: Size, insets: Insets, size: Size): Pick<BubblePlacement, 'edge' | 'fraction'> {
