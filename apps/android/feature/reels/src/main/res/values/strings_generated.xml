@@ -24,7 +24,7 @@
     <string name="reels_mute">Mute</string>
     <string name="reels_open_failure_back">Back</string>
     <string name="reels_report_reason_harassment">Harassment</string>
-    <string name="reels_report_reason_hate_speech">Hate speech</string>
+    <string name="reels_report_reason_hate_speech">Hate</string>
     <string name="reels_report_reason_impersonation">Impersonation</string>
     <string name="reels_report_reason_inappropriate">Inappropriate content</string>
     <string name="reels_report_reason_other">Other</string>

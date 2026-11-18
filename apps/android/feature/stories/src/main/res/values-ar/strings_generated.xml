@@ -296,7 +296,7 @@
     <string name="stories_reply_sent">تم إرسال الرد</string>
     <string name="stories_reply_to">رد على %1$s</string>
     <string name="stories_report_reason_harassment">تحرّش</string>
-    <string name="stories_report_reason_hate_speech">خطاب كراهية</string>
+    <string name="stories_report_reason_hate_speech">كراهية</string>
     <string name="stories_report_reason_impersonation">انتحال الهوية</string>
     <string name="stories_report_reason_inappropriate">محتوى غير لائق</string>
     <string name="stories_report_reason_other">أخرى</string>

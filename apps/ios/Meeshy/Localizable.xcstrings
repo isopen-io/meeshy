@@ -375787,6 +375787,100 @@
           }
         }
       }
+    },
+    "sharedLocation.share.actionAccessibility": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشاركة موقعي مع %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meinen Standort mit %@ teilen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share my location with %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compartir mi ubicación con %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partager ma position avec %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Condividi la mia posizione con %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compartilhar minha localização com %@"
+          }
+        }
+      }
+    },
+    "talkie.send.voice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يمكن إيصال جهاز اللاسلكي الآن: أرسل رسالة صوتية بدلًا من ذلك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Walkie-Talkie kommt gerade nicht durch: Sende stattdessen eine Sprachnachricht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The walkie-talkie can’t get through right now: send a voice message instead."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El walkie-talkie no pasa ahora mismo: envía un mensaje de voz."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il walkie-talkie ora non passa: invia un messaggio vocale."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O walkie-talkie não passa agora: envie uma mensagem de voz."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

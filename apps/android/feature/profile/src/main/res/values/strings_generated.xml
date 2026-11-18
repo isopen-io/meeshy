@@ -53,7 +53,7 @@
     <string name="profile_progression_title">My Legend</string>
     <string name="profile_report_quick_reason_fake_profile">Fake profile</string>
     <string name="profile_report_quick_reason_harassment">Harassment</string>
-    <string name="profile_report_quick_reason_hate_speech">Hate speech</string>
+    <string name="profile_report_quick_reason_hate_speech">Hate</string>
     <string name="profile_report_quick_reason_impersonation">Impersonation</string>
     <string name="profile_report_quick_reason_inappropriate">Inappropriate content</string>
     <string name="profile_report_quick_reason_other">Other</string>

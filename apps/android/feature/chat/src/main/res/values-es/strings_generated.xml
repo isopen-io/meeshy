@@ -610,7 +610,7 @@
     <string name="report_message_submit">Enviar el informe</string>
     <string name="report_message_title">¿Por qué denuncias este mensaje?</string>
     <string name="report_reason_harassment">Acoso</string>
-    <string name="report_reason_hate_speech">Discurso de odio</string>
+    <string name="report_reason_hate_speech">Odio</string>
     <string name="report_reason_impersonation">Suplantación de identidad</string>
     <string name="report_reason_inappropriate">Contenido inapropiado</string>
     <string name="report_reason_other">Otro</string>
