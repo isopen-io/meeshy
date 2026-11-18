@@ -344,6 +344,69 @@ final class ShareLinkEntrySummaryTests: XCTestCase {
         let removed = await sut.removeArrival(participantId: "kora")
         XCTAssertFalse(removed)
     }
+
+    // MARK: - La pile de l'en-tête (#19496)
+
+    func test_headFaces_waitForTheStats_thenShowTheThreeLatestArrivals() async {
+        let service = MockShareLinkManager()
+        let sut = ShareLinkDetailViewModel(link: linkWithConversation("conv-1"), service: service,
+                                           removeParticipant: { _, _ in })
+        XCTAssertEqual(sut.headFaces, [])
+        service.fetchLinkStatsResult = .success(ShareLinkArrivalStats(
+            visits: 9, arrivals: 4, anonymousArrivals: 1,
+            recentArrivals: ["mina", "tomas", "ana", "kora"].map { arrival($0, anonymous: $0 == "kora") }))
+
+        await sut.loadStats()
+
+        XCTAssertEqual(sut.headFaces.map(\.id), ["mina", "tomas", "ana"])
+        XCTAssertEqual(sut.headFaces.first?.name, "mina")
+    }
+}
+
+/// L'en-tête du détail d'un lien de communauté (#19496, planche `Lien-Communaute`) : la pile des visages se peint
+/// depuis la liste (cache d'abord), puis suit les entrées lues.
+@MainActor
+final class CommunityLinkHeadFacesTests: XCTestCase {
+
+    private func link(previews: [LinksFaceMember]?) -> CommunityLink {
+        CommunityLink(id: "c1", name: "Beatmakers Dakar", identifier: "beatmakers", baseUrl: "https://meeshy.me",
+                      memberCount: 342, isActive: true, createdAt: Date(timeIntervalSince1970: 0),
+                      memberPreviews: previews)
+    }
+
+    private func entry(_ id: String, minutesAgo: Double) -> CommunityLinkEntry {
+        CommunityLinkEntry(id: "m-\(id)", userId: id, name: id.capitalized, username: id, avatar: nil,
+                           joinedAt: Date(timeIntervalSince1970: 1_763_000_000 - minutesAgo * 60))
+    }
+
+    private func makeSUT(previews: [LinksFaceMember]?, entries: [CommunityLinkEntry]) -> CommunityLinkDetailViewModel {
+        CommunityLinkDetailViewModel(
+            link: link(previews: previews),
+            viewerId: "me",
+            loadDetails: { _ in
+                CommunityLinkDetails(isPrivate: false, role: "admin", memberCount: 342, avatar: nil,
+                                     settingsCommunity: nil)
+            },
+            loadEntries: { _ in entries },
+            setPrivate: { _, _ in }
+        )
+    }
+
+    func test_headFaces_beforeTheEntries_showTheFacesTheListServed() {
+        let sut = makeSUT(previews: [LinksFaceMember(id: "an", name: "Ana")], entries: [])
+
+        XCTAssertEqual(sut.headFaces.map(\.id), ["an"])
+    }
+
+    func test_headFaces_onceRead_showTheThreeLatestEntriesWithoutMe() async {
+        let sut = makeSUT(previews: nil, entries: [entry("ns", minutesAgo: 30), entry("me", minutesAgo: 1),
+                                                   entry("kb", minutesAgo: 10), entry("sk", minutesAgo: 300),
+                                                   entry("an", minutesAgo: 60)])
+
+        await sut.load()
+
+        XCTAssertEqual(sut.headFaces.map(\.id), ["kb", "ns", "an"])
+    }
 }
 
 /// #9195 — un lien créé depuis « Mes liens › Liens de partage › + » n'apparaissait

@@ -37,7 +37,8 @@ public enum LinksFaceStoppage: Sendable, Equatable {
     case full
 }
 
-/// Un billet de la face Liens : ce que c'est, son adresse en chasse fixe, ce qu'on copie, et son chiffre.
+/// Un billet de la face Liens : ce que c'est, son adresse en chasse fixe, ce qu'on copie, son chiffre, et ce qu'il dit
+/// à côté (`aside` : portée, destination, visages ou QR du code ; `nil` quand rien n'est servi).
 public struct LinksFaceTicket: Sendable, Equatable, Identifiable {
     public let id: String
     public let family: LinksFaceFamily
@@ -47,9 +48,10 @@ public struct LinksFaceTicket: Sendable, Equatable, Identifiable {
     public let figure: LinksFaceFigure
     public let isActive: Bool
     public let expiresAt: Date?
+    public let aside: LinksFaceAside?
 
     public init(id: String, family: LinksFaceFamily, title: String, code: String, copyValue: String,
-                figure: LinksFaceFigure, isActive: Bool, expiresAt: Date? = nil) {
+                figure: LinksFaceFigure, isActive: Bool, expiresAt: Date? = nil, aside: LinksFaceAside? = nil) {
         self.id = id
         self.family = family
         self.title = title
@@ -58,6 +60,7 @@ public struct LinksFaceTicket: Sendable, Equatable, Identifiable {
         self.figure = figure
         self.isActive = isActive
         self.expiresAt = expiresAt
+        self.aside = aside
     }
 
     /// Ce qui empêche ce lien de servir à `now`, ou `nil` s'il sert.
@@ -89,16 +92,17 @@ public enum LinksFaceFilter: Hashable, Sendable {
 }
 
 /// « Liens créés » de la face Liens (#18871) : les quatre familles en billets, dans l'ordre des filtres. Une famille
-/// pas encore lue (`nil`) ne compte ni ne s'affiche ; une famille lue vide compte zéro.
+/// pas encore lue (`nil`) ne compte ni ne s'affiche ; une famille lue vide compte zéro. `owner` reconnaît « ma vitrine »
+/// dans la destination d'un lien de suivi.
 public struct LinksFaceSummary: Sendable, Equatable {
     public let tickets: [LinksFaceTicket]
     public let loadedFamilies: Set<LinksFaceFamily>
 
     public init(share: [MyShareLink]? = nil, tracking: [TrackingLink]? = nil, community: [CommunityLink]? = nil,
-                referral: [AffiliateToken]? = nil) {
+                referral: [AffiliateToken]? = nil, owner: LinksFaceOwner = .unknown) {
         let families: [(LinksFaceFamily, [LinksFaceTicket]?)] = [
             (.share, share.map { $0.map(Self.ticket(share:)) }),
-            (.tracking, tracking.map { $0.map(Self.ticket(tracking:)) }),
+            (.tracking, tracking.map { $0.map { Self.ticket(tracking: $0, owner: owner) } }),
             (.community, community.map { $0.map(Self.ticket(community:)) }),
             (.referral, referral.map { $0.map(Self.ticket(referral:)) }),
         ]
@@ -148,22 +152,25 @@ public struct LinksFaceSummary: Sendable, Equatable {
                         expiresAt: link.expiresAt)
     }
 
-    static func ticket(tracking link: TrackingLink) -> LinksFaceTicket {
+    static func ticket(tracking link: TrackingLink, owner: LinksFaceOwner) -> LinksFaceTicket {
         LinksFaceTicket(id: "tracking:\(link.id)", family: .tracking, title: link.displayName,
                         code: withoutScheme(link.shortUrl), copyValue: link.shortUrl,
-                        figure: .clicks(link.totalClicks), isActive: link.isActive, expiresAt: link.expiresAt)
+                        figure: .clicks(link.totalClicks), isActive: link.isActive, expiresAt: link.expiresAt,
+                        aside: LinksFaceAside.of(tracking: link, owner: owner))
     }
 
     static func ticket(community link: CommunityLink) -> LinksFaceTicket {
         LinksFaceTicket(id: "community:\(link.id)", family: .community, title: link.name,
                         code: withoutScheme(link.joinUrl), copyValue: link.joinUrl,
-                        figure: .members(link.memberCount), isActive: link.isActive)
+                        figure: .members(link.memberCount), isActive: link.isActive,
+                        aside: LinksFaceAside.of(community: link))
     }
 
     static func ticket(referral token: AffiliateToken) -> LinksFaceTicket {
         let link = token.affiliateLink ?? token.token
         return LinksFaceTicket(id: "referral:\(token.id)", family: .referral, title: token.name,
                                code: token.affiliateLink.map(withoutScheme) ?? token.token, copyValue: link,
-                               figure: .referrals(token.referralCount), isActive: token.isActive)
+                               figure: .referrals(token.referralCount), isActive: token.isActive,
+                               aside: .codeQR(link))
     }
 }

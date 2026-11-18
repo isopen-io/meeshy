@@ -12,7 +12,9 @@ enum ProfileCreatedLinkDestination {
 
 /// Le billet de rangée d'un lien créé (K30, planche `Moi-Liens`) : la pastille de sa famille, son titre, son adresse en
 /// chasse fixe, le bouton Copier à droite ; sous la coupe, son chiffre et ce qu'il compte, la jauge d'un lien plafonné
-/// (K42) et son échéance. Un lien en pause ou expiré se lit barré et le dit en mots.
+/// (K42) et son échéance. Un lien en pause ou expiré se lit barré et le dit en mots. À droite de la coupe, ce que le
+/// billet dit à côté de son chiffre (#19496) : la courbe de la semaine et les pays d'un lien de suivi, ou sa
+/// destination ; les visages d'une communauté (K48) ; le QR d'un code de parrainage.
 struct ProfileCreatedLinkTicket: View {
     let ticket: LinksFaceTicket
     let accent: Color
@@ -23,6 +25,7 @@ struct ProfileCreatedLinkTicket: View {
     let onSwitch: (Bool) -> Void
 
     @State private var opensDetail = false
+    @State private var qrShareImage: QRShareImage?
 
     static func tint(of family: LinksFaceFamily) -> Color {
         switch family {
@@ -42,7 +45,8 @@ struct ProfileCreatedLinkTicket: View {
 
     /// Ce que VoiceOver lit d'un billet : le chiffre avec ce qu'il compte, jamais un nombre nu.
     private var spokenLabel: String {
-        [ticket.title, ticket.code, "\(figureText) \(ProfileLinksCopy.figureCaption(ticket.figure))", status]
+        [ticket.title, ticket.code, "\(figureText) \(ProfileLinksCopy.figureCaption(ticket.figure))",
+         ProfileLinksCopy.spokenAside(ticket.aside, locale: locale), status]
             .compactMap { $0 }
             .joined(separator: ", ")
     }
@@ -141,7 +145,9 @@ struct ProfileCreatedLinkTicket: View {
             back: { EmptyView() }
         )
         .accessibilityAction(named: Text(ProfileLinksCopy.copyLink(ticket.title))) { copy() }
+        .modifier(CodeQRAction(payload: codeQRPayload, show: { showCodeQR() }))
         .navigationDestination(isPresented: $opensDetail) { detail }
+        .sheet(item: $qrShareImage) { qr in ShareSheet(activityItems: [qr.image]) }
         .accessibilityIdentifier("profile.links.ticket.\(ticket.id)")
     }
 
@@ -168,7 +174,72 @@ struct ProfileCreatedLinkTicket: View {
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundStyle(ThemeManager.shared.textSecondary)
             }
+            Spacer(minLength: 0)
+            aside
         }
+    }
+
+    // MARK: - À côté du chiffre (#19496)
+
+    @ViewBuilder
+    private var aside: some View {
+        switch ticket.aside {
+        case .reach(let days, let countries)?:
+            reach(days: days, countries: countries)
+        case .destination(let destination)?:
+            MeeshyBadge(.label(ProfileLinksCopy.destination(destination)),
+                        leading: .systemImage(ProfileLinksCopy.destinationGlyph(destination)), size: .s28)
+        case .members(let members)?:
+            LinksFaceStack(members: members, label: ProfileLinksCopy.members(members.map(\.name)),
+                           tint: Self.tint(of: ticket.family))
+        case .codeQR?:
+            MeeshyButton(ProfileLinksCopy.codeQR, systemImage: "qrcode", kind: .tinted, size: .s36,
+                         tint: Self.tint(of: ticket.family), action: { showCodeQR() })
+                .accessibilityIdentifier("profile.links.codeQR.\(ticket.id)")
+        case nil:
+            EmptyView()
+        }
+    }
+
+    /// La courbe des derniers jours (K50, taille billet) avec sa période, puis le nombre de pays (K41).
+    private func reach(days: [Int], countries: Int?) -> some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            if !days.isEmpty {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    MeeshyChart(kind: .line, points: Self.curvePoints(days),
+                                summary: ProfileLinksCopy.curveSummary(days.count, locale: locale),
+                                tint: Self.tint(of: ticket.family), size: .spark, markers: [.today],
+                                animatesEntry: false)
+                    Text(ProfileLinksCopy.days(days.count, locale: locale))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize))
+                        .foregroundStyle(ThemeManager.shared.textMuted)
+                        .accessibilityHidden(true)
+                }
+                .frame(maxWidth: 140)
+            }
+            if let countries {
+                MeeshyBadge(.label(ProfileLinksCopy.countries(countries, locale: locale)), leading: .systemImage("flag"),
+                            size: .s28)
+            }
+        }
+    }
+
+    /// Un point par jour, le plus ancien d'abord ; chacun se dit avec ce qu'il compte.
+    static func curvePoints(_ days: [Int]) -> [MeeshyChartPoint] {
+        days.enumerated().map { index, count in
+            MeeshyChartPoint(id: "day\(index)", value: Double(count), label: "\(count)",
+                             spoken: "\(count) \(ProfileLinksCopy.figureCaption(.clicks(count)))")
+        }
+    }
+
+    private var codeQRPayload: String? {
+        guard case .codeQR(let payload)? = ticket.aside else { return nil }
+        return payload
+    }
+
+    private func showCodeQR() {
+        guard let codeQRPayload else { return }
+        qrShareImage = LinkQRCode.shareImage(for: codeQRPayload)
     }
 
     private func copy() {
@@ -191,6 +262,21 @@ struct ProfileCreatedLinkTicket: View {
             CommunityLinkDetailView(link: link)
         case .route:
             EmptyView()
+        }
+    }
+}
+
+/// « QR du code » offert à VoiceOver sur le billet d'un parrainage, et à lui seul.
+private struct CodeQRAction: ViewModifier {
+    let payload: String?
+    let show: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if payload != nil {
+            content.accessibilityAction(named: Text(ProfileLinksCopy.codeQR)) { show() }
+        } else {
+            content
         }
     }
 }

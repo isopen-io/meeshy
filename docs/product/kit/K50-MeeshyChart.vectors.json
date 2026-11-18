@@ -146,6 +146,12 @@
   ],
   "hauteurs": [
     {
+      "genre": "line",
+      "taille": "spark",
+      "points": 7,
+      "hauteur": 44
+    },
+    {
       "genre": "bars",
       "taille": "compact",
       "points": 5,

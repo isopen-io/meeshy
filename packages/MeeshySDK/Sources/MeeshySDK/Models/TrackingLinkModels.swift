@@ -17,6 +17,11 @@ public struct TrackingLink: Codable, Identifiable, Sendable, CacheIdentifiable {
     public let expiresAt: Date?
     public let createdAt: Date
     public let lastClickedAt: Date?
+    /// Les clics des derniers jours, le plus ancien d'abord (planche `Moi-Liens`, « 7 j ») ; absent d'un serveur qui
+    /// ne le sert pas encore.
+    public var dailyClicks: [Int]? = nil
+    /// Le nombre de pays d'où l'on a cliqué (« 31 pays ») ; absent d'un serveur qui ne le sert pas encore.
+    public var countryCount: Int? = nil
 
     public var displayName: String { name ?? token }
 }
@@ -26,7 +31,8 @@ public extension TrackingLink {
     func withActive(_ active: Bool) -> TrackingLink {
         TrackingLink(id: id, token: token, name: name, campaign: campaign, source: source, medium: medium,
                      originalUrl: originalUrl, shortUrl: shortUrl, totalClicks: totalClicks, uniqueClicks: uniqueClicks,
-                     isActive: active, expiresAt: expiresAt, createdAt: createdAt, lastClickedAt: lastClickedAt)
+                     isActive: active, expiresAt: expiresAt, createdAt: createdAt, lastClickedAt: lastClickedAt,
+                     dailyClicks: dailyClicks, countryCount: countryCount)
     }
 }
 

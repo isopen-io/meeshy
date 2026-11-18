@@ -67,6 +67,13 @@ final class CommunityLinkDetailViewModel: ObservableObject {
 
     var stewardship: CommunityLinkStewardship { CommunityLinkStewardship(role: details?.role) }
 
+    /// La pile de l'en-tête (#19496, planche `Lien-Communaute`) : les entrées les plus récentes une fois lues, et
+    /// avant elles les visages que la liste avait servis (cache d'abord).
+    var headFaces: [LinksFaceMember] {
+        guard let loaded = loadedEntries else { return LinksFaceMember.stack(link.memberPreviews ?? []) }
+        return LinksFaceMember.stack(loaded.recent.map { LinksFaceMember(id: $0.userId, name: $0.name, avatar: $0.avatar) })
+    }
+
     var loadedEntries: CommunityLinkEntries? {
         guard case .loaded(let loaded) = entries else { return nil }
         return loaded

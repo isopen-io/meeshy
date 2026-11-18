@@ -64,6 +64,12 @@ final class ShareLinkDetailViewModel: ObservableObject {
         }
     }
 
+    /// La pile de l'en-tête (#19496, planche `Lien-Partage`) : les dernières arrivées, une fois les statistiques lues.
+    var headFaces: [LinksFaceMember] {
+        guard case .loaded(let snapshot) = stats else { return [] }
+        return LinksFaceMember.stack(snapshot.recentArrivals.map { LinksFaceMember(arrival: $0) })
+    }
+
     // MARK: - Arrivals
 
     /// Retirer un arrivant demande la conversation que le lien ouvre ; sans elle, le geste n'est pas offert.

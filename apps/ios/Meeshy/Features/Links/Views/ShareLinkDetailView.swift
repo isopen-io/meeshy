@@ -107,11 +107,20 @@ struct ShareLinkDetailView: View {
         .accessibilityIdentifier("shareLink.detail.hero")
     }
 
+    /// « Mène à Studio » : la pile des dernières arrivées (K48) quand elles sont lues, sinon l'avatar du groupe.
     private var heroStub: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            MeeshyPersonRow(title: ShareLinkDetailCopy.leadsTo(groupName), size: .inline, showsDivider: false) {
-                MeeshyAvatar(name: groupName, context: .custom(26), kind: .entity, avatarURL: link.conversation?.avatar,
-                             isDark: isDark)
+            let faces = viewModel.headFaces
+            if faces.isEmpty {
+                MeeshyPersonRow(title: ShareLinkDetailCopy.leadsTo(groupName), size: .inline, showsDivider: false) {
+                    MeeshyAvatar(name: groupName, context: .custom(26), kind: .entity,
+                                 avatarURL: link.conversation?.avatar, isDark: isDark)
+                }
+            } else {
+                LinksFaceStack(members: faces, summary: ShareLinkDetailCopy.leadsTo(groupName),
+                               label: ProfileLinksCopy.facesLabel(ShareLinkDetailCopy.leadsTo(groupName), faces: faces),
+                               tint: MeeshyColors.brandPrimary)
+                    .accessibilityIdentifier("shareLink.detail.faces")
             }
             heroActions
         }

@@ -84,11 +84,21 @@ struct CommunityLinkDetailView: View {
         .accessibilityIdentifier("communityLink.detail.hero")
     }
 
+    /// « Tu l'animes · 342 membres » : la pile des entrées récentes (K48) quand il y en a, sinon l'avatar de la
+    /// communauté.
     private var heroStub: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            MeeshyPersonRow(title: stewardshipLine, size: .inline, showsDivider: false) {
-                MeeshyAvatar(name: link.name, context: .custom(26), kind: .entity, avatarURL: viewModel.details?.avatar,
-                             isDark: isDark)
+            let faces = viewModel.headFaces
+            if faces.isEmpty {
+                MeeshyPersonRow(title: stewardshipLine, size: .inline, showsDivider: false) {
+                    MeeshyAvatar(name: link.name, context: .custom(26), kind: .entity,
+                                 avatarURL: viewModel.details?.avatar, isDark: isDark)
+                }
+            } else {
+                LinksFaceStack(members: faces, summary: stewardshipLine,
+                               label: ProfileLinksCopy.facesLabel(stewardshipLine, faces: faces),
+                               tint: Self.accent)
+                    .accessibilityIdentifier("communityLink.detail.faces")
             }
             heroActions
         }

@@ -179,6 +179,82 @@ nonisolated enum ProfileLinksCopy {
         return String(format: format, figure.value.formatted(.number.locale(locale)))
     }
 
+    // MARK: - Ce qu'un billet dit à côté de son chiffre (#19496)
+
+    /// « 7 j » : la période que couvre la courbe d'un lien de suivi.
+    static func days(_ count: Int, locale: Locale) -> String {
+        let format = String(localized: "profile.links.aside.days", defaultValue: "%@ j", bundle: .main)
+        return String(format: format, count.formatted(.number.locale(locale)))
+    }
+
+    /// Ce que VoiceOver dit de la courbe d'un billet.
+    static func curveSummary(_ count: Int, locale: Locale) -> String {
+        let format = String(localized: "profile.links.aside.curve", defaultValue: "Clics des %@ derniers jours",
+                            bundle: .main)
+        return String(format: format, count.formatted(.number.locale(locale)))
+    }
+
+    /// « 31 pays », accordé au nombre.
+    static func countries(_ count: Int, locale: Locale) -> String {
+        let format = count == 1
+            ? String(localized: "profile.links.aside.countries.one", defaultValue: "%@ pays", bundle: .main)
+            : String(localized: "profile.links.aside.countries.many", defaultValue: "%@ pays", bundle: .main)
+        return String(format: format, count.formatted(.number.locale(locale)))
+    }
+
+    /// Où mène un lien de suivi, dit en mots : « Vers ma vitrine ».
+    static func destination(_ destination: LinksFaceDestination) -> String {
+        switch destination {
+        case .showcase:
+            return String(localized: "profile.links.aside.showcase", defaultValue: "Vers ma vitrine", bundle: .main)
+        case .conversation:
+            return String(localized: "profile.links.aside.conversation", defaultValue: "Vers une conversation",
+                          bundle: .main)
+        case .site(let host):
+            let format = String(localized: "profile.links.aside.site", defaultValue: "Vers %@", bundle: .main)
+            return String(format: format, host)
+        }
+    }
+
+    static func destinationGlyph(_ destination: LinksFaceDestination) -> String {
+        switch destination {
+        case .showcase: return "person.crop.square"
+        case .conversation: return "bubble.left.and.bubble.right"
+        case .site: return "globe"
+        }
+    }
+
+    /// Ce que VoiceOver dit d'une pile de visages : « Membres : Mina, Tomás et Koffi ».
+    static func members(_ names: [String]) -> String {
+        let format = String(localized: "profile.links.aside.members", defaultValue: "Membres : %@", bundle: .main)
+        return String(format: format, names.formatted(.list(type: .and)))
+    }
+
+    /// Ce que VoiceOver dit d'un en-tête à pile : la ligne, puis les visages.
+    static func facesLabel(_ line: String, faces: [LinksFaceMember]) -> String {
+        "\(line), \(members(faces.map { $0.name }))"
+    }
+
+    static var codeQR: String {
+        String(localized: "profile.links.aside.codeQR", defaultValue: "QR du code", bundle: .main)
+    }
+
+    /// Ce que le billet dit à côté de son chiffre, pour VoiceOver ; le QR du code est un geste, pas une phrase.
+    static func spokenAside(_ aside: LinksFaceAside?, locale: Locale) -> String? {
+        switch aside {
+        case .reach(let days, let countries)?:
+            let parts = [days.isEmpty ? nil : curveSummary(days.count, locale: locale),
+                         countries.map { Self.countries($0, locale: locale) }]
+            return parts.compactMap { $0 }.joined(separator: ", ")
+        case .destination(let destination)?:
+            return Self.destination(destination)
+        case .members(let members)?:
+            return Self.members(members.map(\.name))
+        case .codeQR?, nil:
+            return nil
+        }
+    }
+
     static var stoppedTitle: String {
         String(localized: "profile.links.stopped", defaultValue: "À l'arrêt", bundle: .main)
     }

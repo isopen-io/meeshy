@@ -10,14 +10,16 @@ public nonisolated enum MeeshyChartKind: String, Sendable, Equatable, CaseIterab
     case bubbles
 }
 
-/// La hauteur de tracé : 96, 128 ou 220.
+/// La hauteur de tracé : 44 (la courbe d'un billet, planche `Moi-Liens`), 96, 128 ou 220.
 public nonisolated enum MeeshyChartSize: String, Sendable, Equatable, CaseIterable {
+    case spark
     case compact
     case regular
     case large
 
     public var height: Double {
         switch self {
+        case .spark: return 44
         case .compact: return 96
         case .regular: return 128
         case .large: return 220

@@ -24,8 +24,11 @@ struct ProfileLinksSnapshot: Sendable {
                              isFresh: newer.isFresh)
     }
 
-    var summary: LinksFaceSummary {
-        LinksFaceSummary(share: share, tracking: tracking, community: community, referral: referral)
+    var summary: LinksFaceSummary { summary(owner: .unknown) }
+
+    /// Les billets, lus pour `owner` : un lien de suivi vers sa vitrine le dit (« Vers ma vitrine »).
+    func summary(owner: LinksFaceOwner) -> LinksFaceSummary {
+        LinksFaceSummary(share: share, tracking: tracking, community: community, referral: referral, owner: owner)
     }
 }
 
@@ -71,13 +74,16 @@ final class ProfileLinksFaceModel: ObservableObject {
 
     private let sources: ProfileLinksSources
     private let switches: ProfileLinksSwitches
+    private let owner: LinksFaceOwner
 
-    init(sources: ProfileLinksSources = .live, switches: ProfileLinksSwitches = .live) {
+    init(sources: ProfileLinksSources = .live, switches: ProfileLinksSwitches = .live, owner: LinksFaceOwner? = nil) {
         self.sources = sources
         self.switches = switches
+        self.owner = owner ?? LinksFaceOwner(username: AuthManager.shared.currentUser?.username,
+                                             webOrigin: MeeshyConfig.shared.webOrigin)
     }
 
-    var summary: LinksFaceSummary { snapshot.summary }
+    var summary: LinksFaceSummary { snapshot.summary(owner: owner) }
 
     var visibleTickets: [LinksFaceTicket] { summary.tickets(for: filter) }
 
