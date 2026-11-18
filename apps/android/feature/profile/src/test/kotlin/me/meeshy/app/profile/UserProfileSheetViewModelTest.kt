@@ -245,4 +245,22 @@ class UserProfileSheetViewModelTest {
         advanceUntilIdle()
         io.mockk.verify(exactly = 3) { loader.open(any(), any(), any()) }
     }
+
+    @Test
+    fun `rouverte pendant son chargement depuis une autre surface la feuille suit la nouvelle demande`() = runTest(dispatcher) {
+        every { loader.open(any(), any(), any()) } returns kotlinx.coroutines.flow.flow {
+            emit(ProfileLoadState(profile = bob))
+            kotlinx.coroutines.awaitCancellation()
+        }
+        val socket = mockk<MessageSocketManager>()
+        every { socket.userUpdated } returns updates
+        val vm = UserProfileSheetViewModel(loader, cache, socket, session(), InMemoryNetworkMonitor())
+        val fromList = ProfileSheetUser(userId = bob.id, username = "bob", accentColor = "#112233")
+        val fromThread = fromList.copy(accentColor = "#445566")
+        vm.onEvent(UserProfileSheetEvent.Open(fromList))
+        advanceUntilIdle()
+        vm.onEvent(UserProfileSheetEvent.Open(fromThread))
+        advanceUntilIdle()
+        assertThat(vm.state.value.presentedFor(fromThread).content).isEqualTo(ProfileSheetContent.Loaded)
+    }
 }

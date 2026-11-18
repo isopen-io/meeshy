@@ -42,7 +42,19 @@ data class UserProfileSheetUiState(
     val loadFailed: Boolean = false,
     val isSelf: Boolean = false,
     val isOffline: Boolean = false,
+    val requested: ProfileSheetUser? = null,
 ) {
+    /**
+     * Ce que la feuille ouverte pour [person] peint : cet état s'il a été ouvert pour elle, sinon le squelette. Le
+     * ViewModel survit à la feuille : rouverte pour quelqu'un d'autre, elle ne montre jamais la fiche précédente.
+     */
+    fun presentedFor(person: ProfileSheetUser): UserProfileSheetUiState =
+        if (requested == person) {
+            this
+        } else {
+            UserProfileSheetUiState(user = person, isLoadingProfile = true, isOffline = isOffline)
+        }
+
     /** Hors ligne sur une fiche peinte : la capsule dit que c'est la dernière version gardée, rien ne se vide. */
     val showsOfflineCapsule: Boolean get() = isOffline && profile != null && !isBlockedByTarget
 
@@ -83,6 +95,9 @@ enum class ProfileSheetContent {
 sealed interface UserProfileSheetEvent {
     data class Open(val user: ProfileSheetUser) : UserProfileSheetEvent
     data object Retry : UserProfileSheetEvent
+
+    /** La feuille a quitté l'écran : le retour du réseau ne rejoue plus rien pour elle. */
+    data object Closed : UserProfileSheetEvent
 }
 
 @HiltViewModel
@@ -102,13 +117,14 @@ class UserProfileSheetViewModel @Inject constructor(
 
     private var load = ProfileLoadState()
     private var loadJob: Job? = null
+    private var presented = false
 
     init {
         viewModelScope.launch {
             networkMonitor.isOnline.collect { online ->
                 val wasOffline = _state.value.isOffline
                 _state.update { it.copy(isOffline = !online) }
-                if (online && wasOffline && _state.value.canRetry) open(_state.value.user, retry = true)
+                if (online && wasOffline && presented && _state.value.canRetry) open(_state.value.user, retry = true)
             }
         }
         viewModelScope.launch {
@@ -132,20 +148,29 @@ class UserProfileSheetViewModel @Inject constructor(
 
     fun onEvent(event: UserProfileSheetEvent) {
         when (event) {
-            is UserProfileSheetEvent.Open -> open(event.user, retry = false)
+            is UserProfileSheetEvent.Open -> {
+                presented = true
+                open(event.user, retry = false)
+            }
             UserProfileSheetEvent.Retry -> if (_state.value.canRetry) open(_state.value.user, retry = true)
+            UserProfileSheetEvent.Closed -> presented = false
         }
     }
 
     private fun open(user: ProfileSheetUser, retry: Boolean) {
+        val requested = if (retry) _state.value.requested else user
         val accented = if (retry) user else user.copy(accentColor = derivedAccent(user))
-        if (!retry && accented == _state.value.user && loadJob?.isActive == true) return
+        if (!retry && accented == _state.value.user && loadJob?.isActive == true) {
+            _state.update { it.copy(requested = requested) }
+            return
+        }
         loadJob?.cancel()
         if (!retry) load = ProfileLoadState()
         _state.update { shown ->
             val samePerson = accented.id.isNotEmpty() && accented.id == shown.user.id
             val base = if (retry || samePerson) shown else UserProfileSheetUiState(isOffline = shown.isOffline)
             base.copy(
+                requested = requested,
                 user = accented,
                 isLoadingProfile = base.profile == null,
                 loadFailed = false,

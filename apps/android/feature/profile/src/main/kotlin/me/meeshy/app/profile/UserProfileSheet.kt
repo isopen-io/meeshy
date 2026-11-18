@@ -20,6 +20,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -92,7 +93,9 @@ fun UserProfileSheet(
     sharedConversationsViewModel: ProfileSharedConversationsViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(user) { viewModel.onEvent(UserProfileSheetEvent.Open(user)) }
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    DisposableEffect(viewModel) { onDispose { viewModel.onEvent(UserProfileSheetEvent.Closed) } }
+    val served by viewModel.state.collectAsStateWithLifecycle()
+    val state = served.presentedFor(user)
     val actionsState by actionsViewModel.state.collectAsStateWithLifecycle()
     val catalog by bannerViewModel.catalog.collectAsStateWithLifecycle()
     val sharedConversations by sharedConversationsViewModel.state.collectAsStateWithLifecycle()
