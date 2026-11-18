@@ -552,8 +552,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     }
     session.iceServers = decodeIceServers(ack.data.iceServers) ?? session.iceServers;
     for (const member of decodeSessionMembers(ack.data.callSession)) remember(member, member.participantId, member.flags);
-    const initiatorId = decodeSessionInitiator(ack.data.callSession);
-    if (initiatorId !== null) update((call) => ({ ...call, initiatorId }));
+    const joined = { initiatorId: decodeSessionInitiator(ack.data.callSession), conversationId: decodeSessionConversation(ack.data.callSession) };
+    update((call) => adoptJoinedSession(call, joined));
     return true;
   };
 
@@ -854,6 +854,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       case SERVER_EVENTS.CALL_RECORDING_STOPPED:
         onRecordingNote(event, payload);
         return;
+      case SERVER_EVENTS.CALL_CONVERSATION_CHANGED:
       case SERVER_EVENTS.CALL_PARTICIPANT_INVITED:
       case SERVER_EVENTS.CALL_INVITE_DECLINED:
       case SERVER_EVENTS.CALL_INVITE_EXPIRED:
