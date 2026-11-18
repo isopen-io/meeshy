@@ -470,3 +470,9 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Pas de revue adversariale : diffusion, vers les seuls membres actifs, d'un fait qu'ils découvriraient au prochain chargement ; ni permission ni migration.
 - #16857 : les trois tranches de son contrat sont livrées (identité, effectif, disparition) ; reste les entrées INDIRECTES qui n'émettent pas (salon d'une communauté via `applyCommunityAdmission`, compte supprimé), à ouvrir en issue avant de la fermer.
 - Prochain lot recommandé : #19592 (Android lit la disparition), puis #18767 / #19591 côté iOS quand #19297 est fusionnée ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-18 — réveil 07:38 UTC
+
+- Début du run : #19602 (#19590, la disparition) ouverte, dernière poussée à 06:02, donc inactive : run consacré à la mener à la fusion. #19297 (#18767, iOS) poussée à 07:10 par une autre session : cédée.
+- État : CI de `e858f87b1` en file depuis 06:03 (94 runs en attente sur le dépôt), cinq tâches jamais démarrées (`Tests · web`, Playwright 2 et 3, deux du traducteur), tout le reste vert. `dev` avait 54 commits d'avance : fusionné sans conflit.
+- Gates locaux sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 215 tests ; passerelle `tsc --noEmit` vert, suites communauté + admin + `tsc-never-loaded` 37 suites / 609 tests ; web `tsc` vert, `bun test src/lib/api/community` 114 / 114.
