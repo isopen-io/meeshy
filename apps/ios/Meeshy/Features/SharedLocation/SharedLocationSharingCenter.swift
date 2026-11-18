@@ -138,6 +138,9 @@ final class SharedLocationSharingCenter: ObservableObject {
     private var pinnedFix: SharedLocationFix?
     /// La liste vient d'un autre appareil du compte : celui-ci ne publie pas sa position (#18578).
     private var received: Bool
+    /// Le dernier démarrage avec position que CET appareil a fait accepter (`startedAt` de l'accusé, #18580) ; `nil` :
+    /// inconnu (relancement, accusé perdu), le démarrage servi est alors pris pour le sien.
+    private var publishedStart: String?
     private var following = Set<AnyCancellable>()
     private var deadline: AnyCancellable?
     private var socketWatch = Set<AnyCancellable>()
@@ -323,13 +326,18 @@ final class SharedLocationSharingCenter: ObservableObject {
             if truth.acceptsUntilStopped { self.servesUntilStopped = true }
             let before = self.roster
             let next = before.withServed(truth, now: self.now())
-            guard next != before else { return nil }
+            guard next != before else {
+                if !self.received, next.hasRecipients { self.followServedStart(truth.startedAt) }
+                return nil
+            }
             self.adopt(next)
             if !next.hasRecipients {
                 self.stopFollowingDevice()
                 self.markReceived(false)
-            } else if !self.received, next.gained(over: before) {
-                self.yieldPublishing()
+            } else if !before.hasRecipients {
+                self.markReceived(true)
+            } else if !self.received {
+                self.followServedStart(truth.startedAt)
             }
             self.scheduleDeadline()
             return nil
@@ -485,12 +493,14 @@ final class SharedLocationSharingCenter: ObservableObject {
         claimsPublishing: Bool
     ) -> SharedLocationShareProblem? {
         switch verdict {
-        case .started:
+        case .started(_, let startedAt):
             if claimsPublishing { markReceived(false) }
+            if fix != nil { publishedStart = startedAt }
             engage(next, fix: fix)
             return nil
         case .refused(.unconfirmed):
             if claimsPublishing { markReceived(false) }
+            if fix != nil { publishedStart = nil }
             engage(previous.union(next), fix: fix)
             return .refused(.unconfirmed)
         case .refused(let outcome):
@@ -580,14 +590,25 @@ final class SharedLocationSharingCenter: ObservableObject {
     private func wipe() {
         adopt(.empty)
         markReceived(false)
+        publishedStart = nil
         deadline = nil
         stopFollowingDevice()
     }
 
-    /// Un autre appareil du compte a partagé après celui-ci : c'est lui qui publie (#18580). Ici, « Arrêter » reste à un
-    /// geste, la position ne part plus — sinon la personne verrait le point sauter d'un appareil à l'autre.
-    private func yieldPublishing() {
+    /// UN SEUL APPAREIL PUBLIE (#18580, iso `followServedStart` du web) : celui du dernier « Partager ». La passerelle
+    /// nomme ce démarrage (`startedAt`), l'accusé de cet appareil en a gardé un ; s'ils diffèrent, un autre appareil a
+    /// partagé après lui. « Arrêter » reste à un geste, la position ne part plus — sinon la personne verrait le point
+    /// sauter d'un appareil à l'autre. Sans accusé lisible, le démarrage servi est pris pour le sien ; sans `startedAt`
+    /// (passerelle d'avant), rien ne change. Aucune horloge n'est comparée.
+    private func followServedStart(_ served: String?) {
+        guard let served else { return }
+        guard let mine = publishedStart else {
+            publishedStart = served
+            return
+        }
+        guard served != mine else { return }
         markReceived(true)
+        publishedStart = nil
         stopFollowingDevice()
     }
 

@@ -244,6 +244,12 @@ struct SharedLocationSendingTests {
             == .started(expiresAt: Date(timeIntervalSince1970: 1_794_650_400)))
     }
 
+    @Test func unAccuséAccepté_gardeLeDémarrageNomméParLaPasserelle() {
+        let data: [String: Any] = ["expiresAt": "2026-11-14T10:00:00.000Z", "startedAt": "2026-11-14T09:00:00.000Z"]
+        #expect(verdict(["success": true, "data": data])
+            == .started(expiresAt: Date(timeIntervalSince1970: 1_794_650_400), startedAt: "2026-11-14T09:00:00.000Z"))
+    }
+
     @Test func unAccuséSansTermeLisible_estUnÉchec() {
         #expect(verdict(["success": true, "data": ["expiresAt": "demain"]]) == .refused(.failed))
         #expect(verdict(["success": true]) == .refused(.failed))
