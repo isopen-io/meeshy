@@ -43,9 +43,17 @@ final class MockRelationsService: RelationsProviding, @unchecked Sendable {
         return try linksResult.get()
     }
 
+    /// Joué UNE fois PENDANT `GET /relations/:userId`, après que la réponse est fixée : le témoin y fait un geste local
+    /// que la réponse, lue avant lui, ne doit pas écraser.
+    var linkHook: (@Sendable () async -> Void)?
+
     func link(userId: String) async throws -> RelationLink {
         linkCallCount += 1
-        return try linkResult.get()
+        let result = linkResult
+        let hook = linkHook
+        linkHook = nil
+        await hook?()
+        return try result.get()
     }
 
     func lower(userId: String, to level: RelationLevel) async throws -> RelationLink {

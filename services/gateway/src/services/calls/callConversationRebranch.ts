@@ -17,7 +17,8 @@ import { createCallGroup, exactMembers, findExactCallGroups, type CallGroupCandi
  *
  * Sans transaction multi-documents, l'ordre est celui des compare-and-swap :
  *
- * 1. réserver le groupe (`activeCallId`) ;
+ * 1. réserver le groupe (`activeCallId`) : un groupe trouvé par compare-and-swap,
+ *    un groupe neuf en naissant (aucun signal de liste avant la bascule gagnée) ;
  * 2. déplacer la session par CAS sur `{ id, conversationId: tête-à-tête, vivante }` ;
  *    une invitation concurrente qui a basculé la première fait perdre celle-ci,
  *    qui DÉFAIT ce qu'elle a écrit (réservation rendue, groupe neuf supprimé —
@@ -32,6 +33,11 @@ import { createCallGroup, exactMembers, findExactCallGroups, type CallGroupCandi
  * 6. rooms rejointes, `conversation:new` si le groupe est neuf, puis
  *    `call:conversation-changed` à la room de l'appel — AVANT que l'appelant
  *    n'émette `call:participant-invited`.
+ *
+ * Audit #19650 — une fois le compare-and-swap gagné, l'appel VIT dans le groupe :
+ * chaque étape suivante est rattrapée une à une, et la bascule est dite quoi
+ * qu'il arrive. Une étape qui lève ne laisse plus un appel déplacé dans un
+ * groupe silencieux, sans annonce, avec une erreur côté client.
  */
 
 const TERMINAL = [...CALL_TERMINAL_STATUSES];
@@ -59,7 +65,12 @@ export type CallRebranchDeps = {
   readonly joinRoom: (userId: string, conversationId: string) => Promise<void>;
   readonly announceNew: (payload: ConversationNewEventData, recipientIds: readonly string[]) => Promise<void>;
   readonly findGroups?: (input: { readonly callId: string; readonly memberUserIds: readonly string[] }) => Promise<readonly CallGroupCandidate[]>;
-  readonly createGroup?: (input: { readonly inviterUserId: string; readonly memberUserIds: readonly string[] }) => Promise<{ readonly id: string; readonly title: string | null }>;
+  /** Le groupe neuf naît en tenant la réservation de `callId` (`createCallGroup`). */
+  readonly createGroup?: (input: {
+    readonly inviterUserId: string;
+    readonly memberUserIds: readonly string[];
+    readonly callId: string;
+  }) => Promise<{ readonly id: string; readonly title: string | null }>;
   readonly now?: () => Date;
 };
 
@@ -76,7 +87,6 @@ type Target = { readonly id: string; readonly title: string | null; readonly cre
 export async function rebranchCall(deps: CallRebranchDeps, input: RebranchInput): Promise<RebranchOutcome> {
   const memberUserIds = exactMembers(input.presentUserIds, input.inviteeUserId);
   const target = await reserveTarget(deps, input, memberUserIds);
-  if (!target) return { kind: 'failed' };
 
   const swapped = await deps.prisma.callSession.updateMany({
     where: { id: input.callId, conversationId: input.fromConversationId, status: { notIn: TERMINAL } },
@@ -89,17 +99,15 @@ export async function rebranchCall(deps: CallRebranchDeps, input: RebranchInput)
 }
 
 /** Le premier groupe exact dont la réservation se prend, sinon un groupe neuf réservé. */
-async function reserveTarget(deps: CallRebranchDeps, input: RebranchInput, memberUserIds: readonly string[]): Promise<Target | null> {
+async function reserveTarget(deps: CallRebranchDeps, input: RebranchInput, memberUserIds: readonly string[]): Promise<Target> {
   const findGroups = deps.findGroups ?? ((request) => findExactCallGroups(deps.prisma as PrismaClient, request));
   const candidates = await findGroups({ callId: input.callId, memberUserIds });
   for (const candidate of candidates) {
     if (await deps.claim(candidate.id, input.callId)) return { id: candidate.id, title: candidate.title, created: false };
   }
   const createGroup = deps.createGroup ?? ((request) => createCallGroup({ prisma: deps.prisma as PrismaClient }, request));
-  const group = await createGroup({ inviterUserId: input.inviterUserId, memberUserIds });
-  if (await deps.claim(group.id, input.callId)) return { id: group.id, title: group.title, created: true };
-  await deleteUnannouncedGroup(deps, group.id);
-  return null;
+  const group = await createGroup({ inviterUserId: input.inviterUserId, memberUserIds, callId: input.callId });
+  return { id: group.id, title: group.title, created: true };
 }
 
 async function undoLostRace(deps: CallRebranchDeps, input: RebranchInput, target: Target): Promise<RebranchOutcome> {
@@ -131,13 +139,20 @@ async function settleInGroup(
   memberUserIds: readonly string[]
 ): Promise<void> {
   const now = deps.now?.() ?? new Date();
-  await repointCallParticipants(deps, input.callId, target.id);
+  const attempt = async (step: string, run: () => Promise<unknown>): Promise<void> => {
+    try {
+      await run();
+    } catch (error) {
+      logger.warn(`call-rebranch: ${step} failed after the swap`, { callId: input.callId, conversationId: target.id, error });
+    }
+  };
   if (target.created) {
-    await deps.prisma.conversation.updateMany({ where: { id: target.id }, data: { firstMessageSentAt: now } });
+    await attempt('firstMessageSentAt', () =>
+      deps.prisma.conversation.updateMany({ where: { id: target.id }, data: { firstMessageSentAt: now } })
+    );
   }
-  await deps.postLiveMessage(input.callId).catch((error: unknown) =>
-    logger.warn('call-rebranch: live call message not posted in group', { callId: input.callId, error })
-  );
+  await attempt('call participants repoint', () => repointCallParticipants(deps, input.callId, target.id));
+  await attempt('live call message', () => deps.postLiveMessage(input.callId));
   for (const userId of memberUserIds) {
     await deps.joinRoom(userId, target.id).catch((error: unknown) =>
       logger.warn('call-rebranch: member not joined to group room', { userId, conversationId: target.id, error })
@@ -157,6 +172,7 @@ async function settleInGroup(
         memberUserIds
       )
       .catch((error: unknown) => logger.warn('call-rebranch: conversation:new not announced', { conversationId: target.id, error }));
+    deps.notify(target.id, input.callId);
   }
   const changed: CallConversationChangedEvent = {
     callId: input.callId,
@@ -188,6 +204,9 @@ async function repointCallParticipants(deps: CallRebranchDeps, callId: string, c
   });
   for (const row of rows) {
     const participantId = row.participant?.userId ? memberOf.get(row.participant.userId) : undefined;
-    if (participantId) await deps.prisma.callParticipant.update({ where: { id: row.id }, data: { participantId } });
+    if (!participantId) continue;
+    await deps.prisma.callParticipant
+      .update({ where: { id: row.id }, data: { participantId } })
+      .catch((error: unknown) => logger.warn('call-rebranch: call participant not repointed', { callId, callParticipantId: row.id, error }));
   }
 }

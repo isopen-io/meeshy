@@ -215,7 +215,7 @@ describe('call:invite-participant — inviter, c’est faire entrer dans la conv
     const h = harness({ route: 'rebranch', rebranch: { kind: 'lost', conversationId: GROUP } });
 
     expect(await h.invite({ callId: CALL, userId: DAVE })).toEqual({ success: true });
-    expect(h.admit).toHaveBeenCalledWith({ conversationId: GROUP, inviterUserId: 'alice', inviteeUserId: DAVE });
+    expect(h.admit).toHaveBeenCalledWith({ conversationId: GROUP, inviterUserId: 'alice', inviteeUserId: DAVE, blockCheck: 'members' });
     expect(h.rings[0]).toMatchObject({ conversationId: GROUP, event: { conversationType: 'group' } });
   });
 
@@ -232,5 +232,71 @@ describe('call:invite-participant — inviter, c’est faire entrer dans la conv
     expect(h.rebranch).not.toHaveBeenCalled();
     expect(h.admit).not.toHaveBeenCalled();
     expect(h.rings[0]).toMatchObject({ conversationId: CONV });
+  });
+});
+
+const ERIN = '64b7f0c2a1b2c3d4e5f6071c';
+const OTHER_CALL = '64b7f0c2a1b2c3d4e5f6071d';
+const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+describe('call:invite-participant — corrections de l’audit adversarial (#19650)', () => {
+  it('un ancien membre qu’un simple membre invite reste l’invité de CET appel : il sonne dans le groupe sans y revenir', async () => {
+    const h = harness({ route: 'admit-member', admitted: 'guest-only' });
+    expect(await h.invite({ callId: CALL, userId: DAVE })).toEqual({ success: true });
+    expect(h.record).toHaveBeenCalledTimes(1);
+    expect(h.rings[0]).toMatchObject({ conversationId: CONV });
+  });
+
+  it('course perdue, ancien membre du groupe gagnant : invité de l’appel dans ce groupe', async () => {
+    const h = harness({ route: 'rebranch', rebranch: { kind: 'lost', conversationId: GROUP }, admitted: 'guest-only' });
+    expect(await h.invite({ callId: CALL, userId: DAVE })).toEqual({ success: true });
+    expect(h.rings[0]).toMatchObject({ conversationId: GROUP });
+  });
+
+  it('course perdue, invité bloqué avec un membre du groupe gagnant : refusé', async () => {
+    const h = harness({ route: 'rebranch', rebranch: { kind: 'lost', conversationId: GROUP }, admitted: 'refused' });
+    expect(await h.invite({ callId: CALL, userId: DAVE })).toEqual({ success: false, code: 'PERMISSION_DENIED' });
+    expect(h.rings).toEqual([]);
+  });
+
+  it('deux invitations du MÊME appel passent l’une après l’autre : la seconde lit le plafond et la conversation que la première a laissés', async () => {
+    const h = harness({ route: 'rebranch' });
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    h.rebranch.mockImplementationOnce(async () => {
+      await gate;
+      return { kind: 'rebranched', conversationId: GROUP, title: null, created: true, memberUserIds: ['alice', 'bob', DAVE] };
+    });
+
+    const first = h.invite({ callId: CALL, userId: DAVE });
+    const second = h.invite({ callId: CALL, userId: ERIN });
+    await flush();
+    expect(h.authorize).toHaveBeenCalledTimes(1);
+
+    release();
+    expect(await first).toEqual({ success: true });
+    expect(await second).toEqual({ success: true });
+    expect(h.authorize).toHaveBeenCalledTimes(2);
+    expect(h.armed.map((a) => a.inviteeUserId)).toEqual([DAVE, ERIN]);
+  });
+
+  it('deux appels différents ne s’attendent pas, et une invitation qui lève ne bloque pas la suivante', async () => {
+    const h = harness({ route: 'rebranch' });
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    h.rebranch.mockImplementationOnce(async () => {
+      await gate;
+      throw new Error('boom');
+    });
+
+    const first = h.invite({ callId: CALL, userId: DAVE });
+    const other = h.invite({ callId: OTHER_CALL, userId: ERIN });
+    await flush();
+    expect(h.authorize).toHaveBeenCalledTimes(2);
+    expect(await other).toEqual({ success: true });
+
+    release();
+    expect(await first).toEqual({ success: false, code: 'INTERNAL_ERROR' });
+    expect(await h.invite({ callId: CALL, userId: ERIN })).toEqual({ success: true });
   });
 });

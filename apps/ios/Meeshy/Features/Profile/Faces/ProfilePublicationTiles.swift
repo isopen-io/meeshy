@@ -110,15 +110,24 @@ nonisolated enum ProfilePublicationsCopy {
         String(localized: "profile.vitrine.posts.empty.publish", defaultValue: "Publier quelque chose", bundle: .main)
     }
 
+    static var reel: String { String(localized: "profile.vitrine.posts.reel", defaultValue: "Réel", bundle: .main) }
+    static var story: String { String(localized: "profile.vitrine.posts.story", defaultValue: "Story", bundle: .main) }
+    static var photo: String { String(localized: "profile.vitrine.posts.photo", defaultValue: "Photo", bundle: .main) }
+
     static func kindName(of post: FeedPost) -> String {
-        if post.isReel { return String(localized: "profile.vitrine.posts.reel", defaultValue: "Réel", bundle: .main) }
-        if post.isStory { return String(localized: "profile.vitrine.posts.story", defaultValue: "Story", bundle: .main) }
+        if post.isReel { return reel }
+        if post.isStory { return story }
         if post.media.contains(where: { $0.type == .video }) {
             return String(localized: "profile.vitrine.posts.video", defaultValue: "Vidéo", bundle: .main)
         }
-        if post.media.contains(where: { $0.type == .image }) {
-            return String(localized: "profile.vitrine.posts.photo", defaultValue: "Photo", bundle: .main)
-        }
+        if post.media.contains(where: { $0.type == .image }) { return photo }
         return String(localized: "profile.vitrine.posts.post", defaultValue: "Publication", bundle: .main)
+    }
+
+    /// Les trois tuiles fantômes du vide (planche `Etat-Vide` vue 3) : ce qu'on peut publier — réel, photo, story.
+    static var emptyGhostTiles: [MeeshyStateGhostTile] {
+        [MeeshyStateGhostTile(systemImage: "play.rectangle", caption: reel),
+         MeeshyStateGhostTile(systemImage: "photo", caption: photo),
+         MeeshyStateGhostTile(systemImage: "circle.dashed", caption: story)]
     }
 }

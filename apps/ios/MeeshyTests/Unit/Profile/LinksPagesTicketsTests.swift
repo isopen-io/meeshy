@@ -163,4 +163,40 @@ private actor PageSwitchLog {
     private(set) var sent: [String] = []
 
     func note(_ entry: String) { sent.append(entry) }
+
+    // MARK: - Loi 12 : « Nouveau lien de partage » est fait du kit (#19642)
+
+    private static let shareCreation = "Meeshy/Features/Links/Views/CreateShareLinkView.swift"
+
+    private func shareCreationForm() throws -> String {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.shareCreation))
+        guard let end = source.range(of: "private struct ConversationPickerSheet")?.lowerBound else { return source }
+        return String(source[..<end])
+    }
+
+    func test_shareCreation_sectionsAreKitHeadersOverKitCards_andGlyphsAreMedallions() throws {
+        let form = try shareCreationForm()
+        for piece in ["MeeshySectionHeader(", "MeeshyGroupCard(", "MeeshyGroupCardDivider()", "MeeshyMedallion(",
+                      "MeeshyNote("] {
+            XCTAssertTrue(form.contains(piece), "le formulaire de partage ne monte pas \(piece)")
+        }
+        for redrawn in ["RoundedRectangle(", "rowBackground", "func iconBadge", "func formSection", "Divider()",
+                        ".font(.caption", "surfaceFill(", ".stroke(", "exclamationmark.circle.fill"] {
+            XCTAssertFalse(form.contains(redrawn), "le formulaire de partage redessine sur place : \(redrawn)")
+        }
+    }
+
+    func test_shareCreation_keepsItsSixSections_andTheirControls() throws {
+        let form = try shareCreationForm()
+        for section in ["conversationSection", "identitySection", "accessSection", "permissionsSection",
+                        "limitsSection", "languagesSection"] {
+            XCTAssertTrue(form.contains("private var \(section): some View"), "\(section) a disparu")
+        }
+        for kept in ["MeeshyStepper(", "LinkExpiryPicker(", "LinkSlugField(", "LinkTicketPreviewView(",
+                     "ConversationPickerSheet(", "MeeshyInfoNoted(", "MeeshySplitActionButton(", "MeeshyChipRow(",
+                     "share.link.create.section.access.subtitle", "share.link.create.section.permissions.subtitle",
+                     "share.link.create.section.limits.subtitle"] {
+            XCTAssertTrue(form.contains(kept), "le formulaire de partage a perdu \(kept)")
+        }
+    }
 }

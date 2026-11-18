@@ -29,6 +29,12 @@ nonisolated struct ProfileVoiceSample: Equatable, Sendable {
                                   servedDuration: Double(milliseconds) / 1000)
     }
 
+    /// Le son que le moteur tient VRAIMENT : un lecteur prêt, ou un chargement en cours. Un son seulement demandé
+    /// dont le chargement a échoué n'est pas chargé — le toucher suivant le relance au lieu de reprendre un vide.
+    static func loadedURL(currentUrl: String?, hasPlayer: Bool, isLoading: Bool) -> String? {
+        hasPlayer || isLoading ? currentUrl : nil
+    }
+
     /// Le même son chargé se met en pause ou reprend ; tout autre état relance la lecture de cet échantillon.
     func toggle(loadedURL: String?) -> Toggle {
         loadedURL == url ? .pauseOrResume : .start(url)

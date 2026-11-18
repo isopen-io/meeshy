@@ -5,9 +5,46 @@ import MeeshyUI
 /// Où mène le billet d'un lien créé : son détail quand l'app en a un, sinon la page de sa famille.
 enum ProfileCreatedLinkDestination {
     case share(MyShareLink, onChanged: @MainActor (MyShareLink) -> Void, onDeleted: @MainActor (String) -> Void)
-    case tracking(TrackingLink)
+    case tracking(TrackingLink, onChanged: @MainActor (TrackingLink) -> Void, onDeleted: @MainActor (String) -> Void)
     case community(CommunityLink)
     case route(Route)
+
+    /// Le détail d'un lien de suivi qui ne renvoie rien à sa liste (pages sans modèle partagé).
+    static func trackingDetail(_ link: TrackingLink) -> ProfileCreatedLinkDestination {
+        .tracking(link, onChanged: { _ in }, onDeleted: { _ in })
+    }
+}
+
+/// Le détail ouvert depuis un billet, porté par la LISTE et non par le billet : un billet qui passe de « servants » à
+/// « À l'arrêt », change de filtre ou disparaît (lien supprimé) ne referme pas le détail sous le doigt. La destination
+/// est figée à l'ouverture ; le détail tient son propre état.
+struct ProfileCreatedLinkDetailHost: ViewModifier {
+    @Binding var opened: ProfileCreatedLinkDestination?
+
+    func body(content: Content) -> some View {
+        content.navigationDestination(isPresented: Binding(get: { opened != nil },
+                                                           set: { if !$0 { opened = nil } })) {
+            if let opened { ProfileCreatedLinkDetail(destination: opened) }
+        }
+    }
+}
+
+/// Le détail d'un lien, selon sa famille.
+struct ProfileCreatedLinkDetail: View {
+    let destination: ProfileCreatedLinkDestination
+
+    var body: some View {
+        switch destination {
+        case .share(let link, let onChanged, let onDeleted):
+            ShareLinkDetailView(link: link, onLinkChanged: onChanged, onLinkDeleted: onDeleted)
+        case .tracking(let link, let onChanged, let onDeleted):
+            TrackingLinkDetailView(link: link, onChanged: onChanged, onDeleted: onDeleted)
+        case .community(let link):
+            CommunityLinkDetailView(link: link)
+        case .route:
+            EmptyView()
+        }
+    }
 }
 
 /// Le billet de rangée d'un lien créé (K30, planche `Moi-Liens`) : la pastille de sa famille, son titre, son adresse en
@@ -21,13 +58,14 @@ struct ProfileCreatedLinkTicket: View {
     let locale: Locale
     let destination: ProfileCreatedLinkDestination
     let onOpen: (Route) -> Void
+    /// Ouvre le détail du lien : la liste le porte (`ProfileCreatedLinkDetailHost`), jamais le billet.
+    let onOpenDetail: (ProfileCreatedLinkDestination) -> Void
     /// « Lien actif » posé depuis le billet d'un lien en pause.
     let onSwitch: (Bool) -> Void
     /// Sous le billet, ce qui le fait reconnaître dans une page de liens (sa conversation, sa campagne, ses dates) ;
     /// `nil` sur la face Liens, qui n'en montre aucune.
     var footnote: String? = nil
 
-    @State private var opensDetail = false
     @State private var qrShareImage: QRShareImage?
 
     static func tint(of family: LinksFaceFamily) -> Color {
@@ -64,18 +102,30 @@ struct ProfileCreatedLinkTicket: View {
                     .lineLimit(2)
                     .padding(.horizontal, MeeshySpacing.xs)
             }
-            if let stoppage, Self.switchesInPlace(stoppage, family: ticket.family) {
+            if let stoppage, Self.switchesInPlace(ticket) {
                 activeSwitch(of: stoppage)
             } else if let stoppage {
-                consequence(of: stoppage)
+                consequence(of: Self.lastingStoppage(ticket) ?? stoppage)
             }
         }
     }
 
-    /// Un lien de partage ou de suivi en pause se rallume depuis son billet (planche `Etat-Erreur` vue 4) : les autres
-    /// arrêts ouvrent leur détail, seul à savoir les régler.
-    static func switchesInPlace(_ stoppage: LinksFaceStoppage, family: LinksFaceFamily) -> Bool {
-        stoppage == .paused && (family == .share || family == .tracking)
+    /// Un lien de partage ou de suivi en pause se rallume depuis son billet (planche `Etat-Erreur` vue 4) — seulement
+    /// s'il servirait une fois rallumé : en pause ET expiré, ou en pause ET plein, l'interrupteur serait un geste sans
+    /// effet pour qui reçoit le lien, et c'est la conséquence de l'arrêt réel qui se dit. Les autres arrêts ouvrent
+    /// leur détail, seul à savoir les régler.
+    static func switchesInPlace(_ ticket: LinksFaceTicket, now: Date = Date()) -> Bool {
+        guard ticket.stoppage(now: now) == .paused, ticket.family == .share || ticket.family == .tracking else {
+            return false
+        }
+        return lastingStoppage(ticket, now: now) == nil
+    }
+
+    /// Ce qui arrêterait encore le lien une fois rallumé (son échéance, son plafond), ou `nil` s'il servirait.
+    static func lastingStoppage(_ ticket: LinksFaceTicket, now: Date = Date()) -> LinksFaceStoppage? {
+        LinksFaceTicket(id: ticket.id, family: ticket.family, title: ticket.title, code: ticket.code,
+                        copyValue: ticket.copyValue, figure: ticket.figure, isActive: true,
+                        expiresAt: ticket.expiresAt, aside: ticket.aside).stoppage(now: now)
     }
 
     /// « Lien actif », éteint, avec ce que la pause veut dire, puis ce que le lien garde : l'interrupteur répond tout
@@ -156,7 +206,6 @@ struct ProfileCreatedLinkTicket: View {
         )
         .accessibilityAction(named: Text(ProfileLinksCopy.copyLink(ticket.title))) { copy() }
         .modifier(CodeQRAction(payload: codeQRPayload, show: { showCodeQR() }))
-        .navigationDestination(isPresented: $opensDetail) { detail }
         .sheet(item: $qrShareImage) { qr in ShareSheet(activityItems: [qr.image]) }
         .accessibilityIdentifier("profile.links.ticket.\(ticket.id)")
     }
@@ -258,21 +307,7 @@ struct ProfileCreatedLinkTicket: View {
 
     private func open() {
         if case .route(let route) = destination { return onOpen(route) }
-        opensDetail = true
-    }
-
-    @ViewBuilder
-    private var detail: some View {
-        switch destination {
-        case .share(let link, let onChanged, let onDeleted):
-            ShareLinkDetailView(link: link, onLinkChanged: onChanged, onLinkDeleted: onDeleted)
-        case .tracking(let link):
-            TrackingLinkDetailView(link: link)
-        case .community(let link):
-            CommunityLinkDetailView(link: link)
-        case .route:
-            EmptyView()
-        }
+        onOpenDetail(destination)
     }
 }
 

@@ -2,9 +2,9 @@ import type { CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
 import { CALL_RING_TIMEOUT_MS } from '@meeshy/shared/types/call-rules';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
-import { decodeControlAck, decodeInviteSettled, decodeMutedByModerator, decodeParticipantInvited, decodeReactionReceived, type DecodedPerson } from './call-decode';
+import { decodeControlAck, decodeConversationChanged, decodeInviteSettled, decodeMutedByModerator, decodeParticipantInvited, decodeReactionReceived, type DecodedPerson } from './call-decode';
 import { laneOf, REACTION_LIFETIME_MS, reactionAllowed, recentSends, showNotice, withBurst, withoutBurst, type CallNoticeStoreApi, type CallReactionStoreApi } from './call-control-state';
-import { patchMember, withMember, withoutMember, type ActiveCall, type CallMember } from './call-store';
+import { patchMember, rebranchCall, withMember, withoutMember, type ActiveCall, type CallMember } from './call-store';
 
 /**
  * **LES CONTRÔLES D'UN APPEL EN COURS, DANS LE MOTEUR** (#8433, #8438, #8439)
@@ -23,6 +23,9 @@ import { patchMember, withMember, withoutMember, type ActiveCall, type CallMembe
  * - **Être coupé** : par le chemin de MON geste, donc la piste reste coupée et
  *   les autres l'apprennent ; je peux la rouvrir.
  * - **Réagir** : la mienne s'affiche aussitôt ; au-delà du débit, rien.
+ * - **Changer de lieu** (#19650) : un tête-à-tête qui invite vit désormais
+ *   dans le groupe des présents (`call:conversation-changed`) ; le média
+ *   continue, seuls la conversation, le titre et le caractère de groupe changent.
  */
 
 export const INVITE_RING_MS = CALL_RING_TIMEOUT_MS + 5_000;
@@ -128,6 +131,11 @@ export function createEngineControls(deps: EngineControlsDeps) {
   const receive = (event: string, payload: unknown): void => {
     const call = deps.read();
     if (!joined(call)) return;
+    if (event === SERVER_EVENTS.CALL_CONVERSATION_CHANGED) {
+      const change = decodeConversationChanged(payload);
+      if (change !== null && change.callId === call.callId) deps.update((current) => rebranchCall(current, change));
+      return;
+    }
     if (event === SERVER_EVENTS.CALL_PARTICIPANT_INVITED) {
       const invited = decodeParticipantInvited(payload);
       if (invited === null || invited.callId !== call.callId || invited.invitee.userId === deps.viewerId() || call.members[invited.invitee.userId] !== undefined) return;

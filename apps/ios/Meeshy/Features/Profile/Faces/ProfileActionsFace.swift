@@ -33,6 +33,8 @@ struct ProfileActionsFace: View {
     let canShare: Bool
     /// Vrai là où le modèle des statuts est servi : « Mon statut » ouvre alors le composer de mood.
     var canSetMood: Bool = false
+    /// « Ma Légende » : mon niveau et mon rang en sous-titre, lus dans le cache du jeu par l'hôte (#19630).
+    var legend: ProfileLegendSummary? = nil
     let onAction: (ProfileFaceAction) -> Void
 
     @ObservedObject var prefs: UserPreferencesManager
@@ -53,17 +55,20 @@ struct ProfileActionsFace: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
-            header
-            showSection
-            sharingSection
-            whoSeesMeSection
+            header.meeshyCascade(rank: 0)
+            showSection.meeshyCascade(rank: 1)
+            sharingSection.meeshyCascade(rank: 2)
+            whoSeesMeSection.meeshyCascade(rank: 3)
             if ProfilePackShortcuts.isShown(viewerId: user?.id, profileUserId: user?.id) {
                 ProfileSavedContentRows(stats: stats, accentColor: accentColor, onOpen: { onAction(.door($0)) })
+                    .meeshyCascade(rank: 4)
             }
-            accountSection
+            accountSection.meeshyCascade(rank: 5)
             MeeshyButton(ProfileActionsCopy.logout, systemImage: "rectangle.portrait.and.arrow.right",
                          kind: .danger, width: .fill, isDestructive: true, action: { onAction(.logout) })
+                .meeshyCascade(rank: 6)
         }
+        .meeshyCascadeFace()
         .fullScreenCover(isPresented: $showsNearbyMap) { NearbyMapScreen() }
         .modifier(ProfileLinksPresentations(
             user: user, link: profileLink, accentColor: accentColor, presented: $presented, sent: $sent,
@@ -213,7 +218,8 @@ struct ProfileActionsFace: View {
                 MeeshyToggleRow(ProfileActionsCopy.statsTitle, systemImage: "chart.bar",
                                 subtitle: ProfileActionsCopy.statsSubtitle(stats, locale: locale),
                                 accessory: .chevron, showsDivider: true, tint: accent, action: { onAction(.stats) })
-                MeeshyToggleRow(ProfileActionsCopy.legend, systemImage: "trophy", accessory: .chevron,
+                MeeshyToggleRow(ProfileActionsCopy.legend, systemImage: "trophy",
+                                subtitle: ProfileLegendSummary.subtitle(for: legend), accessory: .chevron,
                                 showsDivider: true, tint: accent, action: { onAction(.legend) })
                 MeeshyToggleRow(ProfileActionsCopy.securityTitle, systemImage: "checkmark.shield",
                                 subtitle: ProfileActionsCopy.securitySubtitle(user), accessory: .chevron,

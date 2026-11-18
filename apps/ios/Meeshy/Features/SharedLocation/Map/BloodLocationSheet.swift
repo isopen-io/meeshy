@@ -78,11 +78,11 @@ struct BloodLocationSheet: View {
     @ViewBuilder
     private var history: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-            Text(BloodLocationCopy.lastDays).font(.caption.weight(.bold)).foregroundStyle(.secondary)
-            Text(BloodLocationCopy.summary(range: model.range, distance: LocationMapCopy.distance(model.shownDistanceMeters, locale: locale)))
-                .font(.title2.weight(.bold))
-                .accessibilityAddTraits(.isHeader)
-            Text(BloodLocationCopy.stops(model.stops.count)).font(.footnote).foregroundStyle(.secondary)
+            MeeshySectionHeader(title: BloodLocationCopy.lastDays, form: .overline, size: .sheet)
+            MeeshyFigure(value: BloodLocationCopy.summary(range: model.range,
+                                                          distance: LocationMapCopy.distance(model.shownDistanceMeters, locale: locale)),
+                         unit: BloodLocationCopy.stops(model.stops.count), size: .compact,
+                         emptyLabel: BloodLocationCopy.empty)
         }
         MeeshyChart(kind: .strip, points: dayPoints, summary: BloodLocationCopy.lastDays, tint: tint, size: .compact,
                     markers: [.today], emptyText: BloodLocationCopy.empty)

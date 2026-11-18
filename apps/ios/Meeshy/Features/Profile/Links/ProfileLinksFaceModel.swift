@@ -109,40 +109,57 @@ final class ProfileLinksFaceModel: ObservableObject {
     func trackingLink(id: String) -> TrackingLink? { snapshot.tracking?.first { "tracking:\($0.id)" == id } }
     func communityLink(id: String) -> CommunityLink? { snapshot.community?.first { "community:\($0.id)" == id } }
 
-    /// Un lien de partage modifié ou retiré depuis son détail : la face le reflète tout de suite.
+    /// Un lien modifié ou retiré depuis son détail : la face le reflète tout de suite ET le cache aussi — sinon le retour
+    /// sur la face, qui relit un cache encore frais sans réseau, ferait revenir l'ancien état ou le lien supprimé.
     func replace(_ link: MyShareLink) {
         snapshot.share = snapshot.share?.map { $0.id == link.id ? link : $0 }
+        persist(ProfileLinksSnapshot(share: snapshot.share))
     }
 
     func remove(shareLinkId: String) {
         snapshot.share = snapshot.share?.filter { $0.id != shareLinkId }
+        persist(ProfileLinksSnapshot(share: snapshot.share))
     }
 
     func replace(_ link: TrackingLink) {
         snapshot.tracking = snapshot.tracking?.map { $0.id == link.id ? link : $0 }
+        persist(ProfileLinksSnapshot(tracking: snapshot.tracking))
     }
 
+    func remove(trackingLinkId: String) {
+        snapshot.tracking = snapshot.tracking?.filter { $0.id != trackingLinkId }
+        persist(ProfileLinksSnapshot(tracking: snapshot.tracking))
+    }
+
+    /// Les écritures du cache partent dans l'ordre des gestes : la dernière gagne toujours.
+    private func persist(_ partial: ProfileLinksSnapshot) {
+        let previous = pendingSave
+        pendingSave = Task {
+            await previous?.value
+            await self.sources.save(partial)
+        }
+    }
+
+    /// La dernière écriture du cache en vol (les témoins l'attendent).
+    private(set) var pendingSave: Task<Void, Never>?
+
     /// « Lien actif » posé depuis le billet (planche `Etat-Erreur` vue 4) : le billet change tout de suite, le serveur
-    /// confirme ensuite, et un refus défait le geste. Rend `false` quand le geste n'a pas tenu.
+    /// confirme ensuite, et un refus défait le geste. Seul l'interrupteur se défait ou se confirme, sur l'exemplaire
+    /// COURANT : une édition ou une revalidation arrivée pendant l'attente garde ses autres champs. Rend `false` quand
+    /// le geste n'a pas tenu.
     @discardableResult
     func setActive(_ isActive: Bool, ticketId: String) async -> Bool {
         if let link = shareLink(id: ticketId) {
             replace(link.withActive(isActive))
-            guard await Self.succeeds({ try await self.switches.share(link.linkId, isActive) }) else {
-                replace(link)
-                return false
-            }
-            await sources.save(ProfileLinksSnapshot(share: snapshot.share))
-            return true
+            let accepted = await Self.succeeds({ try await self.switches.share(link.linkId, isActive) })
+            if let current = shareLink(id: ticketId) { replace(current.withActive(accepted ? isActive : link.isActive)) }
+            return accepted
         }
         guard let link = trackingLink(id: ticketId) else { return false }
         replace(link.withActive(isActive))
-        guard await Self.succeeds({ try await self.switches.tracking(link.token, isActive) }) else {
-            replace(link)
-            return false
-        }
-        await sources.save(ProfileLinksSnapshot(tracking: snapshot.tracking))
-        return true
+        let accepted = await Self.succeeds({ try await self.switches.tracking(link.token, isActive) })
+        if let current = trackingLink(id: ticketId) { replace(current.withActive(accepted ? isActive : link.isActive)) }
+        return accepted
     }
 
     private static func succeeds(_ send: () async throws -> Void) async -> Bool {

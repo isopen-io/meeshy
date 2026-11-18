@@ -93,10 +93,11 @@ const harness = (options: { found?: string[]; state?: State; beforeSwap?: (state
     }),
     notify: jest.fn(),
     findGroups: jest.fn(async () => (options.found ?? []).map((id) => ({ id, title: 'Les trois', memberUserIds: ['alice', 'bob', 'dave'] }))),
-    createGroup: jest.fn(async ({ memberUserIds }) => {
+    createGroup: jest.fn(async ({ memberUserIds, callId }) => {
       created += 1;
       const id = `g-created-${created}`;
       addGroup(id, [...memberUserIds]);
+      state.claims[id] = callId;
       log.push(`create ${id}`);
       return { id, title: null };
     }),
@@ -130,7 +131,6 @@ describe('rebranchCall — l’appel en tête-à-tête rejoint le groupe des pr�
 
     expect(h.log).toEqual([
       'create g-created-1',
-      'claim g-created-1',
       `session→g-created-1`,
       'announce-ready g-created-1',
       `live-message ${CALL} in g-created-1`,
@@ -201,10 +201,53 @@ describe('rebranchCall — l’appel en tête-à-tête rejoint le groupe des pr�
     expect(h.deps.notify).toHaveBeenCalledWith('g-old', CALL);
   });
 
-  it('un groupe neuf dont la réservation échoue est défait, et la bascule échoue', async () => {
+  it('un groupe neuf naît en tenant la réservation : aucun signal de liste avant la bascule gagnée (audit #19650)', async () => {
     const h = harness();
-    (h.deps.claim as jest.Mock<any>).mockImplementation(async () => false);
-    expect(await h.run()).toEqual({ kind: 'failed' });
-    expect(h.state.conversations).toEqual([DIRECT]);
+    const notified: string[] = [];
+    (h.deps.notify as jest.Mock<any>).mockImplementation((conversationId: string) => {
+      notified.push(`${conversationId} after ${h.log[h.log.length - 1]}`);
+    });
+    await h.run();
+
+    expect(h.deps.createGroup).toHaveBeenCalledWith({ inviterUserId: 'bob', memberUserIds: ['alice', 'bob', 'dave'], callId: CALL });
+    expect(h.deps.claim).not.toHaveBeenCalledWith('g-created-1', CALL);
+    expect(notified).toEqual(['g-created-1 after conversation:new g-created-1']);
+  });
+
+  it('un groupe neuf perdu dans une course disparaît sans qu’aucune liste l’ait vu (audit #19650)', async () => {
+    const h = harness({
+      beforeSwap: (state) => {
+        state.session = { ...state.session, conversationId: 'g-winner' };
+      },
+    });
+    expect(await h.run('erin')).toEqual({ kind: 'lost', conversationId: 'g-winner' });
+    expect(h.deps.claim).not.toHaveBeenCalled();
+    expect(h.deps.notify).not.toHaveBeenCalled();
+    expect(h.state.conversations).not.toContain('g-created-1');
+  });
+
+  it('une panne APRÈS la bascule gagnée ne fait pas échouer la bascule : elle est dite, et le groupe neuf est visible (audit #19650)', async () => {
+    const h = harness();
+    (h.deps.prisma as any).callParticipant.update = jest.fn(async () => { throw new Error('mongo write conflict'); });
+    (h.deps.joinRoom as jest.Mock<any>).mockImplementation(async () => { throw new Error('io down'); });
+
+    const outcome = await h.run();
+
+    expect(outcome).toMatchObject({ kind: 'rebranched', conversationId: 'g-created-1', created: true });
+    expect(h.log).toContain('announce-ready g-created-1');
+    expect(h.emitted.map((e) => e.event)).toEqual([SERVER_EVENTS.CALL_CONVERSATION_CHANGED]);
+  });
+
+  it('une lecture des membres du groupe en panne, ou un firstMessageSentAt refusé, non plus', async () => {
+    const h = harness();
+    (h.deps.prisma as any).participant.findMany = jest.fn(async () => { throw new Error('read timeout'); });
+    const updateMany = (h.deps.prisma as any).conversation.updateMany;
+    (h.deps.prisma as any).conversation.updateMany = jest.fn(async (args: any) => {
+      if (!('activeCallId' in args.data)) throw new Error('write refused');
+      return updateMany(args);
+    });
+
+    expect(await h.run()).toMatchObject({ kind: 'rebranched', conversationId: 'g-created-1' });
+    expect(h.emitted.map((e) => e.event)).toEqual([SERVER_EVENTS.CALL_CONVERSATION_CHANGED]);
   });
 });

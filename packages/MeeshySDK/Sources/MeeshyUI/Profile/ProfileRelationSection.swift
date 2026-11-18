@@ -9,11 +9,14 @@ import SwiftUI
 
 /// Ce que l'app fournit : à partir de l'identifiant et du nom d'affichage du membre, la vue du cercle. L'app pose
 /// `linked` à vrai dès qu'elle montre un lien d'au moins Connaissance (ou qu'il vient d'être annulé) : la fiche cesse
-/// alors de montrer ce qu'elle montrait sans lien (« Connectés », ou la demande de connexion).
+/// alors de montrer ce qu'elle montrait sans lien (« Connectés », ou la demande de connexion). `tint` est l'accent de la
+/// fiche (#19637) : `nil` quand la fiche n'en remet aucun, jamais une teinte transparente qui passerait pour un accent.
 public struct ProfileRelationSection {
-    public let build: (_ userId: String, _ displayName: String, _ linked: Binding<Bool>) -> AnyView
+    public typealias Build = (_ userId: String, _ displayName: String, _ linked: Binding<Bool>, _ tint: Color?) -> AnyView
 
-    public init(build: @escaping (_ userId: String, _ displayName: String, _ linked: Binding<Bool>) -> AnyView) {
+    public let build: Build
+
+    public init(build: @escaping Build) {
         self.build = build
     }
 }
@@ -26,12 +29,14 @@ struct ProfileRelationSlot<Unlinked: View>: View {
     let displayName: String
     /// Porté par la fiche : le cercle commun n'est plus Public dès qu'un lien est montré (#18870).
     @Binding var linked: Bool
+    /// L'accent de la fiche, remis tel quel au cercle (#19637).
+    let tint: Color?
     @ViewBuilder let unlinked: () -> Unlinked
 
     var body: some View {
         if let section, let userId, !userId.isEmpty {
             VStack(spacing: 0) {
-                section.build(userId, displayName, $linked)
+                section.build(userId, displayName, $linked, tint)
                 if !linked { unlinked() }
             }
         } else {

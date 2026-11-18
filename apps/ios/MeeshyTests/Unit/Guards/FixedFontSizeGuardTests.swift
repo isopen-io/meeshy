@@ -692,9 +692,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         EmojiSite(file: "Features/Profile/Views/ParticipantProfileSheet.swift",
                   head: #"Image(systemName: "theatermasks.fill")"#,
                   marker: "MeeshyFont.relative(MeeshyIconSize.xxl"),
-        EmojiSite(file: "Features/Profile/Views/UserStatsView.swift",
-                  head: #"Image(systemName: "exclamationmark.circle.fill")"#,
-                  marker: "MeeshyFont.relative(MeeshyIconSize.md"),
         EmojiSite(file: "Features/Stories/Views/MyStoryActionBar.swift",
                   head: "Image(systemName: glyph.systemImage)",
                   marker: ".meeshyScaledFont(MeeshyIconSize.sm")

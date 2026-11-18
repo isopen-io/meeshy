@@ -139,5 +139,16 @@ describe('createCallGroup — le groupe naît scellé, sans annonce', () => {
     expect(rows.find((r) => r.userId === 'dave')).toMatchObject({ type: 'user', displayName: 'Dave', language: 'es' });
     expect(rows.find((r) => r.userId === 'bob')).toMatchObject({ displayName: 'bob', avatar: 'https://cdn/bob.png' });
     expect(rows.every((r) => r.permissions && r.permissions.canSendMessages === true)).toBe(true);
+    expect(data.activeCallId).toBeUndefined();
+  });
+
+  it('naît en tenant la réservation de l’appel qui le fait naître : aucune prise à annoncer (audit #19650)', async () => {
+    const create = jest.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'g-new', title: null, ...data }));
+    const prisma = { user: { findMany: jest.fn(async () => USERS) }, conversation: { create } };
+    await createCallGroup(
+      { prisma: prisma as never, regime: async () => ({ encryptionMode: 'server' }) },
+      { inviterUserId: 'bob', memberUserIds: ['alice', 'bob', 'dave'], callId: 'call-1' }
+    );
+    expect(create.mock.calls[0][0].data).toMatchObject({ activeCallId: 'call-1', firstMessageSentAt: null });
   });
 });

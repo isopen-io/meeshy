@@ -534,8 +534,8 @@ struct ProfileSheetEnvironment: ViewModifier {
             .environment(\.profileLiveSection, ProfileLiveSection { request in
                 ProfileSlot.view(.live, userId: request.userId, displayName: request.displayName, liveRequest: request)
             })
-            .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, linked in
-                ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked)
+            .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, linked, tint in
+                ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked, tint: tint)
             })
             .environment(\.profileRelationPill, ProfileRelationPill { userId, displayName in
                 ProfileSlot.view(.pill, userId: userId, displayName: displayName)
@@ -575,7 +575,7 @@ enum ProfileSlot {
 
     static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false),
                      mapRequest: ProfileLocationMapRequest? = nil, openMap: (() -> Void)? = nil,
-                     onOpened: (() -> Void)? = nil, tint: Color = .clear,
+                     onOpened: (() -> Void)? = nil, tint: Color? = nil,
                      liveRequest: ProfileLiveRequest? = nil, actionsPart: ProfileActionsPart? = nil,
                      send: ProfileSendHost? = nil) -> AnyView {
         AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked,
@@ -592,7 +592,8 @@ private struct ProfileSlotContent: View {
     let mapRequest: ProfileLocationMapRequest?
     let openMap: (() -> Void)?
     let onOpened: (() -> Void)?
-    let tint: Color
+    /// L'accent remis par la fiche ; `nil` quand elle n'en remet aucun (le cercle reprend alors sa propre couleur).
+    let tint: Color?
     let liveRequest: ProfileLiveRequest?
     let actionsPart: ProfileActionsPart?
     let send: ProfileSendHost?
@@ -602,7 +603,7 @@ private struct ProfileSlotContent: View {
         case .banner:
             GameBannerBadge(userId: userId)
         case .relation:
-            ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked)
+            ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked, tint: tint)
                 .id(userId)
         case .pill:
             ProfileRelationPillView(userId: userId, displayName: displayName)
@@ -616,7 +617,7 @@ private struct ProfileSlotContent: View {
         case .scanner:
             ProfileQRScannerSheet(onOpened: onOpened ?? {})
         case .gameCard:
-            GameProfileBoardSource(userId: userId, tint: tint)
+            GameProfileBoardSource(userId: userId, tint: tint ?? .clear)
                 .id(userId)
         case .live:
             if let liveRequest {

@@ -11,12 +11,15 @@ import SwiftUI
 /// suit `.disabled(_:)`. La taille vient de la grille qui la range. Un raccourci
 /// (`shortcut`) est donné une fois : la même combinaison devient la frappe reconnue
 /// et la touche K55 sous le libellé, montrée seulement si la commande répond.
+/// La pastille se dit par `badgeLabel` quand l'hôte en donne un (« 2 messages non
+/// lus »), telle qu'elle se voit sinon.
 public struct MeeshyLabeledAction: View {
     private let title: String
     private let systemImage: String
     private let value: String?
     private let valueKind: MeeshyLabeledActionValueKind
     private let badge: String?
+    private let badgeLabel: String?
     private let kind: MeeshyGlassButtonKind
     private let isPending: Bool
     private let isFeatured: Bool
@@ -41,6 +44,7 @@ public struct MeeshyLabeledAction: View {
                 value: String? = nil,
                 valueKind: MeeshyLabeledActionValueKind = .accent,
                 badge: String? = nil,
+                badgeLabel: String? = nil,
                 kind: MeeshyGlassButtonKind = .normal,
                 isPending: Bool = false,
                 isFeatured: Bool = false,
@@ -55,6 +59,7 @@ public struct MeeshyLabeledAction: View {
         self.value = value
         self.valueKind = valueKind
         self.badge = badge
+        self.badgeLabel = badgeLabel
         self.kind = kind
         self.isPending = isPending
         self.isFeatured = isFeatured
@@ -72,7 +77,8 @@ public struct MeeshyLabeledAction: View {
     }
 
     private var spokenValue: String {
-        [isPending ? pendingLabel : nil, value, badge].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        MeeshyLabeledActionSpeech.value(pending: isPending ? pendingLabel : nil, value: value, badge: badge,
+                                        badgeLabel: badgeLabel)
     }
 
     /// Le raccourci se dit à la voix là où sa touche se voit : « raccourci : Commande M ».

@@ -3,6 +3,7 @@ import { CALL_MAX_PARTICIPANTS } from '@meeshy/shared/types/call-rules';
 import {
   CALL_GUEST_ROLE,
   authorizeCallInvitation,
+  callEntryForInvitee,
   recordCallInvitation,
   resolveInvitedGuestParticipantId,
 } from '../callInvitation';
@@ -11,7 +12,7 @@ const CALL = '64b7f0c2a1b2c3d4e5f60718';
 const CONV = '64b7f0c2a1b2c3d4e5f60719';
 const NOW = new Date('2026-09-27T10:00:00.000Z');
 
-type ParticipantRow = { id: string; conversationId: string; userId: string; bannedAt?: Date | null; isActive: boolean };
+type ParticipantRow = { id: string; conversationId: string; userId: string; bannedAt?: Date | null; isActive: boolean; role?: string };
 
 const inCall = (key: string, leftAt: Date | null = null) => ({
   id: `cp-${key}`,
@@ -48,8 +49,11 @@ type World = {
   privateCommunity: boolean;
 };
 
-const USERS: Record<string, { id: string; username: string; displayName: string | null; avatar: string | null; [prism: string]: string | null }> = {
+const USERS: Record<string, { id: string; username: string; displayName: string | null; avatar: string | null; [field: string]: string | boolean | Date | null }> = {
   alice: { id: 'alice', username: 'alice', displayName: 'Alice', avatar: null },
+  gone: { id: 'gone', username: 'gone', displayName: null, avatar: null, isActive: false },
+  erased: { id: 'erased', username: 'erased', displayName: null, avatar: null, isActive: true, deletedAt: NOW },
+  root: { id: 'root', username: 'root', displayName: null, avatar: null, role: 'ADMIN' },
   bob: { id: 'bob', username: 'bob', displayName: null, avatar: null },
   dave: { id: 'dave', username: 'dave', displayName: 'Dave', avatar: 'https://cdn/dave.png', systemLanguage: null, regionalLanguage: 'es', customDestinationLanguage: null, deviceLocale: null },
 };
@@ -230,6 +234,49 @@ describe('authorizeCallInvitation — l’invitation fait entrer dans la convers
     );
     expect(prisma.participant.create).not.toHaveBeenCalled();
     expect(prisma.callSession.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('authorizeCallInvitation — un ancien membre ne revient que par le rang de la porte d’ajout (audit #19650)', () => {
+  const formerMember = (inviterRole: string, inviter = 'alice') =>
+    makeWorld({
+      friends: [[inviter, 'dave']],
+      session: callSession({ participants: [inCall(inviter), inCall('bob')] }),
+      participants: [
+        { id: `p-${inviter}`, conversationId: CONV, userId: inviter, isActive: true, role: inviterRole },
+        { id: 'p-dave', conversationId: CONV, userId: 'dave', bannedAt: null, isActive: false },
+      ],
+    });
+
+  it('un simple membre fait d’un membre retiré ou parti l’invité de CET appel, sans le réintégrer au groupe', async () => {
+    expect(await authorize(formerMember('member'))).toMatchObject({ ok: true, route: 'legacy-guest', inviteeIsMember: false });
+  });
+
+  it('un modérateur, un administrateur du groupe ou de la plateforme le fait revenir par la porte d’ajout', async () => {
+    expect(await authorize(formerMember('moderator'))).toMatchObject({ ok: true, route: 'admit-member' });
+    expect(await authorize(formerMember('admin'))).toMatchObject({ ok: true, route: 'admit-member' });
+    expect(await authorize(formerMember('member', 'root'), { inviter: 'root' })).toMatchObject({ ok: true, route: 'admit-member' });
+  });
+
+  it('quelqu’un qui n’a jamais été membre entre toujours dans le groupe (D2)', async () => {
+    expect(await authorize(makeWorld())).toMatchObject({ ok: true, route: 'admit-member' });
+  });
+
+  it('callEntryForInvitee dit la même chose à la porte de l’admission, pour tout groupe', async () => {
+    const entry = (world: World, inviter = 'alice') =>
+      callEntryForInvitee(fakePrisma(world) as never, { conversationId: CONV, inviterUserId: inviter, inviteeUserId: 'dave' });
+    expect(await entry(formerMember('member'))).toBe('guest-only');
+    expect(await entry(formerMember('moderator'))).toBe('admit');
+    expect(await entry(makeWorld())).toBe('admit');
+    expect(await entry(makeWorld({ participants: [{ id: 'p-dave', conversationId: CONV, userId: 'dave', isActive: true }] }))).toBe('member');
+    expect(await entry(makeWorld({ participants: [{ id: 'p-dave', conversationId: CONV, userId: 'dave', isActive: false, bannedAt: NOW }] }))).toBe('banned');
+  });
+});
+
+describe('authorizeCallInvitation — un compte désactivé ou supprimé ne s’invite pas (audit #19650)', () => {
+  it('refuse comme une personne inconnue', async () => {
+    expect(await authorize(makeWorld({ friends: [['alice', 'gone']] }), { invitee: 'gone' })).toEqual({ ok: false, code: 'NOT_A_CONTACT' });
+    expect(await authorize(makeWorld({ friends: [['alice', 'erased']] }), { invitee: 'erased' })).toEqual({ ok: false, code: 'NOT_A_CONTACT' });
   });
 });
 

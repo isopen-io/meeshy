@@ -54,60 +54,73 @@ final class ProfileAddressesStore: ObservableObject {
         await refresh()
     }
 
+    /// Une réponse demandée sous un autre compte n'est ni montrée ni gardée : les adresses de A ne s'affichent jamais
+    /// chez B, même servies après le changement de compte.
     func refresh() async {
+        let requester = owner()
         do {
-            show(try await service.list())
+            let listed = try await service.list()
+            guard owner() == requester else { return }
+            show(listed)
             await cache.save(addresses)
         } catch {
+            guard owner() == requester else { return }
             if phase != .ready { phase = .failed }
         }
     }
 
     func setShown(_ isShown: Bool, for id: String) async {
-        await apply(edit: { $0.map { $0.id == id ? $0.with(isShown: isShown) : $0 } }) {
+        await edit(id: id, change: { $0.with(isShown: isShown) }) {
             _ = try await self.service.update(id: id, ProfileAddressDraft(isShown: isShown))
         }
     }
 
     func setCircle(_ circle: RelationLevel, for id: String) async {
-        await apply(edit: { $0.map { $0.id == id ? $0.with(circle: circle) : $0 } }) {
+        await edit(id: id, change: { $0.with(circle: circle) }) {
             _ = try await self.service.update(id: id, ProfileAddressDraft(circle: circle))
         }
     }
 
     func rename(_ title: String, for id: String) async {
         guard let normalized = ProfileAddressRules.normalizedTitle(title) else { return }
-        await apply(edit: { $0.map { $0.id == id ? $0.with(title: normalized) : $0 } }) {
+        await edit(id: id, change: { $0.with(title: normalized) }) {
             _ = try await self.service.update(id: id, ProfileAddressDraft(title: normalized))
         }
     }
 
     func remove(id: String) async {
-        await apply(edit: { $0.filter { $0.id != id } }) {
+        guard let index = addresses.firstIndex(where: { $0.id == id }) else { return }
+        let original = addresses[index]
+        await apply(undo: .reinsert(original, at: index), edit: { $0.filter { $0.id != id } }) {
             try await self.service.remove(id: id)
         }
     }
 
     /// Déplace l'adresse du rang `from` au rang final `to` (K52) : l'ordre se montre tout de suite, puis l'ordre servi.
     func move(from: Int, to: Int) async {
-        let reordered = MeeshyReorder.move(addresses, from: from, to: to)
-        guard reordered.map(\.id) != addresses.map(\.id) else { return }
+        let before = addresses
+        let reordered = MeeshyReorder.move(before, from: from, to: to)
+        guard reordered.map(\.id) != before.map(\.id) else { return }
         let ids = reordered.map(\.id)
-        await apply(edit: { _ in reordered }) {
+        let requester = owner()
+        await apply(undo: .relist(before: before), edit: { _ in reordered }) {
             let served = try await self.service.reorder(ids: ids)
-            await MainActor.run { self.show(served) }
+            await MainActor.run { if self.owner() == requester { self.show(served) } }
         }
     }
 
     /// Ajoute une adresse : elle n'apparaît qu'une fois servie, avec son identifiant et son lien de suivi.
     @discardableResult
     func add(_ draft: ProfileAddressDraft) async -> Bool {
+        let requester = owner()
         do {
             let created = try await service.create(draft)
+            guard owner() == requester else { return false }
             show(addresses.filter { $0.id != created.id } + [created])
             await cache.save(addresses)
             return true
         } catch {
+            guard owner() == requester else { return false }
             refusal = ProfileLinksCopy.addressRefused
             return false
         }
@@ -127,16 +140,51 @@ final class ProfileAddressesStore: ObservableObject {
         phase = .ready
     }
 
-    /// Le geste optimiste : appliquer, envoyer, défaire sur refus.
-    private func apply(edit: ([ProfileAddress]) -> [ProfileAddress], send: @escaping () async throws -> Void) async {
-        let before = addresses
-        addresses = edit(before)
+    /// Ce qu'un refus défait : CE geste seulement, appliqué à la liste courante — jamais la liste d'avant entière, qui
+    /// effacerait un geste voisin que le serveur a accepté entre-temps.
+    private enum Undo {
+        case restore(ProfileAddress)
+        case reinsert(ProfileAddress, at: Int)
+        case relist(before: [ProfileAddress])
+    }
+
+    private func edit(id: String, change: (ProfileAddress) -> ProfileAddress,
+                      send: @escaping () async throws -> Void) async {
+        guard let original = addresses.first(where: { $0.id == id }) else { return }
+        let changed = change(original)
+        await apply(undo: .restore(original), edit: { $0.map { $0.id == id ? changed : $0 } }, send: send)
+    }
+
+    /// Le geste optimiste : appliquer, envoyer, défaire CE geste sur refus.
+    private func apply(undo: Undo, edit: ([ProfileAddress]) -> [ProfileAddress],
+                       send: @escaping () async throws -> Void) async {
+        let requester = owner()
+        addresses = edit(addresses)
         do {
             try await send()
+            guard owner() == requester else { return }
             await cache.save(addresses)
         } catch {
-            addresses = before
+            guard owner() == requester else { return }
+            await self.undo(undo)
             refusal = ProfileLinksCopy.addressRefused
+        }
+    }
+
+    private func undo(_ undo: Undo) async {
+        switch undo {
+        case .restore(let original):
+            addresses = addresses.map { $0.id == original.id ? original : $0 }
+        case .reinsert(let original, let index):
+            guard !addresses.contains(where: { $0.id == original.id }) else { return }
+            let position = min(index, addresses.count)
+            addresses = Array(addresses.prefix(position)) + [original] + Array(addresses.dropFirst(position))
+        case .relist(let before):
+            guard let listed = try? await service.list() else {
+                addresses = before
+                return
+            }
+            show(listed)
         }
     }
 }
