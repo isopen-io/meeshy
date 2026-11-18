@@ -116,9 +116,10 @@ struct GameBannerBadge: View {
 }
 
 /// Les deux groupes, chacun sur son verre, aux deux angles BAS de la bannière (#10601, directive porteur 2026-10-14) : le
-/// niveau et ses étincelles à l'angle bas du DÉBUT, le rang à l'angle bas de la FIN. Chaque cadre est collé à son bord de
-/// la bannière : il n'a d'arrondi QU'au coin haut tourné vers le milieu — aucun au bord de DÉBUT pour les étincelles, aucun
-/// au bord de FIN pour le rang (décision porteur 2026-10-16) ; ses coins bas sont carrés, posés sur le bord bas. Le fond
+/// rang à l'angle bas du DÉBUT, lu le premier (décision porteur du 10 novembre 2026, #17375, #19764 — « c'est l'objet du
+/// jeu : devenir Légende »), le niveau et ses étincelles à l'angle bas de la FIN (`groupOrder`). Chaque cadre est collé à
+/// son bord de la bannière : il n'a d'arrondi QU'au coin haut tourné vers le milieu (décision porteur 2026-10-16) ; ses
+/// coins bas sont carrés, posés sur le bord bas. Le fond
 /// est un voile léger, sans matière floutée — la bannière et ses dessins se voient au travers ; une ombre de texte tient
 /// la lecture sur une bannière claire. Un `HStack` suit le sens de lecture et place les GROUPES ; leurs COINS, eux, sont
 /// des coins physiques (`UIRectCorner`) que `roundedCorners(for:direction:)` relit selon le sens — le RTL ne les inverse
@@ -139,10 +140,14 @@ struct GameBannerBadgeView: View {
     static let cornerRadius: CGFloat = MeeshyRadius.md
     enum Group { case level, rank }
 
-    /// Le seul coin arrondi d'un groupe : le coin HAUT tourné vers le milieu de la bannière. Les étincelles sont au
-    /// DÉBUT (leur coin haut de FIN s'arrondit), le rang à la FIN (son coin haut de DÉBUT) — physique selon le sens.
+    /// Du DÉBUT à la FIN de la bannière : le rang en tête, puis le niveau. Jumelle de `PROFILE_BANNER_GAME_ORDER`
+    /// (Android) et de l'ordre de `GameProfileBanner` (web).
+    static let groupOrder: [Group] = [.rank, .level]
+
+    /// Le seul coin arrondi d'un groupe : le coin HAUT tourné vers le milieu de la bannière. Le groupe du DÉBUT arrondit
+    /// son coin haut de FIN, celui de la FIN son coin haut de DÉBUT — physique selon le sens.
     static func roundedCorners(for group: Group, direction: LayoutDirection) -> UIRectCorner {
-        let towardsTheMiddleIsRight = (group == .level) == (direction == .leftToRight)
+        let towardsTheMiddleIsRight = (groupOrder.first == group) == (direction == .leftToRight)
         return towardsTheMiddleIsRight ? [.topRight] : [.topLeft]
     }
     /// Le voile : assez pour détacher le groupe, assez peu pour laisser voir la bannière.
@@ -158,27 +163,35 @@ struct GameBannerBadgeView: View {
             // s'étire à la hauteur du plus haut (`maxHeight: .infinity` sous un `fixedSize` vertical), le voile
             // posé APRÈS le cadre le couvre en entier.
             HStack(alignment: .bottom, spacing: 0) {
-                levelGroup
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .glassGroup(corners: Self.roundedCorners(for: .level, direction: layoutDirection))
-                    .frame(width: side)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(model.levelAccessibilityLabel)
-                    .accessibilityIdentifier("profile.banner.game.level")
-                Spacer(minLength: 0)
-                rankGroup
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                    .glassGroup(corners: Self.roundedCorners(for: .rank, direction: layoutDirection))
-                    .frame(width: side)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(model.rankAccessibilityLabel)
-                    .accessibilityIdentifier("profile.banner.game.rank")
+                ForEach(Array(Self.groupOrder.enumerated()), id: \.element) { index, group in
+                    if index > 0 { Spacer(minLength: 0) }
+                    framed(group, width: side)
+                }
             }
             .fixedSize(horizontal: false, vertical: true)
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .bottom)
         }
         .environment(\.colorScheme, .dark)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+    }
+
+    /// Un groupe sur son verre, à la largeur de sa moitié, lu comme UNE image nommée.
+    private func framed(_ group: Group, width: CGFloat) -> some View {
+        groupContent(group)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .glassGroup(corners: Self.roundedCorners(for: group, direction: layoutDirection))
+            .frame(width: width)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(group == .rank ? model.rankAccessibilityLabel : model.levelAccessibilityLabel)
+            .accessibilityIdentifier(group == .rank ? "profile.banner.game.rank" : "profile.banner.game.level")
+    }
+
+    @ViewBuilder
+    private func groupContent(_ group: Group) -> some View {
+        switch group {
+        case .rank: rankGroup
+        case .level: levelGroup
+        }
     }
 
     /// En colonne: le nom du palier, le cercle, puis les étincelles dessous (#10951).

@@ -89,13 +89,13 @@ final class GameBannerBadgeLoadingTests: XCTestCase {
         return GameBannerBadgeView(model: GameBannerBadgeModel.of(GameStandingContent(standing: served, treasuryTier: nil), userId: "u1")!)
     }
 
-    func test_badge_leftToRight_levelAtTheStart_rankAtTheEnd() throws {
+    func test_badge_leftToRight_rankAtTheStart_levelAtTheEnd() throws {
         ecran = RenderedScreen(badge(points: 976).frame(width: 360), size: CGSize(width: 360, height: 200))
 
         let level = try XCTUnwrap(ecran?.frame(of: "profile.banner.game.level", borne: 5))
         let rank = try XCTUnwrap(ecran?.frame(of: "profile.banner.game.rank", borne: 5))
-        XCTAssertLessThan(level.maxX, 180, "le niveau et ses points se posent à GAUCHE de la bannière")
-        XCTAssertGreaterThan(rank.minX, 180, "le rang se pose à DROITE de la bannière")
+        XCTAssertLessThan(rank.maxX, 180, "le rang ouvre la bannière, à GAUCHE (#17375, #19764)")
+        XCTAssertGreaterThan(level.minX, 180, "le niveau et ses points se posent à DROITE de la bannière")
     }
 
     func test_badge_rightToLeft_mirrorsTheTwoGroups() throws {
@@ -106,8 +106,8 @@ final class GameBannerBadgeLoadingTests: XCTestCase {
 
         let level = try XCTUnwrap(ecran?.frame(of: "profile.banner.game.level", borne: 5))
         let rank = try XCTUnwrap(ecran?.frame(of: "profile.banner.game.rank", borne: 5))
-        XCTAssertGreaterThan(level.minX, 180)
-        XCTAssertLessThan(rank.maxX, 180)
+        XCTAssertGreaterThan(rank.minX, 180, "en RTL le rang ouvre la bannière à DROITE")
+        XCTAssertLessThan(level.maxX, 180)
     }
 
     func test_badge_levelGroupSaysItsPoints() throws {
