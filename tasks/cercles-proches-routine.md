@@ -1323,3 +1323,8 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `jvm-check *SharedLocation*` (voir la PR). iOS et Android se prouvent par la CI de la PR.
 - Prochain lot recommandé : finir #19289 si le réveil précédent ne l'a pas fusionnée, puis #19287 (iOS et Android
   envoient la liste seule), #18714, #18580.
+
+## 2026-11-18 — réveil de 1 h : #19354 (icône de cercle) recalée sur dev
+
+- `origin/dev` (d84e74a80) fusionnée sans conflit ; aucun fichier de carte ou de position client ne bougeait côté `dev`.
+  Web `src/lib/shared-locations` + `relations` 180 verts, `tsc` vert sur l'arbre fusionné. iOS et Android par la CI.
