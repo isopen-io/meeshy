@@ -21,6 +21,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SwrCacheSource
 import me.meeshy.sdk.e2ee.PlaintextErasureLedger
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.isoToEpochMillis
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.sync.LiveReceiptsContinuity
@@ -229,8 +230,40 @@ internal class MessageCacheSource(
         )
     }
 
-    /** The recent window as the server served it, and the validator to keep with it. */
-    private class ServedWindow(val messages: List<ApiMessage>, val etag: String?)
+    /**
+     * The recent window as the server served it, and the validator to keep with it. [reachesOldest] — the page proves no
+     * older message remains ([servesWholeHistory] and [nothingOlderThan], #19423).
+     */
+    private class ServedWindow(val messages: List<ApiMessage>, val etag: String?, val reachesOldest: Boolean)
+
+    /**
+     * #19423 — the window serves the WHOLE history only when the page says so (`hasMore == false` with its `total`) AND
+     * is shorter than its `limit`. The gateway counts `total` and reads the page in two queries without a shared
+     * snapshot: a message written between them lets a FULL page claim `hasMore == false` while an older message still
+     * exists behind it. A page that did not reach its limit is the read's own proof. An absent or partial pagination
+     * proves nothing, and counts as « more remain » — `hasMore` DECODES to `false` when left out, so the page must also
+     * serve its own `total`: one that counts more messages than it serves has older ones behind it, whatever it says.
+     */
+    private fun servesWholeHistory(served: Int, pagination: Pagination?): Boolean {
+        if (pagination == null) return false
+        val limit = pagination.limit ?: return false
+        val total = pagination.total ?: return false
+        return !pagination.hasMore && served in total until limit
+    }
+
+    /**
+     * #19423 — the page's own counts are not proof enough: the gateway counts and reads without a shared snapshot, and it
+     * withdraws from the page the ephemeral messages due for this reader after having counted them, so a page shorter than
+     * its `limit` can still have cut a live message. The plaintext of a sealed message pruned wrongly is lost for good, so
+     * the claim is confirmed by a read that cannot be cut: one message BEFORE the oldest served (a cursor read measures
+     * `hasMore` with its own `limit + 1` row, no count). Anything but a clean empty answer proves nothing.
+     */
+    private suspend fun nothingOlderThan(served: List<ApiMessage>): Boolean {
+        val oldest = served.minByOrNull { isoToEpochMillisOrNull(it.createdAt) ?: return false } ?: return true
+        val probe = rawApiCall { messageApi.list(conversationId, limit = 1, before = oldest.id) }
+        val body = (probe as? NetworkResult.Success)?.data ?: return false
+        return body.success && body.data?.isEmpty() == true
+    }
 
     /** The messages read beyond the window, and how far that read went. */
     private class GapRead(val messages: List<ApiMessage>, val sweep: Sweep)
@@ -324,7 +357,11 @@ internal class MessageCacheSource(
                 }
                 null
             }
-            is ConditionalResult.Fresh -> ServedWindow(result.data, result.etag)
+            is ConditionalResult.Fresh -> ServedWindow(
+                result.data,
+                result.etag,
+                reachesOldest = servesWholeHistory(result.data.size, result.pagination) && nothingOlderThan(result.data),
+            )
             is ConditionalResult.Failure -> throw MessageSyncException(result.error.message)
         }
     }
@@ -345,7 +382,7 @@ internal class MessageCacheSource(
         val settlements = media?.let { mutableListOf<MessageIngestPipeline.LocalFilesSettlement>() }
         database.withTransaction {
             val merged = ingestion.mergeInTransaction(window.messages + gap.messages, now, conversationId, settlements, held.versions)
-            prune(window.messages, held.ids)
+            prune(window, held.ids)
             syncMetaDao.upsert(
                 SyncMetaEntity(resourceKey, now, contiguity.watermark, window.etag.takeUnless { merged.disavowedServed }, null),
             )
@@ -366,18 +403,21 @@ internal class MessageCacheSource(
      * BEFORE the request (by identity — a row written during the flight, dated ahead or not, is unknown to the page), that
      * rank above the page's cut in the gateway's total order `(createdAt desc, id desc)` — a row of the same millisecond as
      * the oldest served, with a lower id, may be the one the limit cut, alive — and that the page serves under none of
-     * their keys. A served date that cannot be read proves nothing: nothing is pruned (fail-closed). The vault being the
+     * their keys — or, when the window serves the WHOLE history ([ServedWindow.reachesOldest], #19423), that rank below it
+     * too: nothing older exists on the server. A served date that cannot be read proves nothing: nothing is pruned
+     * (fail-closed). The vault being the
      * only copy of a sealed message's plaintext, each pruned row records its erasure (#14655): the same rule governs the
      * row and its plaintext, so no deleted message leaves its plaintext behind, and no live one loses it.
      */
-    private suspend fun prune(window: List<ApiMessage>, heldBefore: Set<String>) {
-        val served = window.map { RecentWindowPrune.Served(it.id, it.clientMessageId, isoToEpochMillisOrNull(it.createdAt)) }
-        val from = served.mapNotNull { it.createdAt }.minOrNull() ?: Long.MIN_VALUE
+    private suspend fun prune(window: ServedWindow, heldBefore: Set<String>) {
+        val served = window.messages.map { RecentWindowPrune.Served(it.id, it.clientMessageId, isoToEpochMillisOrNull(it.createdAt)) }
+        val from = if (window.reachesOldest) Long.MIN_VALUE else served.mapNotNull { it.createdAt }.minOrNull() ?: Long.MIN_VALUE
         val candidates = messageDao.syncedSince(conversationId, from)
         val gone = RecentWindowPrune.gone(
             held = candidates.map { RecentWindowPrune.Held(it.id, it.serverId, it.createdAt) },
             heldBefore = heldBefore,
             page = served,
+            reachesOldest = window.reachesOldest,
         ).toHashSet()
         if (gone.isEmpty()) return
         val removed = candidates.filter { it.id in gone }
