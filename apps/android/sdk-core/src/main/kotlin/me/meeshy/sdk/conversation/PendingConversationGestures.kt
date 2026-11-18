@@ -3,12 +3,12 @@ package me.meeshy.sdk.conversation
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.decodeFromString
 import me.meeshy.core.database.dao.OutboxDao
+import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.outbox.ConversationPrefsPayload
-import me.meeshy.sdk.outbox.OutboxEntity
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.ReadReceiptPayload
