@@ -523,6 +523,8 @@ struct ProfileOwnBanner: View {
     let user: MeeshyUser?
     let accentColor: String
     let isDark: Bool
+    /// La hauteur peinte : celle que l'en-tête repliable de ma vitrine lui donne, étirement compris (#19589).
+    var height: CGFloat = 120
 
     static func paint(of user: MeeshyUser?) -> ProfileBannerPaint {
         ProfileDecorResolver.bannerPaint(photo: user?.banner, decor: user?.profileDecor?.banner)
@@ -540,7 +542,7 @@ struct ProfileOwnBanner: View {
     }
 
     var body: some View {
-        ProfileBannerPaintView(paint: Self.paint(of: user), thumbHash: user?.bannerThumbHash, accentHex: accentColor, isDark: isDark, height: 120)
+        ProfileBannerPaintView(paint: Self.paint(of: user), thumbHash: user?.bannerThumbHash, accentHex: accentColor, isDark: isDark, height: height)
             .overlay {
                 if let frame = Self.frame(of: user) {
                     BannerFrameView(design: frame)

@@ -99,10 +99,7 @@ struct ProfileView: View {
 
             scrollContent
 
-            VStack(spacing: 0) {
-                header
-                Spacer()
-            }
+            editHeader
 
             faceSelector
 
@@ -113,6 +110,7 @@ struct ProfileView: View {
             }
         }
         .background(InteractivePopEnabler())
+        .accessibilityAction(.escape) { leaveOrCancel() }
         .modifier(ProfileFacesPresentations(
             user: user, authManager: authManager,
             seenAsShown: $seenAsShown, shareShown: $shareShown, securityShown: $securityShown,
@@ -220,48 +218,167 @@ struct ProfileView: View {
         Task { await loadStats() }
     }
 
-    // MARK: - Header
+    // MARK: - L'en-tête de ma vitrine (#19589)
 
-    private var header: some View {
-        // Seul ce reader se re-rend au fil du scroll — la racine écrit
-        // `scrollRelay.offset` sans s'y abonner (P1-1).
-        ScrollOffsetReader(relay: scrollRelay) { offset in
-        CollapsibleHeader(
-            title: String(localized: "profile.title", bundle: .main),
-            scrollOffset: offset,
-            onBack: {
-                if isEditing {
-                    setEditing(false)
-                    loadUserData()
-                } else {
-                    router.pop()
-                }
-            },
-            titleColor: theme.textPrimary,
-            backArrowColor: Color(hex: accentColor),
-            backgroundColor: theme.backgroundPrimary,
-            trailing: {
-                if isSaving || isUploading {
-                    ProgressView()
-                        .tint(Color(hex: accentColor))
-                } else {
-                    Button {
-                        HapticFeedback.light()
-                        if isEditing {
-                            saveProfile()
-                        } else {
-                            setEditing(true)
-                        }
-                    } label: {
-                        Text(isEditing
-                             ? String(localized: "profile.save", bundle: .main)
-                             : String(localized: "profile.edit", bundle: .main))
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                            .foregroundColor(Color(hex: accentColor))
+    /// En édition, le cadre de mode (K16) tient le haut : « Annuler » rétablit les champs, « Enregistrer » envoie.
+    @ViewBuilder
+    private var editHeader: some View {
+        if ProfileOwnHeroPlan.usesModeHeader(isEditing: isEditing) {
+            VStack(spacing: 0) {
+                MeeshyModeHeader(
+                    label: ProfileOwnHeroPlan.modeLabel,
+                    exit: MeeshyModeAction(title: ProfileOwnHeroPlan.cancelTitle, action: { cancelEditing() }),
+                    confirm: MeeshyModeAction(title: ProfileOwnHeroPlan.saveTitle, isEnabled: !isUploading,
+                                              isBusy: isSaving || isUploading, action: { saveProfile() })
+                )
+                Spacer(minLength: 0)
+            }
+            .transition(.opacity)
+        }
+    }
+
+    /// Le héros de ma vitrine (planche `Main`) : K28 sur la bannière vivante, mené par le seul défilement. Au repos il
+    /// reste épinglé et se replie en barre de verre ; en édition il part avec le formulaire.
+    private func vitrineHero(scrollOffset: CGFloat) -> some View {
+        let progress = ProfileOwnHeroPlan.progress(scrollOffset: Double(scrollOffset), isEditing: isEditing)
+        let pinned = ProfileOwnHeroPlan.isPinned(isEditing: isEditing)
+        return MeeshyCollapsingHero(
+            progress: progress,
+            title: heroTitle,
+            subtitle: user.map { "@\($0.username)" },
+            expandedHeight: ProfileOwnHeroPlan.expandedHeight,
+            collapsedHeight: ProfileOwnHeroPlan.collapsedHeight,
+            isLoading: user == nil,
+            banner: { heroBanner(progress: progress) },
+            leading: { heroControls(ProfileOwnHeroPlan.leading(isEditing: isEditing)) },
+            trailing: { heroControls(ProfileOwnHeroPlan.trailing(isEditing: isEditing, progress: progress)) },
+            avatar: { size in heroAvatar(size: size) }
+        )
+        .overlay(alignment: .topTrailing) {
+            if isEditing {
+                // « Changer la bannière » (planche `Moi-Edition`) : la capsule de verre libellée du kit (K40), hors de la
+                // bannière que K28 tait au lecteur d'écran.
+                MeeshyButton(ProfileEditImageCopy.changeBanner, systemImage: "photo", kind: .glass, size: .s36,
+                             action: { bannerPickerShown = true })
+                    .accessibilityIdentifier("profile.edit.banner")
+                    .padding(.top, CGFloat(ProfileOwnHeroPlan.changeBannerTop))
+                    .padding(.trailing, MeeshySpacing.lg)
+                    .transition(.opacity)
+            }
+        }
+        .offset(y: pinned ? -scrollOffset : -max(scrollOffset, 0))
+    }
+
+    /// Mon nom, celui que je suis en train d'écrire en édition.
+    private var heroTitle: String {
+        let typed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isEditing, !typed.isEmpty { return typed }
+        return user?.displayName ?? user?.username ?? String(localized: "profile.unknown_user", bundle: .main)
+    }
+
+    private func heroControls(_ controls: [ProfileOwnHeroControl]) -> some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            ForEach(controls, id: \.self) { control in
+                heroControl(control)
+            }
+        }
+    }
+
+    /// La roue et le crayon sont des boutons ronds de verre (K02) ; « Vue par : Moi ▾ » est la capsule libellée (K40).
+    @ViewBuilder
+    private func heroControl(_ control: ProfileOwnHeroControl) -> some View {
+        switch control {
+        case .viewedBy:
+            MeeshyButton(ProfileOwnHeroPlan.label(control), systemImage: ProfileOwnHeroPlan.systemImage(control),
+                         kind: .glass, size: .s36, tint: Color(hex: accentColor),
+                         action: { performHeroControl(control) }) {
+                Image(systemName: "chevron.down")
+            }
+            .accessibilityIdentifier(ProfileOwnHeroPlan.identifier(control))
+        case .settings, .edit:
+            MeeshyGlassButton(systemImage: ProfileOwnHeroPlan.systemImage(control), label: ProfileOwnHeroPlan.label(control),
+                              action: { performHeroControl(control) })
+                .accessibilityIdentifier(ProfileOwnHeroPlan.identifier(control))
+        }
+    }
+
+    private func performHeroControl(_ control: ProfileOwnHeroControl) {
+        switch control {
+        case .settings: perform(.settings)
+        case .viewedBy: perform(.seenAs)
+        case .edit: perform(.edit)
+        }
+    }
+
+    /// La bannière à fond perdu : ma photo, mon décor, ou la bannière vivante du kit (K27). Le niveau et le rang aux
+    /// angles bas, au-dessus de l'avatar qui la chevauche ; toucher la photo l'ouvre en plein écran.
+    private func heroBanner(progress: Double) -> some View {
+        let height = CGFloat(ProfileOwnHeroPlan.bannerHeight(progress: progress))
+        return photoButton(ProfileOwnBanner.openablePhoto(of: user)) {
+            bannerImage(height: height)
+                .frame(height: height)
+                .frame(maxWidth: .infinity)
+                .clipped()
+                .overlay(alignment: .bottom) {
+                    // #10601 — le niveau et le rang aux angles bas de la bannière, jamais en édition.
+                    if ProfileOwnHeroPlan.showsGameBadges(isEditing: isEditing), let userId = user?.id {
+                        GameBannerBadge(userId: userId)
+                            .allowsHitTesting(false)
+                            .padding(.bottom, CGFloat(ProfileOwnHeroPlan.bannerBottomInset))
+                            .transition(.opacity)
                     }
                 }
+        }
+        .overlay {
+            if isUploadingBanner {
+                Color.black.opacity(0.4).overlay(ProgressView().tint(.white))
             }
-        )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// Mon avatar, à la taille que K28 lui donne (112 sous la bannière, 36 dans la barre), avec mon humeur. K28 tait sa
+    /// bannière au lecteur d'écran : l'avatar offre donc d'ouvrir la photo de bannière.
+    private func heroAvatar(size: CGFloat) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            photoButton(user?.avatar) {
+                ProfileOwnAvatar(user: user, accentColor: shownAccentHex, isEditing: isEditing, size: size)
+            }
+
+            if isEditing {
+                // La pastille d'action de coin du kit (K02, petite taille) : l'appareil photo sur l'avatar modifiable.
+                MeeshyGlassButton(systemImage: "camera.fill", label: ProfileEditImageCopy.changePhoto, size: .s32,
+                                  action: { avatarPickerShown = true })
+                    .accessibilityIdentifier("profile.edit.avatar")
+                    .offset(x: 4, y: 4)
+                    .transition(.opacity)
+            }
+
+            if isUploadingAvatar {
+                Circle()
+                    .fill(Color.black.opacity(0.4))
+                    .overlay(ProgressView().tint(.white))
+            }
+        }
+        .accessibilityActions {
+            if opensFullscreen(ProfileOwnBanner.openablePhoto(of: user)) {
+                Button(ProfileImageCopy.bannerLabel) { openFullscreen(ProfileOwnBanner.openablePhoto(of: user)) }
+            }
+        }
+    }
+
+    /// Annuler l'édition : les champs reprennent ce que mon compte porte, rien ne part.
+    private func cancelEditing() {
+        setEditing(false)
+        loadUserData()
+    }
+
+    /// Le geste d'échappement de VoiceOver : en édition il annule, sinon il ramène en arrière.
+    private func leaveOrCancel() {
+        if isEditing {
+            cancelEditing()
+        } else {
+            router.pop()
         }
     }
 
@@ -269,39 +386,45 @@ struct ProfileView: View {
 
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: ScrollOffsetPreferenceKey.self,
-                    value: geo.frame(in: .named("scroll")).minY
-                )
-            }
-            .frame(height: 0)
+            VStack(spacing: 0) {
+                Color.clear.frame(height: CGFloat(ProfileOwnHeroPlan.contentTop))
 
-            Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
-
-            VStack(spacing: MeeshySpacing.xxl) {
-                // Cold-start placeholder: AuthManager has no cached
-                // user yet (first run, post-logout). Skip rendering the
-                // real banner/avatar/identity sections to avoid the
-                // chain of `?? ""` fallback strings flashing on screen.
-                // Le squelette cède à la fiche par `motion.reveal` (K26, #19528) : même place, fondu croisé.
-                MeeshyRevealZone(isRevealed: !SkeletonVisibilityResolver.shouldShowSkeleton(
-                    isLoading: true,
-                    hasCachedData: user != nil
-                )) {
-                    faceContent
-                } placeholder: {
-                    SkeletonProfileHeader()
+                VStack(spacing: MeeshySpacing.xxl) {
+                    // Cold-start placeholder: AuthManager has no cached user yet (first run, post-logout). Le squelette
+                    // cède à la fiche par `motion.reveal` (K26, #19528) : même place, fondu croisé.
+                    MeeshyRevealZone(isRevealed: !SkeletonVisibilityResolver.shouldShowSkeleton(
+                        isLoading: true,
+                        hasCachedData: user != nil
+                    )) {
+                        faceContent
+                    } placeholder: {
+                        SkeletonProfileHeader()
+                    }
+                    Spacer().frame(height: MeeshySpacing.xxxl + 8 + (showsFaceSelector ? Self.faceSelectorRoom : 0))
                 }
-                Spacer().frame(height: MeeshySpacing.xxxl + 8 + (showsFaceSelector ? Self.faceSelectorRoom : 0))
+                .padding(.horizontal, MeeshySpacing.lg)
+                .meeshyMotion(.morph, value: face)
             }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.top, 0)
-            .meeshyMotion(.morph, value: face)
+            // Le haut de ce qui défile, lu dans l'espace du défilement : son minY vaut −contentOffset (iOS 16–17 ;
+            // iOS 18 passe par `trackScrollContentOffset`). Seul le lecteur du héros se re-rend au fil du défilement.
+            .background(alignment: .top) {
+                GeometryReader { geo in
+                    Color.clear.preference(
+                        key: ScrollOffsetPreferenceKey.self,
+                        value: geo.frame(in: .named("scroll")).minY
+                    )
+                }
+            }
+            .overlay(alignment: .top) {
+                ScrollOffsetReader(relay: scrollRelay) { offset in
+                    vitrineHero(scrollOffset: offset)
+                }
+            }
         }
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
         .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+ (preference path is dead there)
+        .ignoresSafeArea(edges: .top)
     }
 
     private func open(_ door: ProfileDoor) {
@@ -356,7 +479,23 @@ struct ProfileView: View {
     /// Actions mène à la Sécurité, qui dit ce qui reste à vérifier.
     @ViewBuilder
     private var vitrineFace: some View {
-        bannerAndAvatarSection
+        if isEditing {
+            ProfileEditImageCommands(
+                retouchDisabledReason: ProfileEditRetouch.disabledReason(avatar: user?.avatar),
+                isRetouchLoading: isLoadingRetouch,
+                onPhoto: { avatarPickerShown = true },
+                onRetouch: retouchCurrentPhoto,
+                onDecor: { decorShown = true }
+            )
+            .transition(.opacity)
+        } else if let membership = membershipLine {
+            // Ma ville et mon ancienneté se lisent sous le @pseudo du héros.
+            Text(membership)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundStyle(theme.textMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(.opacity)
+        }
         ProfileCirclesSection(summary: circles.summary, hasServedLinks: circles.hasServedLinks,
                               accentHex: accentColor, onOpen: open)
         ProfileIdentitySection(
@@ -448,30 +587,6 @@ struct ProfileView: View {
         Task { await authManager.logout(forgettingAccount: false) }
     }
 
-    // MARK: - Banner & Avatar Section
-
-    private var bannerAndAvatarSection: some View {
-        VStack(spacing: 0) {
-            bannerBlock
-            avatarBlock
-                .offset(y: -45)
-                .padding(.bottom, -45 + ProfileOwnAvatar.reserveBelow(user))
-            if isEditing {
-                ProfileEditImageCommands(
-                    retouchDisabledReason: ProfileEditRetouch.disabledReason(avatar: user?.avatar),
-                    isRetouchLoading: isLoadingRetouch,
-                    onPhoto: { avatarPickerShown = true },
-                    onRetouch: retouchCurrentPhoto,
-                    onDecor: { decorShown = true }
-                )
-                .padding(.top, MeeshySpacing.md)
-                .transition(.opacity)
-            } else {
-                nameBlock.transition(.opacity)
-            }
-        }
-    }
-
     private func openPackShop(_ domain: PackDomain) {
         router.openPackShop(domain: domain)
     }
@@ -493,105 +608,9 @@ struct ProfileView: View {
         }
     }
 
-    private var bannerBlock: some View {
-        ZStack(alignment: .bottomTrailing) {
-            photoButton(ProfileOwnBanner.openablePhoto(of: user)) {
-                bannerImage
-                    .frame(height: 120)
-                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                    .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                    .overlay {
-                        // #10601 — le niveau et le rang aux angles BAS : la découpe de la bannière s'applique aussi à
-                        // eux, leurs coins bas suivent donc l'arrondi de ses angles, sans débord ni jour.
-                        if !isEditing, let userId = user?.id {
-                            GameBannerBadge(userId: userId)
-                                .allowsHitTesting(false)
-                                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                                .transition(.opacity)
-                        }
-                    }
-            }
-            .accessibilityLabel(ProfileImageCopy.bannerLabel)
-
-            if isEditing {
-                // « Changer la bannière » (planche `Moi-Edition`) : la capsule de verre libellée du kit (K40).
-                MeeshyButton(ProfileEditImageCopy.changeBanner, systemImage: "photo", kind: .glass, size: .s36,
-                             action: { bannerPickerShown = true })
-                    .accessibilityIdentifier("profile.edit.banner")
-                    .padding(MeeshySpacing.sm)
-                    .transition(.opacity)
-            }
-
-            if isUploadingBanner {
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .fill(Color.black.opacity(0.4))
-                    .frame(height: 120)
-                    .overlay(ProgressView().tint(.white))
-            }
-        }
-        .overlay(alignment: .topTrailing) {
-            if !isEditing {
-                viewedByButton.transition(.opacity)
-            }
-        }
-    }
-
-    private var avatarBlock: some View {
-        ZStack(alignment: .bottomTrailing) {
-            photoButton(user?.avatar) {
-                ProfileOwnAvatar(user: user, accentColor: shownAccentHex, isEditing: isEditing)
-                .overlay(
-                    Circle()
-                        .stroke(theme.backgroundGradient, lineWidth: 4)
-                )
-            }
-
-            if isEditing {
-                // La pastille d'action de coin du kit (K02, petite taille) : l'appareil photo sur l'avatar modifiable.
-                MeeshyGlassButton(systemImage: "camera.fill", label: ProfileEditImageCopy.changePhoto, size: .s32,
-                                  action: { avatarPickerShown = true })
-                    .accessibilityIdentifier("profile.edit.avatar")
-                    .offset(x: 4, y: 4)
-                    .transition(.opacity)
-            }
-
-            if isUploadingAvatar {
-                Circle()
-                    .fill(Color.black.opacity(0.4))
-                    .frame(width: 90, height: 90)
-                    .overlay(ProgressView().tint(.white))
-            }
-        }
-    }
-
-    /// Nom, @pseudo et ancienneté : l'ancienneté se lit en un mot sous mon nom, plus dans une section à elle.
-    private var nameBlock: some View {
-        VStack(spacing: MeeshySpacing.xs) {
-            Text(user?.displayName ?? user?.username ?? String(localized: "profile.unknown_user", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
-                .foregroundStyle(theme.textPrimary)
-
-            if let username = user?.username {
-                Text("@\(username)")
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                    .foregroundStyle(Color(hex: accentColor))
-            }
-
-            if let membership = ProfileMembershipLine.text(city: user?.declaredCity, createdAt: user?.createdAt, locale: Self.interfaceLocale, now: Date()) {
-                Text(membership)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(theme.textMuted)
-            }
-        }
-        .padding(.top, MeeshySpacing.sm)
-    }
-
-    /// « Vue par : Moi » posé SUR la bannière, en haut à droite (planche `Main`) : la porte de l'aperçu par cercle.
-    private var viewedByButton: some View {
-        MeeshyButton(VitrineSeenAsCopy.viewedByMe, systemImage: "eye", kind: .glass, size: .s36,
-                     tint: Color(hex: accentColor), action: { seenAsShown = true })
-            .accessibilityIdentifier("profile.viewedBy")
-            .padding(MeeshySpacing.sm)
+    /// Ville et ancienneté, dans la langue de l'interface.
+    private var membershipLine: String? {
+        ProfileMembershipLine.text(city: user?.declaredCity, createdAt: user?.createdAt, locale: Self.interfaceLocale, now: Date())
     }
 
     /// La langue dans laquelle l'app me parle : le mois de l'ancienneté se dit dans la même langue que sa phrase.
@@ -604,8 +623,8 @@ struct ProfileView: View {
         Self.vitrineAccentHex(of: user, choosing: isEditing ? accentChoice : nil) ?? accentColor
     }
 
-    private var bannerImage: some View {
-        ProfileOwnBanner(user: user, accentColor: shownAccentHex, isDark: theme.mode.isDark)
+    private func bannerImage(height: CGFloat) -> some View {
+        ProfileOwnBanner(user: user, accentColor: shownAccentHex, isDark: theme.mode.isDark, height: height)
             .task(id: user?.profileDecor) { await servedAppearance.load(decor: user?.profileDecor) }
     }
 

@@ -58,6 +58,59 @@ struct MeeshyCollapsingHeroTests {
         #expect(!MeeshyCollapsingHeroRecipe.resolve(progress: 0.99).isPinned)
     }
 
+    @Test("mouvement réduit : l'identité ne glisse plus, elle s'efface puis reparaît à sa place au passage de main")
+    func reducedMotion_turnsTheTravelIntoACrossFade() {
+        let before = MeeshyCollapsingHeroRecipe.resolve(progress: 0.3, reduceMotion: true)
+        #expect(before.identityTravel == 0)
+        #expect(before.avatarSize == MeeshyCollapsingHeroRecipe.avatarExpanded)
+        #expect(before.titleSize == MeeshyCollapsingHeroRecipe.titleExpanded)
+        #expect(before.identityOpacity == 1)
+
+        let handover = MeeshyCollapsingHeroRecipe.resolve(progress: 0.5, reduceMotion: true)
+        #expect(handover.identityOpacity == 0)
+
+        let after = MeeshyCollapsingHeroRecipe.resolve(progress: 0.7, reduceMotion: true)
+        #expect(after.identityTravel == 1)
+        #expect(after.avatarSize == MeeshyCollapsingHeroRecipe.avatarCollapsed)
+        #expect(after.titleSize == MeeshyCollapsingHeroRecipe.titleCollapsed)
+        #expect(after.identityOpacity == 1)
+
+        for step in stride(from: 0.0, through: 1.0, by: 0.05) {
+            let travel = MeeshyCollapsingHeroRecipe.resolve(progress: step, reduceMotion: true).identityTravel
+            #expect(travel == 0 || travel == 1, "progress \(step)")
+        }
+    }
+
+    @Test("mouvement réduit : c'est toujours le doigt qui mène la hauteur, la bannière et le verre")
+    func reducedMotion_keepsTheFingerOnTheHeight() {
+        for step in stride(from: 0.0, through: 1.0, by: 0.1) {
+            let full = MeeshyCollapsingHeroRecipe.resolve(progress: step)
+            let reduced = MeeshyCollapsingHeroRecipe.resolve(progress: step, reduceMotion: true)
+            #expect(full.height == reduced.height)
+            #expect(full.bannerOpacity == reduced.bannerOpacity)
+            #expect(full.glassOpacity == reduced.glassOpacity)
+            #expect(full.barOwnsIdentity == reduced.barOwnsIdentity)
+        }
+    }
+
+    @Test("sans mouvement réduit, l'identité voyage et reste pleinement visible")
+    func fullMotion_travelsWithoutFading() {
+        let midway = MeeshyCollapsingHeroRecipe.resolve(progress: 0.275)
+        #expect(KitAssemblyGuards.close(midway.identityTravel, 0.5))
+        for step in stride(from: 0.0, through: 1.0, by: 0.1) {
+            #expect(MeeshyCollapsingHeroRecipe.resolve(progress: step).identityOpacity == 1)
+        }
+    }
+
+    @Test("un tic léger à l'épinglage, un seul par sens")
+    func pinTick_firesOncePerDirection() {
+        #expect(MeeshyCollapsingHeroRecipe.pinTick(from: 0.9, to: 1.0))
+        #expect(MeeshyCollapsingHeroRecipe.pinTick(from: 1.0, to: 0.9))
+        #expect(!MeeshyCollapsingHeroRecipe.pinTick(from: 1.0, to: 1.4))
+        #expect(!MeeshyCollapsingHeroRecipe.pinTick(from: 0.2, to: 0.6))
+        #expect(!MeeshyCollapsingHeroRecipe.pinTick(from: .nan, to: 0.3))
+    }
+
     @Test("les commandes gardent 44 et ne se déplacent pas de plus de 6")
     func controls_stayPut() {
         for step in stride(from: 0.0, through: 1.0, by: 0.1) {

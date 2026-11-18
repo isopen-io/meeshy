@@ -170,6 +170,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/MediaHub/ConversationMediaHubView.swift",
         "apps/ios/Meeshy/Features/Profile/Views/ParticipantProfileSheet.swift",  // 43
         "apps/ios/Meeshy/Features/Profile/Views/ProfileView.swift",  // 37
+        // #19589 — l'en-tête de ma vitrine (K28) : ses libellés vivent dans son plan de valeurs.
+        "apps/ios/Meeshy/Features/Profile/Views/ProfileOwnHeroPlan.swift",
         // #14056 — les règles pures de l'éditeur (refus d'identité compris) ont
         // quitté `ProfileView.swift` pour la taille : leurs clés suivent.
         "apps/ios/Meeshy/Features/Profile/Views/MeeshyUser+ProfileEdits.swift",

@@ -615,8 +615,12 @@ final class ProfileSectionsTests: XCTestCase {
 
     func test_viewedByAndWhatSees_sitOnTheBanner() throws {
         let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
-        XCTAssertTrue(profile.contains(".overlay(alignment: .topTrailing)"), "« Vue par : Moi » est posé sur la bannière")
-        XCTAssertEqual(profile.components(separatedBy: "VitrineSeenAsCopy.viewedByMe").count, 2, "une seule porte « Vue par »")
+        let hero = try code("Meeshy/Features/Profile/Views/ProfileOwnHeroPlan.swift")
+        XCTAssertTrue(profile.contains("trailing: { heroControls(ProfileOwnHeroPlan.trailing(isEditing: isEditing, progress: progress)) }"),
+                      "« Vue par : Moi » est posé sur la bannière, dans les commandes de fin du héros (#19589)")
+        XCTAssertEqual(hero.components(separatedBy: "VitrineSeenAsCopy.viewedByMe").count, 2, "une seule porte « Vue par »")
+        XCTAssertFalse(profile.contains("VitrineSeenAsCopy.viewedByMe"))
+        XCTAssertTrue(profile.contains("case .viewedBy: perform(.seenAs)"), "« Vue par » ouvre l'aperçu par cercle")
         let seenAs = try code("Meeshy/Features/Profile/Faces/VitrineSeenAsView.swift")
         XCTAssertTrue(seenAs.contains(".overlay(alignment: .bottomTrailing) { whatSeesBadge }"))
         XCTAssertTrue(seenAs.contains("VitrineCransSection("))

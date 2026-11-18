@@ -12,6 +12,9 @@ import SwiftUI
 /// une fois, comme un en-tête, avec son sous-titre. La barre repliée devient un
 /// bouton nommé par `collapsedTapLabel` quand l'hôte donne `onCollapsedTap`.
 /// Une feuille, qui n'a pas de barre d'état au-dessus d'elle, donne `topInset`.
+/// Un tic léger marque l'épinglage, un seul par sens ; sous « Réduire les animations »
+/// (système ou forcé dans Meeshy), l'identité ne glisse plus : elle passe dans la barre
+/// par un fondu.
 public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, AvatarSlot: View>: View {
     private let progress: Double
     private let title: String
@@ -30,6 +33,8 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     private let avatar: ((CGFloat) -> AvatarSlot)?
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
 
     public init(progress: Double,
                 title: String,
@@ -66,7 +71,8 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     private var recipe: MeeshyCollapsingHeroRecipe {
         MeeshyCollapsingHeroRecipe.resolve(
             progress: progress, expandedHeight: expandedHeight, collapsedHeight: collapsedHeight,
-            alignment: alignment, hasAvatar: avatar != nil, hasSubtitle: subtitle != nil
+            alignment: alignment, hasAvatar: avatar != nil, hasSubtitle: subtitle != nil,
+            reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
         )
     }
 
@@ -85,6 +91,9 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
         .frame(height: CGFloat(recipe.height))
+        .adaptiveOnChange(of: progress) { previous, current in
+            if MeeshyCollapsingHeroRecipe.pinTick(from: previous, to: current) { HapticFeedback.light() }
+        }
     }
 
     @ViewBuilder
@@ -112,7 +121,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     }
 
     private func identity(recipe: MeeshyCollapsingHeroRecipe, width: Double, top: Double, isDark: Bool) -> some View {
-        let travel = min(MeeshyCollapsingHeroRecipe.clamped(progress) / MeeshyCollapsingHeroRecipe.finishShare, 1)
+        let travel = recipe.identityTravel
         let avatarSize = recipe.avatarSize
         let centered = alignment == .center
         let expandedX = centered ? (width - MeeshyCollapsingHeroRecipe.avatarExpanded) / 2 : 20
@@ -136,6 +145,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
                 .frame(width: CGFloat(max(width - textX - 16, 0)), alignment: centered && travel < 0.5 ? .center : .leading)
                 .offset(x: CGFloat(textX), y: CGFloat(textY))
         }
+        .opacity(recipe.identityOpacity)
     }
 
     private func titleBlock(recipe: MeeshyCollapsingHeroRecipe, isDark: Bool, centered: Bool) -> some View {
