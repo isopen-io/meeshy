@@ -66,9 +66,17 @@ struct ProfileConnectionActions {
         (try? await social.unblockUser(userId)) != nil
     }
 
-    /// `reason` : le mot facultatif du signalement, `nil` sans mot.
-    func report(userId: String, reportType: String, reason: String?) async -> Bool {
-        (try? await social.reportUser(userId, reportType: reportType, reason: reason)) != nil
+    /// Le brouillon de la feuille « Signaler » : son motif, son mot et ses messages joints. Rien ne part sans motif.
+    func report(userId: String, draft: ProfileReportDraft) async -> Bool {
+        guard let reason = draft.reason else { return false }
+        return await report(userId: userId, reportType: reason.rawValue, reason: draft.sentDetails,
+                            attachedMessageIds: draft.sentMessageIds)
+    }
+
+    /// `reason` : le mot facultatif du signalement, `nil` sans mot ; `attachedMessageIds` : les messages joints.
+    func report(userId: String, reportType: String, reason: String?, attachedMessageIds: [String] = []) async -> Bool {
+        (try? await social.reportUser(userId, reportType: reportType, reason: reason,
+                                      attachedMessageIds: attachedMessageIds)) != nil
     }
 }
 

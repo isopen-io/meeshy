@@ -166,11 +166,11 @@ extension UserProfileSheet {
                              onBlock: { Task { await blockUser() } }, onReport: { showReportSheet = true })
     }
 
-    /// Le signalement part avec son motif et son mot ; « Bloquer aussi » ne bloque qu'une fois le signalement parti,
-    /// et la fiche passe aussitôt à son état bloqué.
+    /// Le signalement part avec son motif, son mot et ses messages joints ; « Bloquer aussi » ne bloque qu'une fois le
+    /// signalement parti, et la fiche passe aussitôt à son état bloqué.
     func sendReport(_ draft: ProfileReportDraft) async -> ProfileReportOutcome {
-        guard let userId = resolvedUserId, !userId.isEmpty, let reason = draft.reason else { return .notSent }
-        guard await connectionActions.report(userId: userId, reportType: reason.rawValue, reason: draft.sentDetails) else {
+        guard let userId = resolvedUserId, !userId.isEmpty, draft.canSend else { return .notSent }
+        guard await connectionActions.report(userId: userId, draft: draft) else {
             return .notSent
         }
         guard draft.alsoBlocks, !isBlocked else { return ProfileReportOutcome(isSent: true, isBlocked: isBlocked) }

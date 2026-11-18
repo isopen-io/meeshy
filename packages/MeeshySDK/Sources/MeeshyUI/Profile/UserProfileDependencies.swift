@@ -14,6 +14,8 @@ public struct UserProfileDependencies {
     public let acquaintance: (any ProfileAcquaintanceProviding)?
     /// Hors ligne, ce que la file garde pour la personne (#19465). Absente, la fiche ne pose pas le bloc.
     public let pendingQueue: (any ProfilePendingQueueProviding)?
+    /// « Joindre des messages » à un signalement (#19609). Absente, ou sans limite annoncée, la feuille s'en passe.
+    public let reportMessages: (any ProfileReportMessagesProviding)?
 
     public init(
         currentUser: @escaping @MainActor () -> MeeshyUser?,
@@ -23,7 +25,8 @@ public struct UserProfileDependencies {
         fallbackProfileLoading: any ProfileLoading,
         inCommon: any ProfileInCommonLoading = ProfileInCommonUnavailable(),
         acquaintance: (any ProfileAcquaintanceProviding)? = nil,
-        pendingQueue: (any ProfilePendingQueueProviding)? = nil
+        pendingQueue: (any ProfilePendingQueueProviding)? = nil,
+        reportMessages: (any ProfileReportMessagesProviding)? = nil
     ) {
         self.currentUser = currentUser
         self.relationships = relationships
@@ -33,5 +36,6 @@ public struct UserProfileDependencies {
         self.inCommon = inCommon
         self.acquaintance = acquaintance
         self.pendingQueue = pendingQueue
+        self.reportMessages = reportMessages
     }
 }

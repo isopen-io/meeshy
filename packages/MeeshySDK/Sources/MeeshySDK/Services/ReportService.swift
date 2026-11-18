@@ -5,10 +5,19 @@ import Foundation
 public protocol ReportServiceProviding: Sendable {
     func reportMessage(messageId: String, reportType: String, reason: String?) async throws
     func reportUser(userId: String, reportType: String, reason: String?) async throws
+    /// #19609 — le signalement d'un profil avec les messages joints (10 au plus, identifiants serveur). Une liste vide
+    /// envoie exactement le corps d'avant : une passerelle qui ignore le champ ne voit aucune différence.
+    func reportUser(userId: String, reportType: String, reason: String?, attachedMessageIds: [String]) async throws
     func reportPost(postId: String, reportType: String, reason: String?) async throws
     func reportStory(storyId: String, reportType: String, reason: String?) async throws
     func reportComment(commentId: String, reportType: String, reason: String?) async throws
     func reportConversation(conversationId: String, reportType: String, reason: String?) async throws
+}
+
+public extension ReportServiceProviding {
+    func reportUser(userId: String, reportType: String, reason: String?, attachedMessageIds: [String]) async throws {
+        try await reportUser(userId: userId, reportType: reportType, reason: reason)
+    }
 }
 
 /// Signaler un contenu est un geste ORDINAIRE (S2), pas un geste
@@ -50,11 +59,17 @@ public final class ReportService: ReportServiceProviding, Sendable {
     }
 
     public func reportUser(userId: String, reportType: String, reason: String? = nil) async throws {
+        try await reportUser(userId: userId, reportType: reportType, reason: reason, attachedMessageIds: [])
+    }
+
+    public func reportUser(userId: String, reportType: String, reason: String?, attachedMessageIds: [String]) async throws {
+        let attached = Array(attachedMessageIds.prefix(CreateReportBody.attachedMessagesLimit))
         let body = CreateReportBody(
             reportedType: "user",
             reportedEntityId: userId,
             reportType: reportType,
-            reason: reason
+            reason: reason,
+            attachedMessageIds: attached.isEmpty ? nil : attached
         )
         let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
         emitReported(.profile, id: userId, reportType: reportType)
@@ -111,6 +126,10 @@ struct CreateReportBody: Encodable {
     let reportedEntityId: String
     let reportType: String
     let reason: String?
+    /// #19609 — absent du corps quand rien n'est joint (`encodeIfPresent`).
+    var attachedMessageIds: [String]? = nil
+
+    static let attachedMessagesLimit = 10
 }
 
 public struct ReportResponseData: Decodable {

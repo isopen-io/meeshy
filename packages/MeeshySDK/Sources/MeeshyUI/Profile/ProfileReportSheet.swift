@@ -5,7 +5,8 @@ import MeeshySDK
 //
 // Faite du kit (loi 12) : les huit motifs en tuiles K47, le mot facultatif en champ K08, « Bloquer aussi » en ligne
 // K06, l'envoi en bouton K40 destructif, et l'après-envoi en bloc d'état K38 « succès ». Un envoi raté le dit et garde
-// tout ce qui a été saisi.
+// tout ce qui a été saisi. « Joindre des messages » (#19609) n'existe que si la passerelle l'annonce : rangée K20 de
+// vignettes TEXTE cochées, et le choix parmi nos messages.
 
 struct ProfileReportSheet: View {
     let name: String
@@ -13,6 +14,10 @@ struct ProfileReportSheet: View {
     var accentColor = ""
     var ring: ServedProfileDecorItem?
     let isAlreadyBlocked: Bool
+    /// « Joindre des messages » : la source et la personne signalée. Sans source, ou sans limite annoncée par la
+    /// passerelle, la section n'existe pas.
+    var reportMessages: (any ProfileReportMessagesProviding)?
+    var reportedUserId: String?
     let onSend: (ProfileReportDraft) async -> ProfileReportOutcome
 
     @Environment(\.dismiss) private var dismiss
@@ -20,6 +25,7 @@ struct ProfileReportSheet: View {
     @State private var isSending = false
     @State private var sendFailed = false
     @State private var outcome: ProfileReportOutcome?
+    @State private var showsMessagePicker = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -31,6 +37,12 @@ struct ProfileReportSheet: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .sheet(isPresented: $showsMessagePicker) {
+            if let limit = attachmentsLimit {
+                ProfileReportMessagePicker(load: ProfileReportAttachmentsRule.loader(reportMessages, userId: reportedUserId),
+                                           limit: limit, draft: $draft)
+            }
+        }
     }
 
     private var compose: some View {
@@ -52,6 +64,11 @@ struct ProfileReportSheet: View {
                 limit: ProfileReportDraft.detailsLimit,
                 onChange: { draft = draft.writing($0) }
             )
+            if let limit = attachmentsLimit {
+                ProfileReportAttachmentsSection(draft: draft, limit: limit,
+                                                onToggle: { draft = draft.toggling($0, limit: limit) },
+                                                onAdd: { showsMessagePicker = true })
+            }
             if !isAlreadyBlocked {
                 MeeshyToggleRow(ProfileReportCopy.alsoBlock(name), systemImage: "nosign",
                                 subtitle: ProfileReportCopy.notNotified,
@@ -70,6 +87,10 @@ struct ProfileReportSheet: View {
             MeeshyButton(ProfileReportCopy.cancel, kind: .text, width: .fill, action: { dismiss() })
         }
         .padding(MeeshySpacing.xl)
+    }
+
+    private var attachmentsLimit: Int? {
+        ProfileReportAttachmentsRule.offeredLimit(reportMessages?.attachableLimit)
     }
 
     /// En tête, qui l'on signale : son avatar, « Signaler Rui », l'anonymat du signalement, et ✕ pour fermer.
@@ -105,7 +126,7 @@ struct ProfileReportSheet: View {
         guard draft.canSend, !isSending else { return }
         isSending = true
         sendFailed = false
-        let sending = draft
+        let sending = ProfileReportAttachmentsRule.sending(draft, limit: attachmentsLimit)
         Task {
             let result = await onSend(sending)
             isSending = false

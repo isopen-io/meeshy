@@ -59,6 +59,11 @@ public nonisolated struct MeeshyThumbnailRowRecipe: Equatable, Sendable {
     public static let placeholderStroke = MeeshyBorder.emphasis
     public static let placeholderOpacity = 0.6
 
+    /// La coche d'une vignette cochée (#19609) : un disque de 24 qui déborde du coin de 6.
+    public static let checkDisc: CGFloat = 24
+    public static let checkOverhang: CGFloat = 6
+    public static let checkGlyph = MeeshyIconSize.xs
+
     public static let crossDisc: CGFloat = 24
     public static let crossStroke = MeeshyBorder.emphasis
     public static let crossGlyph = MeeshyIconSize.xs

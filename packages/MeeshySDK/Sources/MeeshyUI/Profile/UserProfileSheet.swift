@@ -191,7 +191,7 @@ public struct UserProfileSheet: View {
         .sheet(isPresented: $showReportSheet) {
             ProfileReportSheet(name: displayUser.resolvedDisplayName, avatarURL: displayUser.avatarURL,
                                accentColor: profileAccent, ring: displayUser.profileDecor?.avatarRing,
-                               isAlreadyBlocked: isBlocked,
+                               isAlreadyBlocked: isBlocked, reportMessages: dependencies.reportMessages, reportedUserId: resolvedUserId,
                                onSend: { draft in await sendReport(draft) })
         }
         .fullScreenCover(item: $fullscreenImage) { image in

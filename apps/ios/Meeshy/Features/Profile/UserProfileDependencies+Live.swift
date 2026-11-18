@@ -12,8 +12,30 @@ extension UserProfileDependencies {
         fallbackProfileLoading: UncachedProfileLoading(),
         inCommon: LiveProfileInCommonLoading(),
         acquaintance: LiveProfileAcquaintance(),
-        pendingQueue: LiveProfilePendingQueue()
+        pendingQueue: LiveProfilePendingQueue(),
+        reportMessages: LiveProfileReportMessages()
     )
+}
+
+/// « Joindre des messages » à un signalement (#19609) : nos messages communs viennent de la base locale des messages
+/// du compte actif, lue hors du fil principal ; aucun message chiffré de bout en bout, la base n'en gardant pas le clair.
+/// La passerelle n'annonce pas encore `attachedMessageIds` (#19351) : la limite reste `nil` et la section absente.
+@MainActor
+final class LiveProfileReportMessages: ProfileReportMessagesProviding {
+    nonisolated deinit {}
+
+    var attachableLimit: Int? { nil }
+
+    func attachableMessages(from userId: String) async -> [ProfileReportAttachment] {
+        let persistence = DependencyContainer.shared.messagePersistence
+        return await Self.read(persistence, senderId: userId).map { ProfileReportAttachment(excerpt: $0) }
+    }
+
+    @concurrent
+    private nonisolated static func read(_ persistence: MessagePersistenceActor,
+                                         senderId: String) async -> [ReportableMessageExcerpt] {
+        (try? ReportableMessageExcerpts.read(in: persistence, fromSender: senderId)) ?? []
+    }
 }
 
 /// Hors ligne, ce que la file garde pour la personne (#19465) : ses conversations directes lues dans le cache de la
