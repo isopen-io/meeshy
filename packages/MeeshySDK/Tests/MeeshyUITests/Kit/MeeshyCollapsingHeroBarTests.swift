@@ -32,7 +32,8 @@ struct MeeshyCollapsingHeroBarTests {
     @Test("le grand titre est seul ; le titre en ligne porte son sous-titre s'il en a un")
     func bar_subtitle_followsTheStyle() throws {
         for row in try KitEvolutionVectors.rows(Self.file, "barreSousTitre") {
-            let style = try #require(MeeshyHeroBarTitleStyle(rawValue: try #require(row["titre"] as? String)))
+            let styleRaw = try #require(row["titre"] as? String)
+            let style = try #require(MeeshyHeroBarTitleStyle(rawValue: styleRaw))
             let hasSubtitle = try #require(row["sousTitre"] as? Bool)
             #expect(MeeshyHeroBarRecipe.showsSubtitle(style, hasSubtitle: hasSubtitle) == row["montre"] as? Bool, "\(row)")
         }
@@ -46,6 +47,67 @@ struct MeeshyCollapsingHeroBarTests {
         #expect(MeeshyHeroBarRecipe.capsuleTrailingInset == row["fin"] as? Double)
         #expect(MeeshyHeroBarRecipe.capsuleGap == row["ecart"] as? Double)
         #expect(MeeshyHeroBarRecipe.capsuleTitleSize == row["titre"] as? Double)
+    }
+
+    @Test("la capsule à deux lignes : 56 de haut, titre 19, sous-titre 12,5 ; ajustée ou pleine largeur")
+    func capsule_twoLines_measures() throws {
+        let row = try KitEvolutionVectors.object(Self.file, "capsuleDeuxLignes")
+        #expect(MeeshyHeroBarRecipe.capsuleMinHeight(hasSubtitle: true) == row["hauteur"] as? Double)
+        #expect(MeeshyHeroBarRecipe.capsuleTitleFontSize(hasSubtitle: true) == row["titre"] as? Double)
+        #expect(MeeshyHeroBarRecipe.capsuleSubtitleSize == row["sousTitre"] as? Double)
+        #expect(MeeshyHeroCapsuleWidth.allCases.map(\.rawValue) == row["largeurs"] as? [String])
+        #expect(MeeshyHeroBarRecipe.capsuleMinHeight(hasSubtitle: false) == MeeshyHeroBarRecipe.capsuleHeight)
+        #expect(MeeshyHeroBarRecipe.capsuleTitleFontSize(hasSubtitle: false) == MeeshyHeroBarRecipe.capsuleTitleSize)
+        #expect(MeeshyHeroBarRecipe.capsuleMinHeight(hasSubtitle: true) >= 44)
+        let twoLines = MeeshyHeroBarRecipe.capsuleInsets(hasSubtitle: true)
+        #expect(twoLines.leading == row["debut"] as? Double)
+        #expect(twoLines.trailing == row["fin"] as? Double)
+        let oneLine = MeeshyHeroBarRecipe.capsuleInsets(hasSubtitle: false)
+        let capsule = try KitEvolutionVectors.object(Self.file, "capsule")
+        #expect(oneLine.leading == capsule["debut"] as? Double)
+        #expect(oneLine.trailing == capsule["fin"] as? Double)
+    }
+
+    @Test("l'encre de la capsule suit le ton de son verre : un verre sombre porte l'encre claire, même en apparence claire")
+    func capsule_ink_followsTheGlassTone() throws {
+        for row in try KitEvolutionVectors.rows(Self.file, "capsuleEncre") {
+            let toneName = try #require(row["ton"] as? String)
+            let tone = try #require(MeeshyGlassTone(rawValue: toneName))
+            let appearanceIsDark = try #require(row["apparenceSombre"] as? Bool)
+            let inkIsDark = MeeshyHeroBarRecipe.capsuleInkIsDark(tone: tone, appearanceIsDark: appearanceIsDark)
+            #expect(inkIsDark == row["encreClaire"] as? Bool, "\(row)")
+        }
+    }
+
+    @Test("la capsule pleine passe avant les espaces qui centrent le titre ; ajustée, elle ne réclame rien")
+    func capsule_fill_takesThePlaceBetweenTheCommands() throws {
+        #expect(MeeshyHeroBarRecipe.capsuleLayoutPriority(.fill) > 0)
+        #expect(MeeshyHeroBarRecipe.capsuleLayoutPriority(.fit) == 0)
+        let code = try KitEvolutionVectors.code("MeeshyCollapsingHeroBar.swift")
+        let priorities = code.components(separatedBy: ".layoutPriority(MeeshyHeroBarRecipe.capsuleLayoutPriority(width))").count - 1
+        #expect(priorities == 2, "chaque forme de la capsule (bouton ou en-tête) porte sa priorité")
+        #expect(code.contains("MeeshyHeroBarRecipe.capsuleInsets(hasSubtitle: hasSubtitle)"))
+        #expect(code.contains("textSecondary(isDark: inkIsDark)"))
+        #expect(code.contains("textPrimary(isDark: inkIsDark)"))
+    }
+
+    @Test("la capsule se lit d'un bloc : titre, étiquette, sous-titre ; une partie vide se tait")
+    func capsule_spoken_followsTheVectors() throws {
+        for row in try KitEvolutionVectors.rows(Self.file, "capsuleLue") {
+            let title = try #require(row["titre"] as? String)
+            let spoken = MeeshyHeroBarRecipe.capsuleSpoken(title: title,
+                                                           badge: row["etiquette"] as? String,
+                                                           subtitle: row["sousTitre"] as? String)
+            #expect(spoken == row["lu"] as? String, "\(row)")
+        }
+    }
+
+    @Test("la capsule pose son sous-titre et son étiquette par le kit")
+    func source_capsuleCarriesSubtitleAndBadgeFromTheKit() throws {
+        let code = try KitEvolutionVectors.code("MeeshyCollapsingHeroBar.swift")
+        #expect(code.contains("MeeshyBadge(.label("))
+        #expect(code.contains("MeeshyHeroBarRecipe.capsuleSubtitleSize"))
+        #expect(code.contains("MeeshyHeroBarRecipe.capsuleSpoken("))
     }
 
     @Test("la barre et la capsule sont faites du kit : verre K01, titre en en-tête, aucune couleur en dur ni barre système")

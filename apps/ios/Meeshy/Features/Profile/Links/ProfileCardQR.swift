@@ -165,11 +165,9 @@ extension ProfileCardQRShows {
     var choiceItem: MeeshyChoiceItem {
         switch self {
         case .showcase:
-            return MeeshyChoiceItem(id: rawValue, title: ProfileLinksCopy.qrShowsShowcase,
-                                    detail: ProfileLinksCopy.qrShowsShowcaseDetail, systemImage: "globe")
+            return MeeshyChoiceItem(id: rawValue, title: ProfileLinksCopy.qrShowsShowcase, systemImage: "globe")
         case .invitation:
-            return MeeshyChoiceItem(id: rawValue, title: ProfileLinksCopy.qrShowsInvitation,
-                                    detail: ProfileLinksCopy.qrShowsInvitationDetail, systemImage: "person.badge.plus")
+            return MeeshyChoiceItem(id: rawValue, title: ProfileLinksCopy.qrShowsInvitation, systemImage: "person.badge.plus")
         }
     }
 }

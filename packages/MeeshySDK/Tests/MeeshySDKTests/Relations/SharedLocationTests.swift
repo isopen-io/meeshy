@@ -43,6 +43,19 @@ struct SharedLocationTests {
         #expect(decoded.radiusMeters == 25)
     }
 
+    @Test("le cercle servi se lit tel quel (#17013) ; absent, inconnu ou sous Ami, le marqueur reste neutre")
+    func circle_isReadOnlyWhenServedAndKnown() throws {
+        var blood = wire()
+        blood["circle"] = "BLOOD"
+        #expect(try #require(decode(SharedLocationChanged.self, blood)).circle == .blood)
+        #expect(try #require(decode(SharedLocationChanged.self, wire())).circle == nil)
+        for odd: Any in ["ACQUAINTANCE", "PUBLIC", "ATOM", 7] {
+            var payload = wire()
+            payload["circle"] = odd
+            #expect(try #require(decode(SharedLocationChanged.self, payload)).circle == nil)
+        }
+    }
+
     @Test("une coordonnée hors du globe, une précision inconnue ou un rayon négatif sont refusés")
     func illegible_isRefused() {
         #expect(decode(SharedLocationChanged.self, wire(latitude: 91)) == nil)

@@ -94,6 +94,25 @@ nonisolated enum VitrineSeenAsCopy {
         String(localized: "profile.seenAs.crans.title", defaultValue: "Trois crans", bundle: .main)
     }
 
+    /// L'annonce VoiceOver d'un cran : le cercle, puis ce qu'il ouvre — arguments positionnels, ordre et ponctuation
+    /// tenus par la langue.
+    static func cranSpoken(circle: String, opens: String) -> String {
+        let format = String(localized: "profile.seenAs.cran.a11y", defaultValue: "%1$@ : %2$@", bundle: .main)
+        return String(format: format, circle, opens)
+    }
+
+    /// La même annonce, suivie du geste de contact que ce cercle reçoit.
+    static func cranSpoken(circle: String, opens: String, contact: String) -> String {
+        let format = String(localized: "profile.seenAs.cran.a11y.contact", defaultValue: "%1$@ : %2$@. %3$@", bundle: .main)
+        return String(format: format, circle, opens, contact)
+    }
+
+    /// « 9 publiques » sous « Publications » : ce que CE cercle voit de mes publications.
+    static func publicationsCount(_ count: Int) -> String {
+        let format = String(localized: "profile.seenAs.publications.count", defaultValue: "%lld visibles", bundle: .main)
+        return String.localizedStringWithFormat(format, count)
+    }
+
     static var cranNothing: String {
         String(localized: "profile.seenAs.crans.nothing", defaultValue: "Rien de gardé", bundle: .main)
     }

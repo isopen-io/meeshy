@@ -39,6 +39,16 @@ describe('decodeSharedLocation', () => {
     expect(decodeSharedLocation(served())).toEqual(served());
   });
 
+  test('garde le cercle servi (#17013, #17966)', () => {
+    expect(decodeSharedLocation(served({ circle: 'BLOOD' }))?.circle).toBe('BLOOD');
+  });
+
+  test('un cercle inconnu ou absent ne traverse pas : le marqueur reste neutre, rien n’est deviné', () => {
+    expect(decodeSharedLocation(served({ circle: 'ACQUAINTANCE' }))).toEqual(served());
+    expect(decodeSharedLocation(served({ circle: 7 }))).toEqual(served());
+    expect(Object.keys(decodeSharedLocation(served()) ?? {})).not.toContain('circle');
+  });
+
   test('une précision inconnue se lit « city » — jamais plus fine', () => {
     expect(decodeSharedLocation(served({ precision: 'street' }))?.precision).toBe('city');
   });

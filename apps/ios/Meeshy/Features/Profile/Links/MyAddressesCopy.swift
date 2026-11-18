@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// Les mots de « Mes adresses » (#18871, planche `Mes-Adresses`).
 nonisolated enum MyAddressesCopy {
@@ -82,5 +83,13 @@ nonisolated enum MyAddressesCopy {
     static func previewSpoken(_ titles: [String]) -> String {
         let format = String(localized: "profile.addresses.previewSpoken", defaultValue: "Adresses visibles : %@", bundle: .main)
         return String(format: format, titles.formatted(.list(type: .and)))
+    }
+
+    /// Les trois tuiles fantômes du vide (planche `Etat-Vide` vue 2) : ce qu'une adresse peut être — Site, Musique,
+    /// Photos.
+    static var emptyGhostTiles: [MeeshyStateGhostTile] {
+        [ProfileAddressGlyph.site, .music, .photos].map {
+            MeeshyStateGhostTile(systemImage: ProfileLinksCopy.glyph(of: $0), caption: ProfileLinksCopy.glyphName($0))
+        }
     }
 }

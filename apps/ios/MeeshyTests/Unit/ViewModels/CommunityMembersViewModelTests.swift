@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 import MeeshySDK
 import MeeshyUI
@@ -79,5 +80,47 @@ final class CommunityMembersViewModelTests: XCTestCase {
         await sut.loadIfNeeded()
 
         XCTAssertEqual(sut.sections.map(\.role), [.creator, .admin, .member])
+    }
+
+    // MARK: - community:member-* (#18767)
+
+    private func liveSUT() -> (CommunityMembersViewModel, MockCommunityService) {
+        let service = MockCommunityService()
+        service.membersResult = .success(CommunityStubs.page(threeRoles()))
+        let sut = CommunityMembersViewModel(
+            communityId: "c1", service: service, currentUserId: { "u-admin" }, memberChanges: Empty().eraseToAnyPublisher()
+        )
+        return (sut, service)
+    }
+
+    func test_memberChange_listeOuverte_seRelit() async {
+        let (sut, service) = liveSUT()
+        await sut.loadIfNeeded()
+        service.membersResult = .success(CommunityStubs.page(threeRoles() + [CommunityStubs.member(id: "m4", userId: "u-new", role: "member")]))
+
+        await sut.apply(CommunityStubs.memberChange(userId: "u-new", role: .member))
+
+        XCTAssertEqual(service.getMembersCallCount, 2)
+        XCTAssertEqual(sut.members.map(\.userId).last, "u-new")
+    }
+
+    func test_memberChange_lecteurDestitue_perdLaGestion() async {
+        let (sut, service) = liveSUT()
+        await sut.loadIfNeeded()
+        service.membersResult = .success(CommunityStubs.page([CommunityStubs.member(id: "m2", userId: "u-admin", role: "member")]))
+
+        await sut.apply(CommunityStubs.memberChange(userId: "u-admin", role: .member))
+
+        XCTAssertFalse(sut.isCurrentUserAdmin)
+    }
+
+    func test_memberChange_autreCommunauteOuListeJamaisChargee_neRelitRien() async {
+        let (sut, service) = liveSUT()
+
+        await sut.apply(CommunityStubs.memberChange(userId: "u-new", role: .member))
+        await sut.loadIfNeeded()
+        await sut.apply(CommunityStubs.memberChange(communityId: "c2", userId: "u-new", role: .member))
+
+        XCTAssertEqual(service.getMembersCallCount, 1)
     }
 }

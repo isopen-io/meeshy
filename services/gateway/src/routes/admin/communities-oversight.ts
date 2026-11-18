@@ -61,6 +61,7 @@ import { ADMIN_PERSON_SELECT } from './oversight-people';
 import { NOT_DELETED } from '../../services/posts/softDelete';
 import { admitSalonOccupants, closeSalonsAfterSwitch, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
 import { scheduleCommunityUpdatedBroadcastFrom } from '../../services/community-updated-broadcast';
+import { readCommunityDeletedAudience, scheduleCommunityDeletedBroadcastFrom } from '../../services/community-deleted-broadcast';
 import {
   booleen,
   chaine,
@@ -386,6 +387,10 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
           ? await admitSalonOccupants(fastify.prisma, { communityId, createdBy: current.creator.id })
           : [];
 
+        // #19590 — qui perd la communauté se lit AVANT : désactivée, elle n'a plus d'audience.
+        const deactivates = activeChanged && isActive === false;
+        const lostBy = deactivates ? await readCommunityDeletedAudience(fastify.prisma, communityId) : [];
+
         await fastify.prisma.community.update({
           where: { id: communityId },
           data: {
@@ -401,6 +406,9 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
         }
         // #18435 — une désactivée n'annonce rien (le diffuseur ne lit que les actives).
         scheduleCommunityUpdatedBroadcastFrom(fastify, { communityId });
+        if (deactivates) {
+          scheduleCommunityDeletedBroadcastFrom(fastify, { communityId, reason: 'deactivated', audience: lostBy });
+        }
 
         await withAudit(request, {
           action: 'ADMIN_COMMUNITY_UPDATED',

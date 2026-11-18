@@ -321,7 +321,12 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   // celles de #4176, #4284, #4713 et #16837 au-dessus, et pour la même raison
   // qu'elle reste non bornée : une ligne de liste qui ne nomme que N membres
   // sur N+1 est fausse, pas plus sûre.
-  'conversations/participants-writes.ts': 1,
+  //
+  // 1 -> 0 : #19650 a emporté l'admission d'un membre dans
+  // `services/conversations/memberAdmission.ts`, que l'invitation d'appel
+  // partage avec `POST …/participants` ; sa lecture des membres existants est
+  // partie avec elle, hors du périmètre `routes/` de ce balayage. La borne qui
+  // compte reste l'appartenance à UNE conversation.
   'conversations/memberArrivalFanOut.ts': 1,
   'conversations/membershipAdmissionFanOut.ts': 1,
   'conversations/participant-removal.ts': 2,

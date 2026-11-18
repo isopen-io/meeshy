@@ -21,11 +21,23 @@ export const byIdConversations = (id: string): string => `/api/v1/communities/${
 /** POST /api/v1/communities/:id/conversations/:conversationId */
 export const byIdConversationsByConversationId = (id: string, conversationId: string): string => `/api/v1/communities/${encodeURIComponent(id)}/conversations/${encodeURIComponent(conversationId)}`;
 
+/** GET /api/v1/communities/:id/entries/stats */
+export const byIdEntriesStats = (id: string): string => `/api/v1/communities/${encodeURIComponent(id)}/entries/stats`;
+
 /** POST /api/v1/communities/:id/invite */
 export const byIdInvite = (id: string): string => `/api/v1/communities/${encodeURIComponent(id)}/invite`;
 
 /** POST /api/v1/communities/:id/join */
 export const byIdJoin = (id: string): string => `/api/v1/communities/${encodeURIComponent(id)}/join`;
+
+/** GET /api/v1/communities/:id/join-requests */
+export const byIdJoinRequests = (id: string): string => `/api/v1/communities/${encodeURIComponent(id)}/join-requests`;
+
+/** POST /api/v1/communities/:id/join-requests/:requestId/accept */
+export const byIdJoinRequestsByRequestIdAccept = (id: string, requestId: string): string => `/api/v1/communities/${encodeURIComponent(id)}/join-requests/${encodeURIComponent(requestId)}/accept`;
+
+/** POST /api/v1/communities/:id/join-requests/:requestId/reject */
+export const byIdJoinRequestsByRequestIdReject = (id: string, requestId: string): string => `/api/v1/communities/${encodeURIComponent(id)}/join-requests/${encodeURIComponent(requestId)}/reject`;
 
 /** POST /api/v1/communities/:id/leave */
 export const byIdLeave = (id: string): string => `/api/v1/communities/${encodeURIComponent(id)}/leave`;

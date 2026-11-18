@@ -18,4 +18,14 @@
     <string name="profile_share_qr_cd">QR code for %1$s</string>
     <string name="profile_share_via">Share profile via</string>
     <string name="profile_share_message">%1$s on Meeshy: %2$s</string>
+    <string name="profile_blocked_by_me">You have blocked this user</string>
+    <string name="profile_language_choose">Choose</string>
+    <string name="profile_language_none">None</string>
+    <string name="profile_loadFailed_message">This profile couldn\'t be loaded.</string>
+    <string name="profile_section_languages">LANGUAGES</string>
+    <string name="profile_share_copy">Copy link</string>
+    <string name="profile_toast_report_sent">Report sent</string>
+    <string name="profile_toast_report_failed">Unable to send the report</string>
+    <string name="profile_stats_a11y_hint">Opens the detailed statistics</string>
+    <string name="profile_tab_details">Details</string>
 </resources>

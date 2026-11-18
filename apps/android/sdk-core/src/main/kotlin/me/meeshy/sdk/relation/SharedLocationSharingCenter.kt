@@ -107,7 +107,8 @@ interface SharedLocationSharing {
  *   partage que le démarrage suivant vient de poser ;
  * - chaque opération porte le TICKET du compte qui l'a lancée : une réponse arrivée après une déconnexion ou un
  *   changement de compte n'adopte rien, n'écrit rien et ne rallume rien ;
- * - dans le doute, on ARRÊTE : sans relevé pour republier une liste réduite, tout le partage s'arrête ; un accusé perdu
+ * - dans le doute, on ARRÊTE : une liste réduite part SEULE (#19287), et sans relevé pour la republier devant une
+ *   passerelle d'avant, tout le partage s'arrête ; un accusé perdu
  *   garde « Arrêter » à portée pour chaque personne que le serveur peut servir ; une échéance qui n'a pas pu se solder
  *   est rejouée, et à chaque socket accrochée ; un « Arrêter » qui n'a pas pu partir devient un retrait en attente,
  *   gardé et rejoué de la même façon (#18204).
@@ -345,15 +346,40 @@ class SharedLocationSharingCenter internal constructor(
     private fun isCurrent(ticket: Ticket): Boolean = ticket.generation == generation && accountId() == ticket.account
 
     /**
-     * Redémarrer le partage serveur avec une liste réduite demande une position : la dernière envoyée, sinon l'appareil.
-     * Sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête : retirer une personne ne dépend jamais
-     * de la localisation.
+     * Retirer quelqu'un ou solder une échéance republie la LISTE SEULE (#19287, iso `SharedLocationSharingCenter.swift` et
+     * du web #19284) : la passerelle reprend le point qu'elle garde, et cet appareil n'envoie pas sa position — il peut
+     * n'avoir fait que recevoir la liste d'un autre appareil (#18580). « Pas de partage » : la passerelle dit ce qui court
+     * ([settleNotSharing]). Une passerelle d'avant refuse la liste seule (`INVALID`) : la liste repart avec une position,
+     * la dernière envoyée, sinon l'appareil ; sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête :
+     * retirer une personne ne dépend jamais de la localisation.
      */
     private suspend fun republish(ticket: Ticket, wanted: SharedLocationRoster): SharedLocationShareProblem? {
         val next = wanted.settled()
         if (!next.hasRecipients) return stopAll(ticket)
+        when (val listOnly = publish(ticket, next, fix = null, previous = _roster.value)) {
+            SharedLocationShareProblem.Refused(SharedLocationSendOutcome.INVALID) -> Unit
+            SharedLocationShareProblem.Refused(SharedLocationSendOutcome.NOT_SHARING) -> return settleNotSharing(ticket)
+            else -> return listOnly
+        }
+        if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         val fix = freshLastFix() ?: deviceFix() ?: return stopAll(ticket)
         return publish(ticket, next, fix, previous = _roster.value)
+    }
+
+    /**
+     * « Pas de partage » à une liste seule couvre aussi une session remplacée par un autre appareil pendant l'envoi : la
+     * passerelle dit ce qui court. Un partage servi ⇒ le retrait reste en attente et se rejoue (la liste seule ignore qui
+     * n'est plus servi), comme une relecture qui ne conclut pas : vider sur la foi d'une panne laisserait la personne
+     * servie. Seul un partage servi VIDE vide la liste, sans arrêt ni relevé.
+     */
+    private suspend fun settleNotSharing(ticket: Ticket): SharedLocationShareProblem? {
+        val truth = readServed()
+        if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
+        if (truth == null || truth.recipients.isNotEmpty()) {
+            return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
+        }
+        wipe(ticket)
+        return null
     }
 
     /**
@@ -379,19 +405,26 @@ class SharedLocationSharingCenter internal constructor(
      * La liste envoyée solde tous les retraits en attente : c'est elle que le serveur sert dès qu'il l'accepte.
      * `claimsPublishing` : le geste « Partager » d'ici fait de cet appareil celui qui publie — mais seulement une fois le
      * démarrage accepté (ou son accusé perdu) : un « Partager » refusé laisse muet un appareil qui n'a fait que RECEVOIR la
-     * liste, même au prochain lancement.
+     * liste, même au prochain lancement. `fix` nul : la liste seule, sans repli (une passerelle qui la connaît connaît
+     * aussi les échéances par personne).
      */
     private suspend fun publish(
         ticket: Ticket,
         wanted: SharedLocationRoster,
-        fix: SharedLocationFix,
+        fix: SharedLocationFix?,
         previous: SharedLocationRoster,
         claimsPublishing: Boolean = false,
     ): SharedLocationShareProblem? {
         val next = wanted.settled()
         val now = clock()
-        val request = SharedLocationStartRequest.of(next.deadlinedRecipients(now), next.serverDuration(now), fix)
-            ?: return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.INVALID)
+        val recipients = next.deadlinedRecipients(now)
+        val duration = next.serverDuration(now)
+        val built = if (fix == null) {
+            SharedLocationStartRequest.listOnly(recipients, duration)
+        } else {
+            SharedLocationStartRequest.of(recipients, duration, fix)
+        }
+        val request = built ?: return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.INVALID)
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         val verdict = startTolerant(ticket, request)
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
@@ -416,7 +449,8 @@ class SharedLocationSharingCenter internal constructor(
      */
     private suspend fun startTolerant(ticket: Ticket, request: SharedLocationStartRequest): SharedLocationStartVerdict {
         val verdict = emitter.start(request)
-        val legacy = verdict == SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID) && request.carriesDeadlines
+        val legacy = verdict == SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID) &&
+            request.carriesDeadlines && !request.isListOnly
         if (!legacy || !isCurrent(ticket)) return verdict
         return emitter.start(request.withoutDeadlines())
     }
@@ -433,9 +467,10 @@ class SharedLocationSharingCenter internal constructor(
     private suspend fun deviceFix(): SharedLocationFix? =
         if (permission.isGranted()) fixes.currentFix()?.let { SharedLocationFix.of(it.latitude, it.longitude, it.accuracy) } else null
 
-    private fun engage(ticket: Ticket, next: SharedLocationRoster, fix: SharedLocationFix) {
+    /** `fix` nul : une liste seule, qui n'a rien envoyé de nouveau — la dernière position envoyée reste celle d'avant. */
+    private fun engage(ticket: Ticket, next: SharedLocationRoster, fix: SharedLocationFix?) {
         adopt(ticket, next)
-        lastSent = SharedLocationUpdateGate.Sent(fix, clock())
+        fix?.let { lastSent = SharedLocationUpdateGate.Sent(it, clock()) }
         if (next.hasRecipients && !received) startFollowing()
         scheduleDeadline()
     }

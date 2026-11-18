@@ -61,11 +61,11 @@ struct ProfileCircleProposalCard: View {
                     .transition(.opacity)
             }
         }
-        .meeshyAnimation(.easeOut(duration: 0.2), value: viewModel.receivedProposal)
+        .meeshyMotion(.morph, value: viewModel.receivedProposal)
         .sheet(item: $ritual) { target in
             BloodRitualView(target: target, onFinished: {
                 ritual = nil
-                Task { await viewModel.load() }
+                Task { await viewModel.reload() }
             })
         }
     }
@@ -176,11 +176,11 @@ nonisolated enum ProfileCircleProposalCopy {
         guard level != .blood else {
             return String(localized: "circles.requests.ritual", defaultValue: "Ouvrir le rituel", bundle: .main)
         }
-        return String(format: String(localized: "circles.proposal.accept.hint", defaultValue: "Votre cercle commun passe à %@", bundle: .main),
+        return String(format: String(localized: "circles.proposal.accept.a11y", defaultValue: "Votre cercle commun passe à %@", bundle: .main),
                       CircleLevelNames.title(of: level))
     }
 
     static func declineHint(name: String) -> String {
-        String(format: String(localized: "circles.proposal.decline.hint", defaultValue: "%@ n'en sera pas averti(e)", bundle: .main), name)
+        String(format: String(localized: "circles.proposal.decline.a11y", defaultValue: "%@ n'en sera pas averti(e)", bundle: .main), name)
     }
 }

@@ -43,7 +43,7 @@ function makeAudioTranslateService(overrides: Record<string, any> = {}) {
     }),
     translateAsync: jest.fn<any>().mockResolvedValue({ jobId: JOB_ID, status: 'pending' }),
     getJobStatus: jest.fn<any>().mockResolvedValue({ jobId: JOB_ID, status: 'completed' }),
-    cancelJob: jest.fn<any>().mockResolvedValue({ jobId: JOB_ID, status: 'cancelled' }),
+    cancelJob: jest.fn<any>().mockResolvedValue({ success: true, message: 'Job cancelled' }),
     transcribeOnly: jest.fn<any>().mockResolvedValue({
       text: 'hello', language: 'en', confidence: 0.99, source: 'whisper', segments: [], durationMs: 1000,
     }),
@@ -586,6 +586,37 @@ describe('les charges utiles `attachment` / `transcription` traversent le séria
     });
 
     expect(res.json().data.attachment).toEqual(FULL_ATTACHMENT);
+    await app.close();
+  });
+
+  it('POST /translate sert les pistes déjà traduites sans leur chemin serveur', async () => {
+    const track = {
+      id: 'att-1_en',
+      targetLanguage: 'en',
+      translatedText: 'hello',
+      audioUrl: '/uploads/translated/att-1_en.mp3',
+      durationMs: 8000,
+      format: 'mp3',
+      voiceCloned: true,
+      voiceQuality: 0.82,
+      createdAt: '2026-08-22T09:00:00.000Z',
+    };
+    const { app } = await buildApp({
+      translationService: makeTranslationService({
+        getAttachmentWithTranscription: jest.fn<any>().mockResolvedValue({
+          ...EXISTING,
+          translatedAudios: [{ ...track, audioPath: '/srv/meeshy/uploads/translated/att-1_en.mp3' }],
+        }),
+      }),
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `${PREFIX}/translate`,
+      payload: { attachmentId: 'att-1', targetLanguages: ['en'] },
+    });
+
+    expect(res.json().data.translatedAudios).toEqual([track]);
     await app.close();
   });
 

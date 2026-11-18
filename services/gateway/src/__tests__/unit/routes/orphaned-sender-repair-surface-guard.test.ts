@@ -324,6 +324,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #14105 — le lien d'un choisi d'un post ONLY : a-t-il écrit dans la conversation directe ?
   // `select: { senderId: true }`, la relation n'est jamais chargée.
   'posts/directContactVisibility.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #19378 — « Notre histoire » : `select: { createdAt: true }` seul (premier message, jalons). Aucun expéditeur servi.
+  'relations/pairHistory.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   // #7578 — purge serveur du contenu d'une vue unique : ni expéditeur ni contenu servi.
   'messaging/purgeViewOnceContent.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #11269 — rattrapage des médias à vue unique lus par tous : `senderId` (colonne) seul, la relation n'est jamais chargée.
@@ -372,6 +374,12 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `findUniqueOrThrow` avec `CALL_SUMMARY_MESSAGE_INCLUDE`, la même forme que
   // les écritures du message-résumé de `CallService` (initiateur de l'appel).
   'calls/callRecordingLink.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #19650 — la bascule d'un appel retrouve la bulle « en cours » du tête-à-tête
+  // d'origine par `select: { id, metadata }` (l'édition repasse par
+  // `CALL_SUMMARY_MESSAGE_INCLUDE`), et la réaction d'appel retrouve la bulle
+  // du groupe par `select: { id }` : aucune ne lit l'expéditeur.
+  'calls/originConversationCall.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'calls/callReactionOnBubble.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/conversationWriteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/attachmentSendAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/copyExitProtection.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },

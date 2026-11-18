@@ -86,7 +86,7 @@ struct TrackingLinksView: View {
 
     private func destination(of ticket: LinksFaceTicket) -> ProfileCreatedLinkDestination {
         guard let link = viewModel.link(ticketId: ticket.id) else { return .route(.trackingLinks) }
-        return .tracking(link)
+        return .trackingDetail(link)
     }
 
     /// Ce qui fait reconnaître un lien sous son billet : sa campagne, puis ses dates (règle 7 de l'épure).

@@ -462,7 +462,48 @@ final class SharedLocationSharingCenterTests: XCTestCase {
         XCTAssertEqual(emitter.starts.last?.recipients.map(\.userId), [alice])
     }
 
-    func test_stoppingOnePerson_withoutAnyFix_stopsTheWholeShare() async {
+    func test_stoppingOnePerson_onAGatewayBeforeTheListAlone_withoutAnyFix_stopsTheWholeShare() async {
+        let store = FakeSharedLocationRosterStore()
+        store.kept = SharedLocationRoster.empty
+            .adding(userId: alice, precision: .exact, duration: .eightHours, now: t0)
+            .adding(userId: bob, precision: .city, duration: .eightHours, now: t0)
+        let fixes = FakeSharedLocationFixSource()
+        fixes.result = .denied
+        let emitter = FakeSharedLocationEmitter()
+        emitter.queuedStartVerdicts = [.refused(.invalid)]
+        let (sut, _, _, _) = makeSUT(emitter: emitter, fixes: fixes, store: store)
+
+        let problem = await sut.stopSharing(with: bob)
+
+        XCTAssertNil(problem)
+        XCTAssertEqual(emitter.stops, 1)
+        XCTAssertEqual(emitter.starts.map(\.isListOnly), [true])
+        XCTAssertNil(sut.entry(for: bob))
+        XCTAssertNil(store.kept)
+    }
+
+    // MARK: - La liste seule (#19287)
+
+    func test_stoppingOnePerson_sendsTheListAlone_withoutAskingTheDevice() async {
+        let (sut, emitter, fixes, _) = makeSUT()
+        _ = await sut.share(with: alice, precision: .exact, duration: .eightHours)
+        _ = await sut.share(with: bob, precision: .city, duration: .eightHours)
+        let asked = fixes.asks
+
+        let problem = await sut.stopSharing(with: bob)
+
+        XCTAssertNil(problem)
+        XCTAssertEqual(fixes.asks, asked)
+        XCTAssertEqual(emitter.starts.last?.isListOnly, true)
+        XCTAssertEqual(emitter.starts.last?.recipients.map(\.userId), [alice])
+        XCTAssertEqual(emitter.starts.last?.notifyRecipients, false)
+        XCTAssertEqual(emitter.stops, 0)
+        XCTAssertNil(sut.entry(for: bob))
+        XCTAssertNotNil(sut.entry(for: alice))
+        XCTAssertTrue(fixes.isFollowing)
+    }
+
+    func test_stoppingOnePerson_withTheLocationWithdrawn_onlyRemovesThatPerson() async {
         let store = FakeSharedLocationRosterStore()
         store.kept = SharedLocationRoster.empty
             .adding(userId: alice, precision: .exact, duration: .eightHours, now: t0)
@@ -474,10 +515,55 @@ final class SharedLocationSharingCenterTests: XCTestCase {
         let problem = await sut.stopSharing(with: bob)
 
         XCTAssertNil(problem)
-        XCTAssertEqual(emitter.stops, 1)
-        XCTAssertTrue(emitter.starts.isEmpty)
+        XCTAssertEqual(fixes.asks, 0)
+        XCTAssertEqual(emitter.stops, 0)
+        XCTAssertEqual(emitter.starts.map(\.isListOnly), [true])
         XCTAssertNil(sut.entry(for: bob))
-        XCTAssertNil(store.kept)
+        XCTAssertNotNil(store.kept?.entry(for: alice))
+    }
+
+    func test_aPassedDeadline_sendsTheListAlone() async {
+        let (sut, emitter, fixes, clock) = makeSUT()
+        _ = await sut.share(with: alice, precision: .exact, duration: .eightHours)
+        _ = await sut.share(with: bob, precision: .city, duration: .oneHour)
+        let asked = fixes.asks
+
+        clock.now = t0.addingTimeInterval(3601)
+        await sut.reconcile()
+
+        XCTAssertEqual(fixes.asks, asked)
+        XCTAssertEqual(emitter.starts.last?.isListOnly, true)
+        XCTAssertEqual(emitter.starts.last?.recipients.map(\.userId), [alice])
+    }
+
+    func test_aGatewayBeforeTheListAlone_receivesTheListAgainWithAPosition() async {
+        let (sut, emitter, _, _) = makeSUT()
+        _ = await sut.share(with: alice, precision: .exact, duration: .eightHours)
+        _ = await sut.share(with: bob, precision: .city, duration: .eightHours)
+        let before = emitter.starts.count
+        emitter.queuedStartVerdicts = [.refused(.invalid)]
+
+        let problem = await sut.stopSharing(with: bob)
+
+        XCTAssertNil(problem)
+        let tried = Array(emitter.starts.dropFirst(before))
+        XCTAssertEqual(tried.map(\.isListOnly), [true, false])
+        XCTAssertEqual(tried.last?.recipients.map(\.userId), [alice])
+        XCTAssertNil(sut.entry(for: bob))
+    }
+
+    func test_theListAloneMeetingNoShare_withoutAnyRead_neverEmptiesTheListOnAFailure() async {
+        let (sut, emitter, _, _) = makeSUT()
+        _ = await sut.share(with: alice, precision: .exact, duration: .eightHours)
+        _ = await sut.share(with: bob, precision: .city, duration: .eightHours)
+        emitter.queuedStartVerdicts = [.refused(.notSharing)]
+
+        let problem = await sut.stopSharing(with: bob)
+
+        XCTAssertEqual(problem, .withdrawalPending)
+        XCTAssertTrue(sut.roster.isWithdrawalPending(for: bob))
+        XCTAssertNotNil(sut.entry(for: alice))
+        XCTAssertEqual(emitter.stops, 0)
     }
 
     func test_aLostAck_keepsStopWithinReach() async {
@@ -683,18 +769,19 @@ final class SharedLocationSharingCenterTests: XCTestCase {
         XCTAssertNil(store.kept)
     }
 
-    func test_anOldLastFix_isNeverRepublishedAsFresh() async {
+    func test_anOldLastFix_isNeverRepublishedAsFresh_onAGatewayBeforeTheListAlone() async {
         let emitter = FakeSharedLocationEmitter()
         let fixes = FakeSharedLocationFixSource()
         let (sut, _, _, clock) = makeSUT(emitter: emitter, fixes: fixes)
         _ = await sut.share(with: alice, precision: .exact, duration: .eightHours)
         _ = await sut.share(with: bob, precision: .city, duration: .eightHours)
         fixes.result = .fix(SharedLocationFix(latitude: 49.1, longitude: 2.5, accuracy: 10)!)
+        emitter.queuedStartVerdicts = [.refused(.invalid)]
 
         clock.now = t0.addingTimeInterval(SharedLocationUpdateGate.heartbeat + 1)
         await sut.stopSharing(with: bob)
 
-        XCTAssertEqual(emitter.starts.last?.fix.latitude, 49.1)
+        XCTAssertEqual(emitter.starts.last?.fix?.latitude, 49.1)
         XCTAssertEqual(emitter.starts.last?.recipients.map(\.userId), [alice])
     }
 

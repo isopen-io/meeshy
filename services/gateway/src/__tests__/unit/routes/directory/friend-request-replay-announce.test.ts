@@ -102,6 +102,9 @@ function prismaDouble(opts: Options = {}) {
         return { id: AUTRE, deactivatedAt: null, blockedUserIds: [], displayName: 'Alice', username: 'alice' };
       }),
     },
+    // #19362 — le réglage « accepter les demandes » de la cible, lu à l'envoi.
+    userPreferences: { findMany: jest.fn(async () => []) },
+    userPreference: { findMany: jest.fn(async () => []) },
     friendRequest: {
       findFirst: jest.fn<any>(async () => null),
       findMany: jest.fn<any>(async () => []),

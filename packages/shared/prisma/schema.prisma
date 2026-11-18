@@ -135,6 +135,7 @@ model User {
   profileAccentColor        String?
   /// Adresses personnelles publiées sur la fiche (#18863).
   profileAddresses          ProfileAddress[]
+  storyHighlights           StoryHighlight[]
   email                     String   @unique
   phoneNumber               String?
   /// Code de parrainage INTRINSÈQUE au compte — distinct d'un AffiliateToken
@@ -501,6 +502,7 @@ model User {
 
   createdCommunities      Community[]              @relation("CommunityCreator")
   communityMemberships    CommunityMember[]
+  communityJoinRequests   CommunityJoinRequest[]
   conversationPreferences ConversationPreference[]
   createdShareLinks       ConversationShareLink[]  @relation("ShareLinkCreator")
   receivedFriendRequests  FriendRequest[]          @relation("FriendRequestReceiver")
@@ -2079,6 +2081,13 @@ model FriendRequest {
   receiverId  String    @db.ObjectId
   /// Message optionnel accompagnant la demande d'amitié
   message     String?
+  /// Langue DÉTECTÉE du `message` à l'envoi (#19361). `null` : pas de mot, ou
+  /// une ligne antérieure à la traduction des demandes.
+  messageOriginalLanguage String?
+  /// Traductions du `message`, rangées par le translator (#19361) :
+  /// `{ "<langue>": { text, translationModel, confidenceScore, createdAt } }`.
+  /// Jamais servie brute : `servirParties` en descend le Prisme du DESTINATAIRE.
+  messageTranslations Json?
   /// pending, accepted, rejected, blocked
   status      String    @default("pending")
   /// When the request was accepted/rejected
@@ -2311,6 +2320,10 @@ model RelationFeatureSetting {
   /// Non nul = `ownerId` a coupé les invitations « regarder ou écouter ensemble » de `otherId`
   /// (#17023) : préférence de réception, active par défaut ; la séance déjà rejointe continue.
   togetherBlockedAt     DateTime?
+  /// Non nul = `ownerId` ne veut plus RECEVOIR la position continue de `otherId` (#19454) :
+  /// préférence de réception, active par défaut ; ni son point sur ma carte, ni l'alerte de
+  /// proximité de la paire ne m'arrivent. Ne touche pas au consentement de `otherId`.
+  bloodLocationMutedAt  DateTime?
   consentedAt           DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -2466,8 +2479,11 @@ model Community {
   createdBy   String    @db.ObjectId
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  /// « Valider chaque entrée » (#19429) : rejoindre crée une DEMANDE qu'un administrateur ou un modérateur accepte ou refuse. Absent = entrée directe.
+  requiresJoinApproval Boolean? @default(false)
 
   members             CommunityMember[]
+  joinRequests        CommunityJoinRequest[]
   creator             User                       @relation("CommunityCreator", fields: [createdBy], references: [id])
   sharedConversations ConversationShare[]        @relation("CommunityShares")
   Conversation        Conversation[]
@@ -2487,9 +2503,37 @@ model CommunityMember {
   isActive    Boolean   @default(true)
   /// When the member left the community (null if still active)
   leftAt      DateTime?
+  /// Comment la personne est entrée (#19429) : self, invited, link. Absent sur les lignes d'avant.
+  joinedVia   String?
+  /// Pays de l'arrivant à l'entrée, code ISO 3166-1 alpha-2 — jamais la ville (#19429).
+  joinCountry String?
 
   user      User      @relation(fields: [userId], references: [id])
   community Community @relation(fields: [communityId], references: [id])
+
+  @@index([communityId, isActive, joinedAt])
+}
+
+/// Demande d'entrée dans une communauté qui valide chaque entrée (#19429).
+model CommunityJoinRequest {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  communityId String    @db.ObjectId
+  userId      String    @db.ObjectId
+  /// pending, accepted, rejected
+  status      String    @default("pending")
+  /// Comment la demande est arrivée : self ou link
+  via         String?
+  /// Code ISO 3166-1 alpha-2 de l'arrivant, jamais la ville
+  country     String?
+  createdAt   DateTime  @default(now())
+  decidedAt   DateTime?
+  decidedBy   String?   @db.ObjectId
+
+  user      User      @relation(fields: [userId], references: [id])
+  community Community @relation(fields: [communityId], references: [id])
+
+  @@index([communityId, status, createdAt])
+  @@index([userId, communityId])
 }
 
 /// Statistiques d'utilisation d'un utilisateur
@@ -2704,6 +2748,9 @@ model TrackingLink {
   messageId      String?   @db.ObjectId // Message contenant le lien
   totalClicks    Int       @default(0) // Nombre total de clics
   uniqueClicks   Int       @default(0) // Nombre de clics uniques (par IP/fingerprint)
+  /// Compter les visiteurs uniques (#19418) : `false` ⇒ un clic n'incrémente jamais `uniqueClicks`.
+  /// Absent ou null = vrai, le comportement de tout lien antérieur.
+  countUnique    Boolean?
   isActive       Boolean   @default(true) // Le lien est-il actif
   expiresAt      DateTime? // Date d'expiration (null = pas d'expiration)
   createdAt      DateTime  @default(now())
@@ -2735,6 +2782,27 @@ model ProfileAddress {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, position])
+}
+
+/// Album « à la une » d'une personne (#19394, décision #19393) : des stories de SON auteur,
+/// rangées sous un titre et un glyphe. Mettre une story à la une n'élargit jamais son
+/// audience : la lecture (`GET /users/:id/highlights`) ne sert à un lecteur que les stories
+/// que leur propre visibilité lui ouvre, y compris après leur échéance ; un album vide pour
+/// lui est omis. `storyIds` garde l'ordre de l'album ; une story supprimée s'y ignore.
+model StoryHighlight {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId   String   @db.ObjectId
+  title     String
+  /// Nom d'icône du jeu de la planche (`map-pin`, `moon`…).
+  glyph     String
+  storyIds  String[] @default([]) @db.ObjectId
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, order])
 }
 
 /// Clic sur un lien de tracking
@@ -3014,6 +3082,13 @@ model CallSession {
   /// avec la session, d'où une liste sur la session plutôt qu'un modèle. Écrit
   /// par `services/calls/callInvitation.ts`.
   invitedUserIds String[] @default([]) @db.ObjectId
+
+  /// La conversation DIRECTE d'origine d'un appel rattaché à un groupe par la
+  /// première invitation (#19650) : `conversationId` est alors le groupe, et le
+  /// tête-à-tête garde sa réservation et sa bulle jusqu'à la fin. Écrite UNE
+  /// fois par `services/calls/callConversationRebranch.ts`, absente sinon. Lue
+  /// par `callId` seulement (aucun index), jamais servie aux clients.
+  originConversationId String? @db.ObjectId
 
   /// Les réactions envoyées pendant l'appel, comptées par emoji (#8439) :
   /// `{ "👍": 3, "🎉": 1 }`, emojis de `CALL_REACTION_EMOJIS` seulement.

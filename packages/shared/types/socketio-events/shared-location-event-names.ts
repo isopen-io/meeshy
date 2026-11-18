@@ -32,4 +32,9 @@ export const SHARED_LOCATION_SERVER_EVENTS = {
   SHARED_LOCATION_REQUESTED: 'location:share-requested',
   /** À chacun de deux Sangs consentants proches l'un de l'autre : « X est près de toi », sans coordonnée (#13937). */
   BLOOD_PROXIMITY: 'location:blood-proximity',
+  /**
+   * À chaque compte qui pourrait lire l'historique d'un Sang : sa position continue a bougé, sans
+   * coordonnée — le client relit la carte (#19400).
+   */
+  BLOOD_MOVED: 'location:blood-moved',
 } as const;

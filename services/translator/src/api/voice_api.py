@@ -459,15 +459,20 @@ def create_voice_api_router(
                 temp_path.unlink()
             raise HTTPException(status_code=500, detail=str(e))
 
+    async def _owned_job(job_id: str, authorization: Optional[str]):
+        caller = get_user_id(authorization)
+        job = await translation_pipeline.get_job(job_id)
+        if not job or job.user_id != caller:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return job
+
     @router.get("/voice/job/{job_id}", response_model=JobResponse)
-    async def get_job_status(job_id: str):
+    async def get_job_status(job_id: str, authorization: Optional[str] = Header(None)):
         """Récupérer le status d'un job de traduction."""
         if not translation_pipeline:
             raise HTTPException(status_code=503, detail="Translation pipeline not available")
 
-        job = await translation_pipeline.get_job(job_id)
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found")
+        job = await _owned_job(job_id, authorization)
 
         return JobResponse(
             id=job.id,
@@ -482,11 +487,12 @@ def create_voice_api_router(
         )
 
     @router.delete("/voice/job/{job_id}")
-    async def cancel_job(job_id: str):
+    async def cancel_job(job_id: str, authorization: Optional[str] = Header(None)):
         """Annuler un job en attente."""
         if not translation_pipeline:
             raise HTTPException(status_code=503, detail="Translation pipeline not available")
 
+        await _owned_job(job_id, authorization)
         success = await translation_pipeline.cancel_job(job_id)
         if not success:
             raise HTTPException(status_code=400, detail="Job cannot be cancelled (already processing or completed)")

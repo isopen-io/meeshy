@@ -65,24 +65,29 @@ struct RelationLinksFace: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
-            if let link {
-                ticket(link)
-            } else {
-                MeeshyStateBlock(
-                    kind: .empty,
-                    title: String(localized: "profile.relation.links.empty", defaultValue: "Pas encore de lien", bundle: .module),
-                    primary: MeeshyStateBlockAction(title: RelationFace.vitrine.title, systemImage: "person.crop.square") {
-                        onShowVitrine()
-                    },
-                    tint: tint
-                )
+            Group {
+                if let link {
+                    ticket(link)
+                } else {
+                    MeeshyStateBlock(
+                        kind: .empty,
+                        title: String(localized: "profile.relation.links.empty", defaultValue: "Pas encore de lien", bundle: .module),
+                        primary: MeeshyStateBlockAction(title: RelationFace.vitrine.title, systemImage: "person.crop.square") {
+                            onShowVitrine()
+                        },
+                        tint: tint
+                    )
+                }
             }
-            if !addresses.isEmpty || !lockedAddresses.isEmpty { addressesSection }
+            .meeshyCascade(rank: 0)
+            if !addresses.isEmpty || !lockedAddresses.isEmpty { addressesSection.meeshyCascade(rank: 1) }
             if !communities.isEmpty {
                 RelationOpenCommunitiesSection(communities: communities, tint: tint, join: joinCommunity,
                                                onOpen: communityOpening)
+                    .meeshyCascade(rank: 2)
             }
         }
+        .meeshyCascadeFace()
         .padding(.horizontal, MeeshySpacing.xl)
         .confirmationDialog(RelationLinksCopy.leaveTitle, isPresented: isLeaving, titleVisibility: .visible,
                             presenting: leaving) { address in

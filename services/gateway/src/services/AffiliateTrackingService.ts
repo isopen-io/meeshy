@@ -4,6 +4,7 @@ import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { EngagementService } from './engagement/EngagementService.js';
 import { recordFriendship } from './relations/userRelationWriter.js';
 import { isBlockedBetween } from '../utils/blocking.js';
+import type { AffiliateReferralJoined } from './affiliate-referral-announce';
 
 const logger = enhancedLogger.child({ module: 'AffiliateTrackingService' });
 
@@ -80,7 +81,13 @@ export class AffiliateTrackingService {
   /**
    * Convertit une visite en inscription (appelé lors de l'inscription)
    */
-  static async convertAffiliateVisit(prisma: any, token: string, userId: string, sessionKey?: string) {
+  static async convertAffiliateVisit(
+    prisma: any,
+    token: string,
+    userId: string,
+    sessionKey?: string,
+    onReferralJoined?: (joined: AffiliateReferralJoined) => void,
+  ) {
     try {
       // Trouver le token d'affiliation
       const affiliateToken = await prisma.affiliateToken.findUnique({
@@ -171,6 +178,13 @@ export class AffiliateTrackingService {
           completedAt: new Date()
         }
       });
+
+      // #19446 — le parrain voit son compte de filleuls bouger ; l'écho ne retient rien.
+      try {
+        onReferralJoined?.({ tokenId: affiliateToken.id, sponsorId: affiliateToken.createdBy });
+      } catch {
+        /* l'écho temps réel ne fait pas échouer la conversion */
+      }
 
       // Axe `social.invite_joined` (#5766) — le crédit va à celui qui a INVITÉ,
       // jamais à celui qui arrive : l'axe mesure « quelqu'un est venu par moi ».

@@ -28,6 +28,7 @@ import { broadcastReactionMutation } from '../socketio/broadcastReactionMutation
 import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility.js';
 import { historyReaderFromAuthContext } from '../services/historyFloor.js';
 import { ADMITTED_FILE_READER_WHERE } from '../services/attachments/fileReaderAdmission.js';
+import { PARTICIPATION_VIVANTE } from './conversations/utils/access-control.js';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import {
@@ -156,7 +157,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         });
         if (msg) {
           const participant = await prisma.participant.findFirst({
-            where: { userId, conversationId: msg.conversationId, isActive: true },
+            where: { userId, conversationId: msg.conversationId, ...PARTICIPATION_VIVANTE },
             select: { id: true },
           });
           participantId = participant?.id;
@@ -352,7 +353,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         });
         if (msg) {
           const participant = await prisma.participant.findFirst({
-            where: { userId, conversationId: msg.conversationId, isActive: true },
+            where: { userId, conversationId: msg.conversationId, ...PARTICIPATION_VIVANTE },
             select: { id: true },
           });
           removeParticipantId = participant?.id;
@@ -508,7 +509,15 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
           conversation: {
             include: {
               // #16561 — la LECTURE n'admet que des participations ADMISES, comme
-              // les deux ÉCRITURES de ce fichier (`isActive: true`, l. 158 et 354).
+              // les deux ÉCRITURES de ce fichier.
+              //
+              // #19525 — cette note citait la graphie `isActive: true` de ces deux
+              // écritures, PAR NUMÉROS DE LIGNE, et c'était deux dérives à la fois :
+              // les numéros vieillissent, et la graphie citée était le DÉFAUT —
+              // elle se relisait comme la référence du fichier. Les trois portes de
+              // ce fichier épellent désormais `PARTICIPATION_VIVANTE`, dont
+              // `ADMITTED_FILE_READER_WHERE` est l'alias prouvé.
+              //
               // Elle décidait sur la liste NON filtrée : quitter, être retiré,
               // être banni et la suppression pour soi posent tous
               // `isActive: false` et GARDENT la ligne, si bien qu'un membre banni
@@ -559,7 +568,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       let currentParticipantId = authRequest.authContext.participantId;
       if (!currentParticipantId && !isAnonymous && userId) {
         const participant = await prisma.participant.findFirst({
-          where: { userId, conversationId: message.conversationId, isActive: true },
+          where: { userId, conversationId: message.conversationId, ...PARTICIPATION_VIVANTE },
           select: { id: true },
         });
         currentParticipantId = participant?.id;

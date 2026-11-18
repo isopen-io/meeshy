@@ -49,9 +49,19 @@ const LENS_ROUTES: readonly DeclaredRouteReaders[] = [
   { method: 'POST', path: '/api/v1/packs/lens/:slug/restore' },
 ].map((route) => ({ ...route, readers: ['web'] as const, reason: LENS_WEB_ONLY }));
 
+const LIVE_ACTIVITY_TOKENS: DeclaredRouteReaders = {
+  method: 'POST',
+  path: '/api/v1/me/live-activity-tokens',
+  readers: ['ios'],
+  reason:
+    'Jetons d’Activité en direct (#19463) : seul iOS en a. Android clôt sa notification en cours par la poussée de données ' +
+    '`location_share_ended`, et le web n’a rien qui survive à l’onglet fermé.',
+};
+
 export const ROUTE_READERS: readonly DeclaredRouteReaders[] = [
   ...WEB_CONSOLE_ROUTES.map((route) => ({ method: route.method, path: route.path, readers: ['web'] as const, reason: route.reason })),
   ...LENS_ROUTES,
+  LIVE_ACTIVITY_TOKENS,
 ];
 
 const keyOf = (route: ManifestRouteInput) => `${route.method} ${route.path}`;

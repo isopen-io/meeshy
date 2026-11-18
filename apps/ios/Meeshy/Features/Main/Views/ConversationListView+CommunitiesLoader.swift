@@ -25,6 +25,8 @@ final class MyCommunities: ObservableObject {
     static let liveStore: @MainActor () async -> GRDBCacheStore<String, APICommunity> = {
         await CacheCoordinator.shared.communities
     }
+    /// Le lecteur connecté, lu à chaque événement.
+    static let liveReaderId: @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" }
 
     nonisolated deinit {}
 
@@ -33,19 +35,44 @@ final class MyCommunities: ObservableObject {
     private let service: CommunityServiceProviding
     private let store: @MainActor () async -> GRDBCacheStore<String, APICommunity>
     private var liveUpdates: AnyCancellable?
+    private var liveMembers: AnyCancellable?
+    private let memberLane = OrderedEventLane()
+    private let currentUserId: @MainActor () -> String
 
     /// `communityUpdates` : `community:updated` (#18439) repeint la bande d'une
     /// communauté renommée ailleurs, comme l'écran des communautés.
     init(
         service: CommunityServiceProviding = CommunityService.shared,
         store: @escaping @MainActor () async -> GRDBCacheStore<String, APICommunity> = MyCommunities.liveStore,
-        communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live
+        communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live,
+        memberChanges: AnyPublisher<CommunityMemberChange, Never> = CommunityMemberChannel.live,
+        currentUserId: @escaping @MainActor () -> String = MyCommunities.liveReaderId
     ) {
         self.service = service
         self.store = store
+        self.currentUserId = currentUserId
         self.liveUpdates = communityUpdates
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.apply(event) }
+        self.liveMembers = memberChanges
+            .relay(through: memberLane) { [weak self] change in await self?.apply(change) }
+    }
+
+    /// `community:member-*` (#18767) : l'effectif se recopie ; le lecteur
+    /// sorti d'ailleurs (autre appareil, retrait) perd la communauté de la
+    /// bande, du cache et donc du partage ; entré d'ailleurs, la bande se relit.
+    func apply(_ change: CommunityMemberChange) async {
+        if let index = communities.firstIndex(where: { $0.id == change.communityId }),
+           let updated = communities[index].applying(change) {
+            communities[index] = updated
+        }
+        guard change.concerns(readerId: currentUserId()) else { return }
+        let held = communities.contains { $0.id == change.communityId }
+        switch (change.role, held) {
+        case (nil, true): await remove(communityId: change.communityId)
+        case (.some, false): await refresh()
+        default: return
+        }
     }
 
     func apply(_ event: CommunityUpdatedEvent) {

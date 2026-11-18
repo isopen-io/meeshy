@@ -64,15 +64,6 @@ final class UserActivityCardsTests: XCTestCase {
         ])
     }
 
-    func test_make_eachCard_keepsItsIconAndTint() {
-        let cards = UserActivityCards.make(stats: makeStats())
-
-        XCTAssertEqual(cards.map(\.icon), ["bubble.left.fill", "person.2.fill", "globe"])
-        XCTAssertEqual(cards.map(\.colorHex), [
-            MeeshyColors.brandPrimaryHex, MeeshyColors.indigo300Hex, MeeshyColors.indigo600Hex,
-        ])
-    }
-
     func test_make_cardIdentity_isItsKind_soAServedCountChangeKeepsTheCard() {
         let before = UserActivityCards.make(stats: nil)
         let after = UserActivityCards.make(stats: makeStats())
@@ -87,7 +78,7 @@ final class UserActivityCardsTests: XCTestCase {
 
         XCTAssertTrue(source.contains("\"user.stats.my_activity\""), "Le titre de l'écran devient « Mon activité ».")
         XCTAssertFalse(source.contains("\"user.stats.title\""), "Le titre « Statistiques » est parti.")
-        XCTAssertTrue(source.contains("UserActivityCards.make(stats: viewModel.stats)"), "Les cartes viennent de la valeur, jamais d'une liste recopiée.")
+        XCTAssertTrue(source.contains("ProfileActivityBand.figures(of: viewModel.stats"), "Les chiffres viennent des cartes de Mon activité, comme sur ma fiche, jamais d'une liste recopiée.")
     }
 
     func test_timelineHeader_doesNotRepeatTheScreenTitle_butSaysItsPeriod() throws {
@@ -158,80 +149,87 @@ final class UserActivityCardsTests: XCTestCase {
         XCTAssertTrue(source.contains("UserActivityRefreshLaw.needsTimelineFetch("), "La frise ne dépend plus du seul cache des compteurs.")
     }
 
-    // MARK: - Le nombre se lit sur sa carte
+    // MARK: - L'écran est fait du kit (#19635, loi 12)
 
-    func test_valueHex_conversationsInLightMode_takesTheDarkerIndigo_whileTheCardKeepsItsTint() {
-        let conversations = UserActivityCards.make(stats: makeStats())[1]
-
-        XCTAssertEqual(conversations.valueHex(isDark: false), MeeshyColors.indigo600Hex)
-        XCTAssertEqual(conversations.colorHex, MeeshyColors.indigo300Hex)
-        XCTAssertEqual(conversations.valueHex(isDark: true), MeeshyColors.indigo300Hex)
-    }
-
-    func test_valueHex_conversationsNumber_readsAtLeast4_5To1OnItsLightCard() {
-        let conversations = UserActivityCards.make(stats: makeStats())[1]
-        let card = Self.tinted(conversations.colorHex, opacity: 0.08, over: "FFFFFF")
-
-        XCTAssertGreaterThanOrEqual(Self.contrast(conversations.valueHex(isDark: false), card), 4.5)
-    }
-
-    func test_valueHex_translationsNumber_readsAtLeast4_5To1OnItsDarkCard() {
-        let translations = UserActivityCards.make(stats: makeStats())[2]
-        let card = Self.tinted(translations.colorHex, opacity: 0.15, over: "09090B")
-
-        XCTAssertGreaterThanOrEqual(Self.contrast(translations.valueHex(isDark: true), card), 4.5)
-    }
-
-    func test_statsScreen_paintsTheNumberWithItsInk_andTheProfileBand_leavesItToTheKit() throws {
-        XCTAssertTrue(try statsViewSource().contains("card.valueHex(isDark: theme.mode.isDark)"))
-        let band = try String(contentsOf: URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Profile/Views/ProfileActivityBand.swift"), encoding: .utf8)
-        XCTAssertTrue(band.contains("MeeshyFigureBand("), "la bande K34 peint le chiffre à l'encre du texte, jamais à la teinte")
-        XCTAssertFalse(band.contains("valueHex("), "aucune encre de carte recopiée sur la fiche")
-    }
-
-    // MARK: - L'erreur et la frise paraissent en fondu
-
-    func test_userStatsView_errorAndTimeline_appearThroughATransition() throws {
+    func test_userStatsView_drawsNoCardOnTheSpot_butTheKitFigureBandInAGroupCard() throws {
         let source = try statsViewSource()
 
-        XCTAssertTrue(source.contains("reduced: MeeshyMotion.reducedFade, value: viewModel.errorMessage)"))
-        XCTAssertTrue(source.contains("reduced: MeeshyMotion.reducedFade, value: viewModel.timeline.isEmpty)"))
-        XCTAssertTrue(source.contains("timelineChart\n                    .meeshyTransition(.opacity)"))
-    }
-
-    // MARK: - Contraste WCAG
-
-    private static func channels(_ hex: String) -> [Double] {
-        stride(from: 0, to: 6, by: 2).map { offset in
-            let start = hex.index(hex.startIndex, offsetBy: offset)
-            return Double(Int(hex[start..<hex.index(start, offsetBy: 2)], radix: 16) ?? 0) / 255
+        XCTAssertTrue(source.contains("MeeshyFigureBand("), "les trois compteurs sont la bande de chiffres K34")
+        XCTAssertTrue(source.contains("MeeshyGroupCard("), "la carte qui les porte est celle du kit K43")
+        for handDrawn in ["statCard(", "RoundedRectangle(", "surfaceGradient(", "valueHex("] {
+            XCTAssertFalse(source.contains(handDrawn), "\(handDrawn) redessinait une carte sur place")
         }
+        XCTAssertFalse(source.contains("import Charts"), "la frise est le graphique K50, jamais Swift Charts")
     }
 
-    private static func tinted(_ tint: String, opacity: Double, over background: String) -> String {
-        let pairs: [(Double, Double)] = Array(zip(channels(tint), channels(background)))
-        let blended: [String] = pairs.map { (front: Double, back: Double) -> String in
-            let mixed: Double = front * opacity + back * (1 - opacity)
-            return String(format: "%02X", Int((mixed * 255).rounded()))
-        }
-        return blended.joined()
+    func test_userStatsView_failure_isTheKitStateBlock_withRetry() throws {
+        let source = try statsViewSource()
+
+        XCTAssertTrue(source.contains("MeeshyStateBlock(kind: failure.isOffline ? .offline : .error"), "l'échec est le bloc d'état K38")
+        XCTAssertTrue(source.contains("ProfilePublicationsCopy.retry"), "une erreur a toujours « Réessayer » (loi 8)")
+        XCTAssertTrue(source.contains("await viewModel.retry()"), "« Réessayer » relance le chargement")
+        XCTAssertFalse(source.contains("errorBanner"), "plus de bandeau d'erreur sans sortie")
     }
 
-    private static func luminance(_ hex: String) -> Double {
-        let linear: [Double] = channels(hex).map { (channel: Double) -> Double in
-            if channel <= 0.03928 { return channel / 12.92 }
-            return pow((channel + 0.055) / 1.055, 2.4)
-        }
-        let red: Double = 0.2126 * linear[0]
-        let green: Double = 0.7152 * linear[1]
-        let blue: Double = 0.0722 * linear[2]
-        return red + green + blue
+    func test_retry_rereadsTheServer_whateverTheCacheSays() throws {
+        let source = try statsViewSource()
+
+        XCTAssertTrue(source.contains("await load(force: true)"))
+        XCTAssertTrue(source.contains("let fetchesStats = force || UserActivityRefreshLaw.needsStatsFetch("))
+        XCTAssertTrue(source.contains("let fetchesTimeline = force || UserActivityRefreshLaw.needsTimelineFetch("))
     }
 
-    private static func contrast(_ first: String, _ second: String) -> Double {
-        let (light, dark) = (max(luminance(first), luminance(second)), min(luminance(first), luminance(second)))
-        return (light + 0.05) / (dark + 0.05)
+    // MARK: - Le squelette ne tient que la place de ce qui manque (loi 8)
+
+    func test_figuresAreLoading_onlyWhileNothingIsServedAndTheLoadRuns() {
+        XCTAssertTrue(UserActivityScreenPlan.figuresAreLoading(hasStats: false, hasSettled: false))
+        XCTAssertFalse(UserActivityScreenPlan.figuresAreLoading(hasStats: true, hasSettled: false),
+                       "un cache non vide se peint : jamais de squelette par-dessus")
+        XCTAssertFalse(UserActivityScreenPlan.figuresAreLoading(hasStats: false, hasSettled: true),
+                       "le chargement fini, le tiret du kit dit l'absence — jamais trois zéros")
+    }
+
+    func test_timeline_isASeriesAsSoonAsADayIsServed_evenAfterAFailure() {
+        XCTAssertEqual(UserActivityScreenPlan.timeline(pointCount: 30, hasSettled: false, failed: false), .series)
+        XCTAssertEqual(UserActivityScreenPlan.timeline(pointCount: 30, hasSettled: true, failed: true), .series,
+                       "un échec ne retire pas la frise déjà affichée")
+    }
+
+    func test_timeline_withoutAnyDay_isASkeletonWhileLoading_thenItsEmptyPhrase_orHiddenBehindTheFailure() {
+        XCTAssertEqual(UserActivityScreenPlan.timeline(pointCount: 0, hasSettled: false, failed: false), .skeleton)
+        XCTAssertEqual(UserActivityScreenPlan.timeline(pointCount: 0, hasSettled: true, failed: false), .empty)
+        XCTAssertEqual(UserActivityScreenPlan.timeline(pointCount: 0, hasSettled: true, failed: true), .hidden,
+                       "le bloc d'échec dit déjà qu'elle manque")
+    }
+
+    func test_failure_isNilOnSuccess_andKeepsWhatIsShownOnFailure() {
+        XCTAssertNil(UserActivityScreenPlan.failure(failed: false, isOffline: true, hasContent: true))
+        let overContent = UserActivityScreenPlan.failure(failed: true, isOffline: false, hasContent: true)
+        XCTAssertEqual(overContent, UserActivityScreenPlan.Failure(isOffline: false, keepsContent: true))
+        let offline = UserActivityScreenPlan.failure(failed: true, isOffline: true, hasContent: false)
+        XCTAssertEqual(offline, UserActivityScreenPlan.Failure(isOffline: true, keepsContent: false))
+    }
+
+    func test_failureTitle_saysUnavailableWhenNothingIsShown_andNotUpdatedOverContent() {
+        let offlineEmpty = UserActivityScreenPlan.Failure(isOffline: true, keepsContent: false)
+        let failedEmpty = UserActivityScreenPlan.Failure(isOffline: false, keepsContent: false)
+        let overContent = UserActivityScreenPlan.Failure(isOffline: false, keepsContent: true)
+
+        XCTAssertEqual(UserStatsView.failureTitle(offlineEmpty), ProfileActivityBand.unavailableTitle(offline: true))
+        XCTAssertEqual(UserStatsView.failureTitle(failedEmpty), ProfileActivityBand.unavailableTitle(offline: false))
+        XCTAssertEqual(UserStatsView.failureTitle(overContent),
+                       Bundle.main.localizedString(forKey: "user.stats.refresh_failed", value: nil, table: nil))
+        XCTAssertNotEqual(UserStatsView.failureTitle(overContent), UserStatsView.failureTitle(failedEmpty),
+                          "ce qu'on lit reste : il n'est pas « indisponible »")
+    }
+
+    // MARK: - L'échec et la frise paraissent en fondu
+
+    func test_userStatsView_failureAndTimeline_appearThroughATransition() throws {
+        let source = try statsViewSource()
+
+        XCTAssertTrue(source.contains(".meeshyMotion(.rise, value: viewModel.failure)"))
+        XCTAssertTrue(source.contains(".meeshyMotion(.rise, value: viewModel.timeline.isEmpty)"))
+        XCTAssertTrue(source.contains("failureBlock(failure)\n                    .meeshyTransition(.move(edge: .top).combined(with: .opacity))"))
     }
 }

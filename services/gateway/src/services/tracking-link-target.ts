@@ -19,6 +19,16 @@ export class TrackingTargetCarriesEmailSecretError extends Error {
 export const TRACKING_TARGET_CARRIES_EMAIL_SECRET = 'TRACKING_TARGET_CARRIES_EMAIL_SECRET';
 
 /**
+ * La destination d'un lien vers un contenu Meeshy (`targetType` autre qu'`EXTERNAL`) ne se
+ * réécrit pas : l'application ouvre la cible déclarée, le web suit `originalUrl`, et les
+ * partages du contenu RÉUTILISENT ce lien. Un ancien lien sans cible déclarée est externe.
+ */
+export const TRACKING_TARGET_IMMUTABLE = 'TRACKING_TARGET_IMMUTABLE';
+
+export const hasImmutableTarget = (link: { readonly targetType?: string | null }): boolean =>
+  link.targetType != null && link.targetType !== 'EXTERNAL';
+
+/**
  * L'adresse que ce lien SERT (redirection, clic, résolution) : la
  * sérialisation WHATWG de sa cible — la forme jugée est la forme servie —, ou
  * `null` si elle ne se sert pas (secret d'e-mail, illisible, autre que http(s)).

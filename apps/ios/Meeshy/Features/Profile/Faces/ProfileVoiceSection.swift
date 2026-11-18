@@ -40,12 +40,18 @@ struct ProfileVoiceSection: View {
                 .padding(.vertical, MeeshySpacing.sm)
                 .padding(.horizontal, MeeshySpacing.md)
             }
+            if player.loadFailed {
+                MeeshyNote(ProfileVoiceCopy.loadFailed, kind: .warn)
+                    .meeshyTransition(.opacity)
+                    .accessibilityIdentifier("profile.voice.failed")
+            }
             if let editing {
                 editControls(editing)
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.voice")
+        .meeshyMotion(.rise, value: player.loadFailed)
         .onDisappear { player.stop() }
     }
 
@@ -56,7 +62,7 @@ struct ProfileVoiceSection: View {
 
     @ViewBuilder
     private func editControls(_ editing: ProfileVoiceEditing) -> some View {
-        MeeshyToggleRow(ProfileVoiceCopy.publicToggle, subtitle: ProfileVoiceCopy.publicToggleHint,
+        MeeshyToggleRow(ProfileVoiceCopy.publicToggle,
                         accessory: .toggle(isOn: editing.isPublic.wrappedValue), tint: Color(hex: accentColor),
                         action: { editing.isPublic.wrappedValue.toggle() })
             .accessibilityIdentifier("profile.voice.public")
@@ -66,13 +72,18 @@ struct ProfileVoiceSection: View {
     }
 
     /// Le glissement n'existe qu'une fois l'échantillon chargé.
+    private var loadedURL: String? {
+        ProfileVoiceSample.loadedURL(currentUrl: player.currentUrl, hasPlayer: player.hasLoadedPlayer,
+                                     isLoading: player.isLoading)
+    }
+
     private var scrub: ((Double) -> Void)? {
-        guard sample.acceptsScrub(loadedURL: player.currentUrl) else { return nil }
+        guard player.hasLoadedPlayer, sample.acceptsScrub(loadedURL: loadedURL) else { return nil }
         return { fraction in player.seek(to: fraction) }
     }
 
     private func toggle() {
-        switch sample.toggle(loadedURL: player.currentUrl) {
+        switch sample.toggle(loadedURL: loadedURL) {
         case .start(let url): player.play(urlString: url)
         case .pauseOrResume: player.togglePlayPause()
         }
@@ -103,13 +114,14 @@ nonisolated enum ProfileVoiceCopy {
         String(localized: "profile.vitrine.voice.publicToggle", defaultValue: "Rendre mon échantillon public", bundle: .main)
     }
 
-    static var publicToggleHint: String {
-        String(localized: "profile.vitrine.voice.publicToggle.hint",
-               defaultValue: "Tout le monde peut l'écouter sur ta vitrine.", bundle: .main)
-    }
-
     static var rerecord: String {
         String(localized: "profile.vitrine.voice.rerecord", defaultValue: "Réenregistrer", bundle: .main)
+    }
+
+    /// Le chargement a échoué : le disque reste touchable et le relance.
+    static var loadFailed: String {
+        String(localized: "profile.vitrine.voice.failed",
+               defaultValue: "Impossible de charger ma voix. Touche le bouton pour réessayer.", bundle: .main)
     }
 
     static var record: String {

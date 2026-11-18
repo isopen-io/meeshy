@@ -35,7 +35,7 @@ enum ProfileEditImageCopy {
     }
 
     static var decorTileHint: String {
-        String(localized: "profile.edit.decor.hint", defaultValue: "Ouvre le choix du décor", bundle: .main)
+        String(localized: "profile.edit.decor.a11y", defaultValue: "Ouvre le choix du décor", bundle: .main)
     }
 
     static var myPacks: String {

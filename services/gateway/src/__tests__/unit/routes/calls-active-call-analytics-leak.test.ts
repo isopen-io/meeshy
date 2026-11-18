@@ -83,6 +83,7 @@ async function buildApp(activeCall: unknown): Promise<FastifyInstance> {
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue({ id: 'p1', userId: USER_ID, conversationId: CONV_ID }),
     },
+    conversation: { findUnique: jest.fn<any>().mockResolvedValue({ activeCallId: null }) },
   } as unknown);
 
   const { default: callRoutes } = await import('../../../routes/calls');

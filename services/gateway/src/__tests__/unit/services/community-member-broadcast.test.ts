@@ -21,7 +21,7 @@ const CREATOR = 'u-creator';
 const NOW = new Date('2026-11-15T23:50:00Z');
 
 type CommunityRow = { readonly id: string; readonly isActive: boolean; readonly createdBy: string; readonly name?: string };
-type MemberRow = { readonly communityId: string; readonly userId: string; readonly isActive: boolean; readonly email?: string; readonly isOnline?: boolean };
+type MemberRow = { readonly communityId: string; readonly userId: string; readonly isActive: boolean; readonly role?: string; readonly email?: string; readonly isOnline?: boolean };
 
 const community = (overrides: Partial<CommunityRow> = {}): CommunityRow => ({
   id: COMMUNITY, isActive: true, createdBy: CREATOR, name: 'ne part jamais', ...overrides,
@@ -74,6 +74,28 @@ describe('broadcastCommunityMemberChange', () => {
       event: SERVER_EVENTS.COMMUNITY_MEMBER_JOINED,
       payload: { communityId: COMMUNITY, userId: 'u-new', role: 'member', via: 'self', memberCount: 3, at: NOW.toISOString() },
     });
+  });
+
+  it("une entrée PAR LE LIEN : la porte ne part qu'à ceux qui animent ou modèrent, et à l'arrivant — un membre simple lit « self » (#19429)", async () => {
+    const { sent, deliver } = recorder();
+    await broadcastCommunityMemberChange(
+      deps(
+        [community()],
+        [member('u-a', { role: 'member' }), member('u-mod', { role: 'moderator' }), member('u-new', { role: 'member' }), member(CREATOR, { role: 'admin' })],
+        deliver,
+      ),
+      { kind: 'joined', communityId: COMMUNITY, userId: 'u-new', role: 'member', via: 'link' },
+    );
+
+    const viaOf = (userId: string) => {
+      const emission = sent.find((s) => s.userId === userId)?.emission;
+      return emission?.event === SERVER_EVENTS.COMMUNITY_MEMBER_JOINED ? emission.payload.via : undefined;
+    };
+    expect(viaOf('u-a')).toBe('self');
+    expect(viaOf('u-mod')).toBe('link');
+    expect(viaOf(CREATOR)).toBe('link');
+    expect(viaOf('u-new')).toBe('link');
+    expect(JSON.stringify(sent.filter((s) => s.userId === 'u-a'))).not.toContain('link');
   });
 
   it("un retrait atteint aussi la personne retirée, et jamais un ancien membre tiers ni le membre d'une autre communauté", async () => {

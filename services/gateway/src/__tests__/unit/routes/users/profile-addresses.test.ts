@@ -121,6 +121,7 @@ const prisma = () => ({
       return { count: before - rows.length };
     }),
   },
+  communityMember: { findMany: jest.fn<any>(async () => []) },
   trackingLink: {
     findMany: jest.fn<any>(async (a: any) => Object.keys(links)
       .filter((token) => tokenMatches(token, a.where)

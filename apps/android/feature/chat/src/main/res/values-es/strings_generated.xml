@@ -607,7 +607,6 @@
     <string name="recentMedia_resolveFailed_multiple">No se pudieron preparar %1$d archivos: usa toda la fototeca</string>
     <string name="report_message_details_header">Detalles (opcional)</string>
     <string name="report_message_details_placeholder">Describe el problema…</string>
-    <string name="report_message_sent">Denuncia enviada</string>
     <string name="report_message_submit">Enviar el informe</string>
     <string name="report_message_title">¿Por qué denuncias este mensaje?</string>
     <string name="report_reason_harassment">Acoso</string>

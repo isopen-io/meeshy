@@ -103,6 +103,49 @@ describe('la carte', () => {
   });
 });
 
+describe('le cercle d’où vient la personne (#17013)', () => {
+  test('le marqueur porte l’icône et la couleur du cercle SERVI, et le lecteur d’écran le dit', () => {
+    const html = render({ locations: [location({ circle: 'CLOSE' })] });
+    expect(html).toContain('data-shared-location-circle="CLOSE"');
+    expect(html).toContain('🔥');
+    expect(html).toContain('--kit-pin-tint:var(--color-warning)');
+    expect(html).toContain('aria-label="Ada Lovelace · Proche · à un quartier près · jusqu’à 11:30"');
+  });
+
+  test('trois cercles, trois marqueurs qui se distinguent à l’œil et à l’oreille', () => {
+    const html = render({
+      locations: [
+        location({ userId: 'u-a', circle: 'FRIEND' }),
+        location({ userId: 'u-b', circle: 'CLOSE', latitude: 48.851 }),
+        location({ userId: 'u-c', circle: 'BLOOD', latitude: 48.852 }),
+      ],
+    });
+    expect(html).toContain('🤝');
+    expect(html).toContain('🔥');
+    expect(html).toContain('🩸');
+    expect(html).toContain('--kit-pin-tint:var(--color-success)');
+    expect(html).toContain('--kit-pin-tint:var(--color-error)');
+    expect(html).toContain('Quelqu’un · Ami ·');
+    expect(html).toContain('Quelqu’un · Sang ·');
+  });
+
+  test('sans cercle servi (serveur antérieur), le marqueur reste neutre et ne devine rien', () => {
+    const html = render();
+    expect(html).not.toContain('data-shared-location-circle');
+    expect(html).not.toContain('--kit-pin-tint');
+    expect(html).toContain('aria-label="Ada Lovelace · à un quartier près · jusqu’à 11:30"');
+  });
+
+  test('la langue de l’interface nomme le cercle', () => {
+    expect(render({ language: 'en', locations: [location({ circle: 'BLOOD' })] })).toContain('Ada Lovelace · Blood ·');
+  });
+
+  test('la liste dit aussi le cercle', () => {
+    const html = render({ locations: [location({ circle: 'FRIEND' })] });
+    expect(html).toMatch(/data-shared-location-row="u-ada"[^>]*>Ada Lovelace · Ami · à un quartier près/);
+  });
+});
+
 describe('la liste alternative', () => {
   test('dit la même chose que les épingles, pour qui n’a pas la carte', () => {
     const html = render();

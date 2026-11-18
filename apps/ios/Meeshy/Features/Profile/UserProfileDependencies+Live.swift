@@ -13,8 +13,25 @@ extension UserProfileDependencies {
         inCommon: LiveProfileInCommonLoading(),
         acquaintance: LiveProfileAcquaintance(),
         pendingQueue: LiveProfilePendingQueue(),
-        reportMessages: LiveProfileReportMessages()
+        reportMessages: LiveProfileReportMessages(),
+        directUnread: LiveProfileDirectUnread()
     )
+}
+
+/// La pastille d'« Écrire » (#19646) : la liste des conversations telle que son cache la garde — fraîche ou périmée,
+/// jamais le réseau. Un cache expiré ou vide ne pose aucune pastille ; la liste la remettra à son prochain passage.
+@MainActor
+final class LiveProfileDirectUnread: ProfileDirectUnreadProviding {
+    nonisolated deinit {}
+
+    func cachedConversationList() async -> [MeeshyConversation] {
+        switch await CacheCoordinator.shared.conversations.load(for: "list") {
+        case .fresh(let list, _), .stale(let list, _):
+            return list
+        case .expired, .empty:
+            return []
+        }
+    }
 }
 
 /// « Joindre des messages » à un signalement (#19609) : nos messages communs viennent de la base locale des messages

@@ -80,7 +80,7 @@ const LIGNE_COMPLETE = {
 function buildPrisma() {
   // La question du blocage n'a pas de ligne : personne n'a bloqué personne.
   const findFirst = jest.fn<any>(async (args?: any) => (args?.where?.blockedUserIds ? null : LIGNE_COMPLETE));
-  return { profileAddress: { findMany: async () => [] }, user: { findFirst } };
+  return { profileAddress: { findMany: async () => [] }, communityMember: { findMany: async () => [] }, user: { findFirst } };
 }
 
 async function monter(prisma: unknown): Promise<FastifyInstance> {

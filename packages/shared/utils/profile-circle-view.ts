@@ -201,6 +201,15 @@ export const resolveProfileCircleView = (input: ProfileCircleViewInput): Profile
 };
 
 /**
+ * Le lecteur peut-il encore atteindre un cercle de cette personne ? Non vers une cible
+ * bloquée (dans un sens ou l'autre) ou désactivée : la vue fermée ne porte alors aucun
+ * accord. Soi-même : oui. Ce qui est réservé à un cercle plus proche ne se compte que
+ * pour un lecteur qui pourrait y entrer (#19274).
+ */
+export const profileCirclesReachable = (view: Pick<ProfileCircleView, 'isSelf' | 'grantedByViewer'>): boolean =>
+  view.isSelf || view.grantedByViewer !== undefined;
+
+/**
  * Un champ gardé part-il vers ce lecteur ? La réponse est la présence SERVIE
  * (`resolvePresenceVisibility`) : le pays avec « en ligne », le fuseau avec la
  * présence détaillée. Une cible qui cache sa présence, ou un compte désactivé,

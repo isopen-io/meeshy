@@ -7,6 +7,9 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../CacheStore';
+import { getPushNotificationService } from '../PushNotificationService';
+import { buildLocationShareEndedPush } from '../notifications/liveActivityApns';
+import { purgeSharedLocationLiveActivityTokens, sharedLocationEndPusherOf, type SharedLocationEndPush } from './sharedLocationLiveActivity';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import { sharedLocationNoticesOf } from './sharedLocationNotices';
 import type { SharedLocationRequestDeps } from './sharedLocationRequest';
@@ -38,12 +41,35 @@ export const noticesParams = (prisma: PrismaClient) => ({
   release: (key: string) => getCacheStore().del(key),
 });
 
+const endLogger = enhancedLogger.child({ module: 'SharedLocationEndPush' });
+
+/** Les deux poussées de fin (#19463), par le service de push du processus ; un échec est rendu, jamais levé. */
+const endPushOf = (prisma: PrismaClient): SharedLocationEndPush => ({
+  silent: async (readerId, data) => {
+    await getPushNotificationService(prisma).sendToUser(buildLocationShareEndedPush(readerId, data));
+  },
+  liveActivityEnd: async (target, state) => {
+    await getPushNotificationService(prisma).sendLiveActivityEnd(target, state);
+  },
+});
+
+/**
+ * Le câblage du relais : chaque fin servie part aussi hors de l'app (#19463), sans être
+ * attendue — la poussée ne retarde ni ne fait échouer l'arrêt ; sa panne est journalisée sans charge.
+ */
 export function sharedLocationRelayDepsOf(params: { readonly prisma: PrismaClient; readonly io: SharedLocationIo | undefined }): SharedLocationRelayDeps {
+  const now = (): number => Date.now();
   return {
     prisma: params.prisma,
     cache: lazyCache,
     io: params.io,
-    now: () => Date.now(),
+    now,
+    ended: sharedLocationEndPusherOf({
+      cache: lazyCache,
+      push: endPushOf(params.prisma),
+      now,
+      report: (error) => endLogger.warn('shared location end push failed', { error: error instanceof Error ? error.message : 'unknown' }),
+    }),
     notifyStarted: (notices) => sharedLocationNoticesOf(noticesParams(params.prisma)).started(notices),
     refreshBattery: (emitterId, readerIds) => refreshBatteryForReaders({ ...params, report: reportBattery }, emitterId, readerIds),
   };
@@ -95,12 +121,14 @@ export async function refreshSharedLocationAfter(
  * Un compte désactivé, supprimé ou purgé ne partage plus (#16987) : son partage s'arrête
  * et ceux qui le voyaient reçoivent la fin. Avec `forget` (la purge), ses clés sans durée
  * de vie partent aussi. À appeler APRÈS l'écriture du compte ; un échec n'arrête jamais le
- * geste, il est journalisé (le partage échoit de lui-même à son terme, au plus 8 h).
+ * geste, il est journalisé (le partage échoit de lui-même à son terme, au plus 8 h). La purge
+ * efface aussi les jetons d'Activité en direct que le compte tenait comme lecteur (#19463).
  */
 export async function endSharedLocationAfter(params: RefreshParams, accountId: string, options: { readonly forget: boolean }): Promise<void> {
   try {
     const ack = await endSharedLocationOfAccount(sharedLocationRelayDepsOf(params), accountId, options);
     if (!ack.success) params.report(new Error(`shared location of ${accountId} not ended`));
+    if (ack.success && options.forget) await purgeSharedLocationLiveActivityTokens(lazyCache, accountId);
   } catch (error) {
     params.report(error);
   }

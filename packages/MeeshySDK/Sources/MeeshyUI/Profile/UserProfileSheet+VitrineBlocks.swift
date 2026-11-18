@@ -19,7 +19,8 @@ extension UserProfileSheet {
         if showsRelationBlocks, !ProfileAcquaintanceSection.replacesWithThem(self) {
             ProfileWithThemCard(
                 name: displayUser.resolvedDisplayName, isOffline: ProfileTalkReach.isOffline(phase),
-                offersCall: offersCall, tint: accentTint, map: locationMap, mapRequest: vitrineMapRequest,
+                offersCall: offersCall, writeBadge: writeBadge, tint: accentTint, map: locationMap,
+                mapRequest: vitrineMapRequest,
                 onWrite: { openConversation() }, onCall: { requestCall(isVideo: $0) }, onSeeAll: { face = .actions }
             )
             .padding(.horizontal, MeeshySpacing.xl)
@@ -68,6 +69,8 @@ struct ProfileWithThemCard: View {
     let name: String
     let isOffline: Bool
     let offersCall: Bool
+    /// Les non-lus de notre conversation sur « Écrire » (#19646).
+    let writeBadge: ProfileWriteBadge
     let tint: Color
     let map: ProfileLocationMap?
     let mapRequest: ProfileLocationMapRequest?
@@ -85,10 +88,10 @@ struct ProfileWithThemCard: View {
             emblem: { EmptyView() },
             content: {
                 MeeshyActionGrid {
-                    action(.write, perform: onWrite)
+                    talk(.write, badge: writeBadge, perform: onWrite)
                     if offersCall {
-                        action(.call) { onCall(false) }
-                        action(.video) { onCall(true) }
+                        talk(.call) { onCall(false) }
+                        talk(.video) { onCall(true) }
                     }
                     if let map, let mapRequest, map.placement(for: mapRequest.userId) != .none {
                         ProfileLocationMapAction(map: map, request: mapRequest, tint: tint,
@@ -114,16 +117,9 @@ struct ProfileWithThemCard: View {
         }
     }
 
-    private func action(_ operation: ProfileRelationAction, perform: @escaping () -> Void) -> some View {
-        let reach = ProfileTalkReach.resolve(operation, isOffline: isOffline)
-        return MeeshyLabeledAction(
-            title: operation.title,
-            systemImage: operation.systemImage,
-            value: ProfileStatesCopy.reachMention(reach),
-            valueKind: reach == .queued ? .accent : .quiet,
-            tint: tint,
-            action: perform
-        )
-        .disabled(reach == .needsNetwork)
+    private func talk(_ operation: ProfileRelationAction, badge: ProfileWriteBadge = .empty,
+                      perform: @escaping () -> Void) -> some View {
+        ProfileTalkAction(operation: operation, reach: ProfileTalkReach.resolve(operation, isOffline: isOffline),
+                          badge: badge, tint: tint, action: perform)
     }
 }

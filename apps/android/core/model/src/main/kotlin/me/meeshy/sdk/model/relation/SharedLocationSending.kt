@@ -84,12 +84,20 @@ public data class SharedLocationRecipient(
         copy(expiresInSeconds = expiresInSeconds?.coerceIn(1, SharedLocationContract.RECIPIENT_DEADLINE_MAX_SECONDS))
 }
 
-/** La charge de `location:share-start`. Démarrer de nouveau REMPLACE le partage : la liste est toujours entière. */
+/**
+ * La charge de `location:share-start`. Démarrer de nouveau REMPLACE le partage : la liste est toujours entière. Sans
+ * [fix], c'est une LISTE SEULE (#19284, #19287, iso `SharedLocationStartRequest(listOnly:)` du SDK iOS) : la passerelle
+ * reprend le point qu'elle garde, scellé, avec son heure, et la liste ne fait que retirer — l'appareil qui retire
+ * quelqu'un n'envoie jamais sa position.
+ */
 public class SharedLocationStartRequest private constructor(
     public val recipients: List<SharedLocationRecipient>,
     public val duration: SharedLocationShareDuration,
-    public val fix: SharedLocationFix,
+    public val fix: SharedLocationFix?,
 ) {
+    /** Une liste seule ne porte aucune position. */
+    public val isListOnly: Boolean get() = fix == null
+
     /** Au moins une personne part avec sa propre échéance. */
     public val carriesDeadlines: Boolean get() = recipients.any { it.expiresInSeconds != null }
 
@@ -100,11 +108,11 @@ public class SharedLocationStartRequest private constructor(
     public fun withoutDeadlines(): SharedLocationStartRequest =
         SharedLocationStartRequest(recipients.map { it.copy(expiresInSeconds = null) }, duration, fix)
 
-    public fun wire(): Map<String, Any> = mapOf(
-        "recipients" to recipients.map { it.wire() },
-        "durationMinutes" to duration.minutes,
-        "position" to fix.wire(),
-    )
+    public fun wire(): Map<String, Any> = buildMap {
+        put("recipients", recipients.map { it.wire() })
+        put("durationMinutes", duration.minutes)
+        fix?.let { put("position", it.wire()) }
+    }
 
     public companion object {
         /** `SHARED_LOCATION_RECIPIENTS_MAX`. */
@@ -120,12 +128,19 @@ public class SharedLocationStartRequest private constructor(
             recipients: List<SharedLocationRecipient>,
             duration: SharedLocationShareDuration,
             fix: SharedLocationFix,
-        ): SharedLocationStartRequest? {
+        ): SharedLocationStartRequest? = ordered(recipients)?.let { SharedLocationStartRequest(it, duration, fix) }
+
+        /** La liste seule (#19287) : un retrait ou une échéance, sans position. `null` : comme [of]. */
+        public fun listOnly(
+            recipients: List<SharedLocationRecipient>,
+            duration: SharedLocationShareDuration,
+        ): SharedLocationStartRequest? = ordered(recipients)?.let { SharedLocationStartRequest(it, duration, null) }
+
+        private fun ordered(recipients: List<SharedLocationRecipient>): List<SharedLocationRecipient>? {
             val valid = recipients.filter { objectId.matches(it.userId) }
             val latest = valid.associateBy { it.userId.lowercase() }
             val ordered = valid.map { it.userId.lowercase() }.distinct().map { latest.getValue(it).copy(userId = it).bounded() }
-            if (ordered.isEmpty() || ordered.size > MAX_RECIPIENTS) return null
-            return SharedLocationStartRequest(ordered, duration, fix)
+            return ordered.takeUnless { it.isEmpty() || it.size > MAX_RECIPIENTS }
         }
     }
 }

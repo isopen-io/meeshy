@@ -607,7 +607,6 @@
     <string name="recentMedia_resolveFailed_multiple">%1$d médias n\'ont pas pu être préparés — passez par la photothèque complète</string>
     <string name="report_message_details_header">Détails (facultatif)</string>
     <string name="report_message_details_placeholder">Décrivez le problème…</string>
-    <string name="report_message_sent">Signalement envoyé</string>
     <string name="report_message_submit">Envoyer le signalement</string>
     <string name="report_message_title">Pourquoi signalez-vous ce message ?</string>
     <string name="report_reason_harassment">Harcèlement</string>

@@ -247,6 +247,13 @@
    ]
   },
   {
+   "status": "hors-perimetre-mobile",
+   "reason": "Jeton d'activité en direct d'Apple (Live Activity, #19463) : seul iOS en enregistre un ; Android suit le partage de position par sa notification en cours.",
+   "routes": [
+    "POST /api/v1/me/live-activity-tokens"
+   ]
+  },
+  {
    "status": "ops-only",
    "reason": "Sonde d'exploitation (santé, métriques) pour l'infrastructure, pas pour un écran.",
    "routes": [
@@ -406,7 +413,19 @@
     "POST /api/v1/invitations/email/opt-out",
     "POST /api/v1/me/contact-exchange",
     "POST /api/v1/relations/:userId/location/request",
-    "PUT /api/v1/me/location/ghost"
+    "PUT /api/v1/me/location/ghost",
+    "GET /api/v1/users/:id/highlights",
+    "GET /api/v1/users/me/highlights",
+    "POST /api/v1/users/me/highlights",
+    "PATCH /api/v1/users/me/highlights/:id",
+    "DELETE /api/v1/users/me/highlights/:id",
+    "PUT /api/v1/users/me/highlights/order",
+    "GET /api/v1/communities/:id/entries/stats",
+    "GET /api/v1/communities/:id/join-requests",
+    "POST /api/v1/communities/:id/join-requests/:requestId/accept",
+    "POST /api/v1/communities/:id/join-requests/:requestId/reject",
+    "GET /api/v1/me/location/ghost",
+    "GET /api/v1/me/location/blood-settings"
    ]
   },
   {

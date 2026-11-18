@@ -18,4 +18,14 @@
     <string name="profile_share_qr_cd">Código QR de %1$s</string>
     <string name="profile_share_via">Partilhar perfil via</string>
     <string name="profile_share_message">%1$s no Meeshy: %2$s</string>
+    <string name="profile_blocked_by_me">Você bloqueou este usuário</string>
+    <string name="profile_language_choose">Escolher</string>
+    <string name="profile_language_none">Nenhuma</string>
+    <string name="profile_loadFailed_message">Não foi possível carregar este perfil.</string>
+    <string name="profile_section_languages">IDIOMAS</string>
+    <string name="profile_share_copy">Copiar o link</string>
+    <string name="profile_toast_report_sent">Denúncia enviada</string>
+    <string name="profile_toast_report_failed">Não foi possível enviar a denúncia</string>
+    <string name="profile_stats_a11y_hint">Abre as estatísticas detalhadas</string>
+    <string name="profile_tab_details">Detalhes</string>
 </resources>
