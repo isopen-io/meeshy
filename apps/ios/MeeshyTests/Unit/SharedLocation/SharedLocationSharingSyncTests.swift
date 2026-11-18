@@ -503,3 +503,144 @@ final class SharedLocationAskCenterTests: XCTestCase {
         XCTAssertFalse(sut.hasAsked(alice))
     }
 }
+
+/// « Jusqu'à ce que j'arrête » (#19616, planche `Carte-Partage`) : un partage sans échéance, réservé au Sang, qui ne
+/// s'ouvre que si la passerelle l'annonce (`acceptsUntilStopped`). Sans elle, rien ne change.
+@MainActor
+final class SharedLocationUntilStoppedTests: XCTestCase {
+
+    private let alice = "aaaaaaaaaaaaaaaaaaaaaaaa"
+    private let bob = "bbbbbbbbbbbbbbbbbbbbbbbb"
+    private let me = "cccccccccccccccccccccccc"
+    private let t0 = Date(timeIntervalSince1970: 1_000_000)
+    private let month: TimeInterval = 30 * 24 * 3600
+
+    private func makeCenter(
+        emitter: FakeSharedLocationEmitter,
+        store: FakeSharedLocationRosterStore = FakeSharedLocationRosterStore(),
+        served: SharedLocationOwnSnapshot? = nil
+    ) -> SharedLocationSharingCenter {
+        let t0 = self.t0
+        let me = self.me
+        return SharedLocationSharingCenter(
+            emitter: emitter,
+            fixes: FakeSharedLocationFixSource(),
+            store: store,
+            now: { t0 },
+            owner: me,
+            currentAccount: { me },
+            wakes: FakeSharedLocationWakeScheduler(),
+            served: { served }
+        )
+    }
+
+    // MARK: - La liste
+
+    func test_roster_anOpenEndedPerson_neverExpires_andSetsNoDeadline() {
+        let roster = SharedLocationRoster.empty.adding(userId: alice, precision: .exact, term: .untilStopped, now: t0)
+
+        XCTAssertEqual(roster.pruned(now: t0.addingTimeInterval(month)).entry(for: alice)?.isOpenEnded, true)
+        XCTAssertNil(roster.nextDeadline)
+        XCTAssertTrue(roster.isOpenEnded)
+    }
+
+    func test_roster_aBoundedPersonBesideAnOpenEndedOne_leavesAtHerOwnDeadline() {
+        let roster = SharedLocationRoster.empty
+            .adding(userId: alice, precision: .exact, term: .untilStopped, now: t0)
+            .adding(userId: bob, precision: .city, duration: .oneHour, now: t0)
+
+        let sent = roster.deadlinedRecipients(now: t0)
+
+        XCTAssertNil(sent.first { $0.userId == alice }?.expiresInSeconds)
+        XCTAssertEqual(sent.first { $0.userId == bob }?.expiresInSeconds, 3600)
+        XCTAssertEqual(roster.nextDeadline, t0.addingTimeInterval(3600))
+    }
+
+    func test_roster_aPendingWithdrawalOfAnOpenEndedShare_isNeverDroppedAfterEightHours() {
+        let roster = SharedLocationRoster.empty
+            .adding(userId: alice, precision: .exact, term: .untilStopped, now: t0)
+            .withdrawing(userId: alice, now: t0)
+
+        XCTAssertTrue(roster.pruned(now: t0.addingTimeInterval(month)).isWithdrawalPending(for: alice))
+    }
+
+    func test_roster_anOpenEndedShare_survivesARelaunch() throws {
+        let roster = SharedLocationRoster.empty.adding(userId: alice, precision: .exact, term: .untilStopped, now: t0)
+
+        let restored = try JSONDecoder().decode(SharedLocationRoster.self, from: JSONEncoder().encode(roster))
+
+        XCTAssertEqual(restored.entry(for: alice)?.isOpenEnded, true)
+    }
+
+    func test_roster_theServedOpenEndedPerson_isAdopted() {
+        let served = SharedLocationOwnSnapshot(recipients: [
+            SharedLocationOwnRecipient(userId: alice, precision: .exact, expiresAt: SharedLocationShareTerm.openEndedDeadline),
+        ])
+
+        let next = SharedLocationRoster.empty.withServed(served, now: t0)
+
+        XCTAssertEqual(next.entry(for: alice)?.isOpenEnded, true)
+    }
+
+    // MARK: - Le centre
+
+    func test_share_untilStopped_isRefused_whileTheGatewayDoesNotAcceptIt() async {
+        let emitter = FakeSharedLocationEmitter()
+        let center = makeCenter(emitter: emitter, served: SharedLocationOwnSnapshot(recipients: []))
+        await center.sync()
+
+        let problem = await center.share(with: alice, precision: .exact, term: .untilStopped)
+
+        XCTAssertFalse(center.servesUntilStopped)
+        XCTAssertEqual(problem, .refused(.unavailable))
+        XCTAssertTrue(emitter.starts.isEmpty)
+        XCTAssertNil(center.entry(for: alice))
+    }
+
+    func test_share_untilStopped_sendsTheKey_andKeepsStopAtHand() async {
+        let emitter = FakeSharedLocationEmitter()
+        let center = makeCenter(emitter: emitter, served: SharedLocationOwnSnapshot(recipients: [], acceptsUntilStopped: true))
+        await center.sync()
+
+        let problem = await center.share(with: alice, precision: .exact, term: .untilStopped)
+
+        XCTAssertTrue(center.servesUntilStopped)
+        XCTAssertNil(problem)
+        XCTAssertEqual(emitter.starts.last?.untilStopped, true)
+        XCTAssertEqual(center.entry(for: alice)?.isOpenEnded, true)
+    }
+
+    func test_share_aBoundedDuration_neverSendsTheKey() async {
+        let emitter = FakeSharedLocationEmitter()
+        let center = makeCenter(emitter: emitter, served: SharedLocationOwnSnapshot(recipients: [], acceptsUntilStopped: true))
+        await center.sync()
+
+        _ = await center.share(with: alice, precision: .exact, duration: .oneHour)
+
+        XCTAssertEqual(emitter.starts.last?.untilStopped, false)
+    }
+
+    // MARK: - La tuile
+
+    func test_tile_opens_onlyWhenServed_andEveryChosenPersonIsBlood() {
+        XCTAssertTrue(ShareMyLocationTermRule.opensUntilStopped(served: true, circles: [.blood, .blood]))
+        XCTAssertFalse(ShareMyLocationTermRule.opensUntilStopped(served: false, circles: [.blood]))
+        XCTAssertFalse(ShareMyLocationTermRule.opensUntilStopped(served: true, circles: [.blood, .close]))
+        XCTAssertFalse(ShareMyLocationTermRule.opensUntilStopped(served: true, circles: [.blood, nil]))
+        XCTAssertFalse(ShareMyLocationTermRule.opensUntilStopped(served: true, circles: []))
+    }
+
+    func test_tile_aChosenOpenEndTheRuleNoLongerAllows_fallsBackToOneHour() {
+        let closed = ShareMyLocationTermRule.effective(.untilStopped, opens: false)
+        let open = ShareMyLocationTermRule.effective(.untilStopped, opens: true)
+
+        XCTAssertEqual(closed, .bounded(.oneHour))
+        XCTAssertEqual(open, .untilStopped)
+    }
+
+    func test_wording_anOpenEndedShare_saysUntilYouStop_neverAnHour() {
+        let said = ShareLocationWording.sharing(name: "Léo", precision: .city, until: SharedLocationShareTerm.openEndedDeadline)
+
+        XCTAssertEqual(said, ShareLocationWording.sharingUntilStopped(name: "Léo", precision: .city))
+    }
+}
