@@ -71,6 +71,40 @@ final class ActiveCallServiceTests: XCTestCase {
         }
     }
 
+    // MARK: - #19650 — la session d'UN appel, lue par son id (membre comme invité)
+
+    func test_callSession_hitsTheCallScopedEndpoint() async throws {
+        let (sut, api) = makeSUT()
+        api.stub("/calls/call-1", result: APIResponse<ActiveCallSession>(success: true, data: makeSession(), error: nil))
+
+        let result = try await sut.callSession(callId: "call-1")
+
+        XCTAssertEqual(api.lastRequest?.path, "/calls/call-1")
+        XCTAssertEqual(api.lastRequest?.method, "GET")
+        XCTAssertEqual(result?.id, "call-1")
+    }
+
+    func test_callSession_whenTheCallIsGone_returnsNil() async throws {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = APIError.serverError(404, "CALL_NOT_FOUND")
+
+        let result = try await sut.callSession(callId: "call-1")
+
+        XCTAssertNil(result)
+    }
+
+    func test_callSession_refused_propagatesTheError() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = APIError.serverError(403, "PERMISSION_DENIED")
+
+        do {
+            _ = try await sut.callSession(callId: "call-1")
+            XCTFail("Expected callSession to throw")
+        } catch {
+            XCTAssertTrue(error is APIError)
+        }
+    }
+
     // MARK: - #9111 — l'appel EN COURS de l'utilisateur, relu au lancement
 
     func test_ownActiveCall_hitsTheUserScopedEndpoint() async throws {
