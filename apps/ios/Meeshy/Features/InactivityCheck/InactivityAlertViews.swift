@@ -83,11 +83,6 @@ struct InactivityAlertDetailCard: View, Equatable {
     let state: InactivityAlertState
     let now: Date
     let isDark: Bool
-    let onOpenPosition: (URL) -> Void
-
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.state == rhs.state && lhs.now == rhs.now && lhs.isDark == rhs.isDark
-    }
 
     var body: some View {
         HStack(alignment: .top, spacing: MeeshySpacing.md) {
@@ -103,13 +98,12 @@ struct InactivityAlertDetailCard: View, Equatable {
                         .foregroundStyle(.secondary)
                 }
                 if let url = InactivityCheckWording.mapsURL(for: state) {
-                    Button { onOpenPosition(url) } label: {
+                    Link(destination: url) {
                         Label(InactivityCheckWording.lastPosition, systemImage: "map")
                             .font(.footnote.weight(.semibold))
                             .frame(minHeight: MeeshyControlSize.tapTarget, alignment: .leading)
                             .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
                     .foregroundStyle(MeeshyColors.error)
                     .accessibilityIdentifier("inactivity.detail.position")
                 }
@@ -130,14 +124,12 @@ struct InactivityAlertDetailSection: View {
     let userId: String
     @State private var state: InactivityAlertState?
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.openURL) private var openURL
 
     var body: some View {
         Group {
             if let state {
                 TimelineView(.periodic(from: .now, by: 60)) { context in
-                    InactivityAlertDetailCard(state: state, now: context.date, isDark: colorScheme == .dark,
-                                              onOpenPosition: { openURL($0) }).equatable()
+                    InactivityAlertDetailCard(state: state, now: context.date, isDark: colorScheme == .dark).equatable()
                 }
             }
         }
