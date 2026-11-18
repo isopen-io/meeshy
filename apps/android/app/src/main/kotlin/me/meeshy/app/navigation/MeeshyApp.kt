@@ -13,6 +13,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import android.net.Uri
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -200,7 +203,11 @@ fun MeeshyApp(
     CompositionLocalProvider(LocalAppNavigator provides navigator) {
     UpgradeGateHost(requirement = upgradeRequirement) {
     ShareLaunchHost(navController) {
-    ProvideViewerCallPill(callViewModel, navController, shown = CallPillPresenter.shouldShow(callStatus, onCallScreen)) {
+    // #19701 — l'appel réduit a deux pas, la capsule puis la vignette ; rouvrir l'appel rend la capsule.
+    var callVignette by rememberSaveable { mutableStateOf(false) }
+    val callReduced = CallPillPresenter.shouldShow(callStatus, onCallScreen)
+    LaunchedEffect(callReduced) { if (!callReduced) callVignette = false }
+    ProvideViewerCallPill(callViewModel, navController, shown = callReduced && !callVignette) {
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MeeshyTheme.tokens.backgroundPrimary,
@@ -210,7 +217,7 @@ fun MeeshyApp(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
         ) { padding ->
             Box(modifier = Modifier.fillMaxSize().rootPresentationContent().hiddenBehindOnboarding(onboardingCovers)) {
-                val showsCallPill = CallPillPresenter.shouldShow(callStatus, onCallScreen)
+                val showsCallPill = callReduced && !callVignette
                 val miniPlayerShown by rememberMiniPlayerShown()
                 // The minimised-call pill PUSHES the destination down instead of floating
                 // over it: pinned under the status bar, it would lie under the system status
@@ -218,7 +225,12 @@ fun MeeshyApp(
                 // pill takes the status-bar inset, so the destination below consumes it.
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
                     // A live, non-incoming call while off the CALL screen (#17767 : elle arrive et repart en mouvement).
-                    AnimatedMinimizedCallPill(visible = showsCallPill, callViewModel = callViewModel, navController = navController)
+                    AnimatedMinimizedCallPill(
+                        visible = showsCallPill,
+                        callViewModel = callViewModel,
+                        navController = navController,
+                        onCollapse = { callVignette = true },
+                    )
                     // Le mini-lecteur audio (iOS `MiniAudioPlayerBar`) se range SOUS la pastille d'appel et pousse la destination.
                     MediaTopBarSlot(navController, navigator, callPillShown = showsCallPill, screenCoversChrome = onCallScreen)
                     // Le bandeau « Validez votre compte » (#13854) se range SOUS la pastille d'appel et AU-DESSUS de
@@ -306,6 +318,9 @@ fun MeeshyApp(
 
         ArrivalCelebrationHost()
 
+        // #19701 — la vignette de l'appel réduit, au-dessus de la navigation, des bannières et des calques de l'app.
+        if (callReduced && callVignette) MinimizedCallVignette(callViewModel, navController)
+
         // Dernier calque du chrome, au-dessus de tout sauf du rideau de démarrage (iOS `.onboardingHost`).
         OnboardingHost(
             navController = navController,
@@ -351,6 +366,7 @@ internal fun MinimizedCallPill(
     callViewModel: CallViewModel,
     navController: NavHostController,
     modifier: Modifier = Modifier,
+    onCollapse: (() -> Unit)? = null,
     screenShare: CallScreenShareViewModel = hiltViewModel(),
     namesSource: CallHeaderNamesViewModel = hiltViewModel(),
 ) {
@@ -375,5 +391,6 @@ internal fun MinimizedCallPill(
         isScreenSharing = share.phase == CallScreenSharePhase.Sharing,
         onStopScreenShare = screenShare::stop,
         reduceMotion = FeedOverlayTransition.reduceMotion,
+        onCollapse = onCollapse,
     )
 }
