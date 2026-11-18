@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
@@ -74,7 +74,7 @@ describe('ce qu’un écran tient en mémoire ne survit pas au passage à un aut
   });
 
   test('l’application monte chaque écran sous cet arbre', () => {
-    const main = readFileSync(join(import.meta.dir, '../../main.tsx'), 'utf8');
+    const main = readFileSync(fileURLToPath(new URL('../../main.tsx', import.meta.url)), 'utf8');
     expect(main).toContain('<AccountScopedTree>{screen}</AccountScopedTree>');
   });
 });

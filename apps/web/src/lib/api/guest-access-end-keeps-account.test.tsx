@@ -2,7 +2,6 @@ import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
-import { endRevokedSession } from './account-end';
 import { endRefusedSession } from './client';
 import { endGuestAccess } from './guest-access-end';
 import { createSessionStore, heldAccountOf, type GuestIdentity, type SessionStorage, type SessionUser } from './session';

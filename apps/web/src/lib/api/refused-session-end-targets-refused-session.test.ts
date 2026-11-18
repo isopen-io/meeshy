@@ -48,7 +48,7 @@ describe('la fin chargée à la demande vise la session refusée, pas celle que 
 
     endRefusedSession(tab, { load: () => new Promise((resolve) => (resolveLoad = resolve)), storage });
     deviceSwitchesToBobAndTabFollows(storage, tab);
-    expect(tab.getState().session.status === 'authenticated' && tab.getState().session.user.id).toBe('u-bob');
+    expect(heldAccountOf(tab.getState().session)?.user.id).toBe('u-bob');
 
     resolveLoad({ endRevokedSession: (store) => endRevokedSession(store, quietDevice(storage, erased)) });
     await settle();
