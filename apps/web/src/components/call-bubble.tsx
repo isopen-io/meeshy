@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent, type RefObject, type WheelEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { PeerAvatar } from '@/components/peer-avatar';
@@ -11,15 +11,18 @@ import {
   bubbleSize,
   bubbleTranslate,
   fittingTier,
+  glideBubble,
   isBubbleTap,
   nudgeBubble,
   pinchTier,
   readBubblePlacement,
+  releaseVelocity,
   snapBubble,
   wheelTier,
   writeBubblePlacement,
   type BubblePlacement,
   type BubbleTier,
+  type PointerSample,
   type Point,
   type Size,
 } from '@/lib/calls/call-bubble';
@@ -93,6 +96,43 @@ function BubbleCaption({ call }: { readonly call: ActiveCall }) {
   );
 }
 
+/**
+ * #19701 — la vignette se tient dans la COUCHE SUPÉRIEURE du navigateur (popover manuel) : une feuille ouverte en
+ * modale (`showModal`, la visionneuse, les feuilles du kit) ne la recouvre plus. La couche supérieure empile dans
+ * l'ordre d'entrée : à chaque modale qui s'ouvre, la vignette y rentre de nouveau, par-dessus. Sans l'API, ou si le
+ * navigateur la refuse, elle reste à l'étage de l'appel (`CALL_LAYER_Z`), au-dessus de toute la page.
+ */
+function useTopLayer(ref: RefObject<HTMLDivElement | null>): void {
+  useEffect(() => {
+    const element = ref.current;
+    if (element === null || typeof element.showPopover !== 'function' || typeof MutationObserver === 'undefined') {
+      element?.removeAttribute('popover');
+      return;
+    }
+    const lift = () => {
+      try {
+        if (element.matches(':popover-open')) element.hidePopover();
+        element.showPopover();
+      } catch {
+        element.removeAttribute('popover');
+      }
+    };
+    lift();
+    const observer = new MutationObserver((records) => {
+      if (records.some((record) => record.target !== element && record.target instanceof HTMLDialogElement && record.target.open)) lift();
+    });
+    observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
+    return () => {
+      observer.disconnect();
+      try {
+        if (element.matches(':popover-open')) element.hidePopover();
+      } catch {
+        /* déjà hors du document */
+      }
+    };
+  }, [ref]);
+}
+
 export function CallBubble({ call, away = false }: { readonly call: ActiveCall; readonly away?: boolean }) {
   const language = currentInterfaceLanguage();
   const hintId = useId();
@@ -101,6 +141,9 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
   const [drag, setDrag] = useState<Point | null>(null);
   const [pinch, setPinch] = useState<number | null>(null);
   const start = useRef<Point | null>(null);
+  const trail = useRef<readonly PointerSample[]>([]);
+  const frame = useRef<HTMLDivElement | null>(null);
+  useTopLayer(frame);
   const dragged = useRef(false);
   const pointers = useRef<ReadonlyMap<number, Point>>(new Map());
   const pinchFrom = useRef(0);
@@ -129,6 +172,7 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
       return;
     }
     start.current = { x: event.clientX, y: event.clientY };
+    trail.current = [{ x: event.clientX, y: event.clientY, t: event.timeStamp }];
     dragged.current = false;
   };
   const onPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
@@ -139,6 +183,7 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
     }
     if (start.current === null) return;
     const moved = { x: event.clientX - start.current.x, y: event.clientY - start.current.y };
+    trail.current = [...trail.current.slice(-5), { x: event.clientX, y: event.clientY, t: event.timeStamp }];
     if (!dragged.current && isBubbleTap(moved)) return;
     dragged.current = true;
     setDrag(moved);
@@ -154,7 +199,10 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
     start.current = null;
     setDrag(null);
     if (moved === null || !dragged.current) return;
-    place({ ...placement, ...snapBubble({ x: origin.left + moved.x + size.width / 2, y: origin.top + moved.y + size.height / 2 }, viewport, INSETS, size) });
+    /* #19701 — l'élan du lâcher emporte la vignette, puis le bord le plus proche la reçoit, en glissant. */
+    const glided = glideBubble(moved, releaseVelocity(trail.current));
+    trail.current = [];
+    place({ ...placement, ...snapBubble({ x: origin.left + glided.x + size.width / 2, y: origin.top + glided.y + size.height / 2 }, viewport, INSETS, size) });
   };
   const onClick = () => {
     if (dragged.current) {
@@ -182,6 +230,8 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
       <div
         role="group"
         aria-label={`${call.title} · ${translate(language, 'call.bubble.ongoing')}`}
+        ref={frame}
+        popover="manual"
         className={`fixed z-[190] flex flex-col overflow-hidden rounded-card ${BUBBLE_GLASS.className}`}
         {...BUBBLE_GLASS.attributes}
         style={{
@@ -189,6 +239,11 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
           height: size.height,
           left: 0,
           top: 0,
+          right: 'auto',
+          bottom: 'auto',
+          margin: 0,
+          padding: 0,
+          border: 0,
           translate: bubbleTranslate({ origin, drag }),
           color: 'var(--color-on-media)',
           transform: pinch === null ? undefined : `scale(${Math.min(1.6, Math.max(0.6, pinch))})`,
