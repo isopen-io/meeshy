@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F02AA49C40D7A37CFD1C0420 /* ProfileSendContentSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A84F42D49A782FD39DF6000 /* ProfileSendContentSheet.swift */; };
+		20D6AB20517EC7F212075C55 /* ProfileSendContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4625A248B030BC53C997D44A /* ProfileSendContent.swift */; };
+		E54B25ADF178B956C0ACBE3D /* ProfileSendContentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F3C8F193F24D9363D86D95 /* ProfileSendContentTests.swift */; };
 		BCAA201C167B6EA457F80A6D /* ClosePeopleWidgetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40804A4386C2EFF00FD6D8C5 /* ClosePeopleWidgetTests.swift */; };
 		B6AA1AC3543AA31E0890B5C0 /* LocationShareActivityLawTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4BEB7C999E8F9991A59A23D /* LocationShareActivityLawTests.swift */; };
 		B98E24112617574854D27A03 /* TalkieShortcutIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D20233FFAE6362748F72981 /* TalkieShortcutIntent.swift */; };
@@ -4920,6 +4923,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		1A84F42D49A782FD39DF6000 /* ProfileSendContentSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSendContentSheet.swift; sourceTree = "<group>"; };
+		4625A248B030BC53C997D44A /* ProfileSendContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSendContent.swift; sourceTree = "<group>"; };
+		66F3C8F193F24D9363D86D95 /* ProfileSendContentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileSendContentTests.swift; sourceTree = "<group>"; };
 		00008A0920B7ACBE2AAB8727 /* CallMontageRiseAndFadeGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallMontageRiseAndFadeGuardTests.swift; sourceTree = "<group>"; };
 		000EBA9963DBF574F94AE01B /* ConversationAudioCoordinator+NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationAudioCoordinator+NowPlaying.swift"; sourceTree = "<group>"; };
 		0016995061E3B6CB76B0738A /* SessionTransitionPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTransitionPlan.swift; sourceTree = "<group>"; };
@@ -11127,6 +11133,7 @@
 				59C83C915F25F8B4D4A07AFE /* ProfileEditImageControlsTests.swift */,
 				9E268A5B93481672907A16BC /* ProfileFaceAccessoryTests.swift */,
 				C9C76CE592F158A2D3163F6A /* ProfileNoveltyTests.swift */,
+				66F3C8F193F24D9363D86D95 /* ProfileSendContentTests.swift */,
 				F2B9A4798341D9C4E5E1D5D7 /* ProfileOwnHeroTests.swift */,
 				6BF27F934E2CC2E8D4C3A836 /* ProfilePrismLanguagesTests.swift */,
 				20BCE3E070E7AFA7EDFAA998 /* TrackingLinkDetailMapTests.swift */,
@@ -12767,6 +12774,8 @@
 			isa = PBXGroup;
 			children = (
 				8B0B6EE10D0DCAE4EF2C1666 /* ProfileTogetherRow.swift */,
+				4625A248B030BC53C997D44A /* ProfileSendContent.swift */,
+				1A84F42D49A782FD39DF6000 /* ProfileSendContentSheet.swift */,
 				2C9A5E7A93601BBCC74B69D2 /* TogetherAVSurface.swift */,
 				33A482B626CC797D8137C869 /* TogetherCenter.swift */,
 				47FF922DD265F636E805A21B /* TogetherOverlay.swift */,
@@ -18533,6 +18542,8 @@
 				0B1FA8BA849D9C8E52EFEF98 /* ProfileShareLocationRow.swift in Sources */,
 				3466CAB25A056AA17A8B96BD /* ProfileTalkieRow.swift in Sources */,
 				6C41685EF32643DA1E60F054 /* ProfileTogetherRow.swift in Sources */,
+				20D6AB20517EC7F212075C55 /* ProfileSendContent.swift in Sources */,
+				F02AA49C40D7A37CFD1C0420 /* ProfileSendContentSheet.swift in Sources */,
 				021E07068F611F771F46AA7F /* ProfileUserPostsList.swift in Sources */,
 				89311C42A876466EE30024DF /* ProfileUserPostsViewModel.swift in Sources */,
 				E05A646A5A4D2F1444FDB364 /* ProfileView.swift in Sources */,
@@ -20678,6 +20689,7 @@
 				FF80719071CDBDC67D32A09B /* ProfileEditImageControlsTests.swift in Sources */,
 				AC3BBA8F9A969D7D212AF186 /* ProfileFaceAccessoryTests.swift in Sources */,
 				4F5B963BF1D5DCB03BBE4FB8 /* ProfileNoveltyTests.swift in Sources */,
+				E54B25ADF178B956C0ACBE3D /* ProfileSendContentTests.swift in Sources */,
 				55A5763537A37DB09F84AAA0 /* ProfileOwnHeroTests.swift in Sources */,
 				026E503E853DE693695B31B5 /* ProfilePrismLanguagesTests.swift in Sources */,
 				6E7D4F23DBCD02C2D776B78A /* ProfileUserPostsRealtimeSyncTests.swift in Sources */,
