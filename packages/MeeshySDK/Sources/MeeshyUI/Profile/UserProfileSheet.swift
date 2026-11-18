@@ -229,7 +229,7 @@ public struct UserProfileSheet: View {
                         .padding(.top, MeeshySpacing.lg)
                 }
 
-                faceContent
+                MeeshyRevealZone(isRevealed: phase != .skeleton) { faceContent } placeholder: { ProfileSkeletonFace() }
                     .padding(.top, MeeshySpacing.lg)
 
                 Color.clear.frame(height: showsFaceSelector ? MeeshySpacing.xxl * 3 : 40)
@@ -247,7 +247,7 @@ public struct UserProfileSheet: View {
         }
     }
 
-    /// La face lue — chacune dans son extension. Le squelette seulement sur cache vide (loi 8).
+    /// La face lue — chacune dans son extension. Le squelette seulement sur cache vide (loi 8), cédant par `motion.reveal`.
     @ViewBuilder
     var faceContent: some View {
         switch phase {

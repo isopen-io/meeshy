@@ -29,7 +29,7 @@ struct ProfileCirclesSection: View {
                          action: { onOpen(.invite) })
                 .accessibilityIdentifier("profile.circles.invite")
         }
-        .meeshyAnimation(MeeshyAnimation.springDefault, value: summary)
+        .meeshyMotion(.morph, value: summary)
     }
 
     /// L'accent de la fiche : l'échelle et l'encre des demandes.

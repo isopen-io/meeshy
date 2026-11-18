@@ -20,7 +20,8 @@ struct ProfileAcquaintanceSection: View {
     let onAskFriend: () -> Void
 
     @State private var isComposing = true
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
@@ -56,9 +57,15 @@ struct ProfileAcquaintanceSection: View {
         MeeshyToggleRow(ProfileAcquaintanceCopy.askTitle, systemImage: "bubble.left.fill",
                         subtitle: ProfileAcquaintanceCopy.askSubtitle,
                         accessory: isComposing ? .none : .chevron, tint: tint,
-                        action: { withAnimation(reduceMotion ? nil : MeeshyAnimation.springDefault) { isComposing.toggle() } })
+                        action: { toggleComposing() })
             .accessibilityValue(isComposing ? ProfileAcquaintanceCopy.opened : ProfileAcquaintanceCopy.closed)
             .accessibilityIdentifier("profile.acquaint.ask")
+    }
+
+    /// Le rédacteur paraît et part sous le ressort `morph` de K26, un fondu court sous réduction (#19528).
+    private func toggleComposing() {
+        let reduce = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+        meeshyWithMotion(.morph, reduceMotion: reduce) { isComposing.toggle() }
     }
 
     @ViewBuilder

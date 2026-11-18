@@ -33,7 +33,7 @@ struct ProfileCircleSection: View {
                 Color.clear.frame(height: 0)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: viewModel.shownLevel)
+        .meeshyMotion(.morph, value: viewModel.shownLevel)
         .task(id: viewModel.userId) { await viewModel.load() }
         .adaptiveOnChange(of: viewModel.claimsTheSlot, initial: true) { _, claims in linked = claims }
         .adaptiveOnChange(of: viewModel.notice) { _, new in

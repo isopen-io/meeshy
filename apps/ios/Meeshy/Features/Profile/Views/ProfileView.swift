@@ -277,20 +277,20 @@ struct ProfileView: View {
                 // user yet (first run, post-logout). Skip rendering the
                 // real banner/avatar/identity sections to avoid the
                 // chain of `?? ""` fallback strings flashing on screen.
-                if SkeletonVisibilityResolver.shouldShowSkeleton(
+                // Le squelette cède à la fiche par `motion.reveal` (K26, #19528) : même place, fondu croisé.
+                MeeshyRevealZone(isRevealed: !SkeletonVisibilityResolver.shouldShowSkeleton(
                     isLoading: true,
                     hasCachedData: user != nil
-                ) {
-                    SkeletonProfileHeader()
-                        .transition(.opacity)
-                } else {
+                )) {
                     faceContent
+                } placeholder: {
+                    SkeletonProfileHeader()
                 }
                 Spacer().frame(height: MeeshySpacing.xxxl + 8 + (showsFaceSelector ? Self.faceSelectorRoom : 0))
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.top, 0)
-            .meeshyAnimation(MeeshyAnimation.springDefault, value: face)
+            .meeshyMotion(.morph, value: face)
         }
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
@@ -711,12 +711,12 @@ struct ProfileView: View {
     /// Entrer en édition et en sortir font paraître et partir le nom, les sélecteurs d'image et les chevrons : la
     /// bascule passe par une transaction animée, immédiate sous « réduire les animations ».
     private func setEditing(_ editing: Bool) {
-        meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduceMotion) { isEditing = editing }
+        meeshyWithMotion(.morph, reduceMotion: reduceMotion) { isEditing = editing }
     }
 
     /// Le bandeau d'erreur paraît et part dans une transaction animée, immédiate sous « réduire les animations ».
     private func showError(_ message: String?) {
-        meeshyWithAnimation(MeeshyAnimation.springDefault, reduceMotion: reduceMotion) { errorMessage = message }
+        meeshyWithMotion(.morph, reduceMotion: reduceMotion) { errorMessage = message }
     }
 
     // MARK: - Actions

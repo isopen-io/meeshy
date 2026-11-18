@@ -95,7 +95,7 @@ struct ProfileEditOfflineBand: View {
                     .accessibilityIdentifier("profile.edit.offline")
             }
         }
-        .meeshyAnimation(MeeshyAnimation.springDefault, value: isOffline)
+        .meeshyMotion(.rise, value: isOffline)
         .onReceive(NetworkMonitor.shared.isOfflinePublisher.receive(on: DispatchQueue.main)) { isOffline = $0 }
     }
 }
