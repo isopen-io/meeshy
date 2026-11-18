@@ -8,11 +8,9 @@
     <string name="profile_state_nobody_message">Dieses Profil existiert nicht oder ist für dich nicht sichtbar.</string>
     <string name="profile_state_nobody_back">Zurück</string>
     <string name="profile_state_cached_message">Offline · zuletzt gespeichertes Profil</string>
-    <string name="profile_state_cached_detail">Du siehst die letzte auf diesem Telefon gespeicherte Version</string>
     <string name="profile_report_sheet_title">%1$s melden</string>
     <string name="profile_report_sheet_hint">Anonym. Unser Team liest es innerhalb von 24 Std.</string>
     <string name="profile_report_sheet_question">Was ist passiert?</string>
     <string name="profile_report_also_block">%1$s auch blockieren</string>
-    <string name="profile_report_also_block_hint">Die Person wird nicht benachrichtigt</string>
     <string name="profile_report_send">Melden</string>
 </resources>

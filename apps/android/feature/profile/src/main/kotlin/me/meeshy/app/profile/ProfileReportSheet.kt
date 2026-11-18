@@ -108,7 +108,6 @@ internal fun ProfileReportSheet(
             if (ProfileReportDraft.offersBlock(alreadyBlocked)) {
                 MeeshyToggleRow(
                     title = stringResource(R.string.profile_report_also_block, displayName),
-                    subtitle = stringResource(R.string.profile_report_also_block_hint),
                     accessory = MeeshyToggleRowAccessory.Toggle(isOn = draft.alsoBlock),
                     icon = MeeshyIcons.Block,
                     onClick = { draft = draft.toggleBlock() },

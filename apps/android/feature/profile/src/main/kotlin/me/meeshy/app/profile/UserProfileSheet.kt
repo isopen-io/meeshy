@@ -273,7 +273,6 @@ internal fun UserProfileSheetBody(
         if (state.content == ProfileSheetContent.Loaded && state.showsOfflineCapsule) {
             MeeshyStatusCapsule(
                 message = stringResource(R.string.profile_state_cached_message),
-                detail = stringResource(R.string.profile_state_cached_detail),
                 icon = MeeshyIcons.WifiOff,
                 kind = MeeshyStatusCapsuleKind.Info,
                 edge = MeeshyStatusCapsuleEdge.Top,

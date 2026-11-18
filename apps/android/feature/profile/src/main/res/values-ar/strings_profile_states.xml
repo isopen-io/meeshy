@@ -8,11 +8,9 @@
     <string name="profile_state_nobody_message">هذا الملف غير موجود أو غير ظاهر لك.</string>
     <string name="profile_state_nobody_back">رجوع</string>
     <string name="profile_state_cached_message">بلا اتصال · آخر ملف محفوظ</string>
-    <string name="profile_state_cached_detail">ترى آخر نسخة محفوظة على هذا الهاتف</string>
     <string name="profile_report_sheet_title">الإبلاغ عن %1$s</string>
     <string name="profile_report_sheet_hint">الإبلاغ مجهول. يقرؤه فريقنا خلال 24 ساعة.</string>
     <string name="profile_report_sheet_question">ماذا يحدث؟</string>
     <string name="profile_report_also_block">حظر %1$s أيضًا</string>
-    <string name="profile_report_also_block_hint">لن يتم إشعاره</string>
     <string name="profile_report_send">إبلاغ</string>
 </resources>

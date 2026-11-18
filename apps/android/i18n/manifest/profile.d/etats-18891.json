@@ -37,10 +37,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "profile_state_cached_detail",
-          "status": "android-only"
-        },
-        {
           "androidName": "profile_report_sheet_title",
           "status": "android-only"
         },
@@ -54,10 +50,6 @@
         },
         {
           "androidName": "profile_report_also_block",
-          "status": "android-only"
-        },
-        {
-          "androidName": "profile_report_also_block_hint",
           "status": "android-only"
         },
         {
