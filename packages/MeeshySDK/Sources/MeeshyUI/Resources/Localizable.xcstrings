@@ -93499,43 +93499,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كصديقين، تواصلا كل أسبوع، كلاكما، عدة أسابيع متتالية: عندها يمكنكما أن تقترحا أن تصبحا مقرّبين."
+            "value": "تواصلا كل أسبوع لعدة أسابيع متتالية، ثم اقترحا أن تصبحا مقرّبين."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Als Freunde tauscht ihr euch jede Woche aus, beide, mehrere Wochen am Stück: Dann könnt ihr einander vorschlagen, Vertraute zu werden."
+            "value": "Schreibt euch wochenlang jede Woche, dann schlagt vor, Vertraute zu werden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "As Friends, both of you keep in touch every week, several weeks in a row: then you can offer each other to become Close."
+            "value": "Talk every week, several weeks in a row, then offer to become Close."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Como Amigos, hablad cada semana, los dos, varias semanas seguidas: entonces podréis proponeros ser Cercanos."
+            "value": "Hablad cada semana, varias semanas seguidas, y luego proponed ser Cercanos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Entre Amis, échangez chaque semaine, tous les deux, plusieurs semaines d’affilée : vous pourrez alors vous proposer d’être Proches."
+            "value": "Échangez chaque semaine, des semaines d’affilée, puis proposez d’être Proches."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Da Amici, scrivetevi ogni settimana, entrambi, per più settimane di fila: potrete allora proporvi di diventare Intimi."
+            "value": "Scrivetevi ogni settimana per più settimane, poi proponete di essere Intimi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Como Amigos, conversem toda semana, os dois, várias semanas seguidas: aí vocês poderão se propor a ser Próximos."
+            "value": "Conversem toda semana, várias semanas seguidas, e proponham ser Próximos."
           }
         }
       }
@@ -93546,43 +93546,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كمقرّبين، واصلا التواصل كل أسبوع لعدة أشهر: يقترح أحدكما رابطة الدم ويقبلها الآخر."
+            "value": "تواصلا كل أسبوع لعدة أشهر: يقترح أحدكما رابطة الدم ويقبلها الآخر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Als Vertraute tauscht ihr euch monatelang jede Woche aus: Einer schlägt das Blutsband vor, der andere nimmt es an."
+            "value": "Schreibt monatelang jede Woche: einer schlägt das Blutsband vor, einer nimmt an."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "As Close friends, keep in touch every week for months: one of you offers the Blood bond, the other accepts it."
+            "value": "Talk every week for months: one offers the Blood bond, the other accepts."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Como Cercanos, seguid hablando cada semana durante meses: uno propone el lazo de Sangre y el otro lo acepta."
+            "value": "Hablad cada semana durante meses: uno propone la Sangre, el otro acepta."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Entre Proches, continuez d’échanger chaque semaine pendant des mois : l’un propose le lien de Sang, l’autre l’accepte."
+            "value": "Échangez chaque semaine des mois durant : l’un propose le Sang, l’autre accepte."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Da Intimi, continuate a scrivervi ogni settimana per mesi: uno propone il legame di Sangue, l’altro lo accetta."
+            "value": "Scrivetevi ogni settimana per mesi: uno propone il Sangue, l’altro accetta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Como Próximos, continuem conversando toda semana por meses: um propõe o laço de Sangue, o outro aceita."
+            "value": "Conversem toda semana por meses: um propõe o Sangue, o outro aceita."
           }
         }
       }
@@ -93728,7 +93728,7 @@
         }
       }
     },
-    "profile.listening.hint": {
+    "profile.listening.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
