@@ -1,7 +1,6 @@
 import SwiftUI
 import MapKit
 import CoreLocation
-import GameController
 import MeeshySDK
 import MeeshyUI
 
@@ -32,7 +31,6 @@ struct PersonLocationMapScreen: View {
     @State private var sharesMine = false
     @State private var showsHistory = false
     @State private var bloodHistoryOpen = false
-    @State private var hasKeyboard = GCKeyboard.coalesced != nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -68,11 +66,7 @@ struct PersonLocationMapScreen: View {
             }
         }
         .background { shortcuts }
-        .environment(\.meeshyHasKeyboard, hasKeyboard)
-        .onReceive(NotificationCenter.default.publisher(for: .GCKeyboardDidConnect)) { _ in hasKeyboard = true }
-        .onReceive(NotificationCenter.default.publisher(for: .GCKeyboardDidDisconnect)) { _ in
-            hasKeyboard = GCKeyboard.coalesced != nil
-        }
+        .meeshyHardwareKeyboardHost()
         .task { await appear() }
         .adaptiveOnChange(of: model.pins, initial: true) { _, pins in Task { await places.resolve(pins.filter { $0.id == userId }) } }
         .sheet(isPresented: $sharesMine) {
@@ -104,19 +98,14 @@ struct PersonLocationMapScreen: View {
 
     // MARK: - Le clavier (K55, planche iPad-Split)
 
-    /// ⌘M referme la carte (on revient à la fiche), ⌘↵ écrit : invisibles, mais reconnus quand un clavier est branché.
+    /// ⌘M referme la carte (on revient à la fiche) ; la légende le montre depuis la même valeur. ⌘↵ est porté par
+    /// « Écrire » de la feuille (K32), qui montre sa touche sous son libellé.
     private var shortcuts: some View {
-        ZStack {
-            Button(LocationMapCopy.close) { dismiss() }
-                .keyboardShortcut("m", modifiers: .command)
-            if let write = actions(for: pin)?.onWrite {
-                Button(LocationMapCopy.write, action: write)
-                    .keyboardShortcut(.return, modifiers: .command)
-            }
-        }
-        .opacity(0)
-        .frame(width: 0, height: 0)
-        .accessibilityHidden(true)
+        Button(LocationMapCopy.close) { dismiss() }
+            .meeshyKeyShortcut(ProfileKeyShortcuts.map)
+            .opacity(0)
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
     }
 
     /// En bas de la carte : la précision servie, puis les raccourcis (rien sans clavier).
@@ -142,9 +131,10 @@ struct PersonLocationMapScreen: View {
     }
 
     private var legendItems: [MeeshyKeyLegendItem] {
-        let map = MeeshyKeyLegendItem(id: "map", combos: [[.primary, .character("M")]], title: LocationMapCopy.mapShortcut)
+        let map = MeeshyKeyLegendItem(id: "map", combos: [ProfileKeyShortcuts.map], title: LocationMapCopy.mapShortcut)
         guard onWrite != nil, pin != nil else { return [map] }
-        return [map, MeeshyKeyLegendItem(id: "write", combos: [[.primary, .enter]], title: LocationMapCopy.write)]
+        return [map, MeeshyKeyLegendItem(id: "write", combos: [ProfileKeyShortcuts.write], title: LocationMapCopy.write,
+                                         startsGroup: true)]
     }
 
     @ViewBuilder
@@ -225,10 +215,6 @@ struct PersonLocationMapScreen: View {
         ScrollView {
             sheetContent.padding(.top, MeeshySpacing.xxl)
         }
-    }
-
-    private func actions(for pin: SharedLocationPin?) -> PersonLocationActions? {
-        pin.map { actions($0) }
     }
 
     private func actions(_ pin: SharedLocationPin) -> PersonLocationActions {

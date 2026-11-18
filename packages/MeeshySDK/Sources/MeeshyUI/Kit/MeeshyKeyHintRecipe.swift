@@ -160,8 +160,8 @@ public nonisolated struct MeeshyKeyHintRecipe: Sendable, Equatable {
 }
 
 /// **La loi de la légende** : un filet entre deux groupes seulement — jamais en
-/// tête ni en fin —, une paire ne se coupe jamais, et zéro entrée ne rend ni
-/// conteneur ni verre.
+/// tête ni en fin —, une paire ne se coupe jamais, et zéro entrée — ou aucun
+/// clavier — ne rend ni conteneur ni verre.
 public nonisolated enum MeeshyKeyLegendLaw {
     public static let pairSpacing: Double = 6
     public static let ruleWidth: Double = 1
@@ -185,8 +185,9 @@ public nonisolated enum MeeshyKeyLegendLaw {
         }
     }
 
-    public static func rendersContainer(itemCount: Int) -> Bool {
-        itemCount > 0
+    /// Sans clavier, la légende ne rend rien : ni barre, ni libellé privé de sa touche.
+    public static func rendersContainer(itemCount: Int, hasKeyboard: Bool) -> Bool {
+        hasKeyboard && itemCount > 0
     }
 }
 

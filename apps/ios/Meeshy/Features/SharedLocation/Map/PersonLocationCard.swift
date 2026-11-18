@@ -85,7 +85,8 @@ struct PersonLocationCard: View {
                                 value: distanceMeters.map { LocationMapCopy.distance($0, locale: locale) },
                                 kind: .active, tint: tint, action: actions.onDirections)
             if let onWrite = actions.onWrite {
-                MeeshyLabeledAction(title: LocationMapCopy.write, systemImage: "bubble.left", tint: tint, action: onWrite)
+                MeeshyLabeledAction(title: LocationMapCopy.write, systemImage: "bubble.left", tint: tint,
+                                    shortcut: ProfileKeyShortcuts.write, action: onWrite)
             }
             if let onCall = actions.onCall {
                 MeeshyLabeledAction(title: LocationMapCopy.call, systemImage: "phone", tint: tint, action: onCall)

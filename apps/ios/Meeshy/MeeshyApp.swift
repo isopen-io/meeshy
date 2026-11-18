@@ -198,6 +198,7 @@ struct MeeshyApp: App {
                 .environmentObject(AuthManager.shared)
                 .environmentObject(deepLinkRouter)
                 .meeshyMotionRoot()
+                .meeshyHardwareKeyboardHost()
                 .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
                 .meeshyThemeRoot(theme)
                 .modifier(ExternalEntryHandlers(dispatcher: LiveExternalEntryDispatcher(router: deepLinkRouter)))

@@ -17,6 +17,7 @@ struct ProfileWhereCard: View {
     @StateObject private var circle: ProfileCircleViewModel
     @ObservedObject private var sharing = SharedLocationSharingHolder.center()
     @State private var sharesMine = false
+    @Environment(\.meeshyHasKeyboard) private var hasKeyboard
 
     init(userId: String, displayName: String, openMap: @escaping () -> Void) {
         self.userId = userId
@@ -83,8 +84,7 @@ struct ProfileWhereCard: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(spoken)
                     MeeshyButtonPair {
-                        MeeshyButton(LocationMapCopy.openMap, systemImage: "map", kind: .accent, size: .s44, width: .fill,
-                                     tint: tint, action: openMap)
+                        openMapButton(tint: tint)
                     } secondary: {
                         MeeshyButton(LocationMapCopy.directions, systemImage: "location.north.fill", kind: .tinted,
                                      size: .s44, width: .fill, tint: tint,
@@ -100,6 +100,21 @@ struct ProfileWhereCard: View {
             },
             footer: { EmptyView() }
         )
+    }
+
+    /// « Voir sur la carte » montre sa touche ⌘M (K55) quand un clavier est branché sur iPad : la même valeur que la
+    /// frappe que la section « Où il est » reconnaît (#19515). Sans clavier, le bouton ne réserve aucune place.
+    @ViewBuilder
+    private func openMapButton(tint: Color) -> some View {
+        if hasKeyboard {
+            MeeshyButton(LocationMapCopy.openMap, systemImage: "map", kind: .accent, size: .s44, width: .fill,
+                         tint: tint, action: openMap) {
+                MeeshyKeyHint(keys: ProfileKeyShortcuts.map, context: .inset, surface: .onAccent)
+            }
+        } else {
+            MeeshyButton(LocationMapCopy.openMap, systemImage: "map", kind: .accent, size: .s44, width: .fill,
+                         tint: tint, action: openMap)
+        }
     }
 
     // MARK: - Ma position

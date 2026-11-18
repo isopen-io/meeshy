@@ -3,7 +3,8 @@ import SwiftUI
 // MARK: - « Carte » dans la grille « Parler » (#18872, loi 6)
 
 /// L'action « Carte » de la fiche d'un autre (K32) : elle ouvre en plein écran la carte que l'app fournit, la fiche y
-/// devenant la feuille basse. Elle tient sa propre présentation : la fiche ne porte que la requête.
+/// devenant la feuille basse. Elle tient sa propre présentation : la fiche ne porte que la requête. ⌘M y est donné une
+/// fois, et sa touche se montre sous le libellé sur iPad quand un clavier est branché (#19515).
 struct ProfileLocationMapAction: View {
     let map: ProfileLocationMap
     let request: ProfileLocationMapRequest
@@ -15,8 +16,8 @@ struct ProfileLocationMapAction: View {
 
     var body: some View {
         MeeshyLabeledAction(title: Self.title, systemImage: "map", value: value, valueKind: .quiet, tint: tint,
-                            action: { isOpen = true })
-            .keyboardShortcut("m", modifiers: .command)
+                            shortcut: ProfileKeyShortcuts.map, action: { isOpen = true })
+            .meeshyHardwareKeyboardHost()
             .fullScreenCover(isPresented: $isOpen) { map.destination(request) }
     }
 
@@ -74,11 +75,12 @@ struct ProfileWhereSection: View {
         }
         .background {
             Button(ProfileLocationMapAction.openTitle) { isOpen = true }
-                .keyboardShortcut("m", modifiers: .command)
+                .meeshyKeyShortcut(ProfileKeyShortcuts.map)
                 .opacity(0)
                 .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
         }
+        .meeshyHardwareKeyboardHost()
         .fullScreenCover(isPresented: $isOpen) { map.destination(request) }
     }
 
