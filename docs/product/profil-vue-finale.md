@@ -16,7 +16,7 @@
 1. **Un profil a trois faces.** Vitrine : qui je suis. Liens : ce qui amène vers moi. Actions : ce que je peux faire. Chacune se reconnaît à sa forme : la Vitrine est immersive (bannière vivante, couleur d'accent de la personne), les Liens sont des billets à encoches aux adresses en chasse fixe, les Actions sont des boutons ronds de verre libellés.
 2. **La page publique n'est pas une autre page.** C'est la Vitrine au cercle Public. « Voir comme » rend ma Vitrine telle que la voit chaque cercle (Public, Communauté, Connaissance, Ami, Proche, Sang).
 3. **La fiche d'un autre est le profil d'une relation.** Ce qu'elle montre et permet dépend du cercle commun, qui est le plus bas des deux niveaux accordés. La pilule de relation le dit ; « Notre cercle » montre ce qui manque pour monter.
-4. **Ce qui est fermé se voit, verrouillé.** Une capacité que mon cercle n'ouvre pas s'affiche en rangée fantôme avec le cercle qui l'ouvre. Elle ne porte jamais la donnée protégée, ni un champ voisin.
+4. **Ce qui est fermé ne se montre pas ; le chemin, si** (décision porteur du 2026-11-18, #19674, qui remplace « ce qui est fermé se voit, verrouillé »). Sur la fiche d'un autre, aucune rangée fantôme ni cadenas par outil : une seule carte « Pour aller plus loin » dit les cercles qu'il reste à gagner (Ami, Proche, Sang), ce qu'il faut pour atteindre chacun et, en quelques mots, ce qu'il ouvre. Elle ne porte jamais la donnée protégée, ni un champ voisin. « Voir comme » (ma propre Vitrine) et « Notre cercle » gardent leur détail par cercle.
 5. **Le sélecteur de faces est en bas, dans la zone du pouce.** Verre liquide sur iOS, barre tonale sur Android. Sur le web large, les trois faces de MA fiche sont trois colonnes ; pour la fiche d'un autre, voir #18845. Une feuille, un écran poussé, une carte plein écran et un état sans fiche n'ont pas de sélecteur.
 6. **La carte est une action, pas un onglet.** L'avatar se détache de la fiche et devient l'épingle ; la fiche devient une feuille basse.
 7. **Rien n'apparaît : tout vient de quelque part.** Chaque mouvement sort de la table K26, dure au plus 600 ms, n'anime que la transformation et l'opacité, et se réduit à un fondu sous « Réduire les animations ».
@@ -25,6 +25,7 @@
 10. **La présence obéit à sa loi, sans exception nouvelle** (`presence-visibility.ts`) : rien sous Ami, « en ligne » ou rien pour un Ami, détaillée dès Proche.
 11. **Aucune régression de feature.** Ce que la fiche actuelle sait faire se garde, rangé dans la face qui lui revient.
 12. **Tout est fait du kit.** Aucun composant ne se dessine sur place dans un écran.
+13. **La fiche d'un autre s'ouvre en plein écran, et le retour ramène d'où l'on vient** (décision porteur du 2026-11-18, #19674). Un seul chemin de présentation (`profileCover`) : le bouton de tête dit « Retour » (‹), et le glissement depuis le bord gauche suit le doigt, découvre l'écran d'origine et reste annulable jusqu'aux trois quarts.
 
 ## Le kit
 

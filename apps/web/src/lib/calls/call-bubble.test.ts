@@ -1,10 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
-  BUBBLE_BAR,
   BUBBLE_KEY,
   BUBBLE_TIERS,
-  bubbleBarRows,
   bubbleOrigin,
   bubbleSize,
   bubbleTranslate,
@@ -13,7 +11,6 @@ import {
   fittingTier,
   isBubbleTap,
   nudgeBubble,
-  offersOutputChoice,
   PILL_COLLAPSE_DISTANCE,
   pillSwipeOutcome,
   pinchTier,
@@ -112,7 +109,7 @@ describe('les tailles de la bulle (#8145)', () => {
   const SMALL_PHONE = { width: 320, height: 568 };
   const HEADER_AND_COMPOSER = { top: 64, bottom: 120 };
 
-  test('trois paliers, du plus petit au plus grand, la barre comprise', () => {
+  test('trois paliers, du plus petit au plus grand — la personne seule, sans barre (#19696)', () => {
     const [small, medium, large] = BUBBLE_TIERS.map((tier) => bubbleSize('video', tier));
     expect(BUBBLE_TIERS).toEqual(['small', 'medium', 'large']);
     expect(small!.width).toBeLessThan(medium!.width);
@@ -122,10 +119,9 @@ describe('les tailles de la bulle (#8145)', () => {
     expect(bubbleSize('video')).toEqual(small!);
   });
 
-  test('la barre passe à la ligne plutôt que de rogner une cible de 44', () => {
-    expect(bubbleBarRows(136, 3)).toBe(1);
-    expect(bubbleBarRows(136, 4)).toBe(2);
-    expect(bubbleSize('video', 'small', 4).height - bubbleSize('video', 'small', 3).height).toBe(BUBBLE_BAR);
+  test('#19696 — la bulle n’a plus de barre de commandes : sa hauteur est celle de son cadre', () => {
+    expect(bubbleSize('video', 'small')).toEqual({ width: 136, height: 180 });
+    expect(bubbleSize('portrait', 'small')).toEqual({ width: 136, height: 104 });
   });
 
   test('au pincement : écarter les doigts grandit, les rapprocher rapetisse, d’un palier par quart de zoom', () => {
@@ -157,7 +153,7 @@ describe('les tailles de la bulle (#8145)', () => {
     for (const viewport of [PHONE_SPACE, SMALL_PHONE]) {
       for (const tier of BUBBLE_TIERS) {
         for (const kind of ['video', 'portrait'] as const) {
-          const size = bubbleSize(kind, fittingTier(tier, viewport, HEADER_AND_COMPOSER, (candidate) => bubbleSize(kind, candidate, 4)), 4);
+          const size = bubbleSize(kind, fittingTier(tier, viewport, HEADER_AND_COMPOSER, (candidate) => bubbleSize(kind, candidate)));
           for (const fraction of [0, 1]) {
             for (const edge of ['left', 'right'] as const) {
               const origin = bubbleOrigin({ edge, fraction }, viewport, HEADER_AND_COMPOSER, size);
@@ -175,16 +171,8 @@ describe('les tailles de la bulle (#8145)', () => {
     const landscape = { width: 844, height: 420 };
     const sizeOf = (tier: 'small' | 'medium' | 'large') => bubbleSize('video', tier);
     expect(fittingTier('large', PHONE, INSETS, sizeOf)).toBe('large');
-    expect(fittingTier('large', landscape, { top: 64, bottom: 96 }, sizeOf)).toBe('small');
+    expect(fittingTier('large', landscape, { top: 64, bottom: 96 }, sizeOf)).toBe('medium');
     expect(fittingTier('medium', PHONE, INSETS, sizeOf)).toBe('medium');
-  });
-});
-
-describe('« Sortie audio » dans la bulle (#9097)', () => {
-  test('offert là où l’on choisit la sortie : setSinkId du navigateur, ou les routes de la coque', () => {
-    expect(offersOutputChoice({ shell: false, sinks: true })).toBe(true);
-    expect(offersOutputChoice({ shell: true, sinks: false })).toBe(true);
-    expect(offersOutputChoice({ shell: false, sinks: false })).toBe(false);
   });
 });
 
