@@ -245,6 +245,20 @@ describe('inviter — dès Proche, sur un média audio ou vidéo d\'une conversa
     expect(await inviter(m)).toEqual(REFUS);
   });
 
+  /**
+   * #19690 — la TROISIÈME colonne de départ, et le témoin existe parce que le
+   * correctif de ce lot rendait cette ligne atteignable. `delete-for-me` écrit
+   * `{ deletedForMe, isActive: false }` d'un seul geste : la ligne ci-dessous est
+   * la forme HÉRITÉE d'avant #17072, restée active. L'égalité nue la refusait par
+   * ACCIDENT ; `PARTICIPATION_VIVANTE` + `unsetOrNull('leftAt')` seuls
+   * l'admettraient, et une conversation que `core-list` cache à ce lecteur
+   * ressurgirait en invitation live.
+   */
+  it('refuse quand l\'invité a supprimé la conversation « pour lui », même resté actif', async () => {
+    const m = monde({ participants: [membre(HOTE), membre(PROCHE, CONV, { deletedForMe: new Date(T0 - 1) })] });
+    expect(await inviter(m)).toEqual(REFUS);
+  });
+
   it('refuse un compte désactivé', async () => {
     const m = monde();
     await m.world.users.updateMany({ where: { id: PROCHE }, data: { deactivatedAt: new Date(T0 - 1) } });

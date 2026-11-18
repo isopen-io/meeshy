@@ -19,7 +19,18 @@ export const ACTIVE_CALL_SELECT = {
   // `leftAt: null` NU sous-comptait : une égalité n'apparie pas une clé ABSENTE,
   // et les lignes d'avant l'écriture explicite de C5 n'en ont pas (#19690). La
   // loi de la participation vivante vit une seule fois, chez les appels.
-  _count: { select: { participants: { where: LIVE_CALL_PARTICIPATION } } },
+  //
+  // Les LIGNES plutôt qu'un `_count` filtré, et c'est une décision : `isSet`
+  // dans un `_count.select.<relation>.where` n'est attesté NULLE PART dans ce
+  // dépôt (les sept autres comptes filtrés portent des égalités simples), il n'y
+  // a pas de MongoDB dans la CI pour l'y mesurer, et son échec serait SILENCIEUX
+  // — `loadConversationListActivity` avale la lecture (`.catch(() => [])`), donc
+  // la pastille « appel en cours » disparaîtrait de TOUTE la page sans une ligne
+  // de journal. La forme ci-dessous est celle qu'emploie déjà `CallCleanupService`
+  // (`include: { participants: { where: { OR: […isSet] } } }`), et elle coûte au
+  // plus `CALL_MAX_PARTICIPANTS` identifiants par appel. Audit du cycle 180,
+  // constat I.
+  participants: { where: LIVE_CALL_PARTICIPATION, select: { id: true } },
 } as const;
 
 export interface ActiveCallRow {
@@ -27,7 +38,7 @@ export interface ActiveCallRow {
   readonly status: string;
   readonly startedAt: Date;
   readonly metadata?: unknown;
-  readonly _count?: { readonly participants?: number } | null;
+  readonly participants?: readonly { readonly id: string }[] | null;
 }
 
 /** `null` pour une session close — `Conversation.activeCallId` peut survivre un instant à sa fin. */
@@ -39,7 +50,7 @@ export function resolveActiveCall(row: ActiveCallRow | null | undefined): Conver
   return {
     id: row.id,
     kind: metadata.type === 'video' ? 'video' : 'audio',
-    participantCount: row._count?.participants ?? 0,
+    participantCount: row.participants?.length ?? 0,
     startedAt: row.startedAt.toISOString(),
   };
 }

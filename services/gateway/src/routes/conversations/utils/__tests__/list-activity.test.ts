@@ -19,7 +19,7 @@ const callRow = {
   status: 'active',
   startedAt: new Date('2026-09-23T11:55:00Z'),
   metadata: { type: 'video' },
-  _count: { participants: 3 },
+  participants: [{ id: 'cp-a' }, { id: 'cp-b' }, { id: 'cp-c' }],
 };
 
 const makePrisma = () => ({
@@ -94,8 +94,8 @@ describe('resolveActiveCall', () => {
 /**
  * #19690 — la pastille « N en appel » compte les participations VIVANTES, et une
  * participation vivante a DEUX formes en base : `leftAt` à `null`, ou `leftAt`
- * ABSENT (les lignes d'avant l'écriture explicite de l'audit C5). Le `where` du
- * `_count` portait `leftAt: null` NU, une égalité qui n'apparie pas une clé
+ * ABSENT (les lignes d'avant l'écriture explicite de l'audit C5). Le `where` de
+ * la relation portait `leftAt: null` NU, une égalité qui n'apparie pas une clé
  * absente : la seconde forme était sous-comptée.
  *
  * Le témoin ÉVALUE la clause contre des documents (`matchesMongoWhere`) au lieu
@@ -104,8 +104,7 @@ describe('resolveActiveCall', () => {
  */
 describe('le compte des participants d’un appel actif (#19690)', () => {
   const clause = () =>
-    (ACTIVE_CALL_SELECT as unknown as { _count: { select: { participants: { where: Record<string, unknown> } } } })
-      ._count.select.participants.where;
+    (ACTIVE_CALL_SELECT as unknown as { participants: { where: Record<string, unknown> } }).participants.where;
 
   it.each([
     ['la ligne nominale, sans clé leftAt', { id: 'cp-1' }],

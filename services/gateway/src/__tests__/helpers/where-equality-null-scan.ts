@@ -11,17 +11,30 @@
  *
  * ─── CE QUE CE BALAYAGE DISTINGUE, ET POURQUOI IL LE FAUT ────────────────────
  *
- * `{ champ: null }` dans un `data` est une ÉCRITURE légitime — c'est même la
- * moitié « discipline d'écriture » du remède. Seule la même forme dans un
- * `where` est une LECTURE qui rate la moitié de la population. Un `grep` ne peut
- * pas les séparer : il faut connaître la clé englobante, donc tenir une pile des
- * clés d'objet. `select`, `include` et `_count` portent eux aussi des `where`
- * imbriqués, et ceux-là comptent.
+ * **Écriture ou filtre.** `{ champ: null }` dans un `data` est une ÉCRITURE
+ * légitime — c'est même la moitié « discipline d'écriture » du remède. Seule la
+ * même forme dans un `where` est une LECTURE qui rate la moitié de la
+ * population. Un `grep` ne peut pas les séparer : il faut connaître la clé
+ * englobante, donc tenir une pile des cadres `{` ET `[`. `select`, `include` et
+ * `_count` portent eux aussi des `where` imbriqués, et ceux-là comptent.
  *
- * Il ne relève PAS un site dont le `where` englobant exprime l'absence à côté
- * (`{ champ: { isSet: false } }`, ce que rendent `unsetOrNull` et
- * `PARTICIPATION_VIVANTE`) : c'est la forme JUSTE, quelle que soit la façon de
- * l'obtenir — spread, `AND`, ou littéral écrit à la main.
+ * **Deux graphies de la même égalité.** `{ champ: null }` et
+ * `{ champ: { equals: null } }` sont le même filtre ; la seconde est vivante
+ * dans ce dépôt (`PostFeedService`, `ServerKeyVault`) et un balayage qui ne
+ * cherche que la première mesure une graphie, pas une propriété (règle du
+ * cycle 105).
+ *
+ * **SŒURS d'un même `OR`, et pas « quelque part dans le bloc ».** La forme JUSTE
+ * est une ALTERNATIVE : `OR: [{ champ: null }, { champ: { isSet: false } }]`.
+ * La première version de ce balayage cherchait `isSet: false` n'importe où dans
+ * le `where` englobant — elle BÉNISSAIT donc
+ * `AND: [{ champ: null }, { champ: { isSet: false } }]`, une conjonction
+ * impossible qui n'apparie AUCUN document : le défaut #19690 en pire, certifié
+ * correct par le cliquet censé l'interdire (audit adversarial du cycle 180,
+ * constat F). Et la phrase « se compose par `AND` quand le `where` porte déjà un
+ * `OR` » — vraie des PRÉDICATS COMPLETS — invite précisément cette faute quand
+ * on l'applique aux deux BRANCHES. L'absence n'est donc dite « à côté » que si
+ * elle l'est dans le MÊME tableau `OR`.
  */
 import { readFileSync } from 'fs';
 import { relative } from 'path';
@@ -31,8 +44,16 @@ export type EqualityNullSite = {
   readonly file: string;
   readonly line: number;
   readonly field: string;
-  /** `true` quand le `where` englobant dit l'absence à côté — la forme juste. */
-  readonly absenceSaidToo: boolean;
+  /** La graphie rencontrée — les deux disent la même égalité. */
+  readonly spelling: 'null' | 'equals';
+  /** `true` seulement si l'absence est dite dans le MÊME tableau `OR` — la forme juste. */
+  readonly absenceSaidInSameOr: boolean;
+};
+
+export type EqualityNullSweep = {
+  /** Les fichiers de production effectivement LUS — la non-vacuité de l'instrument. */
+  readonly filesScanned: number;
+  readonly sites: readonly EqualityNullSite[];
 };
 
 const withoutComments = (source: string): string =>
@@ -41,16 +62,16 @@ const withoutComments = (source: string): string =>
 /** Les clés d'objet sous lesquelles un `{ champ: null }` est une ÉCRITURE, jamais un filtre. */
 const PAYLOAD_KEYS = new Set(['data', 'create', 'update', 'set']);
 
-const enclosingKeyOf = (source: string, braceIndex: number): string => {
-  const before = source.slice(Math.max(0, braceIndex - 80), braceIndex);
-  return before.match(/([\w$]+)\s*:\s*$/)?.[1] ?? '';
-};
+type Frame = { readonly kind: '{' | '['; readonly key: string; readonly start: number };
 
-const blockEndOf = (source: string, start: number): number => {
+const keyBefore = (source: string, index: number): string =>
+  source.slice(Math.max(0, index - 80), index).match(/([\w$]+)\s*:\s*$/)?.[1] ?? '';
+
+const blockEndOf = (source: string, start: number, open: '{' | '[', close: '}' | ']'): number => {
   let depth = 0;
   for (let i = start; i < source.length; i += 1) {
-    if (source[i] === '{') depth += 1;
-    else if (source[i] === '}') {
+    if (source[i] === open) depth += 1;
+    else if (source[i] === close) {
       depth -= 1;
       if (depth === 0) return i;
     }
@@ -58,52 +79,76 @@ const blockEndOf = (source: string, start: number): number => {
   return source.length;
 };
 
-/** Les `{ champ: null }` POSÉS EN FILTRE dans un fichier, pour les champs demandés. */
+/**
+ * Le champ que ce `: null` filtre. `{ champ: null }` le porte juste avant ; la
+ * graphie `{ champ: { equals: null } }` le porte sur l'objet ENGLOBANT.
+ */
+const filteredField = (source: string, colonIndex: number, stack: readonly Frame[]): { field: string; spelling: 'null' | 'equals' } | null => {
+  const written = source.slice(Math.max(0, colonIndex - 60), colonIndex).match(/([\w$]+)\s*$/)?.[1];
+  if (!written) return null;
+  if (written !== 'equals' && written !== 'is') return { field: written, spelling: 'null' };
+  const holder = stack[stack.length - 1];
+  return holder && holder.kind === '{' && holder.key ? { field: holder.key, spelling: 'equals' } : null;
+};
+
+/** Les `{ champ: null }` et `{ champ: { equals: null } }` POSÉS EN FILTRE dans un fichier. */
 export function equalityNullFiltersIn(file: string, source: string, fields: ReadonlySet<string>): EqualityNullSite[] {
   const text = withoutComments(source);
-  const stack: Array<{ readonly key: string; readonly start: number }> = [];
+  const stack: Frame[] = [];
   const sites: EqualityNullSite[] = [];
 
   for (let i = 0; i < text.length; i += 1) {
     const char = text[i];
-    if (char === '{') {
-      stack.push({ key: enclosingKeyOf(text, i), start: i });
+    if (char === '{' || char === '[') {
+      stack.push({ kind: char, key: keyBefore(text, i), start: i });
       continue;
     }
-    if (char === '}') {
+    if (char === '}' || char === ']') {
       stack.pop();
       continue;
     }
     if (char !== ':' || !/^\s*null\b/.test(text.slice(i + 1))) continue;
 
-    const field = text.slice(Math.max(0, i - 60), i).match(/([\w$]+)\s*$/)?.[1];
-    if (!field || !fields.has(field)) continue;
+    const filtered = filteredField(text, i, stack);
+    if (!filtered || !fields.has(filtered.field)) continue;
 
-    let filter: { readonly key: string; readonly start: number } | null = null;
+    // Le cadre qui porte la clé littérale `where`, sans traverser une charge
+    // d'écriture : sinon `update({ where, data: { champ: null } })` serait un filtre.
+    let underWhere = false;
     for (let depth = stack.length - 1; depth >= 0; depth -= 1) {
-      const frame = stack[depth];
-      if (frame.key === 'where') {
-        filter = frame;
+      if (stack[depth].kind === '{' && stack[depth].key === 'where') {
+        underWhere = true;
         break;
       }
-      if (PAYLOAD_KEYS.has(frame.key)) break;
+      if (PAYLOAD_KEYS.has(stack[depth].key)) break;
     }
-    if (!filter) continue;
+    if (!underWhere) continue;
 
-    const block = text.slice(filter.start, blockEndOf(text, filter.start) + 1);
+    // L'absence n'est dite « à côté » que dans le MÊME tableau `OR` : le cadre
+    // objet qui porte l'occurrence doit être une BRANCHE de ce tableau.
+    const holderIndex = filtered.spelling === 'equals' ? stack.length - 2 : stack.length - 1;
+    const parent = holderIndex > 0 ? stack[holderIndex - 1] : undefined;
+    const orBranches = parent && parent.kind === '[' && parent.key === 'OR'
+      ? text.slice(parent.start, blockEndOf(text, parent.start, '[', ']') + 1)
+      : null;
+
     sites.push({
       file,
       line: text.slice(0, i).split('\n').length,
-      field,
-      absenceSaidToo: new RegExp(`${field}\\s*:\\s*\\{\\s*isSet\\s*:\\s*false`).test(block),
+      field: filtered.field,
+      spelling: filtered.spelling,
+      absenceSaidInSameOr: orBranches !== null
+        && new RegExp(`${filtered.field}\\s*:\\s*\\{\\s*isSet\\s*:\\s*false`).test(orBranches),
     });
   }
   return sites;
 }
 
 /** Le même balayage sur toutes les sources de PRODUCTION d'une racine. */
-export function sweepEqualityNullFilters(root: string, fields: ReadonlySet<string>): EqualityNullSite[] {
-  return walk(root)
-    .filter((file) => file.endsWith('.ts') && !file.includes('__tests__') && !file.endsWith('.test.ts'))
-    .flatMap((file) => equalityNullFiltersIn(relative(root, file), readFileSync(file, 'utf8'), fields));
+export function sweepEqualityNullFilters(root: string, fields: ReadonlySet<string>): EqualityNullSweep {
+  const files = walk(root).filter((file) => file.endsWith('.ts') && !file.includes('__tests__') && !file.endsWith('.test.ts'));
+  return {
+    filesScanned: files.length,
+    sites: files.flatMap((file) => equalityNullFiltersIn(relative(root, file), readFileSync(file, 'utf8'), fields)),
+  };
 }
