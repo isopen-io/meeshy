@@ -9,6 +9,7 @@ import { permissionsService } from '../../services/admin/permissions.service';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
+import { getCacheStore } from '../../services/CacheStore';
 import { profileFiguresOpen } from '../../services/relations/profileFigures';
 import { contentCountReaderFor } from '../../services/posts/authorContentCounts';
 import { publicProfileSchema, servirProfilPublic } from '../users/public-profile';
@@ -476,7 +477,7 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
           isAdministration: audience.estAdministration,
           seenAs: voirComme,
         });
-        const stats = await computeUserStats(fastify.prisma, cibleId, lecteurDesCompteurs);
+        const stats = await computeUserStats(fastify.prisma, cibleId, lecteurDesCompteurs, { cache: getCacheStore() });
         base.stats = servedUserStats(stats, audience);
       }
 

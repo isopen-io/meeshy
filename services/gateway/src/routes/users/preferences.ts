@@ -25,6 +25,8 @@ import { permissionsService } from '../../services/admin/permissions.service';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
+import { getCacheStore } from '../../services/CacheStore';
+import { isGuestViewer, sendAccountRequired, type GuestViewerContext } from '../../services/guests/guestMemberVisibility';
 import { profileFiguresOpen } from '../../services/relations/profileFigures';
 import { contentCountReaderFor } from '../../services/posts/authorContentCounts';
 import { keepDiscoverable } from '../../services/profile-discoverability';
@@ -410,6 +412,7 @@ export async function getUserStats(fastify: FastifyInstance) {
           }
         },
         401: errorResponseSchema,
+        403: errorResponseSchema,
         404: errorResponseSchema,
         500: errorResponseSchema
       }
@@ -419,6 +422,12 @@ export async function getUserStats(fastify: FastifyInstance) {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated) {
         return sendUnauthorized(reply, 'Authentication required');
+      }
+
+      // #10205 — un lecteur sans compte Meeshy ne lit AUCUN profil : son
+      // identifiant est celui d'un `Participant`, jamais d'un `User`.
+      if (isGuestViewer(authContext as GuestViewerContext)) {
+        return sendAccountRequired(reply, 'A Meeshy account is required to see a user profile');
       }
 
       const { userId: userIdOrUsername } = request.params;
@@ -484,7 +493,8 @@ export async function getUserStats(fastify: FastifyInstance) {
       const stats = await computeUserStats(
         fastify.prisma,
         user.id,
-        contentCountReaderFor({ subjectId: user.id, viewerId: acteur?.userId, isAdministration: audience.estAdministration })
+        contentCountReaderFor({ subjectId: user.id, viewerId: lecteurInscrit, isAdministration: audience.estAdministration }),
+        { cache: getCacheStore() }
       );
 
       reply.header('Cache-Control', 'private, max-age=300, stale-while-revalidate=3600');

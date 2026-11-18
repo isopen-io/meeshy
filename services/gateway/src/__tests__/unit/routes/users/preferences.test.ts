@@ -10,6 +10,9 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
+// Le `CacheStore` partagé n'est pas monté ici : chaque témoin relit l'audience (#19368).
+jest.mock('../../../../services/CacheStore', () => ({ getCacheStore: () => undefined }));
+
 jest.mock('../../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
     child: jest.fn(() => ({

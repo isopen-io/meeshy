@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendInternalError } from '../utils/response';
 import { countAuthorContent, type ContentCountReader } from '../services/posts/authorContentCounts';
+import type { CacheStore } from '../services/CacheStore';
 import { logError } from '../utils/logger.js';
 import { getBlockRelatedUserIds } from '../utils/blocking';
 
@@ -205,11 +206,15 @@ export async function computeUserAchievementStats(
 export async function computeUserStats(
   prisma: PrismaClient,
   userId: string,
-  lecteur: ContentCountReader = { kind: 'total' }
+  lecteur: ContentCountReader = { kind: 'total' },
+  options: { readonly cache?: CacheStore } = {}
 ): Promise<UserStats> {
+  // Le `CacheStore` du fil (#19368) : l'audience d'un lecteur inscrit (amis,
+  // contacts, co-membres, blocages, cercles) ne se recalcule pas à chaque
+  // ouverture de fiche.
   const [base, contenu]: [UserAchievementStats, UserContentCounts] = await Promise.all([
     computeUserAchievementStats(prisma, userId),
-    countAuthorContent(prisma, userId, lecteur),
+    countAuthorContent(prisma, userId, lecteur, new Date(), options.cache),
   ]);
 
   return { ...base, ...contenu };
