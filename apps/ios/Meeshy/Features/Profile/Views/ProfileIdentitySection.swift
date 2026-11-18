@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// « Identité » sur ma fiche : prénom, nom, pseudo, nom affiché, bio, ville. Au repos, la section lit ; en édition, les
+/// « Identité » sur ma fiche : prénom, nom, nom affiché, pseudo, bio, ville. Au repos, la section lit ; en édition, les
 /// champs s'ouvrent sur les brouillons que la fiche tient (et enregistre). Le pseudo ne s'édite pas ici. La ville
 /// (planche `Moi-Edition`, #19388) s'édite au champ du kit (K08) et dit le cercle qui la voit en puces (K04).
 struct ProfileIdentitySection: View {
@@ -29,9 +29,9 @@ struct ProfileIdentitySection: View {
                           placeholder: String(localized: "profile.first_name", bundle: .main))
                     field(title: String(localized: "profile.last_name", bundle: .main), value: $lastName,
                           placeholder: String(localized: "profile.last_name", bundle: .main))
-                    reading(title: String(localized: "profile.username", bundle: .main), value: "@\(username ?? "—")")
                     field(title: String(localized: "profile.display_name", bundle: .main), value: $displayName,
                           placeholder: String(localized: "profile.display_name", bundle: .main))
+                    usernameRow
                     field(title: String(localized: "profile.bio", bundle: .main), value: $bio,
                           placeholder: String(localized: "profile.bio.placeholder", bundle: .main), isMultiline: true)
                     ProfileCityField(isEditing: isEditing, city: $city, circle: $cityCircle, accentColor: accentColor)
@@ -57,9 +57,63 @@ struct ProfileIdentitySection: View {
         }
     }
 
+    /// Le pseudo, après le nom affiché (planche `Moi-Edition`, #19644). Au repos, il se lit ; en édition, il se voit
+    /// verrouillé — le cadenas du kit (K45) et « Ne se modifie pas ici » — et VoiceOver le dit non modifiable.
+    @ViewBuilder
+    private var usernameRow: some View {
+        if isEditing {
+            MeeshyToggleRowFace(
+                content: ProfileUsernameRow.editingContent(username: username),
+                leading: { MeeshyToggleRowNoSlot() },
+                titleAccessory: { MeeshyToggleRowNoSlot() },
+                trailing: { MeeshyMedallion(systemImage: ProfileUsernameRow.lockGlyph, kind: .neutral, size: .s36) }
+            )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(ProfileUsernameRow.editingAccessibilityLabel(username: username))
+            .accessibilityIdentifier("profile.username.locked")
+        } else {
+            reading(title: ProfileUsernameRow.title, value: ProfileUsernameRow.value(of: username))
+        }
+    }
+
     private func reading(title: String, value: String) -> some View {
         MeeshyToggleRowFace(content: MeeshyToggleRowContent(title: title, subtitle: value))
             .accessibilityElement(children: .combine)
+    }
+}
+
+/// Les mots du pseudo de ma fiche (#19644) : il ne s'édite pas ici, et la rangée le dit.
+nonisolated enum ProfileUsernameRow {
+    static let lockGlyph = "lock"
+
+    static var title: String {
+        String(localized: "profile.username", bundle: .main)
+    }
+
+    static var lockedNote: String {
+        String(localized: "profile.username.lockedNote", defaultValue: "Ne se modifie pas ici", bundle: .main)
+    }
+
+    static var lockedWord: String {
+        String(localized: "profile.username.locked", defaultValue: "Non modifiable", bundle: .main)
+    }
+
+    /// « @aissa », ou « — » sans pseudo servi.
+    static func value(of username: String?) -> String {
+        guard let trimmed = username?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return "—"
+        }
+        return "@\(trimmed)"
+    }
+
+    /// La valeur, puis la mention dessous, comme la planche.
+    static func editingContent(username: String?) -> MeeshyToggleRowContent {
+        MeeshyToggleRowContent(title: title, subtitle: "\(value(of: username))\n\(lockedNote)")
+    }
+
+    /// « Pseudo, @aissa, Non modifiable, Ne se modifie pas ici ».
+    static func editingAccessibilityLabel(username: String?) -> String {
+        [title, value(of: username), lockedWord, lockedNote].joined(separator: ", ")
     }
 }
 
