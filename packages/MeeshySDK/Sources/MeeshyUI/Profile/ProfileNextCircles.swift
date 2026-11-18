@@ -160,9 +160,9 @@ enum ProfileNextCirclesCopy {
     static func how(to level: RelationLevel, name: String) -> String {
         switch level {
         case .blood:
-            return String(localized: "profile.nextCircles.blood.how", defaultValue: "Restez Proches et échangez chaque semaine pendant des mois.", bundle: .module)
+            return String(localized: "profile.nextCircles.blood.how", defaultValue: "Échangez chaque semaine des mois durant : l’un propose le Sang, l’autre accepte.", bundle: .module)
         case .close:
-            return String(localized: "profile.nextCircles.close.how", defaultValue: "Échangez chaque semaine, tous les deux, quelques semaines d’affilée.", bundle: .module)
+            return String(localized: "profile.nextCircles.close.how", defaultValue: "Échangez chaque semaine, des semaines d’affilée, puis proposez d’être Proches.", bundle: .module)
         case .friend, .acquaintance, .community, .public:
             let format = String(localized: "profile.nextCircles.friend.how", defaultValue: "Envoie une demande d’ami à %@ : dès qu’elle est acceptée, vous êtes Amis.", bundle: .module)
             return String(format: format, name)
