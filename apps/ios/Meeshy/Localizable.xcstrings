@@ -345392,49 +345392,49 @@
         }
       }
     },
-    "sharedLocation.share.actionAccessibility": {
+    "sharedLocation.share.hint": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشاركة موقعي مع %@"
+            "value": "اختيار المدة والدقة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meinen Standort mit %@ teilen"
+            "value": "Dauer und Genauigkeit wählen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Share my location with %@"
+            "value": "Choose how long and how precisely"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compartir mi ubicación con %@"
+            "value": "Elegir la duración y la precisión"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Partager ma position avec %@"
+            "value": "Choisir la durée et la précision"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Condividi la mia posizione con %@"
+            "value": "Scegli la durata e la precisione"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compartilhar minha localização com %@"
+            "value": "Escolher a duração e a precisão"
           }
         }
       }
