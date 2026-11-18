@@ -2,7 +2,7 @@ import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
 import type { CallRecordingKind, CallRecordingLinkResult as LinkedRecording } from '@meeshy/shared/types/call-recording';
 
 import { uploadAttachments } from '@/lib/api/attachments';
-import { apiDeps } from '@/lib/api/deps';
+import { ownedApiDeps } from '@/lib/api/owned-deps';
 import { speechRecorderOptionsOf } from '@/lib/media/recording-codec';
 
 import type { CallRecorderHandle, CallRecorderStart, CallRecorderTarget, CallRecordingOutcome } from './call-recording';
@@ -49,6 +49,11 @@ export type AudioCapture = {
 
 export type CallRecordingLinkResult = 'linked' | 'bubble-missing' | 'failed';
 
+export type RecordingIo = {
+  readonly upload: (file: File, durationMs: number) => Promise<string | null>;
+  readonly link: (target: CallRecorderTarget, attachmentId: string) => Promise<CallRecordingLinkResult>;
+};
+
 export type CallRecorderDeps = {
   readonly calls: CallStoreApi;
   readonly createMixer: () => AudioMixer;
@@ -56,8 +61,11 @@ export type CallRecorderDeps = {
   /** Le mélange des voix et la piste composée, en un seul flux à capter. */
   readonly combine: (audio: MediaStream, video: MediaStreamTrack) => MediaStream;
   readonly createCapture: (stream: MediaStream, kind: CallRecordingKind) => AudioCapture;
-  readonly upload: (file: File, durationMs: number) => Promise<string | null>;
-  readonly link: (target: CallRecorderTarget, attachmentId: string) => Promise<CallRecordingLinkResult>;
+  /**
+   * Le dépôt et le rattachement, pris AU DÉPART de l'enregistrement (audit #19352, X1) : l'appel dure, et si un autre
+   * onglet fait passer l'appareil à un autre compte entre-temps, le fichier ne part jamais au nom de ce compte.
+   */
+  readonly io: () => RecordingIo;
   readonly now: () => number;
   readonly wait: (ms: number) => Promise<void>;
 };
@@ -116,10 +124,11 @@ export function createCallRecorder(deps: CallRecorderDeps): CallRecorderStart {
     const unsubscribe = deps.calls.subscribe(follow);
     const capture = deps.createCapture(compositor === null ? mixer.output : deps.combine(mixer.output, compositor.output), target.kind);
     const startedAt = deps.now();
+    const io = deps.io();
     capture.start();
 
     const attach = async (attachmentId: string, attempt: number): Promise<CallRecordingOutcome> => {
-      const result = await deps.link(target, attachmentId);
+      const result = await io.link(target, attachmentId);
       if (result === 'linked') return 'saved';
       if (result === 'failed' || attempt >= LINK_ATTEMPTS) return 'save-failed';
       await deps.wait(LINK_RETRY_MS);
@@ -134,7 +143,7 @@ export function createCallRecorder(deps: CallRecorderDeps): CallRecorderStart {
       });
       if (blob.size === 0) return 'empty';
       const file = new File([blob], `appel-${target.callId}.${extensionOf(blob.type)}`, { type: blob.type });
-      const attachmentId = await deps.upload(file, Math.max(0, deps.now() - startedAt));
+      const attachmentId = await io.upload(file, Math.max(0, deps.now() - startedAt));
       return attachmentId === null ? 'save-failed' : attach(attachmentId, 1);
     };
 
@@ -180,19 +189,24 @@ export function createBrowserCapture(stream: MediaStream, kind: CallRecordingKin
   };
 }
 
-async function uploadRecording(file: File, durationMs: number): Promise<string | null> {
-  const result = await uploadAttachments({ ...apiDeps, pending: [{ file, durationMs }] });
-  return result.ok ? (result.data.attachments[0]?.id ?? null) : null;
-}
-
-async function linkRecording(target: CallRecorderTarget, attachmentId: string): Promise<CallRecordingLinkResult> {
-  const result = await apiDeps.transport.request<LinkedRecording>({
-    method: 'POST',
-    path: callsEndpoints.byCallIdRecordingsByRecordingIdAttachment(target.callId, target.recordingId),
-    body: { attachmentId },
-  });
-  if (result.ok) return 'linked';
-  return result.code === 'CALL_BUBBLE_MISSING' ? 'bubble-missing' : 'failed';
+/** Le dépôt et le rattachement, liés au compte qui parle quand l'enregistrement commence. */
+function ownedRecordingIo(): RecordingIo {
+  const deps = ownedApiDeps();
+  return {
+    upload: async (file, durationMs) => {
+      const result = await uploadAttachments({ ...deps, pending: [{ file, durationMs }] });
+      return result.ok ? (result.data.attachments[0]?.id ?? null) : null;
+    },
+    link: async (target, attachmentId) => {
+      const result = await deps.transport.request<LinkedRecording>({
+        method: 'POST',
+        path: callsEndpoints.byCallIdRecordingsByRecordingIdAttachment(target.callId, target.recordingId),
+        body: { attachmentId },
+      });
+      if (result.ok) return 'linked';
+      return result.code === 'CALL_BUBBLE_MISSING' ? 'bubble-missing' : 'failed';
+    },
+  };
 }
 
 export const startBrowserCallRecorder: CallRecorderStart = createCallRecorder({
@@ -201,8 +215,7 @@ export const startBrowserCallRecorder: CallRecorderStart = createCallRecorder({
   createCompositor: createBrowserCompositor,
   combine: (audio, video) => new MediaStream([...audio.getAudioTracks(), video]),
   createCapture: createBrowserCapture,
-  upload: uploadRecording,
-  link: linkRecording,
+  io: ownedRecordingIo,
   now: () => Date.now(),
   wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 });

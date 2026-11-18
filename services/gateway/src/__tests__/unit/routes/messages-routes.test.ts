@@ -1962,7 +1962,7 @@ describe('POST /conversations/:id/messages/:messageId/consume', () => {
     prisma.message.findFirst.mockResolvedValue(null);
     const reply = makeReply();
     await getHandler_()(makeReqWithMsg(), reply);
-    expect(mockSendNotFound).toHaveBeenCalledWith(expect.anything(), 'Message not found');
+    expect(mockSendNotFound).toHaveBeenCalledWith(expect.anything(), 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
   });
 
   it('400 when message.isViewOnce is false', async () => {

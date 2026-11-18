@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { ApiResult } from '@/lib/api/http';
+import { IDENTITY_CHANGED, type ApiResult } from '@/lib/api/http';
 import type { SentMessageAck } from '@/lib/api/messages';
 import { fakeIndexedDb } from '@/lib/share-incoming/idb-double';
 
@@ -193,6 +193,31 @@ describe('un envoi appartient au compte qui l’a fait', () => {
     expect(storage.current()).toHaveLength(1);
     viewer.id = 'me';
     await queue.flush();
+    expect(log).toEqual(['send→c1:de moi:cid-1']);
+  });
+
+  test('le compte change pendant que les ports d’un envoi relu se chargent : l’envoi part quand son compte revient (audit #19352, X1)', async () => {
+    const viewer = { id: 'me' as string | null };
+    const log: string[] = [];
+    let switchDuringLoad = true;
+    /* Les ports d’un envoi parlent au nom du compte actif QUAND ils sont construits (`createSendSheetPorts`). */
+    const portsFor = async (): Promise<SendSheetPorts> => {
+      await settle();
+      if (switchDuringLoad) (switchDuringLoad = false), (viewer.id = 'other');
+      const owner = viewer.id;
+      const ports = fakePorts({ online: true }, log);
+      return {
+        ...ports,
+        sendMessage: async (p) => (viewer.id === owner ? ports.sendMessage(p) : { ok: false, status: 0, error: IDENTITY_CHANGED, code: IDENTITY_CHANGED }),
+      };
+    };
+    const storage = memorySendQueueStorage([{ ...jobOf(text('de moi'), [conversation('c1')]), id: 'j1', createdAt: 1 }] as never);
+    const queue = createSendQueue({ activeViewer: asViewer(viewer), storage, portsFor });
+
+    await queue.resume();
+    viewer.id = 'me';
+    await queue.flush();
+
     expect(log).toEqual(['send→c1:de moi:cid-1']);
   });
 

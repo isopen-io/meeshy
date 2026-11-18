@@ -203,9 +203,9 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         body.systemLanguage !== undefined ||
         body.regionalLanguage !== undefined ||
         body.customDestinationLanguage !== undefined;
-      const touchesCompletion = body.displayName !== undefined || body.bio !== undefined;
       const touchesAccent = body.profileAccentColor !== undefined;
-      const current = touchesName || touchesLanguage || touchesCompletion || touchesAccent
+      const touchesCompletion = body.displayName !== undefined || body.bio !== undefined;
+      const current = touchesName || touchesLanguage || touchesAccent || touchesCompletion
         ? await fastify.prisma.user.findUnique({
             where: { id: userId },
             select: { ...OWN_PROFILE_SELECT, bio: true, phoneNumber: true, email: true },
@@ -383,9 +383,9 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
       }
 
-      // #19201 — les PARTENAIRES voient l'accent par `user:updated` ; MES appareils
-      // l'ont déjà reçu par `profile:updated` plus haut, l'accent étant un champ
-      // de l'instantané.
+      // #19201 — les PARTENAIRES reçoivent l'accent par leur canal public. MES
+      // appareils le reçoivent par `profile:updated`, parti plus haut quand la
+      // ligne écrite change l'instantané (l'accent en est un champ).
       if (body.profileAccentColor !== undefined) {
         announceProfileAccentToPartners(fastify, userId!, servedProfileAccentColor(updatedUser.profileAccentColor));
       }

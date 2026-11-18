@@ -210,8 +210,15 @@ export function createSendQueue(params: {
     const viewer = params.activeViewer();
     if (viewer === null) return;
     const rows = [...stored.values()].filter((row) => row.viewerId === viewer && !live.has(row.id)).sort((a, b) => a.createdAt - b.createdAt);
-    await Promise.all(rows.map(async (row) => adopt(row, await params.portsFor(row.language))));
-    if (rows.length > 0) notify();
+    /* Les ports parlent au nom du compte actif à leur construction (audit #19352, X1) : construits pendant que
+       l'appareil changeait de compte, ils ne serviraient jamais cet envoi. Il attend le réveil où son compte revient. */
+    const adopted = await Promise.all(
+      rows.map(async (row) => {
+        const ports = await params.portsFor(row.language);
+        return params.activeViewer() === viewer && !live.has(row.id) ? adopt(row, ports) : null;
+      }),
+    );
+    if (adopted.some((queued) => queued !== null)) notify();
   };
 
   async function flush(): Promise<void> {

@@ -3,8 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createAccountCacheShelf } from '@/lib/api/account-caches';
 import { setDeviceFollower } from '@/lib/api/account-end';
 import { credentialFromSession } from '@/lib/api/client';
-import { createHttpTransport, type ApiResult } from '@/lib/api/http';
-import { boundToIdentity } from '@/lib/api/owned-deps';
+import { boundToIdentity, createHttpTransport, type ApiResult } from '@/lib/api/http';
 import { createSessionStore, sessionIdentityKey, type SessionStorage, type SessionUser } from '@/lib/api/session';
 import { followDeviceSession, watchDeviceSession } from '@/lib/api/session-follow';
 

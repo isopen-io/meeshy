@@ -189,7 +189,7 @@ export type HttpRequest = {
    * plusieurs requêtes (téléverser, puis envoyer, puis publier) ne se termine
    * jamais sous un autre compte : si l'identité courante n'est plus celle-ci
    * au moment d'ÉMETTRE, rien ne part et l'appel rend
-   * {@link IDENTITY_CHANGED}. Posée par `boundToIdentity` (`owned-deps.ts`).
+   * {@link IDENTITY_CHANGED}. Posée par {@link boundToIdentity}.
    */
   readonly expectedIdentity?: string | null;
 };
@@ -516,4 +516,14 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
   const transport = (({ method, path, body }) => request({ method, path, body })) as HttpTransport;
   transport.request = request;
   return transport;
+}
+
+/**
+ * UNE OPÉRATION EN PLUSIEURS REQUÊTES APPARTIENT À L'IDENTITÉ QUI L'A LANCÉE
+ * (audit #19352, X1) — chaque requête porte cette identité et n'est émise que
+ * si elle est encore la courante ; sinon l'appel rend {@link IDENTITY_CHANGED}.
+ */
+export function boundToIdentity(transport: HttpTransport, identity: string | null): HttpTransport {
+  const request = <T,>(req: HttpRequest): Promise<ApiResult<T>> => transport.request<T>({ ...req, expectedIdentity: identity });
+  return Object.assign(({ method, path, body }: HttpRequest) => request({ method, path, body }), { request }) as HttpTransport;
 }
