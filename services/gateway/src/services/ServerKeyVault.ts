@@ -2,6 +2,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import * as crypto from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { readMasterKey, ServerAtRestUnavailableError, type MasterKeyState } from './messaging/serverAtRest';
+import { unsetOrNull } from '../utils/prisma-unset';
 
 const logger = enhancedLogger.child({ module: 'EncryptionService' });
 
@@ -40,6 +41,31 @@ export type LoadedKey =
   | { readonly status: 'unavailable' };
 
 const MAX_DESIGNATION_CACHE = 2000;
+const MAX_CONVERSATION_KEY_CACHE = 2000;
+
+/**
+ * La clé de conversation sous laquelle le coffre peut encore SCELLER.
+ *
+ * `expiresAt` dit l'absence À CÔTÉ (#19755). Sous MongoDB `{ expiresAt: null }`
+ * — et sa jumelle `{ equals: null }` — est une ÉGALITÉ : elle n'apparie pas un
+ * document dont la clé est ABSENTE, et **aucun des deux créateurs de clés
+ * n'écrit la colonne** (`generateKey` ici, `AttachmentEncryptionService.generateKey`).
+ * L'absence est donc l'état de l'immense majorité des clés, et le filtre nu
+ * n'en retenait aucune : la carte `conversationId → keyId` partait vide à
+ * chaque démarrage, et le chemin rapide de `getOrCreateConversationKey` forgeait
+ * une clé neuve pour une conversation qui en avait déjà une.
+ *
+ * `isActive` reste une ÉGALITÉ, et c'est une décision : Prisma écrit son
+ * `@default(true)` à chaque création, donc la clé est toujours présente — et son
+ * absence éventuelle ÉCARTE la ligne, c'est-à-dire fait sceller sous une clé
+ * neuve plutôt que sous une clé qu'un chemin a éteinte (`deleteKey`). Le sens de
+ * l'erreur est celui qui ne réutilise jamais une clé retirée.
+ */
+const WRITABLE_CONVERSATION_KEY = {
+  purpose: 'conversation',
+  isActive: true,
+  ...unsetOrNull('expiresAt'),
+} as const;
 
 /**
  * Server Key Vault - Manages encryption keys with database persistence
@@ -79,38 +105,51 @@ export class ServerKeyVault {
   }
 
   /**
-   * Initialize vault - load existing keys from database
+   * Prépare le coffre. Il ne LIT rien : la carte `conversationId → keyId` est un
+   * cache read-through et BORNÉ (`conversationKeyId`), pas un index à charger.
+   *
+   * #19755 — ce démarrage balayait la table des clés de conversation pour les
+   * tenir TOUTES dans une `Map` sans borne ni éviction. Le filtre était faux
+   * (voir `WRITABLE_CONVERSATION_KEY`), donc le balayage ne chargeait rien et la
+   * rétention ne s'est jamais vue ; le réparer en place l'aurait rendue
+   * proportionnelle au nombre de conversations, et aurait fait du premier
+   * chiffrement un plein scan. Un cache dont le manque se remplit en UNE lecture
+   * n'a pas besoin d'être chargé d'avance.
    */
   async initialize(): Promise<void> {
-    logger.info('Initializing ServerKeyVault');
+    logger.info('ServerKeyVault ready', { cacheSize: this.keyCache.size });
+  }
 
-    try {
-      // Load conversation key mappings from database
-      const existingKeys = await this.prisma.serverEncryptionKey.findMany({
-        where: {
-          purpose: 'conversation',
-          expiresAt: { equals: null }, // Non-expired keys
-        },
-        select: {
-          id: true,
-          conversationId: true,
-        },
+  /**
+   * La clé sous laquelle cette conversation SCELLE, relue en base au premier
+   * besoin ; `undefined` quand elle n'en a aucune encore.
+   *
+   * La carte n'est pas une autorité de lecture — un chiffré voyage avec son
+   * `keyId` et s'ouvre par sa ligne (`loadKey`, `getKeyFor`) : elle évite de
+   * forger une clé de plus là où la base en porte déjà une. L'ordre
+   * (`createdAt` décroissant) est DÉTERMINISTE pour que deux instances
+   * s'accordent sur la même clé quand la prolifération d'avant #19755 en a
+   * laissé plusieurs.
+   */
+  async conversationKeyId(conversationId: string): Promise<string | undefined> {
+    const cached = this.conversationKeyMap.get(conversationId);
+    if (cached) return cached;
+
+    const rows = await this.prisma.serverEncryptionKey.findMany({
+      where: { conversationId, ...WRITABLE_CONVERSATION_KEY },
+      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+      take: 1,
+    }).catch((error: unknown) => {
+      logger.warn('lecture de la clé de conversation impossible pour le moment', {
+        conversationId, error: error instanceof Error ? error.message : 'unknown',
       });
+      return [] as { id: string }[];
+    });
 
-      for (const key of existingKeys) {
-        if (key.conversationId) {
-          this.conversationKeyMap.set(key.conversationId, key.id);
-        }
-      }
-
-      logger.info('ServerKeyVault initialized', {
-        conversationKeysLoaded: existingKeys.length,
-        cacheSize: this.keyCache.size
-      });
-    } catch (error) {
-      logger.error('Failed to initialize ServerKeyVault', error);
-      throw error;
-    }
+    const keyId = rows[0]?.id;
+    if (keyId) this.rememberConversationKey(conversationId, keyId);
+    return keyId;
   }
 
   /**
@@ -253,6 +292,19 @@ export class ServerKeyVault {
     return designated ?? nextKeyId;
   }
 
+  /**
+   * #19755 — la carte des clés de conversation est BORNÉE, comme celle des
+   * désignations : c'est un cache dont le manque coûte une lecture, et une
+   * passerelle qui sert 100 000 conversations n'a pas à les tenir toutes.
+   */
+  private rememberConversationKey(conversationId: string, keyId: string): void {
+    if (this.conversationKeyMap.size >= MAX_CONVERSATION_KEY_CACHE && !this.conversationKeyMap.has(conversationId)) {
+      const oldest = this.conversationKeyMap.keys().next().value;
+      if (oldest !== undefined) this.conversationKeyMap.delete(oldest);
+    }
+    this.conversationKeyMap.set(conversationId, keyId);
+  }
+
   private rememberDesignation(conversationId: string, keyId: string): void {
     if (this.designationCache.size >= MAX_DESIGNATION_CACHE) {
       const oldest = this.designationCache.keys().next().value;
@@ -281,7 +333,7 @@ export class ServerKeyVault {
         data: { conversationId, purpose: 'conversation' },
       });
       if (count === 0) return;
-      this.conversationKeyMap.set(conversationId, keyId);
+      this.rememberConversationKey(conversationId, keyId);
       const cached = this.keyCache.get(keyId);
       if (cached) cached.owner = conversationId;
       logger.info('clé de conversation d’avant le chiffrement au repos rattachée à sa conversation', { conversationId, keyId });
@@ -296,7 +348,7 @@ export class ServerKeyVault {
    * Set conversation to key mapping
    */
   async setConversationKey(conversationId: string, keyId: string): Promise<void> {
-    this.conversationKeyMap.set(conversationId, keyId);
+    this.rememberConversationKey(conversationId, keyId);
     const cached = this.keyCache.get(keyId);
     if (cached) cached.owner = conversationId;
 
