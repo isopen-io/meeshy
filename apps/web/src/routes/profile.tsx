@@ -29,7 +29,7 @@ import { needsServedPreview, UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
 import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
 import { useEntityImageEdit } from '@/lib/profile/use-entity-image-edit';
 import { appQueryClient } from '@/lib/api/query-client';
-import { sessionStore, type SessionUser } from '@/lib/api/session';
+import { heldAccountOf, sessionStore, type SessionUser } from '@/lib/api/session';
 import { statusMoodsQueryOptions } from '@/lib/api/stories';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { loadProfileDecorCatalog, translateProfileDecor } from '@/lib/i18n-profile-decor-catalog';
@@ -154,7 +154,19 @@ const prismOf = (profile: MyProfile | undefined, user: SessionUser | null): Pris
 const withoutKind = (pending: PendingImages, kind: ProfileImageKind): PendingImages =>
   kind === 'avatar' ? (pending.banner === undefined ? {} : { banner: pending.banner }) : pending.avatar === undefined ? {} : { avatar: pending.avatar };
 
+/**
+ * UN BROUILLON APPARTIENT AU COMPTE QUI L'ÉCRIT (audit #19352). L'onglet suit
+ * l'appareil quand un autre onglet change de compte (`session-follow.ts`) : le
+ * brouillon d'Ada resterait à l'écran sous Bob, et « Enregistrer » l'écrirait
+ * sur le profil de Bob. L'écran est REMONTÉ pour chaque compte, comme
+ * l'édition d'une publication (`publication-edit.tsx`).
+ */
 export default function ProfileScreen() {
+  const account = useStore(sessionStore, (state) => heldAccountOf(state.session)?.user.id ?? null);
+  return <ProfileScreenFor key={account ?? 'anonymous'} />;
+}
+
+function ProfileScreenFor() {
   const language = currentInterfaceLanguage();
   const online = useOnline();
   const sessionUser = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));

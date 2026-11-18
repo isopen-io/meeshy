@@ -48,7 +48,8 @@ export function guestAccessEndedPath(link: string, end: GuestAccessEnd): string 
 /**
  * Le geste UNIQUE, partagé par le transport REST et la socket. Il ne touche
  * qu'une session d'INVITÉ : sous un compte qui tenait cette identité anonyme
- * (#8816), `end` (`endRevokedSession`) oublie l'invité et rend le compte.
+ * (#8816), `end` oublie l'invité et rend le compte — AVANT la navigation, que
+ * la garde de portée suit aussitôt (`endRefusedSession`, audit #19352).
  */
 export function endGuestAccess(deps: {
   readonly reason: GuestAccessEnd;

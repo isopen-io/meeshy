@@ -8,10 +8,10 @@ import { safeLocalStorage, type SafeStorage } from '../storage';
 
 import { notePendingAccountEnd } from './account-caches';
 import { retireDeletedAccountLater } from './account-deleted';
-import { endGuestAccess } from './guest-access-end';
+import { endGuestAccess, type GuestAccessEnd } from './guest-access-end';
 import { VIEWER_ID } from './fixtures-base';
 import { ownerCredentialOf, ownerScopeOf, type OwnerCredential } from './owner-session';
-import { sessionIdentityKey, sessionStore, type SessionState, type SessionStoreApi } from './session';
+import { scopedConversationOf, sessionIdentityKey, sessionStore, type SessionState, type SessionStoreApi } from './session';
 
 /**
  * LE TRANSPORT DE PRODUCTION — l'UNIQUE instance que toute l'application
@@ -99,26 +99,42 @@ type AccountEnd = Pick<typeof import('./account-end'), 'endRevokedSession'>;
 function endWithoutModule(store: SessionStoreApi, storage: SafeStorage): void {
   const state = store.getState();
   const current = state.session;
-  if (current.status === 'guest' && current.account !== undefined) {
-    state.dropAnonymous(current.guest.conversationId);
-    return;
-  }
   const leaving = current.status === 'authenticated' && state.holdsDeviceSession() ? current.user.id : null;
   state.clearSession();
   if (leaving !== null) notePendingAccountEnd(storage, leaving);
 }
 
-/** La fin d'une session refusée se charge quand elle sert (`account-end.ts`) : la première peinture n'en porte que le repli. */
+/**
+ * La fin d'une session refusée se charge quand elle sert (`account-end.ts`) : la première peinture n'en porte que le repli.
+ *
+ * ELLE VISE LA SESSION REFUSÉE, JAMAIS CELLE QUE L'ONGLET TIENT QUAND LE MORCEAU ARRIVE (audit #19352) :
+ * - l'identité anonyme d'un compte (#8816) finit SUR-LE-CHAMP — rien à charger, et la navigation qui suit la fin
+ *   d'un accès d'invité rendrait la session au COMPTE avant la fin chargée, qui le déconnecterait alors ;
+ * - une autre session finit à l'arrivée du morceau (ou de son échec) seulement si l'onglet la tient encore, la même :
+ *   s'il a suivi l'appareil passé à un autre compte, repris une session neuve ou réécrit la sienne, rien ne finit ici,
+ *   et la requête suivante sous un jeton refusé rapporte son propre 401.
+ */
 export function endRefusedSession(
   store: SessionStoreApi,
   { load = () => import('./account-end'), storage }: { readonly load?: () => Promise<AccountEnd>; readonly storage?: SafeStorage } = {},
 ): void {
+  const refused = store.getState().session;
+  const scoped = scopedConversationOf(refused);
+  if (scoped !== null) return store.getState().dropAnonymous(scoped);
+  const stillRefused = (): boolean => store.getState().session === refused;
   void load()
-    .then(({ endRevokedSession }) => endRevokedSession(store))
-    .catch(() => endWithoutModule(store, storage ?? safeLocalStorage()));
+    .then(({ endRevokedSession }) => {
+      if (stillRefused()) endRevokedSession(store);
+    })
+    .catch(() => {
+      if (stillRefused()) endWithoutModule(store, storage ?? safeLocalStorage());
+    });
 }
 
 const endSessionOf = (store: SessionStoreApi): void => endRefusedSession(store);
+
+/** Ce que l'onglet fait quand la passerelle dit que l'accès de son invité est fini — exporté pour que le témoin passe par le câblage de l'application. */
+export const onTabGuestAccessEnded = (reason: GuestAccessEnd): void => endGuestAccess({ reason, store: sessionStore, end: endSessionOf, navigate });
 
 /** Enveloppé par la garde de l'e-mail (#8365) : un refus `EMAIL_NOT_VERIFIED`
  * ouvre la validation et la requête repart au code validé
@@ -131,7 +147,7 @@ export const httpTransport: HttpTransport = withEmailGate(
     deviceLocale: currentDeviceLocale,
     onUnauthorized: () => endSessionOf(sessionStore),
     onAccountDeleted: retireDeletedAccountLater,
-    onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endSessionOf, navigate }),
+    onGuestAccessEnded: onTabGuestAccessEnded,
   }),
   { ask: emailGate.ask, emailUnproven: () => sessionEmailUnproven(sessionStore.getState().session) },
 );
