@@ -1461,3 +1461,17 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `src/lib/shared-locations` 152 verts + `api/shared-locations` 24 verts, `tsc` vert. iOS et Android par la CI.
 - Prochain lot recommandé : fusion de #19683, puis #19681 (startedAt persisté au relancement natif), plafond
   `untilStopped` de `listOnlyState`, #18351 une fois décidé.
+
+## 2026-11-18 — réveil de 23 h : un appareil relancé après une reprise ne republie plus (#19681)
+
+- Reprise : #19683 fusionnée dans `dev` le 2026-11-18 à 20:12 UTC (f1e316f0f0), #18580 et #18714 fermées à la main.
+  #19682 (début arrondi) attend toujours la décision du porteur (commentaire du 2026-11-18 à 21:23 UTC) : sa branche
+  reste sans PR.
+- Lot : #19681. iOS et Android gardent le démarrage accepté par CET appareil (`publishedStart`) dans le même stockage
+  que la marque « reçue », sous la clé du compte : relancé après qu'un autre appareil a repris le partage, le client ne
+  prend plus le démarrage de l'autre pour le sien et cède au lieu de republier. Effacé à l'arrêt, à la cession et
+  quand la passerelle ne sert plus personne. Le web l'avait déjà (localStorage). Un horodatage de démarrage, aucune
+  position : rien à sceller.
+- Témoins : relancement après cession ⇒ aucun relevé ne part et la marque « reçue » est posée ; relancement sans
+  cession ⇒ la publication continue ; partage arrêté ailleurs ⇒ le démarrage gardé s'efface (iOS
+  `SharedLocationSharingSyncTests`, Android `SharedLocationSharingSyncTest`). Swift et Kotlin se prouvent par la CI.
