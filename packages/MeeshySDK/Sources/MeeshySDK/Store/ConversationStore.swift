@@ -610,6 +610,7 @@ public actor ConversationStore {
             // ≥ 1 so the UI badge appears immediately.
             if s.unreadCount == 0 { s.unreadCount = 1 }
             s.lastReadAt = nil
+            s.readThroughServerAt = nil
         case .deleteForUser:
             s.deletedForUserAt = Date()
         case .leave:
