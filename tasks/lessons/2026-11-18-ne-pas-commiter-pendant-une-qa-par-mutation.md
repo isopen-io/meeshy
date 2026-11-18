@@ -1,4 +1,4 @@
-# Ne jamais commiter pendant qu'une QA mute l'arbre de travail
+## Ne jamais commiter pendant qu'une QA mute l'arbre de travail
 
 **Contexte** : cycle 42 de la routine d'appels (#19471). Pendant que l'agent `auditeur-adversarial` mutait `voice_api.py` dans l'arbre de travail partagé, l'orchestrateur a lancé un `git commit` d'étape. Le commit `3654628f` a capturé un mutant, « Job not yours », qui rouvrait l'oracle d'existence que le lot fermait, et il a été poussé.
 
