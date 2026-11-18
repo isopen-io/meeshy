@@ -90,6 +90,26 @@ describe('le dernier point de chaque Sang, en un appel', () => {
   });
 });
 
+describe('la coupure du lecteur (#19454) — ni point, ni journal', () => {
+  it('un Sang que j\'ai coupé manque à ma carte, et son journal ne prend aucune ligne de moi', async () => {
+    const w = bloodWorldAvecConsentements();
+    await recordBloodLocation(w.deps, SANG, PARIS);
+    await recordBloodLocation(w.deps, AUTRE_SANG, A_5_KM);
+    w.consentir(MOI, SANG, { ...TOUT_PARTAGE, bloodLocationMutedAt: new Date(T0 - MINUTE) });
+
+    expect(ids(await bloodLocationMapFor(w.deps, MOI))).toEqual([AUTRE_SANG]);
+    expect(w.consultations.rows.map((row) => row.observedId)).toEqual([AUTRE_SANG]);
+  });
+
+  it('la coupure posée PAR l\'émetteur sur moi ne me retire pas son point : c\'est une préférence de réception', async () => {
+    const w = bloodWorldAvecConsentements();
+    await recordBloodLocation(w.deps, SANG, PARIS);
+    w.consentir(SANG, MOI, { ...TOUT_PARTAGE, bloodLocationMutedAt: new Date(T0 - MINUTE) });
+
+    expect(ids(await bloodLocationMapFor(w.deps, MOI))).toEqual([SANG]);
+  });
+});
+
 describe('le drapeau éteint — aucune entrée, aucun journal', () => {
   it('hors drapeau pour le lecteur, rien n\'est lu ni noté', async () => {
     const w = bloodWorldAvecConsentements({ horsDrapeau: [MOI] });
