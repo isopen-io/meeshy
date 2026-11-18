@@ -138,6 +138,13 @@ describe("la réaction d'un agent n'ouvre qu'à une participation VIVANTE (#1952
     expect(findFirst).toHaveBeenCalled();
     // La porte a refusé : la relecture du message visé — l'instruction qui SUIT
     // immédiatement la résolution — n'a jamais eu lieu.
+    //
+    // C'est un PROXY, et il faut le dire : ce témoin ne tombe que parce que
+    // `ReactionService.addReaction` lit `message.findUnique` en PREMIER
+    // (`ReactionService.ts:110`). Le jour où cette première lecture change, il
+    // passera au vert sur le défaut. Le témoin de PROJECTION ci-dessus, lui, ne
+    // dépend d'aucun ordre d'exécution — c'est lui qui porte la garantie, et
+    // c'est pourquoi les deux cohabitent. Relevé par l'audit adversarial du lot.
     expect(prisma.message.findUnique).not.toHaveBeenCalled();
   });
 
