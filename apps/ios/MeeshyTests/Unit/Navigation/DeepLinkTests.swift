@@ -30,7 +30,7 @@ final class DeepLinkParserTests: XCTestCase {
     func test_parse_customScheme_userProfile_returnsUsername() {
         let url = URL(string: "meeshy://u/atabeth")!
         let result = DeepLinkParser.parse(url)
-        guard case .userProfile(let username) = result else {
+        guard case .userProfile(let username, _) = result else {
             XCTFail("Expected .userProfile, got \(result)")
             return
         }
@@ -129,7 +129,7 @@ final class DeepLinkParserTests: XCTestCase {
     func test_parse_webUrl_userProfile_returnsUsername() {
         let url = URL(string: "https://meeshy.me/u/jcharlesnm")!
         let result = DeepLinkParser.parse(url)
-        guard case .userProfile(let username) = result else {
+        guard case .userProfile(let username, _) = result else {
             XCTFail("Expected .userProfile, got \(result)")
             return
         }
@@ -191,7 +191,7 @@ final class DeepLinkParserTests: XCTestCase {
     func test_parse_webUrl_wwwSubdomain_works() {
         let url = URL(string: "https://www.meeshy.me/u/testuser")!
         let result = DeepLinkParser.parse(url)
-        guard case .userProfile(let username) = result else {
+        guard case .userProfile(let username, _) = result else {
             XCTFail("Expected .userProfile, got \(result)")
             return
         }
@@ -378,7 +378,7 @@ final class DeepLinkParserTests: XCTestCase {
     func test_parse_customScheme_specialCharacters_inUsername() {
         let url = URL(string: "meeshy://u/user%20name%40test")!
         let result = DeepLinkParser.parse(url)
-        guard case .userProfile(let username) = result else {
+        guard case .userProfile(let username, _) = result else {
             XCTFail("Expected .userProfile, got \(result)")
             return
         }
@@ -400,7 +400,7 @@ final class DeepLinkParserTests: XCTestCase {
     func test_parse_universalLink_userProfile_returnsUsername() {
         let url = URL(string: "https://meeshy.me/u/testuser123")!
         let result = DeepLinkParser.parse(url)
-        guard case .userProfile(let username) = result else {
+        guard case .userProfile(let username, _) = result else {
             XCTFail("Expected .userProfile, got \(result)")
             return
         }

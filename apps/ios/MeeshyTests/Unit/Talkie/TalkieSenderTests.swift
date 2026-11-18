@@ -555,4 +555,60 @@ final class TalkieSenderTests: XCTestCase {
         XCTAssertEqual(rig.copier.sent.first?.frames.reduce(0) { $0 + $1.count }, frames * 10)
         XCTAssertEqual(rig.sut.notice, .voice)
     }
+
+    // MARK: - #19732 : le décompte et l'issue de chaque prise de parole
+
+    func test_anOpenedTalk_publishesItsWindow_fromTheOpening_untilItCloses() async {
+        let clock = Clock()
+        let rig = makeRig(clock: clock)
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        XCTAssertNil(rig.sut.talkWindow, "rien ne se décompte avant l'ouverture")
+
+        clock.now = clock.now.addingTimeInterval(0.4)
+        rig.emitter.resolve(.opened(Self.opened))
+        await settle()
+        XCTAssertEqual(rig.sut.talkWindow, TalkieTalkWindow(startedAt: clock.now, maxDuration: 30))
+
+        await rig.sut.release()
+        XCTAssertNil(rig.sut.talkWindow)
+    }
+
+    func test_aFallbackRecording_isCountedDownToo() async {
+        let clock = Clock()
+        let rig = makeRig(clock: clock)
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.emitter.resolve(.refused(.voice))
+        await settle()
+
+        XCTAssertEqual(rig.sut.talkWindow, TalkieTalkWindow(startedAt: clock.now, maxDuration: TalkieContract.maxDuration))
+    }
+
+    func test_everyClosedTalk_isSettledOnce_aReleasedVoiceAsSent() async {
+        let rig = makeRig()
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.emitter.resolve(.opened(Self.opened))
+        await settle()
+        await rig.sut.release()
+
+        let first = rig.sut.lastSettled
+        XCTAssertNotNil(first)
+        XCTAssertNil(first?.outcome, "une voix relâchée et partie n'a pas d'issue à dire : elle est envoyée")
+
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.emitter.resolve(.refused(.rateLimited))
+        await settle()
+        XCTAssertEqual(rig.sut.lastSettled?.outcome, .rateLimited)
+        XCTAssertNotEqual(rig.sut.lastSettled?.id, first?.id, "deux issues pareilles restent deux événements")
+    }
+
+    func test_anOfflinePress_isSettledToo() {
+        let rig = makeRig()
+        rig.emitter.isConnected = false
+        rig.sut.press(toUserId: "bob")
+        XCTAssertEqual(rig.sut.lastSettled?.outcome, .offline)
+    }
 }
