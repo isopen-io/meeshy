@@ -13,6 +13,7 @@ import { CerclesAchievements } from '../achievements/CerclesAchievements';
 import type { EngagementService } from '../engagement/EngagementService';
 import type { NotificationService } from '../notifications/NotificationService';
 import { applyCommunityAdmission, planSalonEntry, type SalonCommunity } from './communityMembershipSync';
+import { communityMemberAnnouncerOverIO } from '../community-member-broadcast';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'ConversationMemberAdmission' });
@@ -172,7 +173,7 @@ export async function admitConversationMember(
     }).catch(() => undefined);
   }
 
-  if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission);
+  if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission, communityMemberAnnouncerOverIO(prisma, ports.io));
   announceConversationLanguageChange({ kind: 'arrival', conversationId, language: addedMemberFields.language, readerUserId: userId });
 
 

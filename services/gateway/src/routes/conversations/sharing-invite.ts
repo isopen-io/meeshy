@@ -32,6 +32,7 @@ import {
   loadSalonCommunity,
   planSalonEntry,
 } from '../../services/conversations/communityMembershipSync';
+import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 
 const logger = enhancedLogger.child({ module: 'ConversationInviteRoute' });
 
@@ -316,7 +317,7 @@ export function registerInviteRoute(
       if (entry.outcome === 'rejoin' && entry.participantId) {
         invalidateParticipantLookup(entry.participantId, conversationId);
       }
-      if (community) await applyCommunityAdmission(fastify.prisma, community.communityId, communityAdmission);
+      if (community) await applyCommunityAdmission(fastify.prisma, community.communityId, communityAdmission, communityMemberAnnouncerFrom(fastify));
       announceConversationLanguageChange({ kind: 'arrival', conversationId, language: invitedMemberFields.language, readerUserId: userId });
 
       // `social.conversation_invite` (#8959) — même crédit que
