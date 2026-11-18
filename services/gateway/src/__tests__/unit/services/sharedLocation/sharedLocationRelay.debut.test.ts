@@ -6,6 +6,10 @@
  * (`expiresAt - startedAt`), jamais le terme des autres. Un état rangé avant ce lot ne le
  * sert pas : le client masque alors le libellé.
  *
+ * UN FLOUTÉ N'A PAS D'HORLOGE FINE (#19682) : comme `updatedAt`, le début servi à un lecteur
+ * qui n'a pas la précision exacte tombe sur le quart d'heure. Seul le lecteur exact lit
+ * l'instant du « Partager » ; une montée vers l'exact le fait remonter, une baisse le recoupe.
+ *
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
@@ -37,23 +41,33 @@ const demarrer = (m: ReturnType<typeof monde>, durationMinutes = 60) =>
 const changes = (m: ReturnType<typeof monde>, userId: string) =>
   m.vers(userId).filter((e) => e.event === SERVER_EVENTS.SHARED_LOCATION_CHANGED);
 
-describe('chaque destinataire reçoit le début du partage, quelle que soit sa précision', () => {
-  it('le Proche flouté et le Sang à échéance propre lisent le même début, exact, et leur propre échéance', async () => {
+describe('chaque destinataire reçoit le début du partage, à la finesse de sa précision', () => {
+  it('le lecteur exact lit l\'instant du « Partager » ; le Proche et le Sang floutés, son quart d\'heure', async () => {
     const m = monde();
-    m.avancer(17_321);
+    m.avancer(14 * MINUTE + 17_321);
     await demarrer(m);
 
-    expect(changes(m, PROCHE).map((e) => e.data.startedAt)).toEqual([iso(T0 + 17_321)]);
-    expect(changes(m, SANG).map((e) => [e.data.startedAt, e.data.expiresAt])).toEqual([[iso(T0 + 17_321), iso(T0 + 17_321 + 30 * MINUTE)]]);
-    expect(changes(m, AMI).map((e) => e.data.startedAt)).toEqual([iso(T0 + 17_321)]);
+    expect(changes(m, AMI).map((e) => e.data.startedAt)).toEqual([iso(T0 + 14 * MINUTE + 17_321)]);
+    expect(changes(m, PROCHE).map((e) => e.data.startedAt)).toEqual([iso(T0)]);
+    expect(changes(m, SANG).map((e) => [e.data.startedAt, e.data.expiresAt])).toEqual([[iso(T0), iso(T0 + 14 * MINUTE + 17_321 + 30 * MINUTE)]]);
   });
 
-  it('le rattrapage sert le même début que le direct', async () => {
+  it('un début pile sur le quart d\'heure reste le même pour un flouté', async () => {
     const m = monde();
+    m.avancer(45 * MINUTE);
+    await demarrer(m);
+    expect(changes(m, PROCHE).map((e) => e.data.startedAt)).toEqual([iso(T0 + 45 * MINUTE)]);
+  });
+
+  it('le rattrapage sert le même début que le direct, arrondi pour le flouté, exact pour l\'exact', async () => {
+    const m = monde();
+    m.avancer(7 * MINUTE + 3_000);
     await demarrer(m, 480);
     m.avancer(20 * MINUTE);
-    const [item] = (await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items;
-    expect(item).toMatchObject({ startedAt: iso(T0), expiresAt: iso(T0 + 8 * HEURE) });
+    const [floute] = (await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items;
+    expect(floute).toMatchObject({ startedAt: iso(T0), expiresAt: iso(T0 + 7 * MINUTE + 3_000 + 8 * HEURE) });
+    const [exact] = (await sharedLocationSnapshotFor(m.deps, AMI, {})).items;
+    expect(exact?.startedAt).toBe(iso(T0 + 7 * MINUTE + 3_000));
   });
 
   it('une nouvelle position garde le début ; seule l\'heure de mise à jour avance', async () => {
@@ -85,6 +99,34 @@ describe('chaque destinataire reçoit le début du partage, quelle que soit sa p
     await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: PROCHE, before: avant });
     expect(changes(m, PROCHE)).toHaveLength(2);
     expect(changes(m, PROCHE).at(-1)?.data.startedAt).toBe(iso(T0));
+  });
+
+  it('une montée vers l\'exact fait remonter l\'instant gardé, une baisse le recoupe, sans nouvel envoi de position', async () => {
+    const m = monde();
+    m.avancer(11 * MINUTE + 5_000);
+    await demarrer(m);
+    const debut = iso(T0 + 11 * MINUTE + 5_000);
+    const liste = (precision: 'exact' | 'city') =>
+      startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }, { userId: PROCHE, precision }], durationMinutes: 60 });
+
+    await liste('exact');
+    expect(changes(m, PROCHE).at(-1)?.data.startedAt).toBe(debut);
+    expect((await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items[0]?.startedAt).toBe(debut);
+
+    await liste('city');
+    expect(changes(m, PROCHE).at(-1)?.data.startedAt).toBe(iso(T0));
+    expect((await sharedLocationSnapshotFor(m.deps, PROCHE, {})).items[0]?.startedAt).toBe(iso(T0));
+  });
+
+  it('aucune charge d\'un flouté ne porte un début plus fin que le quart d\'heure, ni au direct, ni aux mises à jour', async () => {
+    const m = monde();
+    m.avancer(9 * MINUTE + 41_007);
+    await demarrer(m);
+    m.avancer(3 * MINUTE);
+    await updateSharedLocation(m.deps, EMETTEUR, PLUS_LOIN);
+    const servis = [...changes(m, PROCHE), ...changes(m, SANG)].map((e) => Date.parse(String(e.data.startedAt)));
+    expect(servis.length).toBeGreaterThan(0);
+    expect(servis.every((ms) => ms % (15 * MINUTE) === 0)).toBe(true);
   });
 });
 
