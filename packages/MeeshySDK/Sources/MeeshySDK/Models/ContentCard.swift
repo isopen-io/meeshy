@@ -57,7 +57,8 @@ public struct ContentCard: Equatable, Sendable {
     public let stats: Stats
     public let isBookmarkedByMe: Bool
 
-    public static let portraitAspectRatio = 9.0 / 16.0
+    /// Le portrait d'un réel ou d'une story : la scène, lue dans sa loi (`SceneShape.aspect`).
+    public static let portraitAspectRatio = Double(SceneShape.aspect)
     public static let aspectRatioRange: ClosedRange<Double> = (4.0 / 5.0)...(16.0 / 9.0)
     /// Un média sans dimensions servies.
     public static let unknownAspectRatio = 4.0 / 3.0
