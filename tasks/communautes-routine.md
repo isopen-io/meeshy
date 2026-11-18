@@ -509,3 +509,9 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Cliquet : `src/__tests__/community-member-writer-sweep.test.ts` fige les six fichiers qui écrivent `CommunityMember` et leur émetteur ; seul muet nommé : la désactivation d'un compte supprimé (#18769, qui reste ouverte pour elle — `MeeshySocketIOManager` étant hors budget, l'injection d'une annonce dans `MaintenanceService` demande son propre lot).
 - Aucun client touché : web, iOS et Android lisent déjà `community:member-joined` (#18766, #18767, #18768).
 - Prochain lot recommandé : #19591 (iOS lit la disparition) dès que #19665 / #19667 sont fusionnées ; sinon la moitié « compte supprimé » de #18769.
+
+## 2026-11-18 — réveil 15:38 UTC
+
+- Début du run : #19694 (#19591, iOS lit la disparition) poussée à 15:01, donc vivante : cédée. #19678 (#19406) inactive depuis 14:20 : run consacré à la mener à la fusion.
+- `dev` (11 commits, appels et miroirs Swift ; seul `packages/shared/types/call-rules.ts` côté partagé) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : passerelle `tsc --noEmit` vert, `unit/routes` + `unit/services/conversations` + `services/conversations/__tests__` + balayage des écrivains + `tsc-never-loaded` 976 suites / 14 845 tests verts ; shared `__tests__/ci/` 25 fichiers / 216 tests verts.
+- Prochain lot recommandé : la moitié « compte supprimé » de #18769 ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
