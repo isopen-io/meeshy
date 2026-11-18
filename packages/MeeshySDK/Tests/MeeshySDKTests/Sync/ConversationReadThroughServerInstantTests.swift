@@ -50,6 +50,39 @@ final class ConversationReadThroughServerInstantTests: XCTestCase {
         XCTAssertNil(result.userState.readThroughServerAt, "l'accusé est confirmé : la frontière locale n'a plus d'objet")
     }
 
+    /// On lit EN REGARDANT la conversation : un balayage servi pendant qu'elle est ouverte ne porte jamais l'instant
+    /// local. Le perdre ici rallumait le badge au balayage suivant, une fois la conversation quittée.
+    func test_reconcileUnread_whileTheConversationIsOpen_theBoundarySurvivesTheServedSweep() {
+        let result = ConversationSyncEngine.reconcileUnread(
+            incoming: served(unread: 3, lastMessageAt: lastMessage),
+            local: readOffline(through: lastMessage), openConversationId: "conv-1"
+        )
+
+        XCTAssertEqual(result.userState.unreadCount, 0)
+        XCTAssertEqual(result.userState.readThroughServerAt, lastMessage, "la frontière traverse le balayage servi")
+    }
+
+    func test_markConversationReadLocally_recordsTheServedInstantOfTheLastMessage() async {
+        let engine = ConversationSyncEngine(
+            cache: .shared,
+            conversationService: MockConversationService(),
+            messageService: MockMessageService(),
+            messageSocket: MockMessageSocket(),
+            socialSocket: MockSocialSocket(),
+            api: MockAPIClient(),
+            syncDelta: MockSyncDeltaMuet()
+        )
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        try? await CacheCoordinator.shared.conversations.save([served(unread: 3, lastMessageAt: lastMessage)], for: "list")
+
+        await engine.markConversationReadLocally("conv-1")
+
+        let row = (await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []).first { $0.id == "conv-1" }
+        XCTAssertEqual(row?.userState.unreadCount, 0)
+        XCTAssertEqual(row?.userState.readThroughServerAt, lastMessage, "l'instant SERVEUR du dernier message, jamais l'horloge de l'appareil")
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+    }
+
     func test_codable_readThroughServerAt_survivesTheDiskCache() throws {
         let data = try JSONEncoder().encode(readOffline(through: lastMessage))
         let decoded = try JSONDecoder().decode(MeeshyConversation.self, from: data)
