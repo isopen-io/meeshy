@@ -16,11 +16,14 @@ import {
  * - le point de convergence des refus d'écriture (`writeRefusalHttpResponse`,
  *   que l'épingle, le partage de traduction et le message de lien relaient)
  *   rend un code avec chacun de ses 410 ;
- * - tout 410 écrit par une route nomme sa raison : un `code` en option, ou un
- *   motif en capitales dans `error` (les routes de lien, lues ainsi par leurs
- *   clients depuis toujours).
+ * - tout 410 écrit par une route ou par le middleware nomme sa raison, sous
+ *   ses trois formes — `sendError(reply, 410, …)`, `sendGone(reply, …)` et
+ *   `reply.status(410).send(…)` : un `code`, ou un motif en capitales dans
+ *   `error` (les routes de lien et la révocation d'un invité, lues ainsi par
+ *   leurs clients depuis toujours).
  */
-const ROUTES = join(__dirname, '../../../routes');
+const SRC = join(__dirname, '../../..');
+const WRITERS = ['routes', 'middleware'].map((dir) => join(SRC, dir));
 
 function sourcesUnder(dir: string): readonly string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -51,8 +54,20 @@ function callArguments(source: string, open: number): string {
   return source.slice(open + 1);
 }
 
-const GONE = /sendError\(\s*reply\s*,\s*410\s*,/g;
-const NAMED_IN_ERROR = /^\s*reply\s*,\s*410\s*,\s*'[A-Z][A-Z0-9_]+'/;
+/** Les trois formes d'un 410, et où commencent les arguments qui doivent nommer sa raison. */
+const GONE_FORMS: readonly { readonly form: string; readonly pattern: RegExp; readonly named: RegExp }[] = [
+  { form: 'sendError', pattern: /sendError\(\s*reply\s*,\s*410\s*,/g, named: /^\s*reply\s*,\s*410\s*,\s*'[A-Z][A-Z0-9_]+'/ },
+  { form: 'sendGone', pattern: /sendGone\(/g, named: /^\s*reply\s*,\s*'[A-Z][A-Z0-9_]+'/ },
+  { form: 'reply.status(410)', pattern: /reply\.(?:status|code)\(\s*410\s*\)\s*\.send\(/g, named: /\berror\s*:\s*'[A-Z][A-Z0-9_]+'/ },
+];
+
+const goneSitesOf = (path: string, source: string) =>
+  GONE_FORMS.flatMap(({ form, pattern, named }) =>
+    [...source.matchAll(pattern)].map((match) => {
+      const open = (match.index ?? 0) + match[0].lastIndexOf('(');
+      return { file: relative(SRC, path), form, named, args: callArguments(source, form === 'sendError' ? (match.index ?? 0) + 'sendError'.length : open) };
+    }),
+  );
 
 const REFUSALS: readonly ConversationWriteRefused[] = [
   { admitted: false, reason: 'conversation-closed' },
@@ -72,20 +87,18 @@ describe('un 410 nomme toujours sa raison', () => {
     },
   );
 
-  const sites = sourcesUnder(ROUTES).flatMap((path) => {
-    const source = readFileSync(path, 'utf8');
-    return [...source.matchAll(GONE)].map((match) => ({
-      file: relative(ROUTES, path),
-      args: callArguments(source, (match.index ?? 0) + 'sendError'.length),
-    }));
+  const sites = WRITERS.flatMap(sourcesUnder).flatMap((path) => goneSitesOf(path, readFileSync(path, 'utf8')));
+
+  it.each(GONE_FORMS.map(({ form }) => form))('trouve les 410 écrits sous la forme %s (la garde ne garde pas un ensemble vide)', (form) => {
+    expect(sites.filter((site) => site.form === form).length).toBeGreaterThan(0);
   });
 
-  it('trouve les 410 écrits par les routes (la garde ne garde pas un ensemble vide)', () => {
-    expect(sites.length).toBeGreaterThanOrEqual(20);
+  it('trouve les 410 écrits par les routes et le middleware', () => {
+    expect(sites.length).toBeGreaterThanOrEqual(30);
   });
 
-  it('aucune route n’écrit un 410 sans nommer sa raison', () => {
-    const unnamed = sites.filter((site) => !/\bcode\s*:/.test(site.args) && !NAMED_IN_ERROR.test(site.args));
-    expect(unnamed.map((site) => `${site.file}: ${site.args.replace(/\s+/g, ' ').trim()}`)).toEqual([]);
+  it('aucune route ni le middleware n’écrit un 410 sans nommer sa raison', () => {
+    const unnamed = sites.filter((site) => !/\bcode\s*:/.test(site.args) && !site.named.test(site.args));
+    expect(unnamed.map((site) => `${site.file} (${site.form}): ${site.args.replace(/\s+/g, ' ').trim()}`)).toEqual([]);
   });
 });
