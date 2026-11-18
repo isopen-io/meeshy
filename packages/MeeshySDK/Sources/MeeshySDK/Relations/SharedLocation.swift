@@ -256,20 +256,25 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
     /// La passerelle accepte-t-elle un partage sans fin entre Sangs (`untilStopped`, #19616) ? Absent : non — la tuile
     /// « Jusqu'à ce que j'arrête » reste verrouillée.
     public let acceptsUntilStopped: Bool
+    /// UN SEUL APPAREIL PUBLIE (#18580) : le dernier démarrage AVEC position, renouvelé par chaque « Partager », gardé
+    /// par la liste seule. `nil` : passerelle antérieure — l'appareil ne cède alors jamais.
+    public let startedAt: String?
 
     public init(
         recipients: [SharedLocationOwnRecipient],
         shareBattery: Bool? = nil,
         acceptsManualSource: Bool = false,
-        acceptsUntilStopped: Bool = false
+        acceptsUntilStopped: Bool = false,
+        startedAt: String? = nil
     ) {
         self.recipients = recipients
         self.shareBattery = shareBattery
         self.acceptsManualSource = acceptsManualSource
         self.acceptsUntilStopped = acceptsUntilStopped
+        self.startedAt = startedAt
     }
 
-    private enum CodingKeys: String, CodingKey { case recipients, shareBattery, acceptsManualSource, acceptsUntilStopped }
+    private enum CodingKeys: String, CodingKey { case recipients, shareBattery, acceptsManualSource, acceptsUntilStopped, startedAt }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -277,6 +282,7 @@ public struct SharedLocationOwnSnapshot: Decodable, Sendable, Equatable {
         shareBattery = (try? c.decodeIfPresent(Bool.self, forKey: .shareBattery)) ?? nil
         acceptsManualSource = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsManualSource)) ?? nil) ?? false
         acceptsUntilStopped = ((try? c.decodeIfPresent(Bool.self, forKey: .acceptsUntilStopped)) ?? nil) ?? false
+        startedAt = (try? c.decodeIfPresent(String.self, forKey: .startedAt)) ?? nil
     }
 
     private struct Lenient: Decodable {
