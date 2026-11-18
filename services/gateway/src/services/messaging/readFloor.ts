@@ -90,6 +90,11 @@
  * penser à l'appeler ; un type qui EXIGE la lecture la supprime.
  */
 
+import {
+  readCursorFloorOf,
+  type ReadCursorFloorSource,
+} from '@meeshy/shared/utils/read-cursor-floor';
+
 /**
  * La projection MINIMALE d'où une position de lecture se résout. À répandre
  * dans le `select` de tout site qui appellera {@link readFloorOf} — jamais à
@@ -105,10 +110,7 @@ export const READ_FLOOR_SELECT = {
  * nullables, mais présents : c'est cette exigence, et non un commentaire, qui
  * fait rougir le compilateur sur un site qui n'a chargé que l'horloge.
  */
-export type ReadFloorCursor = {
-  readonly lastReadAt: Date | null;
-  readonly lastReadMessageCreatedAt: Date | null;
-};
+export type ReadFloorCursor = ReadCursorFloorSource;
 
 /**
  * La borne BASSE de ce que le curseur de lecture a déjà franchi, ou `null` pour
@@ -127,7 +129,9 @@ export type ReadFloorCursor = {
  *   re-litigerait un passé entier. La fenêtre démarre alors trop TARD — c'est
  *   l'ancien comportement, donc une non-régression, jamais une correction.
  *
- * - **le MINIMUM des deux, et non la position seule.** L'invariant attendu est
+ * - **le MINIMUM des deux, et non la position seule** — la SEULE clause que
+ *   cette unité porte encore en propre depuis #19599, les deux premières
+ *   étant la descente partagée ({@link readCursorFloorOf}). L'invariant attendu est
  *   `position <= horloge` (un message est créé avant d'être lu), si bien que les
  *   deux formes coïncident sur toute donnée saine. Elles divergent sous une
  *   dérive d'horloge entre deux serveurs — et là, la position seule
@@ -138,12 +142,34 @@ export type ReadFloorCursor = {
  *   frontière rapportée, et un compte de non-lus trop HAUT se vide à la
  *   première lecture quand un compte trop BAS cache un message pour toujours.
  */
+/**
+ * Le CLIQUET d'horloge, et il est à nous SEULS (#19599).
+ *
+ * `readCursorFloorOf` rend la descente — la position, l'horloge en repli. Ce
+ * qui suit la clampe au MINIMUM des deux colonnes, et c'est une garde de
+ * NON-RÉGRESSION, pas une correction : les trois consommateurs du plancher
+ * étaient ancrés sur l'HORLOGE avant #19299, donc la position seule aurait pu
+ * RÉTRÉCIR leur fenêtre sous ce qu'elle couvrait — une régression introduite
+ * par le correctif lui-même. Abaisser, en revanche, est la direction sûre des
+ * trois : le balayage voit plus de trous (donc avance moins), le gel reste
+ * borné en haut par la frontière rapportée, et un compte de non-lus trop HAUT
+ * se vide à la première lecture quand un compte trop BAS cache un message pour
+ * toujours.
+ *
+ * **Il ne se transpose à AUCUN lecteur de la descente partagée**, et le
+ * doc-comment de `read-cursor-floor.ts` en porte la raison : un SÉPARATEUR
+ * (`firstUnreadBoundary`) descend la position d'abord depuis son origine, donc
+ * n'a pas ce passé — l'abaisser y ferait remonter le lecteur dans du déjà-lu
+ * sans qu'aucun non-lu ne soit en jeu. Les deux témoins de dérive se
+ * répondent : `readFloor.test.ts` gèle le minimum, `read-cursor-floor.test.ts`
+ * gèle la position, et un lot qui consoliderait les deux formes en une fait
+ * tomber l'un des deux.
+ */
+const clampToClock = (floor: Date | null, clock: Date | null): Date | null => {
+  if (!floor || !clock) return floor;
+  return floor.getTime() <= clock.getTime() ? floor : clock;
+};
+
 export const readFloorOf = (
   cursor: ReadFloorCursor | null | undefined,
-): Date | null => {
-  const position = cursor?.lastReadMessageCreatedAt ?? null;
-  const clock = cursor?.lastReadAt ?? null;
-  if (!position) return clock;
-  if (!clock) return position;
-  return position.getTime() <= clock.getTime() ? position : clock;
-};
+): Date | null => clampToClock(readCursorFloorOf(cursor), cursor?.lastReadAt ?? null);
