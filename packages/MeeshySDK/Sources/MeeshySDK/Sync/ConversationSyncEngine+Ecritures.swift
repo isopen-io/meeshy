@@ -412,7 +412,7 @@ extension ConversationSyncEngine {
 
         if openConversationIds.contains(incoming.id) {
             result.userState.unreadCount = 0
-            return result
+            return result.keepingServerInstantRead(local: local)
         }
 
         if let frontier = result.userState.lastReadAt, frontier >= incoming.lastMessageAt {
