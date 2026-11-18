@@ -62,6 +62,8 @@ export type TrackingLinkClickInput = {
     readonly totalClicks: number;
     readonly uniqueClicks: number;
     readonly lastClickedAt?: Date | null;
+    /** Le lien dédié d'une adresse de fiche (#18863) : jamais annoncé en direct. */
+    readonly addressId?: string | null;
   };
   readonly click: { readonly country?: string | null; readonly clickedAt?: Date | null };
 };
@@ -158,6 +160,11 @@ export function createLinkActivityRelay(deps: {
   return {
     trackingLinkClicked: ({ link, click }) => {
       if (!link.createdBy) return;
+      // Le lien d'une ADRESSE peut n'avoir qu'un lecteur (un cercle Sang d'une personne) : même
+      // repli que `foldClickStatsFacet({ citiesServed: false })`, porté au temps réel — le push
+      // lui-même daterait l'ouverture à la seconde, avec ou sans heure ni pays dans sa charge.
+      // Le créateur relit ses totaux à l'ouverture des statistiques.
+      if (link.addressId) return;
       const payload: TrackingLinkClickedEventData = {
         token: link.token,
         totalClicks: link.totalClicks,

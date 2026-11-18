@@ -59,6 +59,18 @@ describe('createLinkActivityRelay', () => {
     ]]);
   });
 
+  it("ne dit RIEN, en direct, du lien dédié d'une adresse de fiche : son lecteur peut être unique, et l'instant du push dirait qui, d'où et quand", () => {
+    const { io, rooms } = makeIO();
+    const { scheduler, flushDeferred, elapse } = makeScheduler();
+    const relay = createLinkActivityRelay({ io: () => io, scheduler });
+
+    relay.trackingLinkClicked({ link: { ...LINK, addressId: '65a0000000000000000000f1' }, click: CLICK });
+    flushDeferred();
+    elapse();
+
+    expect(rooms()).toEqual([]);
+  });
+
   it("ne dit rien d'un lien de suivi sans créateur", () => {
     const { io, rooms } = makeIO();
     const { scheduler, flushDeferred } = makeScheduler();
