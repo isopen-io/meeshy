@@ -38,7 +38,7 @@ struct ProfileAccentTests {
     // MARK: - Ce que la vitrine peint
 
     @Test func theChosenAccentWinsOverTheComputedOne() throws {
-        let user = try decode(#"{"id":"me","username":"aissa","profileAccentColor":"#4ECDC4"}"#)
+        let user = try decode(##"{"id":"me","username":"aissa","profileAccentColor":"#4ECDC4"}"##)
         #expect(user.chosenAccent?.key == "turquoise")
         #expect(user.profileAccentHex == "4ECDC4")
     }
@@ -49,7 +49,7 @@ struct ProfileAccentTests {
         #expect(older.profileAccentHex == computed)
         let automatic = try decode(#"{"id":"me","username":"aissa","profileAccentColor":null}"#)
         #expect(automatic.profileAccentHex == computed)
-        let corrupted = try decode(#"{"id":"me","username":"aissa","profileAccentColor":"#123456"}"#)
+        let corrupted = try decode(##"{"id":"me","username":"aissa","profileAccentColor":"#123456"}"##)
         #expect(corrupted.profileAccentHex == computed)
     }
 
