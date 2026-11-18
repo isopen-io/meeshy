@@ -42,6 +42,10 @@ import {
   type FreezeMessageStatusParams,
 } from './messaging/freezeMessageStatus';
 import {
+  DELIVERY_FLOOR_SELECT,
+  deliveryFloorOf,
+} from './messaging/deliveryFloor';
+import {
   parsePlaybackTrace,
   traceCoverage,
 } from '../utils/playback-trace';
@@ -589,15 +593,18 @@ export class MessageReadStatusService {
 
       // Best-effort: only bounds the freeze window, never fails the cursor
       // advance below (which is now the sole source of truth for staleness).
-      let prevDeliveredAt: Date | null = null;
-      // #18731 — la POSITION du curseur, distincte de son horloge MURALE.
+      //
+      // #18731 (le BALAYAGE de contiguïté) puis #19261 (la FENÊTRE du gel) ont
+      // chacun remplacé ici l'horloge murale par la POSITION du curseur.
       // `lastDeliveredAt` est posé à `now` par `_advanceCursor` : c'est l'heure
-      // à laquelle un accusé a été TRAITÉ. Ancrer la fenêtre de contiguïté
-      // dessus EXCLURAIT le trou qu'on cherche — M1 (10:00) est sous un
-      // `lastDeliveredAt` de 11:00, et c'est exactement le défaut que ce lot
-      // ferme. Repli sur l'horloge quand la colonne manque (lignes écrites
-      // avant son introduction) : la fenêtre démarre alors trop TARD, donc on
-      // ne re-litige pas un passé dont le repli curseur rend déjà compte.
+      // à laquelle un accusé a été TRAITÉ, et toute borne posée dessus exclut
+      // par construction un trou situé SOUS elle.
+      //
+      // La descente et la PROJECTION d'où elle se résout vivent désormais
+      // ensemble (`messaging/deliveryFloor.ts`), et c'est le lot de la
+      // consolidation : la règle était retapée à trois endroits, dont un qui ne
+      // chargeait pas la colonne. Le type du paramètre EXIGE les deux colonnes,
+      // donc un site qui ne les charge pas ne compile plus.
       let prevDeliveredPosition: Date | null = null;
       let cursorExists = false;
       try {
@@ -605,14 +612,11 @@ export class MessageReadStatusService {
           where: {
             conversation_participant_cursor: { participantId, conversationId },
           },
-          select: { lastDeliveredAt: true, lastDeliveredMessageCreatedAt: true },
+          select: DELIVERY_FLOOR_SELECT,
         });
-        prevDeliveredAt = prevCursor?.lastDeliveredAt ?? null;
-        prevDeliveredPosition =
-          prevCursor?.lastDeliveredMessageCreatedAt ?? prevCursor?.lastDeliveredAt ?? null;
+        prevDeliveredPosition = deliveryFloorOf(prevCursor);
         cursorExists = prevCursor != null;
       } catch {
-        prevDeliveredAt = null;
         prevDeliveredPosition = null;
       }
 
@@ -642,7 +646,14 @@ export class MessageReadStatusService {
         const frozenCount = await this.freezeMessageStatus({
           participantId,
           conversationId,
-          since: prevDeliveredAt,
+          // INERTE aujourd'hui — `freezeMessageStatus` ignore `since` dès
+          // qu'une liste d'ids est nommée, la liste ÉTANT la borne, et #19261 a
+          // donc classé ce site « sans objet ». Il reçoit quand même la
+          // POSITION : une valeur fausse mais inexploitée est un piège armé,
+          // pas une économie (règle du cycle 84). Le jour où ce paramètre
+          // compterait en mode exact, l'horloge serait de retour sans qu'un
+          // témoin tombe.
+          since: prevDeliveredPosition,
           at: now,
           field: "deliveredAt",
           messageIds: options.messageIds,
@@ -847,14 +858,14 @@ export class MessageReadStatusService {
       // fenêtre du gel. Une erreur ici ne doit pas faire échouer le marquage
       // (on retombe sur `null` = gel depuis l'origine, lui-même résilient).
       let prevReadAt: Date | null = null;
-      // #19261 — la POSITION du curseur de livraison, et ELLE SEULE. Même
-      // raison qu'en tête de `markMessagesAsReceived` : la plage du gel se
-      // compare à `createdAt`, donc elle s'ancre sur une position.
+      // #19261 — la POSITION du curseur de livraison, et ELLE SEULE : la plage
+      // du gel se compare à `createdAt`. L'horloge n'est pas seulement
+      // interdite ici, elle n'est pas DISPONIBLE.
       //
-      // `prevDeliveredAt` — l'horloge — a été RETIRÉ de cette portée plutôt que
-      // laissé inutilisé : le mauvais ancrage n'y est plus seulement interdit,
-      // il n'est plus DISPONIBLE. C'est strictement plus fort qu'un témoin, et
-      // `tsc` l'a exigé (TS6133) dans le même mouvement.
+      // Et c'est le site qui a motivé la consolidation : son `select` ne
+      // demandait PAS `lastDeliveredMessageCreatedAt` avant #19261, si bien
+      // qu'y changer la variable passée aurait été un no-op MUET. La projection
+      // voyage désormais AVEC la descente, et le compilateur la tient.
       let prevDeliveredPosition: Date | null = null;
       let cursorExists = false;
       try {
@@ -862,15 +873,10 @@ export class MessageReadStatusService {
           where: {
             conversation_participant_cursor: { participantId, conversationId },
           },
-          select: {
-            lastReadAt: true,
-            lastDeliveredAt: true,
-            lastDeliveredMessageCreatedAt: true,
-          },
+          select: { lastReadAt: true, ...DELIVERY_FLOOR_SELECT },
         });
         prevReadAt = prevCursor?.lastReadAt ?? null;
-        prevDeliveredPosition =
-          prevCursor?.lastDeliveredMessageCreatedAt ?? prevCursor?.lastDeliveredAt ?? null;
+        prevDeliveredPosition = deliveryFloorOf(prevCursor);
         cursorExists = prevCursor != null;
       } catch {
         prevReadAt = null;
