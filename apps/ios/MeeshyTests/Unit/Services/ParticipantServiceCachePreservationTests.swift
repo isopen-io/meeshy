@@ -245,6 +245,37 @@ final class ParticipantServiceCachePreservationTests: XCTestCase {
         await CacheCoordinator.shared.participants.invalidate(for: conversationId)
     }
 
+    /// #19309 — un rafraîchissement forcé sert la page qu'IL vient de relire : une revalidation `.stale` encore en vol,
+    /// plus ancienne, ne la remplace pas (le membre qui vient de rejoindre en disparaissait).
+    func test_pageToPaint_afterAForcedRefresh_isTheOneThatRequestJustRead_notAnOlderRevalidation() async {
+        let conversationId = makeConversationId()
+        await seedStaleCache([makeParticipant("p1")], for: conversationId)
+        let (sut, api) = makeSUT()
+        stubFirstPage(["p1", "p2"], for: conversationId, on: api)
+        _ = try? await sut.loadFirstPage(for: conversationId)
+        let justRead = [makeParticipant("p1"), makeParticipant("p2"), makeParticipant("p3")]
+
+        let painted = await sut.pageToPaint(afterLoading: justRead, for: conversationId, forceRefresh: true)
+
+        XCTAssertEqual(painted.map(\.id), ["p1", "p2", "p3"], "le membre qui vient de rejoindre est affiché")
+
+        await CacheCoordinator.shared.participants.invalidate(for: conversationId)
+    }
+
+    func test_pageToPaint_withoutForce_repaintsTheRevalidatedPage() async {
+        let conversationId = makeConversationId()
+        await seedStaleCache([makeParticipant("p1")], for: conversationId)
+        let (sut, api) = makeSUT()
+        stubFirstPage(["p1", "p2"], for: conversationId, on: api)
+        let served = (try? await sut.loadFirstPage(for: conversationId)) ?? []
+
+        let painted = await sut.pageToPaint(afterLoading: served, for: conversationId, forceRefresh: false)
+
+        XCTAssertEqual(painted.map(\.id), ["p1", "p2"])
+
+        await CacheCoordinator.shared.participants.invalidate(for: conversationId)
+    }
+
     func test_loadFirstPage_whenCacheIsFresh_servesItWithoutTouchingTheNetwork() async {
         let conversationId = makeConversationId()
         try? await CacheCoordinator.shared.participants.save(
