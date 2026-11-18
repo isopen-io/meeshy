@@ -12,5 +12,11 @@
  * Les paramètres sont encodés ICI (encodeURIComponent) : passer la valeur brute.
  */
 
-/** POST /api/v1/invitations/email */
+/** GET · POST /api/v1/invitations/email */
 export const email = '/api/v1/invitations/email';
+
+/** POST /api/v1/invitations/email/:id/resend */
+export const emailByIdResend = (id: string): string => `/api/v1/invitations/email/${encodeURIComponent(id)}/resend`;
+
+/** POST /api/v1/invitations/email/opt-out */
+export const emailOptOut = '/api/v1/invitations/email/opt-out';

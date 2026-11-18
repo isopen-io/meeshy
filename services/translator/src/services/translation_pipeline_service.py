@@ -114,6 +114,16 @@ class TranslationJob:
         }
 
 
+def webhook_payload(job: TranslationJob) -> Dict[str, Any]:
+    """Charge du webhook (#19254) : l'identifiant et l'état du job, jamais son contenu."""
+    return {
+        "event": "translation_completed" if job.status == JobStatus.COMPLETED else "translation_failed",
+        "job": {"id": job.id, "status": job.status.value},
+        "job_id": job.id,
+        "metadata": job.callback_metadata,
+    }
+
+
 @dataclass
 class PipelineResult:
     """Résultat d'une traduction complète"""
@@ -779,13 +789,7 @@ class TranslationPipelineService:
         """Envoie le callback webhook via le garde de #18772 (jamais d'exception)."""
         if not job.webhook_url:
             return
-        job_view = {key: value for key, value in job.to_dict().items() if key != "webhook_url"}
-        payload = {
-            "event": "translation_completed" if job.status == JobStatus.COMPLETED else "translation_failed",
-            "job": job_view,
-            "metadata": job.callback_metadata
-        }
-        await send_job_webhook(job.webhook_url, payload)
+        await send_job_webhook(job.webhook_url, webhook_payload(job))
 
     def _generate_job_id(self, user_id: str) -> str:
         """Génère un ID unique pour un job"""
