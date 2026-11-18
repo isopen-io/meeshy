@@ -401,18 +401,26 @@ class SharedLocationSharingSyncTest {
         assertThat(device.stops).isEqualTo(0)
     }
 
-    private fun servedAt(vararg people: Triple<String, SharedLocationPrecision, Long>) =
-        SharedLocationOwnSnapshot(people.map { SharedLocationOwnRecipient(it.first, it.second, it.third) })
+    private val mine = "2026-01-01T00:00:00.000Z"
+    private val elsewhere = "2026-01-01T00:00:05.000Z"
 
-    @Test
-    fun `une personne ajoutee ailleurs fait ceder l'appareil qui publiait, aucun releve ne part plus`() = runTest {
-        val device = Device(this)
+    private fun servedFrom(startedAt: String?, vararg people: Pair<String, Long>) =
+        SharedLocationOwnSnapshot(served(*people).recipients, startedAt)
+
+    private suspend fun TestScope.publishing(device: Device) {
         runCurrent()
+        device.startVerdict = SharedLocationStartVerdict.Started(hour, mine)
         device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
         runCurrent()
         assertThat(device.following).isEqualTo(1)
+    }
+
+    @Test
+    fun `un autre demarrage servi fait ceder l'appareil qui publiait, aucun releve ne part plus`() = runTest {
+        val device = Device(this)
+        publishing(device)
         val sent = device.updates.size
-        device.servedSnapshot = served(alice to hour, bob to hour)
+        device.servedSnapshot = servedFrom(elsewhere, alice to hour, bob to hour)
 
         device.ownChanged.emit(Unit)
         runCurrent()
@@ -430,32 +438,23 @@ class SharedLocationSharingSyncTest {
     }
 
     @Test
-    fun `une precision changee ou une echeance repoussee ailleurs fait ceder aussi`() = runTest {
-        val precision = Device(this)
-        val deadline = Device(this)
-        runCurrent()
-        precision.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
-        deadline.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
-        precision.servedSnapshot = servedAt(Triple(alice, SharedLocationPrecision.EXACT, hour))
-        deadline.servedSnapshot = served(alice to 8 * hour)
+    fun `la meme personne repartagee ailleurs, liste identique, fait ceder aussi`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.servedSnapshot = servedFrom(elsewhere, alice to hour)
 
-        precision.ownChanged.emit(Unit)
-        deadline.ownChanged.emit(Unit)
+        device.ownChanged.emit(Unit)
         runCurrent()
 
-        assertThat(precision.receivedMarks["me"]).isTrue()
-        assertThat(deadline.receivedMarks["me"]).isTrue()
+        assertThat(device.receivedMarks["me"]).isTrue()
     }
 
     @Test
-    fun `son propre partage relu a quelques secondes pres, ou un retrait fait ailleurs, ne fait pas ceder`() = runTest {
+    fun `son propre demarrage relu avec une echeance decalee de dix minutes ne fait pas ceder`() = runTest {
         val device = Device(this)
-        runCurrent()
-        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
-        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
-        runCurrent()
+        publishing(device)
         val sent = device.updates.size
-        device.servedSnapshot = served(alice to hour + 90_000L)
+        device.servedSnapshot = servedFrom(mine, alice to hour + 600_000L)
 
         device.ownChanged.emit(Unit)
         runCurrent()
@@ -463,8 +462,37 @@ class SharedLocationSharingSyncTest {
         device.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
         runCurrent()
 
-        assertThat(device.center.roster.value.entry(bob)).isNull()
         assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
         assertThat(device.updates.size).isGreaterThan(sent)
+    }
+
+    @Test
+    fun `un accuse perdu prend le demarrage servi pour le sien, puis cede au suivant`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED)
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        device.servedSnapshot = servedFrom(mine, alice to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
+
+        device.servedSnapshot = servedFrom(elsewhere, alice to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isTrue()
+    }
+
+    @Test
+    fun `une passerelle qui ne nomme pas le demarrage ne fait jamais ceder`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.servedSnapshot = servedFrom(null, alice to hour, bob to hour)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
     }
 }

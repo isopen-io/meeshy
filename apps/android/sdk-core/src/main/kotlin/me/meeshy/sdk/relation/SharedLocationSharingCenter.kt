@@ -186,6 +186,9 @@ class SharedLocationSharingCenter internal constructor(
     /** La liste vient d'un autre appareil du compte : celui-ci ne publie pas sa position (#18578). */
     @Volatile private var received = false
 
+    /** Le dernier démarrage avec position que CET appareil a fait accepter (#18580) ; `null` : inconnu, le servi est pris pour le sien. */
+    @Volatile private var publishedStart: String? = null
+
     init {
         scope.launch {
             connected.distinctUntilChanged().filter { it }.collect {
@@ -244,8 +247,8 @@ class SharedLocationSharingCenter internal constructor(
 
     /**
      * Se recale sur le partage que la passerelle sert : un autre appareil du compte a pu le changer (#18578). Une liste
-     * qu'un autre appareil a AGRANDIE (une personne de plus, une précision changée, une échéance repoussée) fait céder la
-     * publication d'ici : un seul appareil publie, celui du dernier « Partager » (#18580). Une relecture
+     * qui nomme un AUTRE démarrage (`startedAt`) que l'accusé d'ici fait céder la publication d'ici : un seul appareil
+     * publie, celui du dernier « Partager » (#18580), sans qu'aucune horloge soit comparée. Une relecture
      * qui échoue (hors ligne, passerelle d'avant #18389, réponse sans liste lisible) ne change rien.
      */
     suspend fun sync() {
@@ -254,11 +257,14 @@ class SharedLocationSharingCenter internal constructor(
             if (!isCurrent(ticket)) return@locked null
             val before = _roster.value
             val next = before.withServed(truth, clock())
-            if (next == before) return@locked null
-            val yields = next.hasRecipients && !received && next.gainedOver(before)
-            if (yields) markReceived(ticket, true)
+            val yields = next.hasRecipients && !received && before.hasRecipients && yieldsTo(truth.startedAt)
+            if (next == before) {
+                if (yields) yieldPublishing(ticket)
+                return@locked null
+            }
+            if (yields || (next.hasRecipients && !before.hasRecipients)) markReceived(ticket, true)
             adopt(ticket, next)
-            if (yields) stopFollowingDevice()
+            if (yields) yieldPublishing(ticket)
             if (!next.hasRecipients) {
                 stopFollowingDevice()
                 markReceived(ticket, false)
@@ -435,11 +441,13 @@ class SharedLocationSharingCenter internal constructor(
         return when (verdict) {
             is SharedLocationStartVerdict.Started -> {
                 if (claimsPublishing) markReceived(ticket, false)
+                if (fix != null) publishedStart = verdict.startedAt
                 engage(ticket, next, fix)
                 null
             }
             SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED) -> {
                 if (claimsPublishing) markReceived(ticket, false)
+                if (fix != null) publishedStart = null
                 engage(ticket, previous.union(next), fix)
                 SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
             }
@@ -528,8 +536,30 @@ class SharedLocationSharingCenter internal constructor(
     private fun wipe(ticket: Ticket) {
         adopt(ticket, SharedLocationRoster.EMPTY)
         markReceived(ticket, false)
+        publishedStart = null
         stopFollowingDevice()
         cancelDeadline()
+    }
+
+    /**
+     * UN SEUL APPAREIL PUBLIE (#18580), iso `followServedStart` du web et d'iOS : la passerelle nomme le dernier démarrage
+     * avec position ; s'il diffère de celui de l'accusé d'ici, un autre appareil a partagé après lui. Sans accusé lisible,
+     * le démarrage servi est pris pour le sien ; sans `startedAt` (passerelle d'avant), rien ne change.
+     */
+    private fun yieldsTo(served: String?): Boolean {
+        if (served == null) return false
+        val mine = publishedStart ?: run {
+            publishedStart = served
+            return false
+        }
+        return served != mine
+    }
+
+    /** La marque « reçue » s'écrit AVANT la liste (processus tué entre les deux : relancé muet), puis le suivi se coupe. */
+    private fun yieldPublishing(ticket: Ticket) {
+        markReceived(ticket, true)
+        publishedStart = null
+        stopFollowingDevice()
     }
 
     private fun stopFollowingDevice() {
