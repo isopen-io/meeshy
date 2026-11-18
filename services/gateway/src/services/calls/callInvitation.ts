@@ -2,6 +2,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CALL_MAX_PARTICIPANTS } from '@meeshy/shared/types/call-rules';
 import { CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import type { CallControlErrorCode, CallInvitedUser } from '@meeshy/shared/types/call-controls';
+import { MemberRole } from '@meeshy/shared/types/role-types';
+import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { CallService } from '../CallService';
 import { amitieAcceptee } from '../friendship';
 import { activeCallStanding } from './callModerationPolicy';
@@ -94,7 +96,13 @@ const isBanned = (row: { bannedAt?: Date | null } | null): boolean => Boolean(ro
  * compté avec les invitations qui sonnent ; ami accepté ; aucun blocage avec un
  * participant présent ; et, quand l'invité entre dans la conversation de
  * l'appel, les gardes d'entrée de cette conversation (close, externe, banni,
- * salon de communauté privée).
+ * salon de communauté privée). Un compte désactivé ou supprimé ne s'invite pas.
+ *
+ * Audit #19650 — un ANCIEN membre du groupe (ligne inactive, non bannie : retiré
+ * par un modérateur, parti, « supprimé pour moi ») n'y revient que par le rang
+ * de la porte d'ajout (MODERATOR, `callEntryForInvitee`). Invité par un simple
+ * membre, il devient l'invité de CET appel (`legacy-guest`), sans retrouver le
+ * groupe ni les messages postés pendant son absence.
  */
 export async function authorizeCallInvitation(
   deps: CallInvitationDeps,
@@ -122,7 +130,7 @@ export async function authorizeCallInvitation(
 
   const users = await deps.prisma.user.findMany({
     where: { id: { in: [input.inviterUserId, input.inviteeUserId] } },
-    select: { id: true, username: true, displayName: true, avatar: true },
+    select: { id: true, username: true, displayName: true, avatar: true, isActive: true, deletedAt: true },
   });
   const toInvited = (id: string): CallInvitedUser | null => {
     const user = users.find((u) => u.id === id);
@@ -132,18 +140,20 @@ export async function authorizeCallInvitation(
   };
   const inviter = toInvited(input.inviterUserId);
   const invitee = toInvited(input.inviteeUserId);
-  if (!inviter || !invitee) return refuse('NOT_A_CONTACT');
+  if (!inviter || !invitee || !isLiveAccount(users.find((u) => u.id === input.inviteeUserId))) return refuse('NOT_A_CONTACT');
 
   const presentUserIds = present.flatMap((p) => (p.participant?.userId ? [p.participant.userId] : []));
   if (await blockedWithAnyone(deps.prisma, input.inviteeUserId, presentUserIds)) return refuse('PERMISSION_DENIED');
 
-  const membership = await deps.prisma.participant.findFirst({
-    where: { conversationId: session.conversationId, userId: input.inviteeUserId },
-    select: { id: true, bannedAt: true, isActive: true },
+  const entry = await callEntryForInvitee(deps.prisma, {
+    conversationId: session.conversationId,
+    inviterUserId: input.inviterUserId,
+    inviteeUserId: input.inviteeUserId,
   });
-  if (isBanned(membership)) return refuse('PERMISSION_DENIED');
+  if (entry === 'banned') return refuse('PERMISSION_DENIED');
 
-  const route = callInvitationRoute(conversation);
+  const conversationRoute = callInvitationRoute(conversation);
+  const route = conversationRoute === 'admit-member' && entry === 'guest-only' ? 'legacy-guest' : conversationRoute;
   const community = route === 'admit-member'
     ? await loadSalonCommunity(deps.prisma, { communityId: conversation.communityId, actorId: input.inviterUserId })
     : null;
@@ -162,12 +172,52 @@ export async function authorizeCallInvitation(
     route,
     conversation,
     community,
-    inviteeIsMember: membership?.isActive === true,
+    inviteeIsMember: entry === 'member',
   };
 }
 
+const isLiveAccount = (user: { readonly isActive?: boolean | null; readonly deletedAt?: Date | null } | undefined): boolean =>
+  Boolean(user) && user?.isActive !== false && !user?.deletedAt;
+
+/**
+ * Comment l'invité entre dans la conversation `conversationId` par l'appel :
+ * `member` (déjà membre actif : il sonne seulement), `banned` (refusé), `admit`
+ * (la porte d'ajout le fait entrer), `guest-only` (ancien membre qu'un inviteur
+ * sous MODERATOR ne peut pas réintégrer : invité de CET appel seulement).
+ */
+export type CallInviteeEntry = 'member' | 'banned' | 'admit' | 'guest-only';
+
+export async function callEntryForInvitee(
+  prisma: Pick<PrismaClient, 'participant' | 'user'>,
+  input: { readonly conversationId: string; readonly inviterUserId: string; readonly inviteeUserId: string }
+): Promise<CallInviteeEntry> {
+  const row = await prisma.participant.findFirst({
+    where: { conversationId: input.conversationId, userId: input.inviteeUserId },
+    select: { id: true, bannedAt: true, isActive: true },
+  });
+  if (!row) return 'admit';
+  if (isBanned(row)) return 'banned';
+  if (row.isActive === true) return 'member';
+  return (await inviterMayReadmit(prisma, input)) ? 'admit' : 'guest-only';
+}
+
+/** Le rang de `POST /conversations/:id/participants` : MODERATOR du groupe, ou administrateur de la plateforme qui y est. */
+async function inviterMayReadmit(
+  prisma: Pick<PrismaClient, 'participant' | 'user'>,
+  input: { readonly conversationId: string; readonly inviterUserId: string }
+): Promise<boolean> {
+  const [row, user] = await Promise.all([
+    prisma.participant.findFirst({
+      where: { conversationId: input.conversationId, userId: input.inviterUserId, isActive: true },
+      select: { role: true },
+    }),
+    prisma.user.findUnique({ where: { id: input.inviterUserId }, select: { role: true } }),
+  ]);
+  return actorHasMinimumRole({ conversationRole: row?.role ?? null, platformRole: user?.role ?? null }, MemberRole.MODERATOR);
+}
+
 /** Un blocage, dans un sens ou dans l'autre, entre l'invité et UN des participants présents — une lecture. */
-async function blockedWithAnyone(
+export async function blockedWithAnyone(
   prisma: Pick<PrismaClient, 'user'>,
   inviteeUserId: string,
   presentUserIds: readonly string[]

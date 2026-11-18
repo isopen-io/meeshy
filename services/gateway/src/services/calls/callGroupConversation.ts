@@ -122,10 +122,14 @@ export type CreateCallGroupDeps = {
  * (`firstMessageSentAt: null`) : il n'apparaît à personne tant que la bascule
  * n'est pas gagnée — une invitation concurrente qui gagne le fait disparaître
  * sans qu'aucune liste l'ait vu.
+ *
+ * Audit #19650 — il naît en TENANT la réservation de l'appel qui le fait naître
+ * (`activeCallId`) : prendre la réservation après coup (`ActiveCallClaim.claim`)
+ * annonçait la ligne de liste aux membres avant que la bascule soit gagnée.
  */
 export async function createCallGroup(
   deps: CreateCallGroupDeps,
-  input: { readonly inviterUserId: string; readonly memberUserIds: readonly string[] }
+  input: { readonly inviterUserId: string; readonly memberUserIds: readonly string[]; readonly callId?: string }
 ): Promise<{ readonly id: string; readonly title: string | null }> {
   const { prisma } = deps;
   const regime = await (deps.regime
@@ -153,6 +157,7 @@ export async function createCallGroup(
       identifier: generateCompactConversationIdentifier(),
       type: 'group',
       firstMessageSentAt: null,
+      ...(input.callId ? { activeCallId: input.callId } : {}),
       participants: { create: rows },
     },
     select: { id: true, title: true },
