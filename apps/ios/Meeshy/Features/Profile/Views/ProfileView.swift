@@ -498,15 +498,19 @@ struct ProfileView: View {
                 .foregroundStyle(theme.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .transition(.opacity)
+                .meeshyCascade(rank: 0)
         }
+        // Les blocs montent l'un après l'autre à l'arrivée sur la face (K26, mouvement 08, #19625).
         ProfileCirclesSection(summary: circles.summary, hasServedLinks: circles.hasServedLinks,
                               accentHex: accentColor, onOpen: open)
+            .meeshyCascade(rank: 1)
         ProfileIdentitySection(
             isEditing: isEditing, firstName: $firstName, lastName: $lastName,
             displayName: $displayName, bio: $bio, city: $city, cityCircle: $cityCircle,
             username: user?.username, accentColor: accentColor
         )
-        if languagesMode == .chips { ProfileLanguageChips(languages: prismLanguages) }
+        .meeshyCascade(rank: 2)
+        if languagesMode == .chips { ProfileLanguageChips(languages: prismLanguages).meeshyCascade(rank: 3) }
         if Self.showsEncryptionBadge(isEditing: isEditing, hasSignalKeys: hasSignalKeys) {
             ProfileE2EEBadge()
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -524,10 +528,11 @@ struct ProfileView: View {
             )
         }
         if languagesMode == .reorderable { languagesSection }
-        activitySection
-        voiceBlock
+        activitySection.meeshyCascade(rank: 3)
+        voiceBlock.meeshyCascade(rank: 3)
         if !isEditing, let userId = user?.id {
             ProfilePublicationsSection(userId: userId, accentColor: accentColor)
+                .meeshyCascade(rank: 3)
         }
     }
 

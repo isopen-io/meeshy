@@ -53,16 +53,18 @@ struct ProfileActionsFace: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
-            header
-            showSection
-            sharingSection
-            whoSeesMeSection
+            header.meeshyCascade(rank: 0)
+            showSection.meeshyCascade(rank: 1)
+            sharingSection.meeshyCascade(rank: 2)
+            whoSeesMeSection.meeshyCascade(rank: 3)
             if ProfilePackShortcuts.isShown(viewerId: user?.id, profileUserId: user?.id) {
                 ProfileSavedContentRows(stats: stats, accentColor: accentColor, onOpen: { onAction(.door($0)) })
+                    .meeshyCascade(rank: 3)
             }
-            accountSection
+            accountSection.meeshyCascade(rank: 3)
             MeeshyButton(ProfileActionsCopy.logout, systemImage: "rectangle.portrait.and.arrow.right",
                          kind: .danger, width: .fill, isDestructive: true, action: { onAction(.logout) })
+                .meeshyCascade(rank: 3)
         }
         .fullScreenCover(isPresented: $showsNearbyMap) { NearbyMapScreen() }
         .modifier(ProfileLinksPresentations(

@@ -15,16 +15,16 @@ extension UserProfileSheet {
     @ViewBuilder
     var vitrineFace: some View {
         VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
-            aboutSection
-            withThemSection
-            liveSection
-            ProfilePendingSection.of(self)
-            voiceSection
-            gameSectionCard
-            statsSection
-            commonSection
-            publicationsSection
-            ProfileAcquaintanceSection.of(self)
+            aboutSection.meeshyCascade(rank: 0)
+            withThemSection.meeshyCascade(rank: 1)
+            liveSection.meeshyCascade(rank: 2)
+            ProfilePendingSection.of(self).meeshyCascade(rank: 3)
+            voiceSection.meeshyCascade(rank: 3)
+            gameSectionCard.meeshyCascade(rank: 3)
+            statsSection.meeshyCascade(rank: 3)
+            commonSection.meeshyCascade(rank: 3)
+            publicationsSection.meeshyCascade(rank: 3)
+            ProfileAcquaintanceSection.of(self).meeshyCascade(rank: 3)
         }
     }
 

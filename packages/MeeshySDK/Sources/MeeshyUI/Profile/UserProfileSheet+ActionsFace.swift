@@ -18,6 +18,7 @@ extension UserProfileSheet {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(ProfileActionsSection.order, id: \.self) { section in
                 actionsSection(section)
+                    .meeshyCascade(rank: ProfileActionsSection.order.firstIndex(of: section) ?? 0)
             }
         }
         .padding(.horizontal, MeeshySpacing.xl)

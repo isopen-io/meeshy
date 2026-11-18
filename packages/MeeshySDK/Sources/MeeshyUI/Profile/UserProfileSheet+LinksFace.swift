@@ -66,7 +66,7 @@ struct RelationLinksFace: View {
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
             if let link {
-                ticket(link)
+                ticket(link).meeshyCascade(rank: 0)
             } else {
                 MeeshyStateBlock(
                     kind: .empty,
@@ -76,11 +76,13 @@ struct RelationLinksFace: View {
                     },
                     tint: tint
                 )
+                .meeshyCascade(rank: 0)
             }
-            if !addresses.isEmpty || !lockedAddresses.isEmpty { addressesSection }
+            if !addresses.isEmpty || !lockedAddresses.isEmpty { addressesSection.meeshyCascade(rank: 1) }
             if !communities.isEmpty {
                 RelationOpenCommunitiesSection(communities: communities, tint: tint, join: joinCommunity,
                                                onOpen: communityOpening)
+                    .meeshyCascade(rank: 2)
             }
         }
         .padding(.horizontal, MeeshySpacing.xl)

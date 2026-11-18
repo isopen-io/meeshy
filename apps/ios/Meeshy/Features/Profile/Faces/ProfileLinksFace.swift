@@ -44,16 +44,19 @@ struct ProfileLinksFace: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
-            if showsHeader { header }
+            if showsHeader { header.meeshyCascade(rank: 0) }
             if let profileLink {
                 ProfileNoveltyReader(feature: .profileLink, accountId: user?.id) { badge in
                     profileTicket(profileLink, badge: badge)
                 }
+                .meeshyCascade(rank: 1)
             }
             ProfileAddressesRail(store: addresses, accent: accent, accountId: user?.id,
                                  onManage: { onOpen(.myAddresses) })
+                .meeshyCascade(rank: 2)
             ProfileCreatedLinks(model: links, accent: accent, onOpen: onOpen,
                                 onCreate: { presented = .create })
+                .meeshyCascade(rank: 3)
         }
         .task { await loadAll() }
         .task(id: createRequested.wrappedValue) { openRequestedCreation() }
