@@ -630,6 +630,8 @@ export const SERVER_EVENTS = {
   COMMUNITY_MEMBER_JOINED: 'community:member-joined',
   COMMUNITY_MEMBER_LEFT: 'community:member-left',
   COMMUNITY_MEMBER_ROLE_UPDATED: 'community:member-role-updated',
+  // La disparition d'une communauté (#19590) : supprimée par son créateur ou désactivée par l'équipe
+  COMMUNITY_DELETED: 'community:deleted',
 
   // --- Packs (#10148) : l'installation d'un pack, synchronisée entre les appareils du compte ---
   PACK_INSTALLATION_UPDATED: 'pack:installation-updated',

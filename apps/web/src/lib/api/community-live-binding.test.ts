@@ -38,7 +38,7 @@ describe('les communautés vivantes, montées avec la connexion (#18435, #18766)
     const off = bindCommunityLiveLazily({ socket, queryClient });
     await until(() => handlers.has('community:updated'));
     expect([...handlers.keys()].sort()).toEqual(
-      ['community:member-joined', 'community:member-left', 'community:member-role-updated', 'community:updated'],
+      ['community:deleted', 'community:member-joined', 'community:member-left', 'community:member-role-updated', 'community:updated'],
     );
 
     handlers.get('community:updated')?.({
@@ -49,6 +49,22 @@ describe('les communautés vivantes, montées avec la connexion (#18435, #18766)
     expect(queryClient.getQueryData<CommunitySummary>(communityQueryKey(CLUB))?.name).toBe('Nouveau');
     off();
     expect(handlers.size).toBe(0);
+  });
+
+  test('un community:deleted retire la communauté du détail en cache (#19590)', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(communityQueryKey(CLUB), {
+      id: CLUB, identifier: 'mshy_club', name: 'Club', description: null, avatar: null, banner: null,
+      isPrivate: false, createdBy: 'u-creator', memberCount: 2, conversationCount: 1,
+    } satisfies CommunitySummary);
+    const { socket, handlers } = fakeSocket();
+    const off = bindCommunityLiveLazily({ socket, queryClient });
+    await until(() => handlers.has('community:deleted'));
+
+    handlers.get('community:deleted')?.({ communityId: CLUB, reason: 'deleted', at: '2026-11-18T06:00:00.000Z' });
+
+    expect(queryClient.getQueryData(communityQueryKey(CLUB))).toBeUndefined();
+    off();
   });
 
   test("un disposer appelé avant l'arrivée du module ne laisse aucun abonnement", async () => {

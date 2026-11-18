@@ -4,6 +4,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 
 import type { SocketClient } from '../net/socket';
 import { COMMUNITIES_QUERY_PREFIX, communityQueryKey, decodeCommunity, type CommunityPage, type CommunitySummary } from './communities';
+import { applyCommunityDeletedEvent } from './community-deleted-live';
 import { applyCommunityMemberEvent, COMMUNITY_MEMBER_EVENTS } from './community-member-live';
 
 /**
@@ -67,8 +68,9 @@ export function applyCommunityUpdatedEvent(queryClient: QueryClient, payload: un
 }
 
 /**
- * Branche l'identité (`community:updated`) et l'effectif (`community:member-*`,
- * #18766) sur les caches des communautés ; rend le débranchement. `viewerId`
+ * Branche l'identité (`community:updated`), l'effectif (`community:member-*`,
+ * #18766) et la disparition (`community:deleted`, #19590) sur les caches des
+ * communautés ; rend le débranchement. `viewerId`
  * dit qui lit : un événement qui le concerne change son rôle.
  */
 export function bindCommunityLive(params: {
@@ -84,9 +86,12 @@ export function bindCommunityLive(params: {
     socket.on(event, handler);
     return { event, handler };
   });
+  const onDeleted = (payload: unknown): void => applyCommunityDeletedEvent(queryClient, payload);
   socket.on(SERVER_EVENTS.COMMUNITY_UPDATED, onUpdated);
+  socket.on(SERVER_EVENTS.COMMUNITY_DELETED, onDeleted);
   return () => {
     socket.off(SERVER_EVENTS.COMMUNITY_UPDATED, onUpdated);
+    socket.off(SERVER_EVENTS.COMMUNITY_DELETED, onDeleted);
     onMember.forEach(({ event, handler }) => socket.off(event, handler));
   };
 }
