@@ -65,6 +65,10 @@ export enum NotificationTypeEnum {
   DEVICE_BATTERY = 'device_battery',
   /** Le téléphone d'un Proche ou d'un Sang est injoignable, ou répond de nouveau (#18737). */
   DEVICE_UNREACHABLE = 'device_unreachable',
+  /** « Tout va bien ? » — à soi, quand son téléphone est resté inactif au-delà du délai choisi (#18738). */
+  WELLNESS_CHECK = 'wellness_check',
+  /** Un Sang n'a pas répondu à « Tout va bien ? », ou vient de répondre (#18738). */
+  INACTIVITY_ALERT = 'inactivity_alert',
   /** Un lien me partage sa position et a choisi de me prévenir (#19204) : un nom et une durée, jamais une position. */
   LOCATION_SHARE_STARTED = 'location_share_started',
   /** Un destinataire me demande de prolonger ou de refaire mon partage de position (#19204). */
@@ -680,6 +684,26 @@ export interface DeviceUnreachableNotificationMetadata extends BaseNotificationM
 }
 
 /**
+ * Metadata pour wellness_check (#18738) — adressée à SOI : le toucher, ou l'action « Je vais bien »,
+ * répond par `POST /me/wellness/ok`. Rien d'autre ne se range.
+ */
+export interface WellnessCheckNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'none';
+  readonly wellnessCheck: true;
+}
+
+/**
+ * Metadata pour inactivity_alert (#18738) — `userId` est la personne restée inactive : le toucher
+ * ouvre son profil, où la dernière position et la dernière batterie se lisent si elles sont déjà
+ * partagées. Ni position ni batterie ne se rangent dans la notification.
+ */
+export interface InactivityAlertNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_profile';
+  readonly userId: string;
+  readonly inactivityKind: 'alert' | 'responded';
+}
+
+/**
  * Metadata pour location_share_started (#19204). `userId` est l'ÉMETTEUR : le toucher ouvre sa
  * carte. Seule la durée choisie se range : ni position, ni précision, ni autre destinataire.
  * La ligne expire au terme du partage.
@@ -782,6 +806,8 @@ export type NotificationMetadata =
   | RelationAcquaintanceNotificationMetadata
   | DeviceBatteryNotificationMetadata
   | DeviceUnreachableNotificationMetadata
+  | WellnessCheckNotificationMetadata
+  | InactivityAlertNotificationMetadata
   | LocationShareStartedNotificationMetadata
   | LocationShareRequestedNotificationMetadata
   | ContentRemovedNotificationMetadata

@@ -65,6 +65,8 @@ export const notificationTypeEnum = z.enum([
   'relation_acquaintance', // La Connaissance est née toute seule entre deux personnes qui échangent (#13932)
   'device_battery',       // La batterie d'un Proche ou d'un Sang l'empêchera bientôt de répondre (#14147)
   'device_unreachable',   // Le téléphone d'un Proche ou d'un Sang est injoignable, ou répond de nouveau (#18737)
+  'wellness_check',       // « Tout va bien ? » : mon téléphone est resté inactif au-delà de mon délai (#18738)
+  'inactivity_alert',     // Un Sang n'a pas répondu à « Tout va bien ? », ou vient de répondre (#18738)
   'location_share_started',   // Un lien me partage sa position et m'en prévient (#19204)
   'location_share_requested', // Un destinataire demande de prolonger ou de refaire mon partage (#19204)
 

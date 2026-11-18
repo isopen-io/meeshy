@@ -9,7 +9,16 @@ import {
 } from '../utils/relation-levels';
 import { resolveRelationAccessWithStoredConsent } from '../utils/relation-emitter-consent';
 import type { RelationAccessInput } from '../utils/relation-access';
-import { INACTIVITY_CHECK_CONFIG, inactivityCheckSettingsUpdateSchema } from '../types/inactivity-check';
+import {
+  INACTIVITY_ALERT_NOTIFICATION_TYPE,
+  INACTIVITY_CHECK_CONFIG,
+  WELLNESS_CHECK_NOTIFICATION_TYPE,
+  inactivityAlertEventDataSchema,
+  inactivityClearedEventDataSchema,
+  inactivityCheckSettingsUpdateSchema,
+} from '../types/inactivity-check';
+import { SERVER_EVENTS } from '../types/socketio-events';
+import { notificationTypeEnum } from '../utils/notification-type-enum';
 import { INITIAL_INACTIVITY_CHECK, inactivityCheckStep, type InactivityCheckRecord } from '../utils/inactivity-check';
 
 const pair = (over: Partial<Omit<RelationAccessInput, 'consent'>> = {}): Omit<RelationAccessInput, 'consent'> => ({
@@ -107,5 +116,34 @@ describe('les réglages', () => {
     expect(inactivityCheckSettingsUpdateSchema.safeParse({ delayHours: null }).success).toBe(true);
     expect(inactivityCheckSettingsUpdateSchema.safeParse({ delayHours: 3 }).success).toBe(false);
     expect(INACTIVITY_CHECK_CONFIG.defaultDelayHours).toBe(12);
+  });
+});
+
+describe('le contrat servi aux Sangs', () => {
+  const USER = 'bbbbbbbbbbbbbbbbbbbbbbbb';
+  const state = { userId: USER, inactiveSince: at(0), alertedAt: at(12 * HOUR + 30) };
+
+  it('nomme ses deux événements et ses deux notifications', () => {
+    expect(SERVER_EVENTS.INACTIVITY_ALERT).toBe('inactivity:alert');
+    expect(SERVER_EVENTS.INACTIVITY_CLEARED).toBe('inactivity:cleared');
+    expect(notificationTypeEnum.options).toEqual(expect.arrayContaining([WELLNESS_CHECK_NOTIFICATION_TYPE, INACTIVITY_ALERT_NOTIFICATION_TYPE]));
+  });
+
+  it('l\'alerte porte la dernière position et la dernière batterie quand elles sont servies, et rien sinon', () => {
+    const full = { ...state, lastPosition: { latitude: 48.85, longitude: 2.35, recordedAt: at(-10) }, lastBattery: { level: 7, measuredAt: at(-5) } };
+    expect(inactivityAlertEventDataSchema.parse({ userId: USER, state: full }).state).toMatchObject(full);
+    expect(inactivityAlertEventDataSchema.parse({ userId: USER, state }).state.lastPosition).toBeUndefined();
+  });
+
+  it('un client plus ancien tolère une annonce, une position ou une batterie illisibles', () => {
+    const parsed = inactivityAlertEventDataSchema.parse({
+      userId: USER,
+      state: { ...state, lastPosition: { latitude: 'x' }, lastBattery: { level: 400 } },
+      announcement: { kind: 'futur', at: at(1) },
+    });
+    expect(parsed.state.lastPosition).toBeUndefined();
+    expect(parsed.state.lastBattery).toBeUndefined();
+    expect(parsed.announcement).toBeUndefined();
+    expect(inactivityClearedEventDataSchema.parse({ userId: USER, announcement: { kind: 'responded', inactiveSince: at(0), at: at(14 * HOUR) } }).announcement?.kind).toBe('responded');
   });
 });

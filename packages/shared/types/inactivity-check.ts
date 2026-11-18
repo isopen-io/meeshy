@@ -58,3 +58,60 @@ export type InactivityCheckSettings = { readonly delayHours: InactivityDelayHour
 /** Ce que je partage à une personne (Sang : accordé par défaut, retirable). */
 export const inactivityCheckPersonSettingsUpdateSchema = z.object({ shared: z.boolean() }).strict();
 export type InactivityCheckPersonSettings = { readonly userId: string; readonly shared: boolean };
+
+const objectId = z.string().regex(/^[0-9a-f]{24}$/i);
+const instant = z.iso.datetime({ offset: true });
+
+/** La dernière position, SEULEMENT quand le Sang la reçoit déjà (`location.history`, #13937). */
+export const inactivityLastPositionSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  accuracy: z.number().min(0).optional(),
+  recordedAt: instant,
+});
+export type InactivityLastPosition = z.infer<typeof inactivityLastPositionSchema>;
+
+/** La dernière batterie, SEULEMENT quand le Sang la reçoit déjà (`device.battery`, #14147). */
+export const inactivityLastBatterySchema = z.object({ level: z.number().int().min(0).max(100), measuredAt: instant });
+export type InactivityLastBattery = z.infer<typeof inactivityLastBatterySchema>;
+
+/**
+ * L'état servi à UN Sang pendant l'alerte : depuis quand le téléphone ne montre plus d'activité, et
+ * ce qui lui est déjà partagé par ailleurs. Une position ou une batterie illisible se tait, l'état reste lu.
+ */
+export const inactivityAlertStateSchema = z.object({
+  userId: objectId,
+  inactiveSince: instant,
+  alertedAt: instant,
+  lastPosition: inactivityLastPositionSchema.optional().catch(undefined),
+  lastBattery: inactivityLastBatterySchema.optional().catch(undefined),
+});
+export type InactivityAlertState = {
+  readonly userId: string;
+  readonly inactiveSince: string;
+  readonly alertedAt: string;
+  readonly lastPosition?: InactivityLastPosition;
+  readonly lastBattery?: InactivityLastBattery;
+};
+
+export const inactivityAnnouncementSchema = z.object({
+  kind: z.enum(INACTIVITY_ANNOUNCEMENT_KINDS),
+  inactiveSince: instant,
+  at: instant,
+});
+
+const tolerantAnnouncement = inactivityAnnouncementSchema.optional().catch(undefined);
+
+/** `inactivity:alert` — à un Sang, dans `user:<lecteur>`. */
+export const inactivityAlertEventDataSchema = z.object({ userId: objectId, state: inactivityAlertStateSchema, announcement: tolerantAnnouncement });
+export type InactivityAlertEventData = { readonly userId: string; readonly state: InactivityAlertState; readonly announcement?: InactivityAnnouncement };
+
+/** `inactivity:cleared` — la personne a répondu, ou l'alerte ne vous est plus servie. */
+export const inactivityClearedEventDataSchema = z.object({ userId: objectId, announcement: tolerantAnnouncement });
+export type InactivityClearedEventData = { readonly userId: string; readonly announcement?: InactivityAnnouncement };
+
+export const inactivitySnapshotSchema = z.object({ items: z.array(inactivityAlertStateSchema) });
+export type InactivitySnapshot = { readonly items: readonly InactivityAlertState[] };
+
+/** L'accusé de « Je vais bien » : `tracked: false` quand l'appareil n'est pas le téléphone suivi. */
+export type WellnessOkAck = { readonly tracked: boolean };
