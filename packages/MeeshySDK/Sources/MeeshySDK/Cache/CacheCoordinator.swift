@@ -221,6 +221,7 @@ public actor CacheCoordinator {
         subscribeToConversationObsolescence()
         subscribeToCommunityUpdates()
         subscribeToCommunityMemberChanges()
+        subscribeToCommunityDeletions()
         Task { await self.backfillSearchIndexIfNeeded() }
     }
 

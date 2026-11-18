@@ -112,13 +112,6 @@ const ASYMETRIES: readonly {
     ],
   },
   {
-    absents: ['ios'],
-    raison:
-      "la disparition d'une communauté (#19590) : la passerelle, le web et Android (#19592) la portent ; "
-      + 'iOS (#19591) la lira sur le modèle de `community:updated` — dette mesurée, son issue.',
-    events: ['community:deleted'],
-  },
-  {
     absents: ['web', 'ios'],
     raison:
       "signaux que seul le miroir ANDROID cite : la pièce jointe prête côté SDK Kotlin et le "

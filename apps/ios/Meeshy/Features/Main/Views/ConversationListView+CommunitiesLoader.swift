@@ -36,6 +36,7 @@ final class MyCommunities: ObservableObject {
     private let store: @MainActor () async -> GRDBCacheStore<String, APICommunity>
     private var liveUpdates: AnyCancellable?
     private var liveMembers: AnyCancellable?
+    private var liveDeletions: AnyCancellable?
     private let memberLane = OrderedEventLane()
     private let currentUserId: @MainActor () -> String
 
@@ -46,6 +47,7 @@ final class MyCommunities: ObservableObject {
         store: @escaping @MainActor () async -> GRDBCacheStore<String, APICommunity> = MyCommunities.liveStore,
         communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live,
         memberChanges: AnyPublisher<CommunityMemberChange, Never> = CommunityMemberChannel.live,
+        deletions: AnyPublisher<String, Never> = CommunityDeletedChannel.live,
         currentUserId: @escaping @MainActor () -> String = MyCommunities.liveReaderId
     ) {
         self.service = service
@@ -56,6 +58,8 @@ final class MyCommunities: ObservableObject {
             .sink { [weak self] event in self?.apply(event) }
         self.liveMembers = memberChanges
             .relay(through: memberLane) { [weak self] change in await self?.apply(change) }
+        self.liveDeletions = deletions
+            .relay(through: memberLane) { [weak self] communityId in await self?.remove(communityId: communityId) }
     }
 
     /// `community:member-*` (#18767) : l'effectif se recopie ; le lecteur
