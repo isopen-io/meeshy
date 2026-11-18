@@ -31,15 +31,15 @@ export type ServedTranslationEntryRatchet = [
   Assert<'url' extends keyof ServedTranslationEntry<{ path: string; url: string }> ? true : false>,
 ];
 
-export function servedAttachmentTranslations(translations: null): null;
-export function servedAttachmentTranslations(translations: undefined): undefined;
+export function servedAttachmentTranslations(map: null): null;
+export function servedAttachmentTranslations(map: undefined): undefined;
 export function servedAttachmentTranslations<E extends object>(
-  translations: Readonly<Record<string, E>>,
+  map: Readonly<Record<string, E>>,
 ): Record<string, ServedTranslationEntry<E>>;
-export function servedAttachmentTranslations(translations: unknown): unknown;
-export function servedAttachmentTranslations(translations: unknown): unknown {
-  if (!isPlainObject(translations)) return translations;
+export function servedAttachmentTranslations(map: unknown): unknown;
+export function servedAttachmentTranslations(map: unknown): unknown {
+  if (!isPlainObject(map)) return map;
   return Object.fromEntries(
-    Object.entries(translations).map(([language, entry]) => [language, withoutDiskPath(entry)]),
+    Object.entries(map).map(([language, entry]) => [language, withoutDiskPath(entry)]),
   );
 }
