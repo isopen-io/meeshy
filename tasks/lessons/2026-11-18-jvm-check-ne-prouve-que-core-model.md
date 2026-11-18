@@ -1,8 +1,8 @@
-# `jvm-check` ne prouve que `:core:model` — un lot qui touche `sdk-core` attend `android.yml`
+## 2026-11-18 — `jvm-check` ne prouve que `:core:model` — un lot qui touche `sdk-core` attend `android.yml`
 
 **Date** : 2026-11-18 · **Issue** : #19650 · **Correctif** : 3c34847299
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 Le lot Android de #19650 (bf51c7d3fc) a été poussé sur `dev` après un `jvm-check`
 vert (2 308 tests). Dans `SocketEventNames.kt`, il avait REMPLACÉ
@@ -11,7 +11,7 @@ vert (2 308 tests). Dans `SocketEventNames.kt`, il avait REMPLACÉ
 (`CommunityDeletedBinding`, #19592) ne compilait plus. Une autre session l'a
 réparé.
 
-## La règle
+### La règle
 
 - `./apps/android/meeshy.sh jvm-check` ne compile QUE `:core:model`. Un vert y
   prouve les lois pures, jamais un module qui les consomme (`sdk-core`,
