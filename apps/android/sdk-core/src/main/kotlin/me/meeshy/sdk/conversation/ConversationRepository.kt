@@ -104,6 +104,7 @@ class ConversationRepository @Inject constructor(
         presenceSink = presenceSink,
         syncDelta = syncDelta,
         journal = liveJournal,
+        pendingPrefs = OutboxPendingConversationPrefs(database.outboxDao()),
     )
 
     /**
