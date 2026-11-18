@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="links_face_profile_tag">رابط ملفي الشخصي</string>
-    <string name="links_face_profile_hint">يفتح واجهتي، عرض العموم</string>
     <string name="links_face_copy">نسخ</string>
     <string name="links_face_qr">QR</string>
     <string name="links_face_send">إرسال</string>

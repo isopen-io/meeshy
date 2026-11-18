@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="links_face_profile_tag">Mi enlace de perfil</string>
-    <string name="links_face_profile_hint">Abre mi escaparate, vista Público</string>
     <string name="links_face_copy">Copiar</string>
     <string name="links_face_qr">QR</string>
     <string name="links_face_send">Enviar</string>

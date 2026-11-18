@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="links_face_profile_tag">My profile link</string>
-    <string name="links_face_profile_hint">Opens my showcase, Public view</string>
     <string name="links_face_copy">Copy</string>
     <string name="links_face_qr">QR</string>
     <string name="links_face_send">Send</string>

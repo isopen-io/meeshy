@@ -22,5 +22,5 @@
     <string name="location_map_nearby_open">Carte de mes proches</string>
     <string name="location_map_nearby_title">Autour de toi</string>
     <string name="location_map_nearby_empty">Personne ne te partage sa position</string>
-    <string name="location_map_nearby_empty_message">Les positions que tes proches te partagent apparaissent ici, à la précision qu\'ils choisissent.</string>
+    <string name="location_map_nearby_empty_message">Les positions partagées par tes proches apparaissent ici.</string>
 </resources>
