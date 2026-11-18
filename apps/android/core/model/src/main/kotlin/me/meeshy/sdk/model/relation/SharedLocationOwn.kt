@@ -19,7 +19,14 @@ public data class SharedLocationOwnRecipient(
  * `GET /relations/locations/mine` — MON partage en cours, tel que la passerelle le sert. Un partage par compte : c'est lui
  * qui fait foi, pour chacun des appareils du compte.
  */
-public data class SharedLocationOwnSnapshot(val recipients: List<SharedLocationOwnRecipient>)
+public data class SharedLocationOwnSnapshot(
+    val recipients: List<SharedLocationOwnRecipient>,
+    /**
+     * UN SEUL APPAREIL PUBLIE (#18580) : le dernier démarrage AVEC position, renouvelé par chaque « Partager », gardé par
+     * la liste seule. `null` : passerelle antérieure — l'appareil ne cède alors jamais.
+     */
+    val startedAt: String? = null,
+)
 
 /**
  * La charge telle qu'elle voyage. Une personne illisible (identifiant vide, échéance illisible) est écartée sans faire
@@ -28,12 +35,16 @@ public data class SharedLocationOwnSnapshot(val recipients: List<SharedLocationO
  * liste et ses « Arrêter » (iso `decodeOwnSharedLocation` du web, `SharedLocationOwnSnapshot` du SDK iOS).
  */
 @Serializable
-public data class SharedLocationOwnSnapshotWire(val recipients: List<JsonElement>? = null) {
+public data class SharedLocationOwnSnapshotWire(
+    val recipients: List<JsonElement>? = null,
+    val startedAt: String? = null,
+) {
     public fun served(json: Json): SharedLocationOwnSnapshot? = recipients?.let { items ->
         SharedLocationOwnSnapshot(
             items.mapNotNull { item ->
                 runCatching { json.decodeFromJsonElement(RecipientWire.serializer(), item) }.getOrNull()?.served()
             },
+            startedAt,
         )
     }
 

@@ -56,7 +56,8 @@ import {
  * un « Arrêter » ne court jamais pendant qu'un démarrage d'un autre onglet attend son accusé, et
  * relit la liste que ce démarrage vient d'adopter avant de retirer la personne.
  *
- * Une liste REÇUE d'un autre appareil (adoptée par `sync()` quand ce navigateur ne partageait rien) ne
+ * Une liste REÇUE d'un autre appareil (adoptée par `sync()` quand ce navigateur ne partageait rien, ou PARTAGÉE ailleurs
+ * après lui — la passerelle sert un autre `startedAt` que son accusé : un seul appareil publie, #18580) ne
  * fait jamais partir la position d'ici : pas de suivi, pas même au rechargement (marque
  * `<clé>.received`), et une échéance s'y solde sans rien envoyer — la passerelle tient
  * l'échéance de chacun (#18205). Seul un geste d'ici (« Partager », « Arrêter ») envoie
@@ -190,6 +191,29 @@ export function createSharedLocationSharingCenter({
   const gate = createSerialGate();
   let abandoned = false;
   let lastSent: SharedLocationSent | null = null;
+  /*
+   * Le dernier démarrage avec position que CE NAVIGATEUR a fait accepter (`startedAt` de l'accusé, #18580) ; `null` :
+   * inconnu. Un navigateur est UN appareil : la valeur vit dans le stockage partagé par ses onglets, sans quoi un onglet
+   * céderait au « Partager » d'un autre onglet et sa marque « reçue » ferait taire celui qui publie au rechargement.
+   */
+  const publishedStartKey = `${storageKey}.publishedStart`;
+  let publishedStartInMemory: string | null = null;
+  const publishedStart = (): string | null => {
+    try {
+      return storage.getItem(publishedStartKey);
+    } catch {
+      return publishedStartInMemory;
+    }
+  };
+  const notePublishedStart = (next: string | null): void => {
+    publishedStartInMemory = next;
+    try {
+      if (next === null) storage.removeItem(publishedStartKey);
+      else storage.setItem(publishedStartKey, next);
+    } catch {
+      /* En mémoire seulement : au pire, un rechargement prend le démarrage servi pour le sien. */
+    }
+  };
   let unfollow: (() => void) | null = null;
   let cancelDeadline: (() => void) | null = null;
   /* La liste vient d'un autre appareil : cet onglet ne publie pas sa position (#18389). */
@@ -259,6 +283,7 @@ export function createSharedLocationSharingCenter({
     adopt(EMPTY_ROSTER);
     markReceived(false);
     lastSent = null;
+    notePublishedStart(null);
     disarm();
     stopFollowing();
   };
@@ -299,6 +324,26 @@ export function createSharedLocationSharingCenter({
       reread();
       if (rosterOps.equals(roster(), sentWith)) wipe();
     });
+  };
+
+  /*
+   * UN SEUL APPAREIL PUBLIE (#18580) : celui du dernier « Partager ». La passerelle nomme ce démarrage (`startedAt`), et
+   * l'accusé de cet onglet en a gardé un. S'ils diffèrent, un autre appareil a partagé après lui : « Arrêter » reste à un
+   * geste, la position ne part plus. Sans accusé lisible (rechargement, accusé perdu), le démarrage servi est pris pour
+   * le sien ; sans `startedAt` (passerelle d'avant), rien ne change. Aucune horloge n'est comparée.
+   */
+  const followServedStart = (served: string | undefined): void => {
+    if (served === undefined) return;
+    const mine = publishedStart();
+    if (mine === null) {
+      notePublishedStart(served);
+      return;
+    }
+    if (served === mine) return;
+    markReceived(true);
+    lastSent = null;
+    notePublishedStart(null);
+    stopFollowing();
   };
 
   const startFollowing = (): void => {
@@ -346,9 +391,12 @@ export function createSharedLocationSharingCenter({
     const verdict = fix === null ? await emitter.start(payload) : await startTolerant(payload);
     if (!isLive()) return 'failed';
     if (verdict.kind === 'started') {
+      if (fix !== null) notePublishedStart(verdict.startedAt ?? null);
       engage(next, fix);
       return null;
     }
+    /* La passerelle a PU appliquer un démarrage avec position qu'elle refuse ensuite (accusé perdu, panne après la prise) : dans le doute, inconnu — deux appareils publient plutôt qu'aucun. */
+    if (fix !== null) notePublishedStart(null);
     if (verdict.outcome === 'unconfirmed') engage(rosterOps.union(previous, next), fix);
     else persist(roster());
     return verdict.outcome;
@@ -499,13 +547,17 @@ export function createSharedLocationSharingCenter({
         if (truth === null || !isLive()) return null;
         const before = roster();
         const next = rosterOps.withServed(before, truth, now());
-        if (rosterOps.equals(next, before)) return null;
+        if (rosterOps.equals(next, before)) {
+          if (!received && rosterOps.hasRecipients(next)) followServedStart(truth.startedAt);
+          return null;
+        }
         adopt(next);
         if (!rosterOps.hasRecipients(next)) {
           lastSent = null;
           stopFollowing();
           markReceived(false);
         } else if (!rosterOps.hasRecipients(before)) markReceived(true);
+        else if (!received) followServedStart(truth.startedAt);
         scheduleDeadline();
         return null;
       });

@@ -37,7 +37,7 @@ describe('chaque personne reçoit SON échéance, jamais le terme du partage', (
     const m = monde();
     const ack = await demarrerAvecEcheances(m);
 
-    expect(ack).toEqual({ success: true, data: { expiresAt: iso(T0 + HUIT_HEURES) } });
+    expect(ack).toEqual({ success: true, data: { expiresAt: iso(T0 + HUIT_HEURES), startedAt: iso(T0) } });
     expect(m.vers(AMI).map((e) => e.data.expiresAt)).toEqual([iso(T0 + HEURE)]);
     expect(m.vers(PROCHE).map((e) => e.data.expiresAt)).toEqual([iso(T0 + HUIT_HEURES)]);
     expect(m.vers(SANG).map((e) => e.data.expiresAt)).toEqual([iso(T0 + 2 * HEURE)]);

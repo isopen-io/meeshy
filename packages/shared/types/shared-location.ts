@@ -107,7 +107,17 @@ export const sharedLocationUpdatePayloadSchema = sharedLocationPositionSchema;
 export type SharedLocationUpdatePayload = SharedLocationPosition;
 
 export type SharedLocationAck =
-  | { readonly success: true; readonly data: { readonly expiresAt: string } }
+  | {
+      readonly success: true;
+      readonly data: {
+        readonly expiresAt: string;
+        /**
+         * Le dernier démarrage AVEC position (#18580) : ce que la relecture de mon partage sert en
+         * {@link SharedLocationOwnSnapshot.startedAt}. ADDITIF : absent d'un serveur antérieur.
+         */
+        readonly startedAt?: string;
+      };
+    }
   | { readonly success: false; readonly error: string; readonly code: SharedLocationErrorCode };
 
 export type SharedLocationStopAck =
@@ -199,6 +209,14 @@ export type SharedLocationOwnSnapshot = {
   readonly expiresAt: string | null;
   /** La batterie accompagne-t-elle le partage en cours (#19204) ? Absent d'un serveur antérieur : non. */
   readonly shareBattery?: boolean;
+  /**
+   * UN SEUL APPAREIL PUBLIE (#18580) : l'instant du dernier démarrage AVEC position, renouvelé par
+   * chaque « Partager », gardé par la liste seule. L'appareil dont l'accusé portait un autre
+   * `startedAt` sait qu'un autre appareil a partagé après lui, et cesse d'envoyer sa position —
+   * sans jamais comparer son horloge à celle de la passerelle. ADDITIF : absent d'un serveur
+   * antérieur, l'appareil ne cède pas.
+   */
+  readonly startedAt?: string;
 };
 
 /**

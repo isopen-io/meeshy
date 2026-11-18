@@ -56,7 +56,7 @@ describe('retirer une personne sans envoyer sa position', () => {
 
     const ack = await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI, precision: 'exact' }, { userId: PROCHE, precision: 'neighborhood' }], durationMinutes: 60 });
 
-    expect(ack).toEqual({ success: true, data: { expiresAt: iso(T0 + HEURE) } });
+    expect(ack).toEqual({ success: true, data: { expiresAt: iso(T0 + HEURE), startedAt: iso(T0) } });
     expect(m.vers(SANG).map((e) => [e.event, e.data])).toEqual([[SERVER_EVENTS.SHARED_LOCATION_ENDED, { userId: EMETTEUR }]]);
     const servi = (await sharedLocationSnapshotFor(m.deps, AMI, {})).items;
     expect(servi.map((item) => [item.latitude, item.longitude, item.updatedAt])).toEqual([[PARIS.latitude, PARIS.longitude, iso(T0)]]);
@@ -144,7 +144,7 @@ describe('ce que la liste seule ne fait PAS', () => {
 
     const ack = await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI }, { userId: PROCHE }], durationMinutes: 480 });
 
-    expect(ack).toEqual({ success: true, data: { expiresAt: iso(T0 + HEURE) } });
+    expect(ack).toEqual({ success: true, data: { expiresAt: iso(T0 + HEURE), startedAt: iso(T0) } });
     expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items.map((item) => item.expiresAt)).toEqual([iso(T0 + 10 * MINUTE)]);
     m.avancer(6 * MINUTE);
     expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toEqual([]);

@@ -36,7 +36,7 @@ const sourcesOfTree = () =>
  * le disque du Bring laisse la feuille porter son fondu. 1011 balises muettes
  * depuis l'étape du code SMS, la rangée des teintes et la carte de la série
  * (#18326), puis 938 depuis que toute la zone du kit répond à l'appui
- * (`press-kit-navigation.test.ts`), 930 quand les couches temps réel des contacts répondent, puis 913 et 17 avec la carte de visite, les cercles et la fiche (#18320), 905 quand les boutons pleins de l'entrée répondent (#18322), puis 904 avec l’épure de l’administration (#18531).
+ * (`press-kit-navigation.test.ts`), 930 quand les couches temps réel des contacts répondent, puis 913 et 17 avec la carte de visite, les cercles et la fiche (#18320), 905 quand les boutons pleins de l'entrée répondent (#18322), puis 904 avec l’épure de l’administration (#18531), et 899 quand la bulle de l’appel réduit perd ses boutons (#19696).
  */
 const PLAFOND = { mute: 899, durations: 17 } as const;
 
