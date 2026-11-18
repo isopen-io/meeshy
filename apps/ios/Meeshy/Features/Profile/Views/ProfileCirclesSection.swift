@@ -196,7 +196,7 @@ struct ProfileCirclesSection: View {
     }
 
     static var pillHint: String {
-        String(localized: "profile.circles.open.hint", defaultValue: "Ouvre Mes cercles", bundle: .main)
+        String(localized: "profile.circles.open.a11y", defaultValue: "Ouvre Mes cercles", bundle: .main)
     }
 
     private static var inviteTitle: String {

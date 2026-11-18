@@ -483,7 +483,6 @@
     <string name="retouch_tool_text">Texto</string>
     <string name="retouch_tool_trim">Cortar</string>
     <string name="skeleton_feed_post_loading">Carregando uma publicação</string>
-    <string name="skeleton_link_row_loading">Carregando um link</string>
     <string name="skeleton_profile_loading">Carregando o perfil</string>
     <string name="skeleton_stories_loading">Carregando os stories</string>
     <string name="slide_rail_delete_cancel">Cancelar</string>

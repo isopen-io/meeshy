@@ -11,7 +11,7 @@
         { "catalog": "app", "iosKey": "profile.decor.frame.section", "androidName": "profile_decor_frame_section", "status": "adopted" },
         { "catalog": "app", "iosKey": "profile.decor.none", "androidName": "profile_decor_none", "status": "adopted" },
         { "catalog": "app", "iosKey": "profile.decor.image", "androidName": "profile_decor_image", "status": "adopted" },
-        { "catalog": "app", "iosKey": "profile.decor.image.hint", "androidName": "profile_decor_image_hint", "status": "adopted" },
+        { "catalog": "app", "iosKey": "profile.decor.image.a11y", "androidName": "profile_decor_image_hint", "status": "adopted" },
         { "catalog": "app", "iosKey": "profile.decor.image.hidesDesigns", "androidName": "profile_decor_image_hides_designs", "status": "adopted" }
       ]
     }

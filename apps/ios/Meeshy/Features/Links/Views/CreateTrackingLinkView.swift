@@ -13,6 +13,7 @@ struct CreateTrackingLinkView: View {
 
     @State private var draft = TrackingLinkDraft()
     @State private var showsMeasure = false
+    @State private var openNoteID: String?
     @State private var isCreating = false
     @State private var errorMessage: String?
     @Environment(\.dismiss) private var dismiss
@@ -57,7 +58,6 @@ struct CreateTrackingLinkView: View {
                 label: LinkCreationCopy.whatToTrack,
                 items: TrackingLinkTarget.allCases.map { target in
                     MeeshyChoiceItem(id: target.rawValue, title: LinkCreationCopy.targetTitle(target),
-                                     detail: target == .external ? LinkCreationCopy.externalDetail : nil,
                                      systemImage: LinkCreationCopy.targetGlyph(target), spansRow: target == .external)
                 },
                 selection: .single(draft.target.rawValue),
@@ -99,14 +99,14 @@ struct CreateTrackingLinkView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     LinksFormField(label: LinkCreationCopy.nameLabel, prompt: draft.ticket.title, text: nameBinding)
                     LinkSlugField(prefix: "meeshy.me/l/", slug: draft.slug, isAcceptable: draft.slugIsAcceptable,
-                                  onChange: { draft.slug = $0 })
+                                  openNoteID: $openNoteID, onChange: { draft.slug = $0 })
                 }
             }
             MeeshyGroupCard(tint: accent) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     LinkExpiryPicker(notches: LinkExpiryNotch.trackingNotches, selection: draft.expiry,
                                      onChange: { draft.expiry = $0 })
-                    MeeshyToggleRow(LinkCreationCopy.countUnique, subtitle: LinkCreationCopy.countUniqueDetail,
+                    MeeshyToggleRow(LinkCreationCopy.countUnique,
                                     accessory: .toggle(isOn: draft.countsUniqueVisitors), tint: accent,
                                     action: { draft.countsUniqueVisitors.toggle() })
                 }
@@ -118,10 +118,11 @@ struct CreateTrackingLinkView: View {
     private var measureCard: some View {
         MeeshyGroupCard(tint: accent) {
             VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                MeeshyToggleRow(LinkCreationCopy.utmTitle, systemImage: "chart.line.uptrend.xyaxis",
-                                subtitle: LinkCreationCopy.utmDetail,
-                                accessory: .toggle(isOn: showsMeasure), tint: accent,
-                                action: { toggleMeasure() })
+                MeeshyInfoNoted(note: LinkCreationCopy.utmNote, openNoteID: $openNoteID, tint: ThemeManager.shared.textSecondary) {
+                    MeeshyToggleRow(LinkCreationCopy.utmTitle, systemImage: "chart.line.uptrend.xyaxis",
+                                    accessory: .toggle(isOn: showsMeasure), tint: accent,
+                                    action: { toggleMeasure() })
+                }
                 if showsMeasure {
                     LinksFormField(label: LinkCreationCopy.utmSource, prompt: "instagram", text: $draft.source, input: .token)
                     LinksFormField(label: LinkCreationCopy.utmMedium, prompt: "bio", text: $draft.medium, input: .token)

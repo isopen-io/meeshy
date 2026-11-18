@@ -60,21 +60,24 @@ struct LinkExpiryPicker: View {
 }
 
 /// Une adresse courte qu'on choisit : le préfixe en tête du champ du kit (K08), la saisie normalisée à la frappe, la
-/// règle dite sous le champ.
+/// règle dite sous le champ quand la saisie l'enfreint ; l'adresse tirée au hasard derrière le (i) du nom.
 struct LinkSlugField: View {
     let prefix: String
     let slug: String
     let isAcceptable: Bool
+    @Binding var openNoteID: String?
     let onChange: (String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-            Text(LinkCreationCopy.addressLabel)
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundStyle(ThemeManager.shared.textSecondary)
-                .accessibilityHidden(true)
+            MeeshyInfoNoted(note: LinkCreationCopy.addressNote, openNoteID: $openNoteID, tint: ThemeManager.shared.textSecondary) {
+                Text(LinkCreationCopy.addressLabel)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundStyle(ThemeManager.shared.textSecondary)
+                    .accessibilityHidden(true)
+            }
             MeeshyField(LinkCreationCopy.addressLabel, text: slug, input: .token,
-                        caption: isAcceptable ? LinkCreationCopy.addressCaption : LinkCreationCopy.addressInvalid,
+                        caption: isAcceptable ? nil : LinkCreationCopy.addressInvalid,
                         leading: .glyph(prefix), limit: LinkSlugRules.maxLength,
                         onChange: { onChange(LinkSlugRules.normalized($0)) })
                 .environment(\.layoutDirection, .leftToRight)

@@ -49,7 +49,7 @@ nonisolated enum TrackingLinkSaveOutcome: Equatable, Sendable {
 }
 
 /// Le brouillon de la feuille « Modifier » : ce que la personne tape, et les seuls changements qui en découlent.
-nonisolated struct TrackingLinkDraft: Equatable, Sendable {
+nonisolated struct TrackingLinkEditDraft: Equatable, Sendable {
     var name: String
     var campaign: String
     var source: String

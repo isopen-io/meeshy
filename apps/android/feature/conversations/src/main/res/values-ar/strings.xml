@@ -36,4 +36,65 @@
     <string name="dashboard_action_search">بحث شامل</string>
     <string name="global_search_hint">ابحث في كل مكان…</string>
     <string name="new_conversation_error_blocked">لا يمكنك بدء محادثة مع هذا المستخدم.</string>
+    <string name="links_community_detail_created_at">أُنشئ في</string>
+    <string name="links_community_detail_full_link">الرابط الكامل</string>
+    <string name="links_community_detail_identifier">المعرّف</string>
+    <string name="links_community_detail_informations">معلومات</string>
+    <string name="links_community_detail_members">الأعضاء</string>
+    <string name="links_community_detail_status">الحالة</string>
+    <string name="links_community_identify">تحديد</string>
+    <plurals name="links_community_row_subtitle">
+        <item quantity="zero">%1$d أعضاء · %2$s</item>
+        <item quantity="one">%1$d عضو · %2$s</item>
+        <item quantity="two">%1$d عضوان · %2$s</item>
+        <item quantity="few">%1$d أعضاء · %2$s</item>
+        <item quantity="many">%1$d أعضاء · %2$s</item>
+        <item quantity="other">%1$d أعضاء · %2$s</item>
+    </plurals>
+    <string name="links_tracking_detail_browsers">المتصفحات</string>
+    <string name="links_tracking_detail_countries">البلدان</string>
+    <string name="links_tracking_detail_last_click">آخر نقرة: %1$s</string>
+    <string name="links_tracking_detail_stats_title">الإحصاءات</string>
+    <string name="links_tracking_detail_stats_total_clicks">إجمالي النقرات</string>
+    <string name="links_tracking_detail_stats_unique_clicks">النقرات الفريدة</string>
+    <plurals name="links_tracking_row_clicks">
+        <item quantity="zero">%1$d نقرات</item>
+        <item quantity="one">%1$d نقرة</item>
+        <item quantity="two">%1$d نقرتان</item>
+        <item quantity="few">%1$d نقرات</item>
+        <item quantity="many">%1$d نقرات</item>
+        <item quantity="other">%1$d نقرات</item>
+    </plurals>
+    <plurals name="links_tracking_row_uniques">
+        <item quantity="zero">· %1$d فريدة</item>
+        <item quantity="one">· %1$d فريدة</item>
+        <item quantity="two">· %1$d فريدتان</item>
+        <item quantity="few">· %1$d فريدة</item>
+        <item quantity="many">· %1$d فريدة</item>
+        <item quantity="other">· %1$d فريدة</item>
+    </plurals>
+    <string name="my_share_links_copy">نسخ الرابط</string>
+    <plurals name="my_share_links_joined_count">
+        <item quantity="zero">%1$d انضموا</item>
+        <item quantity="one">%1$d انضم</item>
+        <item quantity="two">%1$d انضما</item>
+        <item quantity="few">%1$d انضموا</item>
+        <item quantity="many">%1$d انضموا</item>
+        <item quantity="other">%1$d انضموا</item>
+    </plurals>
+    <string name="my_share_links_status_active">نشط</string>
+    <string name="my_share_links_status_inactive">غير نشط</string>
+    <string name="shareLink_detail_askedOnArrival">يُطلب عند الانضمام</string>
+    <string name="shareLink_detail_concurrent">في الوقت نفسه</string>
+    <string name="shareLink_detail_concurrentMax">%1$d كحد أقصى</string>
+    <string name="shareLink_detail_configuration">الإعدادات</string>
+    <string name="shareLink_detail_createdOn">أُنشئ الرابط في %1$s</string>
+    <string name="shareLink_detail_never">أبدًا</string>
+    <string name="shareLink_detail_noAccountBadge">دون حساب</string>
+    <string name="shareLink_detail_optional">اختياري</string>
+    <string name="shareLink_detail_recentArrivals">انضموا مؤخرًا</string>
+    <string name="shareLink_detail_required">إلزامي</string>
+    <string name="shareLink_detail_uses">الاستخدامات</string>
+    <string name="shareLink_detail_usesUnlimited">%1$d / غير محدود</string>
+    <string name="share_links_copy_a11y">نسخ الرابط</string>
 </resources>

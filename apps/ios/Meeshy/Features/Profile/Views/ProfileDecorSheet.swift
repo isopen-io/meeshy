@@ -314,7 +314,7 @@ struct ProfileDecorSheet: View {
         return PhotosPicker(selection: $pickedBanner, matching: .images) { tile }
             .buttonStyle(.plain)
             .accessibilityLabel(label)
-            .accessibilityHint(String(localized: "profile.decor.image.hint", defaultValue: "Choisir une image de bannière", bundle: .main))
+            .accessibilityHint(String(localized: "profile.decor.image.a11y", defaultValue: "Choisir une image de bannière", bundle: .main))
             .accessibilityAddTraits(choice.imageSelected ? [.isButton, .isSelected] : .isButton)
     }
 

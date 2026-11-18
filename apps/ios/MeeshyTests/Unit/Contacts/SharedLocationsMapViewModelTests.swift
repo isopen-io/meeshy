@@ -567,6 +567,8 @@ final class BloodLocationModelTests: XCTestCase {
 @MainActor
 final class BloodLocationRecorderTests: XCTestCase {
 
+    private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+
     @MainActor
     final class FixedFix: BloodLocationFixReading {
         var fix: SharedLocationFix?

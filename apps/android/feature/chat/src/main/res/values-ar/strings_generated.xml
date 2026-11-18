@@ -628,7 +628,6 @@
     <string name="recentMedia_resolveFailed_multiple">تعذّر تجهيز %1$d من الوسائط — استخدم مكتبة الصور كاملة</string>
     <string name="report_message_details_header">تفاصيل (اختياري)</string>
     <string name="report_message_details_placeholder">صِف المشكلة…</string>
-    <string name="report_message_sent">تم إرسال البلاغ</string>
     <string name="report_message_submit">إرسال البلاغ</string>
     <string name="report_message_title">لماذا تُبلّغ عن هذه الرسالة؟</string>
     <string name="report_reason_harassment">تحرّش</string>

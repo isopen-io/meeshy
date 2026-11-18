@@ -165,7 +165,7 @@ nonisolated enum ProfilePendingCopy {
     }
 
     static var cancelHint: String {
-        String(localized: "profile.vitrine.pending.cancel.hint", defaultValue: "Retire ce message de la file et du fil",
+        String(localized: "profile.vitrine.pending.cancel.a11y", defaultValue: "Retire ce message de la file et du fil",
                bundle: .module)
     }
 
