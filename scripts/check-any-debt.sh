@@ -393,13 +393,6 @@ readonly SHARED_BASELINE=0
 # désormais `undefined` et ne fait rien : un objet nul se dit en ne faisant
 # rien, pas en construisant la chose dont on n'a pas besoin, et la dette descend
 # avec la seconde instance.
-# 484 au cycle 180 : la mesure de `origin/dev` (6d76e430de) rendait DÉJÀ 484
-# contre une baseline de 486 — deux usages retirés par un lot de `dev` qui ne
-# les a pas enregistrés. Un cliquet qui échoue sur une AMÉLIORATION rougit
-# TOUTE PR (c'est la mise en garde du `CLAUDE.md` du service : « se méfier
-# particulièrement d'un gate qui échoue en annonçant une bonne nouvelle »), donc
-# il s'enregistre dès qu'il est vu plutôt que d'attendre son lot. Attribution
-# CONTRÔLÉE sur un worktree nu d'`origin/dev`, pas déduite.
 readonly GATEWAY_BASELINE=484
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le

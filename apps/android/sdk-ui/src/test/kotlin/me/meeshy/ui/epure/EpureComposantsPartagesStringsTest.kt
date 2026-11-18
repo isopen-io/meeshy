@@ -120,7 +120,7 @@ class EpureComposantsPartagesStringsTest {
 
     @Test
     fun `pendant que la voix s'enregistre, l'annonce dit qu'elle PART en message vocal, jamais qu'elle est deja envoyee`() {
-        assertThat(text("fr", "talkie_header_announce_recorded")).isEqualTo("Le talkie ne passe pas : votre voix part en message vocal")
+        assertThat(text("fr", "talkie_header_announce_recorded")).isEqualTo("Le talkie ne passe pas : ta voix part en message vocal")
         assertThat(text("en", "talkie_header_announce_recorded"))
             .isEqualTo("The talkie can't get through: your voice will be sent as a voice message")
         folders.keys.forEach { language ->
