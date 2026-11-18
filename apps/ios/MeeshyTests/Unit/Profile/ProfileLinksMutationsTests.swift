@@ -201,12 +201,11 @@ private final class AddressCacheRecorder: ProfileAddressCaching {
 }
 
 /// Mes adresses sur le fil : une mise à jour peut être retenue jusqu'à ce qu'on la libère, un refus se commande par id.
-@MainActor
-private final class GatedAddressService: ProfileAddressProviding {
+private final class GatedAddressService: ProfileAddressProviding, @unchecked Sendable {
     var listed: [ProfileAddress]
     var holdsId: String?
     var refusedIds: Set<String> = []
-    var onList: () -> Void = {}
+    var onList: @MainActor () -> Void = {}
     private var gate: CheckedContinuation<Void, Never>?
     var isHolding: Bool { gate != nil }
 
@@ -218,7 +217,7 @@ private final class GatedAddressService: ProfileAddressProviding {
     }
 
     func list() async throws -> [ProfileAddress] {
-        onList()
+        await onList()
         return listed
     }
 
