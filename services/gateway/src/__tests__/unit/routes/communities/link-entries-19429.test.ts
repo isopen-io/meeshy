@@ -335,7 +335,7 @@ describe('Les demandes en attente', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().data[0]).toEqual(expect.objectContaining({ id: REQUEST, userId: ARRIVANT, country: 'SN', via: 'link' }));
     expect(prisma.communityJoinRequest.findMany.mock.calls[0][0]).toEqual(expect.objectContaining({
-      where: { communityId: COMM, status: 'pending' }, orderBy: { createdAt: 'desc' },
+      where: { communityId: COMM, status: 'pending' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     }));
   });
 
@@ -358,6 +358,56 @@ describe('Les demandes en attente', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().data.map((r: any) => r.userId)).toEqual([ARRIVANT]);
     expect(res.body).not.toContain('deactivatedAt');
+  });
+
+  it('GET pagine au-delà de 100 demandes : la 101e servable, la plus ancienne, est servie à la page suivante, et la liste dit qu\'il en reste', async () => {
+    const prisma = makePrisma({ viewerRole: 'moderator' });
+    const BLOQUE = '507f1f77bcf86cd799430088';
+    const ids = Array.from({ length: 102 }, (_, i) => `65b${String(i).padStart(21, '0')}`);
+    const rows = ids.map((id, i) => ({
+      id, communityId: COMM, userId: i === 50 ? BLOQUE : `66c${String(i).padStart(21, '0')}`, status: 'pending', via: 'self', country: null,
+      createdAt: new Date(Date.UTC(2026, 10, 1) + i * 60_000),
+      user: { id: `u${i}`, username: `u${i}`, displayName: null, avatar: null, ...USABLE },
+    }));
+    prisma.user.findUnique.mockResolvedValue({ blockedUserIds: [BLOQUE] });
+    prisma.communityJoinRequest.findMany.mockImplementation(async (args: any) => {
+      const notIn: string[] = args.where.userId?.notIn ?? [];
+      const sorted = rows
+        .filter((r) => !notIn.includes(r.userId))
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id));
+      const start = args.cursor ? sorted.findIndex((r) => r.id === args.cursor.id) + (args.skip ?? 0) : 0;
+      return sorted.slice(start, start + args.take);
+    });
+    const app = await build(prisma);
+    const first = (await app.inject({ method: 'GET', url: `/communities/${COMM}/join-requests` })).json();
+    expect(first.data).toHaveLength(100);
+    expect(first.pagination).toEqual(expect.objectContaining({ limit: 100, hasMore: true, nextCursor: first.data[99].id }));
+    expect(first.data.map((r: any) => r.userId)).not.toContain(BLOQUE);
+    const second = (await app.inject({ method: 'GET', url: `/communities/${COMM}/join-requests?cursor=${first.pagination.nextCursor}` })).json();
+    expect(second.data.map((r: any) => r.id)).toEqual([ids[0]]);
+    expect(second.pagination).toEqual(expect.objectContaining({ hasMore: false, nextCursor: null }));
+
+    const page = (cursor?: string) => app.inject({ method: 'GET', url: `/communities/${COMM}/join-requests?limit=40${cursor ? `&cursor=${cursor}` : ''}` }).then((r) => r.json());
+    const served: string[] = [];
+    let cursor: string | undefined;
+    for (let guard = 0; guard < 5; guard += 1) {
+      const res = await page(cursor);
+      served.push(...res.data.map((r: any) => r.id));
+      if (!res.pagination.hasMore) break;
+      cursor = res.pagination.nextCursor;
+    }
+    expect(served).toHaveLength(101);
+    expect(new Set(served).size).toBe(101);
+    expect(served).toContain(ids[0]);
+    expect(served.at(-1)).toBe(ids[0]);
+  });
+
+  it('GET refuse une limite ou un curseur illisibles (400), sans rien lire', async () => {
+    const prisma = makePrisma({ viewerRole: 'moderator' });
+    const app = await build(prisma);
+    expect((await app.inject({ method: 'GET', url: `/communities/${COMM}/join-requests?limit=500` })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: `/communities/${COMM}/join-requests?cursor=nope` })).statusCode).toBe(400);
+    expect(prisma.communityJoinRequest.findMany).not.toHaveBeenCalled();
   });
 
   it('GET rend un 404 générique à un MEMBRE simple', async () => {

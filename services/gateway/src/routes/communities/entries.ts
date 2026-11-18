@@ -50,6 +50,17 @@ const requestParams = {
   }
 } as const;
 
+/** Une page de demandes en attente : au plus 100 (l'ancien plafond, que l'ancien client lit sans paramètre). */
+const JOIN_REQUESTS_PAGE_MAX = 100;
+const joinRequestsQuery = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    limit: { type: 'integer', minimum: 1, maximum: JOIN_REQUESTS_PAGE_MAX },
+    cursor: { type: 'string', pattern: OBJECT_ID }
+  }
+} as const;
+
 const notFoundResponses = {
   401: { description: 'User not authenticated', ...errorResponseSchema },
   404: { description: 'Community not found, or the reader neither animates nor moderates it', ...errorResponseSchema },
@@ -144,37 +155,58 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
   fastify.get('/communities/:id/join-requests', {
     onRequest: [fastify.authenticate],
     schema: {
-      description: 'Pending requests to join a community that validates each entry (#19429), most recent first. Admins and moderators only; any other reader gets a generic 404.',
+      description: 'Pending requests to join a community that validates each entry (#19429), most recent first, by pages of `limit` (1-100, default 100) continued with `cursor` = `pagination.nextCursor`. Admins and moderators only; any other reader gets a generic 404.',
       tags: ['communities'],
       summary: 'List pending join requests',
       params: idParams,
+      querystring: joinRequestsQuery,
       response: {
         200: {
           type: 'object',
-          properties: { success: { type: 'boolean' }, data: { type: 'array', items: communityJoinRequestSchema } }
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'array', items: communityJoinRequestSchema },
+            pagination: {
+              type: 'object',
+              properties: {
+                limit: { type: 'integer' },
+                hasMore: { type: 'boolean', description: 'Older pending requests remain beyond this page' },
+                nextCursor: { type: ['string', 'null'], description: 'Pass as `cursor` to read the next (older) page; null when exhausted' },
+                form: { type: 'string', enum: ['keyset'] }
+              }
+            }
+          }
         },
+        400: { description: 'Invalid limit or cursor', ...errorResponseSchema },
         ...notFoundResponses
       }
     }
   }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const { limit = JOIN_REQUESTS_PAGE_MAX, cursor } = request.query as { limit?: number; cursor?: string };
     try {
       return await guarded(request, reply, id, async (viewerId) => {
-        const [requests, blocked] = await Promise.all([
-          fastify.prisma.communityJoinRequest.findMany({
-            where: { communityId: id, status: 'pending' },
-            orderBy: { createdAt: 'desc' },
-            take: 100,
-            include: { user: { select: { ...REQUESTER_SELECT, ...ACCOUNT_STATE_SELECT } } }
-          }),
-          getBlockRelatedUserIds(fastify.prisma, viewerId)
-        ]);
-        // Ni un demandeur bloqué avec cet intendant (dans un sens ou l'autre),
-        // ni un compte qui n'est plus utilisable : l'état du compte ne part pas.
-        const served = requests
+        const blocked = await getBlockRelatedUserIds(fastify.prisma, viewerId);
+        // Le blocage s'exclut EN BASE : une page n'est jamais vidée par ce qu'on retire après.
+        const where = blocked.size > 0
+          ? { communityId: id, status: 'pending', userId: { notIn: [...blocked] } }
+          : { communityId: id, status: 'pending' };
+        const read = await fastify.prisma.communityJoinRequest.findMany({
+          where,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: limit + 1,
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+          include: { user: { select: { ...REQUESTER_SELECT, ...ACCOUNT_STATE_SELECT } } }
+        });
+        const hasMore = read.length > limit;
+        const page = read.slice(0, limit);
+        // Le curseur suit la dernière ligne LUE, servie ou non : rien ne se perd entre deux pages.
+        const nextCursor = hasMore ? (page.at(-1)?.id ?? null) : null;
+        // Un compte qui n'est plus utilisable ne part pas, ni l'état du compte.
+        const served = page
           .filter((r) => isUsableAccount(r.user) && !blocked.has(r.userId))
           .map(servedRequest);
-        return sendSuccess(reply, served);
+        return sendSuccess(reply, served, { pagination: { limit, hasMore, nextCursor, form: 'keyset' } });
       });
     } catch (error) {
       logger.error('Error listing community join requests', error as Error);
