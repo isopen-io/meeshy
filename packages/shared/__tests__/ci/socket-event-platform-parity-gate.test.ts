@@ -127,10 +127,10 @@ const ASYMETRIES: readonly {
     events: ['attachment:ready', 'user:preferences-community-reordered'],
   },
   {
-    absents: ['web', 'android'],
+    absents: ['android'],
     raison:
-      "le Jeu Meeshy est né sur iOS : ses missions sont un écran iOS, et le web comme Android n'en ont "
-      + 'pas encore la surface. La parité suivra le portage du Jeu, qui a ses propres issues.',
+      "un acte du Rêve qui avance : iOS relit ses actes, le web aussi depuis #17367 (l'acte qui avance se voit "
+      + "à l'envoi). Android relit le bloc `game` par `game:updated` seulement ; sa moitié suit le portage de #17367.",
     events: ['game:missions-updated'],
   },
 ];

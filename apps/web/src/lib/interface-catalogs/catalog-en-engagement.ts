@@ -20,6 +20,11 @@ const enEngagement = {
   'engagement.card.open': 'Open the game',
   'engagement.card.hide': 'Hide the flame',
   'engagement.card.title': 'In this conversation',
+  'engagement.act.easy': 'Act I',
+  'engagement.act.medium': 'Act II',
+  'engagement.act.hard': 'Act III',
+  'engagement.act.gold': 'Golden Act',
+  'engagement.act.advance': '{act} · {progress} of {target}',
 } as const;
 
 export default enEngagement;

@@ -10,6 +10,7 @@ import { MessageEditDock } from '@/components/message-edit-composer';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { ConversationBackdrop } from '@/components/conversation-backdrop';
 import { ThreadHeader } from '@/components/thread-header';
+import { ActAdvancePill } from '@/components/act-advance-pill';
 import { ConversationDetailsContext } from '@/components/avatar-menu';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
 import { WorldParticipantCardHost } from '@/components/world-participant-card-host';
@@ -755,6 +756,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
         (« la géométrie fait le travail », §1.5 de la spécification).
       */}
       <DayPill label={chrome.dayPillLabel} headerExpanded={expanded || preview !== undefined} />
+      {preview === undefined ? <ActAdvancePill sent={flameReplay} /> : null}
       <main
           id={preview === undefined ? 'contenu' : undefined}
           ref={scroller}

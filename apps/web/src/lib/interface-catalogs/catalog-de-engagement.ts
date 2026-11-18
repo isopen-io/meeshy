@@ -20,6 +20,11 @@ const deEngagement = {
   'engagement.card.open': 'Zum Spiel',
   'engagement.card.hide': 'Flamme ausblenden',
   'engagement.card.title': 'In dieser Unterhaltung',
+  'engagement.act.easy': 'Akt I',
+  'engagement.act.medium': 'Akt II',
+  'engagement.act.hard': 'Akt III',
+  'engagement.act.gold': 'Goldener Akt',
+  'engagement.act.advance': '{act} · {progress} von {target}',
 } as const;
 
 export default deEngagement;
