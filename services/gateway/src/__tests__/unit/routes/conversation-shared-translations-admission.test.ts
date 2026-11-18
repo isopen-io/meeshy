@@ -81,13 +81,13 @@ describe('POST /conversations/:id/shared-translations — ce que la conversation
     it.each([
       ['désactivée', { isActive: false }],
       ['close', { closedAt: new Date('2026-09-21T00:00:00.000Z') }],
-    ])('refuse 410 dans une conversation %s, sans rien ranger ni diffuser', async (_label, conversation) => {
+    ])('refuse 410 CONVERSATION_CLOSED dans une conversation %s, sans rien ranger ni diffuser', async (_label, conversation) => {
       const h = await buildApp({ store: sceneWith({ conversation }) });
 
       const res = await post(h, shareBody());
 
       expect(res.statusCode).toBe(410);
-      expect(res.json()).toMatchObject({ success: false });
+      expect(res.json()).toMatchObject({ success: false, code: 'CONVERSATION_CLOSED' });
       refusedWithoutTrace(h);
     });
 
