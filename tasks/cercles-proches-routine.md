@@ -1451,3 +1451,13 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reprise : #19683 toujours ouverte ; le porteur y avait fusionné `dev` à 16:29 UTC (4832809f7). Aucun nouveau lot ouvert.
 - `origin/dev` (2fcb40b94 : profil iOS, leçon jvm-check) fusionnée sans conflit, aucun fichier du lot touché ; la
   branche contient de nouveau la tête de `dev`. Fusion de la PR dès la CI verte sur sa tête.
+
+## 2026-11-18 — réveil de 19 h : #19683 (un seul appareil publie) recalée sur dev
+
+- Reprise : #19683 toujours ouverte, tête 0754c4ece intacte depuis le réveil de 17 h ; sa CI attendait encore les
+  runners (passerelle, web, shared, SDK iOS en file). Aucun nouveau lot ouvert.
+- `origin/dev` (ffb60040e) fusionnée à la main, sans conflit : aucun fichier du lot ne bougeait côté `dev`.
+- Gates sur l'arbre fusionné : passerelle `sharedLocation` 18 suites, 217 verts, `tsc` vert ; web
+  `src/lib/shared-locations` 152 verts + `api/shared-locations` 24 verts, `tsc` vert. iOS et Android par la CI.
+- Prochain lot recommandé : fusion de #19683, puis #19681 (startedAt persisté au relancement natif), plafond
+  `untilStopped` de `listOnlyState`, #18351 une fois décidé.
