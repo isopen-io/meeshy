@@ -33,7 +33,12 @@ jest.mock('../../../services/CacheStore', () => {
     }),
     del: jest.fn(async (key: string) => { store.delete(key); }),
     keys: jest.fn(async () => []),
-    setnx: jest.fn(async () => true),
+    setnx: jest.fn(async (key: string, value: string, ttl?: number) => {
+      const entry = store.get(key);
+      if (entry && entry.expiresAt > Date.now()) return false;
+      store.set(key, { value, expiresAt: Date.now() + (ttl || 3600) * 1000 });
+      return true;
+    }),
     expire: jest.fn(async () => true),
     publish: jest.fn(async () => 0),
     info: jest.fn(async () => ''),
@@ -169,6 +174,58 @@ describe('AuthMiddleware — la lecture concurrente ne ressuscite pas une ligne 
     restore.forEach((undo) => undo());
     expect(writerLanded).toBe(true);
     expect(await cache.get(CACHE_KEY)).toBeNull();
+  });
+
+  it('une lecture qui arrive pendant une autre ne lui vole pas sa réservation : la première remplit le cache et la suivante le lit', async () => {
+    const { getCacheStore } = require('../../../services/CacheStore');
+    const cache = getCacheStore();
+    let releaseSecond: () => void = () => {};
+    const secondBlocked = new Promise<void>((resolve) => { releaseSecond = resolve; });
+    let secondRun: Promise<unknown> = Promise.resolve();
+    let secondStarted: () => void = () => {};
+    const secondInFlight = new Promise<void>((resolve) => { secondStarted = resolve; });
+    const findUnique = jest.fn(async () => userRow());
+    const middleware = new AuthMiddleware(prismaReading(findUnique));
+    findUnique
+      .mockImplementationOnce(async () => {
+        secondRun = middleware.createAuthContext(bearer());
+        await secondInFlight;
+        return userRow();
+      })
+      .mockImplementationOnce(async () => {
+        secondStarted();
+        await secondBlocked;
+        return userRow();
+      });
+
+    await middleware.createAuthContext(bearer());
+    const third = await middleware.createAuthContext(bearer());
+    releaseSecond();
+    await secondRun;
+
+    expect(third.isAuthenticated).toBe(true);
+    expect(findUnique).toHaveBeenCalledTimes(2);
+    expect(JSON.parse((await cache.get(CACHE_KEY)) as string)).toMatchObject({ id: USER_ID });
+  });
+
+  it('une ligne déjà en cache n’est jamais écrasée par une réservation', async () => {
+    const { getCacheStore } = require('../../../services/CacheStore');
+    const cache = getCacheStore();
+    const cachedByAnother = JSON.stringify(userRow({ displayName: 'Alicia', updatedAt: new Date('2026-11-17T09:31:00.000Z') }));
+    const plainGet = cache.get.getMockImplementation();
+    let raced = false;
+    cache.get.mockImplementation(async (key: string) => {
+      if (key !== CACHE_KEY || raced) return plainGet(key);
+      raced = true;
+      await cache.set(CACHE_KEY, cachedByAnother, 60);
+      return null;
+    });
+    const middleware = new AuthMiddleware(prismaReading(jest.fn(async () => userRow())));
+
+    await middleware.createAuthContext(bearer());
+
+    cache.get.mockImplementation(plainGet);
+    expect(await cache.get(CACHE_KEY)).toBe(cachedByAnother);
   });
 
   it('la réservation n’est pas du JSON : une passerelle d’avant #19281 la lit comme une absence, jamais comme un compte désactivé', async () => {

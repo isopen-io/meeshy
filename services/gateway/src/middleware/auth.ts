@@ -360,11 +360,14 @@ export class AuthMiddleware {
         // effacement qui tomberait entre les deux passerait sinon. La marque
         // n'est pas du JSON : une passerelle d'avant #19281 (déploiement en
         // cours) la lit comme une absence, jamais comme un compte désactivé.
+        // Elle ne se pose que sur une clé VIDE (`setnx`) : une lecture qui
+        // arrive pendant une autre ne lui vole pas sa réservation — sinon des
+        // lectures qui se chevauchent sans fin ne rempliraient jamais le cache —
+        // et une ligne mise en cache entre-temps n'est jamais écrasée.
         const claim = `${AUTH_USER_CACHE_CLAIM_PREFIX}${crypto.randomUUID()}`;
         let claimed = false;
         try {
-          await cache.set(cacheKey, claim, AUTH_USER_CACHE_CLAIM_TTL);
-          claimed = true;
+          claimed = await cache.setnx(cacheKey, claim, AUTH_USER_CACHE_CLAIM_TTL);
         } catch {
           // Redis indisponible : pas de mise en cache non plus (voir plus bas)
         }
