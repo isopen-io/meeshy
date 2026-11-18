@@ -22,6 +22,34 @@ struct ProfileActionsPartContent: View {
             ProfileNewsNotifyRow(userId: request.userId, tint: request.tint).id(request.userId)
         case .circle:
             ProfileOurCircleRow(userId: request.userId, displayName: request.displayName).id(request.userId)
+        case .nextCircle:
+            ProfileNextCircleSection(request: request).id(request.userId)
+        }
+    }
+}
+
+// MARK: - Pour aller plus loin
+
+/// « Pour aller plus loin » d'un lien servi (#19674) : les cercles qu'il reste à gagner depuis le cercle commun, le
+/// chemin de chacun, et sous le prochain, où en est la série telle que le serveur la sert. Sans lien, la fiche la pose
+/// elle-même sous la demande d'ami ; au Sang, rien.
+private struct ProfileNextCircleSection: View {
+    let request: ProfileLiveRequest
+    @StateObject private var circle: ProfileCircleViewModel
+
+    init(request: ProfileLiveRequest) {
+        self.request = request
+        _circle = StateObject(wrappedValue: ProfileCircleModels.model(for: request.userId))
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.clear.frame(height: 0).accessibilityHidden(true)
+            if circle.shownLevel != nil, !ProfileNextCircleLadder.steps(above: circle.toolGateLevel).isEmpty {
+                ProfileNextCircles(level: circle.toolGateLevel, name: request.displayName, tint: request.tint,
+                                   progress: circle.summary)
+                    .padding(.bottom, MeeshySpacing.xxl)
+            }
         }
     }
 }

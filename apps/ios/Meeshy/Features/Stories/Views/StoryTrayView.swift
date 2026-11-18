@@ -104,7 +104,7 @@ struct StoryTrayView: View {
         // listener `openMyStories` de la RACINE (RootView / iPadRootView) —
         // un listener ici ne couvrait que les écrans où un tray est monté et
         // aurait présenté en double depuis chaque instance.
-        .sheet(item: $selectedProfileUser) { user in
+        .profileCover(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
@@ -112,8 +112,6 @@ struct StoryTrayView: View {
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
             )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         }
         // L'EXPIRATION AU FIL DE L'EAU — une story expire 24 h après sa
         // publication, mais le tray ne la balayait qu'aux CHARGEMENTS
@@ -675,7 +673,7 @@ struct PinnedStoryTrailBand: View {
                 .clipped()
                 .allowsHitTesting(reveal > 0.6)
                 .onDisappear { Task { await SharedImpressionBatchers.flushRail() } }
-                .sheet(item: $selectedProfileUser) { user in
+                .profileCover(item: $selectedProfileUser) { user in
                     UserProfileSheet(
                         user: user,
                         moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
@@ -683,8 +681,6 @@ struct PinnedStoryTrailBand: View {
                         presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                         postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
                     )
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
                 }
                 .relayingMeeshyRouter(meeshyRouter) { $0.myStoriesSheet(
                     isPresented: $showMyStories,
