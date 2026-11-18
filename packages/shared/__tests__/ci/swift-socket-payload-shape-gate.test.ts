@@ -141,6 +141,13 @@ describe('la FORME des charges socket — ce qu\'iOS EXIGE, ce que le contrat D�
     expect(undeclared, `hors contrat : ${undeclared.join(', ')}`).toEqual([]);
   });
 
+  it('lit les routes posées par un RELAIS générique, pas seulement `route(` et `.raw(` (#19650)', () => {
+    const relayed = named.filter((route) => route.file.endsWith('MessageSocketManager+CallControls.swift')).map((route) => route.event);
+    expect(relayed).toEqual(
+      expect.arrayContaining(['call:participant-invited', 'call:invite-declined', 'call:conversation-changed']),
+    );
+  });
+
   it("confronte toujours autant d'événements du contrat qu'à la dernière mesure", () => {
     const swept = new Set(
       named.map((route) => route.event).filter((event): event is string => event !== undefined && contract.has(event)),
@@ -233,7 +240,7 @@ describe('la FORME des charges socket — ce qu\'iOS EXIGE, ce que le contrat D�
     ].sort();
 
     expect(silentRaw).toEqual(['auth:session-revoked', 'auth:token-expired', 'heartbeat:ack', 'talkie:chunk']);
-    expect(manual.length, `types à init(from:) manuel : ${manual.join(', ')}`).toBe(31);
+    expect(manual.length, `types à init(from:) manuel : ${manual.join(', ')}`).toBe(32);
   });
   /**
    * Le SECOND niveau (#18116). Trois événements de commentaire y rendent la MÊME divergence —
