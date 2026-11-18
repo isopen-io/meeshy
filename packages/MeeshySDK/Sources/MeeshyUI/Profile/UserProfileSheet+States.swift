@@ -17,7 +17,9 @@ extension UserProfileSheet {
     /// « Personne ici » : la croix de la fiche, et rien d'autre de la fiche.
     var unavailableLayout: some View {
         ProfileUnavailableView(requestedUsername: user.username, onBack: { closeSheet() })
-            .overlay(alignment: .topLeading) { closeButton }
+            .overlay(alignment: .topLeading) {
+                heroCloseButton.padding(.leading, MeeshySpacing.lg).padding(.top, MeeshySpacing.mdPlus)
+            }
     }
 
     /// Le bloc d'erreur ou la bande « hors ligne » relancent la même ouverture.

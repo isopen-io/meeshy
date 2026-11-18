@@ -49,22 +49,25 @@ struct ProfileTalkieRow: View {
         }
     }
 
+    /// La carte de la planche `Autre-Actions` : l'étiquette TALKIE centrée, le (i) dans l'angle, le gros bouton plein
+    /// entouré de ses halos qui respirent, « Maintenir pour parler · Ta voix part en direct », puis la phrase qui dit ce
+    /// qu'il est.
     private var card: some View {
-        VStack(spacing: MeeshySpacing.md) {
-            HStack {
-                MeeshyBadge(.label(ProfileTalkieWording.tag), leading: .systemImage("dot.radiowaves.left.and.right"),
-                            kind: .accent, tint: tint, size: .s28)
-                Spacer(minLength: 0)
-                TalkieInfoButton(tint: tint)
-            }
+        VStack(spacing: MeeshySpacing.lg) {
+            MeeshyBadge(.label(ProfileTalkieWording.tag), leading: .systemImage("dot.radiowaves.left.and.right"),
+                        kind: .accent, tint: tint, size: .s28)
+                .frame(maxWidth: .infinity)
+                .overlay(alignment: .trailing) { TalkieInfoButton(tint: tint) }
             holdButton
+                .padding(.vertical, MeeshySpacing.xxl)
             VStack(spacing: MeeshySpacing.xs) {
                 Text(label)
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
+                    .contentTransition(.opacity)
                 Text(ProfileTalkieWording.live)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundStyle(theme.textSecondary)
+                    .foregroundStyle(tint)
             }
             .multilineTextAlignment(.center)
             .accessibilityHidden(true)
@@ -76,7 +79,12 @@ struct ProfileTalkieRow: View {
         }
         .padding(MeeshySpacing.lg)
         .frame(maxWidth: .infinity)
-        .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
+        .background(
+            RadialGradient(colors: [tint.opacity(MeeshyOpacity.light), .clear], center: .center,
+                           startRadius: 0, endRadius: holdDiameter * 2)
+                .accessibilityHidden(true)
+        )
+        .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xxl), tone: .theme, tint: tint)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("talkie.card")
     }
@@ -91,14 +99,17 @@ struct ProfileTalkieRow: View {
         }
     }
 
+    /// Le bouton plein de la planche : un disque de l'accent, le micro sombre au centre, deux halos concentriques qui
+    /// respirent au repos et s'élancent pendant la prise de parole.
     private var holdButton: some View {
         let live = holding || sender.isActive
         return Image(systemName: live ? "waveform" : "mic.fill")
             .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .bold))
-            .foregroundStyle(live ? Color.white : tint)
+            .foregroundStyle(MeeshyColors.indigo950)
             .frame(width: holdDiameter, height: holdDiameter)
-            .background(Circle().fill(live ? tint : tint.opacity(MeeshyOpacity.subtle)))
-            .overlay(Circle().stroke(tint, lineWidth: MeeshyBorder.emphasis))
+            .background(Circle().fill(tint))
+            .scaleEffect(live ? TalkieHoldHalo.pressedScale : 1)
+            .background(TalkieHoldHalo(diameter: holdDiameter, tint: tint, isLive: live))
             .contentShape(Circle())
             .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding))
             .accessibilityElement(children: .ignore)
@@ -107,6 +118,57 @@ struct ProfileTalkieRow: View {
             .accessibilityHint(ProfileTalkieWording.holdHint)
             .accessibilityAddTraits([.isButton, .updatesFrequently])
             .accessibilityIdentifier("talkie.send")
+    }
+}
+
+/// Les deux halos du bouton talkie : ils respirent lentement au repos et battent plus vite pendant la prise de parole.
+/// Sous « Réduire les animations », ils restent posés, immobiles. Décoratifs, ils ne reçoivent pas le doigt.
+struct TalkieHoldHalo: View {
+    static let pressedScale: CGFloat = 0.94
+    /// Le rayon de chaque halo, en multiples du bouton.
+    static let rings: [CGFloat] = [1.32, 1.66]
+
+    let diameter: CGFloat
+    let tint: Color
+    let isLive: Bool
+
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+
+    var body: some View {
+        let reduce = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
+        TimelineView(.animation(minimumInterval: nil, paused: reduce)) { context in
+            let phase = reduce ? 0 : Self.phase(at: context.date, isLive: isLive)
+            ZStack {
+                ForEach(Array(Self.rings.enumerated()), id: \.offset) { index, ring in
+                    Circle()
+                        .stroke(tint.opacity(Self.opacity(ring: index, phase: phase, isLive: isLive)),
+                                lineWidth: MeeshyBorder.strong)
+                        .frame(width: diameter * ring, height: diameter * ring)
+                        .scaleEffect(1 + Self.breath(ring: index, phase: phase, isLive: isLive))
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// Une respiration de trois secondes au repos, d'une seconde pendant la prise de parole.
+    static func phase(at date: Date, isLive: Bool) -> Double {
+        let period = isLive ? 1.0 : 3.0
+        return date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
+    }
+
+    static func breath(ring: Int, phase: Double, isLive: Bool) -> CGFloat {
+        let amplitude = isLive ? 0.08 : 0.04
+        let shifted = phase + Double(ring) * 0.25
+        return CGFloat(amplitude * sin(shifted * 2 * .pi))
+    }
+
+    static func opacity(ring: Int, phase: Double, isLive: Bool) -> Double {
+        let base = isLive ? 0.55 : 0.35
+        let fade = Double(ring) * 0.15
+        return max(0.1, base - fade + 0.1 * sin((phase + Double(ring) * 0.25) * 2 * .pi))
     }
 }
 
