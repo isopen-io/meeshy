@@ -1656,3 +1656,8 @@ socket jusqu'au client.
 3. #19597, #19736, puis #19473, #18668 et #18692, #19381, #19253, #19294, #19295, #19255.
 4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
 5. **Recentrer sur les appels eux-mêmes** dès que la dette d'effacement est soldée : latence de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
+
+## Cycle 49 — 2026-11-18 (en cours)
+
+- **Base** : `origin/dev` @ `6fde25b36`. #19753 (cycle 48) est fusionnée ; la CI principale (`ci.yml`, `android.yml`, `ios.yml`, `sdk-tests.yml`) est réactivée.
+- **Objectif** : #19750 — les pistes traduites d'un `PostMedia` s'effacent avec leur média, et les réponses de post ne servent plus `translations.<lang>.path`.
