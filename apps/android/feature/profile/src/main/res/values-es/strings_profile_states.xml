@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_state_error_title">No se puede abrir este perfil ahora</string>
+    <string name="profile_state_error_message">Tu conexión va bien. El problema es nuestro y nunca dura mucho.</string>
+    <string name="profile_state_offline_title">Sin conexión</string>
+    <string name="profile_state_offline_message">Este perfil se abrirá en cuanto vuelvas a tener conexión.</string>
+    <string name="profile_state_nobody_title">Aquí no hay nadie</string>
+    <string name="profile_state_nobody_message">Este perfil no existe o no es visible para ti.</string>
+    <string name="profile_state_nobody_back">Volver</string>
+    <string name="profile_state_cached_message">Sin conexión · último perfil guardado</string>
+    <string name="profile_report_sheet_title">Denunciar a %1$s</string>
+    <string name="profile_report_sheet_hint">Es anónimo. Nuestro equipo lo lee en 24 h.</string>
+    <string name="profile_report_sheet_question">¿Qué ocurre?</string>
+    <string name="profile_report_also_block">Bloquear también a %1$s</string>
+    <string name="profile_report_send">Denunciar</string>
+</resources>
