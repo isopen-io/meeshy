@@ -236,7 +236,7 @@ final class CallGroupStageSizingTests: XCTestCase {
 
     private let families = [
         CallActionFamilyRow(family: .myImage, actions: [.camera, .effects]),
-        CallActionFamilyRow(family: .theCall, actions: [.captions, .journal, .addPeople]),
+        CallActionFamilyRow(family: .theCall, actions: [.captions, .recording, .addPeople]),
     ]
 
     func test_rows_compactHeight_foldIntoOneUntitledScrollingRow() {
@@ -244,7 +244,7 @@ final class CallGroupStageSizingTests: XCTestCase {
 
         XCTAssertEqual(rows.count, 1)
         XCTAssertNil(rows[0].family)
-        XCTAssertEqual(rows[0].actions, [.camera, .effects, .captions, .journal, .addPeople])
+        XCTAssertEqual(rows[0].actions, [.camera, .effects, .captions, .recording, .addPeople])
     }
 
     func test_rows_regularHeight_keepOneTitledRowPerFamily() {

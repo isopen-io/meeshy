@@ -26,6 +26,23 @@ enum BubbleCallJournalOffer {
     }
 }
 
+/// #19687 — sous la carte du fil, le journal se lit EN ENTIER dans une zone bornée qui défile seule : un appel
+/// d'une heure ne pousse plus le fil de plusieurs écrans. Un journal court garde sa hauteur naturelle. Mêmes
+/// valeurs que le web (`call-transcript-panel`, 25 rem) et Android (`CallJournalUnderBubble`, 400 dp).
+nonisolated enum CallJournalUnderCardSizing {
+    static let listMaxHeight: CGFloat = 400
+
+    /// La hauteur de la zone : la hauteur naturelle de la liste, bornée ; `nil` tant qu'elle n'est pas mesurée.
+    static func listHeight(natural: CGFloat, limit: CGFloat) -> CGFloat? {
+        natural > 0 ? min(natural, limit) : nil
+    }
+
+    /// La zone défile quand la liste dépasse la borne.
+    static func scrolls(natural: CGFloat, limit: CGFloat) -> Bool {
+        natural > limit
+    }
+}
+
 /// Les mots de la bascule et de l'échec, tous déjà traduits dans les sept langues.
 enum BubbleCallJournalCopy {
     /// A1.3 — l'état que le lecteur d'écran annonce avec « Masquer / Afficher la transcription ».
@@ -204,10 +221,16 @@ struct BubbleCallJournalUnderCard: View, Equatable {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, MeeshySpacing.sm)
         } else if let transcript {
-            CallTranscriptSection(transcript: transcript, accentHex: accentHex, tint: accent) {
-                self.transcript = nil
-                phase = .nothingKept
-            }
+            CallTranscriptSection(
+                transcript: transcript,
+                accentHex: accentHex,
+                tint: accent,
+                onDeleted: {
+                    self.transcript = nil
+                    phase = .nothingKept
+                },
+                listMaxHeight: CallJournalUnderCardSizing.listMaxHeight
+            )
         } else if BubbleCallJournalOffer.offersRetry(phase) {
             unreachableNotice
         } else if phase == .loading {

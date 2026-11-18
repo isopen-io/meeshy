@@ -36,7 +36,6 @@ struct CallBubbleView: View {
     @State private var pinchLastSample: (time: Date, progress: CGFloat)?
 
     private let circleDiameter = CallBubbleGestureResolver.bubbleDiameter
-    private let menuButtonDiameter: CGFloat = 44
     private let menuButtonGap: CGFloat = 8
 
     private var isVideo: Bool {
@@ -100,9 +99,13 @@ struct CallBubbleView: View {
         let cornerRadius = CallBubbleGestureResolver.interpolatedCornerRadius(progress: progress)
         let controlOpacity = CallBubbleGestureResolver.controlBarOpacity(progress: progress)
         let menuOffset = isMenuRevealed
-            ? CallBubbleGestureResolver.menuOffset(edge: callManager.bubbleEdge, screenWidth: geometry.size.width, buttonDiameter: menuButtonDiameter)
+            ? CallReducedControlsLaw.clusterShift(
+                edge: callManager.bubbleEdge,
+                edgeMargin: CallBubbleGestureResolver.bubbleEdgeMargin,
+                diskDiameter: circleDiameter
+            )
             : 0
-        let sideButtonOffset = circleDiameter / 2 + menuButtonGap + menuButtonDiameter / 2
+        let sideButtonOffset = CallReducedControlsLaw.centerOffset(diskDiameter: circleDiameter)
 
         ZStack {
             if isCircleRegion && isMenuRevealed {
@@ -229,7 +232,7 @@ struct CallBubbleView: View {
 
     private var touchReach: CGFloat {
         guard isCircleRegion && isMenuRevealed else { return max(16, shareStopReach) }
-        return menuButtonGap + menuButtonDiameter + MeeshySpacing.sm
+        return CallReducedControlsLaw.touchReach(diskDiameter: circleDiameter) + MeeshySpacing.sm
     }
 
     // MARK: - « Arrêter » au-dessus d'un plein écran (#17763)
@@ -275,7 +278,7 @@ struct CallBubbleView: View {
     }
 
     private var tierControlBar: some View {
-        HStack(spacing: MeeshySpacing.md) {
+        HStack(spacing: CallReducedControlsLaw.barSpacing) {
             muteButton
             speakerButton
             hangupButton
@@ -431,10 +434,11 @@ struct CallBubbleView: View {
             armAutoDismiss()
         } label: {
             Image(systemName: callManager.isMuted ? "mic.slash.fill" : "mic.fill")
-                .font(.subheadline.weight(.medium))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(callManager.isMuted ? MeeshyColors.error : Color.white)
-                .frame(width: menuButtonDiameter, height: menuButtonDiameter)
+                .frame(width: CallReducedControlsLaw.paintedDiameter, height: CallReducedControlsLaw.paintedDiameter)
                 .background(Circle().fill(callManager.isMuted ? MeeshyColors.error.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.strong)))
+                .reducedControlTouchTarget()
         }
         .pressable()
         .accessibilityLabel(callManager.isMuted
@@ -450,10 +454,11 @@ struct CallBubbleView: View {
             armAutoDismiss()
         } label: {
             Image(systemName: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill")
-                .font(.subheadline.weight(.medium))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(callManager.isSpeaker ? MeeshyColors.indigo400 : Color.white)
-                .frame(width: menuButtonDiameter, height: menuButtonDiameter)
+                .frame(width: CallReducedControlsLaw.paintedDiameter, height: CallReducedControlsLaw.paintedDiameter)
                 .background(Circle().fill(callManager.isSpeaker ? MeeshyColors.indigo400.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.strong)))
+                .reducedControlTouchTarget()
         }
         .pressable()
         .accessibilityLabel(callManager.isSpeaker
@@ -469,9 +474,9 @@ struct CallBubbleView: View {
             HapticFeedback.error()
         } label: {
             Image(systemName: "phone.down.fill")
-                .font(.subheadline.weight(.semibold))
+                .font(.caption.weight(.bold))
                 .foregroundStyle(Color.white)
-                .frame(width: menuButtonDiameter, height: menuButtonDiameter)
+                .frame(width: CallReducedControlsLaw.paintedDiameter, height: CallReducedControlsLaw.paintedDiameter)
                 .background(
                     Circle().fill(
                         LinearGradient(
@@ -481,9 +486,18 @@ struct CallBubbleView: View {
                         )
                     )
                 )
+                .reducedControlTouchTarget()
         }
         .pressable()
         .accessibilityLabel(String(localized: "call.bubble.hangup", defaultValue: "Raccrocher l'appel"))
         .accessibilityHint(String(localized: "call.end.hint", defaultValue: "Termine l'appel en cours", bundle: .main))
+    }
+}
+
+private extension View {
+    /// #19671 — la peinture est petite, la cible tactile garde ses 44 pt.
+    func reducedControlTouchTarget() -> some View {
+        frame(width: CallReducedControlsLaw.hitTarget, height: CallReducedControlsLaw.hitTarget)
+            .contentShape(Circle())
     }
 }
