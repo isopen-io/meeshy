@@ -95,6 +95,9 @@ extension Notification.Name {
     /// puis remet sa prise au composer. Toute entrée « caméra d'abord » la poste ;
     /// le cover unique de la racine (`StoryComposerCover`) la présente.
     static let openStoryCamera = Notification.Name("openStoryCamera")
+    /// **Une image à mettre en story** (ma carte de profil, #19487) : l'objet est l'`UIImage`, que le cover racine
+    /// sème en fond de scène par la même porte que la prise de la caméra autonome.
+    static let openStoryComposerSeeded = Notification.Name("openStoryComposerSeeded")
 }
 
 /// **Ce que la caméra d'abord décide** — pur, éprouvé sans monter de vue.
@@ -156,12 +159,22 @@ struct StoryCameraFirstCover: ViewModifier {
                 takeSeed = nil
                 cameraFirst = true
             }
+            .onReceive(NotificationCenter.default.publisher(for: .openStoryComposerSeeded)) { notification in
+                guard let image = notification.object as? UIImage,
+                      StoryCameraFirstRule.opens(composerShown: composerShown, cameraShown: cameraFirst) else { return }
+                seedComposer(with: .photo(image, data: nil))
+            }
     }
 
     /// Le viseur s'est retiré : une prise ouvre le composer semé, rien n'ouvre rien.
     private func handOver() {
         guard let prise = take else { return }
         take = nil
+        seedComposer(with: prise)
+    }
+
+    /// La prise devient le fond de la scène, puis le composer s'ouvre semé ; rien ne s'ouvre sans graine.
+    private func seedComposer(with prise: CameraResult) {
         Task { @MainActor in
             guard let graine = await ComposerMediaSeeding.seed(forTake: prise), !composerShown else { return }
             takeSeed = graine

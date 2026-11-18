@@ -8,6 +8,8 @@ import MeeshyUI
 /// entourée du cercle de flou que son émetteur a choisi.
 struct SharedLocationsMapSection: View {
     @ObservedObject var viewModel: SharedLocationsMapViewModel
+    /// « Tout voir » ouvre la carte de tous mes proches, en plein écran (#18872, planche Carte-Proches).
+    @State private var showsNearby = false
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
@@ -27,20 +29,25 @@ struct SharedLocationsMapSection: View {
             }
             .padding(.horizontal, MeeshySpacing.xl)
             .padding(.top, MeeshySpacing.md)
+            .fullScreenCover(isPresented: $showsNearby) { NearbyMapScreen() }
         }
     }
 
     private var header: some View {
         let title = String(localized: "circles.locations.title", defaultValue: "Positions partagées avec toi", bundle: .main)
         return HStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: "location.circle.fill").foregroundStyle(MeeshyColors.indigo500).accessibilityHidden(true)
-            Text(title).font(.subheadline.weight(.bold)).foregroundStyle(theme.textPrimary)
-            Text("\(viewModel.pins.count)").font(.caption.weight(.semibold)).foregroundStyle(theme.textMuted)
+            HStack(spacing: MeeshySpacing.sm) {
+                Image(systemName: "location.circle.fill").foregroundStyle(MeeshyColors.indigo500).accessibilityHidden(true)
+                Text(title).font(.subheadline.weight(.bold)).foregroundStyle(theme.textPrimary)
+                Text("\(viewModel.pins.count)").font(.caption.weight(.semibold)).foregroundStyle(theme.textMuted)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityLabel("\(title), \(viewModel.pins.count)")
             Spacer()
+            MeeshyButton(LocationMapCopy.nearbyOpen, systemImage: "map", kind: .text, size: .s36,
+                         action: { showsNearby = true })
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-        .accessibilityLabel("\(title), \(viewModel.pins.count)")
     }
 }
 

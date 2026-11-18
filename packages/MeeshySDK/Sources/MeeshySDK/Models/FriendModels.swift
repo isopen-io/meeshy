@@ -15,6 +15,17 @@ public struct FriendRequest: Codable, CacheIdentifiable, Identifiable, Sendable,
     public let updatedAt: Date?
     /// Le cran visé (#13933) : `nil` = Ami, le sens historique d'une demande sans niveau.
     public let targetLevel: String?
+    /// La langue d'origine du mot (#19460, servie par #19258) ; `nil` = un ancien serveur : le mot se lit tel quel.
+    public let messageOriginalLanguage: String?
+    /// La traduction du mot que la passerelle a élue pour le destinataire, sous forme d'entrée unique.
+    public let messageTranslation: FriendRequestNoteTranslations?
+    /// Les traductions du mot, par langue.
+    public let messageTranslations: FriendRequestNoteTranslations?
+
+    /// Toutes les traductions servies du mot, par langue en minuscules — la carte d'abord, l'entrée unique ensuite.
+    public var noteTranslations: [String: String] {
+        (messageTranslations?.texts ?? [:]).merging(messageTranslation?.texts ?? [:]) { kept, _ in kept }
+    }
 
     /// Le cran que cette demande vise, ou `nil` quand la valeur servie est illisible : une
     /// demande qu'on ne sait pas lire reste une demande simple, jamais un cran inventé.
@@ -35,7 +46,10 @@ public struct FriendRequest: Codable, CacheIdentifiable, Identifiable, Sendable,
         respondedAt: Date? = nil,
         createdAt: Date,
         updatedAt: Date? = nil,
-        targetLevel: String? = nil
+        targetLevel: String? = nil,
+        messageOriginalLanguage: String? = nil,
+        messageTranslation: FriendRequestNoteTranslations? = nil,
+        messageTranslations: FriendRequestNoteTranslations? = nil
     ) {
         self.id = id
         self.senderId = senderId
@@ -48,6 +62,9 @@ public struct FriendRequest: Codable, CacheIdentifiable, Identifiable, Sendable,
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.targetLevel = targetLevel
+        self.messageOriginalLanguage = messageOriginalLanguage
+        self.messageTranslation = messageTranslation
+        self.messageTranslations = messageTranslations
     }
 }
 

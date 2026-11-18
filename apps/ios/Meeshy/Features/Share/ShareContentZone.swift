@@ -97,6 +97,8 @@ struct ShareContentZone: View {
             return "\(ShareSheetCopy.contentZone) · \(ShareSheetCopy.pieceOf(index, pieces.count))"
         case .incoming(let incoming) where !incoming.media.isEmpty:
             return "\(ShareSheetCopy.contentZone) · \(incoming.media.count)"
+        case .card(let shareCard):
+            return ShareSheetCopy.cardZone(shareCard.kind)
         default:
             return ShareSheetCopy.contentZone
         }
@@ -116,7 +118,8 @@ struct ShareContentZone: View {
         case .link(let url):
             card(icon: "link", title: url.host ?? url.absoluteString, subtitle: url.absoluteString)
         case .card(let shareCard):
-            card(icon: Self.icon(for: shareCard.kind), title: shareCard.title, subtitle: shareCard.subtitle, imageURL: shareCard.imageURL)
+            card(icon: Self.icon(for: shareCard.kind), title: shareCard.title, subtitle: shareCard.subtitle,
+                 imageURL: shareCard.imageURL, detail: shareCard.detail)
         case .incoming(let incoming):
             ForEach(incoming.shortfalls, id: \.self) { shortfall in
                 Label(ShareSheetCopy.shortfall(shortfall), systemImage: Self.symbol(for: shortfall))
@@ -222,7 +225,8 @@ struct ShareContentZone: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func card(icon: String, title: String, subtitle: String?, imageURL: String? = nil) -> some View {
+    private func card(icon: String, title: String, subtitle: String?, imageURL: String? = nil,
+                      detail: String? = nil) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             if let imageURL {
                 ProgressiveCachedImage(thumbHash: nil, thumbnailUrl: imageURL, fullUrl: imageURL) {
@@ -249,6 +253,12 @@ struct ShareContentZone: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundStyle(theme.textMuted)
                         .lineLimit(1)
+                }
+                if let detail {
+                    Text(detail)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                        .foregroundStyle(theme.textPrimary)
+                        .lineLimit(3)
                 }
             }
             Spacer(minLength: 0)

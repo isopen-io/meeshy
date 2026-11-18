@@ -12,9 +12,14 @@ import SwiftUI
 /// — ou une vue vide quand la visibilité du membre ferme son jeu à ce lecteur.
 public struct ProfileGameSection {
     public let build: (_ userId: String, _ displayName: String) -> AnyView
+    /// « Son jeu » dans la Vitrine d'un autre (#19416) : la carte que l'app y pose (`ProfileGameBoardView`), vide
+    /// quand rien n'est servi à ce lecteur ; `nil` : la Vitrine ne la pose pas.
+    public let card: ((_ userId: String, _ tint: Color) -> AnyView)?
 
-    public init(build: @escaping (_ userId: String, _ displayName: String) -> AnyView) {
+    public init(build: @escaping (_ userId: String, _ displayName: String) -> AnyView,
+                card: ((_ userId: String, _ tint: Color) -> AnyView)? = nil) {
         self.build = build
+        self.card = card
     }
 }
 

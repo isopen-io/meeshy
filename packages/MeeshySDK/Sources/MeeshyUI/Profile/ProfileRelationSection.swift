@@ -24,8 +24,9 @@ struct ProfileRelationSlot<Unlinked: View>: View {
     let section: ProfileRelationSection?
     let userId: String?
     let displayName: String
+    /// Porté par la fiche : le cercle commun n'est plus Public dès qu'un lien est montré (#18870).
+    @Binding var linked: Bool
     @ViewBuilder let unlinked: () -> Unlinked
-    @State private var linked = false
 
     var body: some View {
         if let section, let userId, !userId.isEmpty {
@@ -51,6 +52,30 @@ public extension EnvironmentValues {
     }
 }
 
+// MARK: - La pilule de relation sous le nom (#18870, loi 3)
+
+/// Ce que l'app fournit : la pilule qui dit le cercle COMMUN (« 🔥 Proche ▾ ») et mène à « Notre cercle ». Vide tant
+/// qu'aucun lien n'est servi : la fiche n'invente aucun niveau.
+public struct ProfileRelationPill {
+    public let build: (_ userId: String, _ displayName: String) -> AnyView
+
+    public init(build: @escaping (_ userId: String, _ displayName: String) -> AnyView) {
+        self.build = build
+    }
+}
+
+private struct ProfileRelationPillKey: EnvironmentKey {
+    static let defaultValue: ProfileRelationPill? = nil
+}
+
+public extension EnvironmentValues {
+    /// La pilule de relation sous le nom d'une fiche ; `nil` : rien sous le nom.
+    var profileRelationPill: ProfileRelationPill? {
+        get { self[ProfileRelationPillKey.self] }
+        set { self[ProfileRelationPillKey.self] = newValue }
+    }
+}
+
 /// « Connectés » : une demande acceptée, sans rien dire du cercle. L'app le reprend tant qu'aucun lien n'est servi.
 public struct ProfileConnectedBadge: View {
     public init() {}
@@ -68,5 +93,77 @@ public struct ProfileConnectedBadge: View {
         .padding(.vertical, MeeshySpacing.md)
         .background(MeeshyColors.success.opacity(MeeshyOpacity.subtle))
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+    }
+}
+
+// MARK: - La carte comme action (#18872, loi 6)
+
+/// Ce que la fiche remet à la carte : qui, et ce que la carte peut rendre à la fiche (écrire, appeler).
+public struct ProfileLocationMapRequest {
+    /// Ce qui rend la même fiche à côté de la carte ; l'hôte lui retire « Carte » (`profileLocationMap` à `nil`).
+    public typealias Profile = () -> UserProfileSheet
+
+    public let userId: String
+    public let displayName: String
+    public let onWrite: (() -> Void)?
+    public let onCall: (() -> Void)?
+    /// La fiche elle-même, à poser à côté de la carte quand la place le permet (planche iPad-Split) ; sans « Carte ».
+    public let profile: Profile?
+
+    public init(userId: String, displayName: String, onWrite: (() -> Void)?, onCall: (() -> Void)?,
+                profile: Profile? = nil) {
+        self.userId = userId
+        self.displayName = displayName
+        self.onWrite = onWrite
+        self.onCall = onCall
+        self.profile = profile
+    }
+}
+
+/// Ce que l'app fournit : si la carte d'une personne a quelque chose à montrer (une position servie), et la carte
+/// elle-même. Sans emplacement, la fiche ne propose pas « Carte » : le SDK ne connaît ni positions ni magasin.
+public struct ProfileLocationMap {
+    /// La carte « Où il est » de la face Actions (planche Autre-Actions) : ce que l'app sait de la position servie,
+    /// et de quoi ouvrir la carte en plein écran.
+    public typealias Preview = (_ request: ProfileLocationMapRequest, _ openMap: @escaping () -> Void) -> AnyView
+
+    public let isOffered: (_ userId: String) -> Bool
+    public let destination: (ProfileLocationMapRequest) -> AnyView
+    /// Sans elle, la fiche propose « Carte » dans « Parler » (K32) ; avec elle, la section « Où il est » la remplace.
+    public let preview: Preview?
+
+    public init(isOffered: @escaping (_ userId: String) -> Bool,
+                destination: @escaping (ProfileLocationMapRequest) -> AnyView,
+                preview: Preview? = nil) {
+        self.isOffered = isOffered
+        self.destination = destination
+        self.preview = preview
+    }
+
+    func placement(for userId: String) -> ProfileWherePlacement {
+        ProfileWherePlacement.resolve(isOffered: isOffered(userId), hasPreview: preview != nil)
+    }
+}
+
+/// Où la fiche d'un autre range sa position servie : nulle part sans position, la section « Où il est » quand l'app
+/// sait la dessiner, sinon l'action « Carte » de « Parler ».
+nonisolated enum ProfileWherePlacement: Equatable, Sendable {
+    case none, action, card
+
+    static func resolve(isOffered: Bool, hasPreview: Bool) -> ProfileWherePlacement {
+        guard isOffered else { return .none }
+        return hasPreview ? .card : .action
+    }
+}
+
+private struct ProfileLocationMapKey: EnvironmentKey {
+    static let defaultValue: ProfileLocationMap? = nil
+}
+
+public extension EnvironmentValues {
+    /// La carte des positions d'une fiche ; `nil` : la face Actions ne propose pas « Carte ».
+    var profileLocationMap: ProfileLocationMap? {
+        get { self[ProfileLocationMapKey.self] }
+        set { self[ProfileLocationMapKey.self] = newValue }
     }
 }

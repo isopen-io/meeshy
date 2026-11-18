@@ -136,6 +136,68 @@ final class BringServiceTests: XCTestCase {
         XCTAssertFalse(decoded.talkieBlocked)
     }
 
+    // MARK: - Les nouveautés d'une personne (#19433, serveur #19434)
+
+    func test_personSettings_newsNotifyAbsent_isNotServed() throws {
+        let old = try JSONDecoder().decode(RelationPersonSettings.self, from: Data(#"{"userId":"u1","bringBlocked":false}"#.utf8))
+        XCTAssertNil(old.newsNotify)
+        XCTAssertNil(old.isSubscribed(.news))
+    }
+
+    func test_personSettings_newsNotifyServed_isRead() throws {
+        let served = try JSONDecoder().decode(
+            RelationPersonSettings.self, from: Data(#"{"userId":"u1","bringBlocked":false,"newsNotify":true}"#.utf8))
+        XCTAssertEqual(served.newsNotify, true)
+        XCTAssertEqual(served.isSubscribed(.news), true)
+    }
+
+    func test_setNewsNotify_putsOnlyThatField() async throws {
+        let (service, api) = makeSUT()
+        api.stub("/relations/u1/settings", result: APIResponse<RelationPersonSettings>(
+            success: true, data: RelationPersonSettings(userId: "u1", bringBlocked: false, newsNotify: false), error: nil))
+
+        let served = try await service.setSubscribed(.news, userId: "u1", subscribed: false)
+
+        XCTAssertEqual(api.lastRequest?.method, "PUT")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?.keys.sorted(), ["newsNotify"])
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["newsNotify"] as? Bool, false)
+        XCTAssertEqual(served.newsNotify, false)
+    }
+
+    // MARK: - La position continue d'un Sang (#19479, serveur #19454)
+
+    func test_personSettings_bloodLocationMutedAbsent_isNotServed() throws {
+        let old = try JSONDecoder().decode(RelationPersonSettings.self, from: Data(#"{"userId":"u1","bringBlocked":false}"#.utf8))
+        XCTAssertNil(old.bloodLocationMuted)
+        XCTAssertFalse(old.isServed(.bloodLocation))
+        XCTAssertFalse(old.isBlocked(.bloodLocation))
+        XCTAssertTrue(old.isServed(.bring))
+        XCTAssertTrue(old.isServed(.talkie))
+    }
+
+    func test_personSettings_bloodLocationMutedServed_isRead() throws {
+        let open = try JSONDecoder().decode(
+            RelationPersonSettings.self, from: Data(#"{"userId":"u1","bringBlocked":false,"bloodLocationMuted":false}"#.utf8))
+        let muted = try JSONDecoder().decode(
+            RelationPersonSettings.self, from: Data(#"{"userId":"u1","bringBlocked":false,"bloodLocationMuted":true}"#.utf8))
+        XCTAssertTrue(open.isServed(.bloodLocation))
+        XCTAssertFalse(open.isBlocked(.bloodLocation))
+        XCTAssertTrue(muted.isBlocked(.bloodLocation))
+    }
+
+    func test_muteBloodLocation_putsOnlyThatField() async throws {
+        let (service, api) = makeSUT()
+        api.stub("/relations/u1/settings", result: APIResponse<RelationPersonSettings>(
+            success: true, data: RelationPersonSettings(userId: "u1", bringBlocked: false, bloodLocationMuted: true), error: nil))
+
+        let served = try await service.setReceptionBlocked(.bloodLocation, userId: "u1", blocked: true)
+
+        XCTAssertEqual(api.lastRequest?.method, "PUT")
+        XCTAssertEqual(api.lastRequest?.bodyJSON?.keys.sorted(), ["bloodLocationMuted"])
+        XCTAssertEqual(api.lastRequest?.bodyJSON?["bloodLocationMuted"] as? Bool, true)
+        XCTAssertTrue(served.isBlocked(.bloodLocation))
+    }
+
     // MARK: - Pushes
 
     func test_ringPush_isReadIntoTheSameShapeAsTheSocket() {

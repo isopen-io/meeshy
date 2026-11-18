@@ -9,6 +9,14 @@ enum WidgetDeepLink {
         url(host: "conversation", id: id)
     }
 
+    /// « Mon lien » : un appui ouvre mes liens (`DeepLinkRouter` : `links` → `.userLinks`).
+    static let myLinks = URL(string: "meeshy://links")
+
+    /// La vitrine d'une personne, par son pseudo (`DeepLinkRouter` : `u/<pseudo>` → `.userProfile`).
+    static func profile(_ username: String?) -> URL? {
+        username.flatMap { url(host: "u", id: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+    }
+
     static func contact(_ id: String) -> URL? {
         url(host: "contact", id: id)
     }

@@ -141,23 +141,20 @@ final class NativeSharePresentationTests: XCTestCase {
     /// answer is `ShareLink` — no state, no representable, no presentation code
     /// at all. `CommunityLinkDetailView` and `TrackingLinkDetailView.shareActionButton`
     /// already used it; the two sites below still hand-rolled the presentation.
-    func test_shareLinkDetailView_sharesJoinURLThroughShareLink() throws {
+    /// Since the fiche moved to the kit (planche `Lien-Partage`, #18871) its Share gesture is a
+    /// `MeeshyLabeledAction`, which cannot wrap a `ShareLink`: the join URL goes through `.sheet(item:)`
+    /// and the shared `ShareSheet`, like the QR of `TrackingLinkDetailView`.
+    func test_shareLinkDetailView_presentsTheJoinURLThroughSwiftUI() throws {
         let source = try source(Self.shareLinkDetailView)
 
-        XCTAssertTrue(
-            source.contains("ShareLink(item: url)"),
-            "ShareLinkDetailView must share the join URL through a native ShareLink."
-        )
-        XCTAssertFalse(
-            source.contains("func presentSheet"),
-            "The hand-rolled presentSheet(_:) helper must be gone — ShareLink replaces it entirely."
-        )
-        // The malformed-joinUrl case is deliberately NOT asserted here. Both
-        // 216i branches removed the dead control; they disagreed only on how.
-        // The shipped answer dims it and hides it from VoiceOver, and that
-        // shape is locked by `NativeShareLinkAdoptionTests`. Asserting the
-        // rejected alternative (sharing the raw string as text) here would
-        // pin a form the codebase does not have.
+        XCTAssertTrue(source.contains("@State private var sharedLink: ShareableLink?"),
+                      "ShareLinkDetailView must hold the join URL in Identifiable state.")
+        XCTAssertTrue(source.contains(".sheet(item: $sharedLink)"),
+                      "The share sheet must be presented via .sheet(item:).")
+        XCTAssertTrue(source.contains("ShareSheet(activityItems: shared.activityItems)"),
+                      "It must reuse the shared ShareSheet representable.")
+        XCTAssertFalse(source.contains("func presentSheet"),
+                       "The hand-rolled presentSheet(_:) helper must stay gone.")
     }
 
     func test_affiliateView_sharesReferralLinkThroughShareLink() throws {

@@ -559,6 +559,29 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     /// autres. `nil` = un ancien serveur ne le sert pas : le profil se rend comme avant.
     public let profileDecor: ServedProfileDecor?
 
+    /// Les adresses que cette fiche me sert (#18863, face Liens #18871) ; `nil` = un ancien serveur, ou aucune ouverte
+    /// à mon cercle. Jamais une adresse que mon cercle n'ouvre : le serveur filtre, le client ne fait que montrer.
+    public let addresses: ServedProfileAddresses?
+
+    /// La ville DÉCLARÉE (#18862) — un mot, jamais une position. Servie à un autre seulement si son cercle l'ouvre ;
+    /// `nil` = un ancien serveur, aucune ville, ou un cercle qui ne m'ouvre pas : la fiche s'en passe.
+    public let city: String?
+    /// Le cercle à partir duquel ma ville se lit, servi à MOI seul (`nil` = moi seul). Lu par `ProfileCity`.
+    public let cityCircle: String?
+
+    /// La couleur d'accent CHOISIE de la vitrine (#19201, iOS #19391) : une teinte de `ProfileAccent.tones` en
+    /// `#RRGGBB`. `nil` = automatique, un ancien serveur, ou une valeur hors liste : l'accent se calcule comme avant.
+    public let profileAccentColor: String?
+
+    /// Ce que mon cercle ne m'ouvre pas de ses adresses (#19444) : un compte par cercle, rien d'autre. `nil` = un
+    /// ancien serveur : la face Liens s'en passe.
+    public let lockedAddresses: ServedLockedAddresses?
+    /// Ses communautés publiques, avec mon appartenance (#19444). `nil` = un ancien serveur : la section n'existe pas.
+    public let openCommunities: ServedOpenCommunities?
+    /// `false` = la personne ferme les nouvelles demandes d'ami (#19460, servi par #19258) : la fiche le dit et éteint
+    /// « Demander à être amis ». `nil` = ouvert, ou un ancien serveur : la fiche se lit comme avant.
+    public let acceptsFriendRequests: Bool?
+
     public init(
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
@@ -584,7 +607,14 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         voiceSampleDurationMs: Int? = nil,
         voiceQuality: Double? = nil,
         activation: UserActivation? = nil,
-        profileDecor: ServedProfileDecor? = nil
+        profileDecor: ServedProfileDecor? = nil,
+        addresses: ServedProfileAddresses? = nil,
+        city: String? = nil,
+        cityCircle: String? = nil,
+        profileAccentColor: String? = nil,
+        lockedAddresses: ServedLockedAddresses? = nil,
+        openCommunities: ServedOpenCommunities? = nil,
+        acceptsFriendRequests: Bool? = nil
     ) {
         self.id = id
         self.username = username
@@ -625,6 +655,13 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.voiceQuality = voiceQuality
         self.activation = activation
         self.profileDecor = profileDecor
+        self.addresses = addresses
+        self.city = city
+        self.cityCircle = cityCircle
+        self.profileAccentColor = profileAccentColor
+        self.lockedAddresses = lockedAddresses
+        self.openCommunities = openCommunities
+        self.acceptsFriendRequests = acceptsFriendRequests
     }
 
     /// Le même compte avec un autre décor de profil (équipement optimiste, événement socket).
@@ -656,7 +693,13 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
             activation: activation,
-            profileDecor: decor
+            profileDecor: decor,
+            addresses: addresses,
+            city: city, cityCircle: cityCircle,
+            profileAccentColor: profileAccentColor,
+            lockedAddresses: lockedAddresses,
+            openCommunities: openCommunities,
+            acceptsFriendRequests: acceptsFriendRequests
         )
     }
 
@@ -703,7 +746,13 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
             activation: activation,
-            profileDecor: profileDecor
+            profileDecor: profileDecor,
+            addresses: addresses,
+            city: city, cityCircle: cityCircle,
+            profileAccentColor: profileAccentColor,
+            lockedAddresses: lockedAddresses,
+            openCommunities: openCommunities,
+            acceptsFriendRequests: acceptsFriendRequests
         )
     }
 

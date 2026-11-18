@@ -12,6 +12,7 @@ import SwiftUI
 public struct MeeshyPersonRow<Avatar: View, Trailing: View>: View {
     private let title: String
     private let subtitle: String?
+    private let subtitleImage: String?
     private let meta: String?
     private let metaDetail: String?
     private let levelImage: String?
@@ -32,6 +33,7 @@ public struct MeeshyPersonRow<Avatar: View, Trailing: View>: View {
 
     public init(title: String,
                 subtitle: String? = nil,
+                subtitleImage: String? = nil,
                 meta: String? = nil,
                 metaDetail: String? = nil,
                 levelImage: String? = nil,
@@ -48,6 +50,7 @@ public struct MeeshyPersonRow<Avatar: View, Trailing: View>: View {
                 @ViewBuilder trailing: () -> Trailing) {
         self.title = title
         self.subtitle = subtitle
+        self.subtitleImage = subtitleImage
         self.meta = meta
         self.metaDetail = metaDetail
         self.levelImage = levelImage
@@ -114,10 +117,7 @@ public struct MeeshyPersonRow<Avatar: View, Trailing: View>: View {
             VStack(alignment: .leading, spacing: 2) {
                 titleLine(recipe: recipe, isDark: isDark)
                 if let subtitle {
-                    Text(subtitle)
-                        .font(MeeshyFont.relative(CGFloat(recipe.subtitleFontSize)))
-                        .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark).opacity(recipe.isMutedText ? 0.8 : 1))
-                        .lineLimit(1)
+                    subtitleLine(subtitle, recipe: recipe, isDark: isDark)
                 }
                 if recipe.metaBelowSubtitle { metaBlock(recipe: recipe, isDark: isDark) }
             }
@@ -145,6 +145,22 @@ public struct MeeshyPersonRow<Avatar: View, Trailing: View>: View {
             }
         }
         .frame(width: CGFloat(recipe.avatarSize), height: CGFloat(recipe.avatarSize))
+    }
+
+    /// La ligne dessous, précédée d'un glyphe quand l'hôte en donne un (« 🔋 Sang · à l'instant ») : le glyphe se tait
+    /// pour VoiceOver, la phrase dit déjà tout.
+    private func subtitleLine(_ subtitle: String, recipe: MeeshyPersonRowRecipe, isDark: Bool) -> some View {
+        HStack(spacing: 5) {
+            if let subtitleImage {
+                Image(systemName: subtitleImage)
+                    .font(MeeshyFont.relative(CGFloat(recipe.subtitleFontSize)))
+                    .accessibilityHidden(true)
+            }
+            Text(subtitle)
+                .font(MeeshyFont.relative(CGFloat(recipe.subtitleFontSize)))
+                .lineLimit(1)
+        }
+        .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark).opacity(recipe.isMutedText ? 0.8 : 1))
     }
 
     private func titleLine(recipe: MeeshyPersonRowRecipe, isDark: Bool) -> some View {
@@ -221,6 +237,7 @@ private struct MeeshyPersonRowStyle<Content: View>: ButtonStyle {
 extension MeeshyPersonRow where Trailing == EmptyView {
     public init(title: String,
                 subtitle: String? = nil,
+                subtitleImage: String? = nil,
                 meta: String? = nil,
                 metaDetail: String? = nil,
                 levelImage: String? = nil,
@@ -234,7 +251,7 @@ extension MeeshyPersonRow where Trailing == EmptyView {
                 label: String? = nil,
                 onPress: (() -> Void)? = nil,
                 @ViewBuilder avatar: () -> Avatar) {
-        self.init(title: title, subtitle: subtitle, meta: meta, metaDetail: metaDetail, levelImage: levelImage,
+        self.init(title: title, subtitle: subtitle, subtitleImage: subtitleImage, meta: meta, metaDetail: metaDetail, levelImage: levelImage,
                   levelLabel: levelLabel, selection: selection, selectedLabel: selectedLabel, outfit: outfit,
                   size: size, ghostGlyph: ghostGlyph, showsDivider: showsDivider, label: label, onPress: onPress,
                   avatar: avatar, trailing: { EmptyView() })

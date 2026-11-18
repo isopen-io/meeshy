@@ -8,7 +8,8 @@ import SwiftUI
 /// lecteur d'écran (`level` de 1 à 6) et le compteur est lu avec lui. Repliable
 /// (`onToggle` reçoit l'état DEMANDÉ), toute la ligne est UN bouton qui dit
 /// `expandedLabel` ou `collapsedLabel`, le chevron et le point sont muets. Statique,
-/// la ligne ne répond pas : seul l'accessoire se touche.
+/// la ligne ne répond pas : seul l'accessoire se touche. Une pastille de titre
+/// (`titleBadge`, K41) se pose juste après le titre et se dit après lui.
 public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
     private let title: String
     private let count: Int?
@@ -19,6 +20,7 @@ public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
     private let isExpanded: Bool
     private let onToggle: ((Bool) -> Void)?
     private let isLive: Bool
+    private let titleBadge: String?
     private let level: Int
     private let expandedLabel: String?
     private let collapsedLabel: String?
@@ -40,6 +42,7 @@ public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
                 isExpanded: Bool = true,
                 onToggle: ((Bool) -> Void)? = nil,
                 isLive: Bool = false,
+                titleBadge: String? = nil,
                 level: Int = 2,
                 expandedLabel: String? = nil,
                 collapsedLabel: String? = nil,
@@ -55,6 +58,7 @@ public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
         self.isExpanded = isExpanded
         self.onToggle = onToggle
         self.isLive = isLive
+        self.titleBadge = titleBadge
         self.level = level
         self.expandedLabel = expandedLabel
         self.collapsedLabel = collapsedLabel
@@ -74,8 +78,7 @@ public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
     }
 
     private var spokenTitle: String {
-        guard let count, count > 0 else { return title }
-        return "\(title), \(count)"
+        MeeshySectionHeaderRecipe.spokenTitle(title: title, count: count, titleBadge: titleBadge)
     }
 
     private var headingLevel: AccessibilityHeadingLevel {
@@ -183,6 +186,11 @@ public struct MeeshySectionHeader<Lead: View, Accessory: View>: View {
                     .frame(width: CGFloat(recipe.liveDotSize), height: CGFloat(recipe.liveDotSize))
                     .padding(.leading, CGFloat(recipe.liveDotGap))
                     .accessibilityHidden(true)
+            }
+            if let titleBadge, !titleBadge.isEmpty {
+                MeeshyBadge(.label(titleBadge), surface: .solid, kind: .accent, tint: tint)
+                    .padding(.leading, MeeshySpacing.sm)
+                    .transition(.opacity)
             }
             if recipe.showsRules { rule(isDark: isDark).padding(.leading, CGFloat(recipe.ruleGap)) }
         }

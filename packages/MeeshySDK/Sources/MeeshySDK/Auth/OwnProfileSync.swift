@@ -84,7 +84,10 @@ extension MeeshyUser {
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
             activation: activation,
-            profileDecor: profileDecor
+            profileDecor: profileDecor,
+            addresses: addresses,
+            city: city, cityCircle: cityCircle,
+            profileAccentColor: profile.profileAccentColor.applied(to: profileAccentColor)
         )
     }
 
@@ -128,5 +131,6 @@ extension MeeshyUser {
             && customDestinationLanguage == other.customDestinationLanguage
             && displayName == other.displayName && firstName == other.firstName && lastName == other.lastName
             && username == other.username && avatar == other.avatar && banner == other.banner
+            && profileAccentColor == other.profileAccentColor
     }
 }
