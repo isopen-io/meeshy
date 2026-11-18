@@ -42,6 +42,17 @@ object FirstUnreadBoundary {
      *
      * Miroir de `FirstUnreadBoundary.remainingUnread` (Swift) ; les dix cas du modèle sont rejoués un pour
      * un par `FirstUnreadRemainingTest`.
+     *
+     * ⚠️ **Aucun appelant Android ne la nourrit encore, et ce n'est pas un oubli de câblage.** La chaîne
+     * de restitution existe pourtant en entier — `UnreadLedger.noteUnreadRemaining`,
+     * `OpenConversations.toRestoreOnClose`, la restitution à la DERNIÈRE fermeture, la persistance et le
+     * journal — et rien ne l'appelle, parce qu'Android n'a RIEN à restituer : `markConversationReadOnOpening`
+     * poste à l'ouverture un `caughtUpToMessageId` inconditionnel (`ReadReceiptLanguages.declare` →
+     * `named.lastOrNull()`), donc le curseur SERVEUR saute au message le plus récent de la fenêtre sans
+     * aucune preuve d'affichage. iOS ne pose ce champ que quand le lot VU contient le plus récent
+     * (`ConversationCatchUpLaw`) et confie le reste à `notePartialRead`. Brancher cette loi sur le registre
+     * AVANT de corriger la déclaration produirait un badge que le serveur contredit dans la seconde
+     * (99 → 0 → 94 → 0). Suivi : #19703.
      */
     fun remainingUnread(
         messages: List<FirstUnreadCandidate>,
