@@ -10,11 +10,12 @@ nonisolated enum ProfileRequestSend: Equatable, Sendable {
 }
 
 /// Ce que rend « Renvoyer » : la nouvelle demande, l'ancienne gardée parce que son retrait a été refusé, ou l'ancienne
-/// retirée sans que la nouvelle parte (l'étape retombe sur « La demande n'est pas partie »).
+/// retirée sans que la nouvelle parte (l'étape retombe sur « La demande n'est pas partie », avec le mot d'origine pour
+/// que « Réessayer » le renvoie).
 nonisolated enum ProfileRequestResend: Equatable, Sendable {
     case resent(FriendRequest)
     case withdrawFailed
-    case unsent
+    case unsent(note: String?)
 }
 
 @MainActor
@@ -58,7 +59,7 @@ struct ProfileConnectionActions {
         }
         switch await sendRequest(to: userId, message: message, afterOptimistic: afterOptimistic) {
         case .sent(let request): return .resent(request)
-        case .failed, .alreadyPending: return .unsent
+        case .failed, .alreadyPending: return .unsent(note: message)
         }
     }
 

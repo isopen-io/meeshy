@@ -359,7 +359,43 @@ final class ProfileCircleViewModelTests: XCTestCase {
         XCTAssertEqual(ProfileRelationAction.battery.gate(at: gate) == .offered, rig.sut.offersBattery)
         XCTAssertEqual(ProfileRelationAction.unreachable.gate(at: gate) == .offered, rig.sut.offersPhoneReachability)
         XCTAssertEqual(ProfileRelationAction.location.gate(at: gate) == .offered, rig.sut.offersSharedLocation)
-        XCTAssertEqual(ProfileRelationAction.lockedGroups(at: gate).map(\.opensAt), [.close])
+        XCTAssertEqual(RelationCapability.lockedGroups(at: gate).map(\.opensAt), [.close, .blood])
+    }
+
+    /// Loi 4 — à Ami, la face Actions dit ce qui reste fermé : une rangée « … · dès Proche » et une « … · dès Sang ».
+    func test_lockedCapabilities_aFriend_showsARowFromCloseAndARowFromBlood() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .friend)])
+        rig.relations.linkResult = .success(link("a", .friend))
+
+        await rig.sut.load()
+
+        let level = rig.sut.lockedCapabilitiesLevel
+        let requirements = RelationCapability.lockedGroups(at: level ?? .blood).map { $0.requirement }
+        XCTAssertEqual(level, .friend)
+        XCTAssertEqual(requirements, [ProfileRelationLockedGroup.requirement(opensAt: .close),
+                                      ProfileRelationLockedGroup.requirement(opensAt: .blood)])
+        XCTAssertTrue(requirements.allSatisfy { !$0.isEmpty })
+    }
+
+    /// Sans lien servi, l'emplacement du cercle ne dit rien de fermé : la fiche dit elle-même ce que Public n'ouvre pas.
+    func test_lockedCapabilities_withoutAServedLink_isNil() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([])
+        rig.relations.linkResult = .success(link("a", .public))
+
+        await rig.sut.load()
+
+        XCTAssertNil(rig.sut.lockedCapabilitiesLevel)
+    }
+
+    func test_circleSection_rendersTheLockedCapabilities_atTheToolGate() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let section = AppSourceGuard.stripComments(try String(
+            contentsOf: root.appendingPathComponent("Meeshy/Features/Contacts/ProfileCircleSection.swift"), encoding: .utf8))
+        XCTAssertTrue(section.contains("ProfileLockedCapabilities(level: level, tint: tint)"))
+        XCTAssertTrue(section.contains("viewModel.lockedCapabilitiesLevel"))
     }
 
     func test_offersTalkieAndTogether_aStrangerWithoutAccessLevel_areNotOffered() async {
@@ -782,8 +818,9 @@ final class OurCircleSummaryTests: XCTestCase {
         XCTAssertEqual(levels, levels.sorted(by: >), "ce que Proche ouvre d'abord, puis ce qu'Ami ouvrait déjà")
     }
 
+    @MainActor
     func test_everyFeature_hasATitleAndAGlyph() {
-        for feature in OurCircleFeature.allCases {
+        for feature in RelationCapability.allCases {
             XCTAssertFalse(feature.title.isEmpty, "\(feature)")
             XCTAssertFalse(feature.systemImage.isEmpty, "\(feature)")
         }
@@ -969,7 +1006,7 @@ extension ProfileCircleViewModelTests {
         XCTAssertTrue(title.contains("Léo"))
         XCTAssertTrue(title.contains(CircleLevelNames.title(of: .blood)))
         let opens = ProfileCircleProposalCopy.opens(level: .blood, features: OurCircleSummary.addedBy(.blood))
-        XCTAssertTrue(opens?.contains(OurCircleFeature.liveLocation.title) == true)
+        XCTAssertTrue(opens?.contains(RelationCapability.liveLocation.title) == true)
         XCTAssertNil(ProfileCircleProposalCopy.opens(level: .blood, features: []))
     }
 }

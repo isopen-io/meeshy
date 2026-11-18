@@ -127,7 +127,8 @@ extension UserProfileSheet {
         case .open, .unsent:
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
                                 linked: $relationLinked, tint: accentTint) {
-                ProfileFriendRequestCard(tint: accentTint, unsent: requestStage == .unsent, isSending: isSendingRequest) { note in
+                ProfileFriendRequestCard(tint: accentTint, unsent: requestStage == .unsent, isSending: isSendingRequest,
+                                         draft: requestStage == .unsent ? unsentNote : nil) { note in
                     Task { await sendConnectionRequest(message: note) }
                 }
             }

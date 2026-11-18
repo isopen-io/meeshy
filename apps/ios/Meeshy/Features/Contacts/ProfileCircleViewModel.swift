@@ -139,6 +139,10 @@ final class ProfileCircleViewModel: ObservableObject {
     /// pour qu'une opération ne soit jamais à la fois offerte et verrouillée.
     var toolGateLevel: RelationLevel { effectiveToolLevel }
 
+    /// « Pas encore ouvert » d'une personne liée (#18870, loi 4) : jugé au cercle qui propose les outils, tant que
+    /// l'emplacement du cercle est pris ; `nil` sans lien, la fiche disant alors elle-même ce que Public n'ouvre pas.
+    var lockedCapabilitiesLevel: RelationLevel? { claimsTheSlot ? toolGateLevel : nil }
+
     /// « Partager ma position » se PROPOSE dès Ami (feature `location.temporary`, #16983), par le lien affiché ou par le
     /// verdict servi. La passerelle rejuge la loi à chaque envoi et ne sert rien sous Ami.
     var offersSharedLocation: Bool {

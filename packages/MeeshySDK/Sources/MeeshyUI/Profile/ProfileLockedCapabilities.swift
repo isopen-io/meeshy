@@ -15,7 +15,7 @@ public struct ProfileLockedCapabilities: View {
     }
 
     public var body: some View {
-        let groups = ProfileRelationAction.lockedGroups(at: level)
+        let groups = RelationCapability.lockedGroups(at: level)
         if !groups.isEmpty {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 MeeshySectionHeader(

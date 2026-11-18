@@ -4,8 +4,9 @@ import MeeshyUI
 
 /// L'emplacement du cercle sur la face Actions d'une personne liée, Connaissance comprise (#13940, #14910) : il pose
 /// `linked` dès qu'un lien d'au moins Connaissance est servi (la fiche range alors la demande de connexion), et ne garde
-/// que « Partager ma position » quand « Où il est » ne l'offre pas. Le niveau, monter, descendre et ce qui reste fermé
-/// vivent dans « Notre cercle » (`OurCircleSheet`), ouvert par sa rangée de « Sa fiche » (#19433, planche
+/// que « Partager ma position » quand « Où il est » ne l'offre pas, puis ce que le cercle commun n'ouvre pas encore, par
+/// cercle qui l'ouvrirait (loi 4, « Pas encore ouvert »). Le niveau, monter, descendre et le cran suivant vivent dans
+/// « Notre cercle » (`OurCircleSheet`), ouvert par sa rangée de « Sa fiche » (#19433, planche
 /// `Autre-Actions`) ; Talkie, « Ensemble » et « Son téléphone » ont leurs sections. Une proposition de cercle reçue de
 /// la personne s'y pose en carte, pour y répondre sans quitter la fiche (#19449). Sans lien servi, rien : `linked`
 /// reste faux et la fiche garde ce qu'elle montrait avant.
@@ -36,6 +37,10 @@ struct ProfileCircleSection: View {
                     .padding(.bottom, MeeshySpacing.xxl)
             } else {
                 Color.clear.frame(height: 0)
+            }
+            if let level = viewModel.lockedCapabilitiesLevel {
+                ProfileLockedCapabilities(level: level, tint: tint)
+                    .padding(.bottom, MeeshySpacing.xxl)
             }
         }
         .meeshyMotion(.morph, value: viewModel.shownLevel)

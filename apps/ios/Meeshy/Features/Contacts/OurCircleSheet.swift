@@ -184,7 +184,7 @@ struct OurCircleSheet: View {
     }
 
     /// Une tuile de ce que le commun ouvre : le glyphe en médaillon K45, le nom, dans une carte K43.
-    private func openedTile(_ feature: OurCircleFeature, tint: Color) -> some View {
+    private func openedTile(_ feature: RelationCapability, tint: Color) -> some View {
         MeeshyGroupCard {
             HStack(spacing: MeeshySpacing.sm) {
                 MeeshyMedallion(systemImage: feature.systemImage, tint: tint, size: .s36)

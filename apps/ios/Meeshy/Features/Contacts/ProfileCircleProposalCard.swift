@@ -11,7 +11,7 @@ nonisolated struct ProfileCircleProposal: Equatable, Sendable {
     let level: RelationLevel
     let avatar: String?
     /// Ce que le cercle proposé ajoute au commun, par la loi d'accès : rien n'est réécrit ici.
-    let opens: [OurCircleFeature]
+    let opens: [RelationCapability]
 
     static func received(in requests: [FriendRequest], from senderId: String, common: RelationLevel?,
                          setAside: Set<String>) -> ProfileCircleProposal? {
@@ -28,7 +28,7 @@ nonisolated struct ProfileCircleProposal: Equatable, Sendable {
     }
 
     /// Du cran proposé vers le commun, ce que chaque cran ajoute — le plus haut d'abord, comme « Notre cercle ».
-    static func opens(from common: RelationLevel, to level: RelationLevel) -> [OurCircleFeature] {
+    static func opens(from common: RelationLevel, to level: RelationLevel) -> [RelationCapability] {
         RelationLevel.allCases.reversed()
             .filter { $0 > common && $0 <= level }
             .flatMap { OurCircleSummary.addedBy($0) }
@@ -152,8 +152,9 @@ nonisolated enum ProfileCircleProposalCopy {
                name, CircleLevelNames.title(of: level))
     }
 
-    /// Les trois premières ouvertures du cercle proposé ; rien quand il n'ajoute rien de nommé.
-    static func opens(level: RelationLevel, features: [OurCircleFeature]) -> String? {
+    /// Les trois premières ouvertures du cercle proposé ; rien quand il n'ajoute rien de nommé. `@MainActor` : les noms
+    /// du catalogue se lisent dans `Bundle.module`.
+    @MainActor static func opens(level: RelationLevel, features: [RelationCapability]) -> String? {
         guard !features.isEmpty else { return nil }
         let named = features.prefix(3).map(\.title).formatted(.list(type: .and))
         return String(format: String(localized: "circles.proposal.opens", defaultValue: "%1$@ t'ouvrira : %2$@", bundle: .main),
