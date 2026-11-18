@@ -95,6 +95,22 @@ class ProfileSnapshotTest {
     }
 
     @Test
+    fun `a re-read proved older still says what the snapshot does not carry`() {
+        val older = MeeshyUser(
+            id = "u1", username = "alice", displayName = "Alice", isActive = false,
+            deactivatedAt = "2026-11-17T09:00:00.000Z", emailVerifiedAt = "2026-11-17T08:00:00.000Z",
+            updatedAt = "2026-11-17T09:00:00.000Z",
+        )
+
+        val merged = ProfileSnapshot.mergingServerUser(older, held())
+
+        assertThat(merged.isActive).isFalse()
+        assertThat(merged.deactivatedAt).isEqualTo("2026-11-17T09:00:00.000Z")
+        assertThat(merged.emailVerifiedAt).isEqualTo("2026-11-17T08:00:00.000Z")
+        assertThat(merged.displayName).isEqualTo("Alicia")
+    }
+
+    @Test
     fun `a re-read not older replaces the profile held`() {
         val newer = MeeshyUser(id = "u1", username = "alice", displayName = "Alicia 2", updatedAt = "2026-11-17T11:00:00.000Z")
 
