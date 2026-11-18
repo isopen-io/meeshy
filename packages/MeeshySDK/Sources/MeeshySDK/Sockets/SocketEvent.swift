@@ -90,6 +90,8 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case commentTranslationUpdated = "comment:translation-updated"
     case commentUnliked = "comment:unliked"
     case commentUpdated = "comment:updated"
+    /// La disparition d'une communauté (#19590) — iOS l'applique depuis #19591.
+    case communityDeleted = "community:deleted"
     /// L'effectif d'une communauté (#18766) — iOS l'applique depuis #18767.
     case communityMemberJoined = "community:member-joined"
     case communityMemberLeft = "community:member-left"

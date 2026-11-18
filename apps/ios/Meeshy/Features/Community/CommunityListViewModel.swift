@@ -24,6 +24,7 @@ final class CommunityListViewModel: ObservableObject, CommunityListModeling {
     private let log = MeeshyLog.logger(.ui)
     private var liveUpdates: AnyCancellable?
     private var liveMembers: AnyCancellable?
+    private var liveDeletions: AnyCancellable?
     private let memberLane = OrderedEventLane()
     private let currentUserId: @MainActor () -> String
 
@@ -32,10 +33,12 @@ final class CommunityListViewModel: ObservableObject, CommunityListModeling {
     /// `store` : « mes communautés » (#18935), la première page de l'écran.
     /// `memberChanges` : `community:member-*` (#18767) recopie l'effectif ; un
     /// geste qui fait entrer ou sortir le LECTEUR relit la liste.
+    /// `deletions` : `community:deleted` (#19591) retire la ligne, sans relance.
     init(
         service: CommunityServiceProviding = CommunityService.shared,
         communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live,
         memberChanges: AnyPublisher<CommunityMemberChange, Never> = CommunityMemberChannel.live,
+        deletions: AnyPublisher<String, Never> = CommunityDeletedChannel.live,
         currentUserId: @escaping @MainActor () -> String = MyCommunities.liveReaderId,
         store: @escaping @MainActor () async -> GRDBCacheStore<String, APICommunity> = MyCommunities.liveStore
     ) {
@@ -47,6 +50,15 @@ final class CommunityListViewModel: ObservableObject, CommunityListModeling {
             .sink { [weak self] event in self?.apply(event) }
         self.liveMembers = memberChanges
             .relay(through: memberLane) { [weak self] change in await self?.apply(change) }
+        self.liveDeletions = deletions
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] communityId in self?.applyDisappearance(of: communityId) }
+    }
+
+    func applyDisappearance(of communityId: String) {
+        guard hasRow(communityId) else { return }
+        communities.removeAll { $0.id == communityId }
+        currentOffset = communities.count
     }
 
     func apply(_ change: CommunityMemberChange) async {
