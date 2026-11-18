@@ -81,6 +81,7 @@ extension MeeshyChart {
 
     private func funnel(values: [Double]) -> some View {
         let scale = MeeshyChartScale.normalized(values)
+        let hops = MeeshyChartRecipe.shownHops(points.map(\.hop))
         return VStack(spacing: MeeshySpacing.xs) {
             ForEach(Array(scale.enumerated()), id: \.offset) { index, fraction in
                 RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
@@ -89,8 +90,21 @@ extension MeeshyChart {
                     .frame(height: CGFloat(MeeshyChartRecipe.funnelStageHeight) - MeeshySpacing.xs)
                     .scaleEffect(x: max(CGFloat(fraction), 0.08), y: 1)
                     .overlay(Text(verbatim: points[index].label).meeshyScaledFont(MeeshyFont.smallSize, weight: .semibold).foregroundStyle(Color.white))
+                if hops[index], let hop = points[index].hop {
+                    funnelHop(hop)
+                }
             }
         }
+    }
+
+    private func funnelHop(_ text: String) -> some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: "chevron.down").meeshyScaledFont(MeeshyFont.footnoteSize, weight: .bold)
+            Text(verbatim: text).meeshyScaledFont(MeeshyFont.smallSize, weight: .semibold)
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity)
+        .frame(height: CGFloat(MeeshyChartRecipe.funnelHopHeight) - MeeshySpacing.xs)
     }
 
     private func breakdown(values: [Double]) -> some View {

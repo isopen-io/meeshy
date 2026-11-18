@@ -166,4 +166,32 @@ struct MeeshyChartTests {
     func source_isAnAgnosticAtom() throws {
         try KitAssemblyGuards.assertAgnostic(["MeeshyChart.swift", "MeeshyChart+Shapes.swift", "MeeshyChartRecipe.swift", "MeeshyChartScale.swift"])
     }
+
+    @Test("un passage d'entonnoir se montre entre deux étages s'il a un texte, jamais sous le dernier")
+    func funnelHops_followTheVectors() throws {
+        for row in try KitAtomVectors.rows(Self.file, "passages") {
+            let raw = try #require(row["passages"] as? [Any])
+            let hops: [String?] = raw.map { $0 as? String }
+            let shown = try #require(row["montres"] as? [Bool])
+            #expect(MeeshyChartRecipe.shownHops(hops) == shown, "\(row)")
+        }
+    }
+
+    @Test("chaque passage montré ajoute 24 à la hauteur de l'entonnoir")
+    func funnelHops_addTheirHeight() throws {
+        for row in try KitAtomVectors.rows(Self.file, "hauteursPassages") {
+            let count = try #require(row["points"] as? Int)
+            let hopCount = try #require(row["passages"] as? Int)
+            let recipe = MeeshyChartRecipe.resolve(kind: .funnel, size: .regular, pointCount: count, hopCount: hopCount)
+            #expect(recipe.plotHeight == row["hauteur"] as? Double, "\(row)")
+        }
+    }
+
+    @Test("le passage d'un étage est porté par son point, et un point sans passage n'en a pas")
+    func funnelHop_isCarriedByThePoint() {
+        let stage = MeeshyChartPoint(id: "v", value: 38, label: "Visites 38", spoken: "Visites, 38", hop: "45 %")
+        #expect(stage.hop == "45 %")
+        #expect(MeeshyChartPoint(id: "a", value: 14, label: "Actifs 14", spoken: "").hop == nil)
+    }
 }
+

@@ -50,9 +50,11 @@ public nonisolated struct MeeshyChartPoint: Identifiable, Equatable, Sendable {
     public let position: Double?
     /// En bulles : la hauteur du centre, de 0 (en haut) à 1 (en bas), posée par l'hôte ; absente, la mi-hauteur.
     public let elevation: Double?
+    /// En entonnoir : le passage de cet étage au suivant (« 45 % s'inscrivent »), posé par l'hôte ; ignoré au dernier.
+    public let hop: String?
 
     public init(id: String, value: Double, label: String, spoken: String, tint: Color? = nil, position: Double? = nil,
-                elevation: Double? = nil) {
+                elevation: Double? = nil, hop: String? = nil) {
         self.id = id
         self.value = value
         self.label = label
@@ -60,6 +62,7 @@ public nonisolated struct MeeshyChartPoint: Identifiable, Equatable, Sendable {
         self.tint = tint
         self.position = position
         self.elevation = elevation
+        self.hop = hop
     }
 
     /// Une valeur négative ou non finie est servie à zéro.
@@ -85,6 +88,7 @@ public nonisolated struct MeeshyChartRecipe: Sendable, Equatable {
 
     public static let stripHeight: Double = 26
     public static let funnelStageHeight: Double = 52
+    public static let funnelHopHeight: Double = 24
     public static let donutDiameter: Double = 104
     public static let maxAxisLabels = 5
     public static let bubbleMinDiameter: Double = 34
@@ -95,15 +99,22 @@ public nonisolated struct MeeshyChartRecipe: Sendable, Equatable {
     public let plotHeight: Double
     public let isEmpty: Bool
 
-    public static func resolve(kind: MeeshyChartKind, size: MeeshyChartSize, pointCount: Int) -> MeeshyChartRecipe {
-        MeeshyChartRecipe(plotHeight: height(kind: kind, size: size, pointCount: pointCount), isEmpty: pointCount <= 0)
+    public static func resolve(kind: MeeshyChartKind, size: MeeshyChartSize, pointCount: Int,
+                               hopCount: Int = 0) -> MeeshyChartRecipe {
+        MeeshyChartRecipe(plotHeight: height(kind: kind, size: size, pointCount: pointCount, hopCount: hopCount),
+                          isEmpty: pointCount <= 0)
     }
 
-    private static func height(kind: MeeshyChartKind, size: MeeshyChartSize, pointCount: Int) -> Double {
+    /// Les passages d'un entonnoir qui se montrent : ceux qui ont un texte, entre deux étages (le dernier n'en a pas).
+    public static func shownHops(_ hops: [String?]) -> [Bool] {
+        hops.enumerated().map { index, hop in index < hops.count - 1 && !(hop ?? "").isEmpty }
+    }
+
+    private static func height(kind: MeeshyChartKind, size: MeeshyChartSize, pointCount: Int, hopCount: Int) -> Double {
         switch kind {
         case .strip: return stripHeight
         case .donut: return donutDiameter
-        case .funnel: return funnelStageHeight * Double(max(pointCount, 1))
+        case .funnel: return funnelStageHeight * Double(max(pointCount, 1)) + funnelHopHeight * Double(max(hopCount, 0))
         case .bars, .line, .breakdown, .bubbles: return size.height
         }
     }

@@ -65,7 +65,8 @@ public struct MeeshyChart<Center: View>: View {
     }
 
     var recipe: MeeshyChartRecipe {
-        MeeshyChartRecipe.resolve(kind: kind, size: size, pointCount: points.count)
+        MeeshyChartRecipe.resolve(kind: kind, size: size, pointCount: points.count,
+                                  hopCount: kind == .funnel ? MeeshyChartRecipe.shownHops(points.map(\.hop)).filter { $0 }.count : 0)
     }
 
     var accent: Color { tint ?? MeeshyColors.brandPrimary }

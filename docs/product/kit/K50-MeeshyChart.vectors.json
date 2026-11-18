@@ -1,7 +1,7 @@
 {
   "composant": "MeeshyChart",
   "cle": "K50",
-  "note": "Vecteurs de parité (fiche K50 § 06, loi pure MeeshyChartScale). Une valeur négative vaut zéro ; le pic est le premier maximum strictement positif. Bulles : diamètre de 34 à 78 à aire proportionnelle à la part, chiffre de 12 à 20 selon le diamètre, centre posé par l'hôte (position, élévation) et gardé dans le tracé ; sans élévation, la bulle tient la mi-hauteur.",
+  "note": "Vecteurs de parité (fiche K50 § 06, loi pure MeeshyChartScale). Une valeur négative vaut zéro ; le pic est le premier maximum strictement positif. Bulles : diamètre de 34 à 78 à aire proportionnelle à la part, chiffre de 12 à 20 selon le diamètre, centre posé par l'hôte (position, élévation) et gardé dans le tracé ; sans élévation, la bulle tient la mi-hauteur. Entonnoir : un passage (« 45 % s'inscrivent ») se montre entre deux étages s'il a un texte, jamais sous le dernier ; chacun ajoute 24 à la hauteur de tracé.",
   "normalise": [
     {
       "valeurs": [],
@@ -272,6 +272,56 @@
       "hauteur": 100,
       "x": 50,
       "y": 50
+    }
+  ],
+  "passages": [
+    {
+      "passages": [
+        "45 %",
+        "82 %",
+        null
+      ],
+      "montres": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "passages": [
+        "a",
+        null,
+        ""
+      ],
+      "montres": [
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "passages": [
+        "seul"
+      ],
+      "montres": [
+        false
+      ]
+    },
+    {
+      "passages": [],
+      "montres": []
+    }
+  ],
+  "hauteursPassages": [
+    {
+      "points": 3,
+      "passages": 2,
+      "hauteur": 204
+    },
+    {
+      "points": 3,
+      "passages": 0,
+      "hauteur": 156
     }
   ]
 }
