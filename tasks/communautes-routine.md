@@ -501,3 +501,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Cliquets partagés : Android sort de la famille « disparition d'une communauté » d'`ASYMETRIES` (reste iOS, #19591) ; `SWEPT_EVENTS_AT_LAST_MEASURE` 135 → 136. `__tests__/ci/` 25 fichiers, 215 tests verts.
 - Gates locaux : `jvm-check -PjvmCheckModelOnly` (compilation en processus, le démon Kotlin manquant de mémoire) : `CommunityDeletedEventTest` 4/4, les suites `Community*` et `socket.*` de `core/model` vertes. `sdk-core` (Robolectric) ne se prouve que par `android.yml` : `CommunityDeletedBindingTest` (4), `CommunityCacheRepositoryTest` (+3).
 - Prochain lot recommandé : #19591 (iOS lit la disparition, débloqué par la fusion de #19297), puis fermer #16857 après avoir ouvert l'issue des entrées INDIRECTES (salon via `applyCommunityAdmission`, compte supprimé).
+
+## 2026-11-18 — réveil 13:38 UTC
+
+- Début du run : #19678 (#19406, admissions implicites) ouverte, poussée à 13:12 : vivante, cédée. #19655 (#19592, Android) fusionnée.
+- Lot : #19591 (iOS lit la disparition d'une communauté). En cours.
