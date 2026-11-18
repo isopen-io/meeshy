@@ -294,6 +294,7 @@ extension ConversationSyncEngine {
                 // (outbox encore pleine, hors-ligne, 429) ne rallume pas la
                 // pastille.
                 updated[idx].userState.lastReadAt = Date()
+                updated[idx].userState.readThroughServerAt = updated[idx].lastMessageAt
             }
             return updated
         }
@@ -338,6 +339,7 @@ extension ConversationSyncEngine {
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 updated[idx].userState.lastReadAt = nil
+                updated[idx].userState.readThroughServerAt = nil
                 if updated[idx].userState.unreadCount == 0 {
                     // Le serveur reste autoritatif sur le compte exact ; on pose
                     // localement ≥ 1 pour que la pastille apparaisse tout de suite.
@@ -420,7 +422,7 @@ extension ConversationSyncEngine {
         if let frontier = result.userState.lastReadAt, frontier >= incoming.lastMessageAt {
             result.userState.unreadCount = 0
         }
-        return result
+        return result.keepingServerInstantRead(local: local)
     }
 
     /// Variante par lot — applique la règle ci-dessus à chaque ligne entrante en

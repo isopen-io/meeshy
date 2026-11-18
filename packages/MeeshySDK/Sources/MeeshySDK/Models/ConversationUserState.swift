@@ -31,6 +31,11 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
     /// `joinedAt`). Servie par G1 (`packages/shared/utils/first-unread.ts`
     /// doc-comment, § rangs) — voir son doc-comment pour la loi complète.
     public var lastReadMessageCreatedAt: Date?
+    /// L'instant SERVEUR du dernier message lu SUR CET APPAREIL (#19424) — le `lastMessageAt` servi de la ligne au
+    /// moment de la lecture, jamais l'horloge de l'appareil (une dérive d'horloge ferait mentir le badge). Tant que le
+    /// serveur n'a pas confirmé l'accusé (`lastReadMessageCreatedAt` n'a pas rattrapé cet instant), une ligne servie
+    /// dont le dernier message n'est pas plus récent garde un non-lu nul. Local à l'appareil, jamais servi.
+    public var readThroughServerAt: Date?
 
     // MARK: - Notification preferences
 
@@ -92,6 +97,7 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         lastDeliveredAt: Date? = nil,
         lastReadMessageId: String? = nil,
         lastReadMessageCreatedAt: Date? = nil,
+        readThroughServerAt: Date? = nil,
         isPinned: Bool = false,
         isMuted: Bool = false,
         mentionsOnly: Bool = false,
@@ -116,6 +122,7 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         self.lastDeliveredAt = lastDeliveredAt
         self.lastReadMessageId = lastReadMessageId
         self.lastReadMessageCreatedAt = lastReadMessageCreatedAt
+        self.readThroughServerAt = readThroughServerAt
         self.isPinned = isPinned
         self.isMuted = isMuted
         self.mentionsOnly = mentionsOnly
@@ -275,6 +282,7 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
             lastDeliveredAt: try c.decodeIfPresent(Date.self, forKey: .lastDeliveredAt),
             lastReadMessageId: try c.decodeIfPresent(String.self, forKey: .lastReadMessageId),
             lastReadMessageCreatedAt: try c.decodeIfPresent(Date.self, forKey: .lastReadMessageCreatedAt),
+            readThroughServerAt: try c.decodeIfPresent(Date.self, forKey: .readThroughServerAt),
             isPinned: try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false,
             isMuted: try c.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false,
             mentionsOnly: try c.decodeIfPresent(Bool.self, forKey: .mentionsOnly) ?? false,
@@ -294,5 +302,25 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
             lastSyncedAt: try c.decodeIfPresent(Date.self, forKey: .lastSyncedAt),
             pendingMutationCount: try c.decodeIfPresent(Int.self, forKey: .pendingMutationCount) ?? 0
         )
+    }
+}
+
+extension MeeshyConversation {
+
+    /// #19424 : l'instant SERVEUR du dernier message lu sur l'appareil survit à l'instantané servi (qui ne le porte
+    /// jamais) et garde un non-lu nul tant que l'accusé n'est pas confirmé — la ligne servie dont le dernier message
+    /// n'est pas plus récent. Confirmé = le curseur serveur (`lastReadMessageCreatedAt`) a rattrapé l'instant : la
+    /// frontière locale tombe, le serveur fait de nouveau autorité. Monotone, comme `lastReadAt`.
+    func keepingServerInstantRead(local: MeeshyConversation?) -> MeeshyConversation {
+        var result = self
+        guard let through = [local?.userState.readThroughServerAt, userState.readThroughServerAt]
+            .compactMap({ $0 }).max() else { return result }
+        if let confirmed = userState.lastReadMessageCreatedAt, confirmed >= through {
+            result.userState.readThroughServerAt = nil
+            return result
+        }
+        result.userState.readThroughServerAt = through
+        if lastMessageAt <= through { result.userState.unreadCount = 0 }
+        return result
     }
 }
