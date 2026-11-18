@@ -60,12 +60,20 @@ public extension EnvironmentValues {
 // MARK: - La pilule de relation sous le nom (#18870, loi 3)
 
 /// Ce que l'app fournit : la pilule qui dit le cercle COMMUN (« 🔥 Proche ▾ ») et mène à « Notre cercle ». Vide tant
-/// qu'aucun lien n'est servi : la fiche n'invente aucun niveau.
+/// qu'aucun lien n'est servi : la fiche n'invente aucun niveau. Posée dans l'en-tête, toujours monté, la pilule publie
+/// `linked` (comme `ProfileRelationSection`) : la Vitrine sait dès le cache qu'écrire n'est plus une demande.
 public struct ProfileRelationPill {
-    public let build: (_ userId: String, _ displayName: String) -> AnyView
+    public typealias Build = (_ userId: String, _ displayName: String, _ linked: Binding<Bool>) -> AnyView
 
-    public init(build: @escaping (_ userId: String, _ displayName: String) -> AnyView) {
+    public let build: Build
+
+    public init(build: @escaping Build) {
         self.build = build
+    }
+
+    /// L'ancienne forme, sans lien publié : la fiche ne l'apprend alors que de l'emplacement du cercle.
+    public init(build: @escaping (_ userId: String, _ displayName: String) -> AnyView) {
+        self.build = { userId, displayName, _ in build(userId, displayName) }
     }
 }
 
@@ -81,23 +89,17 @@ public extension EnvironmentValues {
     }
 }
 
-/// « Connectés » : une demande acceptée, sans rien dire du cercle. L'app le reprend tant qu'aucun lien n'est servi.
+/// « Connectés » : une demande acceptée, sans rien dire du cercle. L'app le reprend tant qu'aucun lien n'est servi. La
+/// même pastille du kit (K41) que l'étape « Acceptée » : une relation, un composant.
 public struct ProfileConnectedBadge: View {
     public init() {}
 
     public var body: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: MeeshyIconSize.sm))
-                .foregroundStyle(MeeshyColors.success)
-            Text(String(localized: "profile.status.connected", defaultValue: "Connectes", bundle: .module))
-                .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
-                .foregroundStyle(MeeshyColors.success)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, MeeshySpacing.md)
-        .background(MeeshyColors.success.opacity(MeeshyOpacity.subtle))
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+        MeeshyBadge(
+            .label(String(localized: "profile.relation.request.accepted.connected", defaultValue: "Connectés", bundle: .module)),
+            leading: .systemImage("person.fill.checkmark"), kind: .ok
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

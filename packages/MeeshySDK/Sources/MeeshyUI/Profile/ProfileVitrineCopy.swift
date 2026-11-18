@@ -175,4 +175,29 @@ enum ProfileVitrineCopy {
             : String(localized: "profile.vitrine.game.trophies.other", defaultValue: "%1$@ trophées sur %2$@", bundle: .module)
         return String(format: format, String(earned), String(total))
     }
+
+    // MARK: La voix, les chiffres
+
+    static var voiceTitle: String {
+        String(localized: "profile.vitrine.voice.title", defaultValue: "Sa voix", bundle: .module)
+    }
+
+    static var voiceSample: String {
+        String(localized: "profile.vitrine.voice.sample", defaultValue: "Échantillon", bundle: .module)
+    }
+
+    static var figuresTitle: String {
+        String(localized: "profile.vitrine.figures.title", defaultValue: "En chiffres", bundle: .module)
+    }
+
+    static var completionTitle: String {
+        String(localized: "profile.vitrine.completion.title", defaultValue: "Profil complété", bundle: .module)
+    }
+
+    /// « Membre depuis janv. 2026 » : le mois abrégé et l'année, dans la langue du téléphone.
+    static func memberSince(_ date: Date, locale: Locale = .current) -> String {
+        let since = date.formatted(.dateTime.month(.abbreviated).year().locale(locale))
+        return String(format: String(localized: "profile.vitrine.memberSince", defaultValue: "Membre depuis %@",
+                                     bundle: .module, locale: locale), since)
+    }
 }

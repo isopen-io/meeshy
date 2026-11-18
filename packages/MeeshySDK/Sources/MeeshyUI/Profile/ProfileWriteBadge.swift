@@ -6,6 +6,15 @@ import MeeshySDK
 @MainActor
 public protocol ProfileDirectUnreadProviding: AnyObject, Sendable {
     func cachedConversationList() async -> [MeeshyConversation]
+    /// Une annonce à chaque réécriture du cache de la liste (message reçu, conversation lue ailleurs) : la fiche ouverte
+    /// relit sa pastille sans changer de personne. Par défaut, rien n'est annoncé.
+    func conversationListChanges() -> AsyncStream<Void>
+}
+
+public extension ProfileDirectUnreadProviding {
+    func conversationListChanges() -> AsyncStream<Void> {
+        AsyncStream { $0.finish() }
+    }
 }
 
 /// **La pastille d'« Écrire »** (#19646, planche `Sys-Boutons` § 02, état « Compteur ») : les messages non lus de nos
@@ -50,5 +59,54 @@ extension ProfileWriteBadge {
                             isShown: Bool = true) async -> ProfileWriteBadge {
         guard isShown, let host, let userId, !userId.isEmpty else { return .empty }
         return resolve(in: await host.cachedConversationList(), with: userId)
+    }
+}
+
+/// Ce que la fiche lit de nos conversations directes dans le cache de la liste : la pastille d'« Écrire », et si une
+/// directe est déjà connue — hors ligne, « Écrire » ne promet « sera envoyé » que pour une conversation qui existe
+/// (l'app ne sait pas en créer une sans réseau).
+public nonisolated struct ProfileDirectDigest: Equatable, Sendable {
+    public let badge: ProfileWriteBadge
+    public let knowsDirect: Bool
+
+    public init(badge: ProfileWriteBadge, knowsDirect: Bool) {
+        self.badge = badge
+        self.knowsDirect = knowsDirect
+    }
+
+    public static let empty = ProfileDirectDigest(badge: .empty, knowsDirect: false)
+
+    public static func resolve(in conversations: [MeeshyConversation], with userId: String?) -> ProfileDirectDigest {
+        guard let target = userId?.lowercased(), !target.isEmpty else { return .empty }
+        let knowsDirect = conversations.contains { $0.type == .direct && $0.participantUserId?.lowercased() == target }
+        return ProfileDirectDigest(badge: ProfileWriteBadge.resolve(in: conversations, with: userId), knowsDirect: knowsDirect)
+    }
+}
+
+extension ProfileDirectDigest {
+    /// Le cache de la liste chez l'hôte, et lui seul ; sans hôte ou sans personne, rien.
+    @MainActor
+    public static func load(for userId: String?, from host: (any ProfileDirectUnreadProviding)?) async -> ProfileDirectDigest {
+        guard let host, let userId, !userId.isEmpty else { return .empty }
+        return resolve(in: await host.cachedConversationList(), with: userId)
+    }
+
+    /// La lecture d'ouverture, puis une relecture à chaque réécriture du cache de la liste, tant que la fiche montre la
+    /// même personne. Jamais le réseau.
+    @MainActor
+    public static func updates(for userId: String?,
+                               from host: (any ProfileDirectUnreadProviding)?) -> AsyncStream<ProfileDirectDigest> {
+        AsyncStream { continuation in
+            let task = Task { @MainActor in
+                continuation.yield(await load(for: userId, from: host))
+                if let host {
+                    for await _ in host.conversationListChanges() {
+                        continuation.yield(await load(for: userId, from: host))
+                    }
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 }

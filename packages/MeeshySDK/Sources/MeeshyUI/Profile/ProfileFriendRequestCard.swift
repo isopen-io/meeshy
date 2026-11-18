@@ -10,6 +10,8 @@ struct ProfileFriendRequestCard: View {
 
     let tint: Color
     var unsent = false
+    /// La demande est en route : le bouton le montre et ne répond plus (un second appui ne repart pas).
+    var isSending = false
     let onSend: (String) -> Void
     @State private var note = ""
     @State private var openNoteID: String?
@@ -43,8 +45,10 @@ struct ProfileFriendRequestCard: View {
                 systemImage: "person.badge.plus",
                 width: .fill,
                 tint: tint,
+                isPending: isSending,
                 action: { onSend(note) }
             )
+            .disabled(isSending)
             if unsent { unsentNotice }
         }
     }

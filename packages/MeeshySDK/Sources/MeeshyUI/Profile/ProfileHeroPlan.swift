@@ -44,6 +44,22 @@ public nonisolated enum ProfileHeroPlan {
         }
     }
 
+    /// Bloqué dans un sens ou l'autre (planche `Etat-Bloque`, loi 9) : l'identité se grise — bannière éteinte, avatar
+    /// aux initiales grises, ni contour, ni humeur, ni présence, ni ligne de statut.
+    public static func isIdentityMuted(isBlocked: Bool, isBlockedByTarget: Bool) -> Bool {
+        isBlocked || isBlockedByTarget
+    }
+
+    /// La bannière d'une identité grisée est la bannière vivante éteinte : ni photo, ni décor.
+    public static func banner(_ paint: ProfileBannerPaint, isMuted: Bool) -> ProfileHeroBanner {
+        isMuted ? .living(isMuted: true) : banner(paint, isBlockedByTarget: false)
+    }
+
+    /// La présence peinte sur l'avatar : aucune sur une identité grisée.
+    public static func presence(_ state: PresenceState, isMuted: Bool) -> PresenceState? {
+        isMuted ? nil : state
+    }
+
     public static func storyRing(_ state: StoryRingState, avatarSize: Double) -> StoryRingState {
         avatarSize >= storyRingMinimumAvatar ? state : .none
     }

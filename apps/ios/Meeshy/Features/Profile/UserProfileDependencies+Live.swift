@@ -32,6 +32,11 @@ final class LiveProfileDirectUnread: ProfileDirectUnreadProviding {
             return []
         }
     }
+
+    /// Chaque réécriture du cache de la liste (`ConversationListPersister`) : la fiche ouverte relit sa pastille.
+    func conversationListChanges() -> AsyncStream<Void> {
+        ConversationListCacheSignal.shared.changes()
+    }
 }
 
 /// « Joindre des messages » à un signalement (#19609) : nos messages communs viennent de la base locale des messages

@@ -3,25 +3,26 @@ import MeeshySDK
 
 // MARK: - UserProfileSheet — Details tab
 //
-// La Vitrine de la fiche d'un autre (#18870) : les pièces de l'ancien onglet
-// Détails (bio, langues, fuseau, pays, chiffrement, complétude, voix, chiffres),
-// puis « En commun » et « Publications », qui étaient deux onglets.
+// La Vitrine de la fiche d'un autre (#18870), faite du kit (loi 12) : la bio et
+// les puces vivent sous le nom (`ProfileIdentityChips`, dans l'en-tête), puis
+// « Avec lui », « En direct », « Sa voix », « Son jeu », « En chiffres », la
+// complétude, « En commun » et « Publications ».
 
 extension UserProfileSheet {
 
-    /// La Vitrine de l'autre (loi 1) : qui il est, « Avec lui » (K32, vers la face Actions), « En direct » dès Proche,
-    /// sa voix, son jeu, ses chiffres, puis ce que les anciens onglets portaient — ce que nous avons en commun et ses
-    /// publications (loi 11). Planche `Autre-Vitrine` (#19416).
+    /// La Vitrine de l'autre (loi 1), dans l'ordre de la planche `Autre-Vitrine` (#19416) : « Avec lui » (K32, vers la
+    /// face Actions), « En direct » dès Proche, sa voix, son jeu, ses chiffres, sa complétude, puis ce que les anciens
+    /// onglets portaient — ce que nous avons en commun et ses publications (loi 11).
     @ViewBuilder
     var vitrineFace: some View {
         VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
-            aboutSection.meeshyCascade(rank: 0)
-            withThemSection.meeshyCascade(rank: 1)
-            liveSection.meeshyCascade(rank: 2)
-            ProfilePendingSection.of(self).meeshyCascade(rank: 3)
-            voiceSection.meeshyCascade(rank: 4)
-            gameSectionCard.meeshyCascade(rank: 5)
-            statsSection.meeshyCascade(rank: 6)
+            withThemSection.meeshyCascade(rank: 0)
+            liveSection.meeshyCascade(rank: 1)
+            ProfilePendingSection.of(self).meeshyCascade(rank: 2)
+            voiceSection.meeshyCascade(rank: 3)
+            gameSectionCard.meeshyCascade(rank: 4)
+            figuresSection.meeshyCascade(rank: 5)
+            completionSection.meeshyCascade(rank: 6)
             commonSection.meeshyCascade(rank: 7)
             publicationsSection.meeshyCascade(rank: 8)
             ProfileAcquaintanceSection.of(self).meeshyCascade(rank: 9)
@@ -63,180 +64,35 @@ extension UserProfileSheet {
         }
     }
 
-    /// En-tête + contenu, marges d'écran comprises — l'exact pendant du
-    /// `section(...)` de `PrivacySettingsView`.
-    @ViewBuilder
-    private func profileSection<Content: View>(
-        title: String,
-        icon: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            SettingsSectionHeader(title: title, icon: icon, color: resolvedAccent)
-            content()
-        }
-        .padding(.horizontal, MeeshySpacing.xl)
-    }
-
-    // MARK: - À propos
-
-    @ViewBuilder
-    private var aboutSection: some View {
-        let hasChips = displayUser.timezone != nil || displayUser.registrationCountry != nil
-        let hasBio = !(displayUser.bio ?? "").isEmpty
-
-        if hasBio || hasChips || displayUser.hasE2EE || displayUser.profileCompletionRate != nil {
-            profileSection(
-                title: String(localized: "profile.section.about", defaultValue: "À propos", bundle: .module),
-                icon: "person.text.rectangle.fill"
-            ) {
-                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                    if let bio = displayUser.bio, !bio.isEmpty {
-                        bioCard(bio)
-                    }
-
-                    languagePills
-
-                    if hasChips {
-                        HStack(spacing: MeeshySpacing.sm) {
-                            if let tz = displayUser.timezone {
-                                TimelineView(.everyMinute) { context in
-                                    infoChip(icon: "clock.fill", text: ProfileVitrineCopy.localTime(
-                                        timezone: tz, name: displayUser.resolvedDisplayName, now: context.date))
-                                }
-                            }
-                            if let country = displayUser.registrationCountry {
-                                let countryName = CountryFlag.name(for: country) ?? country
-                                infoChip(icon: CountryFlag.emoji(for: country), text: countryName)
-                            }
-                        }
-                    }
-
-                    if displayUser.hasE2EE {
-                        ProfileE2EEBadge()
-                    }
-
-                    if let completionRate = displayUser.profileCompletionRate {
-                        ProfileCompletionRing(progress: Double(completionRate) / 100.0)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, MeeshySpacing.xs)
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Voix
+    // MARK: - Sa voix (K44 + K35)
 
     @ViewBuilder
     private var voiceSection: some View {
-        if displayUser.voicePublic == true, !(displayUser.voiceSampleUrl ?? "").isEmpty {
-            profileSection(
-                title: String(localized: "profile.voice.title", defaultValue: "Voix", bundle: .module),
-                icon: "waveform"
-            ) {
-                voiceCard
-            }
+        if displayUser.voicePublic == true, let url = displayUser.voiceSampleUrl, !url.isEmpty {
+            ProfileVoiceSample(url: url, durationMs: displayUser.voiceSampleDurationMs, tint: accentTint)
+                .padding(.horizontal, MeeshySpacing.xl)
         }
     }
 
-    // MARK: - Statistiques
+    // MARK: - En chiffres (K44 + K34)
 
-    private var statsSection: some View {
-        profileSection(
-            title: String(localized: "profile.section.stats", defaultValue: "STATISTIQUES", bundle: .module),
-            icon: "chart.bar.fill"
-        ) {
-            compactStatsBand
-        }
+    private var figuresSection: some View {
+        ProfileFiguresSection(memberSince: displayUser.createdAt, stats: effectiveUserStats,
+                              isLoadingStats: effectiveIsLoadingStats)
+            .padding(.horizontal, MeeshySpacing.xl)
     }
 
-    // MARK: - Voice card
+    // MARK: - La complétude (loi 11)
 
     @ViewBuilder
-    var voiceCard: some View {
-        if displayUser.voicePublic == true,
-           let url = displayUser.voiceSampleUrl, !url.isEmpty {
-            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    Image(systemName: "waveform")
-                        .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundStyle(Color(hex: resolvedAccent))
-                    Text(String(localized: "profile.voice.title", defaultValue: "Voix", bundle: .module))
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundStyle(theme.textPrimary)
-                }
-
-                AudioPlayerView(
-                    attachment: voiceAttachment(url: url),
-                    context: .feedPost,
-                    accentColor: resolvedAccent
-                )
+    private var completionSection: some View {
+        if let completionRate = displayUser.profileCompletionRate {
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                MeeshySectionHeader(title: ProfileVitrineCopy.completionTitle)
+                ProfileCompletionRing(progress: Double(completionRate) / 100.0)
+                    .frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(MeeshySpacing.lg)
-            .background(theme.surfaceGradient(tint: resolvedAccent))
-            .glassCard(cornerRadius: MeeshyRadius.xxl)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(String(localized: "profile.voice.title", defaultValue: "Voix", bundle: .module))
-        }
-    }
-
-    private func voiceAttachment(url: String) -> MeeshyMessageAttachment {
-        MeeshyMessageAttachment(
-            id: "voice-\(displayUser.id)",
-            mimeType: "audio/mp4",
-            fileUrl: url,
-            duration: displayUser.voiceSampleDurationMs,
-            thumbnailColor: resolvedAccent
-        )
-    }
-
-    // MARK: - Compact stats band
-
-    /// « Membre depuis » puis la bande de chiffres du kit (K34, planche
-    /// `Autre-Vitrine` § « En chiffres »). Les chiffres sont lus avec le profil
-    /// à l'ouverture (#10093) — cache d'abord, puis synchronisés ; le squelette
-    /// du kit ne se montre que sur un cache vide.
-    @ViewBuilder
-    var compactStatsBand: some View {
-        // Aucune marge horizontale ici : `profileSection` porte déjà celles de
-        // l'écran. En reposer donnerait un double retrait, visible comme un
-        // décrochement par rapport aux autres sections.
-        VStack(spacing: MeeshySpacing.md) {
-            if let createdAt = displayUser.createdAt {
-                statCard(
-                    icon: "calendar",
-                    label: String(localized: "profile.stats.memberSince", defaultValue: "Membre depuis", bundle: .module),
-                    value: formatRegistrationDate(createdAt)
-                )
-            }
-
-            if ProfileVitrineFigures.isVisible(stats: effectiveUserStats, isLoading: effectiveIsLoadingStats) {
-                MeeshyFigureBand(items: ProfileVitrineFigures.items(of: effectiveUserStats), size: .compact,
-                                 isLoading: effectiveUserStats == nil && effectiveIsLoadingStats,
-                                 emptyLabel: ProfileVitrineFigures.emptyLabel)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("profile.vitrine.figures")
-            }
-        }
-    }
-
-    // MARK: - Stat card (member-since)
-
-    func statCard(icon: String, label: String, value: String) -> some View {
-        // Icône teintée, libellé, valeur à droite : c'est exactement une ligne
-        // de réglage. Elle emprunte la trame partagée au lieu d'en redessiner
-        // une cinquième, et hérite au passage de la cible tactile de 44 pt et
-        // de l'étiquette VoiceOver « libellé, valeur ».
-        SettingsCard(tint: resolvedAccent) {
-            SettingsRow(icon: icon, title: label, color: resolvedAccent) {
-                Text(value)
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundStyle(theme.textPrimary)
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(SettingsRowMetrics.accessibilityLabel(title: label, value: value))
+            .padding(.horizontal, MeeshySpacing.xl)
         }
     }
 }

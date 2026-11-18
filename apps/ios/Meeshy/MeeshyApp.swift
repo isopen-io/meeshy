@@ -525,8 +525,13 @@ struct ProfileSheetEnvironment: ViewModifier {
     /// Le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche, et « Son jeu » dans sa Vitrine : ce que SA
     /// visibilité autorise, rien sinon. « En direct » dès Proche (#19416). Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
     /// injection, toutes les feuilles de profil la reçoivent.
+    /// La connectivité que la fiche lit pour « Parler » hors ligne (#18857) : le moniteur réseau de l'app, pas le
+    /// dernier chargement de la fiche.
+    @ObservedObject private var network = NetworkMonitor.shared
+
     func body(content: Content) -> some View {
         content
+            .environment(\.profileNetworkIsOffline, network.isOffline)
             .environment(\.profileGameSection, ProfileGameSection(
                 build: { userId, displayName in ProfileSlot.view(.banner, userId: userId, displayName: displayName) },
                 card: { userId, tint in ProfileSlot.view(.gameCard, userId: userId, displayName: "", tint: tint) }
@@ -537,8 +542,8 @@ struct ProfileSheetEnvironment: ViewModifier {
             .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, linked, tint in
                 ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked, tint: tint)
             })
-            .environment(\.profileRelationPill, ProfileRelationPill { userId, displayName in
-                ProfileSlot.view(.pill, userId: userId, displayName: displayName)
+            .environment(\.profileRelationPill, ProfileRelationPill { userId, displayName, linked in
+                ProfileSlot.view(.pill, userId: userId, displayName: displayName, linked: linked)
             })
             .environment(\.profileActionsParts, ProfileActionsParts { part, request in
                 ProfileSlot.view(.actions, userId: request.userId, displayName: request.displayName,
@@ -606,7 +611,7 @@ private struct ProfileSlotContent: View {
             ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked, tint: tint)
                 .id(userId)
         case .pill:
-            ProfileRelationPillView(userId: userId, displayName: displayName)
+            ProfileRelationPillView(userId: userId, displayName: displayName, linked: $linked)
                 .id(userId)
         case .locationMap:
             PersonLocationMapScreen(userId: userId, displayName: displayName,
