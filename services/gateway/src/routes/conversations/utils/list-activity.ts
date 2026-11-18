@@ -1,5 +1,6 @@
 import type { ConversationActiveCall, ConversationLastReaction } from '@meeshy/shared/types/conversation-preview';
 import { LAST_REACTION_SELECT, resolveConversationLastReaction, type LastReactionRow } from './last-reaction';
+import { LIVE_CALL_PARTICIPATION } from '../../../services/calls/liveCallParticipations';
 
 /**
  * Ce qui s'est passé DEPUIS le dernier message d'une conversation (#7545) : sa
@@ -15,7 +16,10 @@ export const ACTIVE_CALL_SELECT = {
   status: true,
   startedAt: true,
   metadata: true,
-  _count: { select: { participants: { where: { leftAt: null } } } },
+  // `leftAt: null` NU sous-comptait : une égalité n'apparie pas une clé ABSENTE,
+  // et les lignes d'avant l'écriture explicite de C5 n'en ont pas (#19690). La
+  // loi de la participation vivante vit une seule fois, chez les appels.
+  _count: { select: { participants: { where: LIVE_CALL_PARTICIPATION } } },
 } as const;
 
 export interface ActiveCallRow {
