@@ -83,7 +83,9 @@ const decodeOwnRecipient = (raw: unknown): SharedLocationOwnRecipient | null => 
 export function decodeOwnSharedLocation(raw: unknown): SharedLocationOwnSnapshot | null {
   const wire = objectOf(raw);
   if (wire === null || !Array.isArray(wire.recipients)) return null;
-  return { recipients: wire.recipients.flatMap((row) => decodeOwnRecipient(row) ?? []), expiresAt: instantOf(wire.expiresAt) };
+  const recipients = wire.recipients.flatMap((row) => decodeOwnRecipient(row) ?? []);
+  const own = { recipients, expiresAt: instantOf(wire.expiresAt) };
+  return typeof wire.startedAt === 'string' ? { ...own, startedAt: wire.startedAt } : own;
 }
 
 /** `null` : hors ligne, refus, passerelle d'avant (404) ou données de démonstration — rien n'est conclu. */

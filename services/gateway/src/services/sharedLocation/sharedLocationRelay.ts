@@ -510,7 +510,7 @@ export async function startSharedLocation(deps: SharedLocationRelayDeps, emitter
     return UNAVAILABLE;
   }
 
-  const ack: SharedLocationAck = { success: true, data: { expiresAt: state.expiresAt } };
+  const ack: SharedLocationAck = { success: true, data: { expiresAt: state.expiresAt, ...(state.startedAt === undefined ? {} : { startedAt: state.startedAt }) } };
   try {
     const after = await fanOut(deps, emitterId, state);
     await drainRetiring(deps, emitterId, after.served);
@@ -801,7 +801,8 @@ export async function ownSharedLocationFor(deps: SharedLocationRelayDeps, emitte
     .map((recipient) => ({ userId: recipient.userId.toLowerCase(), precision: recipient.precision, expiresAt: deadlineOf(state, recipient.userId) }))
     .sort((a, b) => a.userId.localeCompare(b.userId));
   if (recipients.length === 0) return { recipients, expiresAt: null };
-  return { recipients, expiresAt: state.expiresAt, shareBattery: state.shareBattery === true };
+  const startedAt = state.startedAt === undefined ? {} : { startedAt: state.startedAt };
+  return { recipients, expiresAt: state.expiresAt, shareBattery: state.shareBattery === true, ...startedAt };
 }
 
 /**

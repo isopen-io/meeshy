@@ -178,17 +178,21 @@ public enum class SharedLocationSendOutcome {
 
 /** Le verdict d'un démarrage ou d'une mise à jour : le terme servi, ou le refus. */
 public sealed interface SharedLocationStartVerdict {
-    public data class Started(val expiresAtMillis: Long) : SharedLocationStartVerdict
+    /** [startedAt] : le démarrage que la passerelle nomme (#18580), que la relecture de mon partage sert ensuite. */
+    public data class Started(val expiresAtMillis: Long, val startedAt: String? = null) : SharedLocationStartVerdict
 
     public data class Refused(val outcome: SharedLocationSendOutcome) : SharedLocationStartVerdict
 
     public companion object {
         /** L'accusé lu sur `data` (`SocketAckPayloadSource.DATA`). */
         public fun read(ack: SocketAck<JsonObject>): SharedLocationStartVerdict = when (ack) {
-            is SocketAck.Accepted -> ack.payload.expiresAtMillis()?.let(::Started) ?: Refused(SharedLocationSendOutcome.FAILED)
+            is SocketAck.Accepted -> ack.payload.expiresAtMillis()?.let { Started(it, ack.payload.startedAt()) }
+                ?: Refused(SharedLocationSendOutcome.FAILED)
             is SocketAck.Refused -> Refused(SharedLocationSendOutcome.ofRefusal(ack.refusal.code))
             SocketAck.Timeout -> Refused(SharedLocationSendOutcome.UNCONFIRMED)
         }
+
+        private fun JsonObject?.startedAt(): String? = (this?.get("startedAt") as? JsonPrimitive)?.takeIf { it.isString }?.content
 
         private fun JsonObject?.expiresAtMillis(): Long? {
             val raw = (this?.get("expiresAt") as? JsonPrimitive)?.contentOrNull ?: return null

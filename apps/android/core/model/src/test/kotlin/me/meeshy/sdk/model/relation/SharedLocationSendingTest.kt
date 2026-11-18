@@ -89,6 +89,18 @@ class SharedLocationSendingTest {
     }
 
     @Test
+    fun `l'accuse garde le demarrage nomme par la passerelle`() {
+        val accepted = SocketAck.Accepted(
+            buildJsonObject {
+                put("expiresAt", JsonPrimitive("2026-11-14T13:00:00.000Z"))
+                put("startedAt", JsonPrimitive("2026-11-14T12:00:00.000Z"))
+            },
+        )
+        assertThat(SharedLocationStartVerdict.read(accepted))
+            .isEqualTo(SharedLocationStartVerdict.Started(1_794_661_200_000L, "2026-11-14T12:00:00.000Z"))
+    }
+
+    @Test
     fun `une mise a jour ne part que si l'on a bouge ou au battement et jamais deux en cinq secondes`() {
         val sent = SharedLocationUpdateGate.Sent(paris, atMillis = 0L)
         val far = SharedLocationFix.of(48.8566 + 0.01, 2.3522)!!
