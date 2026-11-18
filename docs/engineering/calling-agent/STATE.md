@@ -1627,3 +1627,32 @@ socket jusqu'au client.
 3. #19597, #19736, puis #19473, #18668 et #18692 (messages d'exception bruts), #19381, #19253, #19294, #19295, #19255.
 4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
 5. **Recentrer la routine sur les appels eux-mêmes.** Les cycles 42 à 47 ont soldé la dette de la surface vocale de la passerelle. Le prochain lot sans P0 devrait viser la chaîne de traduction en direct (latence mesurée de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613).
+
+## Cycle 48 — 2026-11-18
+
+- **Base** : `origin/dev` @ `d6f1d3284`. #19704 (cycles 45-46) et #19737 (cycle 47) étaient fusionnées. #19647, #19672, #19648 et #19596 sont fermées.
+- **#19742** : fermée sans code. Le témoin `call-live-frame-events` lit déjà `CALL_MAX_PARTICIPANTS` depuis `e1da28c23` (lot #19688). Relancé sur `dev` : `17 passed`.
+- **Branche** : `claude/determined-volta-61m0c8`.
+- **Objectif** : #19734. Une traduction texte seule qui suit une piste vocale de la même langue garde la référence (`path`/`url`) de cette piste, pour que le fichier s'efface avec la pièce.
+- **Livré** (passerelle seule) :
+  - `AudioTranslateService._saveTranslationResult` (voix API) fusionne par `mergeTranslationEntries` au lieu de remplacer l'entrée de langue.
+  - `PostAudioService.handleAudioTranslationsReady` relit `postMedia.translations` puis fusionne, au lieu de remplacer toute la carte.
+  - `mergeTranslationEntries` devient générique (`NoInfer<T>`) : les entrées de post n'ont pas de `createdAt`. Son corps n'a pas changé.
+- **Tests** :
+  - **Rouge** : voix API `2 failed, 2 passed` ; post `2 failed, 2 passed`. Les deux cas verts dès le départ décrivent ce qui ne doit pas changer.
+  - **Vert**, relancé par moi : les 2 témoins et `message-translation` donnent `4 suites, 12 passed`. `tsc --noEmit` : 0.
+  - **QA** : 9 suites ciblées `118 passed`, voisines `172 suites, 3023 passed`. Les mutations M1 à M7 sont toutes tuées. La suite complète de la passerelle n'a pas été lancée.
+- **Rétrocompatibilité** : la forme servie ne change pas. `audioUrl: ""` (ancien traducteur) compte comme une absence sur les deux chemins.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - #19749 : la branche post/story est un chemin mort. Le traducteur ne renvoie pas `postId`/`postMediaId`, et le résultat retombe sur la voie message. La moitié post du lot garde donc un chemin qui ne s'exécute pas aujourd'hui.
+  - #19750 : les pistes traduites d'un `PostMedia` ne s'effacent jamais (`reclaimPostMediaBytes` ne lit pas `translations`), et `path` part brut dans les réponses de post.
+  - #19751 : la fusion tombe sur une entrée inscrite non objet, et une piste gardée garde des métadonnées fausses (`durationMs: 0`).
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre : fusion à la main quand la CI est verte. Fermer #19734 avec sa preuve si `Closes` ne la ferme pas.
+1. **#19750 et #19749 ensemble** (sécurité : effacement et fuite de `path` sur les posts), puis #19702, #19673, #19735 et #19751.
+2. #19520, second critère : constat sur le serveur avec `sre-infra`, dans la même séance que la mesure des journaux d'accès pour #19471.
+3. #19597, #19736, puis #19473, #18668 et #18692, #19381, #19253, #19294, #19295, #19255.
+4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
+5. **Recentrer sur les appels eux-mêmes** dès que la dette d'effacement est soldée : latence de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
