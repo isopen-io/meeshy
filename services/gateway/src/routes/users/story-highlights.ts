@@ -34,6 +34,11 @@ import { logError, logWarn } from '../../utils/logger';
 import { ownerIsActive } from '../../services/profile-addresses/address-link-gate';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { profileViewerId } from './profile-block-gate';
+import { wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
+import type { UnifiedAuthRequest } from '../../middleware/auth';
+
+/** La forme de `storyEffects` suit le lecteur (table O17), comme dans le fil : un client à jour reçoit les calques v3. */
+const readerOf = (request: FastifyRequest) => wireReaderFromRequest(request as UnifiedAuthRequest);
 
 const highlightSchema = {
   type: 'object',
@@ -107,7 +112,7 @@ export async function storyHighlightRoutes(fastify: FastifyInstance) {
       if (viewerId !== ownerId && isValidObjectId(ownerId) && !(await ownerIsActive(prisma, ownerId))) {
         return sendSuccess(reply, { highlights: [] });
       }
-      const highlights = await readStoryHighlights(prisma, { ownerId, viewerId, keepEmpty: false });
+      const highlights = await readStoryHighlights(prisma, { ownerId, viewerId, keepEmpty: false, reader: readerOf(request) });
       return sendSuccess(reply, { highlights });
     } catch (error) {
       logError(fastify.log, '[users/highlights] Failed to read highlights', error);
@@ -121,7 +126,7 @@ export async function storyHighlightRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     const ownerId = owner(request, reply);
     if (ownerId === null) return;
-    return sendSuccess(reply, { highlights: await readStoryHighlights(prisma, { ownerId, viewerId: ownerId, keepEmpty: true }) });
+    return sendSuccess(reply, { highlights: await readStoryHighlights(prisma, { ownerId, viewerId: ownerId, keepEmpty: true, reader: readerOf(request) }) });
   });
 
   fastify.post('/users/me/highlights', {
@@ -136,7 +141,7 @@ export async function storyHighlightRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     const ownerId = owner(request, reply);
     if (ownerId === null) return;
-    return answer(reply, announced(ownerId, await createStoryHighlight(prisma, ownerId, request.body ?? {})), 201);
+    return answer(reply, announced(ownerId, await createStoryHighlight(prisma, ownerId, request.body ?? {}, readerOf(request))), 201);
   });
 
   fastify.put<{ Body: { ids: string[] } }>('/users/me/highlights/order', {
@@ -151,7 +156,7 @@ export async function storyHighlightRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     const ownerId = owner(request, reply);
     if (ownerId === null) return;
-    const outcome = announced(ownerId, await reorderStoryHighlights(prisma, ownerId, request.body));
+    const outcome = announced(ownerId, await reorderStoryHighlights(prisma, ownerId, request.body, readerOf(request)));
     return outcome.ok === true ? sendSuccess(reply, { highlights: outcome.value }) : answer(reply, outcome);
   });
 
@@ -161,7 +166,7 @@ export async function storyHighlightRoutes(fastify: FastifyInstance) {
   }, async (request, reply) => {
     const ownerId = owner(request, reply);
     if (ownerId === null) return;
-    return answer(reply, announced(ownerId, await updateStoryHighlight(prisma, ownerId, request.params.id, request.body ?? {})));
+    return answer(reply, announced(ownerId, await updateStoryHighlight(prisma, ownerId, request.params.id, request.body ?? {}, readerOf(request))));
   });
 
   fastify.delete<{ Params: { id: string } }>('/users/me/highlights/:id', {

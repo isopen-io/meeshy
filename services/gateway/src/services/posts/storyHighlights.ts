@@ -126,8 +126,8 @@ async function ownsEveryStory(prisma: PrismaClient, ownerId: string, ids: readon
   return (await prisma.post.count({ where: ownerStoriesWhere(ownerId, ids) })) === ids.length;
 }
 
-async function servedOne(prisma: PrismaClient, ownerId: string, row: HighlightRow): Promise<StoryHighlightServed<ServedStory>> {
-  const stories = row.storyIds.length === 0 ? [] : await readableStories(prisma, { ownerId, viewerId: ownerId, keepEmpty: true }, row.storyIds);
+async function servedOne(prisma: PrismaClient, ownerId: string, row: HighlightRow, reader?: WireReader): Promise<StoryHighlightServed<ServedStory>> {
+  const stories = row.storyIds.length === 0 ? [] : await readableStories(prisma, { ownerId, viewerId: ownerId, keepEmpty: true, reader }, row.storyIds);
   const byId = new Map(stories.map((story) => [story.id, story]));
   return serve(row, row.storyIds.flatMap((id) => byId.get(id) ?? []));
 }
@@ -135,7 +135,7 @@ async function servedOne(prisma: PrismaClient, ownerId: string, row: HighlightRo
 const findOwn = (prisma: PrismaClient, ownerId: string, id: string) =>
   OBJECT_ID.test(id) ? prisma.storyHighlight.findFirst({ where: { id, ownerId }, select: HIGHLIGHT_SELECT }) : Promise.resolve(null);
 
-export async function createStoryHighlight(prisma: PrismaClient, ownerId: string, body: unknown): Promise<HighlightOutcome<StoryHighlightServed<ServedStory>>> {
+export async function createStoryHighlight(prisma: PrismaClient, ownerId: string, body: unknown, reader?: WireReader): Promise<HighlightOutcome<StoryHighlightServed<ServedStory>>> {
   const parsed = storyHighlightCreateSchema.safeParse(body);
   if (!parsed.success) return INVALID_BODY;
   const existing = await prisma.storyHighlight.count({ where: { ownerId } });
@@ -145,17 +145,17 @@ export async function createStoryHighlight(prisma: PrismaClient, ownerId: string
     data: { ownerId, ...parsed.data, order: existing },
     select: HIGHLIGHT_SELECT,
   });
-  return { ok: true, value: await servedOne(prisma, ownerId, row) };
+  return { ok: true, value: await servedOne(prisma, ownerId, row, reader) };
 }
 
-export async function updateStoryHighlight(prisma: PrismaClient, ownerId: string, id: string, body: unknown): Promise<HighlightOutcome<StoryHighlightServed<ServedStory>>> {
+export async function updateStoryHighlight(prisma: PrismaClient, ownerId: string, id: string, body: unknown, reader?: WireReader): Promise<HighlightOutcome<StoryHighlightServed<ServedStory>>> {
   const parsed = storyHighlightUpdateSchema.safeParse(body);
   if (!parsed.success) return INVALID_BODY;
   if (!(await findOwn(prisma, ownerId, id))) return NOT_FOUND;
   if (parsed.data.storyIds && !(await ownsEveryStory(prisma, ownerId, parsed.data.storyIds))) return NOT_OWNED;
   const data = Object.fromEntries(Object.entries(parsed.data).filter(([, value]) => value !== undefined));
   const row = await prisma.storyHighlight.update({ where: { id }, data, select: HIGHLIGHT_SELECT });
-  return { ok: true, value: await servedOne(prisma, ownerId, row) };
+  return { ok: true, value: await servedOne(prisma, ownerId, row, reader) };
 }
 
 export async function deleteStoryHighlight(prisma: PrismaClient, ownerId: string, id: string): Promise<HighlightOutcome<true>> {
@@ -164,7 +164,7 @@ export async function deleteStoryHighlight(prisma: PrismaClient, ownerId: string
   return count === 0 ? NOT_FOUND : { ok: true, value: true };
 }
 
-export async function reorderStoryHighlights(prisma: PrismaClient, ownerId: string, body: unknown): Promise<HighlightOutcome<StoryHighlightServed<ServedStory>[]>> {
+export async function reorderStoryHighlights(prisma: PrismaClient, ownerId: string, body: unknown, reader?: WireReader): Promise<HighlightOutcome<StoryHighlightServed<ServedStory>[]>> {
   const parsed = storyHighlightOrderSchema.safeParse(body);
   if (!parsed.success) return INVALID_BODY;
   const mine: Array<{ id: string }> = await prisma.storyHighlight.findMany({ where: { ownerId }, select: { id: true } });
@@ -173,5 +173,5 @@ export async function reorderStoryHighlights(prisma: PrismaClient, ownerId: stri
     return refuse(400, 'L’ordre doit nommer chaque album une seule fois', 'INVALID_ORDER');
   }
   await Promise.all(parsed.data.ids.map((id, order) => prisma.storyHighlight.updateMany({ where: { id, ownerId }, data: { order } })));
-  return { ok: true, value: await readStoryHighlights(prisma, { ownerId, viewerId: ownerId, keepEmpty: true }) };
+  return { ok: true, value: await readStoryHighlights(prisma, { ownerId, viewerId: ownerId, keepEmpty: true, reader }) };
 }

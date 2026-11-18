@@ -364,3 +364,35 @@ describe('/users/me/highlights — l’auteur compose ses albums', () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+describe('À la une — la forme de storyEffects suit le lecteur, comme dans le fil (table O17)', () => {
+  const V3 = { v: 3, background: { kind: 'color', color: '#112233' }, layers: [{ id: 'l1', kind: 'text', text: 'Lisbonne' }] };
+  const CAPS = { 'x-canvas-caps': '3' };
+  const withV3 = () => {
+    store.posts = store.posts.map((p) => (p.id === S_PUBLIC ? { ...p, storyEffects: V3 } : p));
+  };
+  const effectsOf = (body: AnyRow) =>
+    body.data.highlights.flatMap((h: AnyRow) => h.stories).find((s: AnyRow) => s.id === S_PUBLIC)?.storyEffects;
+  const call = async (method: 'GET' | 'POST' | 'PATCH' | 'PUT', url: string, as: string, headers: AnyRow = {}, payload?: AnyRow) => {
+    viewer = as;
+    const res = await app.inject({ method, url, headers, ...(payload ? { payload } : {}) });
+    return res.json();
+  };
+
+  it('une story v3-native lue par un client à jour (X-Canvas-Caps: 3) arrive entière ; sans en-tête, la sentinelle part', async () => {
+    withV3();
+    expect(effectsOf(await call('GET', `/users/${OWNER}/highlights`, STRANGER, CAPS))).toEqual(V3);
+    expect(effectsOf(await call('GET', `/users/${OWNER}/highlights`, STRANGER))?.v).not.toBe(3);
+  });
+
+  it('l’auteur, à jour, relit ses albums et ce qu’il vient d’écrire avec les calques entiers', async () => {
+    withV3();
+    expect(effectsOf(await call('GET', '/users/me/highlights', OWNER, CAPS))).toEqual(V3);
+    const reordered = await call('PUT', '/users/me/highlights/order', OWNER, CAPS, { ids: [H3, H2, H1] });
+    expect(effectsOf(reordered)).toEqual(V3);
+    const created = await call('POST', '/users/me/highlights', OWNER, CAPS, { title: 'Neuf', glyph: 'moon', storyIds: [S_PUBLIC] });
+    expect(created.data.stories[0].storyEffects).toEqual(V3);
+    const edited = await call('PATCH', `/users/me/highlights/${H2}`, OWNER, CAPS, { storyIds: [S_PUBLIC] });
+    expect(edited.data.stories[0].storyEffects).toEqual(V3);
+  });
+});
