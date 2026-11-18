@@ -127,18 +127,35 @@ extension MeeshyChart {
         .frame(height: CGFloat(MeeshyChartRecipe.stripHeight))
     }
 
+    /// Les bulles : un disque chiffré par point, son aire suivant la valeur, posé où l'hôte le dit (le fond est à lui).
     private func bubbles(values: [Double], size: CGSize) -> some View {
         let scale = MeeshyChartScale.normalized(values)
-        let maxDiameter = min(size.height, size.width / 2)
         return ZStack(alignment: .topLeading) {
             ForEach(Array(scale.enumerated()), id: \.offset) { index, fraction in
-                let diameter = max(maxDiameter * CGFloat(fraction.squareRoot()), 8)
+                let diameter = MeeshyChartRecipe.bubbleDiameter(fraction: fraction)
                 let position = points[index].position ?? (scale.count > 1 ? Double(index) / Double(scale.count - 1) : 0.5)
-                Circle().fill(color(of: index).opacity(0.5))
-                    .overlay(Circle().strokeBorder(color(of: index), lineWidth: 1.5))
-                    .frame(width: diameter, height: diameter)
-                    .position(x: min(max(CGFloat(position) * size.width, diameter / 2), size.width - diameter / 2), y: size.height / 2)
+                let center = MeeshyChartRecipe.bubbleCenter(position: position, elevation: points[index].elevation,
+                                                            diameter: diameter, width: Double(size.width),
+                                                            height: Double(size.height))
+                bubble(index: index, diameter: diameter)
+                    .position(center)
             }
         }
+    }
+
+    private func bubble(index: Int, diameter: Double) -> some View {
+        Circle().fill(color(of: index).opacity(0.46))
+            .overlay(Circle().strokeBorder(color(of: index).opacity(0.75), lineWidth: 1.5))
+            .overlay(
+                Text(verbatim: points[index].label)
+                    .meeshyScaledFont(CGFloat(MeeshyChartRecipe.bubbleFontSize(diameter: diameter)),
+                                      weight: .black, design: .rounded)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .foregroundStyle(.primary)
+                    .padding(MeeshySpacing.xs)
+            )
+            .frame(width: CGFloat(diameter), height: CGFloat(diameter))
     }
 }

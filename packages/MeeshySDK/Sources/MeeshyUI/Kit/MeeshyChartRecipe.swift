@@ -48,14 +48,18 @@ public nonisolated struct MeeshyChartPoint: Identifiable, Equatable, Sendable {
     public let spoken: String
     public let tint: Color?
     public let position: Double?
+    /// En bulles : la hauteur du centre, de 0 (en haut) à 1 (en bas), posée par l'hôte ; absente, la mi-hauteur.
+    public let elevation: Double?
 
-    public init(id: String, value: Double, label: String, spoken: String, tint: Color? = nil, position: Double? = nil) {
+    public init(id: String, value: Double, label: String, spoken: String, tint: Color? = nil, position: Double? = nil,
+                elevation: Double? = nil) {
         self.id = id
         self.value = value
         self.label = label
         self.spoken = spoken
         self.tint = tint
         self.position = position
+        self.elevation = elevation
     }
 
     /// Une valeur négative ou non finie est servie à zéro.
@@ -83,6 +87,10 @@ public nonisolated struct MeeshyChartRecipe: Sendable, Equatable {
     public static let funnelStageHeight: Double = 52
     public static let donutDiameter: Double = 104
     public static let maxAxisLabels = 5
+    public static let bubbleMinDiameter: Double = 34
+    public static let bubbleMaxDiameter: Double = 78
+    public static let bubbleMinFontSize: Double = 12
+    public static let bubbleMaxFontSize: Double = 20
 
     public let plotHeight: Double
     public let isEmpty: Bool
@@ -111,6 +119,36 @@ public nonisolated struct MeeshyChartRecipe: Sendable, Equatable {
             return Array(min(start, end)...max(start, end))
         case .ticks: return []
         }
+    }
+
+    /// Le diamètre d'une bulle : de 34 à 78, son AIRE proportionnelle à la part (0…1, bornée).
+    public static func bubbleDiameter(fraction: Double) -> Double {
+        let share = fraction.isFinite ? min(max(fraction, 0), 1) : 0
+        let smallest = bubbleMinDiameter * bubbleMinDiameter
+        let largest = bubbleMaxDiameter * bubbleMaxDiameter
+        return (smallest + (largest - smallest) * share).squareRoot()
+    }
+
+    /// Le corps du chiffre d'une bulle : de 12 à 20, suivant son diamètre.
+    public static func bubbleFontSize(diameter: Double) -> Double {
+        let span = bubbleMaxDiameter - bubbleMinDiameter
+        let share = diameter.isFinite ? min(max((diameter - bubbleMinDiameter) / span, 0), 1) : 0
+        return bubbleMinFontSize + (bubbleMaxFontSize - bubbleMinFontSize) * share
+    }
+
+    /// Le centre d'une bulle : l'abscisse et l'élévation de l'hôte (0…1), la bulle restant entière dans le tracé.
+    public static func bubbleCenter(position: Double, elevation: Double?, diameter: Double,
+                                    width: Double, height: Double) -> CGPoint {
+        let radius = diameter / 2
+        let x = min(max(position * width, radius), width - radius)
+        let y = min(max((elevation ?? 0.5) * height, radius), height - radius)
+        return CGPoint(x: x, y: y)
+    }
+
+    /// Les bulles prennent toute la hauteur que l'hôte leur donne (au moins leur hauteur de tracé) : l'hôte pose
+    /// dessous son fond, et ses positions s'y rapportent. Les autres genres gardent leur hauteur de tracé.
+    public static func fillsHostHeight(_ kind: MeeshyChartKind) -> Bool {
+        kind == .bubbles
     }
 
     /// Le point sous un doigt : l'abscisse rapportée à la largeur, bornée aux points existants.

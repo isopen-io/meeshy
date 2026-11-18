@@ -56,4 +56,33 @@ enum TrackingDetailCopy {
     static let utmTitle = String(localized: "tracking.link.detail.utm.title", defaultValue: "CONFIGURATION UTM", bundle: .main)
     static let destination = String(localized: "tracking.link.detail.destinationUrl", defaultValue: "URL de destination", bundle: .main)
     static let createdAt = String(localized: "tracking.link.detail.createdAt", defaultValue: "Créé le", bundle: .main)
+
+    // MARK: - Modifier (#19499)
+
+    static let edit = String(localized: "tracking.link.detail.edit", defaultValue: "Modifier", bundle: .main)
+    static let editTitle = String(localized: "tracking.link.edit.title", defaultValue: "Modifier le lien", bundle: .main)
+    static let nameField = String(localized: "tracking.link.create.field.name", defaultValue: "Nom interne", bundle: .main)
+    static let namePrompt = String(localized: "tracking.link.create.field.name.placeholder", defaultValue: "ex. : Campagne Instagram", bundle: .main)
+    static let campaignField = String(localized: "tracking.link.create.utm.campaign", defaultValue: "Campagne", bundle: .main)
+    static let sourceField = String(localized: "tracking.link.create.utm.source", defaultValue: "Source", bundle: .main)
+    static let mediumField = String(localized: "tracking.link.create.utm.medium", defaultValue: "Moyen", bundle: .main)
+    static let nothingChanged = String(localized: "tracking.link.edit.nothingChanged", defaultValue: "Rien n'a changé", bundle: .main)
+    static let notRetained = String(localized: "tracking.link.edit.notRetained", defaultValue: "Le serveur n'a pas encore retenu le nom ni les UTM", bundle: .main)
+
+    // MARK: - La carte des visiteurs (#19499)
+
+    static let mapTitle = String(localized: "tracking.link.map.title", defaultValue: "Carte des visiteurs", bundle: .main)
+    static let enlargeMap = String(localized: "tracking.link.map.enlarge", defaultValue: "Agrandir", bundle: .main)
+
+    static func mapWindow(countries: Int, days: Int) -> String {
+        String(localized: "tracking.link.map.window", defaultValue: "\(countries) pays · \(days) j", bundle: .main)
+    }
+
+    static func mapSummary(_ zones: Int) -> String {
+        String(localized: "tracking.link.map.summary", defaultValue: "Carte des visiteurs, \(zones) zones", bundle: .main)
+    }
+
+    static func zoneClicks(_ place: String, _ count: Int) -> String {
+        String(localized: "tracking.link.map.zone", defaultValue: "\(place), \(count) clics", bundle: .main)
+    }
 }

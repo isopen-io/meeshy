@@ -14,7 +14,12 @@ struct TrackingLinkDetailView: View {
     @State private var showDeleteConfirm = false
     @State private var qrShareImage: QRShareImage?
     @State private var sharedLink: ShareableLink?
+    @State var isEditing = false
+    @State var isMapEnlarged = false
     @Environment(\.dismiss) private var dismiss
+
+    /// Le lien tel que l'écran le montre : la dernière modification retenue, sinon celui qu'on a ouvert.
+    var current: TrackingLink { viewModel.edited ?? link }
 
     init(link: TrackingLink) {
         self.link = link
@@ -22,12 +27,13 @@ struct TrackingLinkDetailView: View {
     }
 
     var body: some View {
-        LinksPage(title: link.displayName, accent: MeeshyColors.trackingAccent) {
+        LinksPage(title: current.displayName, accent: MeeshyColors.trackingAccent) {
             VStack(spacing: MeeshySpacing.xl) {
                 heroTicket
                 activeRow
                 figuresBand
                 clicksChart
+                visitorMapSection
                 originsSection
                 meansSection
                 recentClicksSection
@@ -41,6 +47,9 @@ struct TrackingLinkDetailView: View {
             }
         }
         .task { await viewModel.load() }
+        .task { await viewModel.loadVisitorMap() }
+        .sheet(isPresented: $isEditing) { editSheet }
+        .fullScreenCover(isPresented: $isMapEnlarged) { enlargedMap }
         .confirmationDialog(String(localized: "tracking.link.detail.confirmDelete", defaultValue: "Supprimer ce lien ?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button(String(localized: "tracking.link.detail.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) { deleteLink() }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
@@ -54,21 +63,21 @@ struct TrackingLinkDetailView: View {
 
     private var heroTicket: some View {
         MeeshyTicket(
-            title: link.displayName,
-            code: link.shortUrl,
+            title: current.displayName,
+            code: current.shortUrl,
             tint: MeeshyColors.trackingAccent,
             systemImage: "cursorarrow.click",
             size: .hero,
             isFlipped: false,
             isSelected: false,
             isDragging: false,
-            label: "\(link.displayName), \(link.shortUrl)",
+            label: "\(current.displayName), \(current.shortUrl)",
             statusLabel: viewModel.isActive ? TrackingDetailCopy.active : TrackingDetailCopy.inactive,
             onPress: nil,
             stub: { heroActions },
             leading: { EmptyView() },
             trailing: {
-                MeeshyCodeCard(payload: URL(string: link.shortUrl)?.absoluteString, label: TrackingDetailCopy.enlargeQR,
+                MeeshyCodeCard(payload: URL(string: current.shortUrl)?.absoluteString, label: TrackingDetailCopy.enlargeQR,
                                tint: MeeshyColors.trackingAccent, style: .plain, size: .mini, tilt: .none,
                                boostsBrightness: false, onPress: { generateQRAndShare() })
             },
@@ -79,18 +88,21 @@ struct TrackingLinkDetailView: View {
     }
 
     private var heroActions: some View {
-        MeeshyActionGrid(columns: .fixed(3)) {
+        MeeshyActionGrid(columns: .fixed(4)) {
             MeeshyLabeledAction(title: TrackingDetailCopy.copy, systemImage: "doc.on.doc", tint: MeeshyColors.trackingAccent,
-                                hint: link.shortUrl, action: {
-                LinksClipboard.copy(link.shortUrl, confirmation: .inline, message: TrackingDetailCopy.copied)
+                                hint: current.shortUrl, action: {
+                LinksClipboard.copy(current.shortUrl, confirmation: .inline, message: TrackingDetailCopy.copied)
             })
             MeeshyLabeledAction(title: TrackingDetailCopy.qr, systemImage: "qrcode", tint: MeeshyColors.trackingAccent,
                                 action: { generateQRAndShare() })
             MeeshyLabeledAction(title: TrackingDetailCopy.share, systemImage: "square.and.arrow.up",
                                 tint: MeeshyColors.trackingAccent, action: {
-                sharedLink = URL(string: link.shortUrl).map { ShareableLink(url: $0) }
+                sharedLink = URL(string: current.shortUrl).map { ShareableLink(url: $0) }
             })
-            .disabled(URL(string: link.shortUrl) == nil)
+            .disabled(URL(string: current.shortUrl) == nil)
+            MeeshyLabeledAction(title: TrackingDetailCopy.edit, systemImage: "pencil", tint: MeeshyColors.trackingAccent,
+                                action: { isEditing = true })
+                .accessibilityIdentifier("tracking.detail.edit")
         }
     }
 
@@ -117,13 +129,13 @@ struct TrackingLinkDetailView: View {
     // MARK: - QR
 
     private func generateQRAndShare() {
-        qrShareImage = LinkQRCode.shareImage(for: link.shortUrl)
+        qrShareImage = LinkQRCode.shareImage(for: current.shortUrl)
     }
 
     private func deleteLink() {
         Task {
             do {
-                try await TrackingLinkService.shared.deleteLink(token: link.token)
+                try await TrackingLinkService.shared.deleteLink(token: current.token)
                 await MainActor.run { dismiss() }
             } catch {
                 await MainActor.run {
@@ -146,20 +158,39 @@ class TrackingDetailViewModel: ObservableObject {
     nonisolated deinit {}
     @Published var clicks: [TrackingLinkClick] = []
     @Published var isLoadingMore = false
-    @Published private(set) var isActive: Bool
+    @Published var isActive: Bool
     @Published private(set) var insights = TrackingLinkInsights(samples: [])
+    /// Le lien tel que la dernière modification l'a laissé ; `nil` tant qu'on ne l'a pas modifié.
+    @Published var edited: TrackingLink?
+    /// La carte des visiteurs ; `nil` tant que le serveur ne la sert pas (antérieur à #19412) : la section se tait.
+    @Published var visitorMap: TrackingVisitorMapState?
 
     let token: String
     private let setActiveRemote: @Sendable (String, Bool) async throws -> Void
+    let placesRemote: @Sendable (String, Date) async throws -> TrackingLinkPlaceStats
+    let updateRemote: @Sendable (String, TrackingLinkChanges) async throws -> TrackingLink
+    let locate: @MainActor (TrackingVisitorPlace) async -> TrackingVisitorZone?
 
     init(token: String,
          isActive: Bool = true,
          setActiveRemote: @escaping @Sendable (String, Bool) async throws -> Void = { token, isActive in
              try await TrackingLinkService.shared.setActive(token: token, isActive: isActive)
+         },
+         placesRemote: @escaping @Sendable (String, Date) async throws -> TrackingLinkPlaceStats = { token, since in
+             try await TrackingLinkService.shared.fetchVisitorPlaces(token: token, since: since)
+         },
+         updateRemote: @escaping @Sendable (String, TrackingLinkChanges) async throws -> TrackingLink = { token, changes in
+             try await TrackingLinkService.shared.updateLink(token: token, changes: changes)
+         },
+         locate: @escaping @MainActor (TrackingVisitorPlace) async -> TrackingVisitorZone? = { place in
+             await TrackingPlaceGeocoder.locate(place)
          }) {
         self.token = token
         self.isActive = isActive
         self.setActiveRemote = setActiveRemote
+        self.placesRemote = placesRemote
+        self.updateRemote = updateRemote
+        self.locate = locate
     }
 
     func load() async {

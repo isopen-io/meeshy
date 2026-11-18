@@ -13,8 +13,8 @@ extension TrackingLinkDetailView {
 
     var figuresBand: some View {
         MeeshyFigureBand(items: [
-            MeeshyFigureItem(value: link.totalClicks.formatted(), unit: TrackingDetailCopy.clicksUnit),
-            MeeshyFigureItem(value: link.uniqueClicks.formatted(), unit: TrackingDetailCopy.uniqueUnit),
+            MeeshyFigureItem(value: current.totalClicks.formatted(), unit: TrackingDetailCopy.clicksUnit),
+            MeeshyFigureItem(value: current.uniqueClicks.formatted(), unit: TrackingDetailCopy.uniqueUnit),
             MeeshyFigureItem(value: viewModel.isFirstLoad ? nil : viewModel.insights.countryCount.formatted(),
                              unit: TrackingDetailCopy.countriesUnit)
         ], emptyLabel: TrackingDetailCopy.noData)
@@ -168,11 +168,12 @@ extension TrackingLinkDetailView {
 
     var utmInfoSection: some View {
         let optionalRows: [TrackingUTMRow?] = [
-            link.campaign.map { TrackingUTMRow(label: "Campaign", value: $0) },
-            link.source.map { TrackingUTMRow(label: "Source", value: $0) },
-            link.medium.map { TrackingUTMRow(label: "Medium", value: $0) },
-            TrackingUTMRow(label: TrackingDetailCopy.destination, value: link.originalUrl),
-            TrackingUTMRow(label: TrackingDetailCopy.createdAt, value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
+            current.campaign.map { TrackingUTMRow(label: "Campaign", value: $0) },
+            current.source.map { TrackingUTMRow(label: "Source", value: $0) },
+            current.medium.map { TrackingUTMRow(label: "Medium", value: $0) },
+            TrackingUTMRow(label: TrackingDetailCopy.destination, value: current.originalUrl),
+            TrackingUTMRow(label: TrackingDetailCopy.createdAt, value: current.createdAt.formatted(date: .abbreviated, time: .shortened)),
+            current.expiresAt.map { TrackingUTMRow(label: ShareLinkDetailCopy.expiresOn, value: $0.formatted(date: .abbreviated, time: .shortened)) }
         ]
         let rows = optionalRows.compactMap { $0 }
         return VStack(alignment: .leading, spacing: MeeshySpacing.md) {

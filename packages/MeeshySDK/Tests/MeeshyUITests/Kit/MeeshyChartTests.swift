@@ -113,6 +113,55 @@ struct MeeshyChartTests {
         #expect(MeeshyChartRecipe.armsSelectionGesture(hasSelection: true))
     }
 
+    @Test("une bulle va de 34 à 78 de diamètre, son aire suit la part, hors bornes elle reste dans 34…78")
+    func bubbleDiameter_followsTheVectors() throws {
+        for row in try KitAtomVectors.rows(Self.file, "bulles") {
+            let share = try #require(row["part"] as? Double)
+            let expected = try #require(row["diametre"] as? Double)
+            #expect(KitAssemblyGuards.close(MeeshyChartRecipe.bubbleDiameter(fraction: share), expected), "\(row)")
+        }
+        #expect(MeeshyChartRecipe.bubbleDiameter(fraction: .nan) == MeeshyChartRecipe.bubbleMinDiameter)
+    }
+
+    @Test("le chiffre d'une bulle va de 12 à 20 selon son diamètre")
+    func bubbleFont_followsTheVectors() throws {
+        for row in try KitAtomVectors.rows(Self.file, "chiffres") {
+            let diameter = try #require(row["diametre"] as? Double)
+            let expected = try #require(row["taille"] as? Double)
+            #expect(KitAssemblyGuards.close(MeeshyChartRecipe.bubbleFontSize(diameter: diameter), expected), "\(row)")
+        }
+    }
+
+    @Test("le centre d'une bulle est posé par l'hôte en deux dimensions, et la bulle reste entière dans le tracé")
+    func bubbleCenter_followsTheVectors() throws {
+        for row in try KitAtomVectors.rows(Self.file, "centres") {
+            let position = try #require(row["position"] as? Double)
+            let diameter = try #require(row["diametre"] as? Double)
+            let width = try #require(row["largeur"] as? Double)
+            let height = try #require(row["hauteur"] as? Double)
+            let expectedX = try #require(row["x"] as? Double)
+            let expectedY = try #require(row["y"] as? Double)
+            let center = MeeshyChartRecipe.bubbleCenter(position: position, elevation: row["elevation"] as? Double,
+                                                        diameter: diameter, width: width, height: height)
+            #expect(KitAssemblyGuards.close(Double(center.x), expectedX), "\(row)")
+            #expect(KitAssemblyGuards.close(Double(center.y), expectedY), "\(row)")
+        }
+    }
+
+    @Test("seules les bulles prennent la hauteur de l'hôte, qui pose son fond dessous")
+    func bubbles_fillTheHostHeight() {
+        #expect(MeeshyChartRecipe.fillsHostHeight(.bubbles))
+        for kind in MeeshyChartKind.allCases where kind != .bubbles {
+            #expect(!MeeshyChartRecipe.fillsHostHeight(kind), "\(kind)")
+        }
+    }
+
+    @Test("un point porte son élévation, absente par défaut")
+    func point_carriesItsElevation() {
+        #expect(MeeshyChartPoint(id: "a", value: 1, label: "1", spoken: "1").elevation == nil)
+        #expect(MeeshyChartPoint(id: "a", value: 1, label: "1", spoken: "1", position: 0.2, elevation: 0.7).elevation == 0.7)
+    }
+
     @Test("garde de source : aucun clic, lien, pays, filleul ni cercle dans les signatures")
     func source_isAnAgnosticAtom() throws {
         try KitAssemblyGuards.assertAgnostic(["MeeshyChart.swift", "MeeshyChart+Shapes.swift", "MeeshyChartRecipe.swift", "MeeshyChartScale.swift"])

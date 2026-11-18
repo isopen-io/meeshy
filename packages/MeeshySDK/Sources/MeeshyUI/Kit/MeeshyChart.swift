@@ -140,7 +140,8 @@ public struct MeeshyChart<Center: View>: View {
                 .gesture(selectionGesture(width: Double(proxy.size.width)),
                          including: MeeshyChartRecipe.armsSelectionGesture(hasSelection: selection != nil) ? .all : .subviews)
         }
-        .frame(height: CGFloat(recipe.plotHeight))
+        .frame(minHeight: CGFloat(recipe.plotHeight),
+               maxHeight: MeeshyChartRecipe.fillsHostHeight(kind) ? .infinity : CGFloat(recipe.plotHeight))
     }
 
     private func selectionGesture(width: Double) -> some Gesture {

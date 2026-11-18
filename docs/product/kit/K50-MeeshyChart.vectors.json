@@ -1,7 +1,7 @@
 {
   "composant": "MeeshyChart",
   "cle": "K50",
-  "note": "Vecteurs de parité (fiche K50 § 06, loi pure MeeshyChartScale). Une valeur négative vaut zéro ; le pic est le premier maximum strictement positif.",
+  "note": "Vecteurs de parité (fiche K50 § 06, loi pure MeeshyChartScale). Une valeur négative vaut zéro ; le pic est le premier maximum strictement positif. Bulles : diamètre de 34 à 78 à aire proportionnelle à la part, chiffre de 12 à 20 selon le diamètre, centre posé par l'hôte (position, élévation) et gardé dans le tracé ; sans élévation, la bulle tient la mi-hauteur.",
   "normalise": [
     {
       "valeurs": [],
@@ -186,6 +186,92 @@
       "taille": "regular",
       "points": 4,
       "hauteur": 208
+    }
+  ],
+  "bulles": [
+    {
+      "part": 0,
+      "diametre": 34.0
+    },
+    {
+      "part": 0.25,
+      "diametre": 48.8672
+    },
+    {
+      "part": 0.631,
+      "diametre": 65.3113
+    },
+    {
+      "part": 1,
+      "diametre": 78.0
+    },
+    {
+      "part": -1,
+      "diametre": 34
+    },
+    {
+      "part": 2,
+      "diametre": 78
+    }
+  ],
+  "chiffres": [
+    {
+      "diametre": 34,
+      "taille": 12.0
+    },
+    {
+      "diametre": 56,
+      "taille": 16.0
+    },
+    {
+      "diametre": 78,
+      "taille": 20.0
+    },
+    {
+      "diametre": 20,
+      "taille": 12
+    },
+    {
+      "diametre": 100,
+      "taille": 20
+    }
+  ],
+  "centres": [
+    {
+      "position": 0.5,
+      "elevation": 0.5,
+      "diametre": 40,
+      "largeur": 200,
+      "hauteur": 100,
+      "x": 100,
+      "y": 50
+    },
+    {
+      "position": 0,
+      "elevation": 0,
+      "diametre": 40,
+      "largeur": 200,
+      "hauteur": 100,
+      "x": 20,
+      "y": 20
+    },
+    {
+      "position": 1,
+      "elevation": 1,
+      "diametre": 40,
+      "largeur": 200,
+      "hauteur": 100,
+      "x": 180,
+      "y": 80
+    },
+    {
+      "position": 0.25,
+      "elevation": null,
+      "diametre": 40,
+      "largeur": 200,
+      "hauteur": 100,
+      "x": 50,
+      "y": 50
     }
   ]
 }

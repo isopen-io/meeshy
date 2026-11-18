@@ -34,6 +34,16 @@ public extension TrackingLink {
                      isActive: active, expiresAt: expiresAt, createdAt: createdAt, lastClickedAt: lastClickedAt,
                      dailyClicks: dailyClicks, countryCount: countryCount)
     }
+
+    /// Le même lien, les changements posés : ce que l'écran montre avant que le serveur confirme.
+    func applying(_ changes: TrackingLinkChanges) -> TrackingLink {
+        TrackingLink(id: id, token: token, name: changes.name ?? name, campaign: changes.campaign ?? campaign,
+                     source: changes.source ?? source, medium: changes.medium ?? medium,
+                     originalUrl: originalUrl, shortUrl: shortUrl, totalClicks: totalClicks, uniqueClicks: uniqueClicks,
+                     isActive: changes.isActive ?? isActive, expiresAt: changes.expiresAt ?? expiresAt,
+                     createdAt: createdAt, lastClickedAt: lastClickedAt,
+                     dailyClicks: dailyClicks, countryCount: countryCount)
+    }
 }
 
 /// Réponse de `POST /api/v1/tracking-links` (#9185). La passerelle ENVELOPPE le
@@ -123,5 +133,89 @@ public struct CreateTrackingLinkRequest: Encodable {
         self.medium = medium
         self.token = token
         self.expiresAt = expiresAt
+    }
+}
+
+// MARK: - La carte des visiteurs (contrat #19412)
+
+/// Une zone de la carte des visiteurs : un pays (ISO 3166-1 alpha-2), sa ville quand le plancher de k-anonymat du
+/// serveur la laisse, et le nombre de clics. Un agrégat, jamais un clic isolé : ni IP, ni coordonnée.
+public struct TrackingVisitorPlace: Codable, Sendable, Equatable {
+    public let country: String
+    public let city: String?
+    public let count: Int
+
+    public init(country: String, city: String?, count: Int) {
+        self.country = country
+        self.city = city
+        self.count = count
+    }
+}
+
+/// Ce que `GET /tracking-links/:token/stats` sert à la carte. Les deux champs manquent chez un serveur antérieur à
+/// #19412 : la carte s'en passe alors.
+public struct TrackingLinkPlaceStats: Decodable, Sendable, Equatable {
+    public let countryCount: Int?
+    public let clicksByPlace: [TrackingVisitorPlace]?
+
+    public init(countryCount: Int?, clicksByPlace: [TrackingVisitorPlace]?) {
+        self.countryCount = countryCount
+        self.clicksByPlace = clicksByPlace
+    }
+}
+
+// MARK: - Modifier un lien (contrat #19412)
+
+/// Ce que l'on change d'un lien de suivi. Un champ `nil` ne part pas ; `.some(nil)` part à `null` et l'efface.
+public struct TrackingLinkChanges: Encodable, Sendable, Equatable {
+    public var name: String??
+    public var campaign: String??
+    public var source: String??
+    public var medium: String??
+    public var expiresAt: Date??
+    public var isActive: Bool?
+
+    public init(name: String?? = nil, campaign: String?? = nil, source: String?? = nil, medium: String?? = nil,
+                expiresAt: Date?? = nil, isActive: Bool? = nil) {
+        self.name = name
+        self.campaign = campaign
+        self.source = source
+        self.medium = medium
+        self.expiresAt = expiresAt
+        self.isActive = isActive
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, campaign, source, medium, expiresAt, isActive
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try Self.encode(name, .name, in: &container)
+        try Self.encode(campaign, .campaign, in: &container)
+        try Self.encode(source, .source, in: &container)
+        try Self.encode(medium, .medium, in: &container)
+        try Self.encode(expiresAt.map { $0.map { ISO8601DateFormatter().string(from: $0) } }, .expiresAt, in: &container)
+        try container.encodeIfPresent(isActive, forKey: .isActive)
+    }
+
+    private static func encode(_ change: String??, _ key: CodingKeys,
+                               in container: inout KeyedEncodingContainer<CodingKeys>) throws {
+        guard let change else { return }
+        if let value = change {
+            try container.encode(value, forKey: key)
+        } else {
+            try container.encodeNil(forKey: key)
+        }
+    }
+
+    /// Le serveur a-t-il laissé de côté un nom ou un UTM demandé ? Un serveur antérieur à #19412 ignore ces champs.
+    public func isUnretained(by served: TrackingLink) -> Bool {
+        let asked: [(String??, String?)] = [(name, served.name), (campaign, served.campaign),
+                                            (source, served.source), (medium, served.medium)]
+        return asked.contains { change, servedValue in
+            guard let change else { return false }
+            return change != servedValue
+        }
     }
 }

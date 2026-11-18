@@ -261,6 +261,88 @@ final class TrackingLinkServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "PATCH")
     }
 
+    // MARK: - La carte des visiteurs (#19499, contrat #19412)
+
+    func test_fetchVisitorPlaces_readsTheAggregatedPlacesOfTheWindow() async throws {
+        mock.stubWire("/tracking-links/abc123/stats", json: """
+        {"success":true,"data":{"totalClicks":9,"uniqueClicks":7,"countryCount":2,
+          "clicksByPlace":[{"country":"SN","city":"Dakar","count":6},{"country":"FR","city":null,"count":3}]}}
+        """)
+        let since = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let places = try await service.fetchVisitorPlaces(token: "abc123", since: since)
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/tracking-links/abc123/stats")
+        XCTAssertEqual(mock.lastRequest?.method, "GET")
+        XCTAssertEqual(mock.lastRequest?.queryItems?.first?.name, "startDate")
+        XCTAssertEqual(places.countryCount, 2)
+        XCTAssertEqual(places.clicksByPlace, [TrackingVisitorPlace(country: "SN", city: "Dakar", count: 6),
+                                              TrackingVisitorPlace(country: "FR", city: nil, count: 3)])
+    }
+
+    func test_fetchVisitorPlaces_serverWithoutTheMap_servesNoPlaces() async throws {
+        mock.stubWire("/tracking-links/abc123/stats", json: #"{"success":true,"data":{"totalClicks":9,"uniqueClicks":7}}"#)
+
+        let places = try await service.fetchVisitorPlaces(token: "abc123", since: Date())
+
+        XCTAssertNil(places.clicksByPlace)
+        XCTAssertNil(places.countryCount)
+    }
+
+    // MARK: - Modifier un lien (#19499, contrat #19412)
+
+    func test_updateLink_sendsOnlyWhatChanged_andAnEmptiedFieldAsNull() async throws {
+        mock.stubWire("/tracking-links/abc123", json: """
+        {"success":true,"data":{"trackingLink":{"id":"tl-1","token":"abc123","name":"Soirée","originalUrl":"https://example.com",
+          "shortUrl":"https://meeshy.me/l/abc123","totalClicks":1,"uniqueClicks":1,"isActive":true,
+          "createdAt":"2026-01-01T00:00:00.000Z"}}}
+        """)
+        let changes = TrackingLinkChanges(name: .some("Soirée"), campaign: .some(nil), isActive: true)
+
+        let link = try await service.updateLink(token: "abc123", changes: changes)
+
+        XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+        let body = try XCTUnwrap(mock.lastRequest?.bodyJSON)
+        XCTAssertEqual(body["name"] as? String, "Soirée")
+        XCTAssertTrue(body["campaign"] is NSNull)
+        XCTAssertEqual(body["isActive"] as? Bool, true)
+        XCTAssertNil(body["source"])
+        XCTAssertNil(body["expiresAt"])
+        XCTAssertEqual(link.name, "Soirée")
+    }
+
+    func test_updateLink_expiry_travelsAsAnIsoDate_orNullToRemoveIt() throws {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let set = try JSONSerialization.jsonObject(with: JSONEncoder().encode(TrackingLinkChanges(expiresAt: .some(date)))) as? [String: Any]
+        let removed = try JSONSerialization.jsonObject(with: JSONEncoder().encode(TrackingLinkChanges(expiresAt: .some(nil)))) as? [String: Any]
+
+        XCTAssertEqual(set?["expiresAt"] as? String, ISO8601DateFormatter().string(from: date))
+        XCTAssertTrue(removed?["expiresAt"] is NSNull)
+    }
+
+    func test_applying_changes_setsWhatChanged_erasesWhatWasEmptied_andKeepsTheRest() {
+        let link = makeTrackingLink().applying(TrackingLinkChanges(name: .some("Soirée"), campaign: .some("dakar")))
+        let erased = link.applying(TrackingLinkChanges(campaign: .some(nil), isActive: false))
+
+        XCTAssertEqual(link.name, "Soirée")
+        XCTAssertEqual(link.campaign, "dakar")
+        XCTAssertNil(erased.campaign)
+        XCTAssertEqual(erased.name, "Soirée")
+        XCTAssertFalse(erased.isActive)
+        XCTAssertEqual(erased.totalClicks, 42)
+    }
+
+    func test_changes_unretainedByAnOlderServer_areNamed() throws {
+        let json = #"{"id":"tl-1","token":"abc","name":null,"originalUrl":"https://e.com","shortUrl":"https://meeshy.me/l/abc","totalClicks":0,"uniqueClicks":0,"isActive":true,"createdAt":"2026-01-01T00:00:00Z"}"#
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let served = try decoder.decode(TrackingLink.self, from: Data(json.utf8))
+
+        XCTAssertTrue(TrackingLinkChanges(name: .some("Soirée")).isUnretained(by: served))
+        XCTAssertFalse(TrackingLinkChanges(name: .some(nil)).isUnretained(by: served))
+        XCTAssertFalse(TrackingLinkChanges(isActive: false).isUnretained(by: served))
+    }
+
     // MARK: - deleteLink
 
     func test_deleteLink_success_callsDeleteEndpoint() async throws {
