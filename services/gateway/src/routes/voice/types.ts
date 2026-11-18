@@ -54,6 +54,37 @@ const voiceTranslationSegmentsSchema = {
   description: 'Timed segments with speakers'
 } as const;
 
+export const voiceTranslationItemSchema = {
+  type: 'object',
+  properties: {
+    targetLanguage: { type: 'string', description: 'Target language code' },
+    translatedText: { type: 'string', description: 'Translated text' },
+    audioBase64: { type: 'string', nullable: true, description: 'Generated audio in base64 (null when no audio was generated)' },
+    audioUrl: { type: 'string', nullable: true, description: 'URL to generated audio file (null when no audio was generated)' },
+    durationMs: { type: 'number', description: 'Generated audio duration in milliseconds' },
+    voiceCloned: { type: 'boolean', description: 'Whether voice was cloned' },
+    voiceQuality: { type: 'number', description: 'Voice clone quality score (0-1)' },
+    segments: voiceTranslationSegmentsSchema
+  }
+} as const;
+
+/**
+ * Une piste de `translatedAudios` (`POST /voice/translate`). Deux producteurs :
+ * `translateSync` rend la traduction de `voiceTranslationResultSchema`, et la
+ * vue d'une pièce déjà traduite y ajoute `id`, `format` et `createdAt` — déclarés
+ * ici pour ne rien retirer à ce chemin. Son `audioPath` (chemin disque serveur)
+ * et les clés internes du traducteur (`audio_path`, `fallback`) ne le sont pas.
+ */
+export const voiceTranslatedAudioSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', description: 'Translated track identifier (existing attachment translations)' },
+    ...voiceTranslationItemSchema.properties,
+    format: { type: 'string', description: 'Audio format of the translated track' },
+    createdAt: { type: 'string', format: 'date-time', description: 'Translated track creation timestamp' }
+  }
+} as const;
+
 export const voiceTranslationResultSchema = {
   type: 'object',
   properties: {
@@ -64,7 +95,7 @@ export const voiceTranslationResultSchema = {
         transcription: { type: 'string', description: 'Transcribed text from audio' },
         language: { type: 'string', description: 'Detected source language' },
         durationMs: { type: 'number', description: 'Audio duration in milliseconds' },
-        confidence: { type: 'number', description: 'Transcription confidence (0-1)' },
+        confidence: { type: 'number', nullable: true, description: 'Transcription confidence (0-1)' },
         segments: voiceTranslationSegmentsSchema,
         speakerCount: { type: 'number', nullable: true, description: 'Number of detected speakers' },
         primarySpeakerId: { type: 'string', nullable: true, description: 'Main speaker identifier' }
@@ -72,19 +103,7 @@ export const voiceTranslationResultSchema = {
     },
     translations: {
       type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          targetLanguage: { type: 'string', description: 'Target language code' },
-          translatedText: { type: 'string', description: 'Translated text' },
-          audioBase64: { type: 'string', nullable: true, description: 'Generated audio in base64 (null when no audio was generated)' },
-          audioUrl: { type: 'string', nullable: true, description: 'URL to generated audio file (null when no audio was generated)' },
-          durationMs: { type: 'number', description: 'Generated audio duration in milliseconds' },
-          voiceCloned: { type: 'boolean', description: 'Whether voice was cloned' },
-          voiceQuality: { type: 'number', description: 'Voice clone quality score (0-1)' },
-          segments: voiceTranslationSegmentsSchema
-        }
-      }
+      items: voiceTranslationItemSchema
     },
     voiceProfile: {
       type: 'object',

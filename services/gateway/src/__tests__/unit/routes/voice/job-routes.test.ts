@@ -316,4 +316,58 @@ describe('Résultat d’un job vocal servi tel que le traducteur le rend (#19595
     expect(result.translations[0].audioUrl).toBeNull();
     expect(result.originalAudio.segments).toHaveLength(2);
   });
+
+  it('les null du traducteur restent null — confiance, langue, segment non final, profil sans identifiant', async () => {
+    const withNulls = {
+      ...translatorResult(),
+      originalAudio: {
+        ...translatorResult().originalAudio,
+        confidence: null,
+        speakerCount: null,
+        segments: [translatorSegment({ isFinal: null, translatedText: null, language: null })],
+      },
+      voiceProfile: { profileId: null, quality: 0.8, isNew: false },
+    };
+    const res = await call(makeJobService({
+      getJobStatus: jest.fn<(userId: string, jobId: string) => Promise<unknown>>().mockResolvedValue(
+        servedTranslatorJob({ status: 'completed', result: withNulls })
+      ),
+    }), 'GET');
+
+    const { originalAudio, voiceProfile } = res.json().data.result;
+    expect({
+      confidence: originalAudio.confidence,
+      speakerCount: originalAudio.speakerCount,
+      isFinal: originalAudio.segments[0].isFinal,
+      translatedText: originalAudio.segments[0].translatedText,
+      language: originalAudio.segments[0].language,
+      profileId: voiceProfile.profileId,
+    }).toEqual({ confidence: null, speakerCount: null, isFinal: null, translatedText: null, language: null, profileId: null });
+  });
+
+  it('`translatedAudios` de la traduction synchrone ne porte ni chemin serveur ni clé interne', async () => {
+    const leaky = {
+      ...translatorResult(),
+      translations: [{
+        ...translatorResult().translations[0],
+        audio_path: '/srv/tts/en.wav',
+        segments: [translatorSegment({ text: 'Hello everyone', language: 'en', fallback: true, audio_path: '/srv/tts/seg.wav' })],
+      }],
+    };
+    const translateSync = jest.fn<(userId: string, options: unknown) => Promise<unknown>>().mockResolvedValue(leaky);
+    const app = await buildApp(makeJobService({ translateSync }));
+    const res = await app.inject({
+      method: 'POST',
+      url: `${PREFIX}/translate`,
+      payload: { audioBase64: 'UklGRg==', targetLanguages: ['en'], generateVoiceClone: false },
+    });
+    await app.close();
+
+    const { translatedAudios } = res.json().data;
+    expect(JSON.stringify(translatedAudios)).not.toMatch(/audio_path|fallback|\/srv\/tts/);
+    expect(translatedAudios).toEqual([{
+      ...translatorResult().translations[0],
+      segments: [translatorSegment({ text: 'Hello everyone', language: 'en' })],
+    }]);
+  });
 });

@@ -7,7 +7,10 @@
  * passerelle passe par `translator:8000` et ZMQ). `#9662` et `#9671` ont
  * retiré le routage Traefik ; aucune garde n'affirmait qu'il ne revenait pas
  * par une autre porte — un `ports:`, un `traefik.enable=true` sous une autre
- * forme, ou `network_mode: host`.
+ * forme, ou `network_mode: host`. Le traducteur n'a besoin d'AUCUN
+ * `network_mode` : l'absence de la clé est la seule forme admise (`host`,
+ * `service:…`, `container:…`, une variable ou un commentaire de fin de ligne
+ * rougissent tous).
  *
  * Même retournement que `scripts/check-compose-required-vars.mjs` sur les
  * FICHIERS : toute composition de `infrastructure/docker/compose/` qui n'est
@@ -17,7 +20,9 @@
  * demain hérite de la garde sans que personne n'ait à y penser.
  *
  * Pas de vert vide : le service traducteur ATTENDU de chaque composition
- * déployante principale doit être trouvé — un renommage rougit.
+ * déployante principale doit être trouvé — un renommage rougit — et toute
+ * composition déployante doit exposer au moins un bloc de service reconnu
+ * (un en-tête `services:` mal lu ne fait plus passer le fichier en silence).
  *
  * Lecture ligne à ligne, sans parseur YAML — même patron que
  * `admin-ui-ssh-tunnel-only.test.ts` et
@@ -46,14 +51,16 @@ type Violation =
   | 'ports-publies'
   | 'traefik-active'
   | 'routeur-traefik'
-  | 'reseau-hote'
+  | 'mode-reseau'
   | 'indirection-opaque';
 
 const isComment = (line: string): boolean => /^\s*#/.test(line);
 
+const SERVICES_HEADER = /^services:\s*(#.*)?$/;
+
 function servicesSection(source: string): ReadonlyArray<string> {
   const lines = source.split('\n');
-  const start = lines.findIndex((l) => /^services:\s*$/.test(l));
+  const start = lines.findIndex((l) => SERVICES_HEADER.test(l));
   if (start === -1) return [];
   const rest = lines.slice(start + 1);
   const end = rest.findIndex((l) => /^\S/.test(l) && !isComment(l));
@@ -63,7 +70,7 @@ function servicesSection(source: string): ReadonlyArray<string> {
 function serviceBlocks(source: string): ReadonlyArray<ServiceBlock> {
   const section = servicesSection(source);
   const starts = section
-    .map((line, index) => ({ index, match: /^ {2}([A-Za-z0-9_.-]+):\s*$/.exec(line) }))
+    .map((line, index) => ({ index, match: /^ {2}([A-Za-z0-9_.-]+):\s*(#.*)?$/.exec(line) }))
     .filter((entry): entry is { index: number; match: RegExpExecArray } => entry.match !== null);
   return starts.map(({ index, match }, i) => {
     const next = starts[i + 1];
@@ -96,19 +103,22 @@ function violations(block: ServiceBlock): ReadonlyArray<Violation> {
     ['ports-publies', publishesPorts(block.lines)],
     ['traefik-active', /traefik\.enable["']?\s*[=:]\s*["']?true\b/i.test(text)],
     ['routeur-traefik', /traefik\.(http|tcp|udp)\.(routers|services)\./i.test(text)],
-    ['reseau-hote', /^ {4}network_mode:\s*["']?host["']?\s*$/m.test(text)],
+    ['mode-reseau', /^ {4}network_mode\s*:/m.test(text)],
     ['indirection-opaque', /^ {4}(<<|extends):/m.test(text)],
   ];
   return checks.filter(([, hit]) => hit).map(([violation]) => violation);
 }
 
 type FileVerdict = {
+  readonly serviceCount: number;
   readonly translators: ReadonlyArray<{ readonly service: string; readonly violations: ReadonlyArray<Violation> }>;
 };
 
 function auditCompose(source: string): FileVerdict {
+  const blocks = serviceBlocks(source);
   return {
-    translators: serviceBlocks(source)
+    serviceCount: blocks.length,
+    translators: blocks
       .filter(isTranslatorService)
       .map((block) => ({ service: block.name, violations: violations(block) })),
   };
@@ -155,6 +165,7 @@ const withTranslatorLines = (name: string, extra: ReadonlyArray<string>): string
 describe('auditCompose — témoins internes sur fixtures (#19520)', () => {
   it('un traducteur conforme ne lève rien, et le service voisin publié ne le contamine pas', () => {
     expect(auditCompose(conformingTranslator('translator'))).toEqual({
+      serviceCount: 2,
       translators: [{ service: 'translator', violations: [] }],
     });
   });
@@ -168,8 +179,13 @@ describe('auditCompose — témoins internes sur fixtures (#19520)', () => {
     ['label map', 'traefik-active', ['    deploy:', '      labels:', '        traefik.enable: "true"']],
     ['label map booléen', 'traefik-active', ['    deploy:', '      labels:', '        traefik.enable: True']],
     ['routeur', 'routeur-traefik', ['    deploy:', '      labels:', '        - "traefik.http.routers.ml.rule=Host(`ml.x`)"']],
-    ['réseau hôte', 'reseau-hote', ['    network_mode: host']],
-    ['réseau hôte cité', 'reseau-hote', ['    network_mode: "host"']],
+    ['réseau hôte', 'mode-reseau', ['    network_mode: host']],
+    ['réseau hôte cité', 'mode-reseau', ['    network_mode: "host"']],
+    ['réseau hôte commenté en fin de ligne', 'mode-reseau', ['    network_mode: host # partage la pile réseau']],
+    ['réseau d’un autre service', 'mode-reseau', ['    network_mode: service:gateway']],
+    ['réseau d’un conteneur', 'mode-reseau', ['    network_mode: "container:meeshy-gateway"']],
+    ['réseau par variable', 'mode-reseau', ['    network_mode: ${NET_MODE:-host}']],
+    ['réseau ponté explicite', 'mode-reseau', ["    network_mode: 'bridge'"]],
     ['fusion YAML', 'indirection-opaque', ['    <<: *translator-defaults']],
     ['extends', 'indirection-opaque', ['    extends:', '      service: translator-base']],
   ] as const)('%s ⇒ refusé (%s)', (_label, expected, extra) => {
@@ -186,6 +202,22 @@ describe('auditCompose — témoins internes sur fixtures (#19520)', () => {
     expect(auditCompose(conformingTranslator('ml-worker')).translators.map((t) => t.service)).toEqual([
       'ml-worker',
     ]);
+  });
+
+  it('`services:` suivi d’un commentaire ouvre bien la section', () => {
+    const source = conformingTranslator('translator').replace(/^services:$/m, 'services: # tous les conteneurs');
+    expect(auditCompose(source).translators.map((t) => t.service)).toEqual(['translator']);
+  });
+
+  it('`services:` commenté et traducteur sur le réseau hôte ⇒ refusé, jamais ignoré', () => {
+    const source = withTranslatorLines('translator', ['    network_mode: host']).replace(/^services:$/m, 'services:   # pile');
+    expect(auditCompose(source).translators[0]?.violations).toContain('mode-reseau');
+  });
+
+  it('une composition sans aucun bloc de service reconnu le DIT — jamais un vert vide', () => {
+    expect(auditCompose('version: "3.8"\nvolumes:\n  models_data:\n').serviceCount).toBe(0);
+    expect(auditCompose(['services:', '    translator:', '      ports: ["8000:8000"]', ''].join('\n')).serviceCount).toBe(0);
+    expect(auditCompose(conformingTranslator('translator')).serviceCount).toBe(2);
   });
 
   it('sans traducteur, le verdict est VIDE — la garde réelle doit alors rougir', () => {
@@ -206,7 +238,11 @@ describe('le traducteur ne publie aucun port en staging et en production (#19520
     expect({ file, found: found.includes(service) }).toEqual({ file, found: true });
   });
 
-  it.each(files)('%s : aucun service traducteur ne publie de port, ni Traefik, ni réseau hôte', (file) => {
+  it.each(files)('%s : au moins un bloc de service est reconnu — jamais un vert vide', (file) => {
+    expect({ file, recognised: auditCompose(readCompose(file)).serviceCount > 0 }).toEqual({ file, recognised: true });
+  });
+
+  it.each(files)('%s : aucun service traducteur ne publie de port, ni Traefik, ni network_mode', (file) => {
     const offending = auditCompose(readCompose(file)).translators.filter((t) => t.violations.length > 0);
     expect({ file, offending }).toEqual({ file, offending: [] });
   });
