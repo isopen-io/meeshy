@@ -205,6 +205,8 @@ struct ProfileUserPostsList: View {
     /// profil, comme depuis le fil ; sans hôte de racine, « Citer » est absent.
     @State private var quotedPost: FeedPost?
     @Environment(\.meeshyQuoteComposerHost) private var quoteHost
+    /// L'accent de la fiche qui porte la liste (`UserProfileSheet`) ; `nil` hors d'une fiche.
+    @Environment(\.meeshyProfileAccent) private var profileAccent
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     private var isDark: Bool { theme.mode.isDark }
@@ -231,7 +233,7 @@ struct ProfileUserPostsList: View {
     // ScrollView owns scrolling); SWR + the visit revalidate covers freshness.
     var body: some View {
         LazyVStack(spacing: MeeshySpacing.md) {
-            if viewModel.posts.isEmpty {
+            if showsGrid { otherPublications } else if viewModel.posts.isEmpty {
                 if viewModel.isLoading {
                     // Cache VIDE ⇒ squelette (bible § I4), jamais un spinner.
                     SkeletonFeedList(count: 3).padding(.top, MeeshySpacing.sm)
@@ -461,6 +463,31 @@ struct ProfileUserPostsList: View {
 
     private func openReel(_ post: FeedPost) {
         opening.openReel(post, in: viewModel.reels)
+    }
+
+    /// Les publications d'un autre se lisent en grille (planche `Autre-Publications`) ; ma propre liste garde ses
+    /// cartes, leurs actions et la tuile « Stories » qui ouvre mes stories.
+    private var showsGrid: Bool { !opensMyStories }
+
+    /// « À la une » attend la passerelle (#19394) : tant qu'elle ne sert aucun album, le rail ne se montre pas.
+    private var otherPublications: some View {
+        ProfileOtherPublicationsGrid(viewModel: viewModel, accentColor: profileAccent ?? postsAccent, highlights: [],
+                                     onOpen: { openTile($0) }, onOpenHighlight: { openHighlight($0) })
+    }
+
+    /// Hors d'une fiche, l'accent calculé de l'auteur — jamais un indigo codé en dur.
+    private var postsAccent: String { DynamicColorGenerator.colorForName(userId) }
+
+    /// Une tuile ouverte : un réel dans le lecteur immersif avec ses réels, une publication dans son détail.
+    private func openTile(_ post: FeedPost) {
+        if post.isReel { openReel(post) } else { openPost(post) }
+    }
+
+    /// Un album « À la une » s'ouvre sur sa première story, une fois la feuille partie.
+    private func openHighlight(_ highlight: ProfileHighlight) {
+        guard let first = highlight.storyIds.first else { return }
+        let router = router
+        departure.leave(dismissing: dismissHost) { router.push(.postDetail(first)) }
     }
 
     /// La tuile « Stories » n'ouvre que MES stories : sur le profil d'un autre, elle n'est qu'une valeur.

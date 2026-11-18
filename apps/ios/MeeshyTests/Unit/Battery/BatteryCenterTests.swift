@@ -193,3 +193,111 @@ final class BatteryAnnouncementWordingTests: XCTestCase {
         XCTAssertEqual(lines.count, 2)
     }
 }
+
+/// Une demande de batterie NOMMÉE attend « Envoyer » (#19565) ; sans auteur, le téléphone relève comme avant.
+@MainActor
+final class BatteryPullRequestTests: XCTestCase {
+
+    final class Clock: @unchecked Sendable {
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+    }
+
+    private struct Rig {
+        let sut: BatteryCenter
+        let inbox: BatteryPullInbox
+        let reporter: MockBatteryReporter
+        let clock: Clock
+    }
+
+    private func makeSUT() -> Rig {
+        let clock = Clock()
+        let inbox = BatteryPullInbox(now: { clock.now })
+        let reporter = MockBatteryReporter()
+        let sut = BatteryCenter(
+            store: BatteryStateStore(persistence: MemoryBatteryStatePersistence()),
+            feed: BatteryAnnouncementFeed(), reporter: reporter, pullInbox: inbox,
+            viewerId: { "me" }, snapshot: { [] }, displayName: { _ in nil },
+            changedEvents: Empty().eraseToAnyPublisher(),
+            clearedEvents: Empty().eraseToAnyPublisher(),
+            pullRequests: Empty().eraseToAnyPublisher(),
+            connected: Empty().eraseToAnyPublisher()
+        )
+        return Rig(sut: sut, inbox: inbox, reporter: reporter, clock: clock)
+    }
+
+    private func mina(_ circle: RelationLevel? = .blood) -> BatteryPullRequester {
+        BatteryPullRequester(id: "mina", displayName: "Mina", avatar: nil, circle: circle)
+    }
+
+    func test_anonymousRequest_reportsAtOnce_andShowsNothing() async {
+        let rig = makeSUT()
+        await rig.sut.receive(BatteryPullRequested(requestedAt: rig.clock.now))
+        XCTAssertEqual(rig.reporter.reportNowCallCount, 1)
+        XCTAssertTrue(rig.inbox.pending.isEmpty)
+    }
+
+    func test_namedRequest_waitsForThePerson() async {
+        let rig = makeSUT()
+        await rig.sut.receive(BatteryPullRequested(requestedAt: rig.clock.now, requestedBy: mina()))
+        XCTAssertEqual(rig.reporter.reportNowCallCount, 0)
+        XCTAssertEqual(rig.inbox.visible(at: rig.clock.now).map(\.requester.displayName), ["Mina"])
+    }
+
+    func test_sameRequesterTwice_keepsOneCard_theLatest() async {
+        let rig = makeSUT()
+        await rig.sut.receive(BatteryPullRequested(requestedAt: rig.clock.now, requestedBy: mina(.close)))
+        let later = rig.clock.now.addingTimeInterval(30)
+        await rig.sut.receive(BatteryPullRequested(requestedAt: later, requestedBy: mina(.blood)))
+        XCTAssertEqual(rig.inbox.pending.count, 1)
+        XCTAssertEqual(rig.inbox.pending.first?.requester.circle, .blood)
+        XCTAssertEqual(rig.inbox.pending.first?.requestedAt, later)
+    }
+
+    func test_send_reportsNow_andTheCardLeaves() async {
+        let rig = makeSUT()
+        await rig.sut.receive(BatteryPullRequested(requestedAt: rig.clock.now, requestedBy: mina()))
+        let sent = await rig.sut.send("mina")
+        XCTAssertTrue(sent)
+        XCTAssertEqual(rig.reporter.reportNowCallCount, 1)
+        XCTAssertTrue(rig.inbox.pending.isEmpty)
+    }
+
+    func test_send_failure_givesTheCardBack() async {
+        let rig = makeSUT()
+        rig.reporter.reportNowResult = .offline
+        await rig.sut.receive(BatteryPullRequested(requestedAt: rig.clock.now, requestedBy: mina()))
+        let sent = await rig.sut.send("mina")
+        XCTAssertFalse(sent)
+        XCTAssertEqual(rig.inbox.pending.map(\.id), ["mina"])
+    }
+
+    func test_request_vanishesAtItsServedExpiry_orAfterTheDefaultLifetime() async {
+        let rig = makeSUT()
+        let served = rig.clock.now.addingTimeInterval(120)
+        await rig.sut.receive(BatteryPullRequested(requestedAt: rig.clock.now, requestedBy: mina(), expiresAt: served))
+        XCTAssertEqual(rig.inbox.visible(at: served.addingTimeInterval(-1)).count, 1)
+        XCTAssertTrue(rig.inbox.visible(at: served).isEmpty)
+
+        let other = BatteryPullRequester(id: "awa", displayName: "Awa")
+        await rig.sut.receive(BatteryPullRequested(requestedAt: rig.clock.now, requestedBy: other))
+        let lifetimeEnd = rig.clock.now.addingTimeInterval(BatteryPullInbox.defaultLifetime)
+        XCTAssertEqual(rig.inbox.visible(at: lifetimeEnd.addingTimeInterval(-1)).map(\.id), ["awa"])
+        XCTAssertTrue(rig.inbox.visible(at: lifetimeEnd).isEmpty)
+    }
+
+    func test_logout_forgetsTheRequests() async {
+        let rig = makeSUT()
+        await rig.sut.receive(BatteryPullRequested(requestedAt: rig.clock.now, requestedBy: mina()))
+        rig.sut.accountChanged(to: nil)
+        XCTAssertTrue(rig.inbox.pending.isEmpty)
+    }
+
+    func test_wording_saysTheCircleAndJustNow() {
+        let now = Date()
+        let detail = BatteryPullWording.detail(circle: .blood, requestedAt: now, now: now)
+        XCTAssertTrue(detail.hasPrefix(CircleLevelNames.title(of: .blood)))
+        XCTAssertTrue(detail.hasSuffix(String(localized: "battery.pull.justNow", defaultValue: "à l'instant", bundle: .main)))
+        XCTAssertFalse(BatteryPullWording.detail(circle: nil, requestedAt: now, now: now).contains("·"))
+        XCTAssertTrue(BatteryPullWording.title(name: "Mina").contains("Mina"))
+    }
+}

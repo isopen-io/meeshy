@@ -93,4 +93,16 @@ struct MeeshySectionHeaderTests {
             #expect(!(try KitAtomVectors.code(file)).contains("UIBlurEffect"), "\(file)")
         }
     }
+
+    @Test("la pastille de titre (K41) se dit après le titre et son compte, et rien ne se dit sans elle")
+    func titleBadge_isSpokenAfterTheTitleAndItsCount() {
+        let withBadge = MeeshySectionHeaderRecipe.spokenTitle(title: "Mes adresses", count: 3, titleBadge: "Nouveau")
+        #expect(withBadge == "Mes adresses, 3, Nouveau")
+        let withoutCount = MeeshySectionHeaderRecipe.spokenTitle(title: "Mes adresses", count: nil, titleBadge: "Nouveau")
+        #expect(withoutCount == "Mes adresses, Nouveau")
+        let withoutBadge = MeeshySectionHeaderRecipe.spokenTitle(title: "Mes adresses", count: 3, titleBadge: nil)
+        #expect(withoutBadge == "Mes adresses, 3")
+        let emptyBadge = MeeshySectionHeaderRecipe.spokenTitle(title: "Mes adresses", count: 0, titleBadge: "")
+        #expect(emptyBadge == "Mes adresses")
+    }
 }

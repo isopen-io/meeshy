@@ -674,5 +674,110 @@
   "surNoir": 12.6,
   "surBlanc": 1.7,
   "tolerance": 0.1
+ },
+ "survol": {
+  "source": "docs/product/profil-vue-finale/src/iPad-Split.dc.html (bouton Itinéraire survolé : scale(1.08), box-shadow 0 0 0 7px accent 20 %, 0 14px 34px accent 50 %)",
+  "appliquentLaRecette": [
+   "K02",
+   "K32",
+   "K40"
+  ],
+  "recette": {
+   "echelle": 1.08,
+   "anneau": {
+    "epaisseur": 7,
+    "opacite": 0.2
+   },
+   "ombre": {
+    "flou": 34,
+    "rayon": 17,
+    "decalageY": 14,
+    "opacite": 0.5
+   },
+   "fondu": {
+    "apparition": 0.15,
+    "retrait": 0.1
+   }
+  },
+  "etats": [
+   {
+    "nom": "repos",
+    "survole": false,
+    "actif": true,
+    "reduit": false,
+    "attendu": {
+     "echelle": 1,
+     "anneau": 0,
+     "ombre": 0,
+     "aimante": true,
+     "anime": true
+    }
+   },
+   {
+    "nom": "survole",
+    "survole": true,
+    "actif": true,
+    "reduit": false,
+    "attendu": {
+     "echelle": 1.08,
+     "anneau": 0.2,
+     "ombre": 0.5,
+     "aimante": true,
+     "anime": true
+    }
+   },
+   {
+    "nom": "survole-reduit",
+    "survole": true,
+    "actif": true,
+    "reduit": true,
+    "attendu": {
+     "echelle": 1,
+     "anneau": 0.2,
+     "ombre": 0,
+     "aimante": false,
+     "anime": false
+    }
+   },
+   {
+    "nom": "repos-reduit",
+    "survole": false,
+    "actif": true,
+    "reduit": true,
+    "attendu": {
+     "echelle": 1,
+     "anneau": 0,
+     "ombre": 0,
+     "aimante": false,
+     "anime": false
+    }
+   },
+   {
+    "nom": "survole-eteint",
+    "survole": true,
+    "actif": false,
+    "reduit": false,
+    "attendu": {
+     "echelle": 1,
+     "anneau": 0,
+     "ombre": 0,
+     "aimante": false,
+     "anime": true
+    }
+   },
+   {
+    "nom": "repos-eteint",
+    "survole": false,
+    "actif": false,
+    "reduit": false,
+    "attendu": {
+     "echelle": 1,
+     "anneau": 0,
+     "ombre": 0,
+     "aimante": false,
+     "anime": true
+    }
+   }
+  ]
  }
 }

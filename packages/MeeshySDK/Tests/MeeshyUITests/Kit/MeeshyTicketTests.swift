@@ -100,4 +100,17 @@ struct MeeshyTicketTests {
             #expect(!(try KitAtomVectors.code(file)).contains("UIBlurEffect"), "\(file)")
         }
     }
+
+    @Test("la pastille de titre (K41) se dit après le nom du billet, qu'il soit passé ou composé")
+    func titleBadge_isSpokenAfterTheTicketName() {
+        let composed = MeeshyTicketRecipe.spokenName(label: nil, title: "Mon lien de profil", code: "meeshy.me/@aissa",
+                                                     figure: nil, statusLabel: nil, titleBadge: "Nouveau")
+        #expect(composed == "Mon lien de profil, meeshy.me/@aissa, Nouveau")
+        let given = MeeshyTicketRecipe.spokenName(label: "Mon lien de profil, meeshy.me/@aissa", title: "x", code: "y",
+                                                  figure: "3", statusLabel: nil, titleBadge: "Nouveau")
+        #expect(given == "Mon lien de profil, meeshy.me/@aissa, Nouveau")
+        let bare = MeeshyTicketRecipe.spokenName(label: nil, title: "Site", code: "", figure: "12",
+                                                 statusLabel: "Masquée", titleBadge: nil)
+        #expect(bare == "Site, 12, Masquée")
+    }
 }

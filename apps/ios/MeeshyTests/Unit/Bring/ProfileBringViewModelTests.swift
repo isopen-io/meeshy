@@ -110,4 +110,23 @@ final class ProfileBringViewModelTests: XCTestCase {
         XCTAssertNil(sut.ringing)
         XCTAssertNil(center.outgoing["bob"])
     }
+
+    // MARK: - « 2 / 3 aujourd'hui » (#19433, planche Autre-Actions)
+
+    func test_counter_saysWhatIsLeftOnTheDailyQuota() {
+        let availability = BringAvailability(userId: "bob", available: true, perDay: 3, remainingToday: 2)
+        let expected = String(format: String(localized: "bring.counter", bundle: .main), 2, 3)
+        XCTAssertEqual(ProfileBringWording.counter(availability), expected)
+    }
+
+    func test_counter_isAbsent_withoutAServedQuota() {
+        XCTAssertNil(ProfileBringWording.counter(BringAvailability(userId: "bob", available: true, perDay: nil, remainingToday: nil)))
+        XCTAssertNil(ProfileBringWording.counter(BringAvailability(userId: "bob", available: true, perDay: nil, remainingToday: 2)))
+    }
+
+    func test_counter_neverSaysMoreThanTheQuota() {
+        let availability = BringAvailability(userId: "bob", available: true, perDay: 3, remainingToday: 5)
+        let expected = String(format: String(localized: "bring.counter", bundle: .main), 3, 3)
+        XCTAssertEqual(ProfileBringWording.counter(availability), expected)
+    }
 }

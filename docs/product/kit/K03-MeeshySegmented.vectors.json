@@ -30,5 +30,33 @@
     { "widths": [60, 140, 60], "available": 300, "rows": [[80, 140, 80]] },
     { "widths": [50, 50, 50, 50], "available": 320, "rows": [[80, 80, 80, 80]] },
     { "widths": [120, 120, 120], "available": 300, "rows": [[150, 150], [300]] }
+  ],
+  "travel": [
+    { "from": 0, "to": 1, "expected": "forward" },
+    { "from": 0, "to": 2, "expected": "forward" },
+    { "from": 2, "to": 1, "expected": "backward" },
+    { "from": 1, "to": 0, "expected": "backward" },
+    { "from": 1, "to": 1, "expected": "none" },
+    { "from": null, "to": 1, "expected": "none" },
+    { "from": 0, "to": null, "expected": "none" }
+  ],
+  "dragTarget": [
+    { "x": 40, "spans": [[0, 100], [100, 200], [200, 300]], "expected": 0 },
+    { "x": 150, "spans": [[0, 100], [100, 200], [200, 300]], "expected": 1 },
+    { "x": 299, "spans": [[0, 100], [100, 200], [200, 300]], "expected": 2 },
+    { "x": 100, "spans": [[0, 100], [100, 200], [200, 300]], "expected": 0 },
+    { "x": -30, "spans": [[0, 100], [100, 200], [200, 300]], "expected": 0 },
+    { "x": 420, "spans": [[0, 100], [100, 200], [200, 300]], "expected": 2 },
+    { "x": 50, "spans": [], "expected": null }
+  ],
+  "drop": [
+    { "from": [0, 100], "to": [100, 200], "progress": 0, "expected": [0, 100] },
+    { "from": [0, 100], "to": [100, 200], "progress": 0.3, "expected": [0, 150] },
+    { "from": [0, 100], "to": [100, 200], "progress": 0.5, "expected": [16.67, 183.33] },
+    { "from": [0, 100], "to": [100, 200], "progress": 1, "expected": [100, 200] },
+    { "from": [0, 100], "to": [100, 200], "progress": 1.2, "expected": [100, 200] },
+    { "from": [100, 200], "to": [0, 100], "progress": 0.3, "expected": [50, 200] },
+    { "from": [100, 200], "to": [0, 100], "progress": 0.5, "expected": [16.67, 183.33] },
+    { "from": [100, 200], "to": [100, 200], "progress": 0.5, "expected": [100, 200] }
   ]
 }

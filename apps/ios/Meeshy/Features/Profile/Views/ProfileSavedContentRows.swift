@@ -2,31 +2,57 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// « Mes contenus » sur ma fiche (#18590) : ce que j'ai gardé — messages favoris, publications enregistrées, packs.
-/// Ces portes ont quitté les Réglages (qui règlent) pour la fiche (qui montre ce qui est à moi). Les raccourcis de packs
-/// de la tête se fondent ici ; la Boutique, elle, reste aux Réglages, qui la règlent.
+/// « Mes contenus » sur ma fiche (#18590, planche `Moi-Actions`) : ce que j'ai gardé — messages favoris, publications
+/// enregistrées, packs. Ces portes ont quitté les Réglages (qui règlent) pour la fiche (qui montre ce qui est à moi).
+/// Faites du kit (#19469) : l'en-tête de section K44 et une rangée K06 par contenu, son nombre en valeur dès que la
+/// passerelle le sert (#19470) ; sans lui, la rangée garde son chevron, jamais un zéro inventé.
 struct ProfileSavedContentRows: View {
 
     static var doors: [ProfileDoor] { Item.allCases.map(\.door) }
 
-    let accentHex: String
+    let stats: UserStats?
+    let accentColor: String
     let onOpen: (ProfileDoor) -> Void
+
+    @Environment(\.locale) private var locale
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ProfileSectionHeader(icon: "tray.full.fill", title: Self.title, color: MeeshyColors.warning)
+            MeeshySectionHeader(title: Self.title)
             VStack(spacing: 0) {
                 ForEach(Item.allCases, id: \.self) { item in
-                    ProfileNavigationRow(icon: item.icon, title: item.title, hint: nil,
-                                         identifier: item.identifier, accentHex: accentHex) { onOpen(item.door) }
+                    row(item)
                 }
             }
-            .background(ProfileSectionCard(tintHex: accentHex))
+            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
         }
+    }
+
+    private func row(_ item: Item) -> some View {
+        let count = Self.count(of: item.door, in: stats)
+        let accessory: MeeshyToggleRowAccessory = count.map { .value(Self.formatted($0, locale: locale)) } ?? .chevron
+        return MeeshyToggleRow(item.title, systemImage: item.icon, accessory: accessory,
+                               showsDivider: item != Item.allCases.last, tint: Color(hex: accentColor),
+                               action: { onOpen(item.door) })
+            .accessibilityIdentifier(item.identifier)
     }
 
     static var title: String {
         String(localized: "profile.section.saved_content", defaultValue: "MES CONTENUS", bundle: .main)
+    }
+
+    /// Le nombre servi pour cette porte ; `nil` tant que la passerelle ne le sert pas.
+    static func count(of door: ProfileDoor, in stats: UserStats?) -> Int? {
+        switch door {
+        case .starredMessages: return stats?.starredMessagesCount
+        case .bookmarks: return stats?.bookmarksCount
+        case .myPacks: return stats?.packsCount
+        default: return nil
+        }
+    }
+
+    static func formatted(_ count: Int, locale: Locale) -> String {
+        count.formatted(IntegerFormatStyle<Int>.number.locale(locale))
     }
 
     /// Les rangées, dans l'ordre de la fiche. Les titres de « Messages favoris » et « Publications enregistrées »
