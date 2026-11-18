@@ -61,11 +61,11 @@ struct ProfileCircleProposalCard: View {
                     .transition(.opacity)
             }
         }
-        .meeshyAnimation(.easeOut(duration: 0.2), value: viewModel.receivedProposal)
+        .meeshyMotion(.morph, value: viewModel.receivedProposal)
         .sheet(item: $ritual) { target in
             BloodRitualView(target: target, onFinished: {
                 ritual = nil
-                Task { await viewModel.load() }
+                Task { await viewModel.reload() }
             })
         }
     }

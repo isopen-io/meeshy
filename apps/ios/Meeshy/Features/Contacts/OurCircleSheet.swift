@@ -38,7 +38,7 @@ struct ProfileRelationPillView: View {
                 .transition(.opacity)
             }
         }
-        .meeshyAnimation(.easeOut(duration: 0.2), value: viewModel.shownLevel)
+        .meeshyMotion(.morph, value: viewModel.shownLevel)
         .task(id: viewModel.userId) { await viewModel.load() }
         .sheet(isPresented: $showsOurCircle) {
             OurCircleSheet(viewModel: viewModel, displayName: displayName)
@@ -57,8 +57,11 @@ struct OurCircleSheet: View {
     @ObservedObject var viewModel: ProfileCircleViewModel
     let displayName: String
     @Environment(\.dismiss) private var dismiss
-    @State private var confirmsLowering = false
+    @State private var confirmedLowering: ProfileCircleLowering?
     private var theme: ThemeManager { ThemeManager.shared }
+    private var myName: String {
+        AuthManager.shared.currentUser.map { $0.displayName ?? $0.username } ?? ""
+    }
 
     var body: some View {
         ScrollView {
@@ -130,32 +133,35 @@ struct OurCircleSheet: View {
 
     @ViewBuilder
     private func sideCards(_ summary: OurCircleSummary) -> some View {
-        sideCard(caption: OurCircleCopy.theirSide(name: displayName), value: OurCircleCopy.grant(summary.theirs),
-                 level: summary.theirs.level)
-        sideCard(caption: OurCircleCopy.mySide, value: CircleLevelNames.title(of: summary.mine), level: summary.mine)
+        sideCard(OurCircleSide(person: displayName, avatarURL: nil, caption: OurCircleCopy.theirSide(name: displayName),
+                               value: OurCircleCopy.grant(summary.theirs), level: summary.theirs.level))
+        sideCard(OurCircleSide(person: myName, avatarURL: AuthManager.shared.currentUser?.avatar,
+                               caption: OurCircleCopy.mySide, value: CircleLevelNames.title(of: summary.mine),
+                               level: summary.mine))
     }
 
-    private func sideCard(caption: String, value: String, level: RelationLevel) -> some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: filledCircleGlyph(level))
-                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
-                .foregroundStyle(CircleLevelColor.color(for: level))
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(caption)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundStyle(theme.textSecondary)
-                Text(value)
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                    .foregroundStyle(theme.textPrimary)
+    /// Une carte K43 par côté (planche `Autre-Cercle`) : l'avatar de qui accorde, ce qu'il accorde, le cercle en K45.
+    private func sideCard(_ side: OurCircleSide) -> some View {
+        let tint = CircleLevelColor.color(for: side.level)
+        return MeeshyGroupCard(surface: .accent, tint: tint) {
+            HStack(spacing: MeeshySpacing.sm) {
+                MeeshyAvatar(name: side.person, context: .postComment,
+                             accentColor: DynamicColorGenerator.colorForName(side.person), avatarURL: side.avatarURL)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(side.caption)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                        .foregroundStyle(theme.textSecondary)
+                    Text(side.value)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                        .foregroundStyle(theme.textPrimary)
+                }
+                Spacer(minLength: 0)
+                MeeshyMedallion(systemImage: filledCircleGlyph(side.level), tint: tint, size: .s24)
             }
-            Spacer(minLength: 0)
+            .padding(.horizontal, CGFloat(MeeshyGroupCardRecipe.dividerInset))
+            .accessibilityElement(children: .combine)
         }
-        .padding(MeeshySpacing.md)
-        .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.tapTarget)
-        .background(CircleLevelColor.color(for: level).opacity(MeeshyOpacity.subtle))
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -172,24 +178,20 @@ struct OurCircleSheet: View {
         }
     }
 
+    /// Une tuile de ce que le commun ouvre : le glyphe en médaillon K45, le nom, dans une carte K43.
     private func openedTile(_ feature: OurCircleFeature, tint: Color) -> some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: feature.systemImage)
-                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: MeeshyControlSize.tapTarget * 0.86, height: MeeshyControlSize.tapTarget * 0.86)
-                .background(Circle().fill(tint.opacity(MeeshyOpacity.light)))
-                .accessibilityHidden(true)
-            Text(feature.title)
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundStyle(theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+        MeeshyGroupCard {
+            HStack(spacing: MeeshySpacing.sm) {
+                MeeshyMedallion(systemImage: feature.systemImage, tint: tint, size: .s36)
+                Text(feature.title)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, MeeshySpacing.md)
+            .accessibilityElement(children: .combine)
         }
-        .padding(MeeshySpacing.sm)
-        .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.tapTarget + MeeshySpacing.md)
-        .background(theme.textPrimary.opacity(MeeshyOpacity.faint))
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
     }
 
     @ViewBuilder
@@ -212,16 +214,10 @@ struct OurCircleSheet: View {
     @ViewBuilder
     private func missing(_ summary: OurCircleSummary) -> some View {
         if let missing = summary.missing {
-            Label {
-                Text(OurCircleCopy.missing(missing, name: displayName))
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                    .foregroundStyle(theme.textPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } icon: {
-                Image(systemName: VitrineSeenAsCopy.glyph(of: summary.next ?? summary.common))
-                    .foregroundStyle(CircleLevelColor.color(for: summary.next ?? summary.common))
-                    .accessibilityHidden(true)
-            }
+            let level = summary.next ?? summary.common
+            MeeshyNote(OurCircleCopy.missing(missing, name: displayName),
+                       lead: .systemImage(VitrineSeenAsCopy.glyph(of: level)),
+                       tint: CircleLevelColor.color(for: level))
             if let progress = viewModel.summary {
                 Text(progress)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
@@ -251,8 +247,10 @@ struct OurCircleSheet: View {
                 }
                 .accessibilityIdentifier("circles.ours.raiseFailed")
             }
-            if let lowering = viewModel.offeredLowering {
-                loweringButton(lowering, from: summary.common)
+            if !viewModel.offeredLowerings.isEmpty {
+                ForEach(viewModel.offeredLowerings, id: \.self) { lowering in
+                    loweringButton(lowering, from: summary.common)
+                }
                 Text(OurCircleCopy.silentLowering(name: displayName))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundStyle(theme.textSecondary)
@@ -270,18 +268,35 @@ struct OurCircleSheet: View {
             width: .fill,
             isDestructive: lowering == .unlink,
             isPending: viewModel.isLowering,
-            action: { confirmsLowering = true }
+            action: { confirmedLowering = lowering }
         )
-        .confirmationDialog(lowering.confirmationTitle(name: displayName), isPresented: $confirmsLowering,
+        .confirmationDialog(lowering.confirmationTitle(name: displayName), isPresented: confirms(lowering),
                             titleVisibility: .visible) {
             Button(lowering.label, role: .destructive) {
-                Task { await viewModel.lower() }
+                Task { await viewModel.lower(lowering) }
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         } message: {
             Text(lowering.confirmationBody(name: displayName, from: level))
         }
     }
+
+    /// Chaque geste de baisse a SA confirmation : une seule s'ouvre, celle du bouton touché.
+    private func confirms(_ lowering: ProfileCircleLowering) -> Binding<Bool> {
+        Binding(
+            get: { confirmedLowering == lowering },
+            set: { if !$0 { confirmedLowering = nil } }
+        )
+    }
+}
+
+/// Un côté du lien dans « Notre cercle » : qui accorde, et quoi.
+private struct OurCircleSide {
+    let person: String
+    let avatarURL: String?
+    let caption: String
+    let value: String
+    let level: RelationLevel
 }
 
 // MARK: - Les mots de « Notre cercle »

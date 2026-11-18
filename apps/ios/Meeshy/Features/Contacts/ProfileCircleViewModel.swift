@@ -32,6 +32,13 @@ final class ProfileCircleViewModel: ObservableObject {
 
     /// Les propositions répondues ou remises à plus tard ici : une relecture ne les ramène pas.
     private var setAside: Set<String> = []
+    /// Le chargement en vol : la pilule, « Notre cercle » et la face Actions partagent ce modèle, un seul chargement part.
+    private var loading: Task<Void, Never>?
+    /// Une revalidation par ouverture de la fiche : remonter la face Actions ne relance rien.
+    private var hasLoaded = false
+    /// Les gestes locaux sur le lien (baisse, acceptation) : un lien servi lu AVANT l'un d'eux ne l'écrase pas.
+    private var linkEdits = 0
+    private var linkEditsInFlight = 0
 
     private let relations: RelationsProviding
     private let friendService: FriendServiceProviding
@@ -141,11 +148,15 @@ final class ProfileCircleViewModel: ObservableObject {
     /// Le cercle occupe l'emplacement de la fiche : un lien est montré, ou vient d'être annulé ici.
     var claimsTheSlot: Bool { shownLevel != nil || didUnlink }
 
-    /// Le geste de baisse proposé : un cran sous le niveau affiché, l'annulation du lien à Connaissance.
-    var offeredLowering: ProfileCircleLowering? {
-        guard let level = shownLevel, let below = RelationRequestRule.rung(below: level) else { return nil }
-        return below == .public ? .unlink : .demote(below)
+    /// Les gestes de baisse proposés (planche `Autre-Cercle`) : le cran sous le niveau affiché, puis l'annulation du lien
+    /// dès qu'il est au-dessus de Connaissance ; à Connaissance, l'annulation seule.
+    var offeredLowerings: [ProfileCircleLowering] {
+        guard let level = shownLevel, let below = RelationRequestRule.rung(below: level) else { return [] }
+        return below == .public ? [.unlink] : [.demote(below), .unlink]
     }
+
+    /// Le premier geste de baisse : le cran inférieur, l'annulation du lien à Connaissance.
+    var offeredLowering: ProfileCircleLowering? { offeredLowerings.first }
 
     /// « Notre cercle » (#18870) : seulement pour un lien montré, rien n'est fabriqué sans lui.
     var ourCircle: OurCircleSummary? {
@@ -157,28 +168,68 @@ final class ProfileCircleViewModel: ObservableObject {
         link.flatMap { CircleProgressSummary.make($0, now: now()).text(levelTitle: CircleLevelNames.title(of:)) }
     }
 
+    /// Regroupé : un appel pendant un chargement en vol l'attend, un appel après lui ne relance rien.
     func load() async {
+        guard !hasLoaded else { return }
+        if let loading {
+            await loading.value
+            return
+        }
+        let task = Task<Void, Never> { [weak self] in
+            guard let self else { return }
+            await self.performLoad()
+        }
+        loading = task
+        await task.value
+        loading = nil
+        hasLoaded = true
+    }
+
+    /// Après un geste qui change le lien hors de ce modèle (le rituel du Sang scellé) : une relecture, même déjà chargé.
+    func reload() async {
+        await loading?.value
+        hasLoaded = false
+        await load()
+    }
+
+    private func performLoad() async {
         let relations = self.relations
         let userId = self.userId
+        let edits = linkEdits
         let store = await linksStore()
         let loader = CacheFirstLoader(store: store, key: CirclesViewModel.cacheKey, networkMonitor: networkMonitor)
         let fetch: @Sendable () async throws -> [RelationLink] = { try await relations.links() }
         let apply: @MainActor @Sendable ([RelationLink]) -> Void = { [weak self] served in
-            self?.link = served.first { $0.userId == userId }
+            guard let self, self.servedLinkMayApply(since: edits) else { return }
+            self.link = served.first { $0.userId == userId }
         }
         let revalidation = await loader.load(fetch: fetch, setLoadState: { _ in }, apply: apply)
         let cached = await cachedReceived()
         paintProposal(from: cached)
         await revalidation?.value
-        await loadServedDetail()
-        await loadPendingRequest()
+        await loadServedDetail(since: edits)
+        await loadPendingRequest(since: edits)
         await loadReceivedProposal(cached: cached)
+    }
+
+    /// Faux dès qu'un geste local a touché le lien depuis le début de la lecture, ou en touche un maintenant.
+    private func servedLinkMayApply(since edits: Int) -> Bool {
+        linkEditsInFlight == 0 && linkEdits == edits
+    }
+
+    private func beginLinkEdit() {
+        linkEdits += 1
+        linkEditsInFlight += 1
+    }
+
+    private func endLinkEdit() {
+        linkEditsInFlight -= 1
     }
 
     /// `GET /relations/:userId` : le blocage de montée quand la passerelle le sert, et le lien lui-même quand la liste
     /// ne le portait pas encore. Un échec garde ce qui est affiché.
-    private func loadServedDetail() async {
-        guard let served = await servedDetail() else { return }
+    private func loadServedDetail(since edits: Int) async {
+        guard let served = await servedDetail(), servedLinkMayApply(since: edits) else { return }
         toolLevel = served.toolLevel
         guard let current = link else {
             if served.effectiveLevel >= .acquaintance { link = served }
@@ -212,9 +263,10 @@ final class ProfileCircleViewModel: ObservableObject {
         return served
     }
 
-    private func loadPendingRequest() async {
+    private func loadPendingRequest(since edits: Int) async {
         guard pendingLevel == nil,
-              let sent = try? await friendService.sentRequests(offset: 0, limit: Self.requestsPage) else { return }
+              let sent = try? await friendService.sentRequests(offset: 0, limit: Self.requestsPage),
+              pendingLevel == nil, servedLinkMayApply(since: edits) else { return }
         pendingLevel = sent.data.first { $0.status == "pending" && $0.receiverId == userId }?.requestedLevel
     }
 
@@ -261,6 +313,8 @@ final class ProfileCircleViewModel: ObservableObject {
         guard let proposal = receivedProposal, let current = link else { return .notSent }
         guard proposal.level != .blood else { return .opensRitual(CircleRitualTarget(userId: userId, name: name)) }
         let pendingBefore = pendingLevel
+        beginLinkEdit()
+        defer { endLinkEdit() }
         setAside.insert(proposal.requestId)
         receivedProposal = nil
         link = Self.accepted(current, at: proposal.level)
@@ -334,16 +388,22 @@ final class ProfileCircleViewModel: ObservableObject {
         )
     }
 
-    /// Instantané -> local -> réseau -> retour arrière. Silencieux pour l'autre (RG-07).
+    /// Instantané -> local -> réseau -> retour arrière. Silencieux pour l'autre (RG-07). Sans geste nommé, le cran
+    /// inférieur ; un geste qui n'est pas proposé ne part pas.
     @discardableResult
-    func lower() async -> Bool {
-        guard !isLowering, let current = link, let lowering = offeredLowering else { return false }
+    func lower(_ requested: ProfileCircleLowering? = nil) async -> Bool {
+        guard !isLowering, let current = link, let lowering = requested ?? offeredLowering,
+              offeredLowerings.contains(lowering) else { return false }
         let target = lowering.level
         let pendingBefore = pendingLevel
         let toolBefore = toolLevel
         isLowering = true
+        beginLinkEdit()
         failedRaise = nil
-        defer { isLowering = false }
+        defer {
+            isLowering = false
+            endLinkEdit()
+        }
         link = current.lowered(to: target)
         toolLevel = Self.toolLevelAfterLowering(toolBefore, link: current.effectiveLevel, to: target)
         if let waiting = pendingLevel, waiting > target { pendingLevel = nil }
@@ -368,7 +428,7 @@ final class ProfileCircleViewModel: ObservableObject {
 }
 
 /// Le geste de baisse d'un lien : un cran plus bas, ou la sortie du cercle à Connaissance.
-enum ProfileCircleLowering: Equatable {
+nonisolated enum ProfileCircleLowering: Hashable {
     case demote(RelationLevel)
     case unlink
 
@@ -453,6 +513,7 @@ enum ProfileCircleModels {
     private final class WeakModel {
         weak var model: ProfileCircleViewModel?
         init(_ model: ProfileCircleViewModel) { self.model = model }
+        nonisolated deinit {}
     }
 
     private static var models: [String: WeakModel] = [:]

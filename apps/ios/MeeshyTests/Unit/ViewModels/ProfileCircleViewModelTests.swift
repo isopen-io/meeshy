@@ -389,6 +389,103 @@ final class ProfileCircleViewModelTests: XCTestCase {
         }
     }
 
+    func test_offeredLowerings_aboveAcquaintance_offerTheRungBelowThenUnlink() async {
+        let cases: [(RelationLevel, [ProfileCircleLowering])] = [
+            (.blood, [.demote(.close), .unlink]), (.close, [.demote(.friend), .unlink]),
+            (.friend, [.demote(.acquaintance), .unlink]), (.acquaintance, [.unlink]),
+        ]
+        for (level, expected) in cases {
+            await CacheCoordinator.shared.relationLinks.invalidate(for: CirclesViewModel.cacheKey)
+            let rig = makeRig()
+            rig.relations.linksResult = .success([link("a", level)])
+            await rig.sut.load()
+            XCTAssertEqual(rig.sut.offeredLowerings, expected, "depuis \(level)")
+        }
+    }
+
+    func test_lower_unlinkFromClose_sendsPublic_andLeavesTheCircle() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        await rig.sut.load()
+
+        let lowered = await rig.sut.lower(.unlink)
+
+        XCTAssertTrue(lowered)
+        XCTAssertEqual(rig.relations.lowerCalls, [.init(userId: "a", level: .public)])
+        XCTAssertTrue(rig.sut.didUnlink)
+    }
+
+    func test_lower_aGestureThatIsNotOffered_doesNotLeave() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        await rig.sut.load()
+
+        let lowered = await rig.sut.lower(.demote(.acquaintance))
+
+        XCTAssertFalse(lowered, "seuls le cran inférieur et l'annulation sont proposés")
+        XCTAssertTrue(rig.relations.lowerCalls.isEmpty)
+    }
+
+    // MARK: - Un seul chargement pour la pilule, « Notre cercle » et la face Actions (#18870)
+
+    func test_load_threeConcurrentCalls_readTheLinksOnce() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        let sut = rig.sut
+
+        async let pill: Void = sut.load()
+        async let section: Void = sut.load()
+        async let live: Void = sut.load()
+        _ = await (pill, section, live)
+
+        XCTAssertEqual(rig.relations.linksCallCount, 1, "trois vues, un modèle, un chargement")
+        XCTAssertEqual(sut.shownLevel, .close)
+    }
+
+    func test_load_remountingTheActionsFace_doesNotReloadEverything() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        await rig.sut.load()
+        await CacheCoordinator.shared.relationLinks.invalidate(for: CirclesViewModel.cacheKey)
+
+        await rig.sut.load()
+
+        XCTAssertEqual(rig.relations.linksCallCount, 1, "une revalidation par ouverture de la fiche")
+        XCTAssertEqual(rig.relations.linkCallCount, 1)
+    }
+
+    func test_reload_afterTheRitual_readsTheLinkAgain() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        rig.relations.linkResult = .success(link("a", .close))
+        await rig.sut.load()
+        rig.relations.linkResult = .success(link("a", .blood))
+        await CacheCoordinator.shared.relationLinks.invalidate(for: CirclesViewModel.cacheKey)
+        rig.relations.linksResult = .success([link("a", .blood)])
+
+        await rig.sut.reload()
+
+        XCTAssertEqual(rig.relations.linkCallCount, 2)
+        XCTAssertEqual(rig.sut.shownLevel, .blood, "le Sang scellé se voit sans rouvrir la fiche")
+    }
+
+    func test_load_aDetailReadBeforeALowering_doesNotOverwriteTheLoweredTools() async {
+        let rig = makeRig()
+        rig.relations.linksResult = .success([link("a", .close)])
+        rig.relations.linkResult = .success(link("a", .close))
+        let sut = rig.sut
+        let relations = rig.relations
+        relations.linkHook = {
+            relations.linkResult = .success(RelationLink(userId: "a", effectiveLevel: .friend, grantedByMe: .friend))
+            _ = await sut.lower()
+        }
+
+        await sut.load()
+
+        XCTAssertEqual(sut.shownLevel, .friend)
+        XCTAssertFalse(sut.offersTalkie, "le Proche lu avant la baisse ne rend pas le talkie")
+    }
+
     func test_offeredLowering_withoutALink_isNil() async {
         let rig = makeRig()
         rig.relations.linksResult = .success([])
