@@ -108,8 +108,10 @@ function endWithoutModule(store: SessionStoreApi, storage: SafeStorage): void {
  * La fin d'une session refusée se charge quand elle sert (`account-end.ts`) : la première peinture n'en porte que le repli.
  *
  * ELLE VISE LA SESSION REFUSÉE, JAMAIS CELLE QUE L'ONGLET TIENT QUAND LE MORCEAU ARRIVE (audit #19352) :
- * - l'identité anonyme d'un compte (#8816) finit SUR-LE-CHAMP — rien à charger, et la navigation qui suit la fin
- *   d'un accès d'invité rendrait la session au COMPTE avant la fin chargée, qui le déconnecterait alors ;
+ * - une session d'INVITÉ finit SUR-LE-CHAMP, rien à charger : la navigation qui suit la fin d'un accès d'invité se rend
+ *   avant le morceau. L'identité anonyme d'un compte (#8816) y rendrait la session au COMPTE, que la fin chargée
+ *   déconnecterait alors ; l'invité d'un lien SANS compte y serait encore tenu, et la page de son lien le renverrait
+ *   vers son fil au lieu de dire pourquoi. Pour lui, le morceau ne fait plus que suivre l'appareil ;
  * - une autre session finit à l'arrivée du morceau (ou de son échec) seulement si l'onglet la tient encore, la même :
  *   s'il a suivi l'appareil passé à un autre compte, repris une session neuve ou réécrit la sienne, rien ne finit ici,
  *   et la requête suivante sous un jeton refusé rapporte son propre 401.
@@ -121,13 +123,15 @@ export function endRefusedSession(
   const refused = store.getState().session;
   const scoped = scopedConversationOf(refused);
   if (scoped !== null) return store.getState().dropAnonymous(scoped);
-  const stillRefused = (): boolean => store.getState().session === refused;
+  if (refused.status === 'guest') store.getState().clearSession();
+  const ended = store.getState().session;
+  const stillEnded = (): boolean => store.getState().session === ended;
   void load()
     .then(({ endRevokedSession }) => {
-      if (stillRefused()) endRevokedSession(store);
+      if (stillEnded()) endRevokedSession(store);
     })
     .catch(() => {
-      if (stillRefused()) endWithoutModule(store, storage ?? safeLocalStorage());
+      if (stillEnded()) endWithoutModule(store, storage ?? safeLocalStorage());
     });
 }
 
