@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 
 /// Les mots d'« En commun » (#19377, planche `Autre-Commun`).
-nonisolated enum ProfileInCommonCopy {
+enum ProfileInCommonCopy {
 
     static func figure(_ figure: ProfileInCommonDigest.Figure) -> String {
         switch figure {
