@@ -1,3 +1,4 @@
+import CallKit
 import Combine
 import Foundation
 import MeeshySDK
@@ -11,7 +12,7 @@ import os
 
 extension CallManager: GroupCallHostProviding {
     var groupCallId: String? { currentCallId }
-    var groupConversationId: String? { conversationId }
+    var groupConversationId: String? { get { conversationId } set { conversationId = newValue } }
     var groupLocalUserId: String { AuthManager.shared.currentUser?.id ?? "" }
 
     /// Tant que l'appelant d'un groupe n'a vu personne rejoindre, `remoteUserId`
@@ -145,6 +146,18 @@ extension CallManager: GroupCallHostProviding {
 
 extension MessageSocketManager: GroupCallSignalingProviding {}
 
+/// #19650 — l'écran verrouillé et les Récents nomment le groupe où l'appel
+/// vit désormais, plus le seul pair du tête-à-tête d'origine.
+enum CallKitCallName {
+    @MainActor
+    static func report(_ name: String, on call: CallManager) {
+        guard call.callUsesCallKit, let uuid = call.activeCallUUID, !name.isEmpty else { return }
+        let update = CXCallUpdate()
+        update.localizedCallerName = name
+        call.callProvider.reportCall(with: uuid, updated: update)
+    }
+}
+
 /// Relie la pile d'appel au maillage : les événements de groupe du socket vont
 /// au coordinateur, et chaque changement d'état, de micro ou de caméra de
 /// `CallManager` le fait se réaligner.
@@ -169,6 +182,10 @@ final class GroupCallMeshBinding {
         boundManager = manager
         cancellables = []
         mesh.attach(host: manager)
+        // #19650 — les contrôles d'appel s'attachent avec la pile : une bascule
+        // de conversation ou un micro coupé par l'admin arrive même quand
+        // l'écran d'appel n'a jamais été ouvert (décroché depuis CallKit).
+        _ = manager.controls
 
         socket.callOfferReceived
             .receive(on: DispatchQueue.main)

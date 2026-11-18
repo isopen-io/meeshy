@@ -37,6 +37,37 @@ final class CallControlsSocketTests: XCTestCase {
         XCTAssertEqual(event.invitedBy, "u1")
     }
 
+    func test_conversationChanged_decodesTheGroupTheCallNowLivesIn() throws {
+        let event = try decode(
+            CallConversationChangedEvent.self,
+            #"{"callId":"c1","conversationId":"g1","previousConversationId":"d1","conversationType":"group","conversationTitle":"Trio","memberUserIds":["u1","u2","u3"],"created":true,"reason":"invitation"}"#
+        )
+
+        XCTAssertEqual(event, CallConversationChangedEvent(
+            callId: "c1", conversationId: "g1", previousConversationId: "d1",
+            conversationTitle: "Trio", memberUserIds: ["u1", "u2", "u3"], created: true
+        ))
+        XCTAssertEqual(CallControlSocketEvent.conversationChanged(event).callId, "c1")
+    }
+
+    func test_conversationChanged_untitledGroup_decodesANilTitle() throws {
+        let event = try decode(
+            CallConversationChangedEvent.self,
+            #"{"callId":"c1","conversationId":"g1","previousConversationId":"d1","conversationType":"group","conversationTitle":null,"memberUserIds":["u1","u2","u3"],"created":false,"reason":"invitation"}"#
+        )
+
+        XCTAssertNil(event.conversationTitle)
+        XCTAssertFalse(event.created)
+    }
+
+    func test_conversationChanged_withoutGroup_isDropped() {
+        XCTAssertNil(try? decode(CallConversationChangedEvent.self, #"{"callId":"c1","previousConversationId":"d1"}"#))
+    }
+
+    func test_conversationChanged_isASocketEventOfTheGateway() {
+        XCTAssertEqual(SocketEvent.callConversationChanged.rawValue, "call:conversation-changed")
+    }
+
     func test_inviteSettled_decodesWhoseInvitationEnded() throws {
         let event = try decode(CallInviteSettledEvent.self, #"{"callId":"c1","userId":"u2"}"#)
 
