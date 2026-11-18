@@ -6478,8 +6478,8 @@ final class CallManagerBubblePositionTests: XCTestCase {
         XCTAssertEqual(CallManager.shared.bubbleVerticalFraction, 0.08, accuracy: 0.0001)
     }
 
-    func test_bubbleSizeTier_defaultsToCircle() {
-        XCTAssertEqual(CallManager.shared.bubbleSizeTier, .circle)
+    func test_bubbleSizeTier_defaultsToSmallVignette() {
+        XCTAssertEqual(CallManager.shared.bubbleSizeTier, .small)
     }
 
     /// `resetEndedStateForNewCall` is private and touches live singleton/CallKit
