@@ -1,4 +1,4 @@
-## `jvm-check` ne prouve que `:core:model` — un lot qui touche `sdk-core` attend `android.yml` (2026-11-18, #19650)
+## `jvm-check` ne prouve que `:core:model` — un lot qui touche `sdk-core` attend `android.yml`
 
 **Date** : 2026-11-18 · **Issue** : #19650 · **Correctif** : 3c34847299
 

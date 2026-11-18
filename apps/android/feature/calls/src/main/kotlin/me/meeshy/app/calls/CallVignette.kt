@@ -1,9 +1,7 @@
 package me.meeshy.app.calls
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -50,6 +48,7 @@ import me.meeshy.sdk.model.call.CallReducedCaption
 import me.meeshy.sdk.model.call.CallVignetteGlide
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
@@ -105,7 +104,7 @@ fun CallVignetteLayer(
                 } else {
                     position.animateTo(
                         target,
-                        spring(dampingRatio = CallVignetteGlide.DAMPING, stiffness = Spring.StiffnessMediumLow),
+                        MeeshyMotion.springFor(response = GLIDE_RESPONSE, dampingFraction = CallVignetteGlide.DAMPING),
                         initialVelocity = velocity,
                     )
                 }
@@ -201,3 +200,6 @@ fun CallVignette(
         )
     }
 }
+
+/** La raideur de Spring.StiffnessMediumLow (400), dite en réponse iOS : (2π / 0,314)² ≈ 400. */
+private const val GLIDE_RESPONSE = 0.314f
