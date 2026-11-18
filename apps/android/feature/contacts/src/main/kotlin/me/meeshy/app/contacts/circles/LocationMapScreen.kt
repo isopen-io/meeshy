@@ -39,7 +39,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -66,6 +65,7 @@ import me.meeshy.ui.component.kit.MeeshyMapPin
 import me.meeshy.ui.component.kit.MeeshyMapPinPrecision
 import me.meeshy.ui.component.location.TileMapView
 import me.meeshy.ui.component.meeshyPresenceDotColor
+import me.meeshy.ui.component.presentation.MeeshyCoverDialog
 import me.meeshy.ui.component.rememberPresence
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
@@ -97,12 +97,12 @@ fun LocationMapDialog(
     onWrite: (() -> Unit)? = null,
     onCall: (() -> Unit)? = null,
 ) {
-    Dialog(
+    MeeshyCoverDialog(
         onDismissRequest = onClose,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         Box(Modifier.fillMaxSize().background(MeeshyTheme.tokens.backgroundPrimary)) {
-            LocationMapScreen(focusUserId, displayName, onClose, LocationMapActions(onShareMine, onWrite, onCall))
+            LocationMapScreen(focusUserId, displayName, { dismiss() }, LocationMapActions(onShareMine, onWrite, onCall))
         }
     }
 }

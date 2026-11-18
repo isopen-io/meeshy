@@ -5,8 +5,10 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -21,7 +23,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.launch
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.links.LinksHubEntry
@@ -38,6 +39,7 @@ import me.meeshy.ui.component.kit.MeeshyLabeledActionSize
 import me.meeshy.ui.component.kit.MeeshySectionHeader
 import me.meeshy.ui.component.kit.MeeshyTicket
 import me.meeshy.ui.component.kit.MeeshyTicketSize
+import me.meeshy.ui.component.presentation.MeeshyCoverDialog
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -87,7 +89,8 @@ internal fun LinksQrDialog(link: LinksProfileLink, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val shareTitle = stringResource(R.string.links_face_qr_share_image)
-    Dialog(onDismissRequest = onDismiss) {
+    MeeshyCoverDialog(onDismissRequest = onDismiss) {
+        Box(Modifier.fillMaxSize().background(MeeshyTheme.tokens.backgroundPrimary), contentAlignment = Alignment.Center) {
         Column(
             Modifier
                 .clip(RoundedCornerShape(28.dp))
@@ -109,7 +112,8 @@ internal fun LinksQrDialog(link: LinksProfileLink, onDismiss: () -> Unit) {
                     QrLinkShare.render(link.webLink)?.let { QrLinkShare.share(context, it, QrFileName.of(link.handle), shareTitle) }
                 }
             }) { Text(shareTitle) }
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.links_face_close)) }
+            TextButton(onClick = { dismiss() }) { Text(stringResource(R.string.links_face_close)) }
+        }
         }
     }
 }
