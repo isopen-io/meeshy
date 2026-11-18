@@ -1,5 +1,6 @@
 import { CallStatus } from '@meeshy/shared/prisma/client';
 import { guardedTimeout } from '../../utils/guarded-timer';
+import { isDuoCall } from './answeredCallRoster';
 
 const ANSWERED_LIVE_STATUSES: readonly string[] = [CallStatus.connecting, CallStatus.active, CallStatus.reconnecting];
 
@@ -32,6 +33,7 @@ export type LoneSurvivorCall = {
   readonly answeredAt?: Date | null;
   readonly endedAt?: Date | null;
   readonly conversation?: { readonly type?: string | null } | null;
+  readonly invitedUserIds?: readonly string[] | null;
   readonly participants: readonly SurvivorRow[];
 };
 
@@ -51,7 +53,7 @@ const userOf = (row: SurvivorRow): string => row.participant?.userId || row.part
  * terminé, deux actifs ou plus, aucun).
  */
 export function loneSurvivorOf(call: LoneSurvivorCall): LoneSurvivor | null {
-  if (call.conversation?.type === 'direct' || !call.answeredAt || call.endedAt) return null;
+  if (isDuoCall({ conversation: { type: call.conversation?.type ?? null }, invitedUserIds: call.invitedUserIds ?? null }) || !call.answeredAt || call.endedAt) return null;
   if (!ANSWERED_LIVE_STATUSES.includes(call.status)) return null;
   const active = call.participants.filter((row) => !row.leftAt);
   const survivor = active.length === 1 ? active[0] : undefined;
