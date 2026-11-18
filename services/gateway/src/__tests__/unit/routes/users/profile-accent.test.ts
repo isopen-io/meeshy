@@ -134,6 +134,12 @@ describe('PATCH /users/me — la couleur d’accent', () => {
     }));
   });
 
+  it('un accent réécrit à l’identique ne repeint pas mes appareils : l’instantané n’a pas changé (#18924)', async () => {
+    const { res, emit } = await patch({ profileAccentColor: '#4ECDC4' }, { profileAccentColor: '#4ECDC4' }, { profileAccentColor: '#4ECDC4' });
+    expect(res.statusCode).toBe(200);
+    expect(emit.mock.calls.map(([event]) => event)).not.toContain(SERVER_EVENTS.PROFILE_UPDATED);
+  });
+
   it('un ancien client qui ne nomme pas le champ n’écrit ni ne diffuse rien de l’accent', async () => {
     const { res, prisma, emitUserUpdated } = await patch({ bio: 'Salut' }, { bio: 'Salut' });
     expect(res.statusCode).toBe(200);

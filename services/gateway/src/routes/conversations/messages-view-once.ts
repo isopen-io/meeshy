@@ -97,7 +97,7 @@ export function registerMessageViewOnceRoutes(
         where: { id: messageId, conversationId }
       });
       if (!message) {
-        return sendNotFound(reply, 'Message not found');
+        return sendNotFound(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
       }
 
       if (!message.isViewOnce) {

@@ -19,7 +19,8 @@ import {
 } from './profile';
 import { publicProfileQueryKey, type PublicProfileView } from './public-profile';
 import { holdProfileEdit, noteProfileTaken, sessionFieldsOfProfile } from './served-profile-session';
-import type { SessionProfileFields, SessionStoreApi, SessionUser } from './session';
+import { boundToIdentity } from './http';
+import { sessionIdentityKey, type SessionProfileFields, type SessionStoreApi, type SessionUser } from './session';
 
 /**
  * **LES GESTES DU PROFIL, OPTIMISTES** (#6289) — CLAUDE.md § Optimistic
@@ -241,8 +242,10 @@ type ImageUpdateParams = {
  * `GET /me` servie pendant le téléversement ou le `PATCH` ne touche pas la session. */
 export async function performImageUpdate(params: ImageUpdateParams): Promise<ImageUpdateOutcome> {
   const release = holdProfileEdit(params.deps.queryClient);
+  /* Téléverser puis poser l'URL : deux requêtes, un seul compte — celui qui a lancé le geste (audit #19352, X1). */
+  const owner = sessionIdentityKey(params.deps.session.getState().session);
   try {
-    return await updateImage(params);
+    return await updateImage({ ...params, deps: { ...params.deps, transport: boundToIdentity(params.deps.transport, owner) } });
   } finally {
     release();
   }
