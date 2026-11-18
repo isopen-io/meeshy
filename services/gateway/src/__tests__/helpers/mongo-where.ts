@@ -273,3 +273,84 @@ export function findManyIn<T extends MongoDocument>(rows: readonly T[]) {
   };
   return { findMany, calls };
 }
+
+/**
+ * `update` sur une collection en mémoire — le double qui REFUSE ce que le vrai
+ * client refuse.
+ *
+ * Prisma accepte, depuis la clause `where` étendue, des filtres NON uniques à
+ * côté de la clé unique : `where: { id, ...unsetOrNull('bannedAt') }` est la
+ * forme que ce dépôt emploie pour qu'une écriture ne rallume pas une ligne
+ * qu'un autre chemin vient de bannir (`restore-for-me.ts`, #10436/#10443). Quand
+ * la ligne ne s'apparie plus, l'écriture ne tombe pas en no-op : elle LÈVE
+ * `P2025`, et c'est ce code que l'appelant doit traiter pour rendre la vraie
+ * cause.
+ *
+ * Un `jest.fn().mockResolvedValue(row)` ne peut pas exprimer cela : il rend la
+ * ligne quelle que soit la clause, donc **il accepte une écriture que la
+ * production refuserait**, et un témoin de COURSE posé sur lui ne peut pas
+ * tomber. C'est le jumeau de la leçon « un double Prisma qui rend `[]` rend
+ * tout témoin de contenu trivialement vert », pris par l'autre bout : un double
+ * ment aussi par ce qu'il ACCEPTE.
+ *
+ * L'écriture est APPLIQUÉE à la ligne en mémoire : une lecture suivante voit ce
+ * que l'écriture a posé, comme en base. `select` est projeté ; `include` rend la
+ * ligne entière (les relations vivent dans la fixture). Tout autre argument, et
+ * tout opérateur d'écriture que ce double ne sait pas appliquer, JETTENT.
+ */
+const SUPPORTED_UPDATE_ARGS = new Set(['where', 'data', 'select', 'include']);
+const WRITE_OPERATORS = new Set(['set', 'unset', 'increment', 'decrement', 'multiply', 'divide', 'push']);
+
+export class MongoDoubleP2025Error extends Error {
+  readonly code = 'P2025';
+  constructor(message = 'An operation failed because it depends on one or more records that were required but not found.') {
+    super(message);
+    this.name = 'MongoDoubleP2025Error';
+  }
+}
+
+function applyWrite(row: MongoDocument, data: MongoDocument | undefined): void {
+  Object.entries(data ?? {}).forEach(([key, value]) => {
+    if (value === undefined) return;
+    if (isPlainDocument(value)) {
+      const keys = Object.keys(value as MongoDocument);
+      const operators = keys.filter((candidate) => WRITE_OPERATORS.has(candidate));
+      if (operators.length === 0) {
+        row[key] = value;
+        return;
+      }
+      if (keys.length !== operators.length) {
+        throw new Error(`double Mongo: écriture mixte non supportée « ${key} »`);
+      }
+      if (operators.length === 1 && operators[0] === 'set') {
+        row[key] = (value as { set: unknown }).set;
+        return;
+      }
+      if (operators.length === 1 && operators[0] === 'unset') {
+        delete row[key];
+        return;
+      }
+      throw new Error(`double Mongo: opérateur d'écriture non supporté « ${key}.${operators.join(', ')} »`);
+    }
+    row[key] = value;
+  });
+}
+
+export function updateIn<T extends MongoDocument>(rows: readonly T[]) {
+  const calls: Array<{ readonly where?: MongoDocument; readonly data?: MongoDocument }> = [];
+  const update = (args: {
+    readonly where?: MongoDocument;
+    readonly data?: MongoDocument;
+    readonly select?: MongoDocument;
+    readonly include?: MongoDocument;
+  } = {}): Promise<MongoDocument> => {
+    const unknown = Object.keys(args).filter((arg) => !SUPPORTED_UPDATE_ARGS.has(arg));
+    if (unknown.length > 0) return Promise.reject(new Error(`double Mongo: argument non supporté « ${unknown.join(', ')} »`));
+    calls.push({ where: args.where, data: args.data });
+    const found = rows.find((row) => matchesMongoWhere(row, args.where));
+    if (!found) return Promise.reject(new MongoDoubleP2025Error());
+    applyWrite(found, args.data);
+    return Promise.resolve(args.select ? project(found, args.select) : { ...found });
+  };
+  return { update, calls };
+}
