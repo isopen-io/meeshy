@@ -190,3 +190,33 @@ describe('GET /api/v1/voice/job/:jobId (#19472)', () => {
     expect(res.statusCode).toBe(500);
   });
 });
+
+describe('Corps exacts servis par les routes de job (#19472, audit)', () => {
+  it('un 404 ne nomme ni le job ni l’utilisateur, et porte le code du traducteur', async () => {
+    const res = await call(makeJobService({
+      cancelJob: jest.fn<(userId: string, jobId: string) => Promise<unknown>>().mockRejectedValue(notFound()),
+    }), 'DELETE');
+
+    expect(res.json()).toEqual({ success: false, error: 'NOT_FOUND', message: 'Job not found' });
+    expect(res.body).not.toContain(JOB_ID);
+    expect(res.body).not.toContain(USER_ID);
+  });
+
+  it('un 400 rend le code JOB_NOT_CANCELLABLE et la phrase du traducteur', async () => {
+    const res = await call(makeJobService({
+      cancelJob: jest.fn<(userId: string, jobId: string) => Promise<unknown>>()
+        .mockResolvedValue({ success: false, message: 'Job is no longer pending' }),
+    }), 'DELETE');
+
+    expect(res.json()).toEqual({ success: false, error: 'JOB_NOT_CANCELLABLE', message: 'Job is no longer pending' });
+  });
+
+  it('une réponse du traducteur sans success: true n’annonce jamais une annulation', async () => {
+    const res = await call(makeJobService({
+      cancelJob: jest.fn<(userId: string, jobId: string) => Promise<unknown>>().mockResolvedValue({}),
+    }), 'DELETE');
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().data).toBeUndefined();
+  });
+});
