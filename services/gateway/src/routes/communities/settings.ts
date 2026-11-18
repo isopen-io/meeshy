@@ -19,6 +19,7 @@ import { identityImagesAreCallers, IDENTITY_IMAGE_NOT_OWNED } from '../../servic
 import { COMMUNITY_ACTIVE_COUNTS, flattenCommunityCounts } from './serialization';
 import { admitSalonOccupants, closeSalonsAfterSwitch, isBecomingPrivate } from '../../services/conversations/communitySalonAdoption';
 import { scheduleCommunityUpdatedBroadcastFrom } from '../../services/community-updated-broadcast';
+import { readCommunityDeletedAudience, scheduleCommunityDeletedBroadcastFrom } from '../../services/community-deleted-broadcast';
 
 const logger = enhancedLogger.child({ module: 'CommunitySettingsRoutes' });
 
@@ -259,6 +260,9 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Only community creator can delete community', { code: 'COMMUNITY_CREATOR_ONLY' });
       }
 
+      // #19590 — l'audience se lit AVANT : la transaction efface les appartenances.
+      const audience = await readCommunityDeletedAudience(fastify.prisma, id);
+
       await fastify.prisma.$transaction([
         fastify.prisma.conversation.updateMany({ where: { communityId: id }, data: { communityId: null } }),
         fastify.prisma.communityMember.deleteMany({ where: { communityId: id } }),
@@ -266,6 +270,8 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
         fastify.prisma.conversationShare.deleteMany({ where: { communityId: id } }),
         fastify.prisma.community.delete({ where: { id } })
       ]);
+
+      scheduleCommunityDeletedBroadcastFrom(fastify, { communityId: id, reason: 'deleted', audience });
 
       return sendSuccess(reply, { message: 'Community deleted successfully' });
     } catch (error) {
