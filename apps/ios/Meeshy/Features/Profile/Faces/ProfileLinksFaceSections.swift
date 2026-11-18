@@ -89,12 +89,18 @@ struct ProfileCreatedLinks: View {
     let onCreate: () -> Void
 
     @Environment(\.locale) private var locale
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// Le détail ouvert depuis un billet : porté par la liste, il survit au passage du billet entre « servants » et
+    /// « À l'arrêt », au changement de filtre et à la suppression du lien.
+    @State private var opened: ProfileCreatedLinkDestination?
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileLinksCopy.createdTitle, lead: { EmptyView() }, accessory: { header })
             content
         }
+        .modifier(ProfileCreatedLinkDetailHost(opened: $opened))
         .accessibilityIdentifier("profile.links.created")
     }
 
@@ -134,6 +140,7 @@ struct ProfileCreatedLinks: View {
         ForEach(tickets) { ticket in
             ProfileCreatedLinkTicket(ticket: ticket, accent: accent, locale: locale,
                                      destination: destination(of: ticket), onOpen: onOpen,
+                                     onOpenDetail: { opened = $0 },
                                      onSwitch: { isActive in setActive(isActive, ticketId: ticket.id) })
         }
     }
@@ -180,13 +187,20 @@ struct ProfileCreatedLinks: View {
                              primary: MeeshyStateBlockAction(title: ProfileLinksCopy.createLink, systemImage: "plus",
                                                              perform: onCreate),
                              art: .ghost(.ticket, count: 2), tint: accent)
-            HStack(spacing: MeeshySpacing.sm) {
-                ForEach(Self.firstLinkShortcuts, id: \.self) { family in
-                    MeeshyButton(ProfileLinksCopy.familyName(family), systemImage: ProfileLinksCopy.familyGlyph(family),
-                                 kind: .outline, size: .s36, tint: accent,
-                                 action: { onOpen(Self.route(for: family)) })
-                }
+            // Aux tailles d'accessibilité, les trois raccourcis passent en colonne plutôt que de tronquer leurs noms.
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: MeeshySpacing.sm) { firstLinkShortcutButtons }
+            } else {
+                HStack(spacing: MeeshySpacing.sm) { firstLinkShortcutButtons }
             }
+        }
+    }
+
+    private var firstLinkShortcutButtons: some View {
+        ForEach(Self.firstLinkShortcuts, id: \.self) { family in
+            MeeshyButton(ProfileLinksCopy.familyName(family), systemImage: ProfileLinksCopy.familyGlyph(family),
+                         kind: .outline, size: .s36, tint: accent,
+                         action: { onOpen(Self.route(for: family)) })
         }
     }
 
@@ -218,7 +232,8 @@ struct ProfileCreatedLinks: View {
             guard let link = model.shareLink(id: ticket.id) else { return .route(.shareLinks) }
             return .share(link, onChanged: { model.replace($0) }, onDeleted: { model.remove(shareLinkId: $0) })
         case .tracking:
-            return model.trackingLink(id: ticket.id).map(ProfileCreatedLinkDestination.tracking) ?? .route(.trackingLinks)
+            guard let link = model.trackingLink(id: ticket.id) else { return .route(.trackingLinks) }
+            return .tracking(link, onChanged: { model.replace($0) }, onDeleted: { model.remove(trackingLinkId: $0) })
         case .community:
             return model.communityLink(id: ticket.id).map(ProfileCreatedLinkDestination.community) ?? .route(.communityLinks)
         case .referral:

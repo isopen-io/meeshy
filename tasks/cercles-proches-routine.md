@@ -1378,3 +1378,39 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 
 - `origin/dev` (d84e74a80) fusionnée sans conflit ; aucun fichier de carte ou de position client ne bougeait côté `dev`.
   Web `src/lib/shared-locations` + `relations` 180 verts, `tsc` vert sur l'arbre fusionné. iOS et Android par la CI.
+
+## 2026-11-18 — réveils de 3 h à 10 h : #19289 et #19354 fusionnées dans `dev`
+
+- Reprise : deux PR de la routine ouvertes, #19289 (liste seule, #19284) et #19354 (icône de cercle, #17013). Aucun
+  nouveau lot ouvert : le run a consisté à les mener à la fusion.
+- `origin/dev` fusionnée à la main dans les deux branches, sans conflit, à trois reprises (c11ad1d1, 5e5414d9, puis
+  47157ee64 pour #19289) ; gates locaux sur l'arbre fusionné : passerelle `sharedLocation` 188 verts (+ `deliveryFloor`,
+  197) et tsc, web `shared-locations` 140 verts, carte 40 verts, tsc web vert.
+- #19354 cédée à 07:09 UTC : une autre session de la routine y a poussé (`ff317d012`).
+- Fusion : les deux PR ont été fusionnées par le porteur le 2026-11-18 à 07:40 UTC (3031bed16 et 9b1090998). #19289 :
+  CI verte sur sa tête (23 succès, 0 échec). #19354 : les tranches du SDK iOS ont été annulées par la fusion, son verdict
+  iOS SDK est rouge par annulation, pas par un test. Le run iOS de `dev` qui suit (14404376b) rougit sur
+  `ProfilePendingActionsCard.swift` (lot profil, isolation `main actor` de `.module`) : étranger aux cercles.
+- Issues fermées avec leur preuve : #19284, #17013. Restent : #19287 (liste seule iOS + Android), #19288 (deux points
+  mineurs), #18714, #18580 ; #18351 attend la décision du porteur.
+- Prochain lot recommandé : #19287, puis #18714.
+## 2026-11-18 — réveil de 9 h : iOS et Android envoient la liste seule (#19287)
+
+- Reprise : #19289 (liste seule, passerelle + web) et #19354 (icône de cercle) sont fusionnées dans `dev`. Aucune branche
+  vivante n'écrit `SharedLocationSharingCenter` ni le centre Android : lot réservé avant toute écriture
+  (`claude/cercles-19287-liste-seule-natifs`).
+- Livré dans la PR #19652 (vers `dev`) : le SDK iOS et le modèle Android savent écrire une liste seule (aucune
+  `position`, aucun repli legacy) ; les deux centres essaient la liste seule d'abord, retombent sur l'envoi complet
+  sur `INVALID` (passerelle d'avant), et relisent ce qui est servi sur `NOT_SHARING`.
+- Audit adversarial : non bloquant, un constat MOYEN corrigé dans le même lot, SUR LES TROIS CLIENTS (web compris) :
+  `NOT_SHARING` couvre aussi une session reprise par un autre appareil ; une relecture en échec vidait la liste et
+  laissait la personne servie. Elle rend désormais « non confirmé » (retrait en attente, rejoué) ; seul un partage
+  servi VIDE vide la liste.
+- Mineurs consignés, sans lot : tout `INVALID` déclenche le repli avec position ; `untilStopped` dans une liste seule
+  serait refusé par le schéma strict (inatteignable aujourd'hui) ; `listOnlyState` plafonnerait un partage
+  « jusqu'à l'arrêt » à `durationMinutes` (à traiter quand la passerelle le servira) ; iOS envoie `shareBattery`
+  dans la liste seule, Android non (sans effet).
+- Gates : jvm-check `:core:model` BUILD SUCCESSFUL ; web 141/141 et `tsc` exit 0 ; gardes iOS exit 0. Swift et
+  `sdk-core` ne compilent pas dans le conteneur : la CI de la PR fait foi.
+- Lot suivant : voir les issues ouvertes du milestone des cercles (prochaine dimension non mûre de la liste seule :
+  le cas « jusqu'à l'arrêt » côté passerelle).

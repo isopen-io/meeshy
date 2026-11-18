@@ -32,6 +32,10 @@ const grant = () => ({
   inviter: { userId: 'alice', username: 'alice', displayName: 'Alice', avatar: null },
   invitee: { userId: DAVE, username: 'dave', displayName: 'Dave', avatar: null },
   activeCount: 2,
+  route: 'legacy-guest' as const,
+  conversation: { id: CONV, type: 'direct', encryptionMode: 'e2ee', isActive: true, closedAt: null, communityId: null },
+  community: null,
+  inviteeIsMember: false,
 });
 
 function harness(options: { refused?: boolean; alreadyInvited?: boolean } = {}) {
@@ -43,6 +47,8 @@ function harness(options: { refused?: boolean; alreadyInvited?: boolean } = {}) 
       rateLimiter: { checkLimit: async () => true },
       authorize: async () => (options.refused ? { ok: false as const, code: 'NOT_A_CONTACT' as const } : grant()),
       record: async () => !options.alreadyInvited,
+      rebranch: async () => ({ kind: 'failed' as const }),
+      admit: async () => 'refused' as const,
       credit,
       ring: async () => undefined,
       armExpiry: () => undefined,

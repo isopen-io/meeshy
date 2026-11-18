@@ -119,10 +119,30 @@ final class ProfilePrismLanguagesTests: XCTestCase {
         XCTAssertLessThan(list.lowerBound, toggle.lowerBound, "« Traduire automatiquement » reste sous la liste")
     }
 
+    func test_vitrine_atRest_hasNoIdentityFormCard_andReadsIdentityBeforeCircles() throws {
+        let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
+        let face = try XCTUnwrap(profile.components(separatedBy: "private var vitrineFace: some View {").last)
+        let editing = try XCTUnwrap(face.range(of: "if isEditing {"))
+        let form = try XCTUnwrap(face.range(of: "ProfileIdentitySection("))
+        let rest = try XCTUnwrap(face.range(of: "restingIdentity.meeshyCascade(rank: 0)"))
+        XCTAssertLessThan(editing.lowerBound, form.lowerBound, "la carte Identité n'existe qu'en édition")
+        XCTAssertLessThan(form.lowerBound, rest.lowerBound, "et le repos rend l'identité en texte, sans elle")
+        let order = ["restingIdentity.meeshyCascade(rank: 0)", "ProfileCirclesSection(", "activitySection.meeshyCascade(rank: 2)",
+                     "voiceBlock.meeshyCascade(rank: 3)", "ProfilePublicationsSection("]
+        let positions = try order.map { try XCTUnwrap(face.range(of: $0), $0).lowerBound }
+        XCTAssertEqual(positions, positions.sorted(), "identité, cercles, activité, voix, publications")
+    }
+
+    func test_restingBio_saysNothingWhenEmpty_neverAPlaceholder() {
+        XCTAssertNil(ProfileView.restingBio(nil))
+        XCTAssertNil(ProfileView.restingBio("  \n"))
+        XCTAssertEqual(ProfileView.restingBio(" J'écris en trois langues. "), "J'écris en trois langues.")
+    }
+
     func test_profile_restsTheChipsUnderTheBio_andNoLongerDrawsTheOldLanguageRows() throws {
         let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
         XCTAssertFalse(profile.contains("ProfileLanguageRow("))
-        let identity = try XCTUnwrap(profile.range(of: "ProfileIdentitySection("))
+        let identity = try XCTUnwrap(profile.range(of: "Self.restingBio(bio)"))
         let chips = try XCTUnwrap(profile.range(of: "ProfileLanguageChips("))
         let badge = try XCTUnwrap(profile.range(of: "showsEncryptionBadge(isEditing"))
         XCTAssertLessThan(identity.lowerBound, chips.lowerBound, "les pastilles suivent la bio")

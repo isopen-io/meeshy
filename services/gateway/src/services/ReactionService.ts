@@ -46,7 +46,16 @@ export interface AddReactionOptions {
   messageId: string;
   participantId: string;
   emoji: string;
+  /**
+   * #19650 (D4) — une réaction envoyée PENDANT un appel se pose sur sa bulle
+   * « Appel … en cours » (`metadata.kind === 'call-live'`), le seul message
+   * système qui l'accepte, et seulement par ce chemin (`callReactionOnBubble.ts`).
+   */
+  allowCallBubble?: boolean;
 }
+
+const isLiveCallBubble = (metadata: unknown): boolean =>
+  typeof metadata === 'object' && metadata !== null && (metadata as { kind?: unknown }).kind === 'call-live';
 
 export interface RemoveReactionOptions {
   messageId: string;
@@ -133,7 +142,7 @@ export class ReactionService {
       throw new Error('Cannot react to a deleted message');
     }
 
-    if (message.messageType === 'system') {
+    if (message.messageType === 'system' && !(options.allowCallBubble && isLiveCallBubble(message.metadata))) {
       throw new Error('Cannot react to a system message');
     }
 

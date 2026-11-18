@@ -63,12 +63,21 @@ describe('retirer une personne', () => {
   });
 
   test('la passerelle n’a plus de partage : rien à retirer chez personne, la liste se vide sans arrêt ni relevé', async () => {
-    const world = makeWorld({ stored: deuxPersonnes(), granted: false });
+    const world = makeWorld({ stored: deuxPersonnes(), granted: false, served: { recipients: [], expiresAt: null } });
     world.startQueue.push(async () => ({ kind: 'refused', outcome: 'not-sharing' }));
     expect(await world.center.stopSharing(AMI)).toBeNull();
     expect(world.source.prompts).toBe(0);
     expect(world.center.entry(AUTRE)).toBeNull();
     expect(world.stored()).toEqual(EMPTY_ROSTER);
+  });
+
+  test('« pas de partage » suivi d’une relecture qui échoue : la liste ne se vide jamais sur une panne, le retrait attend', async () => {
+    const world = makeWorld({ stored: deuxPersonnes(), granted: false, served: null });
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'not-sharing' }));
+    expect(await world.center.stopSharing(AMI)).not.toBeNull();
+    expect(world.server.reads).toBeGreaterThan(0);
+    expect(world.center.entry(AUTRE)).not.toBeNull();
+    expect(world.stored()).not.toEqual(EMPTY_ROSTER);
   });
 });
 

@@ -317,4 +317,54 @@ struct FirstUnreadBoundaryTests {
 
         #expect(result == FirstUnreadBoundary.Result(firstUnreadId: "m2", unreadCount: 1))
     }
+    // MARK: - La descente du curseur (#19599)
+
+    @Test("la descente garde la POSITION sous une dérive d'horloge — jamais le `min` du gateway")
+    func readCursorFloor_keepsPositionUnderClockDrift() {
+        // `position > horloge` est impossible sur donnée saine et c'est le SEUL
+        // cas où cette loi diverge de `readFloorOf` (gateway), qui y prend le
+        // MINIMUM — un cliquet de NON-RÉGRESSION pour ses trois consommateurs
+        // d'avant #19299, et qui ne se transpose pas à un séparateur.
+        let formatter = ISO8601DateFormatter()
+        let drifted = formatter.date(from: "2026-11-18T12:00:00Z")!
+        let clock = formatter.date(from: "2026-11-18T11:00:00Z")!
+
+        #expect(
+            FirstUnreadBoundary.readCursorFloor(
+                lastReadMessageCreatedAt: drifted, lastReadAt: clock) == drifted)
+    }
+
+    @Test("la descente retombe sur l'HORLOGE quand la position manque, et rend nil sans aucune des deux")
+    func readCursorFloor_fallsBackToClockThenNil() {
+        let formatter = ISO8601DateFormatter()
+        let clock = formatter.date(from: "2026-11-18T11:00:00Z")!
+
+        #expect(
+            FirstUnreadBoundary.readCursorFloor(
+                lastReadMessageCreatedAt: nil, lastReadAt: clock) == clock)
+        #expect(
+            FirstUnreadBoundary.readCursorFloor(
+                lastReadMessageCreatedAt: nil, lastReadAt: nil) == nil)
+    }
+
+    @Test("un curseur dont la POSITION dérive au-dessus de l'horloge n'élit pas le déjà-lu")
+    func driftedPosition_doesNotResurrectReadMessages() {
+        // Le même arbitrage, vu du séparateur : M1 et M2 sont sous la position,
+        // donc ATTEINTS par le curseur. Le `min` du gateway les ferait
+        // redevenir candidats en abaissant le plancher à l'horloge.
+        let messages = [
+            message("m1", other, "2026-11-18T11:30:00Z"),
+            message("m2", other, "2026-11-18T11:45:00Z"),
+            message("m3", other, "2026-11-18T12:30:00Z"),
+        ]
+        let formatter = ISO8601DateFormatter()
+
+        let result = FirstUnreadBoundary.resolve(
+            messages: messages, lastReadMessageId: nil,
+            lastReadAt: formatter.date(from: "2026-11-18T11:00:00Z")!,
+            lastReadMessageCreatedAt: formatter.date(from: "2026-11-18T12:00:00Z")!,
+            viewerId: viewer)
+
+        #expect(result == FirstUnreadBoundary.Result(firstUnreadId: "m3", unreadCount: 1))
+    }
 }

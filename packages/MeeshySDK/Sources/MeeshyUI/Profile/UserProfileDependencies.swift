@@ -16,6 +16,8 @@ public struct UserProfileDependencies {
     public let pendingQueue: (any ProfilePendingQueueProviding)?
     /// « Joindre des messages » à un signalement (#19609). Absente, ou sans limite annoncée, la feuille s'en passe.
     public let reportMessages: (any ProfileReportMessagesProviding)?
+    /// La pastille d'« Écrire » (#19646) : la liste des conversations du cache. Absente, aucune pastille.
+    public let directUnread: (any ProfileDirectUnreadProviding)?
 
     public init(
         currentUser: @escaping @MainActor () -> MeeshyUser?,
@@ -26,7 +28,8 @@ public struct UserProfileDependencies {
         inCommon: any ProfileInCommonLoading = ProfileInCommonUnavailable(),
         acquaintance: (any ProfileAcquaintanceProviding)? = nil,
         pendingQueue: (any ProfilePendingQueueProviding)? = nil,
-        reportMessages: (any ProfileReportMessagesProviding)? = nil
+        reportMessages: (any ProfileReportMessagesProviding)? = nil,
+        directUnread: (any ProfileDirectUnreadProviding)? = nil
     ) {
         self.currentUser = currentUser
         self.relationships = relationships
@@ -37,5 +40,6 @@ public struct UserProfileDependencies {
         self.acquaintance = acquaintance
         self.pendingQueue = pendingQueue
         self.reportMessages = reportMessages
+        self.directUnread = directUnread
     }
 }

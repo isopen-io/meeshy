@@ -68,4 +68,34 @@ class FirstUnreadBoundaryTest {
         assertThat(resolve(window, joinedAt = 1, hint = 0)?.firstUnreadId).isEqualTo("b")
         assertThat(resolve(window, lastReadAt = 1, hint = 1)?.firstUnreadId).isEqualTo("b")
     }
+
+    // --- La descente du curseur (#19599) ---
+
+    /**
+     * `position > horloge` est impossible sur donnée saine et c'est le SEUL cas où cette loi diverge
+     * de `readFloorOf` (gateway), qui y prend le MINIMUM — un cliquet de NON-RÉGRESSION pour ses
+     * trois consommateurs d'avant #19299, et qui ne se transpose pas à un séparateur.
+     */
+    @Test
+    fun `the cursor descent keeps the position under clock drift, never the gateway minimum`() {
+        assertThat(FirstUnreadBoundary.readCursorFloorMillis(12_000, 11_000)).isEqualTo(12_000)
+    }
+
+    @Test
+    fun `the cursor descent falls back to the clock, then to null`() {
+        assertThat(FirstUnreadBoundary.readCursorFloorMillis(null, 11_000)).isEqualTo(11_000)
+        assertThat(FirstUnreadBoundary.readCursorFloorMillis(null, null)).isNull()
+    }
+
+    /**
+     * Le même arbitrage, vu du séparateur : `a` et `b` sont sous la position, donc ATTEINTS par le
+     * curseur. Le `min` du gateway les ferait redevenir candidats en abaissant le plancher à
+     * l'horloge.
+     */
+    @Test
+    fun `a position drifted above the clock does not resurrect already read messages`() {
+        val window = listOf(msg("a", 11_300), msg("b", 11_450), msg("c", 12_300))
+        val result = resolve(window, lastReadAt = 11_000, lastReadCreatedAt = 12_000)
+        assertThat(result).isEqualTo(FirstUnreadBoundary.Result("c", 1))
+    }
 }

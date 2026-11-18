@@ -17,6 +17,7 @@ import me.meeshy.sdk.cache.store.inMemoryDatabase
 import me.meeshy.sdk.model.ApiCommunity
 import me.meeshy.sdk.model.ApiCommunityMember
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.CommunityDeletedEvent
 import me.meeshy.sdk.model.CommunityMemberChange
 import me.meeshy.sdk.model.CommunityUpdatedEvent
 import me.meeshy.sdk.model.MemberRole
@@ -257,5 +258,43 @@ class CommunityCacheRepositoryTest {
         assertThat(cache().get("community:detail", "c1", ApiCommunity.serializer())).isNull()
         assertThat(cache().get("community:members", "c1", membersSerializer)).isNull()
         coVerify(exactly = 0) { api.getMembers(any(), any(), any()) }
+    }
+
+    @Test fun `community deleted retire la ligne de la liste et oublie fiche, membres et channels`() = runTest {
+        val channels = ListSerializer(me.meeshy.sdk.model.ApiConversation.serializer())
+        cache().put("community:list", "page0", listOf(community("c0"), community("c1")), pageSerializer, null)
+        cache().put("community:detail", "c1", community("c1"), ApiCommunity.serializer(), null)
+        cache().put("community:members", "c1", listOf(line("u2")), membersSerializer, null)
+        cache().put("community:channels", "c1", emptyList(), channels, null)
+        cache().put("community:detail", "c2", community("c2"), ApiCommunity.serializer(), null)
+
+        repository().applyDeleted(CommunityDeletedEvent(communityId = "c1", reason = "deleted"))
+
+        assertThat(cache().get("community:list", "page0", pageSerializer)!!.value.map { it.id }).containsExactly("c0")
+        assertThat(cache().get("community:detail", "c1", ApiCommunity.serializer())).isNull()
+        assertThat(cache().get("community:members", "c1", membersSerializer)).isNull()
+        assertThat(cache().get("community:channels", "c1", channels)).isNull()
+        assertThat(cache().get("community:detail", "c2", ApiCommunity.serializer())).isNotNull()
+        coVerify(exactly = 0) { api.list(any(), any(), any()) }
+    }
+
+    @Test fun `le detail d une communaute disparue repart a froid, donc se relit et rend le refus de la passerelle`() = runTest {
+        cache().put("community:detail", "c1", community("c1"), ApiCommunity.serializer(), null)
+        coEvery { api.get("c1") } throws IOException("404")
+        val repository = repository()
+
+        repository.applyDeleted(CommunityDeletedEvent(communityId = "c1", reason = "deactivated"))
+        val failures = mutableListOf<Throwable>()
+        val results = repository.detail("c1", onError = { failures += it }).take(1).toList()
+
+        assertThat(results.single()).isEqualTo(CacheResult.Empty)
+    }
+
+    @Test fun `une charge sans communaute ne touche a rien`() = runTest {
+        cache().put("community:list", "page0", listOf(community("c1")), pageSerializer, null)
+
+        repository().applyDeleted(CommunityDeletedEvent(communityId = ""))
+
+        assertThat(cache().get("community:list", "page0", pageSerializer)!!.value.map { it.id }).containsExactly("c1")
     }
 }

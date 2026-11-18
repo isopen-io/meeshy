@@ -8,8 +8,6 @@ import MeeshyUI
 struct CreateShareLinkView: View {
     let onCreate: (CreatedShareLink) -> Void
 
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     @Environment(\.dismiss) private var dismiss
@@ -58,7 +56,7 @@ struct CreateShareLinkView: View {
             accent: accent,
             glyph: .close
         ) {
-            VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                 conversationSection
                 identitySection
                 accessSection
@@ -66,13 +64,11 @@ struct CreateShareLinkView: View {
                 limitsSection
                 languagesSection
                 LinkTicketPreviewView(preview: draft.ticket, tint: accent, systemImage: "bubble.left.and.bubble.right")
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.top, MeeshySpacing.lg)
                 createButton
-                    .padding(.top, MeeshySpacing.sm)
-                    .padding(.bottom, 40)
             }
+            .padding(.horizontal, MeeshySpacing.lg)
             .padding(.top, MeeshySpacing.sm)
+            .padding(.bottom, 40)
         }
         .sheet(isPresented: $showConversationPicker) {
             ConversationPickerSheet(
@@ -92,7 +88,7 @@ struct CreateShareLinkView: View {
     // MARK: - Section: Conversation
 
     private var conversationSection: some View {
-        formSection(title: String(localized: "share.link.create.section.conversation", defaultValue: "Conversation", bundle: .main), icon: "bubble.left.and.bubble.right.fill") {
+        formSection(title: String(localized: "share.link.create.section.conversation", defaultValue: "Conversation", bundle: .main)) {
             MeeshyToggleRow(
                 content: MeeshyToggleRowContent(
                     title: selectedConversation?.name
@@ -105,13 +101,12 @@ struct CreateShareLinkView: View {
                     if let conv = selectedConversation {
                         conversationTypeIcon(conv.type)
                     } else {
-                        iconBadge("plus.circle.dashed", color: MeeshyColors.shareAccentHex)
+                        medallion("plus.circle.dashed", color: MeeshyColors.shareAccentHex)
                     }
                 },
                 titleAccessory: { MeeshyToggleRowNoSlot() },
                 trailing: { MeeshyToggleRowNoSlot() }
             )
-            .background(rowBackground)
             .accessibilityLabel(selectedConversation.map { "\($0.name), \($0.type.displayLabel)" }
                 ?? String(localized: "share.link.create.choose_group", defaultValue: "Choisir un groupe ou une communauté", bundle: .main))
             .accessibilityHint(String(localized: "share.link.create.conversation.a11yHint", defaultValue: "Choisit la conversation à partager", bundle: .main))
@@ -121,7 +116,7 @@ struct CreateShareLinkView: View {
     // MARK: - Section: Identité du lien
 
     private var identitySection: some View {
-        formSection(title: String(localized: "share.link.create.section.identity", defaultValue: "Identité du lien", bundle: .main), icon: "tag.fill") {
+        formSection(title: String(localized: "share.link.create.section.identity", defaultValue: "Identité du lien", bundle: .main)) {
             VStack(spacing: 0) {
                 formField(String(localized: "share.link.create.field.name", defaultValue: "Nom du lien", bundle: .main), placeholder: String(localized: "share.link.create.field.name.placeholder", defaultValue: "ex: Partage Twitter", bundle: .main), text: $linkName, input: .sentence)
                 divider
@@ -131,7 +126,6 @@ struct CreateShareLinkView: View {
                               openNoteID: $openNoteID, onChange: { customSlug = $0 })
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.vertical, MeeshySpacing.md)
-                    .background(rowBackground)
             }
         }
     }
@@ -139,7 +133,7 @@ struct CreateShareLinkView: View {
     // MARK: - Section: Accès invités
 
     private var accessSection: some View {
-        formSection(title: String(localized: "share.link.create.section.access", defaultValue: "Demander aux invités", bundle: .main), icon: "person.badge.key.fill",
+        formSection(title: String(localized: "share.link.create.section.access", defaultValue: "Demander aux invités", bundle: .main),
                     subtitle: String(localized: "share.link.create.section.access.subtitle", defaultValue: "Ce que les invités doivent fournir", bundle: .main)) {
             VStack(spacing: 0) {
                 ruleRow(
@@ -183,7 +177,7 @@ struct CreateShareLinkView: View {
     // MARK: - Section: Permissions
 
     private var permissionsSection: some View {
-        formSection(title: String(localized: "share.link.create.section.permissions", defaultValue: "Autoriser", bundle: .main), icon: "slider.horizontal.3",
+        formSection(title: String(localized: "share.link.create.section.permissions", defaultValue: "Autoriser", bundle: .main),
                     subtitle: String(localized: "share.link.create.section.permissions.subtitle", defaultValue: "Ce que les invités anonymes peuvent faire", bundle: .main)) {
             VStack(spacing: 0) {
                 ruleRow(
@@ -222,12 +216,11 @@ struct CreateShareLinkView: View {
     /// « Expire » en crans (24 h · 7 j · 30 j · Jamais, K04) et « Nombre d'entrées » au pas-à-pas du kit (K53) :
     /// planche `Lien-Creer`. Le plafond reste débrayable : un lien sans limite garde son chemin.
     private var limitsSection: some View {
-        formSection(title: String(localized: "share.link.create.section.limits", defaultValue: "Limites", bundle: .main), icon: "gauge.with.dots.needle.bottom.50percent",
+        formSection(title: String(localized: "share.link.create.section.limits", defaultValue: "Limites", bundle: .main),
                     subtitle: String(localized: "share.link.create.section.limits.subtitle", defaultValue: "Nombre d’utilisations et durée du lien", bundle: .main)) {
             VStack(spacing: 0) {
                 LinkExpiryPicker(notches: LinkExpiryNotch.shareNotches, selection: expiry, onChange: { expiry = $0 })
                     .padding(MeeshySpacing.mdPlus)
-                    .background(rowBackground)
                 divider
                 MeeshyToggleRow(
                     content: MeeshyToggleRowContent(
@@ -238,11 +231,10 @@ struct CreateShareLinkView: View {
                         accessory: .toggle(isOn: maxUsesEnabled)
                     ),
                     action: { maxUsesEnabled.toggle() },
-                    leading: { iconBadge("person.2.fill", color: MeeshyColors.shareAccentHex) },
+                    leading: { medallion("person.2.fill", color: MeeshyColors.shareAccentHex) },
                     titleAccessory: { MeeshyToggleRowNoSlot() },
                     trailing: { MeeshyToggleRowNoSlot() }
                 )
-                .background(rowBackground)
 
                 if maxUsesEnabled {
                     divider
@@ -259,7 +251,6 @@ struct CreateShareLinkView: View {
                     )
                     .frame(maxWidth: .infinity)
                     .padding(MeeshySpacing.mdPlus)
-                    .background(rowBackground)
                     .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
                 }
             }
@@ -271,12 +262,11 @@ struct CreateShareLinkView: View {
     /// « Langues autorisées · Toutes » (planche `Lien-Creer`) : la rangée du kit (K06) dit le choix ; ouverte, la
     /// bascule « Toutes » et les puces des langues (K04). La passerelle accepte la liste à la création.
     private var languagesSection: some View {
-        formSection(title: LinkCreationCopy.languages, icon: "character.bubble") {
+        formSection(title: LinkCreationCopy.languages) {
             VStack(spacing: 0) {
                 MeeshyToggleRow(LinkCreationCopy.languages, systemImage: "character.bubble",
                                 accessory: .value(languagesSummary), tint: accent,
                                 action: { showsLanguages.toggle() })
-                    .background(rowBackground)
                 if showsLanguages {
                     divider
                     VStack(alignment: .leading, spacing: MeeshySpacing.md) {
@@ -296,7 +286,6 @@ struct CreateShareLinkView: View {
                         }
                     }
                     .padding(MeeshySpacing.mdPlus)
-                    .background(rowBackground)
                 }
             }
         }
@@ -348,16 +337,9 @@ struct CreateShareLinkView: View {
     // MARK: - Bouton créer
 
     private var createButton: some View {
-        VStack(spacing: MeeshySpacing.md) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             if let error = errorMessage {
-                HStack(spacing: MeeshySpacing.sm) {
-                    Image(systemName: "exclamationmark.circle.fill")
-                        .foregroundStyle(MeeshyColors.error)
-                    Text(error)
-                        .font(.footnote)
-                        .foregroundStyle(MeeshyColors.error)
-                }
-                .padding(.horizontal, MeeshySpacing.xl)
+                MeeshyNote(error, kind: .warn)
             }
 
             MeeshySplitActionButton(
@@ -369,58 +351,31 @@ struct CreateShareLinkView: View {
                 isEnabled: draft.canCreate,
                 action: create
             )
-            .padding(.horizontal, MeeshySpacing.xl)
         }
     }
 
     // MARK: - Helpers UI
 
-    private var rowBackground: some View {
-        MeeshyColors.surfaceFill(isDark: isDark)
-    }
-
+    /// Le filet entre deux rangées : celui de la carte du kit (K43).
     private var divider: some View {
-        Divider()
-            .background(MeeshyColors.hairline(isDark: isDark))
+        MeeshyGroupCardDivider()
     }
 
+    /// Un bloc du formulaire : l'en-tête du kit (K44), sa phrase d'orientation en note (K46), ses rangées dans UNE
+    /// carte du kit (K43). Rien n'est dessiné ici.
     private func formSection<Content: View>(
         title: String,
-        icon: String,
         subtitle: String? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                Image(systemName: icon)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(accent)
-                    .accessibilityHidden(true)
-                Text(title.uppercased())
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(theme.textSecondary)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            .padding(.horizontal, MeeshySpacing.xl)
-            .padding(.top, MeeshySpacing.lg)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(title)
-            .accessibilityAddTraits(.isHeader)
-
+            MeeshySectionHeader(title: title, form: .overline, size: .sheet)
             if let subtitle {
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(theme.textMuted)
-                    .padding(.horizontal, MeeshySpacing.xl)
+                MeeshyNote(subtitle)
             }
-
-            content()
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(MeeshyColors.hairline(isDark: isDark), lineWidth: 1)
-                )
-                .padding(.horizontal, MeeshySpacing.lg)
+            MeeshyGroupCard(layout: .group, tint: accent) {
+                content()
+            }
         }
     }
 
@@ -428,7 +383,6 @@ struct CreateShareLinkView: View {
         LinksFormField(label: label, prompt: placeholder, text: text, input: input)
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, MeeshySpacing.md)
-            .background(rowBackground)
     }
 
     /// Une règle du lien : la ligne du kit, l'icône en tête, la bascule au bout.
@@ -444,25 +398,17 @@ struct CreateShareLinkView: View {
             MeeshyToggleRow(
                 content: MeeshyToggleRowContent(title: title, accessory: .toggle(isOn: isOn.wrappedValue)),
                 action: { isOn.wrappedValue.toggle() },
-                leading: { iconBadge(icon, color: iconColor) },
+                leading: { medallion(icon, color: iconColor) },
                 titleAccessory: { MeeshyToggleRowNoSlot() },
                 trailing: { MeeshyToggleRowNoSlot() }
             )
         }
         .padding(.trailing, note == nil ? 0 : MeeshySpacing.mdPlus)
-        .background(rowBackground)
     }
 
-    private func iconBadge(_ icon: String, color: String) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                .fill(Color(hex: color).opacity(MeeshyOpacity.light))
-                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
-            Image(systemName: icon)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color(hex: color))
-        }
-        .accessibilityHidden(true)
+    /// Le glyphe d'une rangée : le médaillon du kit (K45), muet — la rangée parle.
+    private func medallion(_ icon: String, color: String) -> some View {
+        MeeshyMedallion(systemImage: icon, tint: Color(hex: color), shape: .squircle, size: .s36)
     }
 
     private func conversationTypeIcon(_ type: Conversation.ConversationType) -> some View {
@@ -474,7 +420,7 @@ struct CreateShareLinkView: View {
         case .broadcast:  ("megaphone.fill", MeeshyColors.trackingAccentHex)
         default:         ("bubble.left.and.bubble.right.fill", MeeshyColors.shareAccentHex)
         }
-        return iconBadge(icon, color: color)
+        return medallion(icon, color: color)
     }
 
     // MARK: - Action

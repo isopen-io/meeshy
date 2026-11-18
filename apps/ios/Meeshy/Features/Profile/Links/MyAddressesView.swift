@@ -20,6 +20,9 @@ struct MyAddressesView: View {
     @State private var removing: ProfileAddress?
     @State private var seenBy: RelationLevel = .public
     @State private var seenAsShown = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool { MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion) }
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -37,7 +40,9 @@ struct MyAddressesView: View {
                         }
                     }
                     list(scrollToForm: {
-                        withAnimation(.easeInOut) { proxy.scrollTo(Self.formAnchor, anchor: .top) }
+                        meeshyWithMotion(.travel, reduceMotion: reduceMotion) {
+                            proxy.scrollTo(Self.formAnchor, anchor: .top)
+                        }
                     })
                     MyAddressForm(store: store, accent: accent)
                         .id(Self.formAnchor)
@@ -114,11 +119,9 @@ struct MyAddressesView: View {
                 kind: .empty,
                 title: MyAddressesCopy.emptyTitle,
                 primary: MeeshyStateBlockAction(title: MyAddressesCopy.addTitle, systemImage: "plus", perform: scrollToForm),
-                art: .glyph,
+                art: .ghostTiles(MyAddressesCopy.emptyGhostTiles),
                 tint: accent
-            ) {
-                MyAddressesEmptyTiles(accent: accent)
-            }
+            )
         default:
             MeeshyReorderList(
                 label: MyAddressesCopy.listLabel,
@@ -138,34 +141,6 @@ struct MyAddressesView: View {
                              onRemove: { removing = address })
             }
         }
-    }
-}
-
-/// Le vide de « Mes adresses » (planche `Etat-Vide` vue 2) : trois tuiles fantômes — Site, Musique, Photos — qui disent
-/// ce qu'une adresse peut être. Muettes pour le lecteur d'écran : le titre du bloc le dit.
-struct MyAddressesEmptyTiles: View {
-    let accent: Color
-    private static let glyphs: [ProfileAddressGlyph] = [.site, .music, .photos]
-
-    var body: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            ForEach(Self.glyphs, id: \.self) { glyph in
-                VStack(spacing: MeeshySpacing.xs) {
-                    Image(systemName: ProfileLinksCopy.glyph(of: glyph))
-                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                        .foregroundStyle(accent)
-                    Text(ProfileLinksCopy.glyphName(glyph))
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, minHeight: 72)
-                .background(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                    .strokeBorder(Color.secondary.opacity(MeeshyOpacity.light),
-                                  style: StrokeStyle(lineWidth: MeeshyBorder.emphasis, dash: [4, 3])))
-            }
-        }
-        .accessibilityHidden(true)
     }
 }
 
@@ -231,6 +206,9 @@ struct MyAddressesVitrinePreview: View {
     let accent: Color
 
     @State private var picking = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool { MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion) }
     private var theme: ThemeManager { ThemeManager.shared }
 
     private var seen: [ProfileAddress] { VitrineSeenAs.addresses(addresses, by: level) }
@@ -238,7 +216,9 @@ struct MyAddressesVitrinePreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             MeeshySectionHeader(title: MyAddressesCopy.onVitrine, lead: { EmptyView() }, accessory: { viewedBy })
-            if picking { circlePicker }
+            if picking {
+                circlePicker.meeshyTransition(.opacity.combined(with: .move(edge: .top)))
+            }
             MeeshyGroupCard(tint: accent) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     identity
@@ -252,7 +232,7 @@ struct MyAddressesVitrinePreview: View {
     private var viewedBy: some View {
         MeeshyBadge(.label(MyAddressesCopy.viewedBy(level)), leading: .systemImage("eye"), surface: .tonal,
                     kind: .accent, tint: accent, size: .s36,
-                    onPress: { withAnimation(.easeInOut) { picking.toggle() } })
+                    onPress: { meeshyWithMotion(.morph, reduceMotion: reduceMotion) { picking.toggle() } })
             .accessibilityHint(MyAddressesCopy.pickCircle)
             .accessibilityIdentifier("profile.addresses.preview.viewedBy")
     }
@@ -269,7 +249,7 @@ struct MyAddressesVitrinePreview: View {
             size: .compact,
             onChange: { _, chosen in
                 level = chosen
-                withAnimation(.easeInOut) { picking = false }
+                meeshyWithMotion(.morph, reduceMotion: reduceMotion) { picking = false }
             }
         )
     }

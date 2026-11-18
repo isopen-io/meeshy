@@ -15,17 +15,18 @@ extension UserProfileSheet {
     @ViewBuilder
     var vitrineFace: some View {
         VStack(spacing: MeeshySpacing.xxl + MeeshySpacing.xs) {
-            aboutSection
-            withThemSection
-            liveSection
-            ProfilePendingSection.of(self)
-            voiceSection
-            gameSectionCard
-            statsSection
-            commonSection
-            publicationsSection
-            ProfileAcquaintanceSection.of(self)
+            aboutSection.meeshyCascade(rank: 0)
+            withThemSection.meeshyCascade(rank: 1)
+            liveSection.meeshyCascade(rank: 2)
+            ProfilePendingSection.of(self).meeshyCascade(rank: 3)
+            voiceSection.meeshyCascade(rank: 4)
+            gameSectionCard.meeshyCascade(rank: 5)
+            statsSection.meeshyCascade(rank: 6)
+            commonSection.meeshyCascade(rank: 7)
+            publicationsSection.meeshyCascade(rank: 8)
+            ProfileAcquaintanceSection.of(self).meeshyCascade(rank: 9)
         }
+        .meeshyCascadeFace()
     }
 
     // MARK: - En commun (l'ancien onglet Conversations)
