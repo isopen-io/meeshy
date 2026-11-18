@@ -5,7 +5,7 @@ import { useStore } from 'zustand/react';
 import { currentIdentity } from '@/lib/api/client';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
-import { ownedApiDeps } from '@/lib/api/owned-deps';
+import { ownedDepsOf } from '@/lib/api/owned-deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { relationLinksQueryOptions, type RelationDeps } from '@/lib/api/relations';
 import { watchRealtime, type WatchRealtime } from '@/lib/api/watch-realtime';
@@ -14,7 +14,7 @@ import { translateCircles, type CirclesCatalogKey } from '@/lib/i18n-circles-cat
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { SocketClient } from '@/lib/net/socket';
 import { createTalkieCapture, talkieEncodingSupportedOnce } from '@/lib/talkie/talkie-encoder';
-import { bindTalkieSender, createTalkieSender, type TalkieCaptureFactory, type TalkieSendOutcome, type TalkieSendPhase, type TalkieVoiceCopier, type TalkieVoiceCopy } from '@/lib/talkie/talkie-sender';
+import { bindTalkieSender, createTalkieSender, type TalkieCaptureFactory, type TalkieSendOutcome, type TalkieSendPhase, type TalkieVoiceCopier } from '@/lib/talkie/talkie-sender';
 import { createTalkieVoiceCopier } from '@/lib/talkie/talkie-voice-copy';
 import { useCirclesCatalog } from '@/lib/use-circles-catalog';
 import { layerMotion, useLayerPresence } from '@/lib/view/dialog-exit';
@@ -177,14 +177,15 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   );
 });
 
-/** Les requêtes d'une copie vocale (chercher la conversation, téléverser, envoyer) parlent au nom de qui a appuyé (audit #19352, X1). */
-export const talkieCopyDeps = (copy: TalkieVoiceCopy): ConversationsDeps => ownedApiDeps(copy.owner);
-
-/** La copie vocale vivante (#16698) : passerelle de l'application, langue de l'interface prêtée à la voix. */
+/**
+ * La copie vocale vivante (#16698) : passerelle de l'application, langue de l'interface prêtée à la voix. Ses requêtes
+ * (chercher la conversation, téléverser, envoyer) parlent au nom de qui a appuyé (audit #19352, X1) ; `base` n'est
+ * injecté que par les témoins, qui y posent un transport de passerelle.
+ */
 export const liveTalkieCopier =
-  (language: () => string): TalkieVoiceCopier =>
+  (language: () => string, base: ConversationsDeps = apiDeps): TalkieVoiceCopier =>
   (copy) =>
-    createTalkieVoiceCopier({ deps: talkieCopyDeps(copy), language })(copy);
+    createTalkieVoiceCopier({ deps: ownedDepsOf(base, copy.owner), language })(copy);
 
 export function useTalkieSender({
   watch,

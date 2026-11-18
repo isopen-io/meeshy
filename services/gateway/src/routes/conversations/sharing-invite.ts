@@ -231,7 +231,7 @@ export function registerInviteRoute(
       });
 
       if (entry.outcome === 'closed') {
-        return sendError(reply, 410, 'Cette conversation est terminée');
+        return sendError(reply, 410, 'Cette conversation est terminée', { code: 'CONVERSATION_CLOSED' });
       }
 
       if (entry.outcome === 'banned') {

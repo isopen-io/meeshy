@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
+import { IDENTITY_CHANGED } from '@/lib/api/http';
 import { updatePublication } from '@/lib/api/publication-update';
 
 import type { ChoosableAudience } from './publication-audience';
@@ -43,6 +44,8 @@ export async function saveStudioEdit(params: {
     deps: { ...params.api, queryClient: params.queryClient },
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
+  /* Le compte a changé avant l'émission (audit #19352, X1) : rien n'est parti, rien n'a échoué. */
+  if (!updated.ok && updated.code === IDENTITY_CHANGED) return { kind: 'aborted', published: 0, total };
   if (!updated.ok) {
     return { kind: 'failed', failure: studioFailureKey(updated, 'publish') ?? 'story.studio.failure.network', published: 0, total };
   }

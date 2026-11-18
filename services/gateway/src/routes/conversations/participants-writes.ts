@@ -601,7 +601,7 @@ export function registerParticipantWriteRoutes(
         select: { isActive: true, closedAt: true, communityId: true, type: true, encryptionMode: true },
       });
       if (conversation && (conversation.isActive === false || conversation.closedAt)) {
-        return sendError(reply, 410, 'Cette conversation est terminée');
+        return sendError(reply, 410, 'Cette conversation est terminée', { code: 'CONVERSATION_CLOSED' });
       }
       // #17117 — un seul membre Meeshy dans une conversation externe ; #16188 —
       // un tête-à-tête chiffré de bout en bout reste à deux.
