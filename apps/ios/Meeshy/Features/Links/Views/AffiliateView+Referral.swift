@@ -262,7 +262,7 @@ extension AffiliateView {
         case .opened: state = ReferralCopy.openedNotJoined
         case .joined: state = ReferralCopy.joinedMeeshy
         }
-        guard let sentAt = invitation.sentAt.flatMap { WireDate.date(from: $0) } else { return state }
+        guard let sentAt = invitation.sentAt.flatMap({ WireDate.date(from: $0) }) else { return state }
         return ReferralCopy.sentLine(sentAt.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)), state)
     }
 
