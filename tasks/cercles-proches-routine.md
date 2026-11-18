@@ -1445,3 +1445,9 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   cohésion, inscription des tests) vertes ; `packages/shared/__tests__/ci` 214/215, le rouge
   (`call:conversation-changed`, parité socket) vient du lot appels de `dev`, étranger aux cercles. Swift et `sdk-core`
   se prouvent par la CI de la PR.
+
+## 2026-11-18 — réveil de 17 h : #19683 (un seul appareil publie) menée vers la fusion
+
+- Reprise : #19683 toujours ouverte ; le porteur y avait fusionné `dev` à 16:29 UTC (4832809f7). Aucun nouveau lot ouvert.
+- `origin/dev` (2fcb40b94 : profil iOS, leçon jvm-check) fusionnée sans conflit, aucun fichier du lot touché ; la
+  branche contient de nouveau la tête de `dev`. Fusion de la PR dès la CI verte sur sa tête.
