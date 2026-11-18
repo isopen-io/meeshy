@@ -227,15 +227,15 @@ trois suites passent désormais par `findFirstIn`.
 
 ## Suivis ouverts par l'audit
 
-- **La RÉTRACTATION a reçu un arbitrage que le dépôt réserve au produit.**
+- **#19603 — la RÉTRACTATION a reçu un arbitrage que le dépôt réserve au produit.**
   `ReactionService.ts:304-318` tranche, pour l'axe CLÔTURE, qu'« un conteneur
   mort continue d'admettre le RETRAIT de ce qu'il porte déjà » — et dit qu'étendre
   la garde au retrait « demande un arbitrage produit et non un correctif ». Ce
   lot l'a étendue sur l'axe BANNISSEMENT sans le dire. Le témoin qui gèle ce
   choix n'a pas rougi parce qu'il garde l'autre axe : « une classe gardée ne
   garde pas sa voisine », deux fois dans le même lot.
-- **`ReactionService.ts:116` et `:172` — le point de CONVERGENCE des quatre
-  transports — épelle encore `isActive: true` NU**, là où la jumelle du MESSAGE
+- **#19604 — `ReactionService.ts:116` et `:172`, le point de CONVERGENCE des
+  quatre transports, épelle encore `isActive: true` NU**, là où la jumelle du MESSAGE
   applique la loi à son propre point de convergence
   (`MessagingService.ts:180`, `:202`). Aucun trou vivant (les cinq portes
   ferment avant), mais c'était le correctif à UN site plutôt qu'à cinq.
