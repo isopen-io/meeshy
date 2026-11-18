@@ -83,3 +83,25 @@ export interface CommunityMemberRoleUpdatedEventData {
   readonly memberCount: number;
   readonly at: string;
 }
+
+/**
+ * `community:deleted` (#19590, dernière tranche de #16857) — la communauté
+ * n'existe plus pour ses membres : supprimée par son créateur (`deleted`) ou
+ * désactivée par l'équipe (`deactivated`).
+ *
+ * Audience : la room personnelle de chaque membre ACTIF et du créateur, lue
+ * AVANT l'écriture (la suppression efface les lignes d'appartenance), une fois
+ * chacun. Jamais un ancien membre, jamais un non-membre.
+ *
+ * La charge ne dit que QUOI a disparu et QUAND : ni membres, ni créateur, ni
+ * identité. Le client retire la communauté de ses caches ; une relecture du
+ * détail repasse par les gardes de la passerelle (404). Une réactivation par
+ * l'équipe est annoncée par `community:updated`. `at` est une chaîne ISO.
+ */
+export type CommunityDeletedReason = 'deleted' | 'deactivated';
+
+export interface CommunityDeletedEventData {
+  readonly communityId: string;
+  readonly reason: CommunityDeletedReason;
+  readonly at: string;
+}
