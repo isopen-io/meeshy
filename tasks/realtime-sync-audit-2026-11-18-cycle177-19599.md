@@ -140,6 +140,12 @@ vert, donc il doit d'abord prouver qu'il voit.
   `check_test_registration.sh` (2 039 fichiers de test inscrits) — les trois vertes ;
 - gardes de journal : `journal-one-file-per-entry-guard` (18) et
   `lessons-numbering-single-key-guard` — vertes avec l'ADR et la leçon de ce lot ;
+- **`dev` fusionnée dans la branche** (#18654) : `origin/dev` à
+  `dfd1b74eb6e4f967b0c04eb7d64f3a0bd6b663d2` est CONTENUE dans la branche, et
+  les gates ci-dessus ont été rejoués sur l'arbre FUSIONNÉ — 17 suites et
+  **328 témoins** côté gateway, le témoin neuf de `dev`
+  (`CallService.directCallTurnedGroup`) compris. Aucun chemin commun entre les
+  deux côtés : `dev` n'a touché que la surface des appels ;
 - **aucun comportement de production ne change** : les deux formes coïncident
   sur toute donnée saine, et l'arbitrage retenu est celui déjà en place des deux
   côtés. Ce lot rend VÉRIFIABLE ce qui ne l'était pas.
