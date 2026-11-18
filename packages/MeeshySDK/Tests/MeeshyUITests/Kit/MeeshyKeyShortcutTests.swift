@@ -12,26 +12,26 @@ struct MeeshyKeyShortcutTests {
     @Test("⌘M devient la frappe Commande m, depuis la même combinaison que la touche dessinée")
     func commandLetter_becomesTheRecognizedShortcut() throws {
         let shortcut = try #require(MeeshyKeyShortcutLaw.keyboardShortcut(for: [.primary, .character("M")]))
-        #expect(shortcut.key == KeyEquivalent("m"))
+        #expect(shortcut.key.character == "m")
         #expect(shortcut.modifiers == .command)
     }
 
     @Test("⌘↵, ⇧⌘K et Échap seule gardent leurs modificateurs, dans l'ordre de frappe")
     func namedKeysAndModifiers_mapOneToOne() throws {
         let write = try #require(MeeshyKeyShortcutLaw.keyboardShortcut(for: [.primary, .enter]))
-        #expect(write.key == .return)
+        #expect(write.key.character == KeyEquivalent.return.character)
         #expect(write.modifiers == .command)
 
         let search = try #require(MeeshyKeyShortcutLaw.keyboardShortcut(for: [.shift, .primary, .character("k")]))
-        #expect(search.key == KeyEquivalent("k"))
+        #expect(search.key.character == "k")
         #expect(search.modifiers == [.command, .shift])
 
         let close = try #require(MeeshyKeyShortcutLaw.keyboardShortcut(for: [.escape]))
-        #expect(close.key == .escape)
+        #expect(close.key.character == KeyEquivalent.escape.character)
         #expect(close.modifiers == [])
 
         let back = try #require(MeeshyKeyShortcutLaw.keyboardShortcut(for: [.option, .control, .left]))
-        #expect(back.key == .leftArrow)
+        #expect(back.key.character == KeyEquivalent.leftArrow.character)
         #expect(back.modifiers == [.option, .control])
     }
 
@@ -71,10 +71,10 @@ struct MeeshyKeyShortcutTests {
     @Test("les raccourcis de la fiche : Carte est ⌘M, Écrire est ⌘↵")
     func profileShortcuts_areTheBoardKeys() throws {
         let map = try #require(MeeshyKeyShortcutLaw.keyboardShortcut(for: ProfileKeyShortcuts.map))
-        #expect(map.key == KeyEquivalent("m"))
+        #expect(map.key.character == "m")
         #expect(map.modifiers == .command)
         let write = try #require(MeeshyKeyShortcutLaw.keyboardShortcut(for: ProfileKeyShortcuts.write))
-        #expect(write.key == .return)
+        #expect(write.key.character == KeyEquivalent.return.character)
         #expect(write.modifiers == .command)
     }
 

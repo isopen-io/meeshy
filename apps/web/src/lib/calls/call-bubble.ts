@@ -47,9 +47,6 @@ export function pillSwipeOutcome({ travelled, sharing }: { readonly travelled: n
 const MARGIN = 12;
 const TAP_SLOP = 8;
 const KEY_STEP = 0.1;
-/** La barre de la bulle (micro, image dans l'image, sortie, raccrocher) : des cibles de 44. */
-export const BUBBLE_BAR = 48;
-const TARGET = 44;
 /** iOS : 25 % de zoom parcourt un palier (`magnificationSensitivity`). */
 const PINCH_SENSITIVITY = 4;
 /** Ctrl + molette : ce cumul de `deltaY` fait un palier (un pincement de pavé tactile en émet beaucoup de petits). */
@@ -61,15 +58,10 @@ const FRAME: Readonly<Record<BubbleTier, { readonly width: number; readonly vide
   large: { width: 216, video: 284, portrait: 152 },
 };
 
-/** Les rangées de la barre : autant de cibles de 44 par rangée que la largeur en porte. */
-export function bubbleBarRows(width: number, controls: number): number {
-  return Math.max(1, Math.ceil(controls / Math.max(1, Math.floor(width / TARGET))));
-}
-
-/** Vidéo : un cadre portrait ; audio : un carré pour l'avatar. La barre de commandes est comprise. */
-export function bubbleSize(kind: 'video' | 'portrait', tier: BubbleTier = 'small', controls = 3): Size {
+/** Vidéo : un cadre portrait ; audio : un carré pour l'avatar. #19696 — aucune barre de commandes : la personne et la durée seules. */
+export function bubbleSize(kind: 'video' | 'portrait', tier: BubbleTier = 'small'): Size {
   const frame = FRAME[tier];
-  return { width: frame.width, height: frame[kind] + bubbleBarRows(frame.width, controls) * BUBBLE_BAR };
+  return { width: frame.width, height: frame[kind] };
 }
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
@@ -102,8 +94,36 @@ export function bubbleTranslate({ origin, drag }: { readonly origin: { readonly 
   return `${origin.left + (drag?.x ?? 0)}px calc(${origin.top + (drag?.y ?? 0)}px + env(safe-area-inset-top))`;
 }
 
-/** L'aimantation au bord ne joue que `translate`, au tempo d'avant (#11314) ; le glissé et le pincement n'en ont pas. */
-export const BUBBLE_SETTLE_TRANSITION = 'translate 180ms ease-out';
+/** L'aimantation au bord ne joue que `translate` (#11314) ; le glissé et le pincement n'en ont pas. #19701 — assez longue et
+    freinée en fin de course pour qu'on VOIE la vignette glisser jusqu'à son bord, comme le ressort d'iOS
+    (`CallBubbleGestureResolver.glideResponse`). « Réduire les animations » la coupe (règle générale d'`app.css`). */
+export const BUBBLE_SETTLE_TRANSITION = 'translate 420ms cubic-bezier(0.22, 1, 0.36, 1)';
+
+/** #19701 — l'élan : la vitesse des derniers instants du doigt (px/ms) se projette sur cette durée. */
+export const GLIDE_PROJECTION_MS = 180;
+/** Le plus long chemin que l'élan ajoute au geste, par axe (`CallBubbleGestureResolver.maxGlide` d'iOS). */
+export const MAX_GLIDE = 320;
+/** Les échantillons plus vieux que ceci ne disent plus la vitesse du lâcher. */
+const VELOCITY_WINDOW_MS = 100;
+
+export type PointerSample = Point & { readonly t: number };
+
+/** La vitesse du doigt au lâcher (px/ms), lue sur les échantillons des derniers instants ; immobile ou trop ancien ⇒ nulle. */
+export function releaseVelocity(samples: readonly PointerSample[]): Point {
+  const last = samples.at(-1);
+  if (last === undefined) return { x: 0, y: 0 };
+  const recent = samples.filter((sample) => last.t - sample.t <= VELOCITY_WINDOW_MS);
+  const first = recent[0];
+  if (first === undefined || last.t <= first.t) return { x: 0, y: 0 };
+  const elapsed = last.t - first.t;
+  return { x: (last.x - first.x) / elapsed, y: (last.y - first.y) / elapsed };
+}
+
+/** Au lâcher, la vignette poursuit sa course selon l'élan, borné : c'est ce point qu'on aimante ensuite au bord le plus proche. */
+export function glideBubble(moved: Point, velocity: Point): Point {
+  const glide = (speed: number): number => Math.max(-MAX_GLIDE, Math.min(MAX_GLIDE, speed * GLIDE_PROJECTION_MS));
+  return { x: moved.x + glide(velocity.x), y: moved.y + glide(velocity.y) };
+}
 
 /** Le centre au lâcher → le bord le plus proche et la hauteur gardée. */
 export function snapBubble(center: Point, viewport: Size, insets: Insets, size: Size): Pick<BubblePlacement, 'edge' | 'fraction'> {
@@ -178,7 +198,3 @@ export function writeBubblePlacement(storage: Pick<Storage, 'setItem'> | null, p
   }
 }
 
-/** « Sortie » dans la bulle (#9097) : là seulement où l'on choisit la sortie — `setSinkId` du navigateur, ou les routes natives de la coque. */
-export function offersOutputChoice(env: { readonly shell: boolean; readonly sinks: boolean }): boolean {
-  return env.shell || env.sinks;
-}
