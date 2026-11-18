@@ -25,4 +25,13 @@ final class CallAppStateObserverTests: XCTestCase {
         XCTAssertFalse(observer.isObservingBackground)
     }
 
+    /// #19695 — le retour au premier plan réaffirme « pas de veille » tant que l'appel vit : posé en
+    /// arrière-plan (décroché depuis l'écran verrouillé), le drapeau ne tenait pas.
+    func test_foreground_reassertsTheIdleTimer_forALiveCall() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallCollaborators/CallAppStateObserver.swift"))
+        let foreground = try XCTUnwrap(source.range(of: "UIApplication.willEnterForegroundNotification"))
+        XCTAssertTrue(source[foreground.upperBound...].prefix(600).contains("UIApplication.shared.isIdleTimerDisabled = call.callState.isActive"))
+        let manager = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift"))
+        XCTAssertTrue(manager.contains("UIApplication.shared.isIdleTimerDisabled = active"), "le changement d'état pose toujours le drapeau")
+    }
 }

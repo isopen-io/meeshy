@@ -16,6 +16,9 @@ struct ProfileRelationPillView: View {
     @StateObject private var viewModel: ProfileCircleViewModel
     let displayName: String
     @State private var showsOurCircle = false
+    /// L'accent de la fiche ouverte (#19674) : la pilule et « Notre cercle » prennent la couleur de la personne, comme
+    /// la planche `Autre-Cercle` ; hors d'une fiche, la couleur du cercle.
+    @Environment(\.meeshyProfileAccent) private var profileAccent
 
     init(userId: String, displayName: String) {
         _viewModel = StateObject(wrappedValue: ProfileCircleModels.model(for: userId))
@@ -30,7 +33,7 @@ struct ProfileRelationPillView: View {
                     systemImage: filledCircleGlyph(level),
                     kind: .accent,
                     size: .s44,
-                    tint: CircleLevelColor.color(for: level),
+                    tint: OurCircleTint.person(profileAccent, level: level),
                     action: { showsOurCircle = true },
                     trailing: { Image(systemName: "chevron.down") }
                 )
@@ -41,7 +44,7 @@ struct ProfileRelationPillView: View {
         .meeshyMotion(.morph, value: viewModel.shownLevel)
         .task(id: viewModel.userId) { await viewModel.load() }
         .sheet(isPresented: $showsOurCircle) {
-            OurCircleSheet(viewModel: viewModel, displayName: displayName)
+            OurCircleSheet(viewModel: viewModel, displayName: displayName, accentHex: profileAccent)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
@@ -50,17 +53,31 @@ struct ProfileRelationPillView: View {
 
 // MARK: - « Notre cercle » (planche `Autre-Cercle`)
 
-/// Le lien vu des deux côtés : l'orbite des six cercles (K33) allume le commun et trace mon accord en pointillé, puis
-/// ce que chacun accorde, ce que le commun ouvre, ce que le cran suivant ajouterait (K37, sans aucune donnée derrière)
-/// et ce qui manque. En bas, monter et descendre d'un cran — les mêmes gestes que la fiche, optimistes et confirmés.
+/// Le lien vu des deux côtés (planche `Autre-Cercle`) : l'orbite des six cercles (K33) dans le halo de la personne, moi
+/// au centre et elle sur le cercle commun ; « Vous êtes Proches depuis… » ; les deux accords en crans, chacun à la
+/// couleur de qui l'accorde ; ce que le commun ouvre ; ce que le cran suivant ajouterait, en pointillé, sans aucune
+/// donnée derrière ; ce qui manque. En bas, monter et descendre d'un cran — les mêmes gestes que la fiche, optimistes et
+/// confirmés. Les couleurs sont celles des PERSONNES (leur accent de profil), jamais une couleur par cercle.
 struct OurCircleSheet: View {
     @ObservedObject var viewModel: ProfileCircleViewModel
     let displayName: String
+    /// L'accent de profil de la personne (hex) ; `nil` hors d'une fiche : la couleur du cercle commun.
+    var accentHex: String? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var confirmedLowering: ProfileCircleLowering?
     private var theme: ThemeManager { ThemeManager.shared }
+    private var me: MeeshyUser? { AuthManager.shared.currentUser }
     private var myName: String {
-        AuthManager.shared.currentUser.map { $0.displayName ?? $0.username } ?? ""
+        me.map { $0.displayName ?? $0.username } ?? ""
+    }
+    private var myAccentHex: String {
+        ProfileAccent.hex(chosen: me?.profileAccentColor, userId: me?.id, name: myName)
+    }
+    private func theirTint(_ summary: OurCircleSummary) -> Color {
+        OurCircleTint.person(accentHex, level: summary.common)
+    }
+    private func myTint(_ summary: OurCircleSummary) -> Color {
+        OurCircleTint.person(myAccentHex, level: summary.mine)
     }
 
     var body: some View {
@@ -68,7 +85,11 @@ struct OurCircleSheet: View {
             if let summary = viewModel.ourCircle {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                     orbit(summary)
-                    sides(summary)
+                    headline(summary)
+                    OurCircleGrantBars(summary: summary, theirName: displayName, myName: myName,
+                                       theirAccentHex: accentHex, myAccentHex: myAccentHex, myAvatarURL: me?.avatar,
+                                       theirTint: theirTint(summary), myTint: myTint(summary))
+                        .meeshyCascade(rank: 2)
                     opened(summary)
                     nextOpens(summary)
                     missing(summary)
@@ -77,6 +98,7 @@ struct OurCircleSheet: View {
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.bottom, MeeshySpacing.xxl)
+                .meeshyCascadeFace()
             }
         }
         .safeAreaInset(edge: .top) { header }
@@ -89,7 +111,7 @@ struct OurCircleSheet: View {
     private var header: some View {
         HStack(spacing: MeeshySpacing.sm) {
             Text(OurCircleCopy.title(name: displayName))
-                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .bold))
                 .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
@@ -99,82 +121,63 @@ struct OurCircleSheet: View {
         .padding(.vertical, MeeshySpacing.sm)
     }
 
+    /// L'orbite K33 dans le halo de la personne : moi au centre, elle posée sur notre cercle commun.
     private func orbit(_ summary: OurCircleSummary) -> some View {
-        VStack(spacing: MeeshySpacing.md) {
-            MeeshyCircleScale(
-                levels: VitrineSeenAsView.levels,
-                current: RelationLevel.allCases.firstIndex(of: summary.common),
-                other: summary.mine > summary.common ? RelationLevel.allCases.firstIndex(of: summary.mine) : nil,
-                tint: CircleLevelColor.color(for: summary.common),
-                form: .rings,
-                label: OurCircleCopy.scaleLabel
-            )
-            .frame(maxWidth: .infinity)
-            VStack(spacing: MeeshySpacing.xs) {
-                Text(OurCircleCopy.common(summary.common, since: summary.since))
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                    .foregroundStyle(theme.textPrimary)
-                Text(OurCircleCopy.lowestOfBoth)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundStyle(theme.textSecondary)
+        let tint = theirTint(summary)
+        return MeeshyCircleScale(
+            levels: VitrineSeenAsView.levels,
+            current: RelationLevel.allCases.firstIndex(of: summary.common),
+            other: summary.mine > summary.common ? RelationLevel.allCases.firstIndex(of: summary.mine) : nil,
+            tint: tint,
+            otherTint: myTint(summary),
+            form: .rings,
+            label: OurCircleCopy.scaleLabel,
+            center: {
+                MeeshyAvatar(name: myName, context: .custom(OurCircleGrantBars.centerAvatar),
+                             accentColor: myAccentHex, avatarURL: me?.avatar)
+            },
+            marker: {
+                MeeshyAvatar(name: displayName, context: .custom(OurCircleGrantBars.markerAvatar),
+                             accentColor: accentHex ?? DynamicColorGenerator.colorForName(displayName))
             }
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
-            .accessibilityElement(children: .combine)
-        }
+        )
+        .frame(maxWidth: .infinity)
+        .background(
+            RadialGradient(colors: [tint.opacity(MeeshyOpacity.medium), .clear], center: .center,
+                           startRadius: 0, endRadius: OurCircleGrantBars.glowRadius)
+                .accessibilityHidden(true)
+        )
+        .meeshyCascade(rank: 0)
     }
 
-    private func sides(_ summary: OurCircleSummary) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: MeeshySpacing.sm) { sideCards(summary) }
-            VStack(spacing: MeeshySpacing.sm) { sideCards(summary) }
+    /// « Vous êtes Proches depuis le 19 mars » : le cercle commun dit à la couleur de la personne, puis la règle.
+    private func headline(_ summary: OurCircleSummary) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            Text(OurCircleCopy.commonHeadline(summary.common, since: summary.since, tint: theirTint(summary)))
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
+                .foregroundStyle(theme.textPrimary)
+            Text(OurCircleCopy.lowestOfBoth)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                .foregroundStyle(theme.textSecondary)
         }
-    }
-
-    @ViewBuilder
-    private func sideCards(_ summary: OurCircleSummary) -> some View {
-        sideCard(OurCircleSide(person: displayName, avatarURL: nil, caption: OurCircleCopy.theirSide(name: displayName),
-                               value: OurCircleCopy.grant(summary.theirs), level: summary.theirs.level))
-        sideCard(OurCircleSide(person: myName, avatarURL: AuthManager.shared.currentUser?.avatar,
-                               caption: OurCircleCopy.mySide, value: CircleLevelNames.title(of: summary.mine),
-                               level: summary.mine))
-    }
-
-    /// Une carte K43 par côté (planche `Autre-Cercle`) : l'avatar de qui accorde, ce qu'il accorde, le cercle en K45.
-    private func sideCard(_ side: OurCircleSide) -> some View {
-        let tint = CircleLevelColor.color(for: side.level)
-        return MeeshyGroupCard(surface: .accent, tint: tint) {
-            HStack(spacing: MeeshySpacing.sm) {
-                MeeshyAvatar(name: side.person, context: .postComment,
-                             accentColor: DynamicColorGenerator.colorForName(side.person), avatarURL: side.avatarURL)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(side.caption)
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundStyle(theme.textSecondary)
-                    Text(side.value)
-                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                        .foregroundStyle(theme.textPrimary)
-                }
-                Spacer(minLength: 0)
-                MeeshyMedallion(systemImage: filledCircleGlyph(side.level), tint: tint, size: .s24)
-            }
-            .padding(.horizontal, CGFloat(MeeshyGroupCardRecipe.dividerInset))
-            .accessibilityElement(children: .combine)
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .meeshyCascade(rank: 1)
     }
 
     @ViewBuilder
     private func opened(_ summary: OurCircleSummary) -> some View {
         if !summary.opened.isEmpty {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                MeeshySectionHeader(title: OurCircleCopy.opens(summary.common), form: .overline, size: .sheet)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.sm)], spacing: MeeshySpacing.sm) {
+                MeeshySectionHeader(title: OurCircleCopy.opens(summary.common), size: .sheet)
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: MeeshySpacing.sm), GridItem(.flexible(), spacing: MeeshySpacing.sm)],
+                          spacing: MeeshySpacing.sm) {
                     ForEach(summary.opened, id: \.self) { feature in
-                        openedTile(feature, tint: CircleLevelColor.color(for: summary.common))
+                        openedTile(feature, tint: theirTint(summary))
                     }
                 }
             }
+            .meeshyCascade(rank: 3)
         }
     }
 
@@ -194,20 +197,33 @@ struct OurCircleSheet: View {
         }
     }
 
+    /// « 🔒 Avec Sang, en plus » : les noms de ce que le cran suivant ajouterait, en pointillé, sans aucune donnée.
     @ViewBuilder
     private func nextOpens(_ summary: OurCircleSummary) -> some View {
         if let next = summary.next, !summary.nextOpens.isEmpty {
-            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                MeeshySectionHeader(title: OurCircleCopy.nextAdds(next), form: .overline, size: .sheet)
-                ForEach(summary.nextOpens, id: \.self) { feature in
-                    MeeshyLockedRow(
-                        title: feature.title,
-                        requirement: ProfileRelationLockedGroup.requirement(opensAt: next),
-                        systemImage: feature.systemImage,
-                        tint: CircleLevelColor.color(for: next)
-                    )
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                Label(OurCircleCopy.nextAdds(next), systemImage: "lock")
+                    .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
+                    .foregroundStyle(theme.textMuted)
+                    .accessibilityAddTraits(.isHeader)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(summary.nextOpens, id: \.self) { feature in
+                        Label(feature.title, systemImage: "lock")
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                            .foregroundStyle(theme.textSecondary)
+                            .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.tapTarget, alignment: .leading)
+                    }
                 }
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.xs)
+                .overlay(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
+                        .stroke(theme.textMuted.opacity(MeeshyOpacity.strong),
+                                style: StrokeStyle(lineWidth: MeeshyBorder.emphasis, dash: [5, 4]))
+                )
+                .accessibilityElement(children: .combine)
             }
+            .meeshyCascade(rank: 4)
         }
     }
 
@@ -215,9 +231,10 @@ struct OurCircleSheet: View {
     private func missing(_ summary: OurCircleSummary) -> some View {
         if let missing = summary.missing {
             let level = summary.next ?? summary.common
-            MeeshyNote(OurCircleCopy.missing(missing, name: displayName),
-                       lead: .systemImage(VitrineSeenAsCopy.glyph(of: level)),
-                       tint: CircleLevelColor.color(for: level))
+            Label(OurCircleCopy.missing(missing, name: displayName), systemImage: VitrineSeenAsCopy.glyph(of: level))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                .foregroundStyle(theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
             if let progress = viewModel.summary {
                 Text(progress)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
@@ -234,8 +251,9 @@ struct OurCircleSheet: View {
                     label,
                     systemImage: VitrineSeenAsCopy.glyph(of: target),
                     kind: .accent,
+                    size: .s56,
                     width: .fill,
-                    tint: CircleLevelColor.color(for: target),
+                    tint: theirTint(summary),
                     action: { Task { await viewModel.requestRaise() } }
                 )
                 .accessibilityHint(ProfileCircleWording.promoteAccessibility(to: target, name: displayName) ?? label)
@@ -264,7 +282,7 @@ struct OurCircleSheet: View {
         MeeshyButton(
             lowering.label,
             systemImage: lowering == .unlink ? "person.crop.circle.badge.xmark" : "arrow.down.circle",
-            kind: .outline,
+            kind: lowering == .unlink ? .danger : .outline,
             width: .fill,
             isDestructive: lowering == .unlink,
             isPending: viewModel.isLowering,
@@ -290,14 +308,6 @@ struct OurCircleSheet: View {
     }
 }
 
-/// Un côté du lien dans « Notre cercle » : qui accorde, et quoi.
-private struct OurCircleSide {
-    let person: String
-    let avatarURL: String?
-    let caption: String
-    let value: String
-    let level: RelationLevel
-}
 
 // MARK: - Les mots de « Notre cercle »
 
@@ -329,6 +339,15 @@ nonisolated enum OurCircleCopy {
         }
         let day = since.formatted(.dateTime.day().month(.wide))
         return String(format: String(localized: "circles.ours.commonSince", defaultValue: "Votre cercle commun : %1$@, depuis le %2$@", bundle: .main), title, day)
+    }
+
+    /// La phrase du cercle commun, son nom de cercle mis à la couleur de la personne (planche `Autre-Cercle`).
+    static func commonHeadline(_ level: RelationLevel, since: Date?, tint: Color) -> AttributedString {
+        var headline = AttributedString(common(level, since: since))
+        if let range = headline.range(of: CircleLevelNames.title(of: level)) {
+            headline[range].foregroundColor = tint
+        }
+        return headline
     }
 
     static func theirSide(name: String) -> String {

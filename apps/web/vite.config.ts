@@ -750,6 +750,9 @@ export default defineConfig({
            * mode Effets l'en important statiquement (`call_overlay.dynamic_only`).
            */
           if (/\/lib\/calls\/call-speaking\.ts$/.test(id)) return 'call-speaking';
+          /* #19696 : la bulle n'importe plus les glyphes d'appel ; sans ce nom, Rollup les fond dans `call_overlay`, que la
+             pastille, la grille, le cadre en direct et l'écran zoomé importeraient alors STATIQUEMENT. Un chunk à eux. */
+          if (/\/components\/glyphs-call-(screen|view|devices)\.ts$/.test(id)) return 'call-glyphs';
           /**
            * LE (i) DES NOTES (#17587) — `info-hint.tsx` sert les écrans d'entrée ET les réglages : seul, il devenait un
            * chunk de plus, et chaque écran qui le cite allongeait la table de préchargement du socle (première peinture

@@ -13,7 +13,7 @@ nonisolated enum ProfileCardMode: String, Hashable, Identifiable, CaseIterable {
         switch self {
         case .qr: return MeeshySegmentedOption(id: self, title: ProfileLinksCopy.qr, systemImage: "qrcode")
         case .contactless:
-            return MeeshySegmentedOption(id: self, title: ProfileLinksCopy.contactless, systemImage: "wave.3.right")
+            return MeeshySegmentedOption(id: self, title: ProfileLinksCopy.contactless, systemImage: ProfileGlyph.contactless)
         }
     }
 }
@@ -196,7 +196,7 @@ struct ProfileCardView: View {
             if contactlessUnavailable {
                 MeeshyStateBlock(kind: .denied, title: ProfileLinksCopy.contactlessUnavailable,
                                  message: ProfileLinksCopy.qrDoesTheSame, art: .glyph, size: .compact, tint: accent,
-                                 systemImage: "wave.3.right")
+                                 systemImage: ProfileGlyph.contactless)
                     .accessibilityIdentifier("profile.card.contactless.unavailable")
             }
             MeeshySectionHeader(title: contactlessUnavailable ? ProfileLinksCopy.instead : ContactlessCopy.withoutChip,
