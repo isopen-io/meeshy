@@ -1406,3 +1406,39 @@ socket jusqu'au client.
 4. #18697, puis #18691 (mesurer d'abord sur le staging), puis #18728.
 5. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
 6. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 42 — 2026-11-18
+
+- **Base** : `origin/dev` @ `5161f92c`. Les PR #19382 (#19292) et #19474 (#19293 voie ZMQ, #19380) ont été fusionnées pendant le démarrage du cycle. #19292, #19380 et #19254 sont fermées. Je n'ai pas pu activer l'auto-merge : il n'est pas autorisé sur le dépôt.
+- **Branche** : `claude/determined-volta-evedav`.
+- **Objectif** : #19471. Les routes HTTP `GET` et `DELETE /api/v1/voice/job/{id}` du traducteur ne servent et n'annulent un job que pour leur propriétaire.
+- **Mesure de rétrocompatibilité** : aucun appelant HTTP de ces routes dans le dépôt.
+  - Les clients iOS et Android appellent la route `/api/v1/voice/job/:jobId` de la **passerelle**, qui relaie par ZMQ (voie corrigée au cycle 41).
+  - La passerelle n'appelle `translator:8000` que pour la diffusion, `serverLanguage` et `MessageValidator`.
+  - En prod et en staging, le traducteur a `traefik.enable=false` et aucun `ports:` (constat sur le dépôt).
+- **Livré** (seul le traducteur change) :
+  - `_owned_job` dérive l'appelant avec le même `get_user_id` que `POST /voice/translate/async`. Si l'appelant n'est pas le propriétaire, le refus est le même `404 {"detail":"Job not found"}` que pour un job inconnu.
+  - `DELETE` vérifie le propriétaire **avant** `cancel_job`.
+  - Un job de la passerelle (`user_id` = ObjectId) n'est donc plus jamais lisible ni annulable en HTTP.
+- **Tests** : `tests/test_voice_job_http_owner.py` (12 témoins). Dans `test_28`, 5 témoins lisaient un job sans appelant ; ils envoient maintenant le bearer du propriétaire.
+  - **Rouge** : relancé par moi, `7 failed, 5 passed`.
+  - **Vert** : `12 passed`.
+  - **Suites voisines** (`test_28`, `test_voice_job_owner`, `test_13`) : `112 passed` avant et après, puis `124 passed` avec le nouveau fichier.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves pour ce durcissement, **mais le critère de fin de #19471 n'est pas rempli**. Elle reste donc ouverte.
+  - **Mutations** : 9 sur 10 tuées. La survivante, l'inversion de l'ordre `get_job`/`get_user_id`, est équivalente.
+  - **R1, élevée** : l'identité est déclarée, pas vérifiée. Quiconque connaît un `job_id` HTTP et le suffixe de 8 caractères du jeton de son auteur peut lire et annuler le job (#18728).
+  - **R2** : un soumetteur HTTP anonyme, ou dont le jeton a été rafraîchi, ne peut plus suivre son job. Cela plaide pour **retirer** `/voice/translate/async` et `/voice/job/*` après mesure des journaux d'accès sur le serveur.
+  - **R3, préexistante** : `error=job.error` sert le texte brut de l'exception au propriétaire (#18668, #18692).
+  - **Témoin d'infrastructure manquant** : #19520.
+- **Incident de méthode** : un commit d'étape, lancé pendant les mutations de la QA, a capturé un mutant (`3654628f`, « Job not yours », un oracle d'existence). Il est corrigé par le commit suivant, et l'arbre vérifié est identique à `e38fe665`. **Leçon** : ne jamais commiter pendant qu'une QA mute l'arbre.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre (l'auto-merge n'est pas autorisé : fusionner à la main quand la CI est verte).
+1. #19520, le témoin `ports:` du traducteur, qui est petit. Puis fermer #19471 par la branche « retrait », après avoir mesuré les journaux d'accès du traducteur sur le serveur avec `sre-infra`, ou par #18728.
+2. #19472 (passerelle) avec un test jest.
+3. #19473, #18668 et #18692 (messages d'exception bruts), puis #19381, #19253, #19294, #19295, #19255.
+4. #18727, #18773, #18729, #18774.
+5. #18697, puis #18691 (mesurer d'abord sur le staging), puis #18728.
+6. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
+7. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
