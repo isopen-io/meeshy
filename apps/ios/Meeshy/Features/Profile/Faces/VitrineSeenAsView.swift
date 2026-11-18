@@ -78,8 +78,8 @@ struct VitrineSeenAsView: View {
                 Spacer(minLength: 0)
             }
             ViewThatFits(in: .horizontal) {
-                circlePicker.frame(maxWidth: .infinity)
-                ScrollView(.horizontal, showsIndicators: false) { circlePicker }
+                circlePicker(form: .dots).frame(maxWidth: .infinity)
+                circlePicker(form: .ladder).frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
@@ -87,13 +87,14 @@ struct VitrineSeenAsView: View {
         .meeshyGlass(in: Rectangle(), density: .dense)
     }
 
-    /// Les six cercles d'une rangée ; aux grandes tailles de texte, la rangée défile plutôt que d'écraser les noms.
-    private var circlePicker: some View {
+    /// Les six cercles d'une rangée ; aux grandes tailles de texte, ils s'empilent en échelle verticale (K33 `ladder`)
+    /// plutôt que de défiler de côté ou d'écraser les noms.
+    private func circlePicker(form: MeeshyCircleScaleForm) -> some View {
         MeeshyCircleScale(
             levels: Self.levels,
             current: RelationLevel.allCases.firstIndex(of: model.level),
             tint: accent,
-            form: .dots,
+            form: form,
             size: .regular,
             label: VitrineSeenAsCopy.pickerLabel,
             onSelect: { index in select(index) }
