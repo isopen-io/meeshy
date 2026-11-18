@@ -400,4 +400,71 @@ class SharedLocationSharingSyncTest {
         assertThat(device.center.roster.value.entry(alice)).isNotNull()
         assertThat(device.stops).isEqualTo(0)
     }
+
+    private fun servedAt(vararg people: Triple<String, SharedLocationPrecision, Long>) =
+        SharedLocationOwnSnapshot(people.map { SharedLocationOwnRecipient(it.first, it.second, it.third) })
+
+    @Test
+    fun `une personne ajoutee ailleurs fait ceder l'appareil qui publiait, aucun releve ne part plus`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+        assertThat(device.following).isEqualTo(1)
+        val sent = device.updates.size
+        device.servedSnapshot = served(alice to hour, bob to hour)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        advanceTimeBy(10_000L)
+        device.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(device.center.roster.value.entry(bob)).isNotNull()
+        assertThat(device.updates).hasSize(sent)
+        assertThat(device.receivedMarks["me"]).isTrue()
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        assertThat(relaunched.following).isEqualTo(0)
+    }
+
+    @Test
+    fun `une precision changee ou une echeance repoussee ailleurs fait ceder aussi`() = runTest {
+        val precision = Device(this)
+        val deadline = Device(this)
+        runCurrent()
+        precision.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        deadline.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        precision.servedSnapshot = servedAt(Triple(alice, SharedLocationPrecision.EXACT, hour))
+        deadline.servedSnapshot = served(alice to 8 * hour)
+
+        precision.ownChanged.emit(Unit)
+        deadline.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(precision.receivedMarks["me"]).isTrue()
+        assertThat(deadline.receivedMarks["me"]).isTrue()
+    }
+
+    @Test
+    fun `son propre partage relu a quelques secondes pres, ou un retrait fait ailleurs, ne fait pas ceder`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+        val sent = device.updates.size
+        device.servedSnapshot = served(alice to hour + 90_000L)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        advanceTimeBy(10_000L)
+        device.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(device.center.roster.value.entry(bob)).isNull()
+        assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
+        assertThat(device.updates.size).isGreaterThan(sent)
+    }
 }

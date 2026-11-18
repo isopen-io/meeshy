@@ -87,6 +87,17 @@ public class SharedLocationRoster private constructor(
         return SharedLocationRoster(next, withdrawals.filterKeys { it in servedIds })
     }
 
+    /**
+     * Cette liste montre-t-elle PLUS que [before] (#18580), iso `rosterOps.gainedOver` du web et `gained(over:)` d'iOS :
+     * une personne de plus, une autre précision, une échéance repoussée au-delà du jeu des horloges ? Seul un
+     * « Partager » le fait — un retrait ou une échéance passe par la liste seule. Lu sur la liste servie, c'est le signe
+     * qu'un autre appareil a partagé après celui-ci, et que c'est lui qui publie.
+     */
+    public fun gainedOver(before: SharedLocationRoster): Boolean = entries.any { (id, entry) ->
+        val kept = before.entries[id]
+        kept == null || kept.precision != entry.precision || entry.untilMillis - kept.untilMillis > CLOCK_SLACK_MILLIS
+    }
+
     /** Sans ceux dont l'échéance est passée, ni les retraits que plus aucun partage serveur ne peut servir. */
     public fun pruned(nowMillis: Long): SharedLocationRoster = SharedLocationRoster(
         entries.filterValues { it.untilMillis > nowMillis },
@@ -155,6 +166,9 @@ public class SharedLocationRoster private constructor(
 
     public companion object {
         public val EMPTY: SharedLocationRoster = SharedLocationRoster(emptyMap())
+
+        /** L'écart que l'horloge de l'appareil, celle de la passerelle et l'arrondi à la seconde peuvent creuser entre deux échéances d'un même partage. */
+        public const val CLOCK_SLACK_MILLIS: Long = 5 * 60_000L
 
         private val codec = Json { ignoreUnknownKeys = true }
 

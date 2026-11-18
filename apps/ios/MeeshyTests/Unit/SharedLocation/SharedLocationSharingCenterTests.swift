@@ -552,6 +552,25 @@ final class SharedLocationSharingCenterTests: XCTestCase {
         XCTAssertNil(sut.entry(for: bob))
     }
 
+    /// « Arrêter » sur une passerelle d'avant la liste seule ne fait jamais surgir la demande de permission (#18714) :
+    /// sans permission déjà accordée ni relevé récent, tout s'arrête.
+    func test_aGatewayBeforeTheListAlone_withoutGrantedLocation_neverAsks_andStopsEverything() async {
+        let store = FakeSharedLocationRosterStore()
+        store.kept = SharedLocationRoster.empty
+            .adding(userId: alice, precision: .exact, duration: .eightHours, now: t0)
+            .adding(userId: bob, precision: .city, duration: .eightHours, now: t0)
+        let fixes = FakeSharedLocationFixSource()
+        fixes.granted = false
+        let (sut, emitter, _, _) = makeSUT(fixes: fixes, store: store)
+        emitter.queuedStartVerdicts = [.refused(.invalid)]
+
+        _ = await sut.stopSharing(with: bob)
+
+        XCTAssertEqual(fixes.asks, 0)
+        XCTAssertEqual(emitter.stops, 1)
+        XCTAssertNil(sut.entry(for: alice))
+    }
+
     func test_theListAloneMeetingNoShare_withoutAnyRead_neverEmptiesTheListOnAFailure() async {
         let (sut, emitter, _, _) = makeSUT()
         _ = await sut.share(with: alice, precision: .exact, duration: .eightHours)
@@ -928,6 +947,17 @@ final class FakeSharedLocationFixSource: SharedLocationFixProviding {
     func currentFix() async -> SharedLocationFixResult {
         asks += 1
         return result
+    }
+
+    /// La permission « pendant l'utilisation » est-elle DÉJÀ accordée ? Sans elle, un relevé silencieux ne rend rien.
+    var granted = true
+    /// Combien de relevés ont été lus sans jamais pouvoir demander la permission.
+    private(set) var silentReads = 0
+
+    func silentFix() async -> SharedLocationFix? {
+        silentReads += 1
+        guard granted, case .fix(let fix) = result else { return nil }
+        return fix
     }
 
     func follow() { isFollowing = true }

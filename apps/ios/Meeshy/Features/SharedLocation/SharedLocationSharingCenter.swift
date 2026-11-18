@@ -15,6 +15,9 @@ protocol SharedLocationFixProviding: AnyObject {
     var fixes: AnyPublisher<SharedLocationFix, Never> { get }
     /// Un relevé, demandant la permission « pendant l'utilisation » si elle n'a pas encore été donnée.
     func currentFix() async -> SharedLocationFixResult
+    /// Un relevé SANS jamais demander la permission (#18714) : un retrait ou une échéance ne la fait pas surgir. `nil`
+    /// tant que la localisation « pendant l'utilisation » n'est pas déjà accordée, ou sans relevé.
+    func silentFix() async -> SharedLocationFix?
     func follow()
     func stopFollowing()
 }
@@ -325,8 +328,8 @@ final class SharedLocationSharingCenter: ObservableObject {
             if !next.hasRecipients {
                 self.stopFollowingDevice()
                 self.markReceived(false)
-            } else if !before.hasRecipients {
-                self.markReceived(true)
+            } else if !self.received, next.gained(over: before) {
+                self.yieldPublishing()
             }
             self.scheduleDeadline()
             return nil
@@ -391,7 +394,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             return await publish(next, fix: pinnedFix, previous: roster)
         }
         if let last = freshLastFix { return await publish(next, fix: last, previous: roster) }
-        guard case .fix(let fix) = await fixes.currentFix() else { return await stopAll() }
+        guard let fix = await fixes.silentFix() else { return await stopAll() }
         guard isLive else { return .refused(.failed) }
         return await publish(next, fix: fix, previous: roster)
     }
@@ -578,6 +581,13 @@ final class SharedLocationSharingCenter: ObservableObject {
         adopt(.empty)
         markReceived(false)
         deadline = nil
+        stopFollowingDevice()
+    }
+
+    /// Un autre appareil du compte a partagé après celui-ci : c'est lui qui publie (#18580). Ici, « Arrêter » reste à un
+    /// geste, la position ne part plus — sinon la personne verrait le point sauter d'un appareil à l'autre.
+    private func yieldPublishing() {
+        markReceived(true)
         stopFollowingDevice()
     }
 

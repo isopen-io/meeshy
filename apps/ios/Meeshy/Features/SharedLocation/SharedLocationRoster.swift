@@ -176,6 +176,21 @@ struct SharedLocationRoster: Equatable, Codable {
                                     battery: served.shareBattery ?? sharesBattery, fixedPoint: isFixedPoint)
     }
 
+    /// L'écart que l'horloge de l'appareil, celle de la passerelle et l'arrondi à la seconde peuvent creuser entre deux
+    /// échéances d'un même partage.
+    static let clockSlack: TimeInterval = 5 * 60
+
+    /// Cette liste montre-t-elle PLUS que `before` (#18580, iso `rosterOps.gainedOver` du web) : une personne de plus,
+    /// une autre précision, une échéance repoussée au-delà du jeu des horloges ? Seul un « Partager » le fait — un retrait
+    /// ou une échéance passe par la liste seule. Lu sur la liste servie, c'est le signe qu'un autre appareil a partagé
+    /// après celui-ci, et que c'est lui qui publie.
+    func gained(over before: SharedLocationRoster) -> Bool {
+        entries.contains { id, entry in
+            guard let kept = before.entries[id] else { return true }
+            return kept.precision != entry.precision || entry.until.timeIntervalSince(kept.until) > Self.clockSlack
+        }
+    }
+
     private static func isObjectId(_ id: String) -> Bool {
         id.count == 24 && id.allSatisfy { $0.isHexDigit }
     }

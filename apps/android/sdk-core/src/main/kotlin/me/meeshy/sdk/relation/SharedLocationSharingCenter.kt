@@ -243,7 +243,9 @@ class SharedLocationSharingCenter internal constructor(
     }
 
     /**
-     * Se recale sur le partage que la passerelle sert : un autre appareil du compte a pu le changer (#18578). Une relecture
+     * Se recale sur le partage que la passerelle sert : un autre appareil du compte a pu le changer (#18578). Une liste
+     * qu'un autre appareil a AGRANDIE (une personne de plus, une précision changée, une échéance repoussée) fait céder la
+     * publication d'ici : un seul appareil publie, celui du dernier « Partager » (#18580). Une relecture
      * qui échoue (hors ligne, passerelle d'avant #18389, réponse sans liste lisible) ne change rien.
      */
     suspend fun sync() {
@@ -253,8 +255,10 @@ class SharedLocationSharingCenter internal constructor(
             val before = _roster.value
             val next = before.withServed(truth, clock())
             if (next == before) return@locked null
-            if (next.hasRecipients && !before.hasRecipients) markReceived(ticket, true)
+            val yields = next.hasRecipients && !received && next.gainedOver(before)
+            if (yields) markReceived(ticket, true)
             adopt(ticket, next)
+            if (yields) stopFollowingDevice()
             if (!next.hasRecipients) {
                 stopFollowingDevice()
                 markReceived(ticket, false)

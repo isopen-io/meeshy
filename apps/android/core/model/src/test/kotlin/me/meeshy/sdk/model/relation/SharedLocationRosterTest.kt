@@ -147,4 +147,21 @@ class SharedLocationRosterTest {
         assertThat(roster.deadlinedRecipients(nowMillis = hour - 200L).first().expiresInSeconds).isEqualTo(1)
         assertThat(roster.deadlinedRecipients(nowMillis = hour).map { it.userId }).containsExactly(bob)
     }
+
+    @Test
+    fun `une liste agrandie ailleurs se reconnait, un retrait ou le jeu des horloges non`() {
+        val mine = SharedLocationRoster.EMPTY
+            .adding(alice, SharedLocationPrecision.EXACT, SharedLocationShareDuration.ONE_HOUR, nowMillis = 0L)
+            .adding(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR, nowMillis = 0L)
+        fun served(vararg people: Triple<String, SharedLocationPrecision, Long>): SharedLocationRoster =
+            mine.withServed(SharedLocationOwnSnapshot(people.map { SharedLocationOwnRecipient(it.first, it.second, it.third) }), 0L)
+
+        assertThat(served(Triple(alice, SharedLocationPrecision.EXACT, hour)).gainedOver(mine)).isFalse()
+        assertThat(served(Triple(alice, SharedLocationPrecision.EXACT, hour + 90_000L), Triple(bob, SharedLocationPrecision.CITY, hour)).gainedOver(mine)).isFalse()
+        assertThat(served(Triple(alice, SharedLocationPrecision.CITY, hour), Triple(bob, SharedLocationPrecision.CITY, hour)).gainedOver(mine)).isTrue()
+        assertThat(served(Triple(alice, SharedLocationPrecision.EXACT, 8 * hour)).gainedOver(mine)).isTrue()
+        val third = "dddddddddddddddddddddddd"
+        assertThat(served(Triple(alice, SharedLocationPrecision.EXACT, hour), Triple(third, SharedLocationPrecision.CITY, hour)).gainedOver(mine)).isTrue()
+        assertThat(served(Triple(alice, SharedLocationPrecision.EXACT, hour)).gainedOver(SharedLocationRoster.EMPTY)).isTrue()
+    }
 }
