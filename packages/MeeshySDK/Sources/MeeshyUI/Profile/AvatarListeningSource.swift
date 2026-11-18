@@ -203,7 +203,7 @@ enum ProfileListeningCopy {
     }
 
     static var hint: String {
-        String(localized: "profile.listening.hint", defaultValue: "Touchez pour voir ce qui est écouté", bundle: .module)
+        String(localized: "profile.listening.reveal.a11y", defaultValue: "Touchez pour voir ce qui est écouté", bundle: .module)
     }
 }
 
