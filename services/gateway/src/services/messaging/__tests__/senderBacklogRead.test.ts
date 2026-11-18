@@ -12,6 +12,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
+import { readReceiptCircleAllowing } from '../../../__tests__/helpers/read-receipt-circle-world';
 import { announceSenderBacklogRead } from '../senderBacklogRead';
 import { makeChainableIO } from '../../../__tests__/helpers/chainable-io';
 import { RECEIPTS_MAX_WRITE_MESSAGE_IDS } from '../../../routes/conversations/receipts-contracts';
@@ -38,6 +39,12 @@ function makeDeps(frozenIds: readonly string[] = [M1, M2]) {
   const deps = {
     io,
     prisma: {
+      // #19385 — les trois tables de la loi de cercle que `broadcastReadStatus`
+      // consulte. Sans elles la descente LÈVE et le fail-closed retient tout
+      // l'éventail : ces témoins comptent les émissions de l'éventail, donc ils
+      // tombent à 1 au lieu de 4 sans dire pourquoi. Le monde déclare les deux
+      // comptes AMIS — le régime d'avant ce lot, que la suite supposait.
+      ...readReceiptCircleAllowing(SENDER_USER_ID, [PEER_USER_ID]),
       messageStatusEntry: { findMany: entryFindMany },
       conversationReadCursor: { findUnique: jest.fn<any>().mockResolvedValue(null) },
       participant: {
