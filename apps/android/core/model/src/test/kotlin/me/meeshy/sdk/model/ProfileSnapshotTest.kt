@@ -71,4 +71,44 @@ class ProfileSnapshotTest {
 
         assertThat(ProfileSnapshot.resolveServerUserWithOptimistic(server, emptyList())).isEqualTo(server)
     }
+
+    // #19281 — une relecture (GET /me, réponse d'un PATCH) plus ancienne que le profil tenu ne le défait pas.
+    private fun held() = MeeshyUser(
+        id = "u1", username = "alice", displayName = "Alicia", firstName = "Al", lastName = "Ice",
+        systemLanguage = "es", regionalLanguage = "fr", customDestinationLanguage = "de",
+        avatar = "new.png", banner = "newbanner.png", updatedAt = "2026-11-17T10:00:00.000Z",
+    )
+
+    @Test
+    fun `a re-read proved older than the profile held changes none of its fields`() {
+        val older = MeeshyUser(
+            id = "u1", username = "alice", displayName = "Alice", systemLanguage = "en",
+            avatar = "old.png", updatedAt = "2026-11-17T09:00:00.000Z",
+        )
+
+        val merged = ProfileSnapshot.mergingServerUser(older, held())
+
+        assertThat(merged.displayName).isEqualTo("Alicia")
+        assertThat(merged.systemLanguage).isEqualTo("es")
+        assertThat(merged.avatar).isEqualTo("new.png")
+        assertThat(merged.updatedAt).isEqualTo("2026-11-17T10:00:00.000Z")
+    }
+
+    @Test
+    fun `a re-read not older replaces the profile held`() {
+        val newer = MeeshyUser(id = "u1", username = "alice", displayName = "Alicia 2", updatedAt = "2026-11-17T11:00:00.000Z")
+
+        val merged = ProfileSnapshot.mergingServerUser(newer, held())
+
+        assertThat(merged.displayName).isEqualTo("Alicia 2")
+    }
+
+    @Test
+    fun `a re-read without an instant is not proved older and applies`() {
+        val unknown = MeeshyUser(id = "u1", username = "alice", displayName = "Sans date")
+
+        val merged = ProfileSnapshot.mergingServerUser(unknown, held())
+
+        assertThat(merged.displayName).isEqualTo("Sans date")
+    }
 }
