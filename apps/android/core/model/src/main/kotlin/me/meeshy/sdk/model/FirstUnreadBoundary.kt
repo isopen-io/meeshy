@@ -24,6 +24,22 @@ object FirstUnreadBoundary {
     /** [windowCount] est le compte de la FENÊTRE, jamais de la conversation : l'annonce est le compte serveur (#7525). */
     data class Result(val firstUnreadId: String, val windowCount: Int)
 
+    /**
+     * La DESCENTE du curseur de lecture — miroir de `readCursorFloorOf()`
+     * (`packages/shared/utils/read-cursor-floor.ts`, #19599), qui porte la loi complète : la
+     * POSITION d'abord, l'HORLOGE en repli, et l'arbitrage `?:` contre le `min` du gateway — un
+     * cliquet de NON-RÉGRESSION qui ne se transpose PAS à un séparateur, lequel descend la
+     * position depuis son origine.
+     *
+     * Ce miroir ne peut pas importer la loi TS : il en porte donc UNE graphie, ici, appelée par
+     * [resolve] comme par [orderedCandidates]. Il en portait DEUX jusqu'à #19599, dans la même
+     * unité. Cliquet : `packages/shared/utils/read-cursor-floor-single-spelling.test.ts`.
+     */
+    fun readCursorFloorMillis(
+        lastReadMessageCreatedAtMillis: Long?,
+        lastReadAtMillis: Long?,
+    ): Long? = lastReadMessageCreatedAtMillis ?: lastReadAtMillis
+
     fun resolve(
         messages: List<FirstUnreadCandidate>,
         lastReadMessageId: String?,
@@ -36,7 +52,8 @@ object FirstUnreadBoundary {
         val ordered = orderedCandidates(
             messages, lastReadMessageId, lastReadAtMillis, lastReadMessageCreatedAtMillis, joinedAtMillis, viewerId,
         )
-        val hasChronologicalRank = (lastReadMessageCreatedAtMillis ?: lastReadAtMillis ?: joinedAtMillis) != null
+        val hasChronologicalRank =
+            (readCursorFloorMillis(lastReadMessageCreatedAtMillis, lastReadAtMillis) ?: joinedAtMillis) != null
         val candidates = if (hasChronologicalRank || unreadCountHint == null) {
             ordered
         } else {
@@ -54,7 +71,8 @@ object FirstUnreadBoundary {
         joinedAtMillis: Long?,
         viewerId: String?,
     ): List<FirstUnreadCandidate> {
-        val boundary = lastReadMessageCreatedAtMillis ?: lastReadAtMillis ?: joinedAtMillis
+        val boundary =
+            readCursorFloorMillis(lastReadMessageCreatedAtMillis, lastReadAtMillis) ?: joinedAtMillis
         return messages
             .filter { viewerId == null || it.senderId != viewerId }
             .filter { it.id != lastReadMessageId }

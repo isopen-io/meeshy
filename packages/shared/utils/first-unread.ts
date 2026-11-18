@@ -5,9 +5,15 @@
  * que soit leur nombre) et ce que dit le séparateur (D-L3 : « N messages non
  * lus », en couleur primaire).
  *
- * Miroir Swift : `FirstUnreadBoundary.resolve(...)`
- * (`packages/MeeshySDK/Sources/MeeshySDK/Models/FirstUnreadBoundary.swift`),
- * mêmes cas rejoués en Swift Testing.
+ * DEUX miroirs, pas un — et ce fichier n'en nommait qu'un jusqu'à #19599,
+ * ce qui est la forme exacte de la leçon 261 : une énumération de sites
+ * affirme aussi qu'elle est COMPLÈTE.
+ * - Swift : `FirstUnreadBoundary.resolve(...)`
+ *   (`packages/MeeshySDK/Sources/MeeshySDK/Models/FirstUnreadBoundary.swift`),
+ *   mêmes cas rejoués en Swift Testing ;
+ * - Kotlin : `FirstUnreadBoundary.resolve(...)`
+ *   (`apps/android/core/model/src/main/kotlin/me/meeshy/sdk/model/FirstUnreadBoundary.kt`),
+ *   mêmes cas rejoués en JUnit.
  *
  * Entrée : la fenêtre de messages CHARGÉE (pas nécessairement toute
  * l'historique) et la frontière de lecture du lecteur, exactement la forme
@@ -33,7 +39,13 @@
  *    `firstUnreadId`, ni compté dans `unreadCount`. Il ne bloque pas non
  *    plus le message d'autrui suivant.
  * 2. **Jamais avant (ni AU) la frontière** — la frontière chronologique
- *    descend les MÊMES trois rangs que le compte autoritatif du serveur
+ *    descend les MÊMES trois rangs que le compte autoritatif du serveur.
+ *    Les DEUX PREMIERS ne sont plus épelés ici : ils sont la descente du
+ *    curseur, et elle a une loi — `readCursorFloorOf()`
+ *    (`read-cursor-floor.ts`, #19599), qui porte aussi l'arbitrage `??`
+ *    contre le `min` du gateway et la raison pour laquelle il ne se
+ *    transpose pas à un séparateur. Le TROISIÈME (`joinedAt`) reste au
+ *    SITE : il n'appartient pas au curseur, il appartient au comptage.
  *    (`MessageReadStatusService.getUnreadCount`,
  *    `services/gateway/src/services/MessageReadStatusService.ts:259-260`) :
  *    `lastReadMessageCreatedAt` (le `createdAt` du message lu, la clé
@@ -106,6 +118,8 @@
  * messages gravés dans la même milliseconde).
  */
 
+import { readCursorFloorOf } from './read-cursor-floor';
+
 export type FirstUnreadCandidateMessage = {
   readonly id: string;
   readonly senderId: string;
@@ -152,7 +166,8 @@ export function firstUnreadBoundary(
     unreadCountHint,
   } = params;
 
-  const boundaryTime = lastReadMessageCreatedAt ?? lastReadAt ?? joinedAt ?? null;
+  const boundaryTime =
+    readCursorFloorOf({ lastReadMessageCreatedAt, lastReadAt }) ?? joinedAt ?? null;
 
   const otherMessages = messages
     .filter((message) => message.senderId !== viewerId)
