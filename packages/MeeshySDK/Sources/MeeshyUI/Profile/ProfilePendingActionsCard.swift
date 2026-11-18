@@ -19,7 +19,7 @@ struct ProfilePendingSection: View {
     /// Hors ligne seulement, sur la fiche d'un autre, quand l'app fournit la file ; en ligne, rien.
     @ViewBuilder
     static func of(_ sheet: UserProfileSheet) -> some View {
-        if sheet.showsRelationBlocks, ProfileTalkReach.isOffline(sheet.phase),
+        if sheet.showsRelationBlocks, sheet.talksOffline,
            let queue = sheet.dependencies.pendingQueue, let userId = sheet.resolvedUserId {
             ProfilePendingSection(userId: userId, name: sheet.displayUser.resolvedDisplayName, queue: queue,
                                   tint: sheet.accentTint, onRetry: { sheet.retryFromState() })

@@ -81,6 +81,8 @@ enum ShareLinkDetailCopy {
     static var seeAll: String { String(localized: "shareLink.sheet.seeAll", defaultValue: "Tout voir", bundle: .main) }
     static var guest: String { String(localized: "shareLink.sheet.guest", defaultValue: "Invité", bundle: .main) }
     static var removeArrival: String { String(localized: "shareLink.sheet.removeArrival", defaultValue: "Retirer", bundle: .main) }
+    static var seeProfile: String { String(localized: "shareLink.arrival.seeProfile", defaultValue: "Voir la fiche", bundle: .main) }
+    static var openConversationHint: String { String(localized: "shareLink.detail.openConversation.a11y", defaultValue: "Ouvre la conversation", bundle: .main) }
 
     static func removeArrivalTitle(_ name: String) -> String {
         String(localized: "shareLink.sheet.removeArrivalTitle", defaultValue: "Retirer \(name) de la conversation ?", bundle: .main)

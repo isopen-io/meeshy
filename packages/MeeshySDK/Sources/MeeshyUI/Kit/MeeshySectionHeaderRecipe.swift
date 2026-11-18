@@ -47,6 +47,8 @@ public nonisolated struct MeeshySectionHeaderRecipe: Sendable, Equatable {
     public static let pressVeilOpacity: Double = 0.09
     public static let pressedScale: Double = 0.985
     public static let largeTextScale: Double = 1.6
+    /// Le détail de fin (« 4 arrêts ») : petit, secondaire, et il suit Dynamic Type.
+    public static let detailFontSize: Double = 12.5
 
     public let form: MeeshySectionHeaderForm
     public let titleFontSize: Double
@@ -105,6 +107,11 @@ public nonisolated struct MeeshySectionHeaderRecipe: Sendable, Equatable {
     public static func spokenTitle(title: String, count: Int?, titleBadge: String?) -> String {
         let counted = (count ?? 0) > 0 ? count.map { String($0) } : nil
         return [title, counted, titleBadge].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+
+    /// La ligne repliable se lit d'un bloc : le titre dit, puis le détail de fin ; un détail vide se tait.
+    public static func spokenRow(spokenTitle: String, detail: String?) -> String {
+        [spokenTitle, detail].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
     public static func titleFontSize(form: MeeshySectionHeaderForm, size: MeeshySectionHeaderSize) -> Double {

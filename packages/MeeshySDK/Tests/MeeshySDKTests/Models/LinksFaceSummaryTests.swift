@@ -13,10 +13,10 @@ struct LinksFaceSummaryTests {
                     conversationTitle: nil)
     }
 
-    private func tracking(id: String = "t1", clicks: Int = 1284) throws -> TrackingLink {
+    private func tracking(id: String = "t1", clicks: Int = 1284, extra: String = "") throws -> TrackingLink {
         let json = """
         {"id":"\(id)","token":"dkr-nuit","name":"Réel Dakar la nuit","originalUrl":"https://a.io",
-         "shortUrl":"https://meeshy.me/l/dkr-nuit","totalClicks":\(clicks),"uniqueClicks":3,"isActive":true,"createdAt":0}
+         "shortUrl":"https://meeshy.me/l/dkr-nuit","totalClicks":\(clicks),"uniqueClicks":3,"isActive":true,"createdAt":0\(extra)}
         """
         return try JSONDecoder().decode(TrackingLink.self, from: Data(json.utf8))
     }
@@ -33,13 +33,17 @@ struct LinksFaceSummaryTests {
     }
 
     @Test func aTrackingLinkSwitchedKeepsEverythingButItsSwitch() throws {
-        let link = try tracking()
+        let link = try tracking(extra: #","dailyClicks":[1,2,3],"countryCount":4"#)
         let paused = link.withActive(false)
         #expect(paused.isActive == false)
         #expect(paused.id == link.id)
         #expect(paused.token == link.token)
         #expect(paused.totalClicks == link.totalClicks)
         #expect(paused.shortUrl == link.shortUrl)
+        #expect(link.dailyClicks == [1, 2, 3])
+        #expect(paused.dailyClicks == link.dailyClicks)
+        #expect(link.countryCount == 4)
+        #expect(paused.countryCount == link.countryCount)
         let ticket = LinksFaceSummary(tracking: [paused]).tickets.first
         #expect(ticket?.stoppage() == .paused)
     }

@@ -124,6 +124,12 @@ final class MeeshyToggleRowTests: XCTestCase {
         XCTAssertEqual(MeeshyToggleRowRecipe.valueFor(accessory: .value("Wolof")), .text("Wolof"))
     }
 
+    /// Une adresse qui quitte Meeshy porte la sortie : ni choisie, ni valeur à dire.
+    func test_external_isNeitherChosenNorAValue() {
+        XCTAssertFalse(MeeshyToggleRowRecipe.isChosen(.external))
+        XCTAssertEqual(MeeshyToggleRowRecipe.valueFor(accessory: .external), MeeshyToggleRowValue.none)
+    }
+
     func test_isChosen_uncheckedChoice_isNotChosen() {
         XCTAssertFalse(MeeshyToggleRowRecipe.isChosen(.check(isSelected: false)))
     }

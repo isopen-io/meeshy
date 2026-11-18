@@ -15,14 +15,18 @@ private func filledCircleGlyph(_ level: RelationLevel) -> String {
 struct ProfileRelationPillView: View {
     @StateObject private var viewModel: ProfileCircleViewModel
     let displayName: String
+    /// Le lien montré, publié à la fiche depuis l'en-tête — toujours monté, quelle que soit la face lue (#18857) : la
+    /// Vitrine sait dès le cache qu'écrire n'est plus une demande.
+    @Binding var standing: ProfileRelationStanding
     @State private var showsOurCircle = false
     /// L'accent de la fiche ouverte (#19674) : la pilule et « Notre cercle » prennent la couleur de la personne, comme
     /// la planche `Autre-Cercle` ; hors d'une fiche, la couleur du cercle.
     @Environment(\.meeshyProfileAccent) private var profileAccent
 
-    init(userId: String, displayName: String) {
+    init(userId: String, displayName: String, standing: Binding<ProfileRelationStanding> = .constant(.unresolved)) {
         _viewModel = StateObject(wrappedValue: ProfileCircleModels.model(for: userId))
         self.displayName = displayName
+        _standing = standing
     }
 
     var body: some View {
@@ -43,6 +47,7 @@ struct ProfileRelationPillView: View {
         }
         .meeshyMotion(.morph, value: viewModel.shownLevel)
         .task(id: viewModel.userId) { await viewModel.load() }
+        .adaptiveOnChange(of: viewModel.standing, initial: true) { _, read in standing = read }
         .sheet(isPresented: $showsOurCircle) {
             OurCircleSheet(viewModel: viewModel, displayName: displayName, accentHex: profileAccent)
                 .presentationDetents([.large])

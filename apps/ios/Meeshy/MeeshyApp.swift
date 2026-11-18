@@ -525,8 +525,13 @@ struct ProfileSheetEnvironment: ViewModifier {
     /// Le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche, et « Son jeu » dans sa Vitrine : ce que SA
     /// visibilité autorise, rien sinon. « En direct » dès Proche (#19416). Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
     /// injection, toutes les feuilles de profil la reçoivent.
+    /// La connectivité que la fiche lit pour « Parler » hors ligne (#18857) : le moniteur réseau de l'app, pas le
+    /// dernier chargement de la fiche.
+    @ObservedObject private var network = NetworkMonitor.shared
+
     func body(content: Content) -> some View {
         content
+            .environment(\.profileNetworkIsOffline, network.isOffline)
             .environment(\.profileGameSection, ProfileGameSection(
                 build: { userId, displayName in ProfileSlot.view(.banner, userId: userId, displayName: displayName) },
                 card: { userId, tint in ProfileSlot.view(.gameCard, userId: userId, displayName: "", tint: tint) }
@@ -534,11 +539,11 @@ struct ProfileSheetEnvironment: ViewModifier {
             .environment(\.profileLiveSection, ProfileLiveSection { request in
                 ProfileSlot.view(.live, userId: request.userId, displayName: request.displayName, liveRequest: request)
             })
-            .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, linked, tint in
-                ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked, tint: tint)
+            .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, standing, tint in
+                ProfileSlot.view(.relation, userId: userId, displayName: displayName, standing: standing, tint: tint)
             })
-            .environment(\.profileRelationPill, ProfileRelationPill { userId, displayName in
-                ProfileSlot.view(.pill, userId: userId, displayName: displayName)
+            .environment(\.profileRelationPill, ProfileRelationPill { userId, displayName, standing in
+                ProfileSlot.view(.pill, userId: userId, displayName: displayName, standing: standing)
             })
             .environment(\.profileActionsParts, ProfileActionsParts { part, request in
                 ProfileSlot.view(.actions, userId: request.userId, displayName: request.displayName,
@@ -573,12 +578,13 @@ struct ProfileSheetEnvironment: ViewModifier {
 enum ProfileSlot {
     case banner, relation, pill, locationMap, whereTheyAre, scanner, gameCard, live, actions, send
 
-    static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false),
+    static func view(_ slot: ProfileSlot, userId: String, displayName: String,
+                     standing: Binding<ProfileRelationStanding> = .constant(.unresolved),
                      mapRequest: ProfileLocationMapRequest? = nil, openMap: (() -> Void)? = nil,
                      onOpened: (() -> Void)? = nil, tint: Color? = nil,
                      liveRequest: ProfileLiveRequest? = nil, actionsPart: ProfileActionsPart? = nil,
                      send: ProfileSendHost? = nil) -> AnyView {
-        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked,
+        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, standing: standing,
                                    mapRequest: mapRequest, openMap: openMap, onOpened: onOpened, tint: tint,
                                    liveRequest: liveRequest, actionsPart: actionsPart, send: send))
     }
@@ -588,7 +594,7 @@ private struct ProfileSlotContent: View {
     let slot: ProfileSlot
     let userId: String
     let displayName: String
-    @Binding var linked: Bool
+    @Binding var standing: ProfileRelationStanding
     let mapRequest: ProfileLocationMapRequest?
     let openMap: (() -> Void)?
     let onOpened: (() -> Void)?
@@ -603,10 +609,10 @@ private struct ProfileSlotContent: View {
         case .banner:
             GameBannerBadge(userId: userId)
         case .relation:
-            ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked, tint: tint)
+            ProfileCircleSection(userId: userId, displayName: displayName, standing: $standing, tint: tint)
                 .id(userId)
         case .pill:
-            ProfileRelationPillView(userId: userId, displayName: displayName)
+            ProfileRelationPillView(userId: userId, displayName: displayName, standing: $standing)
                 .id(userId)
         case .locationMap:
             PersonLocationMapScreen(userId: userId, displayName: displayName,

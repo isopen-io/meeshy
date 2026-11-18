@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - L'emplacement du cercle sur la fiche d'un profil (#13940)
 //
@@ -7,12 +8,40 @@ import SwiftUI
 // la fiche disait « Connectés » — ou proposait la demande de connexion, une Connaissance n'ayant pas d'amitié acceptée
 // (#14910). Sans emplacement, elle montre toujours ce qu'elle montrait.
 
-/// Ce que l'app fournit : à partir de l'identifiant et du nom d'affichage du membre, la vue du cercle. L'app pose
-/// `linked` à vrai dès qu'elle montre un lien d'au moins Connaissance (ou qu'il vient d'être annulé) : la fiche cesse
-/// alors de montrer ce qu'elle montrait sans lien (« Connectés », ou la demande de connexion). `tint` est l'accent de la
-/// fiche (#19637) : `nil` quand la fiche n'en remet aucun, jamais une teinte transparente qui passerait pour un accent.
+/// Ce que l'emplacement du cercle et la pilule publient à la fiche (#18870) : si un lien d'au moins Connaissance est
+/// montré (ou vient d'être annulé), et le cercle auquel l'app juge les outils — `nil` tant qu'elle n'a rien lu. La fiche
+/// juge au MÊME niveau si écrire part en demande : entre deux comptes de l'équipe sans lien (#16623), le Sang servi
+/// ouvre Talkie ET l'écriture directe ; rien ne se dit « demande » avant d'être lu.
+public nonisolated struct ProfileRelationStanding: Equatable, Sendable {
+    public let linked: Bool
+    public let toolLevel: RelationLevel?
+
+    public init(linked: Bool, toolLevel: RelationLevel?) {
+        self.linked = linked
+        self.toolLevel = toolLevel
+    }
+
+    /// Rien de lu : aucune mention « demande ».
+    public static let unresolved = ProfileRelationStanding(linked: false, toolLevel: nil)
+
+    /// Une fiche sans emplacement de cercle ni pilule : le cercle commun reste Public, comme avant.
+    public static let unhosted = ProfileRelationStanding(linked: false, toolLevel: .public)
+
+    /// Écrire part en demande de message (`dm.request`) : sans lien, sans connexion acceptée, sous le niveau qui ouvre
+    /// l'écriture directe — et jamais avant que le niveau soit lu.
+    public func writesARequest(connection: ConnectionStatus) -> Bool {
+        guard !linked, connection != .connected, let toolLevel else { return false }
+        return ProfileRelationAction.writesARequest(at: toolLevel)
+    }
+}
+
+/// Ce que l'app fournit : à partir de l'identifiant et du nom d'affichage du membre, la vue du cercle. L'app publie
+/// `standing` : dès qu'elle montre un lien d'au moins Connaissance, la fiche cesse de montrer ce qu'elle montrait sans
+/// lien (« Connectés », ou la demande de connexion), et le niveau d'outil juge si écrire part en demande. `tint` est
+/// l'accent de la fiche (#19637) : `nil` quand la fiche n'en remet aucun, jamais une teinte transparente.
 public struct ProfileRelationSection {
-    public typealias Build = (_ userId: String, _ displayName: String, _ linked: Binding<Bool>, _ tint: Color?) -> AnyView
+    public typealias Build = (_ userId: String, _ displayName: String, _ standing: Binding<ProfileRelationStanding>,
+                              _ tint: Color?) -> AnyView
 
     public let build: Build
 
@@ -28,7 +57,7 @@ struct ProfileRelationSlot<Unlinked: View>: View {
     let userId: String?
     let displayName: String
     /// Porté par la fiche : le cercle commun n'est plus Public dès qu'un lien est montré (#18870).
-    @Binding var linked: Bool
+    @Binding var standing: ProfileRelationStanding
     /// L'accent de la fiche, remis tel quel au cercle (#19637).
     let tint: Color?
     @ViewBuilder let unlinked: () -> Unlinked
@@ -36,8 +65,8 @@ struct ProfileRelationSlot<Unlinked: View>: View {
     var body: some View {
         if let section, let userId, !userId.isEmpty {
             VStack(spacing: 0) {
-                section.build(userId, displayName, $linked, tint)
-                if !linked { unlinked() }
+                section.build(userId, displayName, $standing, tint)
+                if !standing.linked { unlinked() }
             }
         } else {
             unlinked()
@@ -60,12 +89,21 @@ public extension EnvironmentValues {
 // MARK: - La pilule de relation sous le nom (#18870, loi 3)
 
 /// Ce que l'app fournit : la pilule qui dit le cercle COMMUN (« 🔥 Proche ▾ ») et mène à « Notre cercle ». Vide tant
-/// qu'aucun lien n'est servi : la fiche n'invente aucun niveau.
+/// qu'aucun lien n'est servi : la fiche n'invente aucun niveau. Posée dans l'en-tête, toujours monté, la pilule publie
+/// `standing` (comme `ProfileRelationSection`) : la Vitrine sait dès le cache si écrire part en demande.
 public struct ProfileRelationPill {
-    public let build: (_ userId: String, _ displayName: String) -> AnyView
+    public typealias Build = (_ userId: String, _ displayName: String,
+                              _ standing: Binding<ProfileRelationStanding>) -> AnyView
 
-    public init(build: @escaping (_ userId: String, _ displayName: String) -> AnyView) {
+    public let build: Build
+
+    public init(build: @escaping Build) {
         self.build = build
+    }
+
+    /// L'ancienne forme, sans lien publié : la fiche ne l'apprend alors que de l'emplacement du cercle.
+    public init(build: @escaping (_ userId: String, _ displayName: String) -> AnyView) {
+        self.build = { userId, displayName, _ in build(userId, displayName) }
     }
 }
 
@@ -81,23 +119,17 @@ public extension EnvironmentValues {
     }
 }
 
-/// « Connectés » : une demande acceptée, sans rien dire du cercle. L'app le reprend tant qu'aucun lien n'est servi.
+/// « Connectés » : une demande acceptée, sans rien dire du cercle. L'app le reprend tant qu'aucun lien n'est servi. La
+/// même pastille du kit (K41) que l'étape « Acceptée » : une relation, un composant.
 public struct ProfileConnectedBadge: View {
     public init() {}
 
     public var body: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: MeeshyIconSize.sm))
-                .foregroundStyle(MeeshyColors.success)
-            Text(String(localized: "profile.status.connected", defaultValue: "Connectes", bundle: .module))
-                .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
-                .foregroundStyle(MeeshyColors.success)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, MeeshySpacing.md)
-        .background(MeeshyColors.success.opacity(MeeshyOpacity.subtle))
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+        MeeshyBadge(
+            .label(String(localized: "profile.relation.request.accepted.connected", defaultValue: "Connectés", bundle: .module)),
+            leading: .systemImage("person.fill.checkmark"), kind: .ok
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

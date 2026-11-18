@@ -16,7 +16,8 @@ nonisolated enum ProfileReportReason: String, CaseIterable, Sendable {
     case impersonation
     case other
 
-    /// Le glyphe de la tuile (K47).
+    /// Le glyphe de la tuile (K47). Écart consigné : la planche veut un poing levé (`hand-fist`) pour « Haine », que les
+    /// SF Symbols n'ont pas ; la main levée en tient lieu.
     var systemImage: String {
         switch self {
         case .spam: return "megaphone"
@@ -37,7 +38,7 @@ nonisolated enum ProfileReportReason: String, CaseIterable, Sendable {
         case .inappropriate: return String(localized: "report.reason.inappropriate", defaultValue: "Contenu inapproprié", bundle: .module)
         case .harassment: return String(localized: "report.reason.harassment", defaultValue: "Harcèlement", bundle: .module)
         case .violence: return String(localized: "report.reason.violence", defaultValue: "Violence", bundle: .module)
-        case .hateSpeech: return String(localized: "report.reason.hate_speech", defaultValue: "Discours haineux", bundle: .module)
+        case .hateSpeech: return String(localized: "report.reason.hate_speech", defaultValue: "Haine", bundle: .module)
         case .fakeProfile: return String(localized: "report.reason.fake_profile", defaultValue: "Faux profil", bundle: .module)
         case .impersonation: return String(localized: "report.reason.impersonation", defaultValue: "Usurpation d'identité", bundle: .module)
         case .other: return String(localized: "report.reason.other", defaultValue: "Autre", bundle: .module)
@@ -143,10 +144,27 @@ public nonisolated struct ProfileReportAttachment: Sendable, Equatable, Identifi
     }
 }
 
-/// Ce que l'envoi a donné : parti ou non, et la personne bloquée ou non.
+/// Ce que l'envoi a donné : parti ou non, la personne bloquée ou non, et si « Bloquer aussi » était demandé.
 nonisolated struct ProfileReportOutcome: Sendable, Equatable {
     let isSent: Bool
     let isBlocked: Bool
+    let blockRequested: Bool
+
+    init(isSent: Bool, isBlocked: Bool, blockRequested: Bool = false) {
+        self.isSent = isSent
+        self.isBlocked = isBlocked
+        self.blockRequested = blockRequested
+    }
 
     static let notSent = ProfileReportOutcome(isSent: false, isBlocked: false)
+
+    /// Le signalement est parti, le blocage demandé n'a pas abouti : la feuille le dit, avec « Réessayer » (loi 8).
+    var blockFailed: Bool {
+        isSent && blockRequested && !isBlocked
+    }
+
+    /// « Réessayer » a bloqué : le même envoi, la personne bloquée.
+    func blocking() -> ProfileReportOutcome {
+        ProfileReportOutcome(isSent: isSent, isBlocked: true, blockRequested: blockRequested)
+    }
 }

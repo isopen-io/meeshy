@@ -27,7 +27,7 @@ extension ShareLinkDetailView {
             if let fraction = quota.fraction, let limit = quota.limit {
                 MeeshyMeter(value: fraction, label: ShareLinkDetailCopy.entries,
                             spokenValue: ShareLinkDetailCopy.entriesSpoken(quota.used, limit),
-                            kind: .accent, fullKind: .warn, tint: MeeshyColors.brandPrimary, size: .s12,
+                            kind: .accent, fullKind: .warn, tint: Self.tint, size: .s12,
                             startCaption: ShareLinkDetailCopy.quotaShare(fraction),
                             endCaption: quota.isFull ? ShareLinkDetailCopy.quotaFull
                                                      : ShareLinkDetailCopy.placesLeft(quota.remaining ?? 0))
@@ -109,7 +109,7 @@ extension ShareLinkDetailView {
             ], isLoading: viewModel.stats == .loading, emptyLabel: TrackingDetailCopy.noData)
             if viewModel.stats == .unavailable {
                 MeeshyNote(ShareLinkDetailCopy.statsUnavailable, lead: .systemImage("chart.bar.xaxis"),
-                           tint: MeeshyColors.brandPrimary)
+                           tint: Self.tint)
             }
         }
         .accessibilityIdentifier("shareLink.detail.figures")
@@ -146,40 +146,87 @@ extension ShareLinkDetailView {
         stats.arrivals > min(stats.recentArrivals.count, recentLimit)
     }
 
+    /// « Tout voir », le bouton texte du kit : il pousse la liste complète des arrivées.
     @ViewBuilder
     private func seeAll(_ stats: ShareLinkArrivalStats) -> some View {
         if Self.showsSeeAll(stats) {
-            NavigationLink {
-                ShareLinkArrivalsListView(linkId: link.linkId, totalCount: stats.arrivals,
-                                          seed: stats.recentArrivals.map(ShareLinkArrivalEntry.init))
-            } label: {
-                Text(ShareLinkDetailCopy.seeAll)
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
-                    .foregroundStyle(MeeshyColors.brandPrimary)
-                    .frame(minHeight: MeeshyControlSize.tapTarget)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(ShareLinkDetailCopy.seeAllArrivals(stats.arrivals))
+            MeeshyButton(ShareLinkDetailCopy.seeAll, kind: .text, size: .s44, tint: Self.tint,
+                         action: { showsAllArrivals = true })
+                .accessibilityHint(ShareLinkDetailCopy.seeAllArrivals(stats.arrivals))
+                .accessibilityIdentifier("shareLink.detail.arrivals.seeAll")
         }
     }
 
-    /// Une arrivée ; « Retirer » vit dans le menu contextuel et les actions du lecteur d'écran, et n'est offert que
-    /// si la fiche connaît la conversation que le lien ouvre.
+    /// La liste complète des arrivées, poussée par « Tout voir ».
+    @ViewBuilder
+    var allArrivals: some View {
+        if let stats {
+            ShareLinkArrivalsListView(linkId: link.linkId, totalCount: stats.arrivals,
+                                      seed: stats.recentArrivals.map(ShareLinkArrivalEntry.init))
+        }
+    }
+
+    /// Une arrivée : le toucher la déplie sur « Voir la fiche » et « Retirer » (planche `Lien-Partage`) ; les mêmes
+    /// gestes restent des actions du lecteur d'écran. Les deux demandent la conversation que le lien ouvre.
     private func arrivalRow(_ arrival: ShareLinkArrivalStats.Arrival) -> some View {
-        let canRemove = viewModel.canRemoveArrivals
-        return ShareLinkArrivalRow(entry: ShareLinkArrivalEntry(arrival), avatarURL: arrival.avatar, isDark: isDark)
-            .contextMenu {
-                if canRemove {
-                    Button(role: .destructive) { arrivalToRemove = arrival } label: {
-                        Label(ShareLinkDetailCopy.removeArrival, systemImage: "person.badge.minus")
+        let isOpen = openedArrivalId == arrival.participantId
+        let gestures = arrivalGestures(arrival)
+        return VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            ShareLinkArrivalRow(entry: ShareLinkArrivalEntry(arrival), avatarURL: arrival.avatar, isDark: isDark,
+                                onPress: gestures.isEmpty ? nil : {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        openedArrivalId = isOpen ? nil : arrival.participantId
+                                    }
+                                })
+                .accessibilityActions {
+                    ForEach(gestures, id: \.self) { gesture in
+                        Button(arrivalGestureTitle(gesture)) { perform(gesture, on: arrival) }
                     }
                 }
-            }
-            .accessibilityActions {
-                if canRemove {
-                    Button(ShareLinkDetailCopy.removeArrival) { arrivalToRemove = arrival }
+            if isOpen {
+                HStack(spacing: MeeshySpacing.sm) {
+                    ForEach(gestures, id: \.self) { gesture in arrivalGestureButton(gesture, on: arrival) }
                 }
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.bottom, MeeshySpacing.sm)
+                .accessibilityHidden(true)
             }
+        }
+    }
+
+    /// Ce qu'on peut faire d'une arrivée : voir sa fiche (le routeur ouvre la fiche d'un participant, avec ou sans
+    /// compte), la retirer de la conversation.
+    func arrivalGestures(_ arrival: ShareLinkArrivalStats.Arrival) -> [ShareLinkArrivalGesture] {
+        guard link.conversation?.id != nil else { return [] }
+        let see: [ShareLinkArrivalGesture] = router == nil ? [] : [.seeProfile]
+        let remove: [ShareLinkArrivalGesture] = viewModel.canRemoveArrivals ? [.remove] : []
+        return see + remove
+    }
+
+    private func arrivalGestureTitle(_ gesture: ShareLinkArrivalGesture) -> String {
+        switch gesture {
+        case .seeProfile: return ShareLinkDetailCopy.seeProfile
+        case .remove: return ShareLinkDetailCopy.removeArrival
+        }
+    }
+
+    private func arrivalGestureButton(_ gesture: ShareLinkArrivalGesture,
+                                      on arrival: ShareLinkArrivalStats.Arrival) -> some View {
+        MeeshyButton(arrivalGestureTitle(gesture),
+                     systemImage: gesture == .remove ? "person.badge.minus" : "person.crop.circle",
+                     kind: .outline, size: .s44, tint: Self.tint, isDestructive: gesture == .remove,
+                     action: { perform(gesture, on: arrival) })
+    }
+
+    private func perform(_ gesture: ShareLinkArrivalGesture, on arrival: ShareLinkArrivalStats.Arrival) {
+        switch gesture {
+        case .seeProfile:
+            guard let conversationId = link.conversation?.id else { return }
+            router?.participantProfileTarget = ParticipantProfileTarget(conversationId: conversationId,
+                                                                        participantId: arrival.participantId)
+        case .remove:
+            arrivalToRemove = arrival
+        }
     }
 
     // MARK: - Arrivées par pays (K34)
@@ -196,7 +243,7 @@ extension ShareLinkDetailView {
                         ForEach(shares, id: \.country) { share in
                             MeeshyShareBar(title: CountryFlag.name(for: share.country) ?? share.country,
                                            value: share.count.formatted(), share: share.share,
-                                           tint: MeeshyColors.brandPrimary) {
+                                           tint: Self.tint) {
                                 MeeshyBadge(.code(share.country), surface: .outline, size: .s22)
                             }
                         }
@@ -221,4 +268,10 @@ extension ShareLinkDetailView {
             .accessibilityIdentifier("shareLink.detail.languages")
         }
     }
+}
+
+/// Un geste offert sur une arrivée dépliée.
+nonisolated enum ShareLinkArrivalGesture: Hashable, Sendable {
+    case seeProfile
+    case remove
 }

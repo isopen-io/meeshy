@@ -1,4 +1,5 @@
 import Combine
+import SwiftUI
 import XCTest
 import MeeshySDK
 @testable import Meeshy
@@ -822,5 +823,37 @@ final class SharedLocationUntilStoppedTests: XCTestCase {
         let said = ShareLocationWording.sharing(name: "Léo", precision: .city, until: SharedLocationShareTerm.openEndedDeadline)
 
         XCTAssertEqual(said, ShareLocationWording.sharingUntilStopped(name: "Léo", precision: .city))
+    }
+}
+
+/// Le refus de position (planche `Etat-Erreur` vue 5) ne se lève qu'au RETOUR dans l'app après l'avoir quittée (les
+/// Réglages) : la fermeture de l'alerte système, du Centre de contrôle ou des notifications repasse aussi par `.active`
+/// et ne doit pas effacer l'explication qu'on vient de donner.
+@MainActor
+final class ShareMyLocationDenialTests: XCTestCase {
+
+    func test_next_activeWithoutLeavingTheApp_keepsTheDenial() {
+        let denied = ShareMyLocationDenial(isDenied: true)
+
+        let afterAlert = denied.next(.inactive).next(.active)
+
+        XCTAssertTrue(afterAlert.isDenied)
+    }
+
+    func test_next_backFromTheBackground_liftsTheDenial() {
+        let denied = ShareMyLocationDenial(isDenied: true)
+
+        let back = denied.next(.inactive).next(.background).next(.inactive).next(.active)
+
+        XCTAssertFalse(back.isDenied)
+        XCTAssertFalse(back.leftApp)
+    }
+
+    func test_next_aNewDenialAfterAReturn_waitsForTheNextDeparture() {
+        let lifted = ShareMyLocationDenial(isDenied: true).next(.background).next(.active)
+        let deniedAgain = ShareMyLocationDenial(isDenied: true)
+
+        XCTAssertFalse(lifted.leftApp)
+        XCTAssertTrue(deniedAgain.next(.active).isDenied)
     }
 }

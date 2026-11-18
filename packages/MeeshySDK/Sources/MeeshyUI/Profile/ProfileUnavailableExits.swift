@@ -28,6 +28,20 @@ public struct ProfileUnavailableExits {
         self.suggest = suggest
         self.openSuggestion = openSuggestion
     }
+
+    /// Fermer d'abord, ouvrir ensuite : la fiche présentée par la même liaison que la suggestion (lien profond) effacerait
+    /// en se fermant la personne qu'on vient d'y poser, et une feuille demandée pendant qu'une autre est à l'écran est
+    /// ignorée. La suggestion s'ouvre donc une fois la fermeture jouée.
+    @MainActor
+    public func openSuggestionClosingFirst(_ person: UserSearchResult, close: () -> Void,
+                                           delay: Duration = .milliseconds(300)) {
+        close()
+        guard let openSuggestion else { return }
+        Task { @MainActor in
+            do { try await Task.sleep(for: delay) } catch { return }
+            openSuggestion(person)
+        }
+    }
 }
 
 /// « Tu cherchais peut-être » (planche `Etat-Introuvable`) : le pseudo le plus voisin de l'adresse demandée, à deux
@@ -62,19 +76,15 @@ nonisolated enum ProfileUnavailableSuggestion {
     }
 }
 
-/// Les deux boutons de « Personne ici » : chercher d'abord, scanner ensuite, et « Retour » quand l'app n'offre rien.
+/// Les sorties de « Personne ici », en colonne sous la suggestion : chercher d'abord, scanner ensuite quand l'app les
+/// offre, et toujours « Retour » en dernier (planche `Etat-Introuvable`).
 nonisolated enum ProfileUnavailableExit: Equatable, Sendable {
     case search
     case scan
     case back
 
-    static func resolve(canSearch: Bool, canScan: Bool) -> (primary: ProfileUnavailableExit, secondary: ProfileUnavailableExit?) {
-        switch (canSearch, canScan) {
-        case (true, true): return (primary: ProfileUnavailableExit.search, secondary: ProfileUnavailableExit.scan)
-        case (true, false): return (primary: ProfileUnavailableExit.search, secondary: ProfileUnavailableExit.back)
-        case (false, true): return (primary: ProfileUnavailableExit.scan, secondary: ProfileUnavailableExit.back)
-        case (false, false): return (primary: ProfileUnavailableExit.back, secondary: nil)
-        }
+    static func resolve(canSearch: Bool, canScan: Bool) -> [ProfileUnavailableExit] {
+        (canSearch ? [.search] : []) + (canScan ? [.scan] : []) + [.back]
     }
 }
 

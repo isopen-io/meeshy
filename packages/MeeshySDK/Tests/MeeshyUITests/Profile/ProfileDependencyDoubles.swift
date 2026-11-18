@@ -18,8 +18,14 @@ final class SpyProfileRelationshipState: ProfileRelationshipStateProviding {
 
     func status(for userId: String) -> FriendshipStatus { statuses[userId] ?? .none }
     func isBlocked(userId: String) -> Bool { blockedIds.contains(userId) }
-    func didSendRequest(to receiverId: String, requestId: String) { events.append("didSend:\(receiverId):\(requestId)") }
-    func didCancelRequest(to receiverId: String) { events.append("didCancel:\(receiverId)") }
+    func didSendRequest(to receiverId: String, requestId: String) {
+        events.append("didSend:\(receiverId):\(requestId)")
+        statuses[receiverId] = .pendingSent(requestId: requestId)
+    }
+    func didCancelRequest(to receiverId: String) {
+        events.append("didCancel:\(receiverId)")
+        statuses[receiverId] = FriendshipStatus.none
+    }
     func didAcceptRequest(from senderId: String) { events.append("didAccept:\(senderId)") }
     func rollbackAccept(senderId: String, requestId: String) { events.append("rollbackAccept:\(senderId):\(requestId)") }
     func didRejectRequest(from senderId: String) { events.append("didReject:\(senderId)") }
@@ -119,7 +125,8 @@ enum ProfileDependencyDoubles {
         )
     }
 
-    static func makeFriendRequest(id: String = "req-1") -> FriendRequest {
-        FriendRequest(id: id, senderId: "me", receiverId: "u-bob", status: "pending", createdAt: Date(timeIntervalSince1970: 0))
+    static func makeFriendRequest(id: String = "req-1", message: String? = nil,
+                                  createdAt: Date = Date(timeIntervalSince1970: 0)) -> FriendRequest {
+        FriendRequest(id: id, senderId: "me", receiverId: "u-bob", message: message, status: "pending", createdAt: createdAt)
     }
 }
