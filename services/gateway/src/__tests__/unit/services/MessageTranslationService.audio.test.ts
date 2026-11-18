@@ -1134,6 +1134,28 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       expect(prisma.messageAttachment.findUnique).not.toHaveBeenCalled();
     });
 
+    it('persists a post translation without audio (#19648) with neither url nor path, and keeps the voiced one', async () => {
+      const data = {
+        ...makeAudioProcessCompletedData(),
+        postId: 'post-1',
+        postMediaId: 'media-1',
+        translatedAudios: [
+          makeTranslatedAudio({ targetLanguage: 'de', translatedText: 'Hallo', audioUrl: null, audioPath: '', durationMs: 0, textOnly: true }),
+          makeTranslatedAudio({ targetLanguage: 'fr', audioUrl: '/outputs/audio/translated/fr.mp3', audioPath: '/app/outputs/fr.mp3' }),
+        ]
+      };
+
+      mockZmqClient.emit('audioProcessCompleted', data);
+      await flushAsync(3);
+
+      const { translations } = mockHandleAudioTranslationsReady.mock.calls[0][0] as { translations: Record<string, Record<string, unknown>> };
+      expect(translations.de.transcription).toBe('Hallo');
+      expect(translations.de).not.toHaveProperty('url');
+      expect(translations.de).not.toHaveProperty('path');
+      expect(translations.fr.url).toBe('/outputs/audio/translated/fr.mp3');
+      expect(translations.fr.path).toBe('/app/outputs/fr.mp3');
+    });
+
     it('does not route to PostAudioService when translatedAudios is empty', async () => {
       const data = {
         ...makeAudioProcessCompletedData(),
