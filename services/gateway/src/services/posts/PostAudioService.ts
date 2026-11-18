@@ -19,6 +19,7 @@ import { getLanguagesWithTranslation } from '../../utils/languages';
 import { postInclude, commentMediaInclude, NOT_DELETED } from './postIncludes';
 import { withMentions } from './postReferences';
 import { WIRE_BROADCAST } from './storyEffectsV3';
+import { mergeTranslationEntries } from '../message-translation/translatedTrackSave';
 
 const log = enhancedLogger.child({ module: 'PostAudioService' });
 
@@ -236,7 +237,13 @@ export class PostAudioService {
       const langCount = Object.keys(translations).length;
       log.info('Post audio translations ready — persisting', { postId, postMediaId, langCount });
 
-      const translationsPayload: Prisma.InputJsonValue = translations as unknown as Prisma.InputJsonValue;
+      const current = await this.prisma.postMedia.findUnique({
+        where: { id: postMediaId },
+        select: { translations: true },
+      });
+      const existing = (current?.translations ?? {}) as unknown as HandleAudioTranslationsReadyParams['translations'];
+      const merged = mergeTranslationEntries(existing, translations);
+      const translationsPayload: Prisma.InputJsonValue = merged as unknown as Prisma.InputJsonValue;
 
       const updated = await this.prisma.postMedia.update({
         where: { id: postMediaId },
