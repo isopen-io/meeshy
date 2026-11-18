@@ -415,7 +415,6 @@
     "POST /api/v1/me/contact-exchange",
     "POST /api/v1/relations/:userId/location/request",
     "PUT /api/v1/me/location/ghost",
-    "GET /api/v1/relations/summary",
     "GET /api/v1/users/:id/highlights",
     "GET /api/v1/users/me/highlights",
     "POST /api/v1/users/me/highlights",
