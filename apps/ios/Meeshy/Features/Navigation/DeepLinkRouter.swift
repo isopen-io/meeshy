@@ -152,6 +152,7 @@ enum DeepLinkParser {
     /// - `/me`                                   -> own profile
     /// - `/links`                                -> user links hub
     /// - `/u/{username}` or `/users/{username}`  -> user profile
+    /// - `/@{username}`                          -> user profile (adresse courte)
     /// - `/c/{id}`                               -> conversation
     /// - `/feeds/post/{id}` or `/feeds/p/{id}`   -> post detail
     /// - `/post/{id}` or `/p/{id}`               -> post detail (short)
@@ -334,7 +335,14 @@ enum DeepLinkParser {
         if isPostSegment(head) { return id.map { .postDetail(postId: $0) } }
         if isStorySegment(head) { return id.map { .storyDetail(postId: $0) } }
         if isUserSegment(head) { return id.map { .userProfile(username: $0) } }
-        return nil
+        return shortProfileHandle(head, alone: components.count == 1).map { .userProfile(username: $0) }
+    }
+
+    /// L'adresse courte d'une fiche, `meeshy.me/@pseudo` (#18871) : celle du billet de la face Liens et de son QR.
+    private static func shortProfileHandle(_ head: String, alone: Bool) -> String? {
+        guard alone, head.hasPrefix("@") else { return nil }
+        let handle = String(head.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
+        return handle.isEmpty ? nil : handle
     }
 
     /// Les clés d'adresse qui portent un code d'invitation, dans l'ordre du web

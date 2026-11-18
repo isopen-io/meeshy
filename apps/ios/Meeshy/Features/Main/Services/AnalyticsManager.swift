@@ -75,6 +75,7 @@ extension Route {
         case .trackingLinks: return "TrackingLinks"
         case .shareLinks: return "ShareLinks"
         case .communityLinks: return "CommunityLinks"
+        case .myAddresses: return "MyAddresses"
         case .dataExport: return "DataExport"
         case .postDetail: return "PostDetail"
         case .hashtagResults: return "HashtagResults"

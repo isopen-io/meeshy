@@ -67,4 +67,21 @@ final class JoinFlowCopyTests: XCTestCase {
             "Erreur inattendue"
         )
     }
+
+    func test_isGone_onlyForALinkThatIsNoLongerValid() {
+        XCTAssertTrue(JoinFlowCopy.isGone(MeeshyError.server(statusCode: 410, message: "Ce lien a expire")),
+                      "expiré, éteint ou plein : le lien n'est plus valable (planche Etat-Erreur vue 3)")
+        XCTAssertFalse(JoinFlowCopy.isGone(MeeshyError.server(statusCode: 404, message: "x")))
+        XCTAssertFalse(JoinFlowCopy.isGone(MeeshyError.server(statusCode: 500, message: "x")), "une panne se réessaie")
+        XCTAssertFalse(JoinFlowCopy.isGone(URLError(.notConnectedToInternet)))
+    }
+
+    func test_goneCopy_isTranslatedInTheSevenLanguages() throws {
+        for code in Self.languages {
+            let bundle = try lproj(code)
+            XCTAssertNotEqual(JoinFlowCopy.goneTitle(in: bundle), "joinFlow.gone.title", code)
+            XCTAssertNotEqual(JoinFlowCopy.goneMessage(in: bundle), "joinFlow.gone.message", code)
+        }
+        XCTAssertEqual(JoinFlowCopy.goneTitle(in: try lproj("fr")), "Ce lien n'est plus valable")
+    }
 }

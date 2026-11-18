@@ -19,6 +19,8 @@ public protocol BringProviding: Sendable {
     func setReceptionBlocked(_ setting: RelationReceptionSetting, userId: String, blocked: Bool) async throws -> RelationPersonSettings
     /// `PUT /relations/:userId/settings { listeningCategoryShared }` — accorder ou retirer un partage (#16803).
     func setShareGranted(_ grant: RelationShareGrant, userId: String, granted: Bool) async throws -> RelationPersonSettings
+    /// `PUT /relations/:userId/settings { newsNotify }` — s'abonner ou non à une personne (#19433, serveur #19434).
+    func setSubscribed(_ subscription: RelationSubscription, userId: String, subscribed: Bool) async throws -> RelationPersonSettings
 }
 
 public extension BringProviding {
@@ -75,6 +77,13 @@ public final class BringService: BringProviding, Sendable {
     public func setShareGranted(_ grant: RelationShareGrant, userId: String, granted: Bool) async throws -> RelationPersonSettings {
         let response: APIResponse<RelationPersonSettings> = try await api.put(
             RelationsEndpoint.byUserIdSettings(userId: userId), body: [grant.rawValue: granted]
+        )
+        return response.data
+    }
+
+    public func setSubscribed(_ subscription: RelationSubscription, userId: String, subscribed: Bool) async throws -> RelationPersonSettings {
+        let response: APIResponse<RelationPersonSettings> = try await api.put(
+            RelationsEndpoint.byUserIdSettings(userId: userId), body: [subscription.rawValue: subscribed]
         )
         return response.data
     }

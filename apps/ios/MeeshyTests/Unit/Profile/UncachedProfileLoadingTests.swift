@@ -73,3 +73,94 @@ final class LiveProfileLoadingTests: XCTestCase {
         }
     }
 }
+
+/// « Faire connaissance » (#19456) : le verdict « écrire part en demande » se lit du lien servi, et la demande part par
+/// le chemin unique du partage, vers la PERSONNE (la directe se crée à l'envoi).
+@MainActor
+final class LiveProfileAcquaintanceTests: XCTestCase {
+
+    private func makeSUT(link: Result<RelationLink, Error>,
+                         outcome: ShareDeliveryOutcome = .sent(conversationId: "c-1")) -> (LiveProfileAcquaintance, AcquaintanceDispatcherSpy) {
+        let relations = MockRelationsService()
+        relations.linkResult = link
+        let spy = AcquaintanceDispatcherSpy(outcome: outcome)
+        return (LiveProfileAcquaintance(relations: relations, dispatcher: { spy }), spy)
+    }
+
+    func test_writesARequest_publicLink_isARequest() async {
+        let (sut, _) = makeSUT(link: .success(RelationLink(userId: "u-rui", effectiveLevel: .public, grantedByMe: .public)))
+
+        let verdict = await sut.writesARequest(to: "U-RUI")
+
+        XCTAssertEqual(verdict, true)
+    }
+
+    func test_writesARequest_fromAcquaintance_isNotARequest() async {
+        let (sut, _) = makeSUT(link: .success(RelationLink(userId: "u-rui", effectiveLevel: .acquaintance,
+                                                            grantedByMe: .acquaintance)))
+
+        let verdict = await sut.writesARequest(to: "u-rui")
+
+        XCTAssertEqual(verdict, false)
+    }
+
+    func test_writesARequest_unreadOrSomeoneElse_isUnknown() async {
+        let (failing, _) = makeSUT(link: .failure(NSError(domain: "test", code: 500)))
+        let (other, _) = makeSUT(link: .success(RelationLink(userId: "u-leo", effectiveLevel: .public, grantedByMe: .public)))
+
+        let unread = await failing.writesARequest(to: "u-rui")
+        let mismatched = await other.writesARequest(to: "u-rui")
+
+        XCTAssertNil(unread, "sans lien lu, la fiche ne pose rien")
+        XCTAssertNil(mismatched, "le lien d'un autre ne juge pas cette fiche")
+    }
+
+    func test_sendMessageRequest_goesToThePersonAsText() async throws {
+        let (sut, spy) = makeSUT(link: .failure(NSError(domain: "test", code: 404)))
+
+        let delivered = await sut.sendMessageRequest(to: "u-rui", text: "Bonjour Rui")
+
+        XCTAssertTrue(delivered)
+        let sent = try XCTUnwrap(spy.delivered.first)
+        XCTAssertEqual(sent.recipient.userId, "u-rui")
+        XCTAssertNil(sent.recipient.conversationId, "la directe se crée à l'envoi, jamais avant")
+        XCTAssertEqual(sent.request.subject.composedText(caption: sent.request.caption), "Bonjour Rui")
+    }
+
+    func test_sendMessageRequest_queuedCounts_refusedDoesNot() async {
+        let (queued, _) = makeSUT(link: .failure(NSError(domain: "test", code: 404)), outcome: .queued(conversationId: "c-1"))
+        let (refused, _) = makeSUT(link: .failure(NSError(domain: "test", code: 404)), outcome: .failed(reason: "chiffrée"))
+
+        let inQueue = await queued.sendMessageRequest(to: "u-rui", text: "Bonjour")
+        let notSent = await refused.sendMessageRequest(to: "u-rui", text: "Bonjour")
+
+        XCTAssertTrue(inQueue, "mise en file hors ligne, la demande partira au retour du réseau")
+        XCTAssertFalse(notSent, "un refus défait l'envoi optimiste")
+    }
+}
+
+@MainActor
+private final class AcquaintanceDispatcherSpy: ShareDispatching {
+    nonisolated deinit {}
+
+    let outcome: ShareDeliveryOutcome
+    let createsGroups = false
+    private(set) var delivered: [(recipient: ShareRecipient, request: ShareSendRequest)] = []
+
+    init(outcome: ShareDeliveryOutcome) {
+        self.outcome = outcome
+    }
+
+    func deliver(_ request: ShareSendRequest, to recipient: ShareRecipient) async -> ShareDeliveryOutcome {
+        delivered.append((recipient, request))
+        return outcome
+    }
+
+    func createGroup(with people: [ShareRecipient]) async -> ShareRecipient? { nil }
+
+    func publish(attachment: MessageAttachment, to target: PublicationTarget) async -> Bool { false }
+
+    func resolvedLink(for card: ShareCard) async -> URL? { nil }
+
+    func republish(card: ShareCard, to target: PublicationTarget) async -> ShareRepublishOutcome { .published }
+}

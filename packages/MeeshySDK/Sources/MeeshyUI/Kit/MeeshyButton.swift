@@ -69,6 +69,7 @@ public struct MeeshyButton<Trailing: View>: View {
     public var body: some View {
         VStack(spacing: MeeshySpacing.xs) {
             control
+                .meeshyPointerLift(in: Capsule(), tint: tint)
             if let reason = MeeshyButtonWords.hint(disabledReason: disabledReason, isEnabled: isEnabled) {
                 Text(verbatim: reason)
                     .meeshyScaledFont(MeeshyFont.smallSize)

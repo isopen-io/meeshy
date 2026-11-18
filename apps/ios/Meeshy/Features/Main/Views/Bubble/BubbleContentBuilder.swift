@@ -87,7 +87,8 @@ extension BubbleContent {
             embeddedVideo: firstLinkURL.flatMap { EmbeddableVideoResolver.resolve(urlString: $0) },
             trackedLinks: trackedLinks,
             embedTrackedURL: embedTrackedURL,
-            conversationCardTarget: firstLinkURL.flatMap { ConversationLinkTarget.target(for: $0) }
+            conversationCardTarget: firstLinkURL.flatMap { ConversationLinkTarget.target(for: $0) },
+            profileCardHandle: firstLinkURL.flatMap { PersonLink.handle(from: $0) }
         )
     }
 

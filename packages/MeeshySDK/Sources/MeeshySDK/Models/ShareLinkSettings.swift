@@ -197,9 +197,19 @@ public extension MyShareLink {
     }
 
     func withActive(_ active: Bool) -> MyShareLink {
+        copy(isActive: active, currentUses: currentUses)
+    }
+
+    /// Le lien une fois son compteur d'entrées remis à `uses` — la valeur optimiste de « Remettre le compteur à
+    /// zéro » (#19505).
+    func withCurrentUses(_ uses: Int) -> MyShareLink {
+        copy(isActive: isActive, currentUses: uses)
+    }
+
+    private func copy(isActive active: Bool, currentUses uses: Int) -> MyShareLink {
         MyShareLink(
             id: id, linkId: linkId, identifier: identifier, name: name,
-            isActive: active, currentUses: currentUses, maxUses: maxUses,
+            isActive: active, currentUses: uses, maxUses: maxUses,
             expiresAt: expiresAt, createdAt: createdAt, conversationTitle: conversationTitle,
             description: description, maxConcurrentUsers: maxConcurrentUsers,
             currentConcurrentUsers: currentConcurrentUsers,
@@ -248,5 +258,27 @@ public struct UpdateShareLinkRequest: Encodable, Sendable {
         try c.encode(settings.guestRights.images, forKey: .allowAnonymousImages)
         try c.encode(settings.guestRights.files, forKey: .allowAnonymousFiles)
         try c.encode(settings.guestRights.history, forKey: .allowViewHistory)
+    }
+}
+
+// MARK: - Remise à zéro du compteur (#19505, servie par #19283)
+
+/// Le corps de `PATCH /links/:linkId` qui remet le compteur d'entrées à zéro. Il ne porte QUE `resetUses` : la
+/// remise ne réécrit aucun réglage du lien.
+public struct ResetShareLinkUsesRequest: Encodable, Sendable {
+    public let resetUses: Bool
+
+    public init() {
+        self.resetUses = true
+    }
+}
+
+/// Ce que la passerelle rend après la remise : le lien, dont seul `currentUses` compte ici. Un serveur qui ne
+/// connaît pas `resetUses` ne le déclare pas (`nil`) — la remise n'a alors pas eu lieu.
+public struct ShareLinkUsesReset: Codable, Sendable, Equatable {
+    public let currentUses: Int?
+
+    public init(currentUses: Int?) {
+        self.currentUses = currentUses
     }
 }

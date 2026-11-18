@@ -18,10 +18,12 @@ public nonisolated enum MeeshyAnchoredSheetHeight: Sendable, Equatable {
     public static let tall = MeeshyAnchoredSheetHeight.fraction(MeeshyAnchoredSheetMetrics.maximumFraction)
 }
 
-/// Le matériau d'une feuille ancrée : celui du thème, ou l'indigo sombre forcé du composer.
+/// Le matériau d'une feuille ancrée : celui du thème, l'indigo sombre forcé du composer, ou le
+/// verre (K01) d'une feuille posée sur une carte géographique, qui laisse la carte transparaître.
 public nonisolated enum MeeshyAnchoredSheetSurface: String, Sendable, Equatable, CaseIterable {
     case theme
     case dark
+    case glass
 }
 
 /// Ce que devient un toucher hors de la feuille : il la ferme, ou il traverse jusqu'à l'hôte.
@@ -229,6 +231,11 @@ public nonisolated enum MeeshyAnchoredSheetMetrics {
     }
 
     public static func handleOpacity(surface: MeeshyAnchoredSheetSurface) -> Double {
-        surface == .dark ? handleOpacityDark : handleOpacityTheme
+        usesMediaInk(surface: surface) ? handleOpacityDark : handleOpacityTheme
+    }
+
+    /// L'encre claire du média, sur l'indigo comme sur le verre posé sur une carte : la feuille force le sombre.
+    public static func usesMediaInk(surface: MeeshyAnchoredSheetSurface) -> Bool {
+        surface != .theme
     }
 }

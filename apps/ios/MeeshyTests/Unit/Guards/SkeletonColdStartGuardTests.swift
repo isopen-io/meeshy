@@ -39,7 +39,8 @@ final class SkeletonColdStartGuardTests: XCTestCase {
         ("Features/Main/Views/ConversationView+Skeleton.swift", "SkeletonMessageBubble"),
         ("Features/Main/Views/FeedView.swift",             "SkeletonFeedList"),
         ("Features/Stories/Views/StoryTrayView.swift",        "SkeletonStoryTrayRow"),
-        ("Features/Profile/Views/ProfileView.swift",          "SkeletonProfileHeader"),
+        // Ma vitrine monte le gabarit fait du squelette du kit (K38, #19594) ; le héros K28 tait le reste.
+        ("Features/Profile/Views/ProfileView.swift",          "ProfileVitrineSkeleton"),
     ]
 
     // MARK: - La règle
@@ -78,6 +79,39 @@ final class SkeletonColdStartGuardTests: XCTestCase {
             undefined.isEmpty,
             "Squelette épinglé sans définition (app ou SDK) : \(undefined)"
         )
+    }
+
+    // MARK: - Fait du kit (#19594)
+
+    /// Le gabarit de ma vitrine n'est fait que de l'atome K38 : aucune forme redessinée sur place (loi 12), et
+    /// l'ancien squelette maison n'existe plus nulle part.
+    func test_leGabaritDeMaVitrineNestFaitQueDuSqueletteDuKit() throws {
+        let source = try text(atRelativePath: "Features/Main/Views/Skeletons/ProfileVitrineSkeleton.swift")
+        XCTAssertTrue(Self.mounts("MeeshySkeleton", in: source), "le gabarit ne monte pas MeeshySkeleton")
+        let masked = DeclarationBodyScanner.mask(source)
+        for redrawn in ["SkeletonShape(", "skeletonShimmer", "RoundedRectangle(", "Circle()", "ProgressView("] {
+            XCTAssertFalse(masked.contains(redrawn), "le gabarit redessine sur place : \(redrawn)")
+        }
+        XCTAssertFalse(try definitionCorpus().contains("struct SkeletonProfileHeader"),
+                       "SkeletonProfileHeader est revenu : un squelette redessiné à côté du kit")
+    }
+
+    /// Aucune page de liens ne tourne de roue : sur cache vide, les billets fantômes du kit ; sur cache, la liste.
+    /// Les trois pages montent la section commune (#19601), qui porte le squelette et sa loi.
+    func test_aucunePageDeLiensNeTourneDeRoue() throws {
+        for screen in ["Features/Links/Views/ShareLinksView.swift", "Features/Links/Views/TrackingLinksView.swift",
+                       "Features/Links/Views/CommunityLinksView.swift"] {
+            let source = try text(atRelativePath: screen)
+            XCTAssertFalse(Self.mounts("ProgressView", in: source), "\(screen) tourne encore une roue")
+            XCTAssertTrue(Self.mounts("LinksPageSection", in: source), "\(screen) ne monte pas la section des billets")
+            XCTAssertTrue(DeclarationBodyScanner.mask(source).contains("LinksPageLaw.phase("),
+                          "\(screen) ne garde pas le squelette au seul cache vide")
+        }
+        let section = try text(atRelativePath: "Features/Links/Views/LinksPageTickets.swift")
+        XCTAssertTrue(Self.mounts("MeeshySkeletonColumn", in: section), "la section ne monte pas les billets fantômes")
+        XCTAssertTrue(DeclarationBodyScanner.mask(section).contains("MeeshySkeletonLaw.shows("),
+                      "la section ne garde pas le squelette au seul cache vide")
+        XCTAssertTrue(section.contains(".ticket(cut:"), "le fantôme n'est pas un billet")
     }
 
     // MARK: - Bornes

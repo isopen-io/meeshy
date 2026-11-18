@@ -209,6 +209,95 @@ final class SharedLocationsMapViewModelTests: XCTestCase {
         XCTAssertEqual(rig.spy.requested, [last])
     }
 
+    // MARK: - Le cercle servi et « Pas sur la carte » (#18872)
+
+    func test_theServedCircle_andTheDirectoryAvatar_reachThePin() async {
+        let rig = makeRig(people: [CirclePerson(id: "alice", name: "Alice Martin", username: nil, avatarURL: "https://cdn/a.jpg")])
+
+        rig.live.receive(SharedLocationChanged(
+            userId: "alice", latitude: 38.71, longitude: -9.13, precision: .neighborhood, radiusMeters: 1200,
+            updatedAt: t0, expiresAt: t0.addingTimeInterval(3600), circle: .close
+        ))
+        await waitForPins(rig.sut) { $0.first?.avatarURL != nil }
+
+        XCTAssertEqual(rig.sut.pins.first?.circle, .close)
+        XCTAssertEqual(rig.sut.pins.first?.avatarURL, "https://cdn/a.jpg")
+        XCTAssertEqual(rig.sut.pins.first?.updatedAt, t0)
+    }
+
+    func test_aStoppedShare_goesNotOnTheMap_namedByTheDirectory_withoutAnyPosition() async {
+        let rig = makeRig()
+        let start = t0
+        let log = SharedLocationEndingsLog(live: rig.live, now: { start })
+        let sut = SharedLocationsMapViewModel(
+            live: rig.live,
+            people: FakeCirclePeople([CirclePerson(id: "yuki", name: "Yuki Tanaka", username: nil, avatarURL: nil)]),
+            presence: { _ in nil },
+            endings: log.$endings.eraseToAnyPublisher(),
+            calm: .milliseconds(20)
+        )
+        rig.live.receive(served("yuki"))
+        let named = expectation(description: "Yuki est « pas sur la carte »")
+        let watch = sut.$ended.first { $0.first?.name == "Yuki Tanaka" }.sink { _ in named.fulfill() }
+
+        rig.ended.send(SharedLocationEnded(userId: "yuki"))
+        await fulfillment(of: [named], timeout: 2)
+        watch.cancel()
+
+        XCTAssertEqual(sut.ended.map(\.id), ["yuki"])
+        XCTAssertEqual(sut.ended.first?.endedAt, start)
+        XCTAssertTrue(sut.pins.isEmpty)
+    }
+
+    // MARK: - En pause par fantôme (#19562)
+
+    func test_aServedGhost_isNamedByTheDirectory_withItsCircle_andHasNoPin() async {
+        let live = SharedLocationsLive(
+            viewerId: { "me" },
+            served: { _ in SharedLocationSnapshot(items: [], ghosts: [SharedLocationGhost(userId: "kwame", circle: .blood)]) },
+            changedEvents: Empty().eraseToAnyPublisher(),
+            endedEvents: Empty().eraseToAnyPublisher(),
+            connected: Empty().eraseToAnyPublisher()
+        )
+        let sut = SharedLocationsMapViewModel(
+            live: live,
+            people: FakeCirclePeople([CirclePerson(id: "kwame", name: "Kwame Mensah", username: nil, avatarURL: nil)]),
+            presence: { _ in .online }
+        )
+        live.receive(served("kwame"))
+        let named = expectation(description: "Kwame est en fantôme")
+        let watch = sut.$ghosts.first { $0.first?.name == "Kwame Mensah" }.sink { _ in named.fulfill() }
+
+        await sut.appeared()
+        await fulfillment(of: [named], timeout: 2)
+        watch.cancel()
+
+        XCTAssertEqual(sut.ghosts, [SharedLocationGhostPin(id: "kwame", name: "Kwame Mensah", circle: .blood)])
+        XCTAssertEqual(sut.ghost(for: "kwame")?.circle, .blood)
+        XCTAssertNil(sut.pin(for: "kwame"))
+    }
+
+    func test_aGatewayThatServesNoGhost_showsNobodyInGhost() async {
+        let rig = makeRig()
+        rig.spy.served = [served("alice")]
+
+        await rig.sut.appeared()
+
+        XCTAssertTrue(rig.sut.ghosts.isEmpty)
+        XCTAssertEqual(rig.sut.pins.map(\.id), ["alice"])
+    }
+
+    // MARK: - « Dernière position connue » hors ligne (K36 `stale`)
+
+    func test_pinFreshness_offlineIsTheLastKnownPosition_neverLive() {
+        let pin = SharedLocationPin(id: "a", latitude: 0, longitude: 0, radiusMeters: 10, precision: .exact, name: "A",
+                                    initials: "A", presence: nil, deadline: t0.addingTimeInterval(3600), updatedAt: t0)
+
+        XCTAssertEqual(LocationMapPinsLayer.freshness(of: pin, isOffline: true, now: t0), .lastKnown)
+        XCTAssertEqual(LocationMapPinsLayer.freshness(of: pin, isOffline: false, now: t0), .live)
+        XCTAssertEqual(LocationMapPinsLayer.freshness(of: pin, isOffline: false, now: t0.addingTimeInterval(600)), .settled)
+    }
+
     // MARK: - L'emprise d'une région
 
     func test_regionBounds_matchTheVisibleRegion() {
@@ -230,5 +319,306 @@ final class SharedLocationsMapViewModelTests: XCTestCase {
         )
 
         XCTAssertNil(SharedLocationsMapRegion.bounds(of: region))
+    }
+}
+
+/// La position d'un Sang, côté écran (#18872, planche Carte-Sang) : mon fantôme s'applique aussitôt et revient si la
+/// passerelle le refuse ; l'historique lu se peint à la réouverture, jamais pour un autre compte.
+@MainActor
+final class BloodLocationModelTests: XCTestCase {
+
+    final class FakeBloodLocation: BloodLocationProviding, @unchecked Sendable {
+        var accepts = true
+        var points: [BloodLocationPoint] = []
+        var fails = false
+        var changes: [BloodLocationSettingsChange] = []
+
+        func history(of userId: String, since: Date?, limit: Int?) async throws -> BloodLocationHistory {
+            if fails { throw URLError(.notConnectedToInternet) }
+            return BloodLocationHistory(points: points)
+        }
+
+        var journal = BloodLocationConsultations(items: [])
+
+        func consultations() async throws -> BloodLocationConsultations { journal }
+
+        func update(_ change: BloodLocationSettingsChange) async throws -> Bool {
+            changes.append(change)
+            return accepts
+        }
+
+        func eraseHistory() async throws {}
+
+        var recorded: [BloodLocationReading] = []
+        var keeps = true
+
+        func record(_ reading: BloodLocationReading) async throws -> Bool {
+            recorded.append(reading)
+            return keeps
+        }
+    }
+
+    final class GhostMemory: BloodGhostStoring {
+        var isGhost = false
+        nonisolated deinit {}
+    }
+
+    private let now = Date(timeIntervalSince1970: 1_800_000_000)
+
+    private func makeSUT(_ service: FakeBloodLocation, account: String = "me", online: Bool = true,
+                         people: [CirclePerson] = [], relations: MockBringService = MockBringService()) -> BloodLocationModel {
+        let now = self.now
+        return BloodLocationModel(userId: "mina", service: service, ghostStore: GhostMemory(), isOnline: { online },
+                                  now: { now }, account: account, people: FakeCirclePeople(people), relations: relations)
+    }
+
+    // MARK: - Ne plus recevoir sa position continue (#19479, serveur #19454)
+
+    private func servedRelations(muted: Bool?) -> MockBringService {
+        let relations = MockBringService()
+        relations.settingsResult = .success(RelationPersonSettings(userId: "mina", bringBlocked: false, bloodLocationMuted: muted))
+        return relations
+    }
+
+    func test_stopReceiving_isOfferedOnlyWhenTheGatewayServesIt() async {
+        let served = makeSUT(FakeBloodLocation(), account: "mute-served", relations: servedRelations(muted: false))
+        let oldGateway = makeSUT(FakeBloodLocation(), account: "mute-old", relations: servedRelations(muted: nil))
+        let alreadyMuted = makeSUT(FakeBloodLocation(), account: "mute-done", relations: servedRelations(muted: true))
+        let unreadable = makeSUT(FakeBloodLocation(), account: "mute-failed")
+
+        await served.load()
+        await oldGateway.load()
+        await alreadyMuted.load()
+        await unreadable.load()
+
+        XCTAssertTrue(served.canStopReceiving)
+        XCTAssertFalse(oldGateway.canStopReceiving)
+        XCTAssertFalse(alreadyMuted.canStopReceiving)
+        XCTAssertFalse(unreadable.canStopReceiving)
+    }
+
+    func test_stopReceiving_writesOnlyTheReceptionOfThisBlood_andWithdrawsTheExit() async {
+        let relations = servedRelations(muted: false)
+        relations.setBlockedResult = .success(RelationPersonSettings(userId: "mina", bringBlocked: false, bloodLocationMuted: true))
+        let sut = makeSUT(FakeBloodLocation(), account: "mute-ok", relations: relations)
+        await sut.load()
+
+        let stopped = await sut.stopReceiving()
+
+        XCTAssertTrue(stopped)
+        XCTAssertEqual(relations.blockedSettings, [.bloodLocation])
+        XCTAssertEqual(relations.blockedWrites, [true])
+        XCTAssertFalse(sut.canStopReceiving)
+        XCTAssertFalse(sut.isStoppingReception)
+        XCTAssertNil(sut.notice)
+    }
+
+    func test_stopReceiving_refused_keepsTheExit_andSaysSo() async {
+        let relations = servedRelations(muted: false)
+        let sut = makeSUT(FakeBloodLocation(), account: "mute-refused", relations: relations)
+        await sut.load()
+
+        let stopped = await sut.stopReceiving()
+
+        XCTAssertFalse(stopped)
+        XCTAssertTrue(sut.canStopReceiving)
+        XCTAssertFalse(sut.isStoppingReception)
+        XCTAssertEqual(sut.notice, BloodLocationCopy.stopReceivingFailed)
+    }
+
+    func test_stopReceiving_notOffered_writesNothing() async {
+        let relations = servedRelations(muted: nil)
+        let sut = makeSUT(FakeBloodLocation(), account: "mute-none", relations: relations)
+        await sut.load()
+
+        let stopped = await sut.stopReceiving()
+
+        XCTAssertFalse(stopped)
+        XCTAssertTrue(relations.blockedWrites.isEmpty)
+    }
+
+    // MARK: - Sa batterie (planche Carte-Sang)
+
+    func test_batteryLine_saysTheLevelAndTheAgeOfTheReading() {
+        let measured = now.addingTimeInterval(-12 * 60)
+        let state = BatteryReaderState(userId: "mina", phase: .low, level: 71, charging: false, lowPower: false, measuredAt: measured)
+
+        let line = BloodBatteryLine.resolve(state, now: now)
+
+        XCTAssertEqual(line.title, BloodLocationCopy.battery(level: 71))
+        XCTAssertEqual(line.subtitle, RelativeTimeFormatter.longString(for: measured, now: now))
+        XCTAssertEqual(line.systemImage, BatteryAnnouncementWording.iconName(for: state))
+    }
+
+    func test_batteryLine_withoutAFreshReading_saysNoneAndShowsNoLevel() {
+        let stale = BatteryReaderState(userId: "mina", phase: .low, level: 71, charging: false, lowPower: false,
+                                       measuredAt: now.addingTimeInterval(-BatteryContract.stateTtl - 60))
+
+        let none = BloodBatteryLine.resolve(nil, now: now)
+        let expired = BloodBatteryLine.resolve(stale, now: now)
+
+        XCTAssertEqual(none.title, BloodLocationCopy.batteryUnknown)
+        XCTAssertEqual(none.subtitle, BloodLocationCopy.batteryNoReading)
+        XCTAssertEqual(expired, none)
+    }
+
+    func test_whoLookedAtMyPosition_isNamedByTheCircleDirectory() async {
+        let service = FakeBloodLocation()
+        service.journal = BloodLocationConsultations(items: [
+            BloodLocationConsultation(observerId: "leo", consultedAt: now.addingTimeInterval(-60)),
+            BloodLocationConsultation(observerId: "ghost-id", consultedAt: now.addingTimeInterval(-120)),
+        ])
+        let leo = CirclePerson(id: "leo", name: "Léo Marchetti", username: "leo.m", avatarURL: nil)
+        let sut = makeSUT(service, account: "cache-observers", people: [leo])
+
+        await sut.load()
+
+        XCTAssertEqual(sut.consultations?.byObserver.map(\.observerId), ["leo", "ghost-id"])
+        XCTAssertEqual(sut.observers["leo"]?.name, "Léo Marchetti")
+        XCTAssertNil(sut.observers["ghost-id"])
+    }
+
+    func test_ghost_appliesAtOnce_andComesBackWhenRefused() async {
+        let service = FakeBloodLocation()
+        service.accepts = false
+        let sut = makeSUT(service)
+
+        await sut.setGhost(true)
+
+        XCTAssertFalse(sut.isGhost)
+        XCTAssertEqual(service.changes.first?.ghost, true)
+        XCTAssertNil(service.changes.first?.userId)
+    }
+
+    func test_ghost_staysWhenAccepted() async {
+        let sut = makeSUT(FakeBloodLocation())
+
+        await sut.setGhost(true)
+
+        XCTAssertTrue(sut.isGhost)
+    }
+
+    func test_theReadHistory_paintsAtReopening_onlyForTheSameAccount() async {
+        let service = FakeBloodLocation()
+        service.points = [BloodLocationPoint(latitude: 38.71, longitude: -9.13, recordedAt: now.addingTimeInterval(-600))]
+        await makeSUT(service, account: "cache-a").load()
+
+        service.fails = true
+        let reopened = makeSUT(service, account: "cache-a")
+        let otherAccount = makeSUT(service, account: "cache-b")
+
+        XCTAssertEqual(reopened.state, .loaded)
+        XCTAssertEqual(reopened.points.count, 1)
+        XCTAssertTrue(otherAccount.points.isEmpty)
+    }
+
+    func test_aFailedFirstLoad_saysOfflineWhenTheNetworkIsGone() async {
+        let service = FakeBloodLocation()
+        service.fails = true
+        let sut = makeSUT(service, account: "cache-offline", online: false)
+
+        await sut.load()
+
+        XCTAssertEqual(sut.state, .failed(offline: true))
+    }
+}
+
+/// LE RELEVÉ DU SANG (#18872) : au retour au premier plan, un point part si un Sang peut le relire, hors fantôme, avec
+/// une permission déjà donnée ; le même lieu ne repart pas avant un quart d'heure ; un refus ne repose pas la question
+/// à chaque retour.
+@MainActor
+final class BloodLocationRecorderTests: XCTestCase {
+
+    @MainActor
+    final class FixedFix: BloodLocationFixReading {
+        var fix: SharedLocationFix?
+        var asked = 0
+        init(_ fix: SharedLocationFix?) { self.fix = fix }
+        nonisolated deinit {}
+        func authorizedFix() async -> SharedLocationFix? {
+            asked += 1
+            return fix
+        }
+    }
+
+    final class Clock {
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        nonisolated deinit {}
+    }
+
+    private func makeSUT(service: BloodLocationModelTests.FakeBloodLocation, fix: FixedFix, clock: Clock,
+                         enabled: Bool = true, levels: [RelationLevel] = [.blood], ghost: Bool = false,
+                         account: String? = "me") -> BloodLocationRecorder {
+        let links = levels.enumerated().map { RelationLink(userId: "u\($0.offset)", effectiveLevel: $0.element, grantedByMe: $0.element) }
+        let context = BloodLocationRecorderContext(isEnabled: { enabled }, links: { links })
+        return BloodLocationRecorder(service: service, fixes: fix, context: context, isGhost: { _ in ghost },
+                                     account: { account }, now: { clock.now })
+    }
+
+    private var lisbon: SharedLocationFix? { SharedLocationFix(latitude: 38.71, longitude: -9.13, accuracy: 20) }
+
+    func test_aBloodCanReadIt_soTheFirstPointLeaves_andTheSamePlaceWaitsAQuarterHour() async {
+        let service = BloodLocationModelTests.FakeBloodLocation()
+        let clock = Clock()
+        let sut = makeSUT(service: service, fix: FixedFix(lisbon), clock: clock)
+
+        await sut.recordIfDue()
+        clock.now = clock.now.addingTimeInterval(5 * 60)
+        await sut.recordIfDue()
+        clock.now = clock.now.addingTimeInterval(10 * 60)
+        await sut.recordIfDue()
+
+        XCTAssertEqual(service.recorded.count, 2)
+        XCTAssertEqual(service.recorded.first?.accuracy, 20)
+    }
+
+    func test_withoutABlood_nothingLeaves_andTheQuestionIsNotAskedAgainAtOnce() async {
+        let service = BloodLocationModelTests.FakeBloodLocation()
+        let fix = FixedFix(lisbon)
+        let sut = makeSUT(service: service, fix: fix, clock: Clock(), levels: [.friend, .close])
+
+        await sut.recordIfDue()
+        await sut.recordIfDue()
+
+        XCTAssertTrue(service.recorded.isEmpty)
+        XCTAssertEqual(fix.asked, 1)
+    }
+
+    func test_ghostFlagOffNoPermissionOrNoAccount_nothingLeaves() async {
+        let service = BloodLocationModelTests.FakeBloodLocation()
+        await makeSUT(service: service, fix: FixedFix(lisbon), clock: Clock(), ghost: true).recordIfDue()
+        await makeSUT(service: service, fix: FixedFix(lisbon), clock: Clock(), enabled: false).recordIfDue()
+        await makeSUT(service: service, fix: FixedFix(nil), clock: Clock()).recordIfDue()
+        await makeSUT(service: service, fix: FixedFix(lisbon), clock: Clock(), account: nil).recordIfDue()
+
+        XCTAssertTrue(service.recorded.isEmpty)
+    }
+
+    func test_aPointTheGatewayDidNotKeep_isOfferedAgainAtTheNextReturn() async {
+        let service = BloodLocationModelTests.FakeBloodLocation()
+        service.keeps = false
+        let sut = makeSUT(service: service, fix: FixedFix(lisbon), clock: Clock())
+
+        await sut.recordIfDue()
+        await sut.recordIfDue()
+
+        XCTAssertEqual(service.recorded.count, 2)
+    }
+
+    // MARK: - « Où il est » sur la face Actions (planche Autre-Actions)
+
+    func test_whereDetail_saysThePrecisionThenTheTimeLeft() {
+        let window = SharedLocationWindow(deadline: t0.addingTimeInterval(42 * 60), now: t0)
+
+        let detail = LocationMapCopy.whereDetail(.neighborhood, window: window)
+
+        XCTAssertTrue(detail.hasPrefix(LocationMapCopy.precisionPill(.neighborhood)))
+        XCTAssertTrue(detail.hasSuffix(LocationMapCopy.remaining(window)))
+    }
+
+    func test_whereDetail_ofAnEndedShare_neverSaysATimeLeft() {
+        let window = SharedLocationWindow(deadline: t0.addingTimeInterval(-5), now: t0)
+
+        XCTAssertEqual(LocationMapCopy.whereDetail(.city, window: window), LocationMapCopy.precisionPill(.city))
     }
 }
