@@ -65,4 +65,22 @@ nonisolated enum MyAddressesCopy {
     static var listLabel: String {
         String(localized: "profile.addresses.list", defaultValue: "Mes adresses, dans l'ordre de ma vitrine", bundle: .main)
     }
+    static var preview: String { String(localized: "profile.addresses.preview", defaultValue: "Aperçu", bundle: .main) }
+    static var onVitrine: String {
+        String(localized: "profile.addresses.onVitrine", defaultValue: "Sur ta vitrine", bundle: .main)
+    }
+    static func viewedBy(_ level: RelationLevel) -> String {
+        let format = String(localized: "profile.addresses.viewedBy", defaultValue: "Vue par : %@", bundle: .main)
+        return String(format: format, CircleLevelNames.title(of: level))
+    }
+    static var pickCircle: String {
+        String(localized: "profile.addresses.pickCircle", defaultValue: "Choisir le cercle qui regarde ta vitrine", bundle: .main)
+    }
+    static var previewNone: String {
+        String(localized: "profile.addresses.previewNone", defaultValue: "Aucune adresse visible à ce cercle", bundle: .main)
+    }
+    static func previewSpoken(_ titles: [String]) -> String {
+        let format = String(localized: "profile.addresses.previewSpoken", defaultValue: "Adresses visibles : %@", bundle: .main)
+        return String(format: format, titles.formatted(.list(type: .and)))
+    }
 }

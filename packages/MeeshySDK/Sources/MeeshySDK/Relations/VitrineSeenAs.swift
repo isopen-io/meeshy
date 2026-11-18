@@ -98,3 +98,16 @@ public enum VitrineLadder {
         level <= seen
     }
 }
+
+extension VitrineSeenAs {
+
+    /// Mes adresses telles qu'un lecteur du cercle `level` les lit sur ma Vitrine (#19555, planche `Mes-Adresses`) :
+    /// celles que j'affiche et dont le cercle s'ouvre à ce niveau, dans l'ordre de ma liste. Un cercle illisible ne
+    /// s'ouvre à personne — jamais Public.
+    public static func addresses(_ addresses: [ProfileAddress], by level: RelationLevel) -> [ProfileAddress] {
+        addresses.filter { address in
+            guard address.isShown, let floor = address.circle else { return false }
+            return level >= floor
+        }
+    }
+}

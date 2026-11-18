@@ -79,4 +79,36 @@ struct VitrineSeenAsTests {
         #expect(VitrineLadder.isReached(.friend, seenAs: .close))
         #expect(VitrineLadder.isReached(.blood, seenAs: .close) == false)
     }
+
+    // MARK: - Mes adresses vues par un cercle (#19555, planche `Mes-Adresses`)
+
+    private func address(_ id: String, _ circle: RelationLevel?, shown: Bool = true) -> ProfileAddress {
+        ProfileAddress(id: id, title: id, url: "https://\(id).example", circle: circle, isShown: shown)
+    }
+
+    @Test func aCloseAddressIsAbsentFromThePublicPreviewAndPresentForClose() {
+        let mine = [address("site", .public), address("journal", .close), address("music", .public)]
+        let publicIDs = VitrineSeenAs.addresses(mine, by: .public).map(\.id)
+        let closeIDs = VitrineSeenAs.addresses(mine, by: .close).map(\.id)
+        #expect(publicIDs == ["site", "music"])
+        #expect(closeIDs == ["site", "journal", "music"])
+    }
+
+    @Test func theSeenAddressesKeepTheOrderOfTheList() {
+        let mine = [address("music", .public), address("site", .friend), address("photos", .public)]
+        let seen = VitrineSeenAs.addresses(mine, by: .blood).map(\.id)
+        #expect(seen == ["music", "site", "photos"])
+    }
+
+    @Test func aHiddenAddressIsSeenByNoCircle() {
+        let mine = [address("site", .public, shown: false)]
+        let seen = VitrineSeenAs.addresses(mine, by: .blood)
+        #expect(seen.isEmpty)
+    }
+
+    @Test func anAddressWithAnUnreadableCircleIsSeenByNoCircle() {
+        let mine = [address("site", nil)]
+        let seen = VitrineSeenAs.addresses(mine, by: .blood)
+        #expect(seen.isEmpty)
+    }
 }

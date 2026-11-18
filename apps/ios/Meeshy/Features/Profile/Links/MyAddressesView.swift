@@ -18,11 +18,16 @@ struct MyAddressesView: View {
 
     @State private var circleFor: ProfileAddress?
     @State private var removing: ProfileAddress?
+    @State private var seenBy: RelationLevel = .public
+    @State private var seenAsShown = false
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        LinksPage(title: ProfileLinksCopy.addressesTitle, accent: accent) {
+        LinksPage(title: ProfileLinksCopy.addressesTitle, accent: accent,
+                  action: owner.map { _ in
+                      LinksPageAction(label: MyAddressesCopy.preview, systemImage: "eye", perform: { seenAsShown = true })
+                  }) {
             ScrollViewReader { proxy in
                 VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                     MeeshyNote(MyAddressesCopy.intro, lead: .systemImage("eye"))
@@ -35,6 +40,9 @@ struct MyAddressesView: View {
                     })
                     MyAddressForm(store: store, accent: accent)
                         .id(Self.formAnchor)
+                    if let owner, !store.addresses.isEmpty {
+                        MyAddressesVitrinePreview(owner: owner, addresses: store.addresses, level: $seenBy, accent: accent)
+                    }
                     MeeshyNote(MyAddressesCopy.leaving, kind: .security, lead: .systemImage("checkmark.shield"))
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
@@ -53,8 +61,16 @@ struct MyAddressesView: View {
         .alert(store.refusal ?? "", isPresented: Binding(get: { store.refusal != nil }, set: { if !$0 { store.refusal = nil } })) {
             Button(ProfileLinksCopy.close, role: .cancel) { store.refusal = nil }
         }
+        .fullScreenCover(isPresented: $seenAsShown) {
+            if let owner {
+                VitrineSeenAsView(user: owner, accentColor: owner.profileAccentHex, initial: seenBy)
+            }
+        }
         .accessibilityIdentifier("profile.addresses")
     }
+
+    /// Mon compte, pour la mini-vitrine et « Voir comme » : sans compte, l'écran s'en passe.
+    private var owner: MeeshyUser? { AuthManager.shared.currentUser }
 
     private func isAsking(_ item: Binding<ProfileAddress?>) -> Binding<Bool> {
         Binding(get: { item.wrappedValue != nil }, set: { if !$0 { item.wrappedValue = nil } })
@@ -187,5 +203,99 @@ struct MyAddressRow: View {
         }
         .onAppear { title = address.title }
         .adaptiveOnChange(of: address.title) { _, served in title = served }
+    }
+}
+
+/// « Sur ta vitrine · Vue par : Public » (#19555, planche `Mes-Adresses`) : ma mini-vitrine — avatar, nom, @pseudo —
+/// puis les adresses que CE cercle lit, dans l'ordre de ma liste. Lue dans la même loi que « Voir comme »
+/// (`VitrineSeenAs.addresses`) : une adresse masquée, d'un cercle plus intime ou au cercle illisible n'y paraît pas.
+/// Elle suit le magasin en direct : réordonner, changer un cercle ou masquer une adresse s'y voit tout de suite.
+struct MyAddressesVitrinePreview: View {
+    let owner: MeeshyUser
+    let addresses: [ProfileAddress]
+    @Binding var level: RelationLevel
+    let accent: Color
+
+    @State private var picking = false
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    private var seen: [ProfileAddress] { VitrineSeenAs.addresses(addresses, by: level) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            MeeshySectionHeader(title: MyAddressesCopy.onVitrine, lead: { EmptyView() }, accessory: { viewedBy })
+            if picking { circlePicker }
+            MeeshyGroupCard(tint: accent) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                    identity
+                    chips
+                }
+            }
+        }
+        .accessibilityIdentifier("profile.addresses.preview")
+    }
+
+    private var viewedBy: some View {
+        MeeshyBadge(.label(MyAddressesCopy.viewedBy(level)), leading: .systemImage("eye"), surface: .tonal,
+                    kind: .accent, tint: accent, size: .s36,
+                    onPress: { withAnimation(.easeInOut) { picking.toggle() } })
+            .accessibilityHint(MyAddressesCopy.pickCircle)
+            .accessibilityIdentifier("profile.addresses.preview.viewedBy")
+    }
+
+    private var circlePicker: some View {
+        MeeshyChipRow(
+            RelationLevel.allCases.map {
+                MeeshyChip(id: $0, title: CircleLevelNames.title(of: $0), systemImage: VitrineSeenAsCopy.glyph(of: $0))
+            },
+            selection: [level],
+            label: MyAddressesCopy.pickCircle,
+            layout: .wrap,
+            surface: .theme,
+            size: .compact,
+            onChange: { _, chosen in
+                level = chosen
+                withAnimation(.easeInOut) { picking = false }
+            }
+        )
+    }
+
+    private var identity: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            MeeshyAvatar(name: owner.displayName ?? owner.username, context: .postAuthor,
+                         accentColor: owner.profileAccentHex, avatarURL: owner.avatar)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(owner.displayName ?? owner.username)
+                    .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
+                    .foregroundStyle(theme.textPrimary)
+                    .lineLimit(1)
+                Text(verbatim: "@\(owner.username)")
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .monospaced))
+                    .foregroundStyle(theme.textMuted)
+                    .lineLimit(1)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var chips: some View {
+        if seen.isEmpty {
+            Text(MyAddressesCopy.previewNone)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+                .accessibilityIdentifier("profile.addresses.preview.none")
+        } else {
+            FlowLayout(itemSpacing: MeeshySpacing.sm, lineSpacing: MeeshySpacing.sm) {
+                ForEach(seen) { address in
+                    MeeshyBadge(.label(address.title), leading: .systemImage(ProfileLinksCopy.glyph(of: address.glyph)),
+                                surface: .tonal, kind: .accent, tint: accent, size: .s28)
+                        .accessibilityIdentifier("profile.addresses.preview.\(address.id)")
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(MyAddressesCopy.previewSpoken(seen.map(\.title)))
+        }
     }
 }
