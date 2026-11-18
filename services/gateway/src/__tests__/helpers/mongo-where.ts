@@ -195,7 +195,7 @@ type FindManyArgs = {
 };
 
 const SUPPORTED_FIND_MANY_ARGS = new Set(['where', 'select', 'orderBy', 'take']);
-const SUPPORTED_NESTED_SELECT_ARGS = new Set(['select', 'where', 'take']);
+const SUPPORTED_NESTED_SELECT_ARGS = new Set(['select', 'include', 'where', 'take']);
 
 /**
  * La projection de Prisma : un scalaire demandé et ABSENT du document se lit
@@ -207,17 +207,17 @@ function project(row: MongoDocument, select: MongoDocument): MongoDocument {
     Object.entries(select).flatMap(([key, wanted]) => {
       if (wanted === false || wanted === undefined) return [];
       if (wanted === true) return [[key, has(row, key) ? row[key] : null]];
-      const nested = wanted as MongoDocument & { readonly select?: MongoDocument; readonly where?: MongoDocument; readonly take?: number };
+      const nested = wanted as MongoDocument & { readonly select?: MongoDocument; readonly include?: MongoDocument; readonly where?: MongoDocument; readonly take?: number };
       const unknown = Object.keys(nested).filter((arg) => !SUPPORTED_NESTED_SELECT_ARGS.has(arg));
       if (unknown.length > 0) throw new Error(`double Mongo: sélection non supportée « ${key}.${unknown.join(', ')} »`);
       const value = has(row, key) ? row[key] : null;
       if (Array.isArray(value)) {
         const kept = (value as MongoDocument[]).filter((related) => matchesMongoWhere(related, nested.where));
         const taken = nested.take === undefined ? kept : kept.slice(0, nested.take);
-        return [[key, nested.select ? taken.map((related) => project(related, nested.select as MongoDocument)) : taken]];
+        return [[key, taken.map((related) => hydrate(related, nested))]];
       }
       if (!isPlainDocument(value)) return [[key, null]];
-      return [[key, nested.select ? project(value as MongoDocument, nested.select) : value]];
+      return [[key, hydrate(value as MongoDocument, nested)]];
     })
   );
 }
@@ -239,18 +239,41 @@ function compareBy(orderBy: readonly MongoDocument[]) {
 }
 
 /**
+ * `include` n'est PAS `select`, et la différence est exactement celle qui
+ * décide d'un défaut d'appartenance : `select` énumère ce qui sort, `include`
+ * rend TOUS les scalaires **plus** la relation nommée — dont le `where`
+ * imbriqué filtre les lignes. Une porte qui vit dans ce `where` (le motif de
+ * `ReactionService.addReaction` : `conversation: { include: { participants: {
+ * where: … } } }`) ne s'observe donc que si le double l'HONORE.
+ *
+ * Prisma refuse les deux ensemble sur un même niveau ; ce double le refuse
+ * aussi, plutôt que d'en choisir un en silence.
+ */
+function hydrate(row: MongoDocument, args: { readonly select?: MongoDocument; readonly include?: MongoDocument }): MongoDocument {
+  if (args.select && args.include) throw new Error('double Mongo: `select` et `include` au même niveau');
+  if (args.select) return project(row, args.select);
+  if (args.include) return { ...row, ...project(row, args.include) };
+  return { ...row };
+}
+
+/**
  * `findUnique` sur une collection en mémoire : le premier document qui apparie
  * le `where`, PROJETÉ par son `select` comme Prisma le projette — un champ que
- * le `select` ne demande pas n'existe pas dans la ligne rendue. Rend `null`
- * quand rien n'apparie. Tout autre argument jette.
+ * le `select` ne demande pas n'existe pas dans la ligne rendue —, ou HYDRATÉ
+ * par son `include`, qui garde les scalaires et filtre les relations. Rend
+ * `null` quand rien n'apparie. Tout autre argument jette.
  */
 export function findUniqueIn<T extends MongoDocument>(rows: readonly T[]) {
-  return (args: { readonly where?: MongoDocument; readonly select?: MongoDocument }): Promise<MongoDocument | null> => {
-    const unknown = Object.keys(args).filter((arg) => arg !== 'where' && arg !== 'select');
+  return (args: { readonly where?: MongoDocument; readonly select?: MongoDocument; readonly include?: MongoDocument }): Promise<MongoDocument | null> => {
+    const unknown = Object.keys(args).filter((arg) => arg !== 'where' && arg !== 'select' && arg !== 'include');
     if (unknown.length > 0) return Promise.reject(new Error(`double Mongo: argument non supporté « ${unknown.join(', ')} »`));
     const found = rows.find((row) => matchesMongoWhere(row, args.where));
     if (!found) return Promise.resolve(null);
-    return Promise.resolve(args.select ? project(found, args.select) : { ...found });
+    try {
+      return Promise.resolve(hydrate(found, args));
+    } catch (error) {
+      return Promise.reject(error);
+    }
   };
 }
 
