@@ -104,9 +104,8 @@ struct ProfileLinksFace: View {
             stub: { profileActions(link) },
             leading: { EmptyView() },
             trailing: {
-                MeeshyCodeCard(payload: link.url.absoluteString, label: ProfileLinksCopy.enlargeQR, tint: accent,
-                               style: .plain, size: .mini, tilt: .none, boostsBrightness: false,
-                               onPress: { presented = .card(.qr) })
+                MeeshyCodePlate(payload: link.url.absoluteString, label: ProfileLinksCopy.enlargeQR, tint: accent,
+                                side: MeeshyCodeCardSize.mini.side, style: .plain, onPress: { presented = .card(.qr) })
             },
             status: { EmptyView() },
             back: { EmptyView() }
