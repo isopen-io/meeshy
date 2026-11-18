@@ -1,8 +1,11 @@
 import SwiftUI
 
-/// « Chiffrement de bout en bout activé » sur la Vitrine d'une fiche : un badge de succès, sans état.
-struct ProfileE2EEBadge: View {
-    var body: some View {
+/// « Chiffrement de bout en bout activé » sur la Vitrine d'une fiche : un badge de succès, sans état. Public : la fiche
+/// d'un autre et ma propre vitrine (#19512) posent LE MÊME badge.
+public struct ProfileE2EEBadge: View {
+    public init() {}
+
+    public var body: some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "lock.shield.fill")
                 .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
@@ -20,5 +23,6 @@ struct ProfileE2EEBadge: View {
             RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.emphasis)
         )
+        .accessibilityElement(children: .combine)
     }
 }

@@ -23,7 +23,9 @@ extension MeeshyUser {
         bio: String? = nil,
         systemLanguage: String? = nil,
         regionalLanguage: String? = nil,
-        customDestinationLanguage: String? = nil
+        customDestinationLanguage: String? = nil,
+        autoTranslateEnabled: Bool? = nil,
+        voicePublic: Bool? = nil
     ) -> MeeshyUser {
         MeeshyUser(
             id: id,
@@ -53,13 +55,13 @@ extension MeeshyUser {
             emailVerifiedAt: emailVerifiedAt,
             phoneVerifiedAt: phoneVerifiedAt,
             customDestinationLanguage: customDestinationLanguage ?? self.customDestinationLanguage,
-            autoTranslateEnabled: autoTranslateEnabled,
+            autoTranslateEnabled: autoTranslateEnabled ?? self.autoTranslateEnabled,
             deviceLocale: deviceLocale,
             timezone: timezone,
             registrationCountry: registrationCountry,
             profileCompletionRate: profileCompletionRate,
             signalIdentityKeyPublic: signalIdentityKeyPublic,
-            voicePublic: voicePublic,
+            voicePublic: voicePublic ?? self.voicePublic,
             voiceSampleUrl: voiceSampleUrl,
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
@@ -67,7 +69,10 @@ extension MeeshyUser {
             profileDecor: profileDecor,
             addresses: addresses,
             city: city, cityCircle: cityCircle,
-            profileAccentColor: profileAccentColor
+            profileAccentColor: profileAccentColor,
+            lockedAddresses: lockedAddresses,
+            openCommunities: openCommunities,
+            acceptsFriendRequests: acceptsFriendRequests
         )
     }
 }

@@ -48,3 +48,22 @@ nonisolated struct ProfileVoiceSample: Equatable, Sendable {
         isLoading ? .buffering : .ready
     }
 }
+
+/// Ce que « Ma voix » montre sur ma vitrine (#19512) : au repos, le lecteur d'un échantillon servi ; en édition, ce
+/// lecteur avec son interrupteur public et « Réenregistrer » (planche `Moi-Edition`), ou, sans échantillon, de quoi en
+/// enregistrer un.
+nonisolated enum ProfileVoiceBlock: Equatable, Sendable {
+    case none
+    case listen
+    case edit
+    case record
+
+    static func resolve(sample: ProfileVoiceSample?, isEditing: Bool) -> ProfileVoiceBlock {
+        switch (sample != nil, isEditing) {
+        case (true, false): return .listen
+        case (true, true): return .edit
+        case (false, true): return .record
+        case (false, false): return .none
+        }
+    }
+}

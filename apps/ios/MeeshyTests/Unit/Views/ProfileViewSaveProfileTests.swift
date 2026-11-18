@@ -384,4 +384,98 @@ final class ProfileViewSaveProfileTests: XCTestCase {
         XCTAssertTrue(profile.contains("ProfileAccentSection(choice: $accentChoice"), "« Couleur d'accent » vit dans l'édition de ma vitrine")
         XCTAssertTrue(profile.contains("ProfileOwnBanner(user: user, accentColor: shownAccentHex"), "la bannière prend l'aperçu en direct")
     }
+
+    // MARK: - Ma voix, la traduction automatique et le chiffrement (#19512)
+
+    func test_editSettings_startFromWhatIHold() {
+        let settings = ProfileEditSettings.make(user: makeFullUser(voicePublic: false))
+        XCTAssertEqual(settings, ProfileEditSettings(voicePublic: false, autoTranslate: true))
+    }
+
+    func test_editSettings_withoutServedAutoTranslate_offerNoSwitch() {
+        let bare = MeeshyUser(id: "u1", username: "alice")
+        XCTAssertNil(ProfileEditSettings.make(user: bare).autoTranslate, "champ absent : l'interrupteur ne paraît pas")
+        XCTAssertNil(ProfileEditSettings.make(user: nil).autoTranslate)
+    }
+
+    func test_editSettings_untouched_sendNothing() {
+        let user = makeFullUser(voicePublic: true)
+        let settings = ProfileEditSettings.make(user: user)
+        XCTAssertNil(settings.voicePublicToSend(original: user))
+        XCTAssertNil(settings.autoTranslateToSend(original: user))
+    }
+
+    func test_editSettings_switched_sendTheNewValues() {
+        let user = makeFullUser(voicePublic: true)
+        let settings = ProfileEditSettings(voicePublic: false, autoTranslate: false)
+        XCTAssertEqual(settings.voicePublicToSend(original: user), false)
+        XCTAssertEqual(settings.autoTranslateToSend(original: user), false)
+    }
+
+    func test_editSettings_voiceNeverServedAndStillPrivate_sendNothing() {
+        let user = makeFullUser(voicePublic: nil)
+        XCTAssertNil(ProfileEditSettings(voicePublic: false, autoTranslate: nil).voicePublicToSend(original: user))
+        XCTAssertEqual(ProfileEditSettings(voicePublic: true, autoTranslate: nil).voicePublicToSend(original: user), true)
+    }
+
+    func test_applyingProfileEdits_appliesTheVoiceAndTheTranslationSwitches() {
+        let updated = makeFullUser(voicePublic: true).applyingProfileEdits(autoTranslateEnabled: false, voicePublic: false)
+        XCTAssertEqual(updated.voicePublic, false)
+        XCTAssertEqual(updated.autoTranslateEnabled, false)
+        let untouched = makeFullUser(voicePublic: true).applyingProfileEdits(bio: "x")
+        XCTAssertEqual(untouched.voicePublic, true)
+        XCTAssertEqual(untouched.autoTranslateEnabled, true)
+    }
+
+    func test_applyingProfileEdits_carriesWhetherIAcceptFriendRequests() {
+        let user = MeeshyUser(id: "u1", username: "alice", acceptsFriendRequests: false)
+        XCTAssertEqual(user.applyingProfileEdits(bio: "x").acceptsFriendRequests, false)
+    }
+
+    func test_voiceBlock_atRest_listensOnlyToAServedSample() {
+        let sample = ProfileVoiceSample.make(user: makeFullUser())
+        XCTAssertEqual(ProfileVoiceBlock.resolve(sample: sample, isEditing: false), .listen)
+        XCTAssertEqual(ProfileVoiceBlock.resolve(sample: nil, isEditing: false), .none)
+    }
+
+    func test_voiceBlock_inEdition_setsTheSampleOrOffersToRecordOne() {
+        let sample = ProfileVoiceSample.make(user: makeFullUser())
+        XCTAssertEqual(ProfileVoiceBlock.resolve(sample: sample, isEditing: true), .edit)
+        XCTAssertEqual(ProfileVoiceBlock.resolve(sample: nil, isEditing: true), .record)
+    }
+
+    func test_encryptionBadge_saysOnlyWhatTheKeysProve() {
+        XCTAssertTrue(ProfileView.showsEncryptionBadge(isEditing: false, hasSignalKeys: true))
+        XCTAssertFalse(ProfileView.showsEncryptionBadge(isEditing: false, hasSignalKeys: false))
+        XCTAssertFalse(ProfileView.showsEncryptionBadge(isEditing: false, hasSignalKeys: nil), "non servi : rien n'est affirmé")
+        XCTAssertFalse(ProfileView.showsEncryptionBadge(isEditing: true, hasSignalKeys: true), "l'édition ne la montre pas")
+    }
+
+    func test_encryptionMemory_servesTheLastKnownStateFirst_perAccount() throws {
+        let suite = "ProfileOwnEncryptionMemoryTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let memory = ProfileOwnEncryptionMemory(defaults: defaults)
+        XCTAssertNil(memory.remembered(userId: "u1"))
+        memory.remember(true, userId: "u1")
+        memory.remember(nil, userId: "u1")
+        XCTAssertEqual(memory.remembered(userId: "u1"), true, "une réponse sans résumé n'efface pas ce qu'on sait")
+        XCTAssertNil(memory.remembered(userId: "u2"))
+    }
+
+    func test_offlineBand_saysTheChangesLeaveWithTheNetwork() {
+        XCTAssertTrue(ProfileEditOfflineBand.isShown(isEditing: true, isOffline: true))
+        XCTAssertFalse(ProfileEditOfflineBand.isShown(isEditing: true, isOffline: false))
+        XCTAssertFalse(ProfileEditOfflineBand.isShown(isEditing: false, isOffline: true))
+        XCTAssertTrue(ProfileEditOfflineBand.text.contains(ProfileEditOfflineBand.emphasis))
+    }
+
+    func test_profileView_mountsTheBadgeTheSwitchesAndTheBand() throws {
+        let profile = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Views/ProfileView.swift"))
+        XCTAssertTrue(profile.contains("ProfileE2EEBadge()"), "ma vitrine pose le même badge que la fiche d'un autre")
+        XCTAssertTrue(profile.contains("ProfileEditOfflineBand(isEditing: isEditing)"), "la bande hors ligne vit dans l'édition")
+        XCTAssertTrue(profile.contains("ProfileEditSettingsCopy.autoTranslate"), "« Traduire automatiquement » vit sous mes langues")
+        XCTAssertTrue(profile.contains("autoTranslateEnabled: autoTranslateEdit"), "l'interrupteur part dans le PATCH")
+        XCTAssertTrue(profile.contains("voicePublic: voicePublicEdit"), "ma voix publique part dans le PATCH")
+    }
 }

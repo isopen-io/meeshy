@@ -27,6 +27,11 @@ struct ProfileView: View {
     @State private var systemLanguage = ""
     @State private var regionalLanguage = ""
     @State private var customDestinationLanguage = ""
+    /// Ma voix publique et la traduction automatique, en brouillon jusqu'à « Enregistrer » (#19512).
+    @State private var editSettings = ProfileEditSettings(voicePublic: false, autoTranslate: nil)
+    /// « ai-je des clés de chiffrement ? » — la dernière réponse connue d'abord, puis la passerelle (#19512).
+    @State private var hasSignalKeys: Bool?
+    @State private var voiceManagerShown = false
 
     @State private var isEditing = false
     @State private var isSaving = false
@@ -96,6 +101,8 @@ struct ProfileView: View {
 
             faceSelector
 
+            ProfileEditOfflineBand(isEditing: isEditing)
+
             if let errorMessage {
                 errorBanner(errorMessage)
             }
@@ -113,6 +120,10 @@ struct ProfileView: View {
         .onAppear { loadUserData() }
         .task { await loadStats() }
         .task { await circles.load() }
+        .task(id: user?.id) { await loadEncryption() }
+        .sheet(isPresented: $voiceManagerShown, onDismiss: { Task { await authManager.refreshCurrentUserProfile() } }) {
+            SettingsSheetContent(sheet: .voiceProfileManage(opensWizardWhenEmpty: true), authManager: authManager)
+        }
         .fullScreenCover(item: $fullscreenImage) { image in
             FullscreenImageView(
                 imageURL: image.value,
@@ -338,6 +349,11 @@ struct ProfileView: View {
             displayName: $displayName, bio: $bio, city: $city, cityCircle: $cityCircle,
             username: user?.username, accentColor: accentColor
         )
+        if Self.showsEncryptionBadge(isEditing: isEditing, hasSignalKeys: hasSignalKeys) {
+            ProfileE2EEBadge()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(.opacity)
+        }
         if isEditing {
             ProfileAccentSection(choice: $accentChoice, userId: user?.id,
                                  name: user?.displayName ?? user?.username ?? "")
@@ -349,12 +365,46 @@ struct ProfileView: View {
         }
         languagesSection
         activitySection
-        if !isEditing, let voice = ProfileVoiceSample.make(user: user) {
-            ProfileVoiceSection(sample: voice, accentColor: accentColor)
-        }
+        voiceBlock
         if !isEditing, let userId = user?.id {
             ProfilePublicationsSection(userId: userId, accentColor: accentColor)
         }
+    }
+
+    /// « Ma voix » : le lecteur au repos ; en édition, son interrupteur public et « Réenregistrer », ou de quoi
+    /// enregistrer un échantillon (#19512).
+    @ViewBuilder
+    private var voiceBlock: some View {
+        let sample = ProfileVoiceSample.make(user: user)
+        switch ProfileVoiceBlock.resolve(sample: sample, isEditing: isEditing) {
+        case .listen:
+            if let sample { ProfileVoiceSection(sample: sample, accentColor: accentColor) }
+        case .edit:
+            if let sample {
+                ProfileVoiceSection(sample: sample, accentColor: accentColor, editing: ProfileVoiceEditing(
+                    isPublic: $editSettings.voicePublic, onRecord: { voiceManagerShown = true }))
+            }
+        case .record:
+            ProfileVoiceRecordPrompt(accentColor: accentColor, onRecord: { voiceManagerShown = true })
+        case .none:
+            EmptyView()
+        }
+    }
+
+    /// La puce « Chiffrement activé » ne dit que ce que mes clés prouvent, et l'édition ne la montre pas (#19512).
+    static func showsEncryptionBadge(isEditing: Bool, hasSignalKeys: Bool?) -> Bool {
+        !isEditing && hasSignalKeys == true
+    }
+
+    /// Cache d'abord : la dernière réponse connue se peint, puis la passerelle la confirme ; un échec garde ce qui est
+    /// affiché.
+    private func loadEncryption() async {
+        guard let userId = user?.id else { return }
+        let memory = ProfileOwnEncryptionMemory()
+        hasSignalKeys = memory.remembered(userId: userId)
+        guard let served = try? await AuthService.shared.hasSignalKeys() else { return }
+        hasSignalKeys = served
+        memory.remember(served, userId: userId)
     }
 
     private func perform(_ action: ProfileFaceAction) {
@@ -540,6 +590,12 @@ struct ProfileView: View {
                             code: customDestinationLanguage, isRequired: false) { showCustomLanguagePicker = true }
             }
             .background(ProfileSectionCard(tintHex: accentColor))
+            if isEditing, let autoTranslate = editSettings.autoTranslate {
+                MeeshyToggleRow(ProfileEditSettingsCopy.autoTranslate, subtitle: ProfileEditSettingsCopy.autoTranslateHint,
+                                accessory: .toggle(isOn: autoTranslate), tint: Color(hex: accentColor),
+                                action: { editSettings.autoTranslate = !autoTranslate })
+                    .accessibilityIdentifier("profile.edit.autoTranslate")
+            }
         }
         .sheet(isPresented: $showSystemLanguagePicker) {
             ProfileLanguagePickerSheet(
@@ -638,6 +694,7 @@ struct ProfileView: View {
         systemLanguage = user?.systemLanguage ?? "fr"
         regionalLanguage = user?.regionalLanguage ?? ""
         customDestinationLanguage = user?.customDestinationLanguage ?? ""
+        editSettings = ProfileEditSettings.make(user: user)
     }
 
     private func loadImageForEditor(from item: PhotosPickerItem, completion: @escaping (UIImage?) -> Void) {
@@ -720,6 +777,8 @@ struct ProfileView: View {
         // so the UI reflects them without waiting for the round-trip. Server
         // response replaces this with the canonical form on success; on
         // failure we roll back to the snapshot and re-open the editor.
+        let voicePublicEdit = editSettings.voicePublicToSend(original: original)
+        let autoTranslateEdit = editSettings.autoTranslateToSend(original: original)
         let optimistic = original.applyingProfileEdits(
             firstName: identityEdits.firstName,
             lastName: identityEdits.lastName,
@@ -727,7 +786,9 @@ struct ProfileView: View {
             bio: Self.changedOrNil(bio, original: original.bio),
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
             regionalLanguage: Self.changedOrNil(regionalLanguage, original: original.regionalLanguage),
-            customDestinationLanguage: Self.changedOrNil(customDestinationLanguage, original: original.customDestinationLanguage)
+            customDestinationLanguage: Self.changedOrNil(customDestinationLanguage, original: original.customDestinationLanguage),
+            autoTranslateEnabled: autoTranslateEdit,
+            voicePublic: voicePublicEdit
         )
         let cityEdit = Self.cityEditToSend(typed: city, circle: cityCircle, original: original)
         let changesCity = cityEdit.city != nil || cityEdit.circle != nil
@@ -747,14 +808,18 @@ struct ProfileView: View {
             systemLanguage: systemLanguage.isEmpty ? nil : systemLanguage,
             regionalLanguage: Self.changedOrNil(regionalLanguage, original: original.regionalLanguage),
             customDestinationLanguage: Self.changedOrNil(customDestinationLanguage, original: original.customDestinationLanguage),
+            voicePublic: voicePublicEdit,
             city: cityEdit.city,
             cityCircle: cityEdit.circle,
-            profileAccentColor: accentEdit
+            profileAccentColor: accentEdit,
+            autoTranslateEnabled: autoTranslateEdit
         )
+        send(request, rollingBackTo: original)
+    }
 
-        // Offline path — persist the request to SettingsActionQueue so it
-        // replays automatically once connectivity returns. The optimistic
-        // UI is already in place; the user gets a confirmation toast.
+    /// Offline path — persist the request to SettingsActionQueue so it replays automatically once connectivity
+    /// returns. The optimistic UI is already in place; the user gets a confirmation toast.
+    private func send(_ request: UpdateProfileRequest, rollingBackTo original: MeeshyUser) {
         if NetworkMonitor.shared.isOffline {
             queueOfflineSave(request, rollingBackTo: original)
             return
