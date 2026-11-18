@@ -90,8 +90,8 @@ internal class ConversationCacheSource(
     private val syncDelta: SyncDeltaFetching = SyncDeltaFetching.None,
     /** #18926 — what the realtime writes during a sweep: its page, built before, never undoes it. */
     private val journal: ConversationLiveJournal? = null,
-    /** #19425 — the preference gestures still owed to the gateway: replayed on every served row until acknowledged. */
-    private val pendingPrefs: PendingConversationPrefs = PendingConversationPrefs.None,
+    /** #19425, #19424 — the gestures still owed to the gateway (preferences, read frontier): replayed on every served row until acknowledged. */
+    private val pendingGestures: PendingConversationGestures = PendingConversationGestures.None,
 ) : SwrCacheSource<List<ApiConversation>> {
 
     /**
@@ -491,14 +491,14 @@ internal class ConversationCacheSource(
         database.withTransaction {
             seedEndToEndFromCache()
             val live = liveWrites(flight)
-            val queued = pendingPrefs.snapshots()
+            val queued = pendingGestures.load()
             val known = outcome.rows.mapNotNull { row ->
                 conversationDao.find(row.id)
                     ?.let { runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull() }
             }.associateBy { it.id }
             val applied = DeltaApplyRules.apply(known, outcome.rows, outcome.deletedIds)
             val merge = applied.merge
-            val carried = merge.upserts.map { keepingEndToEnd(it).replayingPending(queued[it.id].orEmpty()) }
+            val carried = merge.upserts.map { keepingEndToEnd(it).replayingPending(queued) }
             confirmServedClear(carried)
             val now = clock.nowMillis()
             conversationDao.upsertAll(carried.map { rankedLive(entityOf(it, now), live) })
@@ -568,9 +568,9 @@ internal class ConversationCacheSource(
         database.withTransaction {
             seedEndToEndFromCache()
             val live = liveWrites(flight)
-            val queued = pendingPrefs.snapshots()
+            val queued = pendingGestures.load()
             val carried = conversations.map {
-                keepingEndToEnd(carryingKnownPeers(keepingLive(it, live))).replayingPending(queued[it.id].orEmpty())
+                keepingEndToEnd(carryingKnownPeers(keepingLive(it, live))).replayingPending(queued)
             }
             confirmServedClear(carried)
             val rows = carried.map { rankedLive(entityOf(it, now), live) }
@@ -643,7 +643,7 @@ internal class ConversationCacheSource(
         database.withTransaction {
             seedEndToEndFromCache()
             val carried = keepingEndToEnd(carryingKnownPeers(conversation))
-                .replayingPending(pendingPrefs.snapshots()[conversation.id].orEmpty())
+                .replayingPending(pendingGestures.load())
             if (servedByGateway) confirmServedClear(listOf(carried))
             conversationDao.upsertAll(listOf(entityOf(carried, now)))
             searchIndex.indexConversation(carried)
