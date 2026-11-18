@@ -120,6 +120,20 @@ describe('runTwoPhaseShutdown (#19280)', () => {
     expect(drain.isDraining()).toBe(true);
   });
 
+  it('un second signal pendant la vidange rejoint l arrêt en cours, sans rouvrir l attente ni fermer deux fois', async () => {
+    const drain = createShutdownDrain();
+    const wake: Array<() => void> = [];
+    const sleep = jest.fn((_ms: number) => new Promise<void>((resolve) => { wake.push(resolve); }));
+    const close = jest.fn(async () => undefined);
+    const first = runTwoPhaseShutdown({ drain, drainMs: 20000, sleep, close });
+    const second = runTwoPhaseShutdown({ drain, drainMs: 20000, sleep, close });
+    await Promise.resolve();
+    wake.forEach((resolve) => resolve());
+    await Promise.all([first, second]);
+    expect(sleep).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
   it('ferme même si l attente échoue', async () => {
     const drain = createShutdownDrain();
     const close = jest.fn(async () => undefined);
