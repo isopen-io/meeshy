@@ -204,7 +204,6 @@
                 <data android:scheme="https" />
                 <data android:host="meeshy.me" />
                 <data android:host="www.meeshy.me" />
-                <data android:host="app.meeshy.me" />
                 <data android:path="/me" />
                 <data android:pathPrefix="/me/" />
                 <data android:pathPrefix="/c/" />
