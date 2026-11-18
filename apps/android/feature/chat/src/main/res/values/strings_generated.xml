@@ -600,7 +600,6 @@
     <string name="recentMedia_resolveFailed_multiple">%1$d media items couldn\'t be prepared — use the full photo library</string>
     <string name="report_message_details_header">Details (optional)</string>
     <string name="report_message_details_placeholder">Describe the issue…</string>
-    <string name="report_message_sent">Report sent</string>
     <string name="report_message_submit">Send report</string>
     <string name="report_message_title">Why are you reporting this message?</string>
     <string name="report_reason_harassment">Harassment</string>

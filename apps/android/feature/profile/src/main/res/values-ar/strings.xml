@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_blocked_by_me">لقد حظرت هذا المستخدم</string>
+    <string name="profile_language_choose">اختيار</string>
+    <string name="profile_language_none">لا شيء</string>
+    <string name="profile_loadFailed_message">تعذّر تحميل هذا الملف الشخصي.</string>
+    <string name="profile_section_languages">اللغات</string>
+    <string name="profile_share_copy">نسخ الرابط</string>
+    <string name="profile_toast_report_sent">تم إرسال البلاغ</string>
+    <string name="profile_toast_report_failed">تعذّر إرسال البلاغ</string>
+    <string name="profile_stats_a11y_hint">يفتح الإحصاءات التفصيلية</string>
+    <string name="profile_tab_details">التفاصيل</string>
+</resources>
