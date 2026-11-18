@@ -88,17 +88,17 @@ describe('#16695 — un salon d’une communauté privée n’accueille que ce q
 
   it.each(['admin', 'moderator'])('un %s de la communauté y fait entrer un non-membre, comme membre', async (role) => {
     const { verdict } = await entrer({ lignes: [membre(ACTEUR, role)] }, { kind: 'registered', userId: ENTRANT });
-    expect(verdict).toEqual({ kind: 'admitted', reactivations: [], creations: [{ userId: ENTRANT, role: 'member' }] });
+    expect(verdict).toEqual({ kind: 'admitted', reactivations: [], creations: [{ userId: ENTRANT, role: 'member', via: 'invited' }] });
   });
 
   it('un admin fait revenir un retiré en simple membre — un rang ne se retrouve pas dans une ligne périmée', async () => {
     const { verdict } = await entrer({ lignes: [membre(ACTEUR, 'admin'), retire(ENTRANT)] }, { kind: 'registered', userId: ENTRANT });
-    expect(verdict).toEqual({ kind: 'admitted', reactivations: [{ id: `cm-${ENTRANT}`, role: 'member' }], creations: [] });
+    expect(verdict).toEqual({ kind: 'admitted', reactivations: [{ id: `cm-${ENTRANT}`, userId: ENTRANT, role: 'member', via: 'invited' }], creations: [] });
   });
 
   it('le créateur de la communauté y fait entrer quelqu’un, et n’y est pas réinscrit lui-même', async () => {
     const { verdict } = await entrer({ lignes: [] }, { kind: 'registered', userId: ENTRANT }, CREATEUR);
-    expect(verdict).toEqual({ kind: 'admitted', reactivations: [], creations: [{ userId: ENTRANT, role: 'member' }] });
+    expect(verdict).toEqual({ kind: 'admitted', reactivations: [], creations: [{ userId: ENTRANT, role: 'member', via: 'invited' }] });
   });
 
   it('un ancien admin retiré de la communauté n’y fait plus entrer personne', async () => {
