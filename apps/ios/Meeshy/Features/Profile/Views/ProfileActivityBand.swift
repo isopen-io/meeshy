@@ -61,13 +61,14 @@ struct ProfileActivityBand: View {
             HapticFeedback.light()
             onOpen()
         } label: {
-            MeeshyFigureBand(items: Self.figures(of: stats, isLoading: isLoading), size: .compact,
-                             isLoading: isLoading, emptyLabel: Self.emptyLabel)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, MeeshySpacing.lg)
-                .padding(.horizontal, MeeshySpacing.md)
-                .background(ProfileSectionCard(tintHex: accentColor))
-                .contentShape(Rectangle())
+            MeeshyGroupCard(tint: Color(hex: accentColor)) {
+                MeeshyFigureBand(items: Self.figures(of: stats, isLoading: isLoading), size: .compact,
+                                 isLoading: isLoading, emptyLabel: Self.emptyLabel)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, MeeshySpacing.lg)
+                    .padding(.horizontal, MeeshySpacing.md)
+            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(PressableButtonStyle())
         .accessibilityElement(children: .ignore)

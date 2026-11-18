@@ -17,74 +17,49 @@ struct ProfileIdentitySection: View {
     /// L'accent de la fiche (hex), sous son nom de règle : il teinte le titre, la carte et les pastilles de la section.
     let accentColor: String
 
-    private var theme: ThemeManager { ThemeManager.shared }
+    /// La bio que la passerelle accepte (`z.string().max(500)`) : le champ compte jusque-là et n'en laisse pas taper plus.
+    static let bioLimit = 500
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ProfileSectionHeader(icon: "person.text.rectangle.fill", title: String(localized: "profile.section.identity", bundle: .main), color: Color(hex: accentColor))
-
-            VStack(spacing: 0) {
-                field(icon: "person.fill", title: String(localized: "profile.first_name", bundle: .main), value: $firstName, placeholder: String(localized: "profile.first_name", bundle: .main))
-                field(icon: "person.fill", title: String(localized: "profile.last_name", bundle: .main), value: $lastName, placeholder: String(localized: "profile.last_name", bundle: .main))
-                infoRow(icon: "at", title: String(localized: "profile.username", bundle: .main), value: "@\(username ?? "—")")
-                field(icon: "person.crop.rectangle.fill", title: String(localized: "profile.display_name", bundle: .main), value: $displayName, placeholder: String(localized: "profile.display_name", bundle: .main))
-                field(icon: "text.quote", title: String(localized: "profile.bio", bundle: .main), value: $bio, placeholder: String(localized: "profile.bio.placeholder", bundle: .main), isMultiline: true)
-                ProfileCityField(isEditing: isEditing, city: $city, circle: $cityCircle, accentColor: accentColor)
-            }
-            .background(ProfileSectionCard(tintHex: accentColor))
-        }
-    }
-
-    private func field(icon: String, title: String, value: Binding<String>, placeholder: String, isMultiline: Bool = false) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            ProfileFieldIcon(name: icon, accentColor: accentColor)
-
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(title)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(theme.textMuted)
-
-                if isEditing && isMultiline {
-                    TextField(placeholder, text: value, axis: .vertical)
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundStyle(theme.textPrimary)
-                        .lineLimit(3...6)
-                } else if isEditing {
-                    TextField(placeholder, text: value)
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundStyle(theme.textPrimary)
-                } else {
-                    Text(value.wrappedValue.isEmpty ? placeholder : value.wrappedValue)
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundStyle(value.wrappedValue.isEmpty ? theme.textMuted : theme.textPrimary)
+            MeeshySectionHeader(title: Self.title)
+            MeeshyGroupCard(layout: .group, tint: Color(hex: accentColor), label: Self.title) {
+                VStack(alignment: .leading, spacing: 0) {
+                    field(title: String(localized: "profile.first_name", bundle: .main), value: $firstName,
+                          placeholder: String(localized: "profile.first_name", bundle: .main))
+                    field(title: String(localized: "profile.last_name", bundle: .main), value: $lastName,
+                          placeholder: String(localized: "profile.last_name", bundle: .main))
+                    reading(title: String(localized: "profile.username", bundle: .main), value: "@\(username ?? "—")")
+                    field(title: String(localized: "profile.display_name", bundle: .main), value: $displayName,
+                          placeholder: String(localized: "profile.display_name", bundle: .main))
+                    field(title: String(localized: "profile.bio", bundle: .main), value: $bio,
+                          placeholder: String(localized: "profile.bio.placeholder", bundle: .main), isMultiline: true)
+                    ProfileCityField(isEditing: isEditing, city: $city, circle: $cityCircle, accentColor: accentColor)
                 }
             }
-
-            Spacer()
         }
-        .padding(.horizontal, MeeshySpacing.mdPlus)
-        .padding(.vertical, MeeshySpacing.smPlus)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(verbatim: "\(title): \(value.wrappedValue)"))
     }
 
-    private func infoRow(icon: String, title: String, value: String) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            ProfileFieldIcon(name: icon, accentColor: accentColor)
+    static var title: String {
+        String(localized: "profile.section.identity", bundle: .main)
+    }
 
-            Text(title)
-                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundStyle(theme.textPrimary)
-
-            Spacer()
-
-            Text(value)
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundStyle(theme.textMuted)
-                .lineLimit(1)
+    /// En édition, le champ du kit (K08) ; au repos, la valeur lue dans le dessin de la rangée du kit (K06).
+    @ViewBuilder
+    private func field(title: String, value: Binding<String>, placeholder: String, isMultiline: Bool = false) -> some View {
+        if isEditing {
+            MeeshyField(title, text: value.wrappedValue, input: isMultiline ? .paragraph : .sentence, prompt: placeholder,
+                        limit: isMultiline ? Self.bioLimit : nil, onChange: { value.wrappedValue = $0 })
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.xs)
+        } else {
+            reading(title: title, value: value.wrappedValue.isEmpty ? placeholder : value.wrappedValue)
         }
-        .padding(.horizontal, MeeshySpacing.mdPlus)
-        .padding(.vertical, MeeshySpacing.smPlus)
+    }
+
+    private func reading(title: String, value: String) -> some View {
+        MeeshyToggleRowFace(content: MeeshyToggleRowContent(title: title, subtitle: value))
+            .accessibilityElement(children: .combine)
     }
 }
 
@@ -108,25 +83,12 @@ struct ProfileCityField: View {
     }
 
     private var resting: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            ProfileFieldIcon(name: "mappin.and.ellipse", accentColor: accentColor)
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(ProfileCityCopy.label)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(theme.textMuted)
-                Text(city)
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                    .foregroundStyle(theme.textPrimary)
-                Text(ProfileCityCopy.seenBy(circle))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(theme.textMuted)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, MeeshySpacing.mdPlus)
-        .padding(.vertical, MeeshySpacing.smPlus)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("profile.city")
+        MeeshyToggleRowFace(content: MeeshyToggleRowContent(title: ProfileCityCopy.label, subtitle: city,
+                                                            accessory: .value(ProfileCityCopy.seenBy(circle))))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(MeeshyToggleRowRecipe.accessibilityLabel(title: ProfileCityCopy.label, titleAccessory: nil,
+                                                                         subtitle: "\(city), \(ProfileCityCopy.seenBy(circle))"))
+            .accessibilityIdentifier("profile.city")
     }
 
     private var editing: some View {
@@ -200,7 +162,7 @@ struct ProfileAccentSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ProfileSectionHeader(icon: "paintpalette.fill", title: ProfileAccentCopy.title, color: previewColor)
+            MeeshySectionHeader(title: ProfileAccentCopy.title)
             MeeshyColorDots(ProfileAccentCopy.dots, selection: ProfileAccentCopy.dotId(of: choice),
                             label: ProfileAccentCopy.title, size: .s32, tone: .theme,
                             onSelect: { id in choice = ProfileAccentCopy.choice(forDot: id) })
@@ -210,31 +172,23 @@ struct ProfileAccentSection: View {
         }
     }
 
+    /// L'aperçu en direct, sur la carte du kit (K43) lavée de la teinte choisie.
     private var preview: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            Circle()
-                .fill(previewColor)
-                .frame(width: MeeshySpacing.smPlus, height: MeeshySpacing.smPlus)
-                .accessibilityHidden(true)
-            Text(ProfileAccentCopy.preview(of: choice))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundStyle(theme.textPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+        MeeshyGroupCard(surface: .accent, tint: previewColor, label: ProfileAccentCopy.preview(of: choice)) {
+            HStack(spacing: MeeshySpacing.md) {
+                Circle()
+                    .fill(previewColor)
+                    .frame(width: MeeshySpacing.smPlus, height: MeeshySpacing.smPlus)
+                    .accessibilityHidden(true)
+                Text(ProfileAccentCopy.preview(of: choice))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundStyle(theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
         }
-        .padding(.horizontal, MeeshySpacing.mdPlus)
-        .padding(.vertical, MeeshySpacing.smPlus)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .fill(LinearGradient(colors: [previewColor.opacity(MeeshyOpacity.medium),
-                                              previewColor.opacity(MeeshyOpacity.subtle)],
-                                     startPoint: .leading, endPoint: .trailing))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .stroke(previewColor.opacity(MeeshyOpacity.strong), lineWidth: MeeshyBorder.regular)
-        )
-        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("profile.accent.preview")
     }
 }

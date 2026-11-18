@@ -238,14 +238,79 @@ final class ProfileSectionsTests: XCTestCase {
     }
 
     func test_profileButtons_answerTheTouch_withThePressResponseOfTheKit() throws {
-        for path in ["Meeshy/Features/Profile/Views/ProfileSectionChrome.swift",
-                     "Meeshy/Features/Profile/Views/ProfileContactSection.swift",
-                     "Meeshy/Features/Profile/Views/ProfileCirclesSection.swift",
+        for path in ["Meeshy/Features/Profile/Views/ProfileCirclesSection.swift",
                      "Meeshy/Features/Profile/Views/ProfileActivityBand.swift"] {
             let source = try code(path)
             XCTAssertFalse(source.contains(".buttonStyle(.plain)"), "\(path) : rien ne répondait au toucher")
             XCTAssertTrue(source.contains(".buttonStyle(PressableButtonStyle())"), path)
         }
+        let contact = try code("Meeshy/Features/Profile/Views/ProfileContactSection.swift")
+        XCTAssertFalse(contact.contains(".buttonStyle(.plain)"))
+        XCTAssertTrue(contact.contains("MeeshyToggleRow("), "une rangée de Contact s'enfonce sous le doigt avec la rangée K06")
+    }
+
+    // MARK: - Ma vitrine est faite du kit : plus d'en-tête ni de carte maison (#19537)
+
+    private static let vitrineSurfaces = ["Views/ProfileContactSection.swift", "Views/ProfileIdentitySection.swift",
+                                          "Views/ProfileCirclesSection.swift", "Views/ProfileActivityBand.swift",
+                                          "Faces/VitrineCrans.swift", "Faces/ProfileVoiceSection.swift"]
+
+    func test_vitrineSections_titleWithK44_andSitOnK43_neverOnTheHouseChrome() throws {
+        for path in Self.vitrineSurfaces {
+            let source = try code("Meeshy/Features/Profile/" + path)
+            XCTAssertFalse(source.contains("ProfileSectionHeader("), "\(path) : aucun en-tête redessiné sur place (loi 12)")
+            XCTAssertFalse(source.contains("ProfileSectionCard("), "\(path) : aucune carte redessinée sur place (loi 12)")
+            XCTAssertFalse(source.contains("ProfileFieldIcon("), "\(path) : aucune pastille d'icône redessinée sur place")
+            XCTAssertTrue(source.contains("MeeshyGroupCard("), "\(path) : la surface est la carte K43")
+        }
+        for path in ["Views/ProfileContactSection.swift", "Views/ProfileIdentitySection.swift"] {
+            XCTAssertTrue(try code("Meeshy/Features/Profile/" + path).contains("MeeshySectionHeader("), "\(path) : l'en-tête est K44")
+        }
+    }
+
+    func test_houseChrome_hasLeftTheApp_onceNoSectionCallsIt() {
+        XCTAssertThrowsError(try AppSourceGuard.unit("Meeshy/Features/Profile/Views/ProfileSectionChrome.swift"),
+                             "ProfileSectionChrome.swift n'a plus d'appelant : il est retiré")
+    }
+
+    func test_contactRow_saysItsFieldValueAndVerification_inTheRowOfTheKit() {
+        let verified = ProfileContactSection.rowContent(title: "E-mail", value: "aissa@exemple.sn", verified: true)
+        XCTAssertEqual(verified.title, "E-mail")
+        XCTAssertEqual(verified.subtitle, "aissa@exemple.sn")
+        XCTAssertEqual(verified.accessory, .chevron, "la rangée mène à Sécurité, elle le montre")
+        XCTAssertEqual(verified.titleAccessoryLabel, ProfileContactSection.verificationWord(isVerified: true),
+                       "la pastille est muette : la rangée dit l'état de vérification à VoiceOver")
+        let unverified = ProfileContactSection.rowContent(title: "Téléphone", value: "+221 42", verified: false)
+        XCTAssertEqual(unverified.titleAccessoryLabel, ProfileContactSection.verificationWord(isVerified: false))
+        XCTAssertNotEqual(ProfileContactSection.verificationWord(isVerified: true),
+                          ProfileContactSection.verificationWord(isVerified: false))
+        let missing = ProfileContactSection.rowContent(title: "Téléphone", value: nil, verified: nil)
+        XCTAssertEqual(missing.subtitle, "—")
+        XCTAssertNil(missing.titleAccessoryLabel, "un contact absent n'a rien à vérifier")
+    }
+
+    func test_contactVerification_isTheBadgeOfTheKit() throws {
+        let contact = try code("Meeshy/Features/Profile/Views/ProfileContactSection.swift")
+        XCTAssertTrue(contact.contains("MeeshyBadge("), "« Vérifié » / « Non vérifié » est la pastille K41")
+        XCTAssertFalse(contact.contains("Capsule()"), "aucune pastille redessinée sur place")
+        XCTAssertTrue(contact.contains("onOpenSecurity(field.securityFocus)"), "chaque rangée ouvre toujours SA section de Sécurité")
+    }
+
+    func test_identity_editsInTheFieldOfTheKit_andTheBioCountsUpToTheServerLimit() throws {
+        XCTAssertEqual(ProfileIdentitySection.bioLimit, 500, "la passerelle refuse une bio au-delà de 500 caractères")
+        let identity = try code("Meeshy/Features/Profile/Views/ProfileIdentitySection.swift")
+        XCTAssertTrue(identity.contains("MeeshyField("), "en édition, chaque champ est K08")
+        XCTAssertFalse(identity.contains("TextField("), "aucun champ redessiné sur place")
+        XCTAssertTrue(identity.contains("MeeshyToggleRowFace("), "au repos, chaque valeur se lit dans le dessin de la rangée K06")
+        XCTAssertTrue(identity.contains("MeeshySectionHeader(title: ProfileAccentCopy.title"), "« Couleur d'accent » porte l'en-tête K44")
+    }
+
+    func test_decorEntry_isTheRowOfTheKit_andStillOpensTheDecorSheet() throws {
+        let decor = try code("Meeshy/Features/Profile/Views/ProfileDecorSheet.swift")
+        XCTAssertTrue(decor.contains("MeeshyToggleRow(ProfileDecorEntry.title"), "l'entrée du décor est la rangée K06")
+        XCTAssertFalse(decor.contains("theme.surface(tint: MeeshyColors.indigo300Hex"), "plus de fond de rangée dessiné à la main")
+        XCTAssertTrue(decor.contains("showSheet = true"), "toucher la rangée ouvre toujours la feuille du décor")
+        XCTAssertNotEqual(ProfileDecorEntry.title, ProfileDecorEntry.subtitle)
     }
 
     func test_profileView_bannerAndAvatar_areButtonsThatSinkUnderTheFinger() throws {

@@ -438,8 +438,8 @@ private extension View {
 
 // MARK: - L'entrée depuis mon profil
 
-/// Une rangée du profil qui ouvre la feuille. Elle porte sa propre présentation :
-/// `ProfileView` n'y ajoute que la ligne qui la monte.
+/// Une rangée du profil qui ouvre la feuille : la rangée du kit (K06) sur sa carte (K43). Elle porte sa propre
+/// présentation : `ProfileView` n'y ajoute que la ligne qui la monte.
 struct ProfileDecorEntry: View {
     let user: MeeshyUser?
     /// « Plus dans la boutique » : le profil décide de la navigation.
@@ -450,7 +450,6 @@ struct ProfileDecorEntry: View {
 
     @State private var showSheet = false
     @State private var pendingBanner: PhotosPickerItem?
-    private var theme: ThemeManager { ThemeManager.shared }
 
     /// `profile:decor-updated` venu d'un AUTRE de mes appareils : la règle vit au SDK
     /// (`MeeshyUser.applying`), et c'est le socket qui repeint mon compte — quel que soit
@@ -459,36 +458,20 @@ struct ProfileDecorEntry: View {
         user?.applying(event)
     }
 
+    static var title: String {
+        String(localized: "profile.decor.title", defaultValue: "Contour et bannière", bundle: .main)
+    }
+
+    static var subtitle: String {
+        String(localized: "profile.decor.subtitle", defaultValue: "Visibles de tous sur ton profil", bundle: .main)
+    }
+
     var body: some View {
-        Button {
-            HapticFeedback.light()
-            showSheet = true
-        } label: {
-            HStack(spacing: MeeshySpacing.md) {
-                Image(systemName: "circle.dashed")
-                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                    .foregroundStyle(MeeshyColors.indigo300)
-                    .frame(width: 28, height: 28)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(String(localized: "profile.decor.title", defaultValue: "Contour et bannière", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundStyle(theme.textPrimary)
-                    Text(String(localized: "profile.decor.subtitle", defaultValue: "Visibles de tous sur ton profil", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundStyle(theme.textMuted)
-                }
-                Spacer()
-                Image(systemName: "chevron.forward")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundStyle(theme.textMuted)
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .padding(.vertical, MeeshySpacing.smPlus)
-            .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.surface(tint: MeeshyColors.indigo300Hex, intensity: 0.08)))
+        MeeshyGroupCard(layout: .group) {
+            MeeshyToggleRow(ProfileDecorEntry.title, systemImage: "circle.dashed", subtitle: ProfileDecorEntry.subtitle,
+                            accessory: .chevron, action: { showSheet = true })
+                .accessibilityIdentifier("profile.decor.entry")
         }
-        .buttonStyle(.plain)
         .sheet(isPresented: $showSheet, onDismiss: handOverPickedBanner) {
             ProfileDecorSheet(
                 decor: user?.profileDecor,

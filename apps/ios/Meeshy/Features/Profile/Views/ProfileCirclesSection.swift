@@ -18,13 +18,14 @@ struct ProfileCirclesSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: Self.title, lead: { EmptyView() }, accessory: { requestsButton })
-            VStack(spacing: 0) {
-                scaleButton
-                if let phrase = Self.emptyPhrase(for: summary, hasServedLinks: hasServedLinks) {
-                    emptyLine(phrase).meeshyTransition(.opacity)
+            MeeshyGroupCard(tint: Color(hex: accentHex), label: Self.title) {
+                VStack(spacing: 0) {
+                    scaleButton
+                    if let phrase = Self.emptyPhrase(for: summary, hasServedLinks: hasServedLinks) {
+                        emptyLine(phrase).meeshyTransition(.opacity)
+                    }
                 }
             }
-            .background(ProfileSectionCard(tintHex: accentHex))
             MeeshyButton(Self.inviteTitle, systemImage: "person.badge.plus", kind: .glass, size: .s44,
                          action: { onOpen(.invite) })
                 .accessibilityIdentifier("profile.circles.invite")

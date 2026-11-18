@@ -26,19 +26,20 @@ struct ProfileVoiceSection: View {
                 MeeshyBadge(.label(isPublic ? ProfileVoiceCopy.publicBadge : ProfileVoiceCopy.privateBadge),
                             leading: .systemImage(isPublic ? "globe" : "lock"))
             })
-            MeeshyWavePlayer(
-                label: ProfileVoiceCopy.playerLabel,
-                progress: player.progress,
-                isPlaying: player.isPlaying,
-                duration: sample.shownDuration(playerDuration: player.duration),
-                tint: Color(hex: accentColor),
-                phase: ProfileVoiceSample.phase(isLoading: player.isLoading),
-                onToggle: { toggle() },
-                onScrub: scrub
-            )
-            .padding(.vertical, MeeshySpacing.sm)
-            .padding(.horizontal, MeeshySpacing.md)
-            .background(ProfileSectionCard(tintHex: accentColor))
+            MeeshyGroupCard(tint: Color(hex: accentColor), label: ProfileVoiceCopy.title) {
+                MeeshyWavePlayer(
+                    label: ProfileVoiceCopy.playerLabel,
+                    progress: player.progress,
+                    isPlaying: player.isPlaying,
+                    duration: sample.shownDuration(playerDuration: player.duration),
+                    tint: Color(hex: accentColor),
+                    phase: ProfileVoiceSample.phase(isLoading: player.isLoading),
+                    onToggle: { toggle() },
+                    onScrub: scrub
+                )
+                .padding(.vertical, MeeshySpacing.sm)
+                .padding(.horizontal, MeeshySpacing.md)
+            }
             if let editing {
                 editControls(editing)
             }

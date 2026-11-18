@@ -68,23 +68,9 @@ struct VitrineCransSection: View {
             HapticFeedback.light()
             onSelect(cran.level)
         } label: {
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                MeeshyBadge(.label(CircleLevelNames.title(of: cran.level)),
-                            leading: .systemImage(VitrineSeenAsCopy.glyph(of: cran.level)),
-                            surface: isCurrent ? .solid : .tonal, kind: .accent, tint: Color(hex: accentColor))
-                if cran.opened.isEmpty {
-                    line(VitrineSeenAsCopy.cranNothing, glyph: "eye.slash")
-                }
-                ForEach(cran.opened.map { row in
-                    AsyncRenderRow(id: row, content: line(VitrineSeenAsCopy.rowTitle(row), glyph: VitrineSeenAsCopy.rowGlyph(row)))
-                }, content: asyncRenderRowContent)
-                if let word = VitrineCran.contactWord(cran.contact) {
-                    line(word, glyph: "bubble.left")
-                }
+            MeeshyGroupCard(surface: isCurrent ? .accent : .raised, tint: Color(hex: accentColor)) {
+                cranLines(cran, isCurrent: isCurrent)
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .padding(MeeshySpacing.sm)
-            .background(ProfileSectionCard(tintHex: accentColor))
             .contentShape(Rectangle())
         }
         .buttonStyle(PressableButtonStyle())
@@ -92,6 +78,25 @@ struct VitrineCransSection: View {
         .accessibilityLabel(cran.spokenLabel)
         .accessibilityAddTraits(isCurrent ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("profile.seenAs.cran.\(cran.level.rawValue.lowercased())")
+    }
+
+    private func cranLines(_ cran: VitrineCran, isCurrent: Bool) -> some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            MeeshyBadge(.label(CircleLevelNames.title(of: cran.level)),
+                        leading: .systemImage(VitrineSeenAsCopy.glyph(of: cran.level)),
+                        surface: isCurrent ? .solid : .tonal, kind: .accent, tint: Color(hex: accentColor))
+            if cran.opened.isEmpty {
+                line(VitrineSeenAsCopy.cranNothing, glyph: "eye.slash")
+            }
+            ForEach(cran.opened.map { row in
+                AsyncRenderRow(id: row, content: line(VitrineSeenAsCopy.rowTitle(row), glyph: VitrineSeenAsCopy.rowGlyph(row)))
+            }, content: asyncRenderRowContent)
+            if let word = VitrineCran.contactWord(cran.contact) {
+                line(word, glyph: "bubble.left")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(MeeshySpacing.sm)
     }
 
     private func line(_ text: String, glyph: String) -> some View {
