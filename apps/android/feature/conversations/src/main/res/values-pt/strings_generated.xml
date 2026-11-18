@@ -106,7 +106,7 @@
     <string name="dialogs_report_error">Erro ao enviar a denúncia</string>
     <string name="dialogs_report_nav_title">Denunciar</string>
     <string name="dialogs_report_reason_harassment">Assédio</string>
-    <string name="dialogs_report_reason_hate_speech">Discurso de ódio</string>
+    <string name="dialogs_report_reason_hate_speech">Ódio</string>
     <string name="dialogs_report_reason_impersonation">Falsidade ideológica</string>
     <string name="dialogs_report_reason_inappropriate">Conteúdo inadequado</string>
     <string name="dialogs_report_reason_other">Outro</string>

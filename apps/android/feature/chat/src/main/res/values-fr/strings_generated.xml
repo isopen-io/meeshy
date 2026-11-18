@@ -610,7 +610,7 @@
     <string name="report_message_submit">Envoyer le signalement</string>
     <string name="report_message_title">Pourquoi signalez-vous ce message ?</string>
     <string name="report_reason_harassment">Harcèlement</string>
-    <string name="report_reason_hate_speech">Discours haineux</string>
+    <string name="report_reason_hate_speech">Haine</string>
     <string name="report_reason_impersonation">Usurpation d\'identité</string>
     <string name="report_reason_inappropriate">Contenu inapproprié</string>
     <string name="report_reason_other">Autre</string>

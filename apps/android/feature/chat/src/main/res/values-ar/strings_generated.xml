@@ -631,7 +631,7 @@
     <string name="report_message_submit">إرسال البلاغ</string>
     <string name="report_message_title">لماذا تُبلّغ عن هذه الرسالة؟</string>
     <string name="report_reason_harassment">تحرّش</string>
-    <string name="report_reason_hate_speech">خطاب كراهية</string>
+    <string name="report_reason_hate_speech">كراهية</string>
     <string name="report_reason_impersonation">انتحال الهوية</string>
     <string name="report_reason_inappropriate">محتوى غير لائق</string>
     <string name="report_reason_other">أخرى</string>

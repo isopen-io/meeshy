@@ -82,7 +82,7 @@
     <string name="feed_reel_republished_by">Ricondiviso da %1$s</string>
     <string name="feed_reel_views">Visualizzazioni</string>
     <string name="feed_report_reason_harassment">Molestie</string>
-    <string name="feed_report_reason_hate_speech">Incitamento all\'odio</string>
+    <string name="feed_report_reason_hate_speech">Odio</string>
     <string name="feed_report_reason_impersonation">Furto d\'identità</string>
     <string name="feed_report_reason_inappropriate">Contenuto inappropriato</string>
     <string name="feed_report_reason_other">Altro</string>

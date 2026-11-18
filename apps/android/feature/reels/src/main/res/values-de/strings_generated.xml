@@ -24,7 +24,7 @@
     <string name="reels_mute">Stummschalten</string>
     <string name="reels_open_failure_back">Zurück</string>
     <string name="reels_report_reason_harassment">Belästigung</string>
-    <string name="reels_report_reason_hate_speech">Hassrede</string>
+    <string name="reels_report_reason_hate_speech">Hass</string>
     <string name="reels_report_reason_impersonation">Identitätsdiebstahl</string>
     <string name="reels_report_reason_inappropriate">Unangemessener Inhalt</string>
     <string name="reels_report_reason_other">Andere</string>

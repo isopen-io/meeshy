@@ -603,7 +603,7 @@
     <string name="report_message_submit">Meldung senden</string>
     <string name="report_message_title">Warum meldest du diese Nachricht?</string>
     <string name="report_reason_harassment">Belästigung</string>
-    <string name="report_reason_hate_speech">Hassrede</string>
+    <string name="report_reason_hate_speech">Hass</string>
     <string name="report_reason_impersonation">Identitätsdiebstahl</string>
     <string name="report_reason_inappropriate">Unangemessener Inhalt</string>
     <string name="report_reason_other">Andere</string>

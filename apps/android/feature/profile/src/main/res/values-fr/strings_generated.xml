@@ -53,7 +53,7 @@
     <string name="profile_progression_title">Ma Légende</string>
     <string name="profile_report_quick_reason_fake_profile">Faux profil</string>
     <string name="profile_report_quick_reason_harassment">Harcèlement</string>
-    <string name="profile_report_quick_reason_hate_speech">Discours haineux</string>
+    <string name="profile_report_quick_reason_hate_speech">Haine</string>
     <string name="profile_report_quick_reason_impersonation">Usurpation d\'identité</string>
     <string name="profile_report_quick_reason_inappropriate">Contenu inapproprié</string>
     <string name="profile_report_quick_reason_other">Autre</string>
