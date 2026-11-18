@@ -633,7 +633,6 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
             )
         }
 
-        // Per-user — assemble userState from flat wire keys.
         self.userState = ConversationUserState(
             unreadCount: try c.decodeIfPresent(Int.self, forKey: .unreadCount) ?? 0,
             lastReadAt: try c.decodeIfPresent(Date.self, forKey: .lastReadAt),
@@ -734,8 +733,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encodeIfPresent(userState.lastReadAt, forKey: .lastReadAt)
         try c.encodeIfPresent(userState.lastDeliveredAt, forKey: .lastDeliveredAt)
         try c.encodeIfPresent(userState.lastReadMessageId, forKey: .lastReadMessageId)
-        try c.encodeIfPresent(userState.lastReadMessageCreatedAt, forKey: .lastReadMessageCreatedAt)
-        try c.encodeIfPresent(userState.readThroughServerAt, forKey: .readThroughServerAt)
+        try c.encodeIfPresent(userState.lastReadMessageCreatedAt, forKey: .lastReadMessageCreatedAt); try c.encodeIfPresent(userState.readThroughServerAt, forKey: .readThroughServerAt)
         try c.encodeIfPresent(userState.deletedForUserAt, forKey: .deletedForUserAt)
         try c.encodeIfPresent(userState.clearHistoryBefore, forKey: .clearHistoryBefore)
         try c.encodeIfPresent(userState.orderInCategory, forKey: .orderInCategory)
