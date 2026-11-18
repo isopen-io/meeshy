@@ -1516,3 +1516,34 @@ socket jusqu'au client.
 3. #19597, #19596, puis #19473, #18668 et #18692 (messages d'exception bruts), #19381, #19253, #19294, #19295, #19255.
 4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
 5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 45 — 2026-11-18
+
+- **Base** : `origin/dev` @ `02c4bd697`. La PR du cycle 44 (#19649) était fusionnée. #19595 est fermée ; #19520 reste ouverte pour son second critère, le constat sur le serveur.
+- **Branche** : `claude/determined-volta-mmvigf`.
+- **Objectif** : #19647. `POST /voice/transcribe` et `POST /attachments/:id/transcribe` ne servent plus le chemin disque serveur (`audioPath`) des pistes traduites.
+- **Livré** (passerelle seule) :
+  - Les deux routes déclarent `translatedAudios: { type: 'array', items: voiceTranslatedAudioSchema }`. Le schéma du cycle 44 est réutilisé, pas dupliqué.
+  - La vue riche (`attachmentAudioRichView`) a dix clés : seule `audioPath` est retirée. Les clés internes `audio_path` et `fallback` ne passent plus non plus.
+- **Tests** :
+  - **Rouge** (`-t "chemin serveur"`, deux suites) : `2 failed, 67 skipped, 1 passed`. Le diff montrait `+ "audioPath": "/srv/meeshy/uploads/translated/…"`.
+  - **Vert** : `voice/translation` et `attachments/translation` donnent `70 passed`, relancé par moi.
+  - Suites voice et attachments : `46 suites, 771 passed`. Gardes `security/response-schema*` : `27 passed`. `tsc --noEmit` : 0.
+  - La QA a ajouté un témoin qui part du vrai producteur `attachmentAudioRichView`. Il est rouge sur la route d'avant le lot (`2 failed, 25 passed`) et vert après. Avec lui : `49 suites, 800 passed`.
+  - **Mutations QA** : ajouter `audioPath` au schéma, ou retirer `format`. Chacune fait tomber 3 tests.
+- **Rétrocompatibilité** : aucun client ne lit `translatedAudios` sur ces routes.
+  - iOS : `AttachmentService.requestTranscription` décode un `SimpleAPIResponse`, et `VoiceEndpoint.transcribe` n'a pas d'appelant.
+  - Android : `MediaApi.transcribe` décode un `JsonElement` ; `TranscribeOutcome` ne lit que `status` et `transcription`.
+  - Web : `attachment-processing.ts` ne lit que `data.transcription`.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - #19672 (**moyenne, sécurité**) : `messageAttachmentSchema` déclare `translations.<langue>.path` et `translatedAudios[].path`, et `cleanAttachmentsForApi` les recopie. Le chemin absolu (`/app/uploads/translated/…`) part donc avec toute liste de messages, sur une dizaine de routes.
+  - #19673 : `transcription.segments` n'a pas d'`items`. Dans la même issue, l'`attachment` de `/attachments/:id/transcribe` est tronqué à 6 champs.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre : fusion à la main quand la CI est verte.
+1. **#19672 d'abord** : même classe que #19647, surface large, sécurité. Vérifier qu'aucun client ne lit `path` avant de le retirer du schéma partagé, et regarder aussi le socket. Puis #19673, puis #19648.
+2. #19520, second critère : constat sur le serveur avec `sre-infra`, dans la même séance que la mesure des journaux d'accès pour #19471.
+3. #19597, #19596, puis #19473, #18668 et #18692 (messages d'exception bruts), #19381, #19253, #19294, #19295, #19255.
+4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
+5. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
