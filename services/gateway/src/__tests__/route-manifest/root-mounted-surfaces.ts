@@ -220,6 +220,12 @@ export const ROOT_MOUNTED_SURFACES: readonly DeclaredRootSurface[] = [
     reason: '@fastify/cors — négociation CORS par hook ; la réponse OPTIONS est un miroir, jamais une route déclarée.',
   },
   {
+    callee: 'registerShutdownDrain',
+    via: 'call',
+    kind: 'no-routes',
+    reason: "Pose le hook de vidange de l'arrêt (utils/shutdown-drain.ts, #19280) : 503 + CORS pendant la vidange — aucune route déclarée.",
+  },
+  {
     callee: 'swagger',
     via: 'register',
     kind: 'no-routes',
