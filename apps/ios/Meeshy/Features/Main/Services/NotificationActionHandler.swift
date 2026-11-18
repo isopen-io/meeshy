@@ -265,10 +265,7 @@ final class NotificationActionHandler: NotificationActionHandling {
 
         switch actionIdentifier {
         case UNNotificationDefaultActionIdentifier:
-            // #6999 — OUVRIR, c'est CONSOMMER ; la navigation d'ABORD, la consommation attend le `markAsRead` REST.
-            openNotification(userInfo)
-            await answerIfWellnessCheck(userInfo)
-            await consumeTapped(payload)
+            await handleDefaultTap(payload, userInfo: userInfo)
 
         case UNNotificationDismissActionIdentifier:
             break
@@ -313,8 +310,7 @@ final class NotificationActionHandler: NotificationActionHandling {
             await handleStopBring(userInfo)
 
         case MeeshyNotificationAction.wellnessOk.rawValue:
-            await answerWellness()
-            await consumeTapped(payload)
+            await handleWellnessOk(payload)
 
         case MeeshyNotificationAction.declineCall.rawValue:
             // Silent decline — no navigation. The VoIP layer handles the
@@ -334,10 +330,20 @@ final class NotificationActionHandler: NotificationActionHandling {
         await stopBring(bringId)
     }
 
-    /// #18738 — toucher « Tout va bien ? », c'est déjà répondre « Je vais bien ».
-    private func answerIfWellnessCheck(_ userInfo: [AnyHashable: Any]) async {
-        guard userInfo["type"] as? String == InactivityCheckContract.wellnessCheckNotificationType else { return }
+    /// #6999 — OUVRIR, c'est CONSOMMER ; la navigation d'ABORD, la consommation attend le `markAsRead` REST. Toucher
+    /// « Tout va bien ? » (#18738), c'est déjà répondre « Je vais bien ».
+    private func handleDefaultTap(_ payload: NotificationPayload, userInfo: [AnyHashable: Any]) async {
+        openNotification(userInfo)
+        if userInfo["type"] as? String == InactivityCheckContract.wellnessCheckNotificationType {
+            await answerWellness()
+        }
+        await consumeTapped(payload)
+    }
+
+    /// #18738 — « Je vais bien » depuis la bannière : la réponse part, l'app ne s'ouvre pas.
+    private func handleWellnessOk(_ payload: NotificationPayload) async {
         await answerWellness()
+        await consumeTapped(payload)
     }
 
     // MARK: - Conversation verrouillée par PIN (#12655)
