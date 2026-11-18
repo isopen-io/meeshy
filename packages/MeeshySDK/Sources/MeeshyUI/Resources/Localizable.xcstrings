@@ -2432,53 +2432,6 @@
     "Premier plan": {},
     "Préparation…": {},
     "Quitter le Picture in Picture": {},
-    "profile.linkCard.closed.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هذا الملف غير موجود أو غير متاح لك."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieses Profil existiert nicht oder ist für dich nicht sichtbar."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This profile doesn't exist or isn't open to you."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este perfil no existe o no está abierto para ti."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce profil n'existe pas ou ne s'ouvre pas pour toi."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Questo profilo non esiste o non è aperto per te."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este perfil não existe ou não está aberto para você."
-          }
-        }
-      }
-    },
     "profile.linkCard.closed.title": {
       "extractionState": "manual",
       "localizations": {
@@ -3274,43 +3227,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذه الرسالة مشفّرة من طرف إلى طرف. إرفاقها يكشف نصها لفريق الإشراف لدينا."
+            "value": "مشفّرة من طرف إلى طرف: إرفاقها يكشف نصها للمشرفين."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Nachricht ist Ende-zu-Ende-verschlüsselt. Wenn du sie anhängst, erhält unser Moderationsteam ihren Text."
+            "value": "Ende-zu-Ende-verschlüsselt: Anhängen gibt den Text an die Moderation."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This message is end-to-end encrypted. Attaching it shares its text with our moderation team."
+            "value": "End-to-end encrypted: attaching it shares its text with the moderators."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este mensaje está cifrado de extremo a extremo. Adjuntarlo comparte su texto con nuestro equipo de moderación."
+            "value": "Cifrado de extremo a extremo: adjuntarlo da su texto a los moderadores."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce message est chiffré de bout en bout. Le joindre en confie le texte à notre équipe de modération."
+            "value": "Chiffré de bout en bout : le joindre en confie le texte aux modérateurs."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo messaggio è crittografato end-to-end. Allegarlo ne affida il testo al nostro team di moderazione."
+            "value": "Crittografato end-to-end: allegarlo ne affida il testo ai moderatori."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta mensagem é criptografada de ponta a ponta. Anexá-la compartilha o texto com nossa equipe de moderação."
+            "value": "Criptografada de ponta a ponta: anexá-la mostra o texto aos moderadores."
           }
         }
       }
@@ -33149,7 +33102,7 @@
         }
       }
     },
-    "profile.avatar.viewFullscreen.hint": {
+    "profile.avatar.viewFullscreen.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -33290,7 +33243,7 @@
         }
       }
     },
-    "profile.close.hint": {
+    "profile.close.a11y": {
       "extractionState": "extracted_with_value",
       "localizations": {
         "ar": {
@@ -34179,53 +34132,6 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Conversas"
-          }
-        }
-      }
-    },
-    "profile.tab.details": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "التفاصيل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Details"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Details"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Detalles"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Détails"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dettagli"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Detalhes"
           }
         }
       }
@@ -90350,7 +90256,7 @@
         }
       }
     },
-    "profile.vitrine.withThem.seeAll.hint": {
+    "profile.vitrine.withThem.seeAll.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -92559,7 +92465,7 @@
         }
       }
     },
-    "profile.vitrine.pending.cancel.hint": {
+    "profile.vitrine.pending.cancel.a11y": {
       "extractionState": "manual",
       "localizations": {
         "ar": {

@@ -600,7 +600,6 @@
     <string name="recentMedia_resolveFailed_multiple">%1$d Medien konnten nicht vorbereitet werden – nutze die gesamte Fotomediathek</string>
     <string name="report_message_details_header">Details (optional)</string>
     <string name="report_message_details_placeholder">Beschreibe das Problem…</string>
-    <string name="report_message_sent">Meldung gesendet</string>
     <string name="report_message_submit">Meldung senden</string>
     <string name="report_message_title">Warum meldest du diese Nachricht?</string>
     <string name="report_reason_harassment">Belästigung</string>

@@ -116,7 +116,7 @@ nonisolated struct OurCircleSummary: Equatable, Sendable {
             since: link.since.flatMap { WireDate.date(from: $0) },
             next: next,
             opened: opened(at: common),
-            nextOpens: next.map(addedBy:) ?? [],
+            nextOpens: next.map(addedBy) ?? [],
             missing: missing(common: common, mine: mine, next: next, pending: pending)
         )
     }
