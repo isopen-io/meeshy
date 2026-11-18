@@ -1650,7 +1650,7 @@ socket jusqu'au client.
 
 ### Cycle suivant : par où reprendre
 
-0. Si la PR de ce cycle n'est pas fusionnée, la reprendre : fusion à la main quand la CI est verte. Fermer #19734 avec sa preuve si `Closes` ne la ferme pas.
+0. **PR #19753, ouverte et non fusionnée.** La CI est gelée par le porteur depuis le 2026-11-18 à 19:24 : les 25 workflows sont désactivés, et seule la session `v2-meeshy-88` fusionne vers `dev` (consigne sur #19704). Tant que le gel tient, il ne faut ni fusionner, ni lancer de `workflow_dispatch`. Il faut seulement fusionner `origin/dev` dans la branche, rejouer les gardes locales et le dire sur la PR. Après la fusion, vérifier #19734 et relancer les témoins `textOnlyKeepsTrack` sur `dev`.
 1. **#19750 et #19749 ensemble** (sécurité : effacement et fuite de `path` sur les posts), puis #19702, #19673, #19735 et #19751.
 2. #19520, second critère : constat sur le serveur avec `sre-infra`, dans la même séance que la mesure des journaux d'accès pour #19471.
 3. #19597, #19736, puis #19473, #18668 et #18692, #19381, #19253, #19294, #19295, #19255.
