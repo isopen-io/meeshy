@@ -31,7 +31,10 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
         // Widgets « Non lus » / « Récentes » et App Shortcut « Open Recent
         // Conversation » : élus par `ConversationListEntry` (#7811).
         "conversations": "meeshy://conversations/unread",
-        "call": "meeshy://call?contactId=conv1&type=video"
+        "call": "meeshy://call?contactId=conv1&type=video",
+        // Widget « Mes proches » et activité d'une position partagée : la
+        // vitrine d'une personne, par son pseudo (#19524).
+        "u": "meeshy://u/leo.m"
     ]
 
     /// Hosts émis SANS destination, et pourquoi ils le restent. Chacun demande

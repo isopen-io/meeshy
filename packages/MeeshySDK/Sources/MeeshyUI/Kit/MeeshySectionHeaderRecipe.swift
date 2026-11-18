@@ -100,6 +100,13 @@ public nonisolated struct MeeshySectionHeaderRecipe: Sendable, Equatable {
         )
     }
 
+    /// Ce que le lecteur d'écran dit d'une ligne repliable : le titre, son compte s'il n'est pas nul, puis la pastille
+    /// de titre (K41) quand il y en a une.
+    public static func spokenTitle(title: String, count: Int?, titleBadge: String?) -> String {
+        let counted = (count ?? 0) > 0 ? count.map { String($0) } : nil
+        return [title, counted, titleBadge].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+
     public static func titleFontSize(form: MeeshySectionHeaderForm, size: MeeshySectionHeaderSize) -> Double {
         switch form {
         case .overline, .divider: return overlineFontSize

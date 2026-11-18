@@ -735,6 +735,32 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertNil(hasPassword)
     }
 
+    func test_hasSignalKeys_readsTheSecuritySummaryOfMe() async throws {
+        mock.stub("/auth/me", result: APIResponse(
+            success: true,
+            data: MeSecurityResponseData(user: .init(security: .init(hasPassword: true, hasSignalKeys: true))),
+            error: nil
+        ))
+
+        let hasSignalKeys = try await service.hasSignalKeys()
+
+        XCTAssertEqual(hasSignalKeys, true)
+        let query = mock.lastRequest?.queryItems ?? []
+        XCTAssertTrue(query.contains(URLQueryItem(name: "expand", value: "security")))
+    }
+
+    func test_hasSignalKeys_gatewayWithoutTheField_isUnknown() async throws {
+        mock.stub("/auth/me", result: APIResponse(
+            success: true,
+            data: MeSecurityResponseData(user: .init(security: .init(hasPassword: true))),
+            error: nil
+        ))
+
+        let hasSignalKeys = try await service.hasSignalKeys()
+
+        XCTAssertNil(hasSignalKeys)
+    }
+
     // MARK: - logout
 
     func testLogoutCallsCorrectEndpoint() async {

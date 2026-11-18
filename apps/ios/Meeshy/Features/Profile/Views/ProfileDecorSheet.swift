@@ -438,8 +438,8 @@ private extension View {
 
 // MARK: - L'entrée depuis mon profil
 
-/// Une rangée du profil qui ouvre la feuille. Elle porte sa propre présentation :
-/// `ProfileView` n'y ajoute que la ligne qui la monte.
+/// Une rangée du profil qui ouvre la feuille : la rangée du kit (K06) sur sa carte (K43). Elle porte sa propre
+/// présentation : `ProfileView` n'y ajoute que la ligne qui la monte.
 struct ProfileDecorEntry: View {
     let user: MeeshyUser?
     /// « Plus dans la boutique » : le profil décide de la navigation.
@@ -449,8 +449,6 @@ struct ProfileDecorEntry: View {
     var onPickBanner: (PhotosPickerItem) -> Void = { _ in }
 
     @State private var showSheet = false
-    @State private var pendingBanner: PhotosPickerItem?
-    private var theme: ThemeManager { ThemeManager.shared }
 
     /// `profile:decor-updated` venu d'un AUTRE de mes appareils : la règle vit au SDK
     /// (`MeeshyUser.applying`), et c'est le socket qui repeint mon compte — quel que soit
@@ -459,37 +457,38 @@ struct ProfileDecorEntry: View {
         user?.applying(event)
     }
 
+    static var title: String {
+        String(localized: "profile.decor.title", defaultValue: "Contour et bannière", bundle: .main)
+    }
+
+    static var subtitle: String {
+        String(localized: "profile.decor.subtitle", defaultValue: "Visibles de tous sur ton profil", bundle: .main)
+    }
+
     var body: some View {
-        Button {
-            HapticFeedback.light()
-            showSheet = true
-        } label: {
-            HStack(spacing: MeeshySpacing.md) {
-                Image(systemName: "circle.dashed")
-                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
-                    .foregroundStyle(MeeshyColors.indigo300)
-                    .frame(width: 28, height: 28)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(String(localized: "profile.decor.title", defaultValue: "Contour et bannière", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundStyle(theme.textPrimary)
-                    Text(String(localized: "profile.decor.subtitle", defaultValue: "Visibles de tous sur ton profil", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundStyle(theme.textMuted)
-                }
-                Spacer()
-                Image(systemName: "chevron.forward")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundStyle(theme.textMuted)
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .padding(.vertical, MeeshySpacing.smPlus)
-            .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.surface(tint: MeeshyColors.indigo300Hex, intensity: 0.08)))
+        MeeshyGroupCard(layout: .group) {
+            MeeshyToggleRow(ProfileDecorEntry.title, systemImage: "circle.dashed", subtitle: ProfileDecorEntry.subtitle,
+                            accessory: .chevron, action: { showSheet = true })
+                .accessibilityIdentifier("profile.decor.entry")
         }
-        .buttonStyle(.plain)
-        .sheet(isPresented: $showSheet, onDismiss: handOverPickedBanner) {
+        .modifier(ProfileDecorSheetPresentation(isPresented: $showSheet, user: user, onOpenShop: onOpenShop,
+                                                onPickBanner: onPickBanner))
+    }
+}
+
+/// La feuille du décor, présentée depuis la rangée de « Mon activité » comme depuis l'édition de ma vitrine (#19548) :
+/// une seule présentation. L'image choisie par la tuile « Image » est remise au profil une fois la feuille FERMÉE, sa
+/// retouche plein écran ne pouvant pas se présenter par-dessus une feuille encore ouverte.
+struct ProfileDecorSheetPresentation: ViewModifier {
+    @Binding var isPresented: Bool
+    let user: MeeshyUser?
+    let onOpenShop: (PackDomain) -> Void
+    let onPickBanner: (PhotosPickerItem) -> Void
+
+    @State private var pendingBanner: PhotosPickerItem?
+
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $isPresented, onDismiss: handOverPickedBanner) {
             ProfileDecorSheet(
                 decor: user?.profileDecor,
                 avatarURL: user?.avatar,
@@ -498,12 +497,12 @@ struct ProfileDecorEntry: View {
                 bannerURL: user?.banner,
                 bannerThumbHash: user?.bannerThumbHash,
                 onOpenShop: { domain in
-                    showSheet = false
+                    isPresented = false
                     onOpenShop(domain)
                 },
                 onPickBanner: { item in
                     pendingBanner = item
-                    showSheet = false
+                    isPresented = false
                 }
             )
         }
@@ -524,6 +523,8 @@ struct ProfileOwnBanner: View {
     let user: MeeshyUser?
     let accentColor: String
     let isDark: Bool
+    /// La hauteur peinte : celle que l'en-tête repliable de ma vitrine lui donne, étirement compris (#19589).
+    var height: CGFloat = 120
 
     static func paint(of user: MeeshyUser?) -> ProfileBannerPaint {
         ProfileDecorResolver.bannerPaint(photo: user?.banner, decor: user?.profileDecor?.banner)
@@ -541,7 +542,7 @@ struct ProfileOwnBanner: View {
     }
 
     var body: some View {
-        ProfileBannerPaintView(paint: Self.paint(of: user), thumbHash: user?.bannerThumbHash, accentHex: accentColor, isDark: isDark, height: 120)
+        ProfileBannerPaintView(paint: Self.paint(of: user), thumbHash: user?.bannerThumbHash, accentHex: accentColor, isDark: isDark, height: height)
             .overlay {
                 if let frame = Self.frame(of: user) {
                     BannerFrameView(design: frame)
@@ -567,11 +568,10 @@ struct ProfileBannerPaintView: View {
         case .photo(let bannerURL):
             CachedBannerImage(urlString: bannerURL, thumbHash: thumbHash, fallbackColor: accentHex, height: height)
         case .plain:
-            LinearGradient(
-                colors: [Color(hex: accentHex).opacity(0.3), MeeshyColors.indigo300.opacity(0.2)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            // Sans photo ni design : la bannière vivante du kit (K27, planche `Main`), figée sous « réduire les
+            // animations » par le kit lui-même.
+            MeeshyLivingBanner(tint: Color(hex: accentHex), height: Double(height))
+                .accessibilityHidden(true)
         }
     }
 }

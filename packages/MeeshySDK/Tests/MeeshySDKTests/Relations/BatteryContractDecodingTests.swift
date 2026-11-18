@@ -70,6 +70,36 @@ struct BatteryContractDecodingTests {
         #expect(pull.requestedAt == WireDate.date(from: "2026-11-15T10:00:00.000Z"))
     }
 
+    @Test func pullRequested_withoutRequester_staysAnonymous() throws {
+        let pull = try decode(BatteryPullRequested.self, #"{"requestedAt":"2026-11-15T10:00:00.000Z"}"#)
+        #expect(pull.requestedBy == nil)
+        #expect(pull.expiresAt == nil)
+    }
+
+    @Test func pullRequested_namesItsRequester_whenTheGatewayServesHim() throws {
+        let json = #"{"requestedAt":"2026-11-15T10:00:00.000Z","expiresAt":"2026-11-15T10:15:00.000Z","requestedBy":{"id":"mina","displayName":"Mina","avatar":"https://a/m.jpg","circle":"BLOOD"}}"#
+        let pull = try decode(BatteryPullRequested.self, json)
+        #expect(pull.requestedBy == BatteryPullRequester(id: "mina", displayName: "Mina", avatar: "https://a/m.jpg", circle: .blood))
+        #expect(pull.expiresAt == WireDate.date(from: "2026-11-15T10:15:00.000Z"))
+    }
+
+    @Test func pullRequested_unreadableRequester_readsAsBefore() throws {
+        let noName = try decode(BatteryPullRequested.self, #"{"requestedBy":{"id":"mina","displayName":"  "}}"#)
+        #expect(noName.requestedBy == nil)
+        let oddCircle = try decode(BatteryPullRequested.self, #"{"requestedBy":{"id":"mina","displayName":"Mina","circle":"ATOM"}}"#)
+        #expect(oddCircle.requestedBy?.circle == nil)
+        #expect(oddCircle.requestedBy?.displayName == "Mina")
+    }
+
+    @Test func pullPush_readsTheRequester_asObjectOrJSONString() {
+        let object: [AnyHashable: Any] = ["type": "battery_pull", "requestedBy": ["id": "mina", "displayName": "Mina"]]
+        #expect(BatteryPullRequested(pushUserInfo: object).requestedBy?.id == "mina")
+        let text: [AnyHashable: Any] = ["type": "battery_pull", "requestedBy": #"{"id":"mina","displayName":"Mina","circle":"CLOSE"}"#]
+        #expect(BatteryPullRequested(pushUserInfo: text).requestedBy?.circle == .close)
+        let bare: [AnyHashable: Any] = ["type": "battery_pull"]
+        #expect(BatteryPullRequested(pushUserInfo: bare).requestedBy == nil)
+    }
+
     @Test func personSettings_decode_andTheUpdateNamesOnlyWhatChanges() throws {
         let settings = try decode(BatteryPersonSettings.self, #"{"userId":"u1","shared":true,"receive":"pill"}"#)
         #expect(settings.receive == .pill)

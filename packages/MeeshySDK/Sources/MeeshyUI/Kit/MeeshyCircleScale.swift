@@ -25,6 +25,7 @@ public struct MeeshyCircleScale<Center: View, Marker: View>: View {
     private let size: MeeshyCircleScaleSize
     private let showsTitles: Bool
     private let label: String?
+    private let caption: String?
     private let onSelect: ((Int) -> Void)?
     private let haptic: MeeshyCircleScaleHaptic
     private let center: Center
@@ -49,6 +50,7 @@ public struct MeeshyCircleScale<Center: View, Marker: View>: View {
                 size: MeeshyCircleScaleSize = .regular,
                 showsTitles: Bool = true,
                 label: String? = nil,
+                caption: String? = nil,
                 onSelect: ((Int) -> Void)? = nil,
                 haptic: MeeshyCircleScaleHaptic = .onChange,
                 @ViewBuilder center: () -> Center,
@@ -63,6 +65,7 @@ public struct MeeshyCircleScale<Center: View, Marker: View>: View {
         self.size = size
         self.showsTitles = showsTitles
         self.label = label
+        self.caption = caption
         self.onSelect = onSelect
         self.haptic = haptic
         self.center = center()
@@ -94,6 +97,7 @@ public struct MeeshyCircleScale<Center: View, Marker: View>: View {
         case .dots: dots(recipe: recipe)
         case .pill: pill(recipe: recipe)
         case .rings: rings(recipe: recipe)
+        case .ladder: ladder(recipe: recipe)
         }
     }
 
@@ -114,9 +118,10 @@ public struct MeeshyCircleScale<Center: View, Marker: View>: View {
         let validCounts = MeeshyCircleScaleRecipe.validCounts(counts, levelCount: levels.count)
         let isCompact = size == .compact
         let group = HStack(alignment: .top, spacing: isCompact ? recipe.stepGap : MeeshySpacing.sm) {
-            ForEach(Array(levels.enumerated()), id: \.offset) { index, level in
-                dotCell(index: index, level: level, count: validCounts?[index], recipe: recipe, isCompact: isCompact)
-            }
+            ForEach(levels.indices.map { index in
+                AsyncRenderRow(id: index, content: dotCell(index: index, level: levels[index], count: validCounts?[index],
+                                                           recipe: recipe, isCompact: isCompact))
+            }, content: asyncRenderRowContent)
         }
         return Group {
             if onSelect == nil {
@@ -229,9 +234,8 @@ public struct MeeshyCircleScale<Center: View, Marker: View>: View {
     private func rings(recipe: MeeshyCircleScaleRecipe) -> some View {
         let outer = ringDiameter(level: 0, recipe: recipe)
         return ZStack {
-            ForEach(Array(levels.indices), id: \.self) { level in
-                ring(level: level, recipe: recipe)
-            }
+            ForEach(levels.indices.map { AsyncRenderRow(id: $0, content: ring(level: $0, recipe: recipe)) },
+                    content: asyncRenderRowContent)
             center.frame(width: CGFloat(recipe.centerDiameter), height: CGFloat(recipe.centerDiameter))
             if let lit = recipe.litLevel {
                 marker
@@ -264,6 +268,92 @@ public struct MeeshyCircleScale<Center: View, Marker: View>: View {
     }
 }
 
+// MARK: - Échelle verticale
+
+extension MeeshyCircleScale {
+
+    /// L'échelle verticale : le plus haut niveau en haut, des nœuds reliés par un trait,
+    /// le niveau courant plein et cerné, ceux au-dessus en tirets. `caption` se pose à
+    /// côté du niveau courant (« Léo et toi »).
+    fileprivate func ladder(recipe: MeeshyCircleScaleRecipe) -> some View {
+        let rowHeight = onSelect == nil ? MeeshyCircleScaleRecipe.ladderNodeDiameter : Double(MeeshyControlSize.tapTarget)
+        let group = VStack(alignment: .leading, spacing: CGFloat(MeeshyCircleScaleRecipe.ladderRowGap)) {
+            ForEach(MeeshyCircleScaleRecipe.ladderOrder(count: levels.count), id: \.self) { index in
+                ladderRow(index: index, recipe: recipe, rowHeight: rowHeight)
+            }
+        }
+        .background(alignment: .leading) {
+            Rectangle()
+                .fill(.quaternary)
+                .frame(width: CGFloat(MeeshyCircleScaleRecipe.ladderLineWidth))
+                .padding(.vertical, CGFloat(rowHeight / 2))
+                .padding(.leading, CGFloat((MeeshyCircleScaleRecipe.ladderNodeDiameter
+                                            - MeeshyCircleScaleRecipe.ladderLineWidth) / 2))
+                .accessibilityHidden(true)
+        }
+        return Group {
+            if onSelect == nil {
+                group.accessibilityElement(children: .ignore)
+                    .accessibilityLabel(spokenLabel(recipe: recipe))
+                    .accessibilityValue(spokenValue(recipe: recipe))
+            } else {
+                group.accessibilityElement(children: .contain)
+            }
+        }
+    }
+
+    @ViewBuilder
+    fileprivate func ladderRow(index: Int, recipe: MeeshyCircleScaleRecipe, rowHeight: Double) -> some View {
+        let level = levels[index]
+        let node = MeeshyCircleScaleRecipe.ladderNode(level: index, current: recipe.litLevel)
+        let row = HStack(spacing: MeeshySpacing.sm) {
+            ladderNode(level: level, node: node)
+            Text(verbatim: level.title)
+                .meeshyScaledFont(MeeshyFont.subheadSize, weight: node == .current ? .bold : .regular)
+                .foregroundStyle(node == .current ? Color.primary : Color.secondary)
+            if node == .current, let caption {
+                Text(verbatim: caption)
+                    .meeshyScaledFont(MeeshyFont.subheadSize, weight: .semibold)
+                    .foregroundStyle(accent)
+            }
+        }
+        .frame(minHeight: CGFloat(rowHeight))
+        if let onSelect {
+            Button { choose(index, onSelect: onSelect) } label: { row.contentShape(Rectangle()) }
+                .buttonStyle(.plain)
+                .accessibilityLabel(level.title)
+                .accessibilityValue(node == .current ? (caption ?? "") : "")
+                .accessibilityAddTraits(node == .current ? .isSelected : [])
+        } else {
+            row
+        }
+    }
+
+    fileprivate func ladderNode(level: MeeshyCircleScaleLevel, node: MeeshyCircleScaleLadderNode) -> some View {
+        let diameter = CGFloat(MeeshyCircleScaleRecipe.ladderNodeDiameter)
+        return ZStack {
+            switch node {
+            case .current:
+                Circle().fill(accent)
+                Circle().stroke(accent.opacity(MeeshyOpacity.medium),
+                                lineWidth: CGFloat(MeeshyCircleScaleRecipe.ladderHaloWidth))
+                    .padding(-CGFloat(MeeshyCircleScaleRecipe.ladderHaloWidth))
+                Image(systemName: level.systemImage).foregroundStyle(MeeshyColors.indigo950)
+            case .reached:
+                Circle().fill(.quaternary)
+                Image(systemName: level.systemImage).foregroundStyle(.secondary)
+            case .ahead:
+                Circle().fill(.background)
+                Circle().strokeBorder(.tertiary, style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+                Image(systemName: level.systemImage).foregroundStyle(.tertiary)
+            }
+        }
+        .meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
+        .frame(width: diameter, height: diameter)
+        .accessibilityHidden(true)
+    }
+}
+
 public extension MeeshyCircleScale where Center == EmptyView, Marker == EmptyView {
     init(levels: [MeeshyCircleScaleLevel],
          current: Int?,
@@ -275,10 +365,11 @@ public extension MeeshyCircleScale where Center == EmptyView, Marker == EmptyVie
          size: MeeshyCircleScaleSize = .regular,
          showsTitles: Bool = true,
          label: String? = nil,
+         caption: String? = nil,
          onSelect: ((Int) -> Void)? = nil,
          haptic: MeeshyCircleScaleHaptic = .onChange) {
         self.init(levels: levels, current: current, other: other, counts: counts, tint: tint, otherTint: otherTint,
-                  form: form, size: size, showsTitles: showsTitles, label: label, onSelect: onSelect,
+                  form: form, size: size, showsTitles: showsTitles, label: label, caption: caption, onSelect: onSelect,
                   haptic: haptic, center: { EmptyView() }, marker: { EmptyView() })
     }
 }

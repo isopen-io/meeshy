@@ -577,8 +577,6 @@ const PENDING_CLIENT_ENTRIES = {
   'UsersEndpoint.meProfileLinkStats': { issue: 19206, reason: 'GET /users/me/profile-link/stats — les visites de mon lien (iOS)' },
   'InvitationsEndpoint.emailByIdResend': { issue: 19207, reason: 'POST /invitations/email/:id/resend — relancer une invitation (iOS)' },
   'InvitationsEndpoint.emailOptOut': { issue: 19321, reason: 'POST /invitations/email/opt-out — la page web de désinscription, pas un écran iOS (#19321)' },
-  // « En commun » (#19200) : le serveur sert les communautés, amis et médias en commun avant le tour client (#19234).
-  'UsersEndpoint.byIdInCommon': { issue: 19234, reason: 'GET /users/:id/in-common — la vue « En commun » de la fiche d’un autre (iOS)' },
   // La boîte de demandes (#14107, PR #14449) : le serveur sert « Accepter » avant le tour client, qui le portera.
   'ConversationsEndpoint.byIdMessageRequestAccept': { issue: 14107, reason: 'POST /conversations/:id/message-request/accept — le bouton « Accepter » de la boîte de demandes (iOS)' },
   // #11327 (S26) — `/api/v1/lens` : le crédit « Lens par X », le logo du filigrane et le ping d'usage, que la
@@ -601,25 +599,10 @@ const PENDING_CLIENT_ENTRIES = {
   // La conversation externe (#17117, chantier #17007) : la passerelle ouvre une conversation chiffrée de bout en
   // bout avec un ami WhatsApp, derrière un drapeau éteint en production ; le lot clients (#17118) l'appellera.
   'ConversationsEndpoint.external': { issue: 17118, reason: 'POST /conversations/external — ouvrir une conversation avec un ami WhatsApp depuis iOS' },
-  // La position du Sang (#13937, derrière un drapeau éteint) : la passerelle sert l'historique scellé, le fantôme, le
-  // journal et la proximité avant les clients ; `sang-position-historique@ios` les appellera.
-  'MeEndpoint.locationBlood': { issue: 13937, reason: 'POST /me/location/blood — ranger un point au réveil sur changement significatif' },
-  'MeEndpoint.locationHistory': { issue: 13937, reason: 'DELETE /me/location/history — effacer son historique' },
-  'MeEndpoint.locationConsultations': { issue: 13937, reason: 'GET /me/location/consultations — qui a consulté ma position' },
-  'MeEndpoint.locationBloodSettings': { issue: 13937, reason: 'PUT /me/location/blood-settings — fantôme et rayon de proximité' },
-  'RelationsEndpoint.byUserIdLocationHistory': { issue: 13937, reason: 'GET /relations/:userId/location/history — l’historique d’un Sang' },
   // Le relais de la confirmation d'un appareil par code (#19156, spec 2026-11-17 § 5.2) : la passerelle le sert avant
   // le SDK et l'app iOS (§ 10, lots 3 et 4), portés par #18906.
   'E2EeEndpoint.devicesSelfVerifications': { issue: 18906, reason: 'POST|GET /e2ee/devices/self/verifications — déposer et relire les messages de comparaison, appelés par le SDK iOS de la confirmation par code' },
   'E2EeEndpoint.devicesSelfVerificationsAck': { issue: 18906, reason: 'POST /e2ee/devices/self/verifications/ack — accuser les messages de comparaison lus, même lot iOS' },
-  // « Mes adresses » (serveur-mes-adresses, chantier #18857) : la passerelle sert la lecture, l'écriture et l'ordre des
-  // adresses personnelles avant la face Liens iOS (#18871), qui les appellera.
-  'UsersEndpoint.meAddresses': { issue: 18871, reason: 'GET|POST /users/me/addresses — lire et créer mes adresses, face Liens iOS' },
-  'UsersEndpoint.meAddressesById': { issue: 18871, reason: 'PATCH|DELETE /users/me/addresses/:id — modifier et retirer une adresse, face Liens iOS' },
-  'UsersEndpoint.meAddressesOrder': { issue: 18871, reason: 'PUT /users/me/addresses/order — réordonner mes adresses, face Liens iOS' },
-  // « En commun » (chantier #18857, PR #19231) : la passerelle sert les communautés, les amis et les médias en commun de
-  // la fiche d'un autre avant les clients (#19234), qui les liront.
-  'UsersEndpoint.byIdInCommon': { issue: 19234, reason: 'GET /users/:id/in-common — nos communautés, nos amis et nos médias en commun, lus par la fiche iOS' },
 };
 
 const BASELINE_DEAD_ENTRIES = 328;

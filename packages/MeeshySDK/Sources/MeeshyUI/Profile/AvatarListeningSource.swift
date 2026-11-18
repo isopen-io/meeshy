@@ -36,7 +36,7 @@ public struct AvatarListeningLive: View {
                 AvatarListeningBand(listening: band, avatarSize: avatarSize)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: band)
+        .meeshyMotion(.rise, value: band)
         .task(id: userId) {
             band = nil
             for await value in source.band(userId).values {

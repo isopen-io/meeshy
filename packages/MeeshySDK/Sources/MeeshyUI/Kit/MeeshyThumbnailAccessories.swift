@@ -112,3 +112,61 @@ struct MeeshyThumbnailAddFace: View {
         .contentShape(Rectangle())
     }
 }
+
+// MARK: - La coche
+
+/// La coche d'une vignette cochée (#19609) : un disque de 24 à la couleur de marque, glyphe de 12, filet de fond. Pas
+/// une cible : toucher la vignette la décoche, et le trait « sélectionné » de la vignette la dit.
+struct MeeshyThumbnailCheck: View {
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        let isDark = colorScheme == .dark
+        return ZStack {
+            Circle().fill(MeeshyColors.brandPrimary)
+            Circle().strokeBorder(MeeshyColors.surfaceFill(isDark: isDark), lineWidth: MeeshyThumbnailRowRecipe.crossStroke)
+            Image(systemName: "checkmark")
+                .font(Font.system(size: MeeshyThumbnailRowRecipe.checkGlyph, weight: .bold))
+                .foregroundStyle(MeeshyColors.onMedia)
+        }
+        .frame(width: MeeshyThumbnailRowRecipe.checkDisc, height: MeeshyThumbnailRowRecipe.checkDisc)
+        .accessibilityHidden(true)
+    }
+}
+
+// MARK: - La face TEXTE
+
+/// La face TEXTE d'une vignette (#19609) : un extrait sur trois lignes au plus, et sa date en pied. Le contenu que
+/// l'hôte rend dans `content(item, state)` quand la vignette représente un message et non une image ; masquée aux
+/// lecteurs d'écran, la vignette disant elle-même son nom.
+public struct MeeshyThumbnailExcerpt: View {
+    private let text: String
+    private let caption: String
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    public init(text: String, caption: String) {
+        self.text = text
+        self.caption = caption
+    }
+
+    public var body: some View {
+        let isDark = colorScheme == .dark
+        return VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            Text(verbatim: text)
+                .meeshyScaledFont(MeeshyFont.subheadSize)
+                .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
+                .lineLimit(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
+            Text(verbatim: caption)
+                .meeshyScaledFont(MeeshyFont.footnoteSize, weight: .semibold)
+                .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
+                .lineLimit(1)
+        }
+        .padding(MeeshySpacing.sm)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(MeeshyColors.surfaceFill(isDark: isDark))
+        .accessibilityHidden(true)
+    }
+}

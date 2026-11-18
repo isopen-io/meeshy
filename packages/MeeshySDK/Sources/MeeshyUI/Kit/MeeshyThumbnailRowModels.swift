@@ -36,6 +36,9 @@ public nonisolated struct MeeshyThumbnail<ID: Hashable & Sendable>: Equatable, S
     public let status: MeeshyThumbnailStatus
     /// Non nul : la vignette est supprimable, et la croix de l'armement porte ce nom.
     public let removeLabel: String?
+    /// Non nul : la vignette est COCHABLE (sélection multiple, #19609) ; `true` pose la coche de coin et le trait
+    /// « sélectionné ». `nil` : la rangée ne parle que de la courante.
+    public let isChecked: Bool?
     public let contentVersion: Int
 
     public init(
@@ -44,6 +47,7 @@ public nonisolated struct MeeshyThumbnail<ID: Hashable & Sendable>: Equatable, S
         accessibilityValue: String? = nil,
         status: MeeshyThumbnailStatus = .ready,
         removeLabel: String? = nil,
+        isChecked: Bool? = nil,
         contentVersion: Int = 0
     ) {
         self.id = id
@@ -51,6 +55,7 @@ public nonisolated struct MeeshyThumbnail<ID: Hashable & Sendable>: Equatable, S
         self.accessibilityValue = accessibilityValue
         self.status = status
         self.removeLabel = removeLabel
+        self.isChecked = isChecked
         self.contentVersion = contentVersion
     }
 
