@@ -163,11 +163,87 @@ describe('l’appareil qui REÇOIT la liste d’un autre ne publie jamais sa pro
     expect(world.source.following).toBe(1);
   });
 
-  test('un onglet qui publiait déjà reste celui qui publie après un recalage', async () => {
+  test('un onglet qui publiait déjà reste celui qui publie quand il relit SON propre partage', async () => {
     const world = worldWith(storedOf({}), servedOf());
     await world.center.share({ userId: AMI, precision: 'exact', durationMinutes: 60 });
+    world.server.served = servedOf([AMI, 'exact', T0 + HOUR]);
+    await world.center.sync();
+    expect(world.source.following).toBe(1);
+  });
+});
+
+/**
+ * UN SEUL APPAREIL PUBLIE (#18580, #18714) : celui qui a fait le dernier « Partager ». Un appareil qui publiait et
+ * relit une liste qu'un AUTRE a agrandie (une personne de plus, une précision changée, une échéance repoussée) cède :
+ * il garde « Arrêter » à un geste, mais sa position ne part plus — sinon la personne voit le point sauter d'un
+ * appareil à l'autre. Un retrait fait ailleurs passe par la liste seule, qui n'envoie aucune position : il ne change
+ * pas qui publie.
+ */
+describe('l’appareil qui publiait cède quand un autre partage à son tour', () => {
+  const publiant = async () => {
+    const world = worldWith(storedOf({}), servedOf());
+    await world.center.share({ userId: AMI, precision: 'exact', durationMinutes: 60 });
+    expect(world.source.following).toBe(1);
+    return world;
+  };
+
+  test('une personne ajoutée ailleurs : il cesse de suivre sa position, et aucun relevé ne part plus', async () => {
+    const world = await publiant();
+    const sent = world.updates.length;
     world.server.served = servedOf([AMI, 'exact', T0 + HOUR], [AUTRE, 'city', T0 + HOUR]);
     await world.center.sync();
+    expect(world.source.following).toBe(0);
+    expect(world.center.entry(AUTRE)).not.toBeNull();
+    world.source.listener?.(PARIS);
+    expect(world.updates.length).toBe(sent);
+    expect(world.memory.get('roster.received')).toBe('1');
+  });
+
+  test('une précision changée ailleurs : il cède aussi', async () => {
+    const world = await publiant();
+    world.server.served = servedOf([AMI, 'city', T0 + HOUR]);
+    await world.center.sync();
+    expect(world.source.following).toBe(0);
+  });
+
+  test('une échéance repoussée ailleurs : il cède aussi', async () => {
+    const world = await publiant();
+    world.server.served = servedOf([AMI, 'exact', T0 + 8 * HOUR]);
+    await world.center.sync();
+    expect(world.source.following).toBe(0);
+  });
+
+  test('son propre partage relu, l’échéance servie à quelques secondes de la sienne (horloges, arrondi) : il publie toujours', async () => {
+    const world = await publiant();
+    world.server.served = servedOf([AMI, 'exact', T0 + HOUR + 90_000]);
+    await world.center.sync();
+    expect(world.source.following).toBe(1);
+  });
+
+  test('une personne retirée ailleurs (liste seule) : il publie toujours pour les autres', async () => {
+    const world = worldWith(storedOf({}), servedOf());
+    await world.center.share({ userId: AMI, precision: 'exact', durationMinutes: 60 });
+    await world.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 });
+    world.server.served = servedOf([AMI, 'exact', T0 + HOUR]);
+    await world.center.sync();
+    expect(world.center.entry(AUTRE)).toBeNull();
+    expect(world.source.following).toBe(1);
+  });
+
+  test('rechargé après avoir cédé, il ne se remet pas à suivre sa position', async () => {
+    const world = await publiant();
+    world.server.served = servedOf([AMI, 'exact', T0 + HOUR], [AUTRE, 'city', T0 + HOUR]);
+    await world.center.sync();
+    const reloaded = makeWorld({ memory: world.memory, served: world.server.served });
+    await reloaded.advance(0);
+    expect(reloaded.source.following).toBe(0);
+  });
+
+  test('« Partager » d’ici après avoir cédé en refait l’appareil qui publie', async () => {
+    const world = await publiant();
+    world.server.served = servedOf([AMI, 'exact', T0 + HOUR], [AUTRE, 'city', T0 + HOUR]);
+    await world.center.sync();
+    await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60 });
     expect(world.source.following).toBe(1);
   });
 });
@@ -177,7 +253,7 @@ describe('deux onglets du même navigateur qui partage', () => {
     const memory = new Map<string, string>();
     const publie = makeWorld({ memory, served: servedOf() });
     await publie.center.share({ userId: AMI, precision: 'exact', durationMinutes: 60 });
-    const second = makeWorld({ memory, granted: false, served: servedOf([AMI, 'exact', T0 + HOUR], [AUTRE, 'city', T0 + HOUR]) });
+    const second = makeWorld({ memory, granted: false, served: servedOf([AMI, 'exact', T0 + HOUR]) });
     await second.center.sync();
     publie.center.refresh();
     expect(publie.source.following).toBe(1);

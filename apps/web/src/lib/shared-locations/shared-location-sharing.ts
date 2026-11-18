@@ -56,7 +56,8 @@ import {
  * un « Arrêter » ne court jamais pendant qu'un démarrage d'un autre onglet attend son accusé, et
  * relit la liste que ce démarrage vient d'adopter avant de retirer la personne.
  *
- * Une liste REÇUE d'un autre appareil (adoptée par `sync()` quand ce navigateur ne partageait rien) ne
+ * Une liste REÇUE d'un autre appareil (adoptée par `sync()` quand ce navigateur ne partageait rien, ou AGRANDIE ailleurs
+ * pendant qu'il publiait : un seul appareil publie, celui du dernier « Partager », #18580) ne
  * fait jamais partir la position d'ici : pas de suivi, pas même au rechargement (marque
  * `<clé>.received`), et une échéance s'y solde sans rien envoyer — la passerelle tient
  * l'échéance de chacun (#18205). Seul un geste d'ici (« Partager », « Arrêter ») envoie
@@ -301,6 +302,13 @@ export function createSharedLocationSharingCenter({
     });
   };
 
+  /* Un autre appareil a partagé après celui-ci : c'est lui qui publie (#18580). Ici, « Arrêter » reste à un geste, la position ne part plus. */
+  const yieldPublishing = (): void => {
+    markReceived(true);
+    lastSent = null;
+    stopFollowing();
+  };
+
   const startFollowing = (): void => {
     if (unfollow !== null) return;
     unfollow = fixes.follow((fix) => void didMove(fix));
@@ -505,7 +513,7 @@ export function createSharedLocationSharingCenter({
           lastSent = null;
           stopFollowing();
           markReceived(false);
-        } else if (!rosterOps.hasRecipients(before)) markReceived(true);
+        } else if (!received && rosterOps.gainedOver(before, next)) yieldPublishing();
         scheduleDeadline();
         return null;
       });

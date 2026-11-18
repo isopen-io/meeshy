@@ -28,6 +28,8 @@ export type SharedLocationRoster = {
 const [ONE_HOUR, EIGHT_HOURS] = SHARED_LOCATION_DURATIONS_MINUTES;
 const MINUTE = 60_000;
 const SECOND = 1_000;
+/** L'écart que l'horloge de l'appareil, celle de la passerelle et l'arrondi à la seconde peuvent creuser entre deux échéances d'un même partage. */
+export const SHARED_LOCATION_CLOCK_SLACK_MS = 5 * MINUTE;
 
 /** Une personne présente dans la liste n'a jamais de retrait en attente. */
 const rosterOf = (entries: SharedLocationRoster['entries'], withdrawals: SharedLocationRoster['withdrawals'] = {}): SharedLocationRoster =>
@@ -94,6 +96,16 @@ export const rosterOps = {
     );
     return rosterOf(entries, filtered(roster.withdrawals, (id) => servedIds.has(id)));
   },
+  /**
+   * `next` montre-t-il PLUS que `before` (#18580) : une personne de plus, une autre précision, une échéance repoussée
+   * au-delà du jeu des horloges ? Seul un « Partager » le fait — un retrait ou une échéance passe par la liste seule. Lu
+   * sur la liste servie, c'est le signe qu'un autre appareil a partagé après celui-ci, et que c'est lui qui publie.
+   */
+  gainedOver: (before: SharedLocationRoster, next: SharedLocationRoster): boolean =>
+    Object.entries(next.entries).some(([id, entry]) => {
+      const kept = before.entries[id];
+      return kept === undefined || kept.precision !== entry.precision || entry.until - kept.until > SHARED_LOCATION_CLOCK_SLACK_MS;
+    }),
   /** Sans ceux dont l'échéance est passée, ni les retraits que plus aucun partage serveur ne peut servir. */
   pruned: (roster: SharedLocationRoster, now: number): SharedLocationRoster =>
     rosterOf(
