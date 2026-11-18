@@ -32,6 +32,20 @@ struct ProfileActivityBand: View {
         case unavailable(offline: Bool)
     }
 
+    /// Comment finit un chargement de mes chiffres. Annulé (la fiche quittée, une relance qui le remplace) : il ne
+    /// change rien — ni le squelette ni l'état indisponible ne sont l'affaire d'une tâche qui ne parle plus.
+    enum LoadEnd: Equatable {
+        case served
+        case failed
+        case cancelled
+    }
+
+    static func loadEnd(failure: Error?, isCancelled: Bool) -> LoadEnd {
+        if isCancelled || failure is CancellationError { return .cancelled }
+        if let urlError = failure as? URLError, urlError.code == .cancelled { return .cancelled }
+        return failure == nil ? .served : .failed
+    }
+
     static func phase(stats: UserStats?, isLoading: Bool, isOffline: Bool) -> Phase {
         if stats != nil { return .figures }
         return isLoading ? .skeleton : .unavailable(offline: isOffline)

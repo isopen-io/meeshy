@@ -42,6 +42,8 @@ struct ProfileView: View {
     @State private var statsLoading = true
     /// Vrai quand le dernier chargement de Mon activité a échoué hors ligne.
     @State private var statsOffline = false
+    /// La relance de Mon activité en vol : Réessayer l'annule avant d'en lancer une autre.
+    @State private var statsTask: Task<Void, Never>?
     @StateObject private var circles = ProfileCirclesViewModel()
     /// #16264 — mon décor d'un pack non embarqué se repeint dès son contrat arrivé.
     @StateObject private var servedAppearance = ServedAppearanceRefresh()
@@ -198,6 +200,7 @@ struct ProfileView: View {
     /// #10093 — le cache se peint, puis la page se synchronise dès l'ouverture, cache frais compris ; un échec garde ce
     /// qui est affiché.
     private func loadStats() async {
+        if stats == nil { statsLoading = true }
         let userId = authManager.currentUser?.id ?? ""
         switch await CacheCoordinator.shared.stats.load(for: userId) {
         case .fresh(let cached, _), .stale(let cached, _):
@@ -206,20 +209,31 @@ struct ProfileView: View {
             break
         }
         Task { await authManager.refreshCurrentUserProfile() }
-        if let fresh = try? await StatsService.shared.fetchStats() {
-            stats = fresh
-            statsOffline = false
-            await bestEffort("profileView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([fresh], for: userId) }
-        } else {
-            statsOffline = NetworkMonitor.shared.isOffline
+        let end: ProfileActivityBand.LoadEnd
+        do {
+            let fresh = try await StatsService.shared.fetchStats()
+            end = ProfileActivityBand.loadEnd(failure: nil, isCancelled: Task.isCancelled)
+            if end == .served {
+                stats = fresh
+                await bestEffort("profileView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([fresh], for: userId) }
+            }
+        } catch {
+            end = ProfileActivityBand.loadEnd(failure: error, isCancelled: Task.isCancelled)
+        }
+        switch end {
+        case .cancelled: return
+        case .served: statsOffline = false
+        case .failed: statsOffline = NetworkMonitor.shared.isOffline
         }
         statsLoading = false
     }
 
-    /// Réessayer depuis l'état indisponible de Mon activité : le squelette revient pendant la relance.
+    /// Réessayer depuis l'état indisponible de Mon activité : le squelette revient pendant la relance, et une seule
+    /// relance est en vol — la précédente est annulée, elle n'éteint plus le squelette de la suivante.
     private func retryStats() {
+        statsTask?.cancel()
         statsLoading = true
-        Task { await loadStats() }
+        statsTask = Task { await loadStats() }
     }
 
     // MARK: - L'en-tête de ma vitrine (#19589)
@@ -496,31 +510,21 @@ struct ProfileView: View {
                 onDecor: { decorShown = true }
             )
             .transition(.opacity)
-        } else if let membership = membershipLine {
-            // Ma ville et mon ancienneté se lisent sous le @pseudo du héros.
-            Text(membership)
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundStyle(theme.textMuted)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .transition(.opacity)
-                .meeshyCascade(rank: 0)
+            // La carte formulaire n'existe qu'en édition (planche `Moi-Edition`) ; la Vitrine n'en montre aucune.
+            ProfileIdentitySection(
+                isEditing: isEditing, firstName: $firstName, lastName: $lastName,
+                displayName: $displayName, bio: $bio, city: $city, cityCircle: $cityCircle,
+                username: user?.username, accentColor: accentColor
+            )
+            .meeshyCascade(rank: 0)
+        } else {
+            restingIdentity.meeshyCascade(rank: 0)
         }
         // Les blocs montent l'un après l'autre à l'arrivée sur la face (K26, mouvement 08, #19625).
         ProfileCirclesSection(summary: circles.summary, hasServedLinks: circles.hasServedLinks,
-                              accentHex: accentColor, onOpen: open)
+                              loadState: circles.loadState, accentHex: accentColor, onOpen: open,
+                              onRetry: { Task { await circles.load() } })
             .meeshyCascade(rank: 1)
-        ProfileIdentitySection(
-            isEditing: isEditing, firstName: $firstName, lastName: $lastName,
-            displayName: $displayName, bio: $bio, city: $city, cityCircle: $cityCircle,
-            username: user?.username, accentColor: accentColor
-        )
-        .meeshyCascade(rank: 2)
-        if languagesMode == .chips { ProfileLanguageChips(languages: prismLanguages).meeshyCascade(rank: 3) }
-        if Self.showsEncryptionBadge(isEditing: isEditing, hasSignalKeys: hasSignalKeys) {
-            ProfileE2EEBadge()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .transition(.opacity)
-        }
         if isEditing {
             ProfileAccentSection(choice: $accentChoice, userId: user?.id,
                                  name: user?.displayName ?? user?.username ?? "")
@@ -533,12 +537,45 @@ struct ProfileView: View {
             )
         }
         if languagesMode == .reorderable { languagesSection }
-        activitySection.meeshyCascade(rank: 4)
-        voiceBlock.meeshyCascade(rank: 5)
+        activitySection.meeshyCascade(rank: 2)
+        voiceBlock.meeshyCascade(rank: 3)
         if !isEditing, let userId = user?.id {
             ProfilePublicationsSection(userId: userId, accentColor: accentColor)
-                .meeshyCascade(rank: 6)
+                .meeshyCascade(rank: 4)
         }
+    }
+
+    /// Qui je suis, au repos (planche `Main`) : sous le nom et le @pseudo du héros, ma ville et mon ancienneté, ma bio,
+    /// mes langues en pastilles, puis la puce de chiffrement — du texte, aucune carte formulaire. La puce qui arrive
+    /// après `loadEncryption()` monte par le jeton du kit, jamais d'un coup.
+    private var restingIdentity: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            if let membership = membershipLine {
+                Text(membership)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundStyle(theme.textMuted)
+            }
+            if let shownBio = Self.restingBio(bio) {
+                Text(shownBio)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize))
+                    .foregroundStyle(theme.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("profile.vitrine.bio")
+            }
+            if languagesMode == .chips { ProfileLanguageChips(languages: prismLanguages) }
+            if Self.showsEncryptionBadge(isEditing: isEditing, hasSignalKeys: hasSignalKeys) {
+                ProfileE2EEBadge().meeshyTransition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .transition(.opacity)
+        .meeshyMotion(.rise, value: hasSignalKeys)
+    }
+
+    /// La bio telle que la Vitrine la lit : rien quand elle est vide — jamais un texte d'invite pris pour une valeur.
+    static func restingBio(_ bio: String?) -> String? {
+        guard let trimmed = bio?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed
     }
 
     /// « Ma voix » : le lecteur au repos ; en édition, son interrupteur public et « Réenregistrer », ou de quoi

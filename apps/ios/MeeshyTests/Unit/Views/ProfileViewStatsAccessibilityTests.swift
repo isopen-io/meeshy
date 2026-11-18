@@ -43,6 +43,23 @@ final class ProfileViewStatsAccessibilityTests: XCTestCase {
         XCTAssertFalse(band.contains("profile.stats.friends"), "Un compteur de demandes n'est pas une statistique.")
     }
 
+    /// La fiche quittée annule le chargement : il ne doit ni éteindre le squelette ni annoncer « indisponible ».
+    @MainActor
+    func test_statsLoadEnd_aCancellationChangesNothing_aFailureSaysUnavailable() {
+        XCTAssertEqual(ProfileActivityBand.loadEnd(failure: CancellationError(), isCancelled: false), .cancelled)
+        XCTAssertEqual(ProfileActivityBand.loadEnd(failure: URLError(.cancelled), isCancelled: false), .cancelled)
+        XCTAssertEqual(ProfileActivityBand.loadEnd(failure: nil, isCancelled: true), .cancelled)
+        XCTAssertEqual(ProfileActivityBand.loadEnd(failure: URLError(.notConnectedToInternet), isCancelled: false), .failed)
+        XCTAssertEqual(ProfileActivityBand.loadEnd(failure: nil, isCancelled: false), .served)
+    }
+
+    func test_profileView_reloadsWithTheSkeleton_andKeepsOneRetryInFlight() throws {
+        let profile = try source("ProfileView.swift")
+        XCTAssertTrue(profile.contains("if stats == nil { statsLoading = true }"), "le retour sur la fiche repeint le squelette")
+        XCTAssertTrue(profile.contains("case .cancelled: return"), "une tâche annulée ne parle plus")
+        XCTAssertTrue(profile.contains("statsTask?.cancel()"), "Réessayer remplace la relance en vol")
+    }
+
     func test_profileView_mountsTheActivityBand_whichOpensTheDetailedStats() throws {
         let profile = try source("ProfileView.swift")
         XCTAssertTrue(profile.contains("ProfileActivityBand(stats: stats, isLoading: statsLoading, isOffline: statsOffline, accentColor: accentColor,"))

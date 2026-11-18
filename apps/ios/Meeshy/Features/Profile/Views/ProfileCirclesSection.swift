@@ -12,15 +12,41 @@ import MeeshyUI
 struct ProfileCirclesSection: View {
     let summary: ProfileCirclesSummary
     let hasServedLinks: Bool
+    var loadState: LoadState = .idle
     let accentHex: String
     let onOpen: (ProfileDoor) -> Void
+    /// Relance le chargement depuis l'état indisponible.
+    var onRetry: () -> Void = {}
+
+    /// Ce que l'échelle peint : les comptes une fois des liens servis (zéro compris), aucun compte pendant le premier
+    /// chargement, l'état indisponible du kit après un échec sur un cache vide — jamais cinq « 0 » inventés.
+    enum Phase: Equatable {
+        case loading
+        case counts
+        case unavailable(offline: Bool)
+    }
+
+    static func phase(hasServedLinks: Bool, loadState: LoadState) -> Phase {
+        if hasServedLinks { return .counts }
+        switch loadState {
+        case .offline: return .unavailable(offline: true)
+        case .error: return .unavailable(offline: false)
+        case .idle, .loading, .cachedStale, .cachedFresh, .loaded: return .loading
+        }
+    }
+
+    private var phase: Phase { Self.phase(hasServedLinks: hasServedLinks, loadState: loadState) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: Self.title, lead: { EmptyView() }, accessory: { requestsButton })
             MeeshyGroupCard(tint: Color(hex: accentHex), label: Self.title) {
                 VStack(spacing: 0) {
-                    scaleButton
+                    if case .unavailable(let offline) = phase {
+                        unavailable(offline: offline).meeshyTransition(.opacity)
+                    } else {
+                        scaleButton
+                    }
                     if let phrase = Self.emptyPhrase(for: summary, hasServedLinks: hasServedLinks) {
                         emptyLine(phrase).meeshyTransition(.opacity)
                     }
@@ -31,6 +57,18 @@ struct ProfileCirclesSection: View {
                 .accessibilityIdentifier("profile.circles.invite")
         }
         .meeshyMotion(.morph, value: summary)
+        .meeshyMotion(.morph, value: phase)
+    }
+
+    /// Rien n'est servi et le chargement a échoué : le bloc d'état du kit (K38), avec Réessayer.
+    private func unavailable(offline: Bool) -> some View {
+        MeeshyStateBlock(kind: offline ? .offline : .error, title: Self.unavailableTitle(offline: offline),
+                         primary: MeeshyStateBlockAction(title: ProfilePublicationsCopy.retry,
+                                                         systemImage: "arrow.clockwise",
+                                                         perform: { onRetry() }),
+                         art: .none, size: .compact, tint: tint)
+            .padding(.vertical, MeeshySpacing.sm)
+            .accessibilityIdentifier("profile.circles.unavailable")
     }
 
     /// L'accent de la fiche : l'échelle et l'encre des demandes.
@@ -74,7 +112,7 @@ struct ProfileCirclesSection: View {
         }
         .buttonStyle(PressableButtonStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.accessibilityLabel(summary: summary))
+        .accessibilityLabel(Self.accessibilityLabel(summary: summary, isLoading: phase == .loading))
         .accessibilityHint(Self.pillHint)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("profile.circles.scale")
@@ -84,7 +122,7 @@ struct ProfileCirclesSection: View {
         MeeshyCircleScale(
             levels: Self.scaleLevels(of: summary),
             current: nil,
-            counts: Self.scaleCounts(of: summary),
+            counts: phase == .counts ? Self.scaleCounts(of: summary) : nil,
             tint: tint,
             form: .dots,
             size: .regular
@@ -128,7 +166,8 @@ struct ProfileCirclesSection: View {
     }
 
     /// Le titre de la section, puis chaque cercle avec ses personnes : une seule annonce pour toute l'échelle.
-    static func accessibilityLabel(summary: ProfileCirclesSummary) -> String {
+    static func accessibilityLabel(summary: ProfileCirclesSummary, isLoading: Bool = false) -> String {
+        if isLoading { return [title, ProfileActivityBand.loadingLabel].joined(separator: ", ") }
         let pills = summary.entries.map {
             pillAccessibilityLabel(title: CircleLevelNames.title(of: $0.level), count: $0.count)
         }
@@ -147,6 +186,13 @@ struct ProfileCirclesSection: View {
     static func emptyPhrase(for summary: ProfileCirclesSummary, hasServedLinks: Bool) -> String? {
         guard hasServedLinks, summary.isEmpty else { return nil }
         return String(localized: "profile.circles.empty", defaultValue: "Tes cercles se remplissent à mesure que tu échanges", bundle: .main)
+    }
+
+    static func unavailableTitle(offline: Bool) -> String {
+        offline
+            ? String(localized: "profile.circles.offline", defaultValue: "Hors ligne — Mes cercles reviendront avec le réseau",
+                     bundle: .main)
+            : String(localized: "profile.circles.failed", defaultValue: "Mes cercles sont indisponibles", bundle: .main)
     }
 
     static var pillHint: String {

@@ -70,6 +70,17 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertTrue(label.contains(blood), "un cercle vide se dit aussi : \(label)")
     }
 
+    func test_circlesPhase_paintsNoZeroBeforeAnythingIsServed_andOffersRetryAfterAFailure() {
+        XCTAssertEqual(ProfileCirclesSection.phase(hasServedLinks: false, loadState: .loading), .loading)
+        XCTAssertEqual(ProfileCirclesSection.phase(hasServedLinks: false, loadState: .idle), .loading)
+        XCTAssertEqual(ProfileCirclesSection.phase(hasServedLinks: false, loadState: .offline), .unavailable(offline: true))
+        XCTAssertEqual(ProfileCirclesSection.phase(hasServedLinks: false, loadState: .error("x")), .unavailable(offline: false))
+        XCTAssertEqual(ProfileCirclesSection.phase(hasServedLinks: true, loadState: .error("x")), .counts,
+                       "un échec ne retire jamais ce qui est servi")
+        let label = ProfileCirclesSection.accessibilityLabel(summary: .empty, isLoading: true)
+        XCTAssertFalse(label.contains("0"), "pendant le chargement, VoiceOver ne dit aucun zéro : \(label)")
+    }
+
     func test_emptyPhrase_beforeTheLinksAreServed_isAbsent() {
         XCTAssertNil(ProfileCirclesSection.emptyPhrase(for: .empty, hasServedLinks: false),
                      "cinq zéros pendant le chargement ne disent pas encore « aucun lien »")
@@ -458,7 +469,7 @@ final class ProfileSectionsTests: XCTestCase {
 
     func test_vitrine_mountsMyVoice_outOfEditing_andItsPlayerIsTheKitWavePlayer() throws {
         let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
-        XCTAssertTrue(profile.contains("if !isEditing, let voice = ProfileVoiceSample.make(user: user)"))
+        XCTAssertTrue(profile.contains("ProfileVoiceBlock.resolve(sample: sample, isEditing: isEditing)"))
         let voice = try code("Meeshy/Features/Profile/Faces/ProfileVoiceSection.swift")
         XCTAssertTrue(voice.contains("MeeshyWavePlayer("), "le lecteur est K35, aucun lecteur redessiné sur place")
         XCTAssertTrue(voice.contains("player.play(urlString: url)"), "le disque lit vraiment l'échantillon servi")

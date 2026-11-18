@@ -48148,6 +48148,53 @@
         }
       }
     },
+    "profile.circles.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "دوائري غير متاحة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Kreise sind nicht verfügbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "My circles are unavailable"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mis círculos no están disponibles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mes cercles sont indisponibles"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I miei cerchi non sono disponibili"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meus círculos estão indisponíveis"
+          }
+        }
+      }
+    },
     "profile.circles.invite": {
       "extractionState": "manual",
       "localizations": {
@@ -48191,6 +48238,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Convidar alguém"
+          }
+        }
+      }
+    },
+    "profile.circles.offline": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير متصل — ستعود دوائري مع الشبكة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline — Meine Kreise kommen mit dem Netz zurück"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline — My circles will return with the network"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin conexión — Mis círculos volverán con la red"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hors ligne — Mes cercles reviendront avec le réseau"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline — I miei cerchi torneranno con la rete"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline — Meus círculos voltarão com a rede"
           }
         }
       }
