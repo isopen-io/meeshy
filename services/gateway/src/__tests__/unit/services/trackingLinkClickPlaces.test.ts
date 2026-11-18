@@ -31,17 +31,20 @@ function trancheLieu(): unknown[] {
   return pipeline[1].$facet!.place;
 }
 
-const ligne = (country: string, city: string | null, n: number) => ({ _id: { country, city }, n });
+const ligne = (country: string, city: string | null, n: number, visitors = n) => ({ _id: { country, city }, n, visitors });
 
 describe('clickStatsPipeline — la tranche des lieux', () => {
-  it('groupe par pays et ville, sans lire aucune colonne identifiante', () => {
-    const tranche = JSON.stringify(trancheLieu());
+  it('groupe par pays et ville, et ne fait sortir de la base que des comptes — ni IP ni empreinte', () => {
+    const etapes = trancheLieu() as Array<Record<string, unknown>>;
+    const tranche = JSON.stringify(etapes);
 
     expect(tranche).toContain('$country');
     expect(tranche).toContain('$city');
-    for (const interdit of ['ipAddress', 'deviceFingerprint', 'userAgent', 'latitude', 'longitude', 'region']) {
+    for (const interdit of ['userAgent', 'latitude', 'longitude', 'region']) {
       expect(tranche).not.toContain(interdit);
     }
+    const derniere = etapes.at(-1) as { $project?: Record<string, unknown> };
+    expect(Object.keys(derniere.$project ?? {}).sort()).toEqual(['n', 'visitors']);
   });
 });
 
@@ -75,6 +78,22 @@ describe('foldClickStatsFacet — clicksByPlace et countryCount', () => {
     );
 
     expect(agrege.clicksByPlace).toEqual([{ country: 'SN', city: null, count: CLICK_CITY_K_ANONYMITY * 10 + 1 }]);
+  });
+
+  it('le plancher compte des VISITEURS distincts, pas des clics : une personne qui ouvre cinq fois le lien depuis Thiès garde sa ville secrète', () => {
+    const k = CLICK_CITY_K_ANONYMITY;
+    const agrege = foldClickStatsFacet({ place: [ligne('SN', 'Thiès', k, 1), ligne('SN', 'Dakar', k, k)] });
+
+    expect(agrege.clicksByPlace).toEqual([
+      { country: 'SN', city: null, count: k },
+      { country: 'SN', city: 'Dakar', count: k },
+    ]);
+  });
+
+  it('une ligne sans compte de visiteurs ne sert pas de ville (fail-closed)', () => {
+    const agrege = foldClickStatsFacet({ place: [{ _id: { country: 'SN', city: 'Dakar' }, n: 50 }] });
+
+    expect(agrege.clicksByPlace).toEqual([{ country: 'SN', city: null, count: 50 }]);
   });
 
   it('traite une ville vide comme absente', () => {

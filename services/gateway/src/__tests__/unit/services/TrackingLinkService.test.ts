@@ -863,7 +863,7 @@ describe('TrackingLinkService — le détail complet d\'un lien (#19412)', () =>
   const lieuxFacet = {
     country: [{ _id: 'SN', n: 7 }, { _id: 'FR', n: 1 }],
     place: [
-      { _id: { country: 'SN', city: 'Dakar' }, n: 7 },
+      { _id: { country: 'SN', city: 'Dakar' }, n: 7, visitors: 6 },
       { _id: { country: 'FR', city: 'Lyon' }, n: 1 },
     ],
   };
