@@ -9,6 +9,7 @@ import type { ServerEmitIOWithRooms } from '../serverEmit';
 import { batteryHandlerDeps, listenBattery } from './BatteryHandler';
 import { listenNowPlaying, nowPlayingHandlerDeps } from './NowPlayingHandler';
 import { ensurePhoneReachabilitySweep } from './PhoneReachabilityHandler';
+import { ensureInactivitySweep } from './InactivityHandler';
 import { listenSharedLocation, sharedLocationHandlerDeps } from './SharedLocationHandler';
 import { listenTalkie, talkieHandlerDeps } from './TalkieHandler';
 import { listenTogether, togetherHandlerDeps } from './TogetherHandler';
@@ -30,4 +31,5 @@ export function listenCircleLive(
   listenTogether(socket, togetherHandlerDeps(params));
   listenBattery(socket, batteryHandlerDeps(params));
   ensurePhoneReachabilitySweep(params);
+  ensureInactivitySweep(params);
 }

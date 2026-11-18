@@ -1,0 +1,18 @@
+## 2026-11-18 : « Tout va bien ? » après le délai sans activité, puis les Sangs prévenus sans réponse en 30 minutes
+
+**Statut** : Accepté le 2026-11-18 (#18738, TEL-02 du catalogue `docs/specs/cercles/etat-du-telephone.md`). Suit la forme du téléphone injoignable (#18737) et réutilise son téléphone suivi.
+
+**Contexte** : le catalogue demande qu'après un délai sans activité du téléphone (12 h par défaut), l'app demande « Tout va bien ? », et que sans réponse en 30 minutes les Sangs soient prévenus avec la dernière position et la dernière batterie connues. Trois questions restaient ouvertes : ce qui compte comme « activité », par quel canal part l'alerte, et ce que « dernière position » autorise à montrer.
+
+**Décision** :
+
+1. **L'activité est celle de la PERSONNE, jamais celle du téléphone en arrière-plan.** Comptent : une socket authentifiée du téléphone suivi (l'app ouverte), cette socket encore ouverte au balayage, et la réponse « Je vais bien » (`POST /me/wellness/ok`), acceptée de N'IMPORTE LEQUEL de ses appareils puisque c'est elle qui répond. Ne comptent pas : la réponse à une sonde silencieuse (#18737) et les relevés de batterie, que le système déclenche sans elle — les compter rendrait la vérification aveugle à la personne qui ne touche plus son téléphone.
+2. **La question est une notification VISIBLE adressée à soi** (`wellness_check`), remplacée à chaque nouvelle question et retirée dès la première activité. Personne d'autre n'apprend qu'elle a été posée.
+3. **L'alerte part par les DEUX canaux, en conversation ou non** : la notification `inactivity_alert` et l'état `inactivity:alert` (avec l'annonce, pour la SyncPill). À la différence de la batterie et de l'injoignabilité, une alerte de sécurité ne se rabat pas sur la seule SyncPill quand on est en conversation. Le retour (`inactivity:cleared` + notification) part aux seuls Sangs qui ont reçu l'alerte.
+4. **La dernière position et la dernière batterie ne sont servies qu'au Sang qui les reçoit DÉJÀ**, chacune jugée par SA loi, lecteur par lecteur : la position par la loi de la carte des Sangs (`bloodLastPointFor`, `location.history`, fantômes et coupure du lecteur compris, la consultation notée au journal de l'émetteur comme toute lecture de la carte) ; la batterie par la loi de la batterie (`batteryLastReadingFor`, réglages de réception compris). Aucune des deux n'est dans le texte d'une bannière : la position jamais, la batterie seulement en pourcentage. Ni l'une ni l'autre ne se range dans la notification.
+5. **Les deux types de notification ne se coupent pas par type** : ce sont des signaux de sécurité. La personne règle son délai (6, 12 ou 24 h) ou coupe la vérification pour tous (`User.inactivityCheckDisabledAt`), et retire l'alerte à une personne (`RelationFeatureSetting.inactivityShared`, tri-état, accordé par défaut entre Sangs).
+6. **Personne à prévenir ⇒ aucune question.** Une personne sans Sang autorisé n'est pas interrogée : la question promet qu'on rassure quelqu'un.
+
+**Loi commune** : `relations/emitterFeatureAccess.ts` porte désormais la loi des états d'appareil à consentement stocké et coupure globale ; `phoneReachabilityAllowedAmong` et `inactivityAllowedAmong` en sont deux projections, plutôt que deux jumelles.
+
+**Conséquences** : l'état vit 72 h au plus en Redis, scellé, sans historique ; le balayage tourne une fois par minute sous verrou de flotte. Une personne dont le téléphone n'a jamais été suivi n'est pas vérifiée. Les features de santé du catalogue (#18748 et suivantes) passent par `conformite-juridique` ; celle-ci, qui ne lit aucune donnée de santé, n'en relève pas, mais elle sert une position à des tiers et en hérite donc les garanties de la carte des Sangs.

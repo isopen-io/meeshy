@@ -231,3 +231,9 @@ export const stickersByStickerIdUse = (stickerId: string): string => `/api/v1/me
 
 /** GET · PUT /api/v1/me/terms */
 export const terms = '/api/v1/me/terms';
+
+/** POST /api/v1/me/wellness/ok */
+export const wellnessOk = '/api/v1/me/wellness/ok';
+
+/** GET · PUT /api/v1/me/wellness/settings */
+export const wellnessSettings = '/api/v1/me/wellness/settings';

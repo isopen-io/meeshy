@@ -3,7 +3,8 @@
  * réponds pas, mes Sangs sont prévenus » (#18738, TEL-02). Sur le socle du téléphone injoignable
  * (#18737) : le même téléphone suivi, la même matrice, le même relais par lecteur.
  *
- * 1. L'ACTIVITÉ est celle de la session du téléphone suivi (une requête, une socket, une réponse) ;
+ * 1. L'ACTIVITÉ est celle de la PERSONNE : l'app ouverte sur le téléphone suivi (sa socket), ou sa
+ *    réponse « Je vais bien » — jamais une sonde silencieuse ni un relevé de batterie d'arrière-plan ;
  * 2. après le délai choisi sans activité, le téléphone reçoit un push VISIBLE « Tout va bien ? »
  *    (`WELLNESS_CHECK_NOTIFICATION_TYPE`), auquel répondent l'action « Je vais bien »
  *    (`POST /me/wellness/ok`) ou toute activité ;

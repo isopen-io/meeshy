@@ -85,6 +85,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case stickersByStickerId(stickerId: String)
     case stickersByStickerIdUse(stickerId: String)
     case terms
+    case wellnessOk
+    case wellnessSettings
 
     public var path: String {
         switch self {
@@ -161,6 +163,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .stickersByStickerId(let stickerId): return "/api/v1/me/stickers/\(stickerId)"
         case .stickersByStickerIdUse(let stickerId): return "/api/v1/me/stickers/\(stickerId)/use"
         case .terms: return "/api/v1/me/terms"
+        case .wellnessOk: return "/api/v1/me/wellness/ok"
+        case .wellnessSettings: return "/api/v1/me/wellness/settings"
         }
     }
 }

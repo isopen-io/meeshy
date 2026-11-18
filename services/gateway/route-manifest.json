@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 858,
+  "routeCount": 864,
   "routes": [
     {
       "method": "DELETE",
@@ -4605,6 +4605,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/me/wellness/settings",
+      "module": "wellnessMeRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/mentions/me",
       "module": "mentionRoutes",
       "mountPrefix": "/api/v1",
@@ -5690,6 +5704,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/relations/:userId/inactivity/settings",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/relations/:userId/location/history",
       "module": "relationsRoutes",
       "mountPrefix": "/api/v1/relations",
@@ -5761,6 +5789,20 @@
     {
       "method": "GET",
       "path": "/api/v1/relations/config",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/relations/inactivity",
       "module": "relationsRoutes",
       "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
@@ -10058,6 +10100,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/me/wellness/ok",
+      "module": "wellnessMeRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/messages/:messageId/restore-for-me",
       "module": "userDeletionsRoutes",
       "mountPrefix": "",
@@ -11874,6 +11930,20 @@
     },
     {
       "method": "PUT",
+      "path": "/api/v1/me/wellness/settings",
+      "module": "wellnessMeRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
       "path": "/api/v1/messages/:messageId",
       "module": "messageRoutes",
       "mountPrefix": "/api/v1",
@@ -12001,6 +12071,20 @@
     {
       "method": "PUT",
       "path": "/api/v1/relations/:userId/battery/settings",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/relations/:userId/inactivity/settings",
       "module": "relationsRoutes",
       "mountPrefix": "/api/v1/relations",
       "securityLevel": "inconnu",
