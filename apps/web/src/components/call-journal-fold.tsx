@@ -32,7 +32,7 @@ export function CallJournalFold({ id, callId, open, restored, language, original
   if (!fold.mounted) return null;
   return (
     <div ref={fold.ref} id={id} className="flex w-full" data-call-journal-fold="" {...(open ? {} : LEAVING)}>
-      <CallTranscriptPanel callId={callId} language={language} original={original} onOriginalChange={onOriginalChange} />
+      <CallTranscriptPanel callId={callId} language={language} original={original} onOriginalChange={onOriginalChange} bounded />
     </div>
   );
 }

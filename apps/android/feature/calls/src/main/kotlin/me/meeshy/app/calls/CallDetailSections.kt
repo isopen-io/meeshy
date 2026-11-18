@@ -54,6 +54,9 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.unit.Dp
 
 /**
  * « Participants » — port of iOS `CallDetailSheet.participantsSection` (#8066): who
@@ -118,13 +121,19 @@ internal fun CallDetailTranscriptSection(
     accent: Color,
     onRetry: () -> Unit,
     onDelete: () -> Unit,
+    listMaxHeight: Dp? = null,
 ) {
     when (state) {
         CallTranscriptState.ReadingCopy, CallTranscriptState.Loading, CallTranscriptState.Absent -> Unit
         CallTranscriptState.Failed -> TranscriptFailure(onRetry)
-        is CallTranscriptState.Ready -> TranscriptLines(state, accent, onDelete)
+        is CallTranscriptState.Ready -> TranscriptLines(state, accent, onDelete, listMaxHeight)
     }
 }
+
+/** #19687 — under the call card of the thread, the WHOLE list fits a bounded area and scrolls on its own; the sheet keeps its height. */
+@Composable
+private fun Modifier.boundedJournal(maxHeight: Dp?): Modifier =
+    if (maxHeight == null) this else heightIn(max = maxHeight).verticalScroll(rememberScrollState())
 
 @Composable
 private fun TranscriptHeader() {
@@ -156,7 +165,7 @@ private fun TranscriptFailure(onRetry: () -> Unit) {
 }
 
 @Composable
-private fun TranscriptLines(state: CallTranscriptState.Ready, accent: Color, onDelete: () -> Unit) {
+private fun TranscriptLines(state: CallTranscriptState.Ready, accent: Color, onDelete: () -> Unit, listMaxHeight: Dp?) {
     var showOriginal by rememberSaveable { mutableStateOf(false) }
     val reduceMotion = rememberCallReduceMotion()
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
@@ -165,6 +174,7 @@ private fun TranscriptLines(state: CallTranscriptState.Ready, accent: Color, onD
             modifier = Modifier
                 .fillMaxWidth()
                 .background(accent.copy(alpha = TRANSCRIPT_TINT_ALPHA), RoundedCornerShape(MeeshyRadius.md))
+                .boundedJournal(listMaxHeight)
                 .padding(MeeshySpacing.md),
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus),
         ) {

@@ -46,7 +46,10 @@ const muted = { color: 'var(--color-ios-ink-2)' } as const;
  * Le journal DANS sa bulle ou dans la fiche d'un appel : rend « Voir l'original » dans l'état que sa bulle a
  * retenu (`original`, `onOriginalChange` : la mémoire `call-journal-memory.ts` est celle de la carte — A1.17).
  */
-export function CallTranscriptPanel({ callId, language, original: initial = false, onOriginalChange }: { readonly callId: string; readonly language: InterfaceLanguage; readonly original?: boolean; readonly onOriginalChange?: (original: boolean) => void }) {
+/** #19687 — sous la carte d'appel du fil, la liste ENTIÈRE tient dans 25 rem et défile seule (iOS `CallJournalUnderCardSizing`, Android 400 dp) ; la page de détail garde sa hauteur. */
+export const BOUNDED_JOURNAL_CLASS = 'max-h-[25rem] overflow-y-auto overscroll-contain';
+
+export function CallTranscriptPanel({ callId, language, original: initial = false, onOriginalChange, bounded = false }: { readonly callId: string; readonly language: InterfaceLanguage; readonly original?: boolean; readonly onOriginalChange?: (original: boolean) => void; readonly bounded?: boolean }) {
   suspendForCallControlsCatalog(language);
   const session = useStore(sessionStore, (state) => state.session);
   const { languages } = useReaderLanguages();
@@ -92,7 +95,7 @@ export function CallTranscriptPanel({ callId, language, original: initial = fals
       </p>
     );
   }
-  return <CallTranscriptLines lines={lines} notes={notes} language={language} original={original} onToggleOriginal={toggleOriginal} />;
+  return <CallTranscriptLines lines={lines} notes={notes} language={language} original={original} onToggleOriginal={toggleOriginal} bounded={bounded} />;
 }
 
 type LinesProps = {
@@ -101,6 +104,8 @@ type LinesProps = {
   readonly language: InterfaceLanguage;
   readonly original: boolean;
   readonly onToggleOriginal?: () => void;
+  /** Sous la carte d'appel du fil : la liste se borne et défile seule (#19687). */
+  readonly bounded?: boolean;
 };
 
 function NoteItem({ note, language }: { readonly note: TranscriptNote; readonly language: InterfaceLanguage }) {
@@ -150,13 +155,13 @@ function SentenceItem({ line, language, inverted }: { readonly line: TranscriptL
   );
 }
 
-export function CallTranscriptLines({ lines, notes = [], language, original, onToggleOriginal }: LinesProps) {
+export function CallTranscriptLines({ lines, notes = [], language, original, onToggleOriginal, bounded = false }: LinesProps) {
   const translatedSome = lines.some((line) => line.translated);
   const entries = transcriptEntries(lines, notes);
   const section = useTranscriptSwapFade(original);
   return (
     <section ref={section} aria-label={translate(language, 'callTranscript.title')} className="flex w-full flex-col gap-2 text-start" data-call-transcript="lines">
-      <ol className="flex flex-col gap-2">
+      <ol className={`flex flex-col gap-2${bounded ? ` ${BOUNDED_JOURNAL_CLASS}` : ''}`} {...(bounded ? { tabIndex: 0, 'data-call-transcript-scroll': '' } : {})}>
         {entries.map((entry) => (entry.type === 'note' ? <NoteItem key={entry.note.id} note={entry.note} language={language} /> : <SentenceItem key={entry.line.id} line={entry.line} language={language} inverted={original} />))}
       </ol>
       {translatedSome && onToggleOriginal !== undefined ? (

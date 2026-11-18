@@ -8,7 +8,9 @@ import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-b
 import type { TranscriptLine, TranscriptNote } from '@/lib/calls/call-transcript';
 import { authorInk } from '@/lib/view/author-ink';
 
-import { CallTranscriptLines } from './call-transcript-panel';
+import { readFileSync } from 'node:fs';
+
+import { BOUNDED_JOURNAL_CLASS, CallTranscriptLines } from './call-transcript-panel';
 
 /**
  * LE JOURNAL D'APRÈS L'APPEL, FIDÈLE (#16634, `docs/product/appels-vue-finale.md`
@@ -226,5 +228,27 @@ describe('une phrase du journal se lit d’un trait (A1.19)', () => {
     await loadInterfaceCatalog('en');
     const html = renderToStaticMarkup(<CallTranscriptLines lines={[line()]} language="en" original />);
     expect(spokenOf(entryOf(html))).toEqual(['Awa, 00:04 : Can you hear me?. Translated : Tu m’entends ?']);
+  });
+});
+
+describe('#19687 — sous la carte du fil, le journal ENTIER tient dans une zone qui défile seule', () => {
+  const many = Array.from({ length: 300 }, (_, n) => line({ id: `s-${n}`, offsetMs: n * 1_000, text: `Phrase ${n}` }));
+
+  test('bornée, la liste garde TOUTES les phrases, plafonne sa hauteur et défile, au clavier aussi', () => {
+    const html = renderToStaticMarkup(<CallTranscriptLines lines={many} language="fr" original={false} bounded />);
+    expect(html.match(/data-call-transcript-line=/g)?.length).toBe(300);
+    expect(html).toMatch(/<ol class="[^"]*max-h-\[25rem\][^"]*overflow-y-auto[^"]*overscroll-contain[^"]*" tabindex="0" data-call-transcript-scroll=""/);
+    expect(BOUNDED_JOURNAL_CLASS).toContain('overflow-y-auto');
+  });
+
+  test('ailleurs (page de détail), la liste garde sa hauteur naturelle', () => {
+    const html = renderToStaticMarkup(<CallTranscriptLines lines={many} language="fr" original={false} />);
+    expect(html).not.toContain('overflow-y-auto');
+    expect(html).not.toContain('data-call-transcript-scroll');
+  });
+
+  test('seule la carte du fil demande la borne', () => {
+    expect(readFileSync(new URL('./call-journal-fold.tsx', import.meta.url), 'utf8')).toContain('onOriginalChange={onOriginalChange} bounded />');
+    expect(readFileSync(new URL('../routes/call-detail-parts.tsx', import.meta.url), 'utf8')).not.toContain(' bounded');
   });
 });
