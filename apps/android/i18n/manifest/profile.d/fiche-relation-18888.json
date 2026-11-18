@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:profile": {
+      "resDir": "feature/profile/src/main/res",
+      "entries": [
+        {
+          "androidName": "fiche_faces_label",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_face_vitrine",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_face_links",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_face_actions",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_section_talk",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_section_together",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_section_where",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_section_card",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_section_not_open",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_action_write",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_action_write_request",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_action_call",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_action_video",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_card_share",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_card_our_circle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_links_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_links_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_links_copy",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_links_qr",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_links_send",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_links_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_circle_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_circle_common",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_circle_they_grant",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_circle_you_grant",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_circle_at_least",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_circle_opens",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_circle_opens_more",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_circle_missing_they",
+          "status": "android-only"
+        },
+        {
+          "androidName": "fiche_circle_missing_you",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
