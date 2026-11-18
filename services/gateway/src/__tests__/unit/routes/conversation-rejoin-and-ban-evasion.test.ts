@@ -310,7 +310,13 @@ describe('POST /conversations/join/:linkId', () => {
 
     expect(prisma.participant.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: JOINER_ROW_ID },
+        // #19688 — la clause porte l'id ET la garde de bannissement : une
+        // égalité NUE sur le `where` attesterait l'écriture d'avant, celle qui
+        // rallumait une ligne bannie dans sa fenêtre.
+        where: expect.objectContaining({
+          id: JOINER_ROW_ID,
+          OR: [{ bannedAt: null }, { bannedAt: { isSet: false } }],
+        }),
         data: expect.objectContaining({ isActive: true, leftAt: null }),
       })
     );
@@ -389,7 +395,13 @@ describe('POST /conversations/:id/participants', () => {
     expect(prisma.participant.create).not.toHaveBeenCalled();
     expect(prisma.participant.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: EXISTING_ROW_ID },
+        // #19688 — la clause porte l'id ET la garde de bannissement : une
+        // égalité NUE sur le `where` attesterait l'écriture d'avant, celle qui
+        // rallumait une ligne bannie dans sa fenêtre.
+        where: expect.objectContaining({
+          id: EXISTING_ROW_ID,
+          OR: [{ bannedAt: null }, { bannedAt: { isSet: false } }],
+        }),
         data: expect.objectContaining({ isActive: true, leftAt: null }),
       })
     );
@@ -435,7 +447,13 @@ describe('POST /conversations/:id/invite', () => {
     expect(prisma.participant.create).not.toHaveBeenCalled();
     expect(prisma.participant.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: EXISTING_ROW_ID },
+        // #19688 — la clause porte l'id ET la garde de bannissement : une
+        // égalité NUE sur le `where` attesterait l'écriture d'avant, celle qui
+        // rallumait une ligne bannie dans sa fenêtre.
+        where: expect.objectContaining({
+          id: EXISTING_ROW_ID,
+          OR: [{ bannedAt: null }, { bannedAt: { isSet: false } }],
+        }),
         data: expect.objectContaining({ isActive: true, leftAt: null }),
       })
     );

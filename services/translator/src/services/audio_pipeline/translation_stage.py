@@ -56,7 +56,7 @@ class TranslatedAudioVersion:
     language: str
     translated_text: str
     audio_path: str
-    audio_url: str
+    audio_url: Optional[str]
     duration_ms: int
     format: str
     voice_cloned: bool
@@ -75,7 +75,7 @@ class TranslatedAudioVersion:
             language=language,
             translated_text=translated_text,
             audio_path="",
-            audio_url="",
+            audio_url=None,
             duration_ms=0,
             format="",
             voice_cloned=False,
