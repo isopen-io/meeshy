@@ -13,6 +13,7 @@ struct BloodLocationScreen: View {
     @StateObject private var model: BloodLocationModel
     @StateObject private var people = SharedLocationsMapViewModel()
     @StateObject private var places = LocationPlaceNamer()
+    @State private var isOffline = NetworkMonitor.shared.isOffline
     @ObservedObject private var sharing: SharedLocationSharingCenter
     @State private var viewport: LocationMapViewport?
     @State private var focus: LocationMapFocus?
@@ -41,9 +42,10 @@ struct BloodLocationScreen: View {
                 .ignoresSafeArea()
             traceLayer
             LocationMapPinsLayer(viewport: viewport, pins: people.pins.filter { $0.id == userId },
-                                 me: me, meShare: ownShare, focusedName: displayName)
+                                 me: me, meShare: ownShare, focusedName: displayName, isOffline: isOffline)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
+            ghostPin
             chrome
         }
         .meeshyAnchoredSheet(isPresented: .constant(true), height: .detents([0.5, 0.9], initial: 0),
@@ -60,6 +62,7 @@ struct BloodLocationScreen: View {
             refocus()
         }
         .adaptiveOnChange(of: model.range) { _, _ in refocus() }
+        .onReceive(NetworkMonitor.shared.isOfflinePublisher.receive(on: DispatchQueue.main)) { isOffline = $0 }
         .task(id: isPlaying) { await play() }
         .sheet(isPresented: $sharesMine) {
             ShareMyLocationSheet(recipients: [ShareMyLocationRecipient(userId: userId, name: displayName, circle: .blood)])
@@ -104,9 +107,22 @@ struct BloodLocationScreen: View {
         .padding(.top, MeeshySpacing.sm)
     }
 
+    /// En pause par son fantôme (#19562) : l'épingle K36 `ghost`, pointillée, au milieu de la carte — aucune position
+    /// n'est servie, elle n'est posée nulle part.
+    @ViewBuilder
+    private var ghostPin: some View {
+        if let ghost = people.ghost(for: userId) {
+            LocationMapGhostPin(ghost: ghost)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+        }
+    }
+
     @ViewBuilder
     private var proximity: some View {
-        if let pin = people.pin(for: userId), let me {
+        if people.ghost(for: userId) != nil {
+            MeeshyNote(LocationMapCopy.ghostPaused, lead: .systemImage("theatermasks"))
+        } else if let pin = people.pin(for: userId), let me {
             let meters = LocationMapRules.distanceMeters(fromLatitude: me.latitude, fromLongitude: me.longitude,
                                                          toLatitude: pin.latitude, toLongitude: pin.longitude)
             MeeshyNote(BloodLocationCopy.isNear(name: displayName, distance: LocationMapCopy.distance(meters, locale: locale)),

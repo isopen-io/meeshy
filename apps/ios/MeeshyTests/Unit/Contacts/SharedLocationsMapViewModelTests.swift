@@ -249,6 +249,55 @@ final class SharedLocationsMapViewModelTests: XCTestCase {
         XCTAssertTrue(sut.pins.isEmpty)
     }
 
+    // MARK: - En pause par fantôme (#19562)
+
+    func test_aServedGhost_isNamedByTheDirectory_withItsCircle_andHasNoPin() async {
+        let live = SharedLocationsLive(
+            viewerId: { "me" },
+            served: { _ in SharedLocationSnapshot(items: [], ghosts: [SharedLocationGhost(userId: "kwame", circle: .blood)]) },
+            changedEvents: Empty().eraseToAnyPublisher(),
+            endedEvents: Empty().eraseToAnyPublisher(),
+            connected: Empty().eraseToAnyPublisher()
+        )
+        let sut = SharedLocationsMapViewModel(
+            live: live,
+            people: FakeCirclePeople([CirclePerson(id: "kwame", name: "Kwame Mensah", username: nil, avatarURL: nil)]),
+            presence: { _ in .online }
+        )
+        live.receive(served("kwame"))
+        let named = expectation(description: "Kwame est en fantôme")
+        let watch = sut.$ghosts.first { $0.first?.name == "Kwame Mensah" }.sink { _ in named.fulfill() }
+
+        await sut.appeared()
+        await fulfillment(of: [named], timeout: 2)
+        watch.cancel()
+
+        XCTAssertEqual(sut.ghosts, [SharedLocationGhostPin(id: "kwame", name: "Kwame Mensah", circle: .blood)])
+        XCTAssertEqual(sut.ghost(for: "kwame")?.circle, .blood)
+        XCTAssertNil(sut.pin(for: "kwame"))
+    }
+
+    func test_aGatewayThatServesNoGhost_showsNobodyInGhost() async {
+        let rig = makeRig()
+        rig.spy.served = [served("alice")]
+
+        await rig.sut.appeared()
+
+        XCTAssertTrue(rig.sut.ghosts.isEmpty)
+        XCTAssertEqual(rig.sut.pins.map(\.id), ["alice"])
+    }
+
+    // MARK: - « Dernière position connue » hors ligne (K36 `stale`)
+
+    func test_pinFreshness_offlineIsTheLastKnownPosition_neverLive() {
+        let pin = SharedLocationPin(id: "a", latitude: 0, longitude: 0, radiusMeters: 10, precision: .exact, name: "A",
+                                    initials: "A", presence: nil, deadline: t0.addingTimeInterval(3600), updatedAt: t0)
+
+        XCTAssertEqual(LocationMapPinsLayer.freshness(of: pin, isOffline: true, now: t0), .lastKnown)
+        XCTAssertEqual(LocationMapPinsLayer.freshness(of: pin, isOffline: false, now: t0), .live)
+        XCTAssertEqual(LocationMapPinsLayer.freshness(of: pin, isOffline: false, now: t0.addingTimeInterval(600)), .settled)
+    }
+
     // MARK: - L'emprise d'une région
 
     func test_regionBounds_matchTheVisibleRegion() {

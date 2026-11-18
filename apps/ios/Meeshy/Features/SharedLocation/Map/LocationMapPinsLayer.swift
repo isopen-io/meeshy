@@ -14,6 +14,14 @@ enum LocationMapMorph {
     static func id(_ userId: String) -> String { "locationMap.avatar.\(userId)" }
 }
 
+/// Ce que l'épingle dit de l'âge de la position : en direct (onde), posée, ou la dernière connue hors ligne (K36 `stale`,
+/// grisée, disque pointillé) — l'appareil ne peut plus rien apprendre de neuf.
+enum LocationMapPinFreshness: Equatable {
+    case live
+    case settled
+    case lastKnown
+}
+
 /// LES ÉPINGLES AU-DESSUS DE LA CARTE (#18872) : chaque personne est son avatar (K36) posé là où la carte montre sa
 /// position SERVIE, entourée du flou servi à l'échelle de la carte ; la mienne est une petite épingle « own ». Rien ne
 /// se dessine hors champ, et rien ne se dessine avant que la carte ait dit ce qu'elle montre.
@@ -28,6 +36,8 @@ struct LocationMapPinsLayer: View {
     /// Ce que dit mon épingle : ma position part-elle, et vers la personne regardée ?
     var meShare: LocationMapOwnShare = .notShared
     var focusedName: String?
+    /// Hors ligne, chaque épingle servie n'est plus que la dernière position connue.
+    var isOffline = false
     var onSelect: ((String) -> Void)?
 
     var body: some View {
@@ -56,13 +66,15 @@ struct LocationMapPinsLayer: View {
         let point = viewport.point(latitude: pin.latitude, longitude: pin.longitude)
         let precision = Self.precision(of: pin, viewport: viewport)
         let lift = precision.radius == 0 ? (MeeshyMapPinRecipe.defaultDiameter + MeeshyMapPinRecipe.tipSide) / 2 : 0
-        let isLive = Self.isLive(pin)
+        let freshness = Self.freshness(of: pin, isOffline: isOffline)
+        let label = LocationMapCopy.pinLabel(name: pin.name, precision: pin.precision)
         return MeeshyMapPin(
-            label: LocationMapCopy.pinLabel(name: pin.name, precision: pin.precision),
+            label: freshness == .lastKnown ? "\(label), \(LocationMapCopy.lastKnownPosition)" : label,
             tint: LocationMapTint.color(for: pin.circle),
             precision: precision,
-            isLive: isLive,
+            isLive: freshness == .live,
             isSelected: pin.id == selectedId,
+            isStale: freshness == .lastKnown,
             onPress: onSelect.map { select in { select(pin.id) } },
             content: { LocationMapPinAvatar(pin: pin, travels: pin.id == travellingId, size: Self.diameter(pin.id == selectedId)) },
             badge: { presenceDot(pin.presence) },
@@ -106,6 +118,12 @@ struct LocationMapPinsLayer: View {
         isSelected ? MeeshyMapPinRecipe.selectedDiameter : MeeshyMapPinRecipe.defaultDiameter
     }
 
+    /// Hors ligne : la dernière position connue ; sinon en direct sous deux minutes, posée au-delà.
+    static func freshness(of pin: SharedLocationPin, isOffline: Bool, now: Date = Date()) -> LocationMapPinFreshness {
+        guard !isOffline else { return .lastKnown }
+        return isLive(pin, now: now) ? .live : .settled
+    }
+
     /// En direct : mise à jour depuis moins de deux minutes.
     static func isLive(_ pin: SharedLocationPin, now: Date = Date()) -> Bool {
         if case .live = SharedLocationFreshness(updatedAt: pin.updatedAt, now: now) { return true }
@@ -132,5 +150,17 @@ struct LocationMapPinAvatar: View {
         MeeshyAvatar(name: pin.name, context: .custom(CGFloat(size)),
                      accentColor: DynamicColorGenerator.colorForName(pin.name), avatarURL: pin.avatarURL)
             .accessibilityHidden(true)
+    }
+}
+
+/// L'épingle d'une personne en pause par son mode fantôme (K36 `ghost`, #19562) : pointillée, sans avatar, posée hors de
+/// toute position — la passerelle n'en sert aucune. Son nom dit pourquoi.
+struct LocationMapGhostPin: View {
+    let ghost: SharedLocationGhostPin
+
+    var body: some View {
+        MeeshyMapPin(label: LocationMapCopy.ghostPinLabel(name: ghost.name), kind: .ghost) {
+            EmptyView()
+        }
     }
 }

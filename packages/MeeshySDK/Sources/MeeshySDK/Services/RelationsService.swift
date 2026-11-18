@@ -76,11 +76,17 @@ public final class RelationsService: RelationsProviding, Sendable {
     }
 
     public func sharedLocations(within bounds: SharedLocationBounds?) async throws -> [SharedLocationChanged] {
+        try await sharedLocationsSnapshot(within: bounds).items
+    }
+
+    /// Le même rattrapage, avec ceux dont la position est en pause par fantôme (#19562) : vide tant que la passerelle
+    /// ne les sert pas.
+    public func sharedLocationsSnapshot(within bounds: SharedLocationBounds?) async throws -> SharedLocationSnapshot {
         let query = bounds.map { [URLQueryItem(name: "bbox", value: $0.queryValue)] }
         let response: APIResponse<SharedLocationSnapshot> = try await api.request(
             RelationsEndpoint.locations, method: "GET", body: nil, queryItems: query
         )
-        return response.data.items
+        return response.data
     }
 
     public func ownSharedLocation() async throws -> SharedLocationOwnSnapshot {

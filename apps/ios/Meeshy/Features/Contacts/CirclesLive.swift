@@ -74,7 +74,7 @@ enum SharedLocationsLiveHolder {
         if let current, current.userId == userId { return current.live }
         let live = SharedLocationsLive(
             viewerId: { userId },
-            snapshot: { bounds in try await RelationsService.shared.sharedLocations(within: bounds) },
+            served: { bounds in try await RelationsService.shared.sharedLocationsSnapshot(within: bounds) },
             connected: MessageSocketManager.shared.$connectionState
                 .map { $0 == .connected }
                 .eraseToAnyPublisher()

@@ -49,6 +49,14 @@ struct SharedLocationEndedPin: Identifiable, Equatable {
     let endedAt: Date
 }
 
+/// Une personne dont la position est en pause par son mode fantôme (#19562) : qui, de quel cercle. Ni coordonnée, ni
+/// heure, ni précision : la rangée « En mode fantôme · position en pause » n'a rien d'autre à dire.
+struct SharedLocationGhostPin: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let circle: RelationLevel?
+}
+
 /// LA CARTE DES POSITIONS QU'ON ME PARTAGE, SUR iOS (#16983 ; iso de la carte web `shared-locations-map.tsx`, #16984).
 ///
 /// - Elle PROJETTE le magasin du SDK (`SharedLocationsLive`) : le serveur a déjà tronqué chaque position à la précision
@@ -64,6 +72,8 @@ final class SharedLocationsMapViewModel: ObservableObject {
     @Published private(set) var pins: [SharedLocationPin] = []
     /// Les partages qui viennent de s'arrêter, « pas sur la carte » (#18872), du plus récent au plus ancien.
     @Published private(set) var ended: [SharedLocationEndedPin] = []
+    /// Ceux dont la position est en pause par fantôme, servis par la passerelle (#19562), dans l'ordre des noms.
+    @Published private(set) var ghosts: [SharedLocationGhostPin] = []
 
     private let live: SharedLocationsLive
     private let people: CirclePeopleResolving
@@ -96,6 +106,14 @@ final class SharedLocationsMapViewModel: ObservableObject {
         endings
             .sink { [weak self] endings in self?.projectEnded(endings) }
             .store(in: &cancellables)
+        live.$ghosts
+            .sink { [weak self] ghosts in self?.projectGhosts(ghosts) }
+            .store(in: &cancellables)
+    }
+
+    /// Cette personne est-elle en pause par fantôme ?
+    func ghost(for userId: String) -> SharedLocationGhostPin? {
+        ghosts.first { $0.id == userId }
     }
 
     /// La position servie d'une personne, si elle me la partage en ce moment.
@@ -152,12 +170,28 @@ final class SharedLocationsMapViewModel: ObservableObject {
         Task { [weak self] in await self?.name(Array(unnamed)) }
     }
 
+    private func projectGhosts(_ served: [String: SharedLocationGhost]) {
+        ghosts = served.values
+            .map { ghost in
+                SharedLocationGhostPin(id: ghost.userId, name: known[ghost.userId]?.name ?? Self.someone, circle: ghost.circle)
+            }
+            .sorted { ($0.name, $0.id) < ($1.name, $1.id) }
+        let unnamed = served.keys.filter { known[$0] == nil }
+        guard !unnamed.isEmpty else { return }
+        Task { [weak self] in await self?.name(Array(unnamed)) }
+    }
+
+    private static var someone: String {
+        String(localized: "circles.locations.someone", defaultValue: "Quelqu'un", bundle: .main)
+    }
+
     private func name(_ ids: [String]) async {
         let found = await people.people(for: ids)
         guard !found.isEmpty else { return }
         known.merge(found) { _, new in new }
         project(live.byUser)
         projectEnded(lastEndings)
+        projectGhosts(live.ghosts)
     }
 
     private func pin(_ userId: String, _ entry: SharedLocationEntry) -> SharedLocationPin {

@@ -23,6 +23,7 @@ struct PersonLocationMapScreen: View {
     @StateObject private var places = LocationPlaceNamer()
     @ObservedObject private var sharing = SharedLocationSharingHolder.center()
     @ObservedObject private var asks = SharedLocationAskHolder.center()
+    @State private var isOffline = NetworkMonitor.shared.isOffline
     @State private var viewport: LocationMapViewport?
     @State private var focus: LocationMapFocus?
     @State private var style: LocationMapStyle = .standard
@@ -68,6 +69,7 @@ struct PersonLocationMapScreen: View {
         .background { shortcuts }
         .meeshyHardwareKeyboardHost()
         .task { await appear() }
+        .onReceive(NetworkMonitor.shared.isOfflinePublisher.receive(on: DispatchQueue.main)) { isOffline = $0 }
         .adaptiveOnChange(of: model.pins, initial: true) { _, pins in Task { await places.resolve(pins.filter { $0.id == userId }) } }
         .sheet(isPresented: $sharesMine) {
             ShareMyLocationSheet(recipients: [ShareMyLocationRecipient(userId: userId, name: displayName, circle: pin?.circle)])
@@ -87,7 +89,7 @@ struct PersonLocationMapScreen: View {
             trace
             LocationMapPinsLayer(viewport: viewport, pins: model.pins, selectedId: userId, travellingId: userId,
                                  hasArrived: hasArrived || reduceMotion, me: me, meShare: ownShare,
-                                 focusedName: displayName)
+                                 focusedName: displayName, isOffline: isOffline)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
             if !hasArrived, !reduceMotion, let pin { heroAvatar(pin) }

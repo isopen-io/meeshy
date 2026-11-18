@@ -94,6 +94,22 @@ final class RelationsServiceTests: XCTestCase {
         XCTAssertEqual(served.first?.precision, .city)
     }
 
+    func test_sharedLocationsSnapshot_readsWhoIsPausedByGhost_withoutAnyPosition() async throws {
+        let (service, api) = makeSUT()
+        api.stubWire("/relations/locations", json: """
+        {"success":true,"data":{"items":[
+          {"userId":"u1","latitude":48.85,"longitude":2.35,"precision":"city","radiusMeters":8000,
+           "updatedAt":"2026-11-13T10:00:00.000Z","expiresAt":"2026-11-13T11:00:00.000Z"},
+          {"userId":"kwame","paused":"ghost","circle":"BLOOD"}
+        ]}}
+        """)
+
+        let served = try await service.sharedLocationsSnapshot(within: nil)
+
+        XCTAssertEqual(served.items.map(\.userId), ["u1"])
+        XCTAssertEqual(served.ghosts, [SharedLocationGhost(userId: "kwame", circle: .blood)])
+    }
+
     func test_sharedLocations_withBounds_sendsTheBboxTheGatewayReads() async throws {
         let (service, api) = makeSUT()
         api.stubWire("/relations/locations", json: #"{"success":true,"data":{"items":[]}}"#)

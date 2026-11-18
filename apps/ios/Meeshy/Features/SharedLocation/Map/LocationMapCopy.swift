@@ -163,6 +163,18 @@ enum LocationMapCopy {
         }
     }
     static var notOnMap: String { String(localized: "locationMap.nearby.notOnMap", defaultValue: "Pas sur la carte", bundle: .main) }
+    /// Un proche en pause par son fantôme (#19562) : aucune heure, aucun lieu, aucune précision.
+    static var ghostPaused: String {
+        String(localized: "locationMap.ghost.paused", defaultValue: "En mode fantôme · position en pause", bundle: .main)
+    }
+    static func ghostPinLabel(name: String) -> String {
+        String(format: String(localized: "locationMap.ghost.pin", defaultValue: "%@, en mode fantôme · position en pause",
+                              bundle: .main), name)
+    }
+    /// Hors ligne, l'épingle servie n'est plus que la dernière position connue (K36 `stale`).
+    static var lastKnownPosition: String {
+        String(localized: "locationMap.lastKnown", defaultValue: "dernière position connue", bundle: .main)
+    }
     static var filtersLabel: String { String(localized: "locationMap.nearby.filters", defaultValue: "Cercles montrés", bundle: .main) }
     static var all: String { String(localized: "locationMap.nearby.all", defaultValue: "Tous", bundle: .main) }
     static var shareMyPosition: String { String(localized: "sharedLocation.share.action", defaultValue: "Partager ma position", bundle: .main) }

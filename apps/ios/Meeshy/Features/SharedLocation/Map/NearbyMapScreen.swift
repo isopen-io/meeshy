@@ -11,6 +11,7 @@ struct NearbyMapScreen: View {
     @ObservedObject private var sharing: SharedLocationSharingCenter
     @ObservedObject private var asks: SharedLocationAskCenter
     @StateObject private var places = LocationPlaceNamer()
+    @State private var isOffline = NetworkMonitor.shared.isOffline
     @State private var viewport: LocationMapViewport?
     @State private var focus: LocationMapFocus?
     @State private var filter: NearbyCircleFilter = .all
@@ -55,6 +56,7 @@ struct NearbyMapScreen: View {
             }
         }
         .task { await appear() }
+        .onReceive(NetworkMonitor.shared.isOfflinePublisher.receive(on: DispatchQueue.main)) { isOffline = $0 }
         .adaptiveOnChange(of: model.pins, initial: true) { _, pins in Task { await places.resolve(pins) } }
         .fullScreenCover(item: $opened) { person in
             PersonLocationMapScreen(userId: person.userId, displayName: person.name)
@@ -75,7 +77,7 @@ struct NearbyMapScreen: View {
                 .ignoresSafeArea()
             LocationMapPinsLayer(viewport: viewport, pins: shown, me: me,
                                  meShare: LocationMapOwnShare.resolve(recipientIds: recipientIds, focusedUserId: nil),
-                                 onSelect: { open($0) })
+                                 isOffline: isOffline, onSelect: { open($0) })
                 .ignoresSafeArea()
             VStack(spacing: MeeshySpacing.md) {
                 header
@@ -215,10 +217,13 @@ struct NearbyMapScreen: View {
         }
     }
 
+    /// « Pas sur la carte » : les partages qui viennent de finir (« Redemander »), puis ceux qui sont en pause par
+    /// leur fantôme (#19562) — une rangée K39 `ghost` sans heure, sans lieu, sans précision, et rien à relancer.
     @ViewBuilder
     private var endedList: some View {
-        let ended = model.ended.filter { filter.admits($0.circle) && model.pin(for: $0.id) == nil }
-        if !ended.isEmpty {
+        let ghosts = model.ghosts.filter { filter.admits($0.circle) && model.pin(for: $0.id) == nil }
+        let ended = model.ended.filter { filter.admits($0.circle) && model.pin(for: $0.id) == nil && model.ghost(for: $0.id) == nil }
+        if !ended.isEmpty || !ghosts.isEmpty {
             MeeshySectionHeader(title: LocationMapCopy.notOnMap, form: .overline)
             VStack(spacing: 0) {
                 ForEach(ended) { person in
@@ -226,13 +231,27 @@ struct NearbyMapScreen: View {
                         title: person.name,
                         subtitle: LocationMapCopy.endedAgo(person.endedAt, locale: locale),
                         outfit: .muted,
-                        showsDivider: person.id != ended.last?.id,
+                        showsDivider: person.id != ended.last?.id || !ghosts.isEmpty,
                         avatar: {
                             MeeshyAvatar(name: person.name, context: .custom(44),
                                          accentColor: DynamicColorGenerator.colorForName(person.name), avatarURL: person.avatarURL)
                         },
                         trailing: { reaskButton(person) }
                     )
+                }
+                ForEach(ghosts) { ghost in
+                    MeeshyPersonRow(
+                        title: ghost.name,
+                        subtitle: LocationMapCopy.ghostPaused,
+                        levelImage: ghost.circle.map { PersonLocationCard.circleSymbol($0) },
+                        levelLabel: ghost.circle.map { CircleLevelNames.title(of: $0) },
+                        outfit: .ghost,
+                        ghostGlyph: "theatermasks",
+                        showsDivider: ghost.id != ghosts.last?.id,
+                        avatar: { EmptyView() },
+                        trailing: { EmptyView() }
+                    )
+                    .accessibilityIdentifier("locationMap.nearby.ghost.\(ghost.id)")
                 }
             }
         }

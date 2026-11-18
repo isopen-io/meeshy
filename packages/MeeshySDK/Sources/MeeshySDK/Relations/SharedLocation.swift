@@ -59,6 +59,9 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        guard (try? SharedLocationGhost(from: decoder)) == nil else {
+            throw DecodingError.dataCorruptedError(forKey: .userId, in: c, debugDescription: "position en pause (fantôme)")
+        }
         let userId = try c.decode(String.self, forKey: .userId).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !userId.isEmpty else {
             throw DecodingError.dataCorruptedError(forKey: .userId, in: c, debugDescription: "userId vide")
@@ -99,13 +102,50 @@ public struct SharedLocationEnded: Decodable, Sendable, Equatable {
     }
 }
 
-/// `GET /relations/locations` — les partages servis à MOI, déjà tronqués. Un élément illisible est écarté, il ne fait
-/// pas tomber le rattrapage.
+/// Une personne qui me partageait sa position et l'a mise EN PAUSE par son mode fantôme (#19562, chaîne serveur
+/// #19304). ADDITIF : un élément `{ userId, paused: "ghost", circle? }` (ou `ghost: true`) de `GET /relations/locations`.
+/// Il ne porte que QUI et de quel cercle : aucune coordonnée, aucun instant, aucune précision n'a de champ où se poser,
+/// même si le serveur en servait. Un serveur qui ne le sert pas ne montre personne en fantôme.
+public struct SharedLocationGhost: Decodable, Sendable, Equatable, Identifiable {
+    public let userId: String
+    public let circle: RelationLevel?
+
+    public var id: String { userId }
+
+    public init(userId: String, circle: RelationLevel? = nil) {
+        self.userId = userId
+        self.circle = circle.flatMap { SharedLocationCircle.served.contains($0) ? $0 : nil }
+    }
+
+    private enum CodingKeys: String, CodingKey { case userId, paused, ghost, circle }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let paused = (try? c.decodeIfPresent(String.self, forKey: .paused)) ?? nil
+        let flagged = (try? c.decodeIfPresent(Bool.self, forKey: .ghost)) ?? nil
+        guard paused == "ghost" || flagged == true else {
+            throw DecodingError.dataCorruptedError(forKey: .paused, in: c, debugDescription: "pas en fantôme")
+        }
+        let userId = try c.decode(String.self, forKey: .userId).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !userId.isEmpty else {
+            throw DecodingError.dataCorruptedError(forKey: .userId, in: c, debugDescription: "userId vide")
+        }
+        let circle = ((try? c.decodeIfPresent(String.self, forKey: .circle)) ?? nil).flatMap(RelationLevel.init(rawValue:))
+        self.init(userId: userId, circle: circle)
+    }
+}
+
+/// `GET /relations/locations` — les partages servis à MOI, déjà tronqués, et ceux qui sont en pause par fantôme. Un
+/// élément illisible est écarté, il ne fait pas tomber le rattrapage ; une personne servie à la fois en position et en
+/// fantôme est un fantôme (la pause l'emporte : aucune position ne s'affiche d'elle).
 public struct SharedLocationSnapshot: Decodable, Sendable, Equatable {
     public let items: [SharedLocationChanged]
+    public let ghosts: [SharedLocationGhost]
 
-    public init(items: [SharedLocationChanged]) {
-        self.items = items
+    public init(items: [SharedLocationChanged], ghosts: [SharedLocationGhost] = []) {
+        let paused = Set(ghosts.map(\.userId))
+        self.items = items.filter { !paused.contains($0.userId) }
+        self.ghosts = ghosts
     }
 
     private enum CodingKeys: String, CodingKey { case items }
@@ -113,14 +153,16 @@ public struct SharedLocationSnapshot: Decodable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let lenient = (try? c.decodeIfPresent([Lenient].self, forKey: .items)) ?? nil
-        items = (lenient ?? []).compactMap(\.value)
+        self.init(items: (lenient ?? []).compactMap(\.position), ghosts: (lenient ?? []).compactMap(\.ghost))
     }
 
     private struct Lenient: Decodable {
-        let value: SharedLocationChanged?
+        let position: SharedLocationChanged?
+        let ghost: SharedLocationGhost?
 
         init(from decoder: Decoder) throws {
-            value = try? SharedLocationChanged(from: decoder)
+            ghost = try? SharedLocationGhost(from: decoder)
+            position = ghost == nil ? try? SharedLocationChanged(from: decoder) : nil
         }
     }
 }
