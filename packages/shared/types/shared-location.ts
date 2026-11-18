@@ -127,6 +127,12 @@ export type SharedLocationChangedEventData = {
    * Le début du partage en cours (#19458), redit à chaque remplacement ou prolongation :
    * « Partage pour 1 h » se lit `expiresAt - startedAt`, la fenêtre de CE lecteur. ADDITIF :
    * absent d'un serveur antérieur ou d'un partage rangé avant lui, le libellé se masque.
+   *
+   * EXACT pour tout lecteur, flouté compris, à la différence de `updatedAt` : `expiresAt`
+   * part exact à chacun (le lecteur doit savoir quand le partage s'arrête), et la durée
+   * choisie est l'une d'une poignée de valeurs — l'arrondir ne cacherait rien que
+   * `expiresAt` ne dise déjà, et fausserait le libellé. Ce que l'arrondi de `updatedAt`
+   * brouille, c'est le RYTHME des déplacements, que le début ne porte pas.
    */
   readonly startedAt?: string;
 };
