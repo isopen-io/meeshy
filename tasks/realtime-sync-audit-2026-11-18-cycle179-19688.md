@@ -180,6 +180,33 @@ rend `non-resolue`, jamais `sans-langue`.
   lot n'en ajoute aucun ;
 - `tsc --noEmit` vert sur `services/gateway` et `packages/shared`.
 
+## Ce que la fusion attend, et pourquoi elle n'a pas eu lieu
+
+Le lot est prêt : `dev` (`ffb60040e3`) fusionnée sans conflit, PR `mergeable` /
+`mergeable_state: clean`, gates rejoués sur l'arbre fusionné (13 suites,
+247 tests ; `tsc` vert sur gateway et shared).
+
+**Aucun verdict de CI n'est obtenable** : les 25 workflows du dépôt sont
+`disabled_manually` — seuls les deux dynamiques de Dependabot restent actifs.
+Deux runs avaient été annulés avant (le premier évincé par une poussée, le
+second alors qu'il était encore en file), et les deux seuls jobs qui ont eu le
+temps de conclure étaient VERTS (`Gardes du dépôt`, `Qualité TS (bun)`).
+
+La directive #9226 — « toute PR vers `dev` fusionne dès la CI verte » — est donc
+inapplicable pour tout le monde, par une cause différente de celle de #19684. Une
+session ne réactive pas un workflow du dépôt et ne fusionne pas sans verdict :
+**la PR reste ouverte**, et c'est consigné sur elle.
+
+> **La manière dont je l'ai découvert est la leçon.** Une poussée sur un workflow
+> désactivé ne rend ni run, ni suite, ni erreur — exactement ce que rend une file
+> longue. Les trois observations que j'avais (runs annulés, 95 runs en file,
+> aucune suite créée) sont toutes compatibles avec « ça va finir par tourner ».
+> Seul `workflow_dispatch` le DIT (« Cannot trigger a 'workflow_dispatch' on a
+> disabled workflow »). **Devant une attente de CI qui ne bouge pas, interroger
+> l'ÉTAT DU WORKFLOW, pas la FILE** — la file dit ce qui attend, jamais que plus
+> rien n'attendra. Détail :
+> `tasks/lessons/2026-11-18-une-ci-desactivee-ne-rend-aucun-signal.md`.
+
 ## Suivis
 
 - **#19677** (199 lookups `isActive: true` nus) reste ouvert, et ce lot en
