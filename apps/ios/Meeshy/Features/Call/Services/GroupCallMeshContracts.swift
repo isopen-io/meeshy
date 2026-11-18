@@ -159,7 +159,8 @@ struct GroupCallAudioLevels: Equatable, Sendable {
 @MainActor
 protocol GroupCallHostProviding: AnyObject {
     var groupCallId: String? { get }
-    var groupConversationId: String? { get }
+    /// #19650 — réécrite quand la passerelle rattache l'appel au groupe des présents.
+    var groupConversationId: String? { get set }
     var groupLocalUserId: String { get }
     /// Le pair que `CallManager` négocie (`remoteUserId`).
     var groupPrimaryUserId: String? { get }

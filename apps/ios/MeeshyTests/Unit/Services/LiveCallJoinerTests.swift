@@ -15,6 +15,8 @@ final class LiveCallJoinerTests: XCTestCase {
             askedConversationIds.append(conversationId)
             return try result.get()
         }
+
+        func callSession(callId: String) async throws -> ActiveCallSession? { nil }
     }
 
     @MainActor

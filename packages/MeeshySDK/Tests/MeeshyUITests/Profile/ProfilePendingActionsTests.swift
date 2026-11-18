@@ -7,6 +7,7 @@ import MeeshySDK
 /// Hors ligne, la fiche d'un autre liste ce que la file garde pour lui et le laisse annuler (#19465, planche
 /// `Etat-HorsLigne`) : seuls ses envois, au rang où ils partiront, et un retrait se voit tout de suite.
 @Suite("Hors ligne, les actions en attente de la fiche d'un autre")
+@MainActor
 struct ProfilePendingActionsTests {
 
     private static let direct = "conv-leo"
