@@ -14,7 +14,10 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.post.UserPostsCacheRepository
+import me.meeshy.sdk.post.UserPostsSnapshot
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
@@ -27,9 +30,10 @@ import javax.inject.Inject
  * feed), and un-bookmarks optimistically with rollback on failure.
  *
  * The list is the pure [BookmarksListState]; this ViewModel is the orchestration
- * layer (when to fetch, when to roll back). There is no repository-level bookmark
- * cache yet, so a cold open shows a skeleton then the first page — a follow-up will
- * add an L1 cache to serve saved posts instantly (instant-app parity with the feed).
+ * layer (when to fetch, when to roll back). The first page is served from the disk copy
+ * ([UserPostsCacheRepository.cachedBookmarks], #19426) before the network: no skeleton
+ * on a non-empty cache, a stale copy is revalidated silently and replaced by the first
+ * page, and every change of the list (page, un-save, rollback) is written back.
  */
 data class BookmarksUiState(
     val posts: List<FeedPostPresentation> = emptyList(),
@@ -52,6 +56,7 @@ class BookmarksViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val config: MeeshyConfig,
     socialSocket: SocialSocketManager,
+    private val cache: UserPostsCacheRepository,
 ) : ViewModel() {
 
     private val listState = MutableStateFlow(BookmarksListState())
@@ -80,6 +85,26 @@ class BookmarksViewModel @Inject constructor(
         loadInitial()
     }
 
+    private suspend fun cachedCopy(): CacheResult<UserPostsSnapshot> = try {
+        cache.cachedBookmarks()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        CacheResult.Empty
+    }
+
+    private suspend fun persistCurrent() {
+        val list = listState.value
+        if (!list.hasLoaded) return
+        try {
+            cache.persistBookmarks(UserPostsSnapshot(list.posts, list.cursor, list.hasMore), cache.ticket())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Le disque est un confort : une écriture manquée ne change rien à l'écran.
+        }
+    }
+
     /**
      * First page. Guarded so a re-entrant call (e.g. an `onAppear` re-fire) while a
      * load is in flight or after the list has already loaded is a no-op — [refresh]
@@ -88,7 +113,21 @@ class BookmarksViewModel @Inject constructor(
     fun loadInitial() {
         if (status.value.isLoading || listState.value.hasLoaded) return
         status.update { it.copy(isLoading = true, error = null) }
-        fetchFirstPage()
+        viewModelScope.launch {
+            val held = cachedCopy()
+            val snapshot = when (held) {
+                is CacheResult.Fresh -> held.value
+                is CacheResult.Stale -> held.value
+                is CacheResult.Syncing -> held.value
+                CacheResult.Empty -> null
+            }
+            if (snapshot != null) {
+                listState.value = BookmarksListState(snapshot.posts, snapshot.nextCursor, snapshot.hasMore, hasLoaded = true)
+                status.update { it.copy(isLoading = false) }
+            }
+            if (held is CacheResult.Fresh) return@launch
+            fetchFirstPage(replacing = snapshot != null)
+        }
     }
 
     /**
@@ -98,29 +137,29 @@ class BookmarksViewModel @Inject constructor(
     fun refresh() {
         listState.value = BookmarksListState()
         status.update { it.copy(isRefreshing = true, error = null) }
-        fetchFirstPage()
+        viewModelScope.launch { fetchFirstPage(replacing = false) }
     }
 
-    private fun fetchFirstPage() {
-        viewModelScope.launch {
-            try {
-                when (val result = postRepository.getBookmarksPage(cursor = null)) {
-                    is NetworkResult.Success -> {
-                        listState.update { it.foldPage(result.data) }
-                        status.update { it.copy(isLoading = false, isRefreshing = false) }
-                    }
-                    is NetworkResult.Failure ->
-                        status.update {
-                            it.copy(isLoading = false, isRefreshing = false, error = result.error.message)
-                        }
+    /** [replacing] : une copie du disque est déjà peinte — la page l'écrase, et un échec ne dit rien. */
+    private suspend fun fetchFirstPage(replacing: Boolean) {
+        try {
+            when (val result = postRepository.getBookmarksPage(cursor = null)) {
+                is NetworkResult.Success -> {
+                    listState.update { (if (replacing) BookmarksListState() else it).foldPage(result.data) }
+                    status.update { it.copy(isLoading = false, isRefreshing = false) }
+                    persistCurrent()
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                status.update { it.copy(isLoading = false, isRefreshing = false, error = e.message) }
+                is NetworkResult.Failure -> failFirstPage(replacing, result.error.message)
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            failFirstPage(replacing, e.message)
         }
     }
+
+    private fun failFirstPage(replacing: Boolean, message: String?) =
+        status.update { it.copy(isLoading = false, isRefreshing = false, error = message.takeUnless { replacing }) }
 
     /**
      * Infinite scroll: once the given post is within [LOAD_MORE_THRESHOLD] of the tail
@@ -139,7 +178,10 @@ class BookmarksViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 when (val result = postRepository.getBookmarksPage(cursor = list.cursor)) {
-                    is NetworkResult.Success -> listState.update { it.foldPage(result.data) }
+                    is NetworkResult.Success -> {
+                        listState.update { it.foldPage(result.data) }
+                        persistCurrent()
+                    }
                     is NetworkResult.Failure -> Unit
                 }
             } catch (e: CancellationException) {
@@ -162,17 +204,20 @@ class BookmarksViewModel @Inject constructor(
         if (snapshot.posts.none { it.id == postId }) return
         listState.update { it.removed(postId) }
         viewModelScope.launch {
+            persistCurrent()
             try {
                 val result = postRepository.removeBookmark(postId)
                 if (result is NetworkResult.Failure) {
                     listState.value = snapshot
                     status.update { it.copy(error = result.error.message) }
+                    persistCurrent()
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 listState.value = snapshot
                 status.update { it.copy(error = e.message) }
+                persistCurrent()
             }
         }
     }
