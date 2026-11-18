@@ -25,7 +25,6 @@ import me.meeshy.sdk.model.profile.from
 import me.meeshy.sdk.model.profile.repainted
 import me.meeshy.sdk.profile.ProfileCacheRepository
 import me.meeshy.sdk.profile.ProfileSheetLoader
-import me.meeshy.sdk.network.InMemoryNetworkMonitor
 import me.meeshy.sdk.network.NetworkMonitor
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -92,10 +91,13 @@ class UserProfileSheetViewModel @Inject constructor(
     private val cache: ProfileCacheRepository,
     socket: MessageSocketManager,
     private val session: SessionRepository,
-    private val networkMonitor: NetworkMonitor = InMemoryNetworkMonitor(),
+    private val networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(UserProfileSheetUiState(isOffline = !networkMonitor.isOnline.value))
+    /** Avant toute ouverture, le squelette : jamais un « Personne ici » d'une image le temps que l'ouverture arrive. */
+    private val _state = MutableStateFlow(
+        UserProfileSheetUiState(isLoadingProfile = true, isOffline = !networkMonitor.isOnline.value),
+    )
     val state: StateFlow<UserProfileSheetUiState> = _state.asStateFlow()
 
     private var load = ProfileLoadState()
@@ -103,7 +105,11 @@ class UserProfileSheetViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            networkMonitor.isOnline.collect { online -> _state.update { it.copy(isOffline = !online) } }
+            networkMonitor.isOnline.collect { online ->
+                val wasOffline = _state.value.isOffline
+                _state.update { it.copy(isOffline = !online) }
+                if (online && wasOffline && _state.value.canRetry) open(_state.value.user, retry = true)
+            }
         }
         viewModelScope.launch {
             try {

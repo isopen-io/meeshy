@@ -228,7 +228,7 @@ private fun ProfileActionsViewModel.callbacks(
  * Le corps de la feuille, projection mince de [UserProfileSheetUiState] : squelette sur cache vide,
  * échec + Réessayer, « Personne ici » + Retour, ou la fiche peinte — chacun en UN SEUL défilement. Le
  * bouton Fermer reste au-dessus de tout (barre compacte comprise), en haut au début ; la feuille
- * porte le nom de la personne comme titre de volet (TalkBack).
+ * porte le nom de la personne comme titre de volet (TalkBack), sauf « Personne ici », qui ne nomme personne.
  */
 @Composable
 internal fun UserProfileSheetBody(
@@ -243,7 +243,11 @@ internal fun UserProfileSheetBody(
     sharedConversations: ProfileSharedConversationsState = ProfileSharedConversationsState(),
 ) {
     val accent = hexColor(state.accentHex, MeeshyPalette.Indigo500)
-    val title = state.profile?.let { it.displayName ?: it.username } ?: state.user.resolvedDisplayName
+    val title = if (state.content == ProfileSheetContent.Nobody) {
+        stringResource(R.string.profile_state_nobody_title)
+    } else {
+        state.profile?.let { it.displayName ?: it.username } ?: state.user.resolvedDisplayName
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()

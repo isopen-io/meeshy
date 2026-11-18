@@ -154,13 +154,14 @@ class ProfileSheetLoaderTest {
     }
 
     @Test
-    fun `404 sur fiche peinte bloque et 404 a vide est une panne`() = runTest {
+    fun `404 sur fiche peinte bloque et 404 a vide est un refus sans reessayer`() = runTest {
         profiles.store(bob, id, null)
         val painted = loader(FakeRemote(failure(404), failure(null))).states(id, "bob").last()
         assertThat(painted.isBlockedByTarget).isTrue()
         val empty = loader(FakeRemote(failure(404), failure(null))).states("64b7f0a1c2d3e4f5a6b7c8da", "x").last()
         assertThat(empty.isBlockedByTarget).isFalse()
-        assertThat(empty.profileLoadFailed).isTrue()
+        assertThat(empty.profileLoadFailed).isFalse()
+        assertThat(empty.isLoadingProfile).isFalse()
     }
 
     @Test
