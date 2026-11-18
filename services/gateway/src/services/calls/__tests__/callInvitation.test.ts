@@ -30,10 +30,22 @@ const callSession = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+type ConversationRow = {
+  id: string;
+  type: string;
+  encryptionMode: string | null;
+  isActive: boolean;
+  closedAt: Date | null;
+  communityId: string | null;
+};
+
 type World = {
   session: ReturnType<typeof callSession> | null;
   friends: Array<[string, string]>;
   participants: ParticipantRow[];
+  conversation: ConversationRow | null;
+  blocked: Array<[string, string]>;
+  privateCommunity: boolean;
 };
 
 const USERS: Record<string, { id: string; username: string; displayName: string | null; avatar: string | null; [prism: string]: string | null }> = {
@@ -51,7 +63,20 @@ const fakePrisma = (world: World) => ({
       return linked ? { id: 'fr' } : null;
     }),
   },
+  conversation: { findUnique: jest.fn(async () => world.conversation) },
+  community: {
+    findFirst: jest.fn(async () => (world.privateCommunity ? { createdBy: 'owner', isPrivate: true, isActive: true, members: [] } : null)),
+  },
+  communityMember: { findMany: jest.fn(async () => []) },
   user: {
+    findFirst: jest.fn(async ({ where }: { where: { OR: Array<{ id: string | { in: string[] }; blockedUserIds: { has?: string; hasSome?: string[] } }> } }) => {
+      const pairs = where.OR.flatMap((clause) => {
+        const ids = typeof clause.id === 'string' ? [clause.id] : clause.id.in;
+        const targets = clause.blockedUserIds.has ? [clause.blockedUserIds.has] : clause.blockedUserIds.hasSome ?? [];
+        return ids.flatMap((id) => targets.map((target) => [id, target] as const));
+      });
+      return pairs.some(([a, b]) => world.blocked.some(([x, y]) => x === a && y === b)) ? { id: 'blocked' } : null;
+    }),
     findMany: jest.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
       where.id.in.flatMap((id) => (USERS[id] ? [USERS[id]] : []))
     ),
@@ -76,18 +101,32 @@ const fakePrisma = (world: World) => ({
   },
 });
 
+const groupConversation = (overrides: Partial<ConversationRow> = {}): ConversationRow => ({
+  id: CONV,
+  type: 'group',
+  encryptionMode: 'server',
+  isActive: true,
+  closedAt: null,
+  communityId: null,
+  ...overrides,
+});
+
 const makeWorld = (overrides: Partial<World> = {}): World => ({
   session: callSession(),
   friends: [['alice', 'dave']],
   participants: [],
+  conversation: groupConversation(),
+  blocked: [],
+  privateCommunity: false,
   ...overrides,
 });
 
-const authorize = (world: World, input: { inviter?: string; invitee?: string } = {}) =>
+const authorize = (world: World, input: { inviter?: string; invitee?: string; ringing?: string[] } = {}) =>
   authorizeCallInvitation(
     {
       prisma: fakePrisma(world) as never,
       callService: { getCallSession: async () => { if (!world.session) throw new Error('CALL_NOT_FOUND'); return world.session; } } as never,
+      ringingInviteeIds: () => input.ringing ?? [],
     },
     { callId: CALL, inviterUserId: input.inviter ?? 'alice', inviteeUserId: input.invitee ?? 'dave' }
   );
@@ -135,6 +174,62 @@ describe('authorizeCallInvitation — qui peut faire sonner qui dans un appel en
   it('refuse une personne bannie de la conversation', async () => {
     const banned = makeWorld({ participants: [{ id: 'p-dave', conversationId: CONV, userId: 'dave', bannedAt: NOW, isActive: false }] });
     expect(await authorize(banned)).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+  });
+});
+
+describe('authorizeCallInvitation — l’invitation fait entrer dans la conversation de l’appel (#19650)', () => {
+  it('dit le chemin : groupe ⇒ admission, tête-à-tête lisible ⇒ bascule, tête-à-tête chiffré ⇒ invité de l’appel', async () => {
+    expect(await authorize(makeWorld())).toMatchObject({ ok: true, route: 'admit-member', inviteeIsMember: false });
+    const answered = callSession({ answeredAt: NOW });
+    expect(await authorize(makeWorld({ session: answered, conversation: groupConversation({ type: 'direct' }) })))
+      .toMatchObject({ ok: true, route: 'rebranch' });
+    expect(await authorize(makeWorld({ session: answered, conversation: groupConversation({ type: 'direct', encryptionMode: 'e2ee' }) })))
+      .toMatchObject({ ok: true, route: 'legacy-guest' });
+  });
+
+  it('dit si l’invité est déjà membre actif du groupe : il sonne seulement', async () => {
+    const member = makeWorld({ participants: [{ id: 'p-dave', conversationId: CONV, userId: 'dave', bannedAt: null, isActive: true }] });
+    expect(await authorize(member)).toMatchObject({ ok: true, inviteeIsMember: true });
+  });
+
+  it('un appel en tête-à-tête qui sonne encore ne s’ouvre à personne (D5)', async () => {
+    expect(await authorize(makeWorld({ conversation: groupConversation({ type: 'direct' }) })))
+      .toEqual({ ok: false, code: 'CALL_NOT_ACTIVE' });
+  });
+
+  it('les invitations qui sonnent comptent dans le plafond', async () => {
+    const actives = Array.from({ length: CALL_MAX_PARTICIPANTS - 1 }, (_, i) => inCall(i === 0 ? 'alice' : `u${i}`));
+    const world = makeWorld({ session: callSession({ participants: actives }) });
+    expect(await authorize(world, { ringing: ['erin'] })).toEqual({ ok: false, code: 'MAX_PARTICIPANTS_REACHED' });
+    expect(await authorize(world, { ringing: ['dave'] })).toMatchObject({ ok: true });
+    expect(await authorize(world)).toMatchObject({ ok: true });
+  });
+
+  it('refuse une personne bloquée avec un participant présent, dans un sens comme dans l’autre', async () => {
+    expect(await authorize(makeWorld({ blocked: [['bob', 'dave']] }))).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+    expect(await authorize(makeWorld({ blocked: [['dave', 'bob']] }))).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+  });
+
+  it('refuse l’entrée d’un salon de communauté privée à qui ne peut y faire entrer personne', async () => {
+    const salon = makeWorld({ conversation: groupConversation({ communityId: 'c1' }), privateCommunity: true });
+    expect(await authorize(salon)).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+  });
+
+  it('refuse une conversation externe, et une conversation close', async () => {
+    expect(await authorize(makeWorld({ conversation: groupConversation({ type: 'external' }) }))).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+    expect(await authorize(makeWorld({ conversation: groupConversation({ closedAt: NOW }) }))).toEqual({ ok: false, code: 'CALL_NOT_ACTIVE' });
+    expect(await authorize(makeWorld({ conversation: null }))).toEqual({ ok: false, code: 'CALL_NOT_ACTIVE' });
+  });
+
+  it('aucun refus n’écrit quoi que ce soit', async () => {
+    const world = makeWorld({ blocked: [['bob', 'dave']] });
+    const prisma = fakePrisma(world);
+    await authorizeCallInvitation(
+      { prisma: prisma as never, callService: { getCallSession: async () => world.session } as never, ringingInviteeIds: () => [] },
+      { callId: CALL, inviterUserId: 'alice', inviteeUserId: 'dave' }
+    );
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+    expect(prisma.callSession.update).not.toHaveBeenCalled();
   });
 });
 

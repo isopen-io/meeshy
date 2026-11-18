@@ -275,7 +275,7 @@ export class CallService {
   // evict its 2s `call:signal` session cache entry. Mirrors callEndedBroadcaster.
   private signalCacheInvalidator: ((callId: string) => void) | null = null;
 
-  private readonly activeCallClaim: ActiveCallClaim;
+  readonly activeCallClaim: ActiveCallClaim;
 
   // Wired in server.ts to CallEventsHandler.broadcastParticipantLeftForRest.
   // Sibling of callEndedBroadcaster: the REST end/leave routes have no `io`,

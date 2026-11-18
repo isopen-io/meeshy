@@ -3083,6 +3083,13 @@ model CallSession {
   /// par `services/calls/callInvitation.ts`.
   invitedUserIds String[] @default([]) @db.ObjectId
 
+  /// La conversation DIRECTE d'origine d'un appel rattaché à un groupe par la
+  /// première invitation (#19650) : `conversationId` est alors le groupe, et le
+  /// tête-à-tête garde sa réservation et sa bulle jusqu'à la fin. Écrite UNE
+  /// fois par `services/calls/callConversationRebranch.ts`, absente sinon. Lue
+  /// par `callId` seulement (aucun index), jamais servie aux clients.
+  originConversationId String? @db.ObjectId
+
   /// Les réactions envoyées pendant l'appel, comptées par emoji (#8439) :
   /// `{ "👍": 3, "🎉": 1 }`, emojis de `CALL_REACTION_EMOJIS` seulement.
   /// Incrémenté atomiquement (`$inc`) par `services/calls/callReactions.ts` ;

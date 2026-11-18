@@ -53,7 +53,8 @@ const SRC = join(__dirname, '..');
 
 /** Les écritures CONFORMES mesurées sur `dev` le 2026-09-01. */
 const CONFORMES_CONNUES = [
-  'routes/conversations/participants-writes.ts',
+  // #19650 — l'ajout d'un membre a quitté `participants-writes.ts` pour être partagé avec l'appel.
+  'services/conversations/memberAdmission.ts',
   'services/messaging/MessagingService.ts',
 ] as const;
 
@@ -106,7 +107,7 @@ describe('balayage : tout producteur de `Participant.language` vient du site uni
 describe('le balayage TOMBE sous la mutation qu’il nomme', () => {
   it('nomme un site conforme RÉEL dont on remet la forme `systemLanguage ?? \'en\'`', () => {
     const conforme = readFileSync(
-      join(SRC, 'routes/conversations/participants-writes.ts'),
+      join(SRC, 'services/conversations/memberAdmission.ts'),
       'utf8',
     );
     const mute = conforme.replace(
@@ -121,13 +122,13 @@ describe('le balayage TOMBE sous la mutation qu’il nomme', () => {
     // au lieu de nommer la mutation.
     const voisin = 'services/conversations/conversationEntryAdmission.ts';
     const racine = bacAvec({
-      'routes/conversations/participants-writes.ts': mute,
+      'services/conversations/memberAdmission.ts': mute,
       [voisin]: readFileSync(join(SRC, voisin), 'utf8'),
     });
 
     expect(producteursHorsSite(racine)).toEqual([
-      expect.stringContaining('routes/conversations/participants-writes.ts'),
-      expect.stringContaining('routes/conversations/participants-writes.ts'),
+      expect.stringContaining('services/conversations/memberAdmission.ts'),
+      expect.stringContaining('services/conversations/memberAdmission.ts'),
     ]);
     expect(producteursHorsSite(racine)[0]).toContain('userToAdd.systemLanguage');
   });
