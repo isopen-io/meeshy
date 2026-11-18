@@ -539,11 +539,11 @@ struct ProfileSheetEnvironment: ViewModifier {
             .environment(\.profileLiveSection, ProfileLiveSection { request in
                 ProfileSlot.view(.live, userId: request.userId, displayName: request.displayName, liveRequest: request)
             })
-            .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, linked, tint in
-                ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked, tint: tint)
+            .environment(\.profileRelationSection, ProfileRelationSection { userId, displayName, standing, tint in
+                ProfileSlot.view(.relation, userId: userId, displayName: displayName, standing: standing, tint: tint)
             })
-            .environment(\.profileRelationPill, ProfileRelationPill { userId, displayName, linked in
-                ProfileSlot.view(.pill, userId: userId, displayName: displayName, linked: linked)
+            .environment(\.profileRelationPill, ProfileRelationPill { userId, displayName, standing in
+                ProfileSlot.view(.pill, userId: userId, displayName: displayName, standing: standing)
             })
             .environment(\.profileActionsParts, ProfileActionsParts { part, request in
                 ProfileSlot.view(.actions, userId: request.userId, displayName: request.displayName,
@@ -578,12 +578,13 @@ struct ProfileSheetEnvironment: ViewModifier {
 enum ProfileSlot {
     case banner, relation, pill, locationMap, whereTheyAre, scanner, gameCard, live, actions, send
 
-    static func view(_ slot: ProfileSlot, userId: String, displayName: String, linked: Binding<Bool> = .constant(false),
+    static func view(_ slot: ProfileSlot, userId: String, displayName: String,
+                     standing: Binding<ProfileRelationStanding> = .constant(.unresolved),
                      mapRequest: ProfileLocationMapRequest? = nil, openMap: (() -> Void)? = nil,
                      onOpened: (() -> Void)? = nil, tint: Color? = nil,
                      liveRequest: ProfileLiveRequest? = nil, actionsPart: ProfileActionsPart? = nil,
                      send: ProfileSendHost? = nil) -> AnyView {
-        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, linked: linked,
+        AnyView(ProfileSlotContent(slot: slot, userId: userId, displayName: displayName, standing: standing,
                                    mapRequest: mapRequest, openMap: openMap, onOpened: onOpened, tint: tint,
                                    liveRequest: liveRequest, actionsPart: actionsPart, send: send))
     }
@@ -593,7 +594,7 @@ private struct ProfileSlotContent: View {
     let slot: ProfileSlot
     let userId: String
     let displayName: String
-    @Binding var linked: Bool
+    @Binding var standing: ProfileRelationStanding
     let mapRequest: ProfileLocationMapRequest?
     let openMap: (() -> Void)?
     let onOpened: (() -> Void)?
@@ -608,10 +609,10 @@ private struct ProfileSlotContent: View {
         case .banner:
             GameBannerBadge(userId: userId)
         case .relation:
-            ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked, tint: tint)
+            ProfileCircleSection(userId: userId, displayName: displayName, standing: $standing, tint: tint)
                 .id(userId)
         case .pill:
-            ProfileRelationPillView(userId: userId, displayName: displayName, linked: $linked)
+            ProfileRelationPillView(userId: userId, displayName: displayName, standing: $standing)
                 .id(userId)
         case .locationMap:
             PersonLocationMapScreen(userId: userId, displayName: displayName,

@@ -92,9 +92,9 @@ public struct UserProfileSheet: View {
     @Environment(\.profilePresentationStyle) var presentationStyle
     /// La face lue (loi 1, #18870) ; la Vitrine d'abord.
     @State var face: RelationFace = .vitrine
-    /// L'app montre un lien d'au moins Connaissance dans l'emplacement du cercle (#14910) : le cercle commun n'est plus
-    /// Public, écrire n'est plus une demande.
-    @State var relationLinked = false
+    /// Ce que l'emplacement du cercle publie (#14910, #18870) : le lien montré et le niveau d'outil lu, `unresolved`
+    /// tant que l'app n'a rien lu.
+    @State var relationStanding = ProfileRelationStanding.unresolved
     @State var sharesProfile = false
     /// #10093 — la bannière ou la photo ouverte en plein écran, PRÉSENTÉE par-dessus la feuille (`fullScreenCover`) :
     /// posée dans la pile de la feuille, la visionneuse ne pouvait pas déborder de sa hauteur (mi-écran en `.medium`).
@@ -308,9 +308,17 @@ public struct UserProfileSheet: View {
         return { openConversation() }
     }
 
-    /// Sans lien ni connexion acceptée, écrire part en demande de message.
+    /// Sans lien ni connexion acceptée, écrire part en demande de message, jugé au niveau d'outil que l'app a lu.
     var writesARequest: Bool {
-        RelationFace.writesARequest(linked: relationLinked, connection: connectionStatus)
+        RelationFace.writesARequest(standing: servedStanding, connection: connectionStatus)
+    }
+
+    /// L'app montre un lien d'au moins Connaissance (#14910) : la fiche range ce qu'elle montrait sans lien.
+    var relationLinked: Bool { relationStanding.linked }
+
+    /// Sans emplacement de cercle ni pilule, personne ne publie : la fiche reste au cercle Public d'avant.
+    var servedStanding: ProfileRelationStanding {
+        relationSection == nil && relationPill == nil ? .unhosted : relationStanding
     }
 
     /// « Réessayer » (#8025) : le chargeur rejoue l'ouverture, puis les conversations en commun si elles manquent.

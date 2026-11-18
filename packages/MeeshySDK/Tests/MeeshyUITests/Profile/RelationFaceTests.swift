@@ -59,10 +59,31 @@ final class RelationFaceTests: XCTestCase {
     }
 
     func test_writing_isARequest_untilALinkIsShownOrTheConnectionAccepted() {
-        XCTAssertTrue(RelationFace.writesARequest(linked: false, connection: .none))
-        XCTAssertTrue(RelationFace.writesARequest(linked: false, connection: .pendingSent(requestId: "r")))
-        XCTAssertFalse(RelationFace.writesARequest(linked: true, connection: .none))
-        XCTAssertFalse(RelationFace.writesARequest(linked: false, connection: .connected))
+        let stranger = ProfileRelationStanding(linked: false, toolLevel: .public)
+        let linked = ProfileRelationStanding(linked: true, toolLevel: .friend)
+        XCTAssertTrue(RelationFace.writesARequest(standing: stranger, connection: .none))
+        XCTAssertTrue(RelationFace.writesARequest(standing: stranger, connection: .pendingSent(requestId: "r")))
+        XCTAssertFalse(RelationFace.writesARequest(standing: linked, connection: .none))
+        XCTAssertFalse(RelationFace.writesARequest(standing: stranger, connection: .connected))
+    }
+
+    /// #16623 — entre deux comptes de l'équipe, sans lien, la passerelle sert le Sang aux outils de cercle : écrire
+    /// n'est pas une demande, au même niveau que ce que l'app propose.
+    func test_standing_aServedBloodToolLevelWithoutALink_writingIsNotARequest() {
+        let team = ProfileRelationStanding(linked: false, toolLevel: .blood)
+
+        XCTAssertFalse(RelationFace.writesARequest(standing: team, connection: .none))
+    }
+
+    /// Tant que l'app n'a rien lu, la fiche ne dit pas « demande » : un Proche ne voit jamais, le temps d'un
+    /// chargement, la mention d'un inconnu.
+    func test_standing_unresolved_saysNoRequest() {
+        XCTAssertFalse(RelationFace.writesARequest(standing: .unresolved, connection: .none))
+    }
+
+    /// Sans hôte (ni emplacement de cercle ni pilule), la fiche reste au cercle Public d'avant : écrire part en demande.
+    func test_standing_unhosted_staysPublic() {
+        XCTAssertTrue(RelationFace.writesARequest(standing: .unhosted, connection: .none))
     }
 
     /// Loi 12 — la face Actions est faite du kit : actions libellées K32, boutons K40, l'échelle « Pour aller plus loin »

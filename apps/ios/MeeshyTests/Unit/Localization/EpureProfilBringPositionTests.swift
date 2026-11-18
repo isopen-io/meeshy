@@ -176,8 +176,8 @@ final class ProfileShareLocationLineTests: XCTestCase {
         let section = try code("Features/Contacts/ProfileCircleSection.swift")
         XCTAssertTrue(section.contains("tint: tint"), "la section passe l'accent de la fiche à la rangée")
         let app = try code("MeeshyApp.swift")
-        XCTAssertTrue(app.contains("ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked, tint: tint)"))
-        XCTAssertTrue(app.contains("ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked, tint: tint)"),
+        XCTAssertTrue(app.contains("ProfileCircleSection(userId: userId, displayName: displayName, standing: $standing, tint: tint)"))
+        XCTAssertTrue(app.contains("ProfileSlot.view(.relation, userId: userId, displayName: displayName, standing: standing, tint: tint)"),
                       "l'emplacement du cercle relaie l'accent que la fiche lui remet")
         XCTAssertFalse(app.contains("tint: Color = .clear"), "aucune teinte transparente ne passe pour l'accent de la fiche")
     }
