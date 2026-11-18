@@ -125,7 +125,8 @@ export async function requestCommunityEntry(
   const pendings = await fastify.prisma.communityJoinRequest.findMany({
     where: { communityId, userId, status: 'pending' },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    select: { id: true }
+    select: { id: true },
+    take: 1
   });
   const kept = pendings[0]?.id ?? created.id;
   if (kept !== created.id) {
