@@ -853,8 +853,7 @@ export class AudioTranslateService extends EventEmitter {
         translationsData[translation.targetLanguage] = {
           type: 'audio',
           transcription: translation.translatedText,
-          url: translation.audioUrl,
-          path: translation.audioUrl,
+          ...(translation.audioUrl ? { url: translation.audioUrl, path: translation.audioUrl } : {}),
           durationMs: translation.durationMs || 0,
           format: 'mp3',
           cloned: translation.voiceCloned,

@@ -28,6 +28,7 @@ import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/m
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
 import { servedDescription } from '../../services/attachments/mediaSideContent';
+import { servedAttachmentTranslations } from '../../services/attachments/servedAttachmentTranslations';
 import { FORWARD_PIECE_PROTECTION_SELECT, FORWARD_SOURCE_PROTECTION_SELECT, forwardPreviewOf, signReaderAttachmentsIn } from '../../services/attachments/signedAttachmentUrls';
 import type { ReaderFileUrlSigner } from '../../services/attachments/readerFileSignature';
 import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
@@ -76,7 +77,7 @@ export type { CurrentUserConsumption } from './messages-list-query-types';
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
  * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
  */
-function cleanAttachmentsForApi(
+export function cleanAttachmentsForApi(
   attachments: readonly RawMessageAttachment[] | null | undefined,
   languageFilter?: readonly string[],
   currentParticipantId?: string,
@@ -171,7 +172,7 @@ function cleanAttachmentsForApi(
           }))
         };
       }
-      cleaned.translations = cleanedTranslations;
+      cleaned.translations = servedAttachmentTranslations(cleanedTranslations);
     } else {
       logger.debug(`🧹 [CLEAN] Attachment ${attIndex} - AUCUNE traduction trouvée`);
     }
