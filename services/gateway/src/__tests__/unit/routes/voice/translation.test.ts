@@ -43,7 +43,7 @@ function makeAudioTranslateService(overrides: Record<string, any> = {}) {
     }),
     translateAsync: jest.fn<any>().mockResolvedValue({ jobId: JOB_ID, status: 'pending' }),
     getJobStatus: jest.fn<any>().mockResolvedValue({ jobId: JOB_ID, status: 'completed' }),
-    cancelJob: jest.fn<any>().mockResolvedValue({ jobId: JOB_ID, status: 'cancelled' }),
+    cancelJob: jest.fn<any>().mockResolvedValue({ success: true, message: 'Job cancelled' }),
     transcribeOnly: jest.fn<any>().mockResolvedValue({
       text: 'hello', language: 'en', confidence: 0.99, source: 'whisper', segments: [], durationMs: 1000,
     }),

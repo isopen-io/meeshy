@@ -1442,3 +1442,34 @@ socket jusqu'au client.
 5. #18697, puis #18691 (mesurer d'abord sur le staging), puis #18728.
 6. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
 7. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
+
+## Cycle 43 — 2026-11-18
+
+- **Base** : `origin/dev` @ `765e011b`. La PR du cycle 42 (#19521, #19471) était verte sauf un job en file ; je l'ai mise à jour avec `dev` (la CI repart). Elle n'est pas fusionnée au moment d'écrire.
+- **Branche** : `claude/determined-volta-th0761`, **empilée sur #19521** (le journal `STATE.md` des deux cycles), puis fusionnée avec `dev` @ `0f5647e4`.
+- **Objectif** : #19472. Suivre ou annuler un job vocal par la passerelle rend la vraie réponse et le bon statut HTTP.
+- **Mesure de rétrocompatibilité** (aucun client modifié) :
+  - Android `VoiceApi.job` décode `VoiceJob(jobId, status, progress, currentStep, error, result)` en camelCase avec défauts : c'est exactement la forme désormais servie (avant, `jobId` et `currentStep` n'arrivaient jamais). `cancelJob` décode un `JsonElement` libre. Le dépôt de jobs Android traite tout 4xx comme définitif : un 404 arrête désormais le sondage qu'un 500 relançait.
+  - iOS : `VoiceEndpoint.jobByJobId` est déclaré, sans appelant. Web : aucun consommateur.
+  - Avant ce lot, l'annulation servait `data: {}` et un 200 même sans annulation.
+- **Livré** (passerelle seule) :
+  - `routes/voice/servedJob.ts` : `toServedJob` (vue snake_case du traducteur → camelCase déclaré, liste fermée, jamais `userId`, nulls omis), `toCancelOutcome` (annonce `cancelled` seulement sur `success: true`), `isTranslatorNotFound`.
+  - `DELETE` : 200 `{jobId, status: 'cancelled'}` ou 400 `JOB_NOT_CANCELLABLE` ; `NOT_FOUND` du traducteur ⇒ 404 (inconnu et d'autrui, même corps) ; le reste ⇒ 500. `errorResponse` passe par `sendError`.
+  - `userId` retiré de `translationJobSchema`.
+- **Tests** : `__tests__/unit/routes/voice/job-routes.test.ts`.
+  - **Rouge** : `7 failed, 2 passed`. **Vert** : `9 passed` (relancé par moi), puis `12 passed` avec les 3 témoins de la QA.
+  - Suites voice / AudioTranslate / AttachmentTranslate / cliquets de schéma : `35 suites, 692 passed` (QA). `tsc --noEmit` : 0.
+  - Doubles `cancelJob` réalignés sur la forme réelle `{success, message}` dans deux suites qui simulaient `{jobId, status}`.
+  - **Mutations QA** : 18 ; 12 tuées d'abord, 5 des 6 survivantes tuées par les témoins ajoutés ; M1 (`jobId` ignore `view.id`) quasi équivalente.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves, toutes antérieures au lot → #19595 (`result` perd ses null et ses `segments` au sérialiseur), #19596 (horodatages ISO naïfs), #19597 (type du service, annulation de pièce jointe, jumelle d'`errorResponse` dans `analysis.ts`, doubles fictifs). Le texte brut des exceptions reste couvert par #18668 / #18692 / #19473.
+
+### Cycle suivant : par où reprendre
+
+0. Fusionner #19521 puis la PR de ce cycle quand la CI est verte (auto-merge non autorisé : à la main), refusionner `dev` avant. Fermer #19472 à la main avec sa preuve si `Closes` ne la ferme pas.
+1. #19520, le témoin `ports:` du traducteur. Puis fermer #19471 (retrait des routes HTTP après mesure des journaux avec `sre-infra`, ou #18728).
+2. #19597 et #19595 (passerelle), #19596.
+3. #19473, #18668 et #18692 (messages d'exception bruts), puis #19381, #19253, #19294, #19295, #19255.
+4. #18727, #18773, #18729, #18774.
+5. #18697, puis #18691 (mesurer d'abord sur le staging), puis #18728.
+6. #18629, avec l'agent `sre-infra`, puis #17133, #18611 et #18600.
+7. Toujours : lire `call_caption_translation_seconds` et `translatorClient` sur le staging, et faire la recette fr↔en de #16613.
