@@ -87,24 +87,27 @@ struct BloodLocationScreen: View {
         }
     }
 
+    /// La barre de l'écran (K28 `bar`, nue) : retour, le titre en capsule (K28 `capsule`, goutte teintée), le fantôme.
     private var chrome: some View {
         VStack(spacing: MeeshySpacing.md) {
-            HStack {
+            MeeshyCollapsingHeroBar(surface: .bare) {
                 MeeshyGlassButton(systemImage: "chevron.backward", label: LocationMapCopy.back, size: .s44, action: { dismiss() })
-                Spacer()
-                MeeshyBadge(.label(BloodLocationCopy.title(name: displayName)), leading: .systemImage("drop.fill"),
-                            surface: .glass, tint: tint, size: .s36)
-                Spacer()
+            } title: {
+                MeeshyCollapsingHeroCapsule(BloodLocationCopy.title(name: displayName)) {
+                    Image(systemName: "drop.fill").foregroundStyle(tint)
+                }
+            } trailing: {
                 MeeshyGlassButton(systemImage: "theatermasks", label: BloodLocationCopy.ghostTitle,
                                   value: model.isGhost ? BloodLocationCopy.on : BloodLocationCopy.off,
                                   kind: model.isGhost ? .active : nil, size: .s44,
                                   action: { Task { await model.setGhost(!model.isGhost) } })
             }
-            proximity
-            LocationTravelPill(me: me, places: places)
+            VStack(spacing: MeeshySpacing.md) {
+                proximity
+                LocationTravelPill(me: me, places: places)
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
         }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.sm)
     }
 
     /// En pause par son fantôme (#19562) : l'épingle K36 `ghost`, pointillée, au milieu de la carte — aucune position

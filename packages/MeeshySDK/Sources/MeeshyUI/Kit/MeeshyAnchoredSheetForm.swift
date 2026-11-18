@@ -127,10 +127,11 @@ private struct MeeshyAnchoredSheetHostBlur: ViewModifier {
     let isPresented: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     func body(content: Content) -> some View {
         content
-            .blur(radius: isPresented ? radius : 0)
+            .blur(radius: isPresented && !reduceMotion && !reduceTransparency ? radius : 0)
             .animation(MeeshyAnchoredSheetMetrics.motion(reduceMotion: reduceMotion).animation, value: isPresented)
     }
 }

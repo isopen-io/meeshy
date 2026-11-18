@@ -58,5 +58,18 @@
       "identiteDansLaBarre": false
     }
   ],
-  "distanceDefilement": 354
+  "distanceDefilement": 354,
+  "variantesNote": "Évolutions du profil (plan-kit K28) : la barre `bar` autonome d'un écran poussé (début K02 · titre + sous-titre ou grand titre · fin K02/K40/avatar ; nue ou de verre) et la `capsule` ajustée au contenu (marque + titre, 44, touchable ou en-tête).",
+  "variantes": [
+    "hero",
+    "bar",
+    "capsule"
+  ],
+  "barre": {"rangee": 44, "marge": 16, "ecart": 12, "vertical": 8, "sousTitre": 12, "titreEnLigne": 17, "grandTitre": 20, "surfaces": ["bare", "glass"], "titres": ["inline", "large"]},
+  "barreSousTitre": [
+    {"titre": "inline", "sousTitre": true, "montre": true},
+    {"titre": "inline", "sousTitre": false, "montre": false},
+    {"titre": "large", "sousTitre": true, "montre": false}
+  ],
+  "capsule": {"hauteur": 44, "debut": 12, "fin": 16, "ecart": 8, "titre": 16}
 }
