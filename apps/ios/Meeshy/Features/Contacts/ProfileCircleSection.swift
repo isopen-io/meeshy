@@ -27,7 +27,8 @@ struct ProfileCircleSection: View {
             ProfileCircleProposalCard(viewModel: viewModel, displayName: displayName)
                 .padding(.bottom, viewModel.receivedProposal == nil ? 0 : MeeshySpacing.xxl)
             if showsSharedLocation {
-                ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName, center: sharing)
+                ProfileShareLocationRow(userId: viewModel.userId, displayName: displayName, circle: viewModel.toolGateLevel,
+                                        center: sharing)
                     .padding(.bottom, MeeshySpacing.xxl)
             } else {
                 Color.clear.frame(height: 0)

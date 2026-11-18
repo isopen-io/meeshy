@@ -10,12 +10,16 @@ struct ProfileShareLocationRow: View {
     @ObservedObject private var center: SharedLocationSharingCenter
     let userId: String
     let displayName: String
+    /// Le cercle commun, qui ouvre « Jusqu'à ce que j'arrête » entre Sangs (#19616) ; `nil` : la tuile reste verrouillée.
+    let circle: RelationLevel?
     @State private var choosing = false
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(userId: String, displayName: String, center: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
+    init(userId: String, displayName: String, circle: RelationLevel? = nil,
+         center: SharedLocationSharingCenter = SharedLocationSharingHolder.center()) {
         self.userId = userId
         self.displayName = displayName
+        self.circle = circle
         _center = ObservedObject(wrappedValue: center)
     }
 
@@ -25,7 +29,7 @@ struct ProfileShareLocationRow: View {
             .background(MeeshyColors.indigo500.opacity(MeeshyOpacity.subtle))
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             .sheet(isPresented: $choosing) {
-                ShareMyLocationSheet(recipients: [ShareMyLocationRecipient(userId: userId, name: displayName, circle: nil)],
+                ShareMyLocationSheet(recipients: [ShareMyLocationRecipient(userId: userId, name: displayName, circle: circle)],
                                      center: center)
             }
     }
