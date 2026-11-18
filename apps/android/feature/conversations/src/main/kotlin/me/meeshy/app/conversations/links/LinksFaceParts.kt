@@ -59,7 +59,6 @@ internal fun LinksProfileTicket(link: LinksProfileLink, actions: LinkActions, on
         modifier = modifier,
         tint = linkAccent(LinksHubEntry.TRACKING.accentHex),
         size = MeeshyTicketSize.Hero,
-        figureCaption = stringResource(R.string.links_face_profile_hint),
         trailing = {
             MeeshyCodeCard(
                 payload = link.webLink,
