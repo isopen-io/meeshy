@@ -3,6 +3,7 @@ import XCTest
 
 /// #19674 — la fiche d'un profil s'ouvre en plein écran chez TOUS ses appelants, par le seul modificateur
 /// `profileCover` : aucun site ne la présente plus en feuille à détentes, et le retour ramène à l'écran d'origine.
+@MainActor
 final class ProfileCoverPresentationGuardTests: XCTestCase {
 
     private static var appRoot: URL {

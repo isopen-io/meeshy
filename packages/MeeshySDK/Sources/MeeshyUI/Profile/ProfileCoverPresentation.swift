@@ -9,7 +9,7 @@ import SwiftUI
 // l'écran d'origine ; ramenée avant la fin, elle revient).
 
 /// Comment la fiche est présentée : en plein écran, la tête dit « Retour » (‹) ; en feuille, « Fermer » (⌄).
-public enum ProfilePresentationStyle: Sendable, Equatable {
+public nonisolated enum ProfilePresentationStyle: Sendable, Equatable {
     case sheet
     case cover
 
@@ -63,7 +63,7 @@ public extension View {
 /// La loi pure du glissement de retour : la fiche suit le doigt vers la droite, jamais vers la gauche ; le doigt levé
 /// ne referme qu'au-delà des trois quarts de la largeur, ou sur une lancée qui l'emmènerait au bord. En deçà, le geste
 /// n'a rien fait (directive des glissements progressifs et annulables).
-public enum ProfileCoverBackSwipe {
+public nonisolated enum ProfileCoverBackSwipe {
     /// La bande du bord gauche qui reçoit le doigt, comme le retour d'une pile ; elle s'arrête avant le bouton « Retour ».
     public static let edgeWidth: CGFloat = 16
     /// La part de la largeur au-delà de laquelle le doigt levé referme.
