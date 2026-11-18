@@ -173,24 +173,27 @@ describe('l’appareil qui REÇOIT la liste d’un autre ne publie jamais sa pro
 });
 
 /**
- * UN SEUL APPAREIL PUBLIE (#18580, #18714) : celui qui a fait le dernier « Partager ». Un appareil qui publiait et
- * relit une liste qu'un AUTRE a agrandie (une personne de plus, une précision changée, une échéance repoussée) cède :
- * il garde « Arrêter » à un geste, mais sa position ne part plus — sinon la personne voit le point sauter d'un
- * appareil à l'autre. Un retrait fait ailleurs passe par la liste seule, qui n'envoie aucune position : il ne change
- * pas qui publie.
+ * UN SEUL APPAREIL PUBLIE (#18580, #18714) : celui du dernier « Partager ». La passerelle nomme ce démarrage (`startedAt`)
+ * dans l'accusé et dans la relecture ; un onglet dont l'accusé portait un AUTRE démarrage que celui servi cède : il garde
+ * « Arrêter » à un geste, mais sa position ne part plus. Aucune horloge n'est comparée : une échéance, une précision ou
+ * une liste seule venues d'ailleurs ne changent pas qui publie.
  */
 describe('l’appareil qui publiait cède quand un autre partage à son tour', () => {
+  const MOI = '2026-01-01T00:00:00.000Z';
+  const AUTRE_APPAREIL = '2026-01-01T00:00:05.000Z';
+  const servedFrom = (startedAt: string | undefined, ...recipients: ReadonlyArray<readonly [string, 'exact' | 'neighborhood' | 'city', number]>) => ({ ...servedOf(...recipients), ...(startedAt === undefined ? {} : { startedAt }) });
   const publiant = async () => {
     const world = worldWith(storedOf({}), servedOf());
+    world.startQueue.push(async () => ({ kind: 'started', expiresAt: T0 + HOUR, startedAt: MOI }));
     await world.center.share({ userId: AMI, precision: 'exact', durationMinutes: 60 });
     expect(world.source.following).toBe(1);
     return world;
   };
 
-  test('une personne ajoutée ailleurs : il cesse de suivre sa position, et aucun relevé ne part plus', async () => {
+  test('un autre démarrage servi : il cesse de suivre sa position, et aucun relevé ne part plus', async () => {
     const world = await publiant();
     const sent = world.updates.length;
-    world.server.served = servedOf([AMI, 'exact', T0 + HOUR], [AUTRE, 'city', T0 + HOUR]);
+    world.server.served = servedFrom(AUTRE_APPAREIL, [AMI, 'exact', T0 + HOUR], [AUTRE, 'city', T0 + HOUR]);
     await world.center.sync();
     expect(world.source.following).toBe(0);
     expect(world.center.entry(AUTRE)).not.toBeNull();
@@ -199,40 +202,54 @@ describe('l’appareil qui publiait cède quand un autre partage à son tour', (
     expect(world.memory.get('roster.received')).toBe('1');
   });
 
-  test('une précision changée ailleurs : il cède aussi', async () => {
+  test('le même destinataire repartagé ailleurs, liste identique : il cède aussi', async () => {
     const world = await publiant();
-    world.server.served = servedOf([AMI, 'city', T0 + HOUR]);
+    world.server.served = servedFrom(AUTRE_APPAREIL, [AMI, 'exact', T0 + HOUR]);
     await world.center.sync();
     expect(world.source.following).toBe(0);
   });
 
-  test('une échéance repoussée ailleurs : il cède aussi', async () => {
+  test('son propre démarrage relu, l’échéance servie décalée de dix minutes (horloge de l’appareil) : il publie toujours', async () => {
     const world = await publiant();
-    world.server.served = servedOf([AMI, 'exact', T0 + 8 * HOUR]);
-    await world.center.sync();
-    expect(world.source.following).toBe(0);
-  });
-
-  test('son propre partage relu, l’échéance servie à quelques secondes de la sienne (horloges, arrondi) : il publie toujours', async () => {
-    const world = await publiant();
-    world.server.served = servedOf([AMI, 'exact', T0 + HOUR + 90_000]);
+    world.server.served = servedFrom(MOI, [AMI, 'exact', T0 + HOUR + 600_000]);
     await world.center.sync();
     expect(world.source.following).toBe(1);
   });
 
-  test('une personne retirée ailleurs (liste seule) : il publie toujours pour les autres', async () => {
+  test('une précision abaissée ou une personne retirée par une liste seule d’ailleurs : il publie toujours', async () => {
     const world = worldWith(storedOf({}), servedOf());
+    world.startQueue.push(async () => ({ kind: 'started', expiresAt: T0 + HOUR, startedAt: MOI }));
+    world.startQueue.push(async () => ({ kind: 'started', expiresAt: T0 + HOUR, startedAt: MOI }));
     await world.center.share({ userId: AMI, precision: 'exact', durationMinutes: 60 });
     await world.center.share({ userId: AUTRE, precision: 'city', durationMinutes: 60 });
-    world.server.served = servedOf([AMI, 'exact', T0 + HOUR]);
+    world.server.served = servedFrom(MOI, [AMI, 'city', T0 + HOUR]);
     await world.center.sync();
     expect(world.center.entry(AUTRE)).toBeNull();
     expect(world.source.following).toBe(1);
   });
 
-  test('rechargé après avoir cédé, il ne se remet pas à suivre sa position', async () => {
+  test('un accusé perdu : le démarrage servi est pris pour le sien, il publie toujours', async () => {
+    const world = worldWith(storedOf({}), servedOf());
+    world.startQueue.push(async () => ({ kind: 'refused', outcome: 'unconfirmed' }));
+    await world.center.share({ userId: AMI, precision: 'exact', durationMinutes: 60 });
+    world.server.served = servedFrom(MOI, [AMI, 'exact', T0 + HOUR]);
+    await world.center.sync();
+    expect(world.source.following).toBe(1);
+    world.server.served = servedFrom(AUTRE_APPAREIL, [AMI, 'exact', T0 + HOUR]);
+    await world.center.sync();
+    expect(world.source.following).toBe(0);
+  });
+
+  test('une passerelle qui ne nomme pas le démarrage : rien ne change, il publie toujours', async () => {
     const world = await publiant();
     world.server.served = servedOf([AMI, 'exact', T0 + HOUR], [AUTRE, 'city', T0 + HOUR]);
+    await world.center.sync();
+    expect(world.source.following).toBe(1);
+  });
+
+  test('rechargé après avoir cédé, il ne se remet pas à suivre sa position', async () => {
+    const world = await publiant();
+    world.server.served = servedFrom(AUTRE_APPAREIL, [AMI, 'exact', T0 + HOUR]);
     await world.center.sync();
     const reloaded = makeWorld({ memory: world.memory, served: world.server.served });
     await reloaded.advance(0);
@@ -241,7 +258,7 @@ describe('l’appareil qui publiait cède quand un autre partage à son tour', (
 
   test('« Partager » d’ici après avoir cédé en refait l’appareil qui publie', async () => {
     const world = await publiant();
-    world.server.served = servedOf([AMI, 'exact', T0 + HOUR], [AUTRE, 'city', T0 + HOUR]);
+    world.server.served = servedFrom(AUTRE_APPAREIL, [AMI, 'exact', T0 + HOUR]);
     await world.center.sync();
     await world.center.share({ userId: TROISIEME, precision: 'city', durationMinutes: 60 });
     expect(world.source.following).toBe(1);
