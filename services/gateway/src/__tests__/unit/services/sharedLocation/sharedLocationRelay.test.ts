@@ -73,7 +73,7 @@ describe('démarrer — chaque destinataire reçoit SA projection, et lui seul',
     const m = monde();
     const ack = await demarrer(m);
 
-    expect(ack).toEqual({ success: true, data: { expiresAt: new Date(T0 + HEURE).toISOString() } });
+    expect(ack).toEqual({ success: true, data: { expiresAt: new Date(T0 + HEURE).toISOString(), startedAt: new Date(T0).toISOString() } });
     expect(m.vers(AMI).map((e) => [e.event, e.data.precision, e.data.latitude])).toEqual([[SERVER_EVENTS.SHARED_LOCATION_CHANGED, 'exact', 48.8566]]);
     expect(m.vers(PROCHE).map((e) => [e.data.precision, e.data.latitude])).toEqual([['neighborhood', 48.855]]);
     expect(m.vers(SANG).map((e) => [e.data.precision, e.data.latitude])).toEqual([['city', 48.85]]);
@@ -591,7 +591,7 @@ describe('contre-audit adversarial de 86fa2ae — la fin ne part qu\'à qui a vu
     const m = monde();
     m.echouerProchaineLecture(1);
 
-    expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }])).toEqual({ success: true, data: { expiresAt: new Date(T0 + HEURE).toISOString() } });
+    expect(await demarrer(m, [{ userId: AMI, precision: 'exact' }])).toEqual({ success: true, data: { expiresAt: new Date(T0 + HEURE).toISOString(), startedAt: new Date(T0).toISOString() } });
     expect((await sharedLocationSnapshotFor(m.deps, AMI, {})).items).toHaveLength(1);
     expect(await stopSharedLocation(m.deps, EMETTEUR)).toEqual({ success: true });
     expect(m.vers(AMI).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED);
