@@ -1,9 +1,9 @@
-# Un cliquet qui cherche les MOTS de la forme juste bénit sa négation
+## Un cliquet qui cherche les MOTS de la forme juste bénit sa négation (cycle 180, #19690)
 
 *2026-11-18, cycle 180 (#19690). Trouvé par `auditeur-adversarial` sur un cliquet
 que je venais d'écrire — constat F, le plus cher de l'audit.*
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 Le cliquet garde une alternative : sous MongoDB, « pas encore » se dit
 `OR: [{ champ: null }, { champ: { isSet: false } }]`, parce qu'une égalité
@@ -19,7 +19,7 @@ absente : **cette clause n'apparie AUCUN document.** C'est le défaut que le
 cliquet existe pour interdire, en pire — zéro ligne au lieu de presque zéro —
 **certifié correct par le cliquet.**
 
-## Pourquoi ce n'était pas un hasard
+### Pourquoi ce n'était pas un hasard
 
 Mon propre doc-comment l'invitait. Il disait :
 
@@ -31,7 +31,7 @@ Cette phrase est VRAIE des **prédicats complets** : `PARTICIPATION_VIVANTE` et
 même prédicat, elle produit la conjonction impossible. Un lecteur pressé n'a pas
 tort de la lire ainsi : rien dans la phrase ne dit à quel NIVEAU elle s'applique.
 
-## La règle
+### La règle
 
 > **Une forme juste qui est une ALTERNATIVE ne se reconnaît pas à ses mots mais à
 > sa STRUCTURE.** `null` et `isSet: false` ne disent la bonne chose que SŒURS d'un
@@ -43,7 +43,7 @@ Outillage : la pile du balayage tient les cadres `{` **et** `[`, avec la clé qu
 précède chacun ; l'absence n'est accordée que si le cadre objet qui porte
 l'occurrence est une BRANCHE du tableau `OR` où la branche `isSet` se trouve.
 
-## Les deux corollaires du même audit
+### Les deux corollaires du même audit
 
 - **La non-vacuité posée sur la PRODUCTION mesure l'état du dépôt ; sur une
   FIXTURE, elle mesure l'instrument.** Ma sonde « plus de 10 sites vus » était
@@ -58,7 +58,7 @@ l'occurrence est une BRANCHE du tableau `OR` où la branche `isSet` se trouve.
   conjonction impossible est désormais une fixture, et c'est l'audit qui l'a
   trouvée, pas moi.
 
-## Et une phrase de doctrine se relit à son NIVEAU
+### Et une phrase de doctrine se relit à son NIVEAU
 
 Le défaut de rédaction ci-dessus est le même que celui des commentaires qui
 ÉNONCENT une contrainte (cycle 94) : il ne dit pas faux, il omet **sur quoi** il
