@@ -9,6 +9,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { recordBloodLocation } from '../../../../services/bloodLocation/bloodLocationService';
+import { settled } from '../../../helpers/settled';
 import { bloodLocationMutedBy } from '../../../../services/bloodLocation/bloodLocationMute';
 import { ADULT_BIRTH } from '../../../helpers/messaging-circle-world';
 import {
@@ -30,9 +31,9 @@ const COUPE = new Date('2026-11-09T11:00:00.000Z');
 
 /** SANG enregistre près de MOI, puis MOI enregistre : une évaluation de la paire. */
 async function rencontre(w: BloodLocationWorld, lecteur: string, emetteur: string): Promise<void> {
-  await recordBloodLocation(w.deps, emetteur, PARIS);
+  await settled(recordBloodLocation(w.deps, emetteur, PARIS));
   w.poser(lecteur, A_300_M, w.horloge() - MINUTE);
-  await recordBloodLocation(w.deps, lecteur, A_300_M);
+  await settled(recordBloodLocation(w.deps, lecteur, A_300_M));
 }
 
 describe('#19454 — la proximité d\'un Sang que j\'ai coupé ne m\'arrive plus', () => {
@@ -57,10 +58,10 @@ describe('#19454 — la proximité d\'un Sang que j\'ai coupé ne m\'arrive plus
   it('couper un Sang ne coupe pas un autre Sang', async () => {
     const w = bloodWorldAvecConsentements();
     w.consentir(MOI, SANG, { ...TOUT_PARTAGE, bloodLocationMutedAt: COUPE });
-    await recordBloodLocation(w.deps, SANG, PARIS);
-    await recordBloodLocation(w.deps, AUTRE_SANG, PARIS);
+    await settled(recordBloodLocation(w.deps, SANG, PARIS));
+    await settled(recordBloodLocation(w.deps, AUTRE_SANG, PARIS));
     w.poser(MOI, A_300_M, w.horloge() - MINUTE);
-    await recordBloodLocation(w.deps, MOI, A_300_M);
+    await settled(recordBloodLocation(w.deps, MOI, A_300_M));
 
     expect(w.vers(MOI, SERVER_EVENTS.BLOOD_PROXIMITY).map((e) => e.data.userId)).toEqual([AUTRE_SANG]);
   });

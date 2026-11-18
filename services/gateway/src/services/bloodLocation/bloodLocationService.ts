@@ -85,8 +85,10 @@ export async function recordBloodLocation(deps: BloodLocationDeps, ownerId: stri
       expiresAt: new Date(now + HISTORY_MS),
     },
   });
-  if (plausible) await signalBloodMoved(deps, ownerId, recordedAt, hidden).catch((error: unknown) => deps.report?.(error));
-  if (plausible && anchor) await alertBloodProximity(deps, ownerId, parsed.data, hidden).catch((error: unknown) => deps.report?.(error));
+  // Le signal et l'alerte relisent liens, consentements et coupures puis réservent par lecteur : ils
+  // partent APRÈS la réponse, jamais sur le chemin du point (chaque point paierait leur coût).
+  if (plausible) void signalBloodMoved(deps, ownerId, recordedAt, hidden).catch((error: unknown) => deps.report?.(error));
+  if (plausible && anchor) void alertBloodProximity(deps, ownerId, parsed.data, hidden).catch((error: unknown) => deps.report?.(error));
   return { recorded: true };
 }
 
