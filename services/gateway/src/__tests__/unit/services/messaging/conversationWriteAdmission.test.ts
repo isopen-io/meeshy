@@ -662,9 +662,9 @@ describe('describeConversationWriteRefusal — le message, en un seul exemplaire
 // ── Ce qu'on RÉPOND en HTTP ─────────────────────────────────────────────────
 
 describe('writeRefusalHttpResponse — le statut dit « jamais », « plus jamais » ou « pas encore »', () => {
-  it('rend 410 pour une conversation close', () => {
+  it('rend 410 pour une conversation close, et nomme sa raison (audit #19352 A6)', () => {
     expect(writeRefusalHttpResponse({ admitted: false, reason: 'conversation-closed' }))
-      .toEqual({ status: 410 });
+      .toEqual({ status: 410, code: 'CONVERSATION_CLOSED' });
   });
 
   it('rend 403 pour un rang insuffisant', () => {

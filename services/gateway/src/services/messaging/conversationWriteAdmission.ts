@@ -454,7 +454,8 @@ export const describeConversationWriteRefusal = (refusal: ConversationWriteRefus
 };
 
 export type WriteRefusalHttpResponse =
-  | { readonly status: 410 | 403 }
+  | { readonly status: 410; readonly code: 'CONVERSATION_CLOSED' }
+  | { readonly status: 403 }
   | { readonly status: 403; readonly code: typeof GLOBAL_ADULTS_ONLY_CODE }
   | {
       readonly status: 429;
@@ -468,7 +469,9 @@ const assertNever = (value: never): never => {
 
 /**
  * Ce qu'on RÉPOND en HTTP à un refus, en un seul exemplaire — 410 (parti pour
- * de bon), 403 (jamais), 429 + `Retry-After` (pas encore). Le `switch` est
+ * de bon), 403 (jamais), 429 + `Retry-After` (pas encore). Le 410 NOMME sa
+ * raison (`CONVERSATION_CLOSED`, audit #19352 A6) : une file cliente qui ne lit
+ * que le statut le classerait sinon en panne passagère et rejouerait le geste. Le `switch` est
  * EXHAUSTIF : un refus ajouté à l'union ne compile pas tant qu'on n'a pas dit
  * s'il est définitif ou temporaire. Le repli à 1 s évite d'annoncer
  * « réessayez dans 0 s », qui inviterait à une boucle serrée.
@@ -477,7 +480,7 @@ export const writeRefusalHttpResponse = (refusal: ConversationWriteRefused): Wri
   const reason: ConversationWriteRefusal = refusal.reason;
   switch (reason) {
     case 'conversation-closed':
-      return { status: 410 };
+      return { status: 410, code: 'CONVERSATION_CLOSED' };
     case 'write-role-insufficient':
       return { status: 403 };
     case 'minor-global':
