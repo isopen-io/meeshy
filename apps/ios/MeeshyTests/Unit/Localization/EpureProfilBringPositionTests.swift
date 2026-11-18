@@ -178,3 +178,63 @@ final class ProfileShareLocationLineTests: XCTestCase {
         XCTAssertTrue(app.contains("ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked, tint: tint)"))
     }
 }
+
+/// Les écrans de carte (#19639, planches `Carte-Proches`, `Carte-Sang`, `Carte-Partage`) posent leurs titres et leurs
+/// chiffres par le kit (loi 12) : aucune police système, aucune teinte ni verre posés sur place.
+@MainActor
+final class LocationMapScreensKitTests: XCTestCase {
+
+    private static let repoRoot: URL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+
+    private func code(_ relativePath: String) throws -> String {
+        AppSourceGuard.stripComments(try String(contentsOf: Self.repoRoot.appendingPathComponent("apps/ios/Meeshy/" + relativePath), encoding: .utf8))
+    }
+
+    private func slice(_ relativePath: String, from start: String, to end: String) throws -> String {
+        let source = try code(relativePath)
+        let lower = try XCTUnwrap(source.range(of: start), "\(relativePath) : « \(start) » introuvable").lowerBound
+        let upper = try XCTUnwrap(source.range(of: end, range: lower..<source.endIndex), "\(relativePath) : « \(end) » introuvable").lowerBound
+        return String(source[lower..<upper])
+    }
+
+    private static let handMade = [".font(", "Color.white", ".foregroundStyle(.secondary)", ".meeshyGlass(", "RoundedRectangle("]
+
+    func test_nearbyHeader_isTheK28Bar_withItsTwoLineCapsule_titleSubtitleAndNovelty() throws {
+        let header = try slice("Features/SharedLocation/Map/NearbyMapScreen.swift",
+                               from: "private var header: some View", to: "private var arrangeMenu")
+        XCTAssertTrue(header.contains("MeeshyCollapsingHeroBar(surface: .bare)"), "la barre de l'écran est K28 `bar`")
+        XCTAssertTrue(header.contains("MeeshyCollapsingHeroCapsule(LocationMapCopy.nearbyTitle"), "le titre est la capsule K28")
+        XCTAssertTrue(header.contains("subtitle: LocationMapCopy.nearbySubtitle(model.pins.count)"), "la capsule porte le sous-titre")
+        XCTAssertTrue(header.contains("titleBadge: badge"), "l'étiquette « Nouveau » est posée par la capsule")
+        XCTAssertTrue(header.contains("width: .fill"), "la capsule occupe la place entre retour et entonnoir")
+        XCTAssertTrue(header.contains("ProfileNoveltyReader(feature: .closeOnesMap"), "la loi de la nouveauté reste lue")
+        XCTAssertTrue(header.contains("arrangeMenu"), "l'entonnoir reste en fin de barre")
+        for word in Self.handMade { XCTAssertFalse(header.contains(word), "en-tête : \(word) posé sur place") }
+    }
+
+    func test_bloodHistory_isAK44Overline_andAK34Figure_withTheStopsAsUnit() throws {
+        let history = try slice("Features/SharedLocation/Map/BloodLocationSheet.swift",
+                                from: "private var history: some View", to: "private var dayPoints")
+        XCTAssertTrue(history.contains("MeeshySectionHeader(title: BloodLocationCopy.lastDays"), "« 30 derniers jours » est un en-tête K44")
+        XCTAssertTrue(history.contains("form: .overline"), "en sur-titre")
+        XCTAssertTrue(history.contains("MeeshyFigure(value: BloodLocationCopy.summary("), "le chiffre du jour est K34")
+        XCTAssertTrue(history.contains("unit: BloodLocationCopy.stops(model.stops.count)"), "« 4 arrêts » est l'unité du chiffre")
+        XCTAssertTrue(history.contains("MeeshyChart(kind: .strip"), "la frise des trente jours reste")
+        for word in Self.handMade { XCTAssertFalse(history.contains(word), "historique : \(word) posé sur place") }
+    }
+
+    func test_shareSheet_titleNotesAndOptions_areK44_K46_andK43() throws {
+        let sheet = try slice("Features/SharedLocation/Map/ShareMyLocationSheet.swift",
+                              from: "struct ShareMyLocationSheet: View", to: "enum ShareMyLocationCopy")
+        XCTAssertTrue(sheet.contains("MeeshySectionHeader(title: ShareMyLocationCopy.title"), "le titre est un en-tête K44")
+        XCTAssertTrue(sheet.contains("MeeshyNote(ShareMyLocationCopy.footnote"), "la note sous le bouton est K46")
+        XCTAssertTrue(sheet.contains("MeeshyNote(ShareLocationWording.explain(name: name)"), "la phrase d'échéance est K46")
+        XCTAssertTrue(sheet.contains("MeeshyInfoNoted(note: ShareLocationWording.explainNote"), "son (i) reste")
+        XCTAssertTrue(sheet.contains("MeeshyGroupCard(surface: .glass, layout: .group"), "les options sont une carte de groupe K43")
+        XCTAssertTrue(sheet.contains("sharedLocation.share.notify") && sheet.contains("sharedLocation.share.battery"),
+                      "les deux interrupteurs restent")
+        for word in Self.handMade { XCTAssertFalse(sheet.contains(word), "feuille : \(word) posé sur place") }
+    }
+}

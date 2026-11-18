@@ -48,6 +48,37 @@ struct MeeshyCollapsingHeroBarTests {
         #expect(MeeshyHeroBarRecipe.capsuleTitleSize == row["titre"] as? Double)
     }
 
+    @Test("la capsule à deux lignes : 56 de haut, titre 19, sous-titre 12,5 ; ajustée ou pleine largeur")
+    func capsule_twoLines_measures() throws {
+        let row = try KitEvolutionVectors.object(Self.file, "capsuleDeuxLignes")
+        #expect(MeeshyHeroBarRecipe.capsuleMinHeight(hasSubtitle: true) == row["hauteur"] as? Double)
+        #expect(MeeshyHeroBarRecipe.capsuleTitleFontSize(hasSubtitle: true) == row["titre"] as? Double)
+        #expect(MeeshyHeroBarRecipe.capsuleSubtitleSize == row["sousTitre"] as? Double)
+        #expect(MeeshyHeroCapsuleWidth.allCases.map(\.rawValue) == row["largeurs"] as? [String])
+        #expect(MeeshyHeroBarRecipe.capsuleMinHeight(hasSubtitle: false) == MeeshyHeroBarRecipe.capsuleHeight)
+        #expect(MeeshyHeroBarRecipe.capsuleTitleFontSize(hasSubtitle: false) == MeeshyHeroBarRecipe.capsuleTitleSize)
+        #expect(MeeshyHeroBarRecipe.capsuleMinHeight(hasSubtitle: true) >= 44)
+    }
+
+    @Test("la capsule se lit d'un bloc : titre, étiquette, sous-titre ; une partie vide se tait")
+    func capsule_spoken_followsTheVectors() throws {
+        for row in try KitEvolutionVectors.rows(Self.file, "capsuleLue") {
+            let title = try #require(row["titre"] as? String)
+            let spoken = MeeshyHeroBarRecipe.capsuleSpoken(title: title,
+                                                           badge: row["etiquette"] as? String,
+                                                           subtitle: row["sousTitre"] as? String)
+            #expect(spoken == row["lu"] as? String, "\(row)")
+        }
+    }
+
+    @Test("la capsule pose son sous-titre et son étiquette par le kit")
+    func source_capsuleCarriesSubtitleAndBadgeFromTheKit() throws {
+        let code = try KitEvolutionVectors.code("MeeshyCollapsingHeroBar.swift")
+        #expect(code.contains("MeeshyBadge(.label("))
+        #expect(code.contains("MeeshyHeroBarRecipe.capsuleSubtitleSize"))
+        #expect(code.contains("MeeshyHeroBarRecipe.capsuleSpoken("))
+    }
+
     @Test("la barre et la capsule sont faites du kit : verre K01, titre en en-tête, aucune couleur en dur ni barre système")
     func source_barIsMadeOfTheKit() throws {
         let code = try KitEvolutionVectors.code("MeeshyCollapsingHeroBar.swift")
