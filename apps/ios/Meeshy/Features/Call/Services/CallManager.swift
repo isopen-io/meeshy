@@ -274,7 +274,7 @@ final class CallManager: ObservableObject, Sendable {
     /// en mode bulle — `FloatingCallPillView.collapseToBubble()` — qui le
     /// repose déjà à `.circle` à chaque fois : pas de reset défensif
     /// redondant nécessaire ici.
-    @Published var bubbleSizeTier: CallBubbleSizeTier = .circle
+    @Published var bubbleSizeTier: CallBubbleSizeTier = .small
     @Published var hasLocalVideoTrack = false
     @Published var hasRemoteVideoTrack = false
     /// Pairs qui ont OUVERT leur panneau de sous-titres — un ensemble, pas un

@@ -31,5 +31,5 @@ public enum CallRules {
     /// Durée de vie d'une poussée d'appel — jamais plus que la sonnerie.
     public static let pushTimeToLive: TimeInterval = 45
     /// Participants simultanés tant que l'appel est un maillage sans SFU.
-    public static let maxParticipants = 6
+    public static let maxParticipants = 5
 }
