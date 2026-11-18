@@ -1,6 +1,6 @@
 import CoreGraphics
 
-/// **Les boutons de l'appel réduit sont PETITS** (#19671, retour porteur du 2026-11-18) : couper
+/// **Les boutons de l'appel réduit sont PETITS** (#19671, retour porteur) : couper
 /// le micro, couper la sortie du son et raccrocher, posés autour du disque (appui long) ou en barre
 /// sous les paliers rectangle, sont dessinés en disques de `paintedDiameter`, en audio comme en
 /// vidéo. Seule la PEINTURE rétrécit : la cible tactile reste de 44 pt (HIG), et elle ne mord
