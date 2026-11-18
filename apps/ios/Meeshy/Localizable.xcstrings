@@ -206845,7 +206845,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Talkie en direct : votre voix est entendue maintenant"
+            "value": "Talkie en direct : ta voix est entendue maintenant"
           }
         },
         "it": {
@@ -206892,7 +206892,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le talkie ne passe pas : votre voix part en message vocal"
+            "value": "Le talkie ne passe pas : ta voix part en message vocal"
           }
         },
         "it": {
@@ -206939,7 +206939,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hors ligne : votre voix lui sera rejouée à son retour"
+            "value": "Hors ligne : ta voix lui sera rejouée à son retour"
           }
         },
         "it": {
@@ -207315,7 +207315,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ vous parle"
+            "value": "%@ te parle"
           }
         },
         "it": {
@@ -340748,53 +340748,6 @@
         }
       }
     },
-    "talkie.send.explain": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جهاز لاسلكي للطوارئ لأقرب الناس إليك: اضغط مطولًا وتحدّث، يخرج صوتك لدى %@ دون الحاجة إلى الرد."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Notfall-Walkie-Talkie für deine Allernächsten: Gedrückt halten und sprechen, deine Stimme ist bei %@ ohne Abheben zu hören."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Emergency walkie-talkie, for your closest people: hold and talk, your voice plays on %@’s side without them picking up."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Walkie-talkie de urgencia, para tus más cercanos: mantén pulsado y habla, tu voz suena en el lado de %@ sin descolgar."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Talkie d’urgence, pour vos très proches : maintenez et parlez, votre voix sort chez %@ sans décrocher."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Walkie-talkie d’emergenza, per i tuoi più vicini: tieni premuto e parla, la tua voce esce da %@ senza rispondere."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Walkie-talkie de emergência, para seus mais próximos: segure e fale, sua voz sai do lado de %@ sem atender."
-          }
-        }
-      }
-    },
     "talkie.send.hold": {
       "extractionState": "manual",
       "localizations": {
@@ -340919,7 +340872,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touchez deux fois et maintenez, parlez, puis relâchez."
+            "value": "Touche deux fois et maintiens, parle, puis relâche."
           }
         },
         "it": {
@@ -341013,7 +340966,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous parlez à %@…"
+            "value": "Tu parles à %@…"
           }
         },
         "it": {
@@ -341026,53 +340979,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Você está falando com %@…"
-          }
-        }
-      }
-    },
-    "talkie.send.voice": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يمكن إيصال جهاز اللاسلكي الآن: أرسل رسالة صوتية بدلًا من ذلك."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Walkie-Talkie kommt gerade nicht durch: Sende stattdessen eine Sprachnachricht."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The walkie-talkie can’t get through right now: send a voice message instead."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El walkie-talkie no pasa ahora mismo: envía un mensaje de voz."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il walkie-talkie ora non passa: invia un messaggio vocale."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O walkie-talkie não passa agora: envie uma mensagem de voz."
           }
         }
       }
@@ -341177,43 +341083,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يخرج صوتك رغم ذلك لدى قريبك."
+            "value": "للطوارئ بين المقرّبين: يخرج صوتك فورًا، حتى لو كان Meeshy مغلقًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Stimme ist bei deinem nahen Menschen trotzdem zu hören."
+            "value": "Für Notfälle unter Nahestehenden: Deine Stimme ist sofort zu hören, auch wenn Meeshy geschlossen ist."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your voice still plays on your loved one’s side."
+            "value": "For emergencies, between close ones: your voice plays at once, even with Meeshy closed."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu voz suena igualmente en el lado de tu ser querido."
+            "value": "Para urgencias, entre allegados: tu voz suena al instante, aunque Meeshy esté cerrado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre voix sort quand même chez votre proche."
+            "value": "Pour l’urgence, entre proches : ta voix sort aussitôt, même Meeshy fermé."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua voce esce comunque dal tuo caro."
+            "value": "Per le urgenze, tra persone care: la tua voce esce subito, anche a Meeshy chiuso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua voz sai mesmo assim do lado da pessoa próxima."
+            "value": "Para urgências, entre pessoas próximas: sua voz sai na hora, mesmo com o Meeshy fechado."
           }
         }
       }
@@ -341224,43 +341130,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "وماذا لو كان Meeshy في الخلفية؟"
+            "value": "ما فائدة جهاز اللاسلكي؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Und wenn Meeshy im Hintergrund ist?"
+            "value": "Wofür ist das Walkie-Talkie?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "What if Meeshy is in the background?"
+            "value": "What is the talkie for?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿Y si Meeshy está en segundo plano?"
+            "value": "¿Para qué sirve el talkie?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Et si Meeshy est en arrière-plan ?"
+            "value": "À quoi sert le talkie ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "E se Meeshy è in background?"
+            "value": "A cosa serve il talkie?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "E se o Meeshy estiver em segundo plano?"
+            "value": "Para que serve o talkie?"
           }
         }
       }
@@ -341342,7 +341248,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trop de prises de parole : réessayez dans un instant."
+            "value": "Trop de prises de parole : réessaie dans un instant."
           }
         },
         "it": {
@@ -341483,7 +341389,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autorisez le micro pour parler en talkie."
+            "value": "Autorise le micro pour parler en talkie."
           }
         },
         "it": {
@@ -367046,53 +366952,6 @@
         }
       }
     },
-    "talkie.card.live": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "صوتك يصل مباشرة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine Stimme geht live raus"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your voice goes out live"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tu voz sale en directo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ta voix part en direct"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La tua voce parte in diretta"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sua voz sai ao vivo"
-          }
-        }
-      }
-    },
     "talkie.card.tag": {
       "extractionState": "manual",
       "localizations": {
@@ -375690,6 +375549,241 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nível %@"
+          }
+        }
+      }
+    },
+    "talkie.card.openSettings": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح الإعدادات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Settings"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir Ajustes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir les réglages"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri Impostazioni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir Ajustes"
+          }
+        }
+      }
+    },
+    "talkie.card.remaining": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الوقت المتبقي: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ left"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiempo restante: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encore %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ancora %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tempo restante: %@"
+          }
+        }
+      }
+    },
+    "talkie.card.sent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم الإرسال"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesendet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoyé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inviato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado"
+          }
+        }
+      }
+    },
+    "talkie.card.sentAsVoice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُرسل كرسالة صوتية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Als Sprachnachricht gesendet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sent as a voice message"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado como mensaje de voz"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parti en message vocal"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inviato come messaggio vocale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviado como mensagem de voz"
+          }
+        }
+      }
+    },
+    "talkie.send.notClose": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعمل جهاز اللاسلكي بين المقرّبين فقط."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Walkie-Talkie geht nur unter Nahestehenden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The talkie only works between close ones."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El talkie solo funciona entre allegados."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le talkie ne s’ouvre qu’entre proches."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il talkie funziona solo tra persone care."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O talkie só funciona entre pessoas próximas."
           }
         }
       }

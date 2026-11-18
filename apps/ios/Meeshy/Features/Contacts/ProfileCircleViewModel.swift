@@ -96,7 +96,7 @@ final class ProfileCircleViewModel: ObservableObject {
     }
 
     /// Le talkie se PROPOSE dès Proche (D-4), par le lien affiché ou par le verdict servi. La passerelle rejuge à chaque
-    /// appui ; un `TALKIE_NOT_ALLOWED` retire la ligne (#16927).
+    /// appui ; un `TALKIE_NOT_ALLOWED` se dit sur la carte, qui ne disparaît plus (#16927, #19732).
     var offersTalkie: Bool {
         max(shownLevel ?? .public, toolLevel ?? .public) >= .close
     }

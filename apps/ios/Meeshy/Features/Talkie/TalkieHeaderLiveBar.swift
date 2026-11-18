@@ -234,11 +234,11 @@ nonisolated enum TalkieHeaderWording {
     static func announcement(_ delivery: TalkieHeaderDelivery) -> String {
         switch delivery {
         case .live:
-            String(localized: "talkie.header.announce.live", defaultValue: "Talkie en direct : votre voix est entendue maintenant", bundle: .main)
+            String(localized: "talkie.header.announce.live", defaultValue: "Talkie en direct : ta voix est entendue maintenant", bundle: .main)
         case .relayed:
-            String(localized: "talkie.header.announce.relayed", defaultValue: "Hors ligne : votre voix lui sera rejouée à son retour", bundle: .main)
+            String(localized: "talkie.header.announce.relayed", defaultValue: "Hors ligne : ta voix lui sera rejouée à son retour", bundle: .main)
         case .recorded:
-            String(localized: "talkie.header.announce.recorded", defaultValue: "Le talkie ne passe pas : votre voix part en message vocal", bundle: .main)
+            String(localized: "talkie.header.announce.recorded", defaultValue: "Le talkie ne passe pas : ta voix part en message vocal", bundle: .main)
         }
     }
 

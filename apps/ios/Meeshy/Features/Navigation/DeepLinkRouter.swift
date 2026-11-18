@@ -2,12 +2,14 @@ import Foundation
 import Combine
 import UIKit
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Deep Link Destination (used by RootView openURL handler)
 
 enum DeepLinkDestination: Equatable {
     case ownProfile
-    case userProfile(username: String)
+    /// `?face=actions` ouvre la fiche sur une autre face que la Vitrine (le raccourci Talkie, #19732).
+    case userProfile(username: String, face: RelationFace = .vitrine)
     /// `draftText` porte le brouillon des surfaces widget / App Shortcut
     /// (`meeshy://quickreply/{id}?text=…`, `meeshy://send?contactId=…&message=…`).
     /// Le consommateur (`Router.handleConversationDeepLink`) le DÉPOSE dans
@@ -112,6 +114,13 @@ enum DeepLinkParser {
     /// with the gateway REST surface (`/api/v1/users/...`) and to align
     /// with how third-party tools commonly write user URLs.
     private static let userSegments: Set<String> = ["u", "users"]
+
+    /// La face sur laquelle s'ouvre un profil (`?face=actions`) ; inconnue ou absente, c'est la Vitrine.
+    static let faceQueryKey = "face"
+
+    static func profileFace(in url: URL) -> RelationFace {
+        queryValue(faceQueryKey, in: url).flatMap(RelationFace.init(rawValue:)) ?? .vitrine
+    }
 
     /// `true` when `segment` is a valid alias for the user-profile keyword.
     static func isUserSegment(_ segment: String) -> Bool {
@@ -334,8 +343,8 @@ enum DeepLinkParser {
         // Post (`post`, `p`), story (`story`, `stories`, `s`), profil (`u`, `users`).
         if isPostSegment(head) { return id.map { .postDetail(postId: $0) } }
         if isStorySegment(head) { return id.map { .storyDetail(postId: $0) } }
-        if isUserSegment(head) { return id.map { .userProfile(username: $0) } }
-        return shortProfileHandle(head, alone: components.count == 1).map { .userProfile(username: $0) }
+        if isUserSegment(head) { return id.map { .userProfile(username: $0, face: profileFace(in: url)) } }
+        return shortProfileHandle(head, alone: components.count == 1).map { .userProfile(username: $0, face: profileFace(in: url)) }
     }
 
     /// L'adresse courte d'une fiche, `meeshy.me/@pseudo` (#18871) : celle du billet de la face Liens et de son QR.
@@ -414,7 +423,7 @@ enum DeepLink: Equatable {
     case community(id: String)
     case recentConversation
     case unreadConversations
-    case userProfile(username: String)
+    case userProfile(username: String, face: RelationFace = .vitrine)
     case ownProfile
     case userLinks
     case hashtag(tag: String)
@@ -693,7 +702,7 @@ final class DeepLinkRouter: ObservableObject {
         case .unreadConversations:        return .unreadConversations
         case .postDetail(let id):         return .postDetail(postId: id)
         case .conversation(let id, _):    return .conversation(id: id)
-        case .userProfile(let username):  return .userProfile(username: username)
+        case .userProfile(let username, let face): return .userProfile(username: username, face: face)
         case .ownProfile:                 return .ownProfile
         case .userLinks:                  return .userLinks
         case .hashtag(let tag):           return .hashtag(tag: tag)

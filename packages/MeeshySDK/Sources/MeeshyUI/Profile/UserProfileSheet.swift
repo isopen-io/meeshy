@@ -90,7 +90,7 @@ public struct UserProfileSheet: View {
     @Environment(\.dismiss) var dismiss
     /// En plein écran (`profileCover`, #19674), la tête dit « Retour » ; en feuille, « Fermer ».
     @Environment(\.profilePresentationStyle) var presentationStyle
-    /// La face lue (loi 1, #18870) ; la Vitrine d'abord.
+    /// La face lue (loi 1, #18870) ; la Vitrine d'abord, ou celle que demande l'ouverture (#19732).
     @State var face: RelationFace = .vitrine
     /// Ce que l'emplacement du cercle publie (#14910, #18870) : le lien montré et le niveau d'outil lu, `unresolved`
     /// tant que l'app n'a rien lu.
@@ -131,6 +131,7 @@ public struct UserProfileSheet: View {
     ) {
         self.dependencies = dependencies
         self.user = user
+        _face = State(initialValue: user.openingFace)
         self.onDismiss = onDismiss
         self.onNavigateToConversation = onNavigateToConversation
         self.onSendMessage = onSendMessage
