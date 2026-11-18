@@ -25,6 +25,60 @@ object FirstUnreadBoundary {
     data class Result(val firstUnreadId: String, val windowCount: Int)
 
     /**
+     * Ce qui RESTE non lu après une lecture PARTIELLE (#7350 I-2, miroir Kotlin posé par #19662), borné
+     * par la MÊME frontière que [resolve]. Le serveur n'avance son curseur que jusqu'au bout du PRÉFIXE
+     * CONTIGU de messages vus depuis la frontière (`MessageReadStatusService.ts`, mode exact) : un message
+     * sauté arrête le compte, et la loi le rejoue à l'identique.
+     *
+     * - [windowIsAtTip] : la fenêtre atteint le présent. Elle porte alors TOUS les non-lus récents — y
+     *   compris ceux arrivés depuis l'ouverture. Si elle en compte MOINS que [unreadAtOpen], les manquants
+     *   sont PLUS ANCIENS qu'elle : le premier non-lu réel n'y est pas, le curseur serveur ne peut pas
+     *   avancer, rien n'est consommé.
+     * - sinon (fenêtre ouverte SUR le séparateur), les non-lus absents sont plus RÉCENTS qu'elle et se
+     *   déduisent de [unreadAtOpen].
+     * - [caughtUpMessageId] : le dernier message RATTRAPÉ pendant l'affichage. Le serveur y a posé son
+     *   curseur (`caughtUpToMessageId`) quels que soient les messages sautés : il devient la frontière, et
+     *   rien n'était non lu à cet instant. Absent de la fenêtre, il ne déplace rien.
+     *
+     * Miroir de `FirstUnreadBoundary.remainingUnread` (Swift) ; les dix cas du modèle sont rejoués un pour
+     * un par `FirstUnreadRemainingTest`.
+     */
+    fun remainingUnread(
+        messages: List<FirstUnreadCandidate>,
+        lastReadMessageId: String?,
+        lastReadAtMillis: Long?,
+        lastReadMessageCreatedAtMillis: Long?,
+        joinedAtMillis: Long? = null,
+        viewerId: String?,
+        seenIds: Set<String>,
+        unreadAtOpen: Int,
+        windowIsAtTip: Boolean,
+        caughtUpMessageId: String? = null,
+    ): Int {
+        val caughtUp = caughtUpMessageId?.let { id -> messages.firstOrNull { it.id == id } }
+        if (caughtUp != null) {
+            return remainingUnread(
+                messages = messages,
+                lastReadMessageId = caughtUp.id,
+                lastReadAtMillis = null,
+                lastReadMessageCreatedAtMillis = caughtUp.createdAtMillis,
+                joinedAtMillis = joinedAtMillis,
+                viewerId = viewerId,
+                seenIds = seenIds,
+                unreadAtOpen = 0,
+                windowIsAtTip = windowIsAtTip,
+            )
+        }
+        val candidates = orderedCandidates(
+            messages, lastReadMessageId, lastReadAtMillis, lastReadMessageCreatedAtMillis, joinedAtMillis, viewerId,
+        )
+        val consumed = candidates.takeWhile { it.id in seenIds }.size
+        if (!windowIsAtTip) return (unreadAtOpen - consumed).coerceAtLeast(0)
+        if (candidates.size < unreadAtOpen) return unreadAtOpen.coerceAtLeast(0)
+        return candidates.size - consumed
+    }
+
+    /**
      * La DESCENTE du curseur de lecture — miroir de `readCursorFloorOf()`
      * (`packages/shared/utils/read-cursor-floor.ts`, #19599), qui porte la loi complète : la
      * POSITION d'abord, l'HORLOGE en repli, et l'arbitrage `?:` contre le `min` du gateway — un
