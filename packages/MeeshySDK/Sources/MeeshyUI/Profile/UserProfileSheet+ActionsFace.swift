@@ -117,7 +117,8 @@ extension UserProfileSheet {
             ProfileRelationSlot(section: relationSection, userId: resolvedUserId, displayName: name,
                                 linked: $relationLinked, tint: accentTint) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                    ProfileFriendRequestCard(tint: accentTint, unsent: requestStage == .unsent, isSending: isSendingRequest) { note in
+                    ProfileFriendRequestCard(tint: accentTint, unsent: requestStage == .unsent, isSending: isSendingRequest,
+                                             draft: requestStage == .unsent ? unsentNote : nil) { note in
                         Task { await sendConnectionRequest(message: note) }
                     }
                     ProfileNextCircles(level: .public, name: name, tint: accentTint)

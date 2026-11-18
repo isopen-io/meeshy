@@ -103,12 +103,30 @@ final class ProfileConnectionActionsTests: XCTestCase {
         let outcome = await fixture.sut.resendRequest(requestId: "req-1", userId: "u-bob", message: nil,
                                                       afterWithdrawn: { withdrawn += 1 })
         let stage = ProfileRequestStage.resolve(connection: ConnectionStatus(friendship: fixture.relationships.status(for: "u-bob")),
-                                                request: nil, justAccepted: false, sendFailed: outcome == .unsent)
+                                                request: nil, justAccepted: false, sendFailed: outcome == .unsent(note: nil))
 
-        XCTAssertEqual(outcome, .unsent)
+        XCTAssertEqual(outcome, .unsent(note: nil))
         XCTAssertEqual(withdrawn, 1)
         XCTAssertEqual(fixture.social.deleteCalls, ["req-1"])
         XCTAssertEqual(stage, .unsent)
+    }
+
+    /// Renvoyer ne perd pas le mot : la demande retirée et la nouvelle refusée (le 429 du budget quotidien), l'étape
+    /// retombe sur « pas partie » et rend le mot d'origine, que « Réessayer » renvoie tel quel.
+    func test_resendRequest_envoiEnEchec_rendLeMotDOrigine_queLeProchainEnvoiRenvoie() async {
+        let fixture = Fixture()
+        fixture.relationships.statuses["u-bob"] = .pendingSent(requestId: "req-1")
+        fixture.social.sendResult = .failure(StubFailure())
+
+        let outcome = await fixture.sut.resendRequest(requestId: "req-1", userId: "u-bob", message: "Du festival",
+                                                      afterWithdrawn: {})
+        guard case .unsent(let note) = outcome else { return XCTFail("attendu : pas partie, reçu \(outcome)") }
+        fixture.social.sendResult = .success(ProfileDependencyDoubles.makeFriendRequest(id: "req-3", message: "Du festival"))
+        _ = await fixture.sut.sendRequest(to: "u-bob", message: note)
+
+        XCTAssertEqual(note, "Du festival")
+        XCTAssertEqual(fixture.relationships.status(for: "u-bob"), .pendingSent(requestId: "req-3"))
+        XCTAssertEqual(fixture.social.sentMessages, ["Du festival", "Du festival"])
     }
 
     /// Le retrait refusé ne part pas en double : l'ancienne demande est remise, rien n'est renvoyé.

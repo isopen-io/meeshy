@@ -43,6 +43,8 @@ public struct UserProfileSheet: View {
     @State var justAccepted = false
     /// La dernière demande n'est pas partie (planche `Etat-Erreur` vue 2) : la carte le dit et propose « Réessayer ».
     @State var requestUnsent = false
+    /// Le mot de la demande qui n'est pas partie : la carte le reprend, et « Réessayer » le renvoie tel quel.
+    @State var unsentNote: String?
     /// Accepter, refuser ou annuler a raté (planche `Etat-Erreur` vue 2, #19611) : la carte le dit et propose « Réessayer ».
     @State var relationFailure: ProfileRelationMutation?
     /// Une demande est en route : un second appui ne repart pas, et la carte « Envoyée » attend son identifiant servi.
@@ -379,7 +381,7 @@ public struct UserProfileSheet: View {
             markRequestPending(provisional)
         }
         isSendingRequest = false
-        applySent(outcome)
+        applySent(outcome, note: message)
     }
 
     private func markRequestPending(_ requestId: String) {
@@ -388,9 +390,10 @@ public struct UserProfileSheet: View {
     }
 
     /// La demande servie porte sa date et son mot : l'étape dit « à l'instant » sans attendre le cache des demandes.
-    private func applySent(_ outcome: ProfileRequestSend) {
+    private func applySent(_ outcome: ProfileRequestSend, note: String?) {
         switch outcome {
         case .sent(let request):
+            unsentNote = nil
             pendingRequest = request
             markRequestPending(request.id)
             HapticFeedback.success()
@@ -399,6 +402,7 @@ public struct UserProfileSheet: View {
             pendingRequestId = nil
             connectionStatus = .none
             requestUnsent = true
+            unsentNote = note
             HapticFeedback.error()
         case .alreadyPending:
             resolveConnectionStatus()
@@ -445,8 +449,8 @@ public struct UserProfileSheet: View {
         )
         isSendingRequest = false
         switch outcome {
-        case .resent(let request): applySent(.sent(request))
-        case .unsent: applySent(.failed)
+        case .resent(let request): applySent(.sent(request), note: message)
+        case .unsent(let note): applySent(.failed, note: note)
         case .withdrawFailed: relationFailed(.resend)
         }
     }
