@@ -108,15 +108,18 @@ struct BloodLocationSheet: View {
         }
     }
 
+    /// La relecture du trajet (K35 `transport`) : lecture / pause, les arrêts en repères, l'heure du point montré.
     private var player: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            MeeshyGlassButton(systemImage: isPlaying ? "pause.fill" : "play.fill",
-                              label: isPlaying ? BloodLocationCopy.pause : BloodLocationCopy.play,
-                              kind: .active, size: .s44, tint: tint, action: { isPlaying.toggle() })
-            MeeshyLabeledSlider(BloodLocationCopy.playhead, value: $model.progress, in: 0...1,
-                                valueText: playheadTime, showsValue: true, tint: tint,
-                                onEditingChanged: { editing in if editing { isPlaying = false } })
-        }
+        MeeshyWaveTransport(BloodLocationCopy.playhead, position: $model.progress, isPlaying: isPlaying,
+                            playLabel: BloodLocationCopy.play, pauseLabel: BloodLocationCopy.pause,
+                            timeText: playheadTime, markers: stopMarkers, tint: tint, tone: .theme,
+                            onToggle: { isPlaying.toggle() },
+                            onEditingChanged: { editing in if editing { isPlaying = false } })
+    }
+
+    private var stopMarkers: [Double] {
+        let shown = model.shown
+        return model.stops.compactMap { BloodHistoryRules.progress(ofIndex: $0, in: shown) }
     }
 
     private var playheadTime: String {

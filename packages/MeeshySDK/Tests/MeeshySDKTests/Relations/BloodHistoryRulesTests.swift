@@ -76,6 +76,21 @@ struct BloodHistoryRulesTests {
         #expect(BloodHistoryRules.index(atProgress: 0.5, in: []) == nil)
     }
 
+    @Test("un arrêt se pose sur la piste de lecture à son instant : le début à 0, la fin à 1, rien hors du chemin")
+    func progressOfIndex() {
+        let points = [
+            point(38.70, -9.14, hour: 9, minute: 0),
+            point(38.71, -9.14, hour: 12, minute: 0),
+            point(38.72, -9.14, hour: 15, minute: 0),
+        ]
+        #expect(BloodHistoryRules.progress(ofIndex: 0, in: points) == 0)
+        #expect(BloodHistoryRules.progress(ofIndex: 1, in: points) == 0.5)
+        #expect(BloodHistoryRules.progress(ofIndex: 2, in: points) == 1)
+        #expect(BloodHistoryRules.progress(ofIndex: 3, in: points) == nil)
+        #expect(BloodHistoryRules.progress(ofIndex: 0, in: [points[0]]) == 0)
+        #expect(BloodHistoryRules.progress(ofIndex: 0, in: []) == nil)
+    }
+
     @Test("un réglage de fantôme part seul ; un rayon sans personne ou un identifiant illisible ne part pas")
     func settingsChange_isShapedLikeTheSchema() throws {
         #expect(BloodLocationSettingsChange() == nil)

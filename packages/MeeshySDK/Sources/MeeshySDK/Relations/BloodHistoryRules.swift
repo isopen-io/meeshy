@@ -80,4 +80,13 @@ public enum BloodHistoryRules {
         let instant = first.recordedAt.addingTimeInterval(clamped * last.recordedAt.timeIntervalSince(first.recordedAt))
         return points.lastIndex { $0.recordedAt <= instant } ?? 0
     }
+
+    /// La place d'un relevé sur la piste de lecture (0…1), à son instant : la réciproque de `index(atProgress:in:)`.
+    /// Un chemin d'un seul instant le pose à 0 ; un index hors du chemin n'a pas de place.
+    public static func progress(ofIndex index: Int, in points: [BloodLocationPoint]) -> Double? {
+        guard points.indices.contains(index), let first = points.first, let last = points.last else { return nil }
+        let span = last.recordedAt.timeIntervalSince(first.recordedAt)
+        guard span > 0 else { return 0 }
+        return points[index].recordedAt.timeIntervalSince(first.recordedAt) / span
+    }
 }
