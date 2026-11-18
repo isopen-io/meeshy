@@ -81,7 +81,7 @@ struct ProfileContactSection: View {
     }
 
     static var openSecurityHint: String {
-        String(localized: "profile.contact.open.hint", defaultValue: "Ouvre Sécurité, où se change et se vérifie ce contact", bundle: .main)
+        String(localized: "profile.contact.open.a11y", defaultValue: "Ouvre Sécurité, où se change et se vérifie ce contact", bundle: .main)
     }
 
     private static func isFilled(_ value: String?) -> Bool { !(value ?? "").isEmpty }

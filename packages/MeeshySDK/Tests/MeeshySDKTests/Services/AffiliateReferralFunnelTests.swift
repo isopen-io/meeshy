@@ -65,7 +65,8 @@ final class AffiliateReferralFunnelTests: XCTestCase {
           "nextTier": { "reached": 14, "target": 15, "reward": "Contour d'avatar Parrain" } } } }
         """)
 
-        let rewards = try XCTUnwrap(try await sut.fetchStats().rewards)
+        let stats = try await sut.fetchStats()
+        let rewards = try XCTUnwrap(stats.rewards)
 
         XCTAssertEqual(rewards.perActiveReferral, 50)
         XCTAssertEqual(rewards.earned, 700)

@@ -83,4 +83,5 @@
     <string name="viewer_doc_open_with">Abrir con otra app</string>
     <string name="viewer_text_show_source">Mostrar el origen</string>
     <string name="viewer_text_show_rendered">Mostrar el resultado</string>
+    <string name="report_message_sent">Denuncia enviada</string>
 </resources>

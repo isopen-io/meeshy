@@ -601,10 +601,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "share.links.copy.a11y",
           "androidName": "my_share_links_copy",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "androidName": "my_share_links_delete",
@@ -651,12 +649,8 @@
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "share.links.joined_count",
           "androidName": "my_share_links_joined_count",
-          "kind": "plurals",
-          "fillMissingQuantities": true,
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "androidName": "my_share_links_share",
@@ -675,16 +669,12 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "share.links.status.active",
           "androidName": "my_share_links_status_active",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "share.links.status.inactive",
           "androidName": "my_share_links_status_inactive",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",

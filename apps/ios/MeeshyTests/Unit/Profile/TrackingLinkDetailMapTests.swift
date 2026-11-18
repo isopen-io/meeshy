@@ -100,7 +100,7 @@ final class TrackingLinkDetailMapTests: XCTestCase {
 
     func test_draft_sendsOnlyWhatChanged_andAnEmptiedFieldErasesIt() throws {
         let link = try Self.link()
-        var draft = TrackingLinkDraft(link: link)
+        var draft = TrackingLinkEditDraft(link: link)
         XCTAssertFalse(draft.hasChanges(from: link))
 
         draft.name = "  Dakar nuit  "

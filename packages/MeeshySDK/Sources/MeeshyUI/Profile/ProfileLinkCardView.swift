@@ -135,14 +135,8 @@ public struct ProfileLinkClosedCard: View {
                     .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
                     .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(ProfileLinkCardCopy.closedTitle)
-                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    Text(ProfileLinkCardCopy.closedHint)
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(ProfileLinkCardCopy.closedTitle)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 Spacer(minLength: 0)
             }
             .padding(MeeshySpacing.md)
@@ -177,8 +171,6 @@ enum ProfileLinkCardCopy {
     static let write = String(localized: "profile.linkCard.write", defaultValue: "Écrire", bundle: .module)
     static let closedTitle = String(localized: "profile.linkCard.closed.title", defaultValue: "Profil indisponible",
                                     bundle: .module)
-    static let closedHint = String(localized: "profile.linkCard.closed.hint",
-                                   defaultValue: "Ce profil n'existe pas ou ne s'ouvre pas pour toi.", bundle: .module)
     static let loading = String(localized: "profile.linkCard.loading", defaultValue: "Chargement du profil",
                                 bundle: .module)
 

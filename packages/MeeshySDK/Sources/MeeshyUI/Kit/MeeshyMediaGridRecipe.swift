@@ -25,7 +25,7 @@ public nonisolated enum MeeshyMediaGridSpacing: String, Sendable, Equatable, Cas
 }
 
 /// La pastille d'un coin : un glyphe et une valeur (« 0:24 », « 4 »), rendue par K41.
-public struct MeeshyMediaTileBadge: Equatable {
+public nonisolated struct MeeshyMediaTileBadge: Equatable {
     public let systemImage: String
     public let value: String?
 
@@ -37,7 +37,7 @@ public struct MeeshyMediaTileBadge: Equatable {
 
 /// Un élément opaque : un identifiant stable (clé de recyclage), des textes déjà
 /// traduits, un rapport de forme. Aucune publication, aucun réel, aucune story.
-public struct MeeshyMediaGridItem: Identifiable, Equatable {
+public nonisolated struct MeeshyMediaGridItem: Identifiable, Equatable {
     public let id: String
     public let kind: MeeshyMediaTileKind
     public let label: String

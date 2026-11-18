@@ -56,7 +56,7 @@ struct ProfileVoiceSection: View {
 
     @ViewBuilder
     private func editControls(_ editing: ProfileVoiceEditing) -> some View {
-        MeeshyToggleRow(ProfileVoiceCopy.publicToggle, subtitle: ProfileVoiceCopy.publicToggleHint,
+        MeeshyToggleRow(ProfileVoiceCopy.publicToggle,
                         accessory: .toggle(isOn: editing.isPublic.wrappedValue), tint: Color(hex: accentColor),
                         action: { editing.isPublic.wrappedValue.toggle() })
             .accessibilityIdentifier("profile.voice.public")
@@ -101,11 +101,6 @@ nonisolated enum ProfileVoiceCopy {
 
     static var publicToggle: String {
         String(localized: "profile.vitrine.voice.publicToggle", defaultValue: "Rendre mon échantillon public", bundle: .main)
-    }
-
-    static var publicToggleHint: String {
-        String(localized: "profile.vitrine.voice.publicToggle.hint",
-               defaultValue: "Tout le monde peut l'écouter sur ta vitrine.", bundle: .main)
     }
 
     static var rerecord: String {

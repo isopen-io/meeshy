@@ -81,7 +81,7 @@ struct ProfileCircleViewTests {
     @Test func seenAsBloodOpensEveryCapability() {
         let view = ProfileCircleView.seenAs(.blood)
         #expect(view.capabilities.count == ProfileCapability.allCases.count)
-        #expect(view.capabilities.values.allSatisfy(\.isOpen))
+        #expect(view.capabilities.values.allSatisfy { $0.isOpen })
     }
 
     @Test func everyProjectedStateCarriesTheFloorOfItsFeature() {
