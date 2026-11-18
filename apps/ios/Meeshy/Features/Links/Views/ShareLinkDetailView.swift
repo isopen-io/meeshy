@@ -13,13 +13,23 @@ struct ShareLinkDetailView: View {
     @StateObject var viewModel: ShareLinkDetailViewModel
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.meeshyRouter) var router
     @State private var showDeleteConfirm = false
+    /// « Supprimer » touché dans le formulaire : la confirmation attend que sa feuille soit partie, UIKit refusant de
+    /// présenter pendant une fermeture.
+    @State private var deleteAfterEdit = false
     @State private var showResetConfirm = false
     @State private var showsMore = false
     @State private var isEditing = false
-    @State private var qrShareImage: QRShareImage?
+    @State private var enlargedQR: LinkQRPresentation?
     @State private var sharedLink: ShareableLink?
     @State var arrivalToRemove: ShareLinkArrivalStats.Arrival?
+    /// L'arrivée dépliée au toucher, qui montre « Voir la fiche » et « Retirer » (planche `Lien-Partage`).
+    @State var openedArrivalId: String?
+    @State var showsAllArrivals = false
+
+    /// La teinte de la famille « partage » (`--l-share`), la même que son billet et son filtre sur la face Liens.
+    static let tint = MeeshyColors.shareAccent
 
     init(
         link: MyShareLink,
@@ -40,7 +50,7 @@ struct ShareLinkDetailView: View {
     var link: MyShareLink { viewModel.link }
 
     var body: some View {
-        LinksPage(title: ShareLinkDetailCopy.pageTitle, accent: MeeshyColors.brandPrimary,
+        LinksPage(title: ShareLinkDetailCopy.pageTitle, accent: Self.tint,
                   action: LinksPageAction(label: ShareLinkDetailCopy.more, systemImage: "ellipsis") { showsMore = true }) {
             VStack(spacing: MeeshySpacing.xl) {
                 heroTicket
@@ -84,9 +94,10 @@ struct ShareLinkDetailView: View {
             Button(ShareLinkDetailCopy.removeArrival, role: .destructive) { removeArrival(arrival) }
             Button(ShareLinkDetailCopy.cancel, role: .cancel) {}
         }
-        .sheet(isPresented: $isEditing, onDismiss: { viewModel.discardChanges() }) { editSheet }
-        .sheet(item: $qrShareImage) { qr in ShareSheet(activityItems: [qr.image]) }
+        .sheet(isPresented: $isEditing, onDismiss: { editSheetDismissed() }) { editSheet }
+        .sheet(item: $enlargedQR) { qr in LinkQRSheet(presentation: qr, tint: Self.tint) }
         .sheet(item: $sharedLink) { shared in ShareSheet(activityItems: shared.activityItems) }
+        .navigationDestination(isPresented: $showsAllArrivals) { allArrivals }
     }
 
     private var removalBinding: Binding<Bool> {
@@ -103,7 +114,7 @@ struct ShareLinkDetailView: View {
         MeeshyTicket(
             title: link.displayName,
             code: link.address.displayString,
-            tint: MeeshyColors.brandPrimary,
+            tint: Self.tint,
             systemImage: "bubble.left.and.bubble.right.fill",
             size: .hero,
             label: "\(link.displayName), \(link.address.displayString)",
@@ -117,40 +128,57 @@ struct ShareLinkDetailView: View {
         .accessibilityIdentifier("shareLink.detail.hero")
     }
 
-    /// « Mène à Studio » : la pile des dernières arrivées (K48) quand elles sont lues, sinon l'avatar du groupe.
+    /// « Mène à Studio › » : la pile des dernières arrivées (K48) quand elles sont lues, sinon l'avatar du groupe ;
+    /// le toucher ouvre la conversation, quand la fiche la connaît.
     private var heroStub: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             let faces = viewModel.headFaces
+            let open = openConversation
             if faces.isEmpty {
-                MeeshyPersonRow(title: ShareLinkDetailCopy.leadsTo(groupName), size: .inline, showsDivider: false) {
+                MeeshyPersonRow(title: ShareLinkDetailCopy.leadsTo(groupName), size: .inline, showsDivider: false,
+                                onPress: open) {
                     MeeshyAvatar(name: groupName, context: .custom(26), kind: .entity,
                                  avatarURL: link.conversation?.avatar, isDark: isDark)
+                } trailing: {
+                    if open != nil {
+                        Image(systemName: "chevron.right")
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
                 }
+                .accessibilityHint(open == nil ? "" : ShareLinkDetailCopy.openConversationHint)
             } else {
                 LinksFaceStack(members: faces, summary: ShareLinkDetailCopy.leadsTo(groupName),
                                label: ProfileLinksCopy.facesLabel(ShareLinkDetailCopy.leadsTo(groupName), faces: faces),
-                               tint: MeeshyColors.brandPrimary)
+                               tint: Self.tint, hint: ShareLinkDetailCopy.openConversationHint, onPress: open)
                     .accessibilityIdentifier("shareLink.detail.faces")
             }
             heroActions
         }
     }
 
+    /// Ouvre la conversation que le lien ouvre ; `nil` tant que la fiche ne la connaît pas.
+    private var openConversation: (() -> Void)? {
+        guard let conversationId = link.conversation?.id else { return nil }
+        return { DeepLinkRouter.shared.pendingDeepLink = .conversation(id: conversationId) }
+    }
+
     private var heroActions: some View {
         MeeshyActionGrid(columns: .fixed(4)) {
-            MeeshyLabeledAction(title: TrackingDetailCopy.copy, systemImage: "doc.on.doc", tint: MeeshyColors.brandPrimary,
+            MeeshyLabeledAction(title: TrackingDetailCopy.copy, systemImage: "doc.on.doc", tint: Self.tint,
                                 hint: link.address.displayString, action: {
                 LinksClipboard.copy(link.address.absoluteString, confirmation: .inline, message: ShareLinkDetailCopy.copied)
             })
-            MeeshyLabeledAction(title: TrackingDetailCopy.qr, systemImage: "qrcode", tint: MeeshyColors.brandPrimary,
-                                action: { qrShareImage = LinkQRCode.shareImage(for: link.address.absoluteString) })
+            MeeshyLabeledAction(title: TrackingDetailCopy.qr, systemImage: "qrcode", tint: Self.tint,
+                                action: { enlargeQR() })
                 .disabled(link.address.url == nil)
             MeeshyLabeledAction(title: ShareLinkDetailCopy.share, systemImage: "square.and.arrow.up",
-                                tint: MeeshyColors.brandPrimary, action: {
+                                tint: Self.tint, action: {
                 sharedLink = link.address.url.map { ShareableLink(url: $0) }
             })
             .disabled(link.address.url == nil)
-            MeeshyLabeledAction(title: ShareLinkDetailCopy.edit, systemImage: "pencil", tint: MeeshyColors.brandPrimary,
+            MeeshyLabeledAction(title: ShareLinkDetailCopy.edit, systemImage: "pencil", tint: Self.tint,
                                 action: { isEditing = true })
         }
     }
@@ -162,7 +190,7 @@ struct ShareLinkDetailView: View {
         MeeshyToggleRow(ShareLinkDetailCopy.active,
                         subtitle: link.isActive ? nil : ShareLinkDetailCopy.inactiveHint,
                         accessory: .toggle(isOn: link.isActive),
-                        tint: MeeshyColors.brandPrimary,
+                        tint: Self.tint,
                         action: { toggleActive() })
             .accessibilityIdentifier("shareLink.detail.active")
     }
@@ -192,7 +220,7 @@ struct ShareLinkDetailView: View {
     // MARK: - Modifier (feuille)
 
     private var editSheet: some View {
-        LinksPage(title: ShareLinkDetailCopy.editTitle, accent: MeeshyColors.brandPrimary, glyph: .close,
+        LinksPage(title: ShareLinkDetailCopy.editTitle, accent: Self.tint, glyph: .close,
                   onBack: { isEditing = false }) {
             ShareLinkEditForm(
                 draft: $viewModel.draft,
@@ -203,8 +231,8 @@ struct ShareLinkDetailView: View {
                 onSave: save,
                 onToggleActive: toggleActive,
                 onDelete: {
+                    deleteAfterEdit = true
                     isEditing = false
-                    showDeleteConfirm = true
                 }
             )
             .padding(.horizontal, MeeshySpacing.lg)
@@ -214,6 +242,19 @@ struct ShareLinkDetailView: View {
     }
 
     // MARK: - Actions
+
+    /// La feuille « Modifier » est partie : le brouillon non enregistré s'efface, puis la suppression demandée depuis
+    /// le formulaire se confirme, maintenant que plus rien ne se présente.
+    private func editSheetDismissed() {
+        viewModel.discardChanges()
+        guard deleteAfterEdit else { return }
+        deleteAfterEdit = false
+        showDeleteConfirm = true
+    }
+
+    private func enlargeQR() {
+        enlargedQR = LinkQRPresentation(address: link.address.absoluteString, title: link.displayName)
+    }
 
     private func save() {
         HapticFeedback.light()

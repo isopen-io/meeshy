@@ -314,8 +314,8 @@ final class ConversationEpureTests: XCTestCase {
                         "send_messages.subtitle", "send_images.subtitle", "send_files.subtitle", "view_history.subtitle", "picker.empty.description"] {
             XCTAssertFalse(view.contains(removed), "\(removed) : la rangée se comprend seule")
         }
-        XCTAssertTrue(view.contains("share.link.create.section.access.subtitle"), "la phrase d'orientation du bloc reste visible (règle 7)")
-        XCTAssertTrue(view.contains("share.link.create.section.permissions.subtitle"), "la phrase d'orientation du bloc reste visible (règle 7)")
+        XCTAssertTrue(view.contains("share.link.create.section.access.subtitle"), "la phrase d'orientation du bloc reste lisible derrière son (i)")
+        XCTAssertTrue(view.contains("share.link.create.section.permissions.subtitle"), "la phrase d'orientation du bloc reste lisible derrière son (i)")
     }
 
     func test_createShareLink_birthDate_explainsItself_behindAnInfoWhoseNameIsTheQuestion() throws {

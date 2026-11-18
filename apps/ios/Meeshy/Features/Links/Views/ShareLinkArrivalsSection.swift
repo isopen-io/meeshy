@@ -9,6 +9,13 @@ struct ShareLinkArrivalRow: View, Equatable {
     let entry: ShareLinkArrivalEntry
     var avatarURL: String? = nil
     let isDark: Bool
+    /// Le toucher déplie la rangée ; `nil` : la rangée ne mène nulle part (liste complète).
+    var onPress: (() -> Void)? = nil
+
+    static func == (lhs: ShareLinkArrivalRow, rhs: ShareLinkArrivalRow) -> Bool {
+        lhs.entry == rhs.entry && lhs.avatarURL == rhs.avatarURL && lhs.isDark == rhs.isDark
+            && (lhs.onPress == nil) == (rhs.onPress == nil)
+    }
 
     var body: some View {
         MeeshyPersonRow(
@@ -18,7 +25,8 @@ struct ShareLinkArrivalRow: View, Equatable {
             levelImage: entry.isAnonymous ? "person" : "checkmark.seal.fill",
             levelLabel: kindLabel,
             showsDivider: false,
-            label: accessibilityText
+            label: accessibilityText,
+            onPress: onPress
         ) {
             MeeshyAvatar(name: entry.displayName, context: .custom(36), avatarURL: avatarURL, enablePulse: false,
                          isDark: isDark)

@@ -30,6 +30,13 @@ nonisolated struct CommunityLinkDetails: Equatable, Sendable {
     }
 }
 
+/// La communauté d'un lien : en chemin, servie, ou introuvable.
+nonisolated enum CommunityLinkDetailsPhase: Equatable, Sendable {
+    case loading
+    case loaded
+    case failed
+}
+
 /// Les entrées du lien : en chemin, servies, ou introuvables.
 nonisolated enum CommunityLinkEntriesState: Equatable, Sendable {
     case loading
@@ -46,6 +53,8 @@ final class CommunityLinkDetailViewModel: ObservableObject {
     nonisolated deinit {}
 
     @Published private(set) var details: CommunityLinkDetails?
+    /// La lecture de la communauté : en chemin, servie, ou échouée — « Fermer les entrées » éteint dit alors pourquoi.
+    @Published private(set) var detailsPhase: CommunityLinkDetailsPhase = .loading
     @Published private(set) var entries: CommunityLinkEntriesState = .loading
     @Published private(set) var isClosed: Bool?
     /// Les amis que l'on peut inviter, lus dans le cache (#19505) ; la rangée n'attend pas le réseau.
@@ -99,7 +108,11 @@ final class CommunityLinkDetailViewModel: ObservableObject {
         return loaded
     }
 
+    /// Lit la communauté et ses entrées. « Réessayer » se voit : ce qui avait échoué repasse en chargement, jamais
+    /// ce qui est déjà servi.
     func load() async {
+        if entries == .failed { entries = .loading }
+        if detailsPhase == .failed { detailsPhase = .loading }
         if friends.isEmpty { friends = await loadFriends() }
         let id = link.id
         let loadDetails = self.loadDetails
@@ -110,6 +123,9 @@ final class CommunityLinkDetailViewModel: ObservableObject {
         if let fetchedDetails {
             details = fetchedDetails
             isClosed = fetchedDetails.isPrivate
+            detailsPhase = .loaded
+        } else if details == nil {
+            detailsPhase = .failed
         }
         if let fetchedEntries {
             entries = .loaded(CommunityLinkEntries(entries: fetchedEntries, excludingUserId: viewerId))

@@ -15,7 +15,7 @@ extension TrackingLinkDetailView {
         MeeshyFigureBand(items: [
             MeeshyFigureItem(value: current.totalClicks.formatted(), unit: TrackingDetailCopy.clicksUnit),
             MeeshyFigureItem(value: current.uniqueClicks.formatted(), unit: TrackingDetailCopy.uniqueUnit),
-            MeeshyFigureItem(value: viewModel.isFirstLoad ? nil : viewModel.insights.countryCount.formatted(),
+            MeeshyFigureItem(value: viewModel.phase == .loaded ? viewModel.insights.countryCount.formatted() : nil,
                              unit: TrackingDetailCopy.countriesUnit)
         ], emptyLabel: TrackingDetailCopy.noData)
         .accessibilityIdentifier("tracking.detail.figures")
@@ -71,7 +71,9 @@ extension TrackingLinkDetailView {
         let countries = viewModel.insights.countries()
         return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: TrackingDetailCopy.originsTitle, count: viewModel.insights.countryCount, size: .sheet)
-            if countries.isEmpty {
+            if viewModel.isFirstLoad {
+                loadingBlock
+            } else if countries.isEmpty {
                 emptyBlock
             } else {
                 ForEach(countries, id: \.key) { share in
@@ -103,12 +105,14 @@ extension TrackingLinkDetailView {
         let shown = Array(shares.prefix(TrackingLinkInsights.shownShares))
         return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             MeeshySectionHeader(title: title, form: .overline, size: .sheet)
-            if shown.isEmpty {
+            if viewModel.isFirstLoad {
+                loadingBlock
+            } else if shown.isEmpty {
                 emptyBlock
             } else {
                 MeeshyChart(kind: .donut, points: Self.donutPoints(shown, name: name),
                             summary: shown.map { "\(name($0.key)) \(Self.percent($0.percent))" }.joined(separator: ", "),
-                            tint: MeeshyColors.trackingAccent, size: .compact, markers: [], isLoading: viewModel.isFirstLoad) {
+                            tint: MeeshyColors.trackingAccent, size: .compact, markers: []) {
                     Text(verbatim: Self.percent(shown[0].percent)).font(.headline.weight(.heavy))
                 }
                 ForEach(Array(shown.enumerated()), id: \.element.key) { index, share in
@@ -168,9 +172,9 @@ extension TrackingLinkDetailView {
 
     var utmInfoSection: some View {
         let optionalRows: [TrackingUTMRow?] = [
-            current.campaign.map { TrackingUTMRow(label: "Campaign", value: $0) },
-            current.source.map { TrackingUTMRow(label: "Source", value: $0) },
-            current.medium.map { TrackingUTMRow(label: "Medium", value: $0) },
+            current.campaign.map { TrackingUTMRow(label: TrackingDetailCopy.campaignField, value: $0) },
+            current.source.map { TrackingUTMRow(label: TrackingDetailCopy.sourceField, value: $0) },
+            current.medium.map { TrackingUTMRow(label: TrackingDetailCopy.mediumField, value: $0) },
             TrackingUTMRow(label: TrackingDetailCopy.destination, value: current.originalUrl),
             TrackingUTMRow(label: TrackingDetailCopy.createdAt, value: current.createdAt.formatted(date: .abbreviated, time: .shortened)),
             current.expiresAt.map { TrackingUTMRow(label: ShareLinkDetailCopy.expiresOn, value: $0.formatted(date: .abbreviated, time: .shortened)) }
@@ -191,6 +195,20 @@ extension TrackingLinkDetailView {
 
     var emptyBlock: some View {
         MeeshyStateBlock(kind: .empty, title: TrackingDetailCopy.noData, art: .none, size: .compact)
+    }
+
+    /// Avant la première lecture, une section tient sa place : jamais « Aucune donnée » (loi 8).
+    var loadingBlock: some View {
+        MeeshySkeleton(shape: .card(aspect: 3.2, radius: Double(MeeshyRadius.lg)))
+    }
+
+    /// La lecture des clics a échoué et rien n'est montré : la fiche le dit, et « Réessayer » relit.
+    var clicksFailedBlock: some View {
+        MeeshyStateBlock(kind: .error, title: TrackingDetailCopy.clicksFailed,
+                         primary: MeeshyStateBlockAction(title: ShareLinkDetailCopy.retry, systemImage: "arrow.clockwise",
+                                                         perform: { Task { await viewModel.load() } }),
+                         art: .none, size: .compact, tint: MeeshyColors.trackingAccent)
+            .accessibilityIdentifier("tracking.detail.failed")
     }
 
     static func percent(_ value: Int) -> String {

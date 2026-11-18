@@ -8,11 +8,6 @@ enum ProfileCreatedLinkDestination {
     case tracking(TrackingLink, onChanged: @MainActor (TrackingLink) -> Void, onDeleted: @MainActor (String) -> Void)
     case community(CommunityLink)
     case route(Route)
-
-    /// Le détail d'un lien de suivi qui ne renvoie rien à sa liste (pages sans modèle partagé).
-    static func trackingDetail(_ link: TrackingLink) -> ProfileCreatedLinkDestination {
-        .tracking(link, onChanged: { _ in }, onDeleted: { _ in })
-    }
 }
 
 /// Le détail ouvert depuis un billet, porté par la LISTE et non par le billet : un billet qui passe de « servants » à

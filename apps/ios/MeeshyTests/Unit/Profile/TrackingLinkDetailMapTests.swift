@@ -41,6 +41,30 @@ final class TrackingLinkDetailMapTests: XCTestCase {
                                 })
     }
 
+    // MARK: - Le chargement des clics (loi 8)
+
+    func test_load_beforeAnything_showsTheSkeleton_andAFailureWithNothingShown_saysIt() async {
+        let model = TrackingDetailViewModel(token: "dkr", isActive: true, setActiveRemote: { _, _ in },
+                                            clicksRemote: { _ in throw Refused() })
+        XCTAssertTrue(model.isFirstLoad, "avant la première lecture : un squelette, jamais « aucun clic »")
+
+        await model.load()
+
+        XCTAssertTrue(model.loadFailed, "hors ligne : la fiche dit l'échec au lieu de « 0 pays »")
+        XCTAssertFalse(model.isFirstLoad)
+        XCTAssertEqual(model.phase, .failed)
+    }
+
+    func test_load_served_isLoaded_evenWithoutAnyClick() async {
+        let model = TrackingDetailViewModel(token: "dkr", isActive: true, setActiveRemote: { _, _ in },
+                                            clicksRemote: { _ in [] })
+
+        await model.load()
+
+        XCTAssertFalse(model.loadFailed)
+        XCTAssertEqual(model.phase, .loaded)
+    }
+
     // MARK: - La carte
 
     func test_visitorMap_servedPlaces_areLocatedLargestFirst_withTheServedCountryCount() async {

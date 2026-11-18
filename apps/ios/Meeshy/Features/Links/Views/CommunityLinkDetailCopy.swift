@@ -3,6 +3,8 @@ import Foundation
 /// Les mots de la fiche d'un lien de communauté (planche `Lien-Communaute`, #18871), localisés dans les sept langues.
 enum CommunityLinkDetailCopy {
     static var pageTitle: String { String(localized: "communityLink.sheet.pageTitle", defaultValue: "Lien de communauté", bundle: .main) }
+    static var detailsFailed: String { String(localized: "communityLink.detail.detailsFailed", defaultValue: "La communauté n'a pas pu être lue", bundle: .main) }
+    static var openCommunityHint: String { String(localized: "communityLink.detail.openCommunity.a11y", defaultValue: "Ouvre la communauté", bundle: .main) }
     static var animates: String { String(localized: "communityLink.sheet.animates", defaultValue: "Tu l'animes", bundle: .main) }
     static var moderates: String { String(localized: "communityLink.sheet.moderates", defaultValue: "Tu la modères", bundle: .main) }
     static var copyIdentifier: String { String(localized: "communityLink.sheet.copyIdentifier", defaultValue: "Copier l'identifiant", bundle: .main) }
