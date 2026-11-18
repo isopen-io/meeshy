@@ -33,6 +33,7 @@ jest.mock('../../../../services/ConsentValidationService', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerTranslationRoutes, shouldReturnExistingTranscription } from '../../../../routes/attachments/translation';
+import { attachmentAudioRichView } from '../../../../services/audio/attachmentAudioRichView';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -420,6 +421,53 @@ describe('POST /attachments/:id/transcribe — pistes déjà traduites (#19647)'
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.translatedAudios).toEqual([track]);
+    await app.close();
+  });
+});
+
+describe('POST /attachments/:id/transcribe — piste du VRAI producteur (#19647, audit)', () => {
+  it("sert chaque clé de la vue riche sauf le chemin disque, depuis la colonne JSON réelle", async () => {
+    const createdAt = new Date('2026-08-22T09:00:00.000Z');
+    const prismaRow = {
+      findUnique: jest.fn<any>().mockResolvedValue({
+        id: ATTACHMENT_ID, messageId: 'msg-1', fileName: 'a.webm', originalName: 'a.webm',
+        fileUrl: '/api/v1/attachments/file/a.webm', mimeType: 'audio/webm', fileSize: 1, duration: 8000,
+        bitrate: null, sampleRate: null, codec: null, channels: null, createdAt,
+        transcription: { text: 'hello', language: 'en', confidence: 0.9, source: 'whisper', segments: [], durationMs: 8000 },
+        translations: {
+          fr: {
+            type: 'audio', transcription: 'bonjour',
+            path: '/app/uploads/translated/att-001_fr.mp3',
+            url: '/api/v1/attachments/file/translated/att-001_fr.mp3',
+            durationMs: 7900, format: 'mp3', cloned: true, quality: 0.8,
+            createdAt: '2026-08-22T09:01:00.000Z',
+          },
+        },
+      }),
+    };
+    const view = await attachmentAudioRichView({ messageAttachment: prismaRow } as any, ATTACHMENT_ID);
+    expect(view?.translatedAudios[0].audioPath).toBe('/app/uploads/translated/att-001_fr.mp3');
+
+    const { app } = await buildApp({
+      translationService: makeTranslationService({
+        getAttachmentWithTranscription: jest.fn<any>().mockResolvedValue(view),
+      }),
+    });
+    const res = await app.inject({ method: 'POST', url: `/attachments/${ATTACHMENT_ID}/transcribe`, payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.translatedAudios).toEqual([{
+      id: `${ATTACHMENT_ID}_fr`,
+      targetLanguage: 'fr',
+      translatedText: 'bonjour',
+      audioUrl: '/api/v1/attachments/file/translated/att-001_fr.mp3',
+      durationMs: 7900,
+      format: 'mp3',
+      voiceCloned: true,
+      voiceQuality: 0.8,
+      createdAt: '2026-08-22T09:01:00.000Z',
+    }]);
+    expect(res.body).not.toContain('/app/uploads');
     await app.close();
   });
 });
