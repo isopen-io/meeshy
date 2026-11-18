@@ -989,6 +989,16 @@ final class LocalizationConsistencyTests: XCTestCase {
         XCTAssertEqual(localizedCalls(in: labelled).map(\.isModuleBundle), [true],
                        "le paramètre se remplit sous son ÉTIQUETTE (`in: .module`), pas sous son nom")
         XCTAssertEqual(localizedCalls(in: labelled + "\nlet b = failed(in: .main)").map(\.isModuleBundle), [false])
+
+        let fallback = """
+        static func spoken(bundle: Bundle? = nil) -> String { name(bundle: bundle ?? .module) }
+        static func name(bundle: Bundle) -> String {
+            String(localized: "cle.sdk", defaultValue: "A", bundle: bundle)
+        }
+        """
+        XCTAssertEqual(localizedCalls(in: fallback).map(\.isModuleBundle), [true],
+                       "le kit remplit le paramètre par `bundle ?? .module` : c'est le catalogue du SDK")
+        XCTAssertEqual(localizedCalls(in: fallback + "\nlet b = name(bundle: x ?? .main)").map(\.isModuleBundle), [false])
     }
 
     /// Keys with at least one locale expressed as plural variations.
@@ -1070,7 +1080,7 @@ final class LocalizationConsistencyTests: XCTestCase {
             untranslated.count, backlogCeiling,
             "\(untranslated.count) identifier keys are untranslated in at least one shipped "
             + "locale (ceiling \(backlogCeiling)). Add the missing entries to the catalog of the "
-            + "target that owns them."
+            + "target that owns them: \(untranslated.sorted().joined(separator: ", "))"
         )
     }
 
