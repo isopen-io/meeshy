@@ -2,6 +2,7 @@ package me.meeshy.app.chat
 
 import me.meeshy.sdk.lang.ReadReceiptLanguages
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.outbox.ReadReceiptPayload
 
 /**
@@ -48,6 +49,7 @@ internal object ReadReceiptComposition {
             language = declared.language,
             messageLanguages = declared.messageLanguages.takeIf { it.isNotEmpty() },
             caughtUpToMessageId = declared.caughtUpToMessageId,
+            readThroughAt = read.firstOrNull { it.id == declared.caughtUpToMessageId }?.createdAt?.let(::isoToEpochMillisOrNull),
         )
     }
 }
