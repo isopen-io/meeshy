@@ -377,13 +377,16 @@ class MessageRepository internal constructor(
      * it left a LIVE message « deleted » for good. It therefore runs out of reach of cancellation, and its read is bounded
      * in REAL time ([readBackBudgetMillis], on an IO thread: a virtual clock never ends it early) — an answer that never
      * comes proves nothing ([MessageReadBack.Unknown]).
+     *
+     * Returns whether the settlement LANDED: `false` when the account that asked for it closed or was replaced before
+     * (#19422) — it decided nothing, and must not be marked settled, so the replay of that account settles it again.
      */
     suspend fun settleRefusedDeletion(
         conversationId: String?,
         messageId: String,
         refusedAsGone: Boolean = false,
         readBackBudgetMillis: Long = READ_BACK_BUDGET_MS,
-    ): Unit = withContext(NonCancellable) {
+    ): Boolean = withContext(NonCancellable) {
         val ticket = mutations.ticket()
         val read = conversationId?.let { readBackWithin(it, messageId, readBackBudgetMillis) } ?: MessageReadBack.Unknown
         settle(ticket, messageId, read, refusedAsGone)
@@ -391,16 +394,18 @@ class MessageRepository internal constructor(
 
     /**
      * #19422 — what the read decides belongs to the account that ASKED for it ([ticket], taken before the request): the
-     * settlement lands only while that account is still the current one, never in the same message id of the next.
+     * settlement lands only while that account is still the current one, never in the same message id of the next. Its
+     * account still current once the write is done, it landed.
      */
-    private suspend fun settle(ticket: AccountTicket?, messageId: String, read: MessageReadBack, refusedAsGone: Boolean) {
-        if (!mutations.isCurrent(ticket)) return
+    private suspend fun settle(ticket: AccountTicket?, messageId: String, read: MessageReadBack, refusedAsGone: Boolean): Boolean {
+        if (!mutations.isCurrent(ticket)) return false
         when (read) {
             is MessageReadBack.Served -> if (read.message.deletedAt == null) mutations.markUndeleted(ticket, messageId, read.message)
             MessageReadBack.Absent -> confirmDeletionUnder(ticket, messageId)
             MessageReadBack.Unknown ->
                 if (refusedAsGone) confirmDeletionUnder(ticket, messageId) else mutations.markUndeleted(ticket, messageId, null)
         }
+        return mutations.isCurrent(ticket)
     }
 
     /** The erasure is stamped with [ticket]'s account ([withAccountTicket]), never with whoever the session names now. */

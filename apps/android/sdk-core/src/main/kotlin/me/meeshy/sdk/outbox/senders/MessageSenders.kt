@@ -207,12 +207,12 @@ public class DeleteMessageHandler @Inject constructor(
     }
 
     override suspend fun onExhausted(row: OutboxEntity): Unit = withContext(NonCancellable) {
-        messageRepository.settleRefusedDeletion(
+        val settled = messageRepository.settleRefusedDeletion(
             PlaintextRefusal.laneConversation(row.lane),
             row.targetId,
             refusedAsGone = SendFailureClassifier.refusedAsGone(row.lastError),
         )
-        settledMarks.markSettled(row.cmid)
+        if (settled) settledMarks.markSettled(row.cmid)
     }
 }
 
