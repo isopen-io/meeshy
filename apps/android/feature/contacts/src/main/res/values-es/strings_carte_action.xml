@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La carte comme action (#18890) : mots de la carte des positions partagées. -->
+<resources>
+    <string name="location_map_close">Cerrar el mapa</string>
+    <string name="location_map_layers">Cambiar el fondo del mapa</string>
+    <string name="location_map_recenter">Recentrar el mapa</string>
+    <string name="location_map_view_exact">Vista exacta</string>
+    <string name="location_map_view_neighborhood">Vista de barrio</string>
+    <string name="location_map_view_city">Vista de ciudad</string>
+    <string name="location_map_remaining_minutes">quedan %1$d min</string>
+    <string name="location_map_remaining_hours">quedan %1$d h %2$02d</string>
+    <string name="location_map_shared_for_hour">Compartida durante 1 h</string>
+    <string name="location_map_shared_for_hours">Compartida durante 8 h</string>
+    <string name="location_map_fresh_live">Posición en directo · actualizada hace %1$d s</string>
+    <string name="location_map_fresh_stale">Actualizada hace %1$d min</string>
+    <string name="location_map_directions">Ruta</string>
+    <string name="location_map_write">Escribir</string>
+    <string name="location_map_call">Llamar</string>
+    <string name="location_map_share_mine">Compartir la mía</string>
+    <string name="location_map_not_sharing">%1$s no comparte su posición</string>
+    <string name="location_map_not_sharing_message">La verás aquí en cuanto te la comparta.</string>
+    <string name="location_map_nearby_open">Mapa de mis allegados</string>
+    <string name="location_map_nearby_title">A tu alrededor</string>
+    <string name="location_map_nearby_empty">Nadie te comparte su posición</string>
+    <string name="location_map_nearby_empty_message">Las posiciones que comparten tus allegados aparecen aquí, con la precisión que elijan.</string>
+</resources>

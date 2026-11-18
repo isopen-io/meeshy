@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fiche_faces_label">Profile faces</string>
+    <string name="fiche_face_vitrine">Showcase</string>
+    <string name="fiche_face_links">Links</string>
+    <string name="fiche_face_actions">Actions</string>
+    <string name="fiche_section_talk">Talk</string>
+    <string name="fiche_section_together">Together</string>
+    <string name="fiche_section_where">Where they are</string>
+    <string name="fiche_section_card">Their profile</string>
+    <string name="fiche_section_not_open">Not open yet</string>
+    <string name="fiche_action_write">Write</string>
+    <string name="fiche_action_write_request">Ask to write</string>
+    <string name="fiche_action_call">Call</string>
+    <string name="fiche_action_video">Video</string>
+    <string name="fiche_card_share">Send their profile</string>
+    <string name="fiche_card_our_circle">Our circle</string>
+    <string name="fiche_links_title">Their profile link</string>
+    <string name="fiche_links_hint">Opens their showcase, Public view</string>
+    <string name="fiche_links_copy">Copy link</string>
+    <string name="fiche_links_qr">QR code</string>
+    <string name="fiche_links_send">Send to a friend</string>
+    <string name="fiche_links_empty">There is no link to share for this person.</string>
+    <string name="fiche_circle_title">%1$s and you</string>
+    <string name="fiche_circle_common">Your common level is the lower of the two.</string>
+    <string name="fiche_circle_they_grant">%1$s grants you</string>
+    <string name="fiche_circle_you_grant">You grant %1$s</string>
+    <string name="fiche_circle_at_least">%1$s or more</string>
+    <string name="fiche_circle_opens">What %1$s opens for you</string>
+    <string name="fiche_circle_opens_more">With %1$s, in addition</string>
+    <string name="fiche_circle_missing_they">Missing: %1$s grants you %2$s</string>
+    <string name="fiche_circle_missing_you">Missing: you grant %2$s to %1$s</string>
+</resources>
