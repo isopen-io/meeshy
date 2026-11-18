@@ -61,12 +61,29 @@ async function sharedDirectConversations(prisma: PrismaClient, viewerId: string,
   return conversations.filter((c) => c.isActive !== false && !c.deletedAt).map((c) => c.id);
 }
 
+/**
+ * Les identités d'auteur des deux dans ces conversations : `Message.senderId`
+ * pointe un `Participant`, jamais un `User` (cf. `user-stats.ts`) — et un filtre
+ * par relation (`sender: { userId }`) coûterait un `$lookup` par message.
+ * Toutes les participations, actives ou non : un message écrit reste écrit.
+ */
+async function pairAuthorIds(prisma: PrismaClient, conversationIds: string[], userIds: string[]): Promise<string[]> {
+  const rows = await prisma.participant.findMany({
+    where: { conversationId: { in: conversationIds }, userId: { in: userIds } },
+    select: { id: true },
+    take: MEMBERSHIP_LIMIT,
+  });
+  return rows.map((r) => r.id);
+}
+
 async function messageFacts(prisma: PrismaClient, viewerId: string, targetId: string) {
   const conversationIds = await sharedDirectConversations(prisma, viewerId, targetId);
   if (conversationIds.length === 0) return { firstMessageAt: null, milestones: [] };
+  const authorIds = await pairAuthorIds(prisma, conversationIds, [viewerId, targetId]);
+  if (authorIds.length === 0) return { firstMessageAt: null, milestones: [] };
   const where = {
     conversationId: { in: conversationIds },
-    senderId: { in: [viewerId, targetId] },
+    senderId: { in: authorIds },
     messageSource: 'user',
     deletedAt: null,
   };

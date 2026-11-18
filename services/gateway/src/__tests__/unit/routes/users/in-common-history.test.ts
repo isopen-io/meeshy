@@ -89,15 +89,26 @@ const RISE_TO_CLOSE = [
 ];
 
 let mid = 0;
-const msg = (conversationId: string, senderId: string, createdAt: Date, extra: AnyRow = {}): AnyRow => {
+const participantId = (userId: string, conversationId: string): string => `p-${userId.slice(-2)}-${conversationId.slice(-2)}`;
+const msg = (conversationId: string, authorUserId: string, createdAt: Date, extra: AnyRow = {}): AnyRow => {
   mid += 1;
-  return { id: `m${String(mid).padStart(6, '0')}`, conversationId, senderId, createdAt, messageSource: 'user', deletedAt: null, ...extra };
+  return {
+    id: `m${String(mid).padStart(6, '0')}`,
+    conversationId,
+    senderId: participantId(authorUserId, conversationId),
+    createdAt,
+    messageSource: 'user',
+    deletedAt: null,
+    ...extra,
+  };
 };
 
 type Store = { users: AnyRow[]; relations: AnyRow[]; members: AnyRow[]; participants: AnyRow[]; conversations: AnyRow[]; messages: AnyRow[] };
 let store: Store;
 
-const part = (userId: string, conversationId: string, extra: AnyRow = {}): AnyRow => ({ userId, conversationId, isActive: true, ...extra });
+const part = (userId: string, conversationId: string, extra: AnyRow = {}): AnyRow => ({
+  id: participantId(userId, conversationId), userId, conversationId, isActive: true, ...extra,
+});
 
 const pairStore = (byV: string, byT: string, transitions: AnyRow[] = RISE_TO_CLOSE): Store => ({
   users: [user(V), user(T), user(THIRD)],
