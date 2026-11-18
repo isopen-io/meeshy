@@ -58,6 +58,16 @@ describe('arrêt en deux temps — phase de vidange (#19280)', () => {
     await server.close();
   });
 
+  it('répond aussi 503 aux applications natives, qui n envoient aucune origine', async () => {
+    const { server, drain } = await buildServer();
+    drain.begin();
+    const res = await server.inject({ method: 'POST', url: '/api/v1/conversations?limit=10' });
+    expect(res.statusCode).toBe(503);
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+    expect(res.json()).toMatchObject({ success: false, code: 'SERVICE_SHUTTING_DOWN' });
+    await server.close();
+  });
+
   it('ne pose aucune origine en trop pendant la vidange (le refus CORS garde la main)', async () => {
     const { server, drain } = await buildServer();
     drain.begin();
