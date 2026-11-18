@@ -4,7 +4,9 @@ import { playPattern } from '@/lib/view/haptics';
 import { useStore } from 'zustand';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
+import { currentIdentity } from '@/lib/api/client';
 import { apiDeps, postMediaUploadDeps } from '@/lib/api/deps';
+import { ownedDepsOf } from '@/lib/api/owned-deps';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { PostMediaUploadDeps } from '@/lib/api/post-media-upload';
 import { protectedMediaDeps, type ProtectedMediaDeps } from '@/lib/api/protected-media';
@@ -576,17 +578,22 @@ function StoryStudio({
     setPublishFailure(null);
     // Une CRÉATION se retire jusqu'à son issue, montées comprises (#10316).
     const cancelSignal = reopened === undefined ? pending.begin() : null;
+    // LE GESTE APPARTIENT AU COMPTE QUI L'A FAIT (audit #19352, X1) : si l'onglet change de compte en route, rien ne
+    // part sous le nouveau, et l'intention reste armée pour celui-ci — jamais en échec.
+    const owner = currentIdentity();
+    const api = ownedDepsOf(deps.api, owner);
+    const ownerLeft = () => currentIdentity() !== owner;
 
     const settledByPage = await settlePages(draft.pages, (pageId, door) => pendingRef.current[uploadKey(pageId, door)] ?? null);
     if (reopened !== undefined) {
-      const save = studioEditSaver({ edit: reopened, api: deps.api, language, latest: latestDraft, sendRef, setPublishing, setPublishFailure, setPublishProgress, dropPublished: (ids) => dropPublishedPages(ids, reopened.origin.kind) });
+      const save = studioEditSaver({ edit: reopened, api, language, latest: latestDraft, sendRef, setPublishing, setPublishFailure, setPublishProgress, dropPublished: (ids) => dropPublishedPages(ids, reopened.origin.kind) });
       return save(settledByPage);
     }
     if (cancelSignal === null || cancelSignal.aborted) return;
     const current = latestDraft.current;
     const plan = studioPublishPlan({ pages: current.pages, settled: settledByPage, choice: chosen });
     if (plan.kind !== 'ready') {
-      outbox.fail();
+      if (!ownerLeft()) outbox.fail();
       pending.settle(cancelSignal);
       setPublishing(false);
       return;
@@ -597,7 +604,7 @@ function StoryStudio({
     setPublishProgress({ published: 0, total: plan.publications.length });
     const outcome = await publishStudioPlan({
       plan,
-      api: deps.api,
+      api,
       kind: chosen.kind,
       visibility: current.visibility,
       language,
@@ -619,7 +626,7 @@ function StoryStudio({
     if (outcome.kind !== 'published') {
       setPublishProgress(null);
       setPublishing(false);
-      if (outcome.kind === 'failed') (outbox.fail(), setPublishFailure({ failure: outcome.failure, published: outcome.published, total: outcome.total }));
+      if (outcome.kind === 'failed' && !ownerLeft()) (outbox.fail(), setPublishFailure({ failure: outcome.failure, published: outcome.published, total: outcome.total }));
       return;
     }
 

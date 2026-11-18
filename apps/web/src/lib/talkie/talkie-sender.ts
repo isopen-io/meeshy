@@ -86,6 +86,8 @@ export type TalkieVoiceCopy = {
   readonly durationMs: number;
   readonly toUserId: string;
   readonly conversationId: string | null;
+  /** Le compte qui a APPUYÉ (sa clé d'identité) : la copie part à son nom, jamais sous un compte pris depuis (audit #19352, X1). */
+  readonly owner: string | null;
 };
 
 /** Envoie la copie en message vocal ; rend `false` si elle n'est pas partie. */
@@ -144,6 +146,7 @@ const joined = (fragment: Fragment): Uint8Array => {
 /** Une prise de parole, de l'appui à sa fin : ses fragments, ses compteurs, son micro. */
 type Session = {
   readonly toUserId: string;
+  readonly owner: string | null;
   opened: Opened | null;
   capture: TalkieCapture | null;
   /** Le micro remet encore ses trames (vrai jusqu'à son arrêt complet). */
@@ -165,7 +168,7 @@ type Session = {
   keptMs: number;
 };
 
-type Kept = { readonly frames: readonly Uint8Array[]; readonly durationMs: number; readonly toUserId: string };
+type Kept = { readonly frames: readonly Uint8Array[]; readonly durationMs: number; readonly toUserId: string; readonly owner: string | null };
 
 export function createTalkieSender({
   socket,
@@ -177,6 +180,7 @@ export function createTalkieSender({
   },
   onOutcome,
   copier,
+  identity = () => null,
 }: {
   readonly socket: () => SocketClient | null;
   readonly capture: TalkieCaptureFactory;
@@ -184,6 +188,8 @@ export function createTalkieSender({
   readonly schedule?: (run: () => void, ms: number) => () => void;
   readonly onOutcome: (outcome: TalkieSendOutcome) => void;
   readonly copier: TalkieVoiceCopier;
+  /** Qui parle à l'instant de l'appui — relu une fois, au geste. */
+  readonly identity?: () => string | null;
 }): TalkieSender {
   const store = createStore<TalkieSenderState>(() => ({ phase: { kind: 'idle' } }));
   let session: Session | null = null;
@@ -270,7 +276,7 @@ export function createTalkieSender({
     }
     s.current = EMPTY_FRAGMENT;
     settleIdle(s, outcome);
-    if (s.opened?.delivery === 'waking') await awaitVerdict(s.opened.talkieId, { frames: s.kept, durationMs: s.keptMs, toUserId: s.toUserId });
+    if (s.opened?.delivery === 'waking') await awaitVerdict(s.opened.talkieId, { frames: s.kept, durationMs: s.keptMs, toUserId: s.toUserId, owner: s.owner });
   }
 
   /** Une voix réveillée close : son verdict est peut-être déjà là, sinon elle l'attend (bornée). */
@@ -294,7 +300,7 @@ export function createTalkieSender({
     s.cancelLimit?.();
     await stopMic(s);
     settleIdle(s, null);
-    await sendCopy({ frames: s.kept, durationMs: s.keptMs, toUserId: s.toUserId, conversationId: s.conversationId });
+    await sendCopy({ frames: s.kept, durationMs: s.keptMs, toUserId: s.toUserId, conversationId: s.conversationId, owner: s.owner });
   }
 
   const startCopy = (s: Session, conversationId: string | null): Promise<void> | undefined => {
@@ -335,6 +341,7 @@ export function createTalkieSender({
     }
     const s: Session = {
       toUserId,
+      owner: identity(),
       opened: null,
       capture: null,
       accepting: true,

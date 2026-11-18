@@ -169,6 +169,6 @@ describe('#4188 — POST /reactions garde les deux propriétés que la forme imb
     });
 
     expect(res.statusCode).toBe(410);
-    expect(res.statusCode).not.toBe(500);
+    expect(res.json()).toMatchObject({ success: false, code: 'CONVERSATION_CLOSED' });
   });
 });

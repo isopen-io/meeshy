@@ -1,7 +1,7 @@
 import { forgetCallJournal } from '../calls/call-network-journal-keys';
 import { safeLocalStorage, type SafeStorage } from '../storage';
 
-import { createAccountCacheShelf, purgeReaderCaches, type AccountCacheShelf, type CacheStorageLike } from './account-caches';
+import { createAccountCacheShelf, PENDING_ACCOUNT_ENDS_KEY, purgeReaderCaches, type AccountCacheShelf, type CacheStorageLike } from './account-caches';
 import { heldAccountOf, heldSessionKey, type SessionStoreApi } from './session';
 
 /**
@@ -74,6 +74,30 @@ export function forgetAccountCaches({
   } catch {
     /* La déconnexion aboutit même si l'appareil refuse. */
   }
+}
+
+/**
+ * LA FIN RESTÉE À FAIRE (audit #19352) — les comptes notés par le repli de
+ * `client.ts` quand ce morceau n'a pas pu se charger : ce qu'ils laissent sur
+ * l'appareil part maintenant, sauf pour le compte que l'appareil tient de
+ * nouveau (il s'est reconnecté entre-temps).
+ */
+function takePendingAccountEnds(storage: SafeStorage): readonly string[] {
+  try {
+    const noted = storage.getItem(PENDING_ACCOUNT_ENDS_KEY);
+    storage.removeItem(PENDING_ACCOUNT_ENDS_KEY);
+    return noted === null ? [] : noted.split(' ').filter((userId) => userId !== '');
+  } catch {
+    return [];
+  }
+}
+
+export function forgetPendingAccountEnds(store: SessionStoreApi, deps: Omit<Parameters<typeof forgetAccountCaches>[0], 'userId'> = {}): void {
+  const storage = deps.storage ?? safeLocalStorage();
+  const held = heldAccountOf(store.getState().deviceSession())?.user.id ?? null;
+  takePendingAccountEnds(storage)
+    .filter((userId) => userId !== held)
+    .forEach((userId) => forgetAccountCaches({ ...deps, userId, storage }));
 }
 
 /**

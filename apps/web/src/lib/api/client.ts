@@ -4,7 +4,9 @@ import { withEmailGate } from '../activation/email-gated-transport';
 import { apiConfig } from './config';
 import { createHttpTransport, type ApiFailure, type ApiResult, type Credential, type HttpTransport } from './http';
 import { navigate } from '../router';
+import { safeLocalStorage, type SafeStorage } from '../storage';
 
+import { notePendingAccountEnd } from './account-caches';
 import { retireDeletedAccountLater } from './account-deleted';
 import { endGuestAccess } from './guest-access-end';
 import { VIEWER_ID } from './fixtures-base';
@@ -85,10 +87,38 @@ export function sessionEmailUnproven(session: SessionState): boolean {
   return session.status === 'authenticated' && session.user.emailUnproven === true;
 }
 
-/** La fin d'une session refusée se charge quand elle sert (`account-end.ts`) : la première peinture n'en porte rien. */
-const endSessionOf = (store: SessionStoreApi): void => {
-  void import('./account-end').then(({ endRevokedSession }) => endRevokedSession(store));
-};
+type AccountEnd = Pick<typeof import('./account-end'), 'endRevokedSession'>;
+
+/**
+ * LE REPLI QUAND LE MORCEAU DE FIN NE SE CHARGE PAS (audit #19352) — réseau
+ * instable, version changée en route : la session refusée finit quand même,
+ * tout de suite, sans toucher l'entrée d'un autre compte que l'appareil tient
+ * (`clearSession`), et son compte est noté pour que ce qu'il laisse sur
+ * l'appareil parte au prochain chargement (`forgetPendingAccountEnds`).
+ */
+function endWithoutModule(store: SessionStoreApi, storage: SafeStorage): void {
+  const state = store.getState();
+  const current = state.session;
+  if (current.status === 'guest' && current.account !== undefined) {
+    state.dropAnonymous(current.guest.conversationId);
+    return;
+  }
+  const leaving = current.status === 'authenticated' && state.holdsDeviceSession() ? current.user.id : null;
+  state.clearSession();
+  if (leaving !== null) notePendingAccountEnd(storage, leaving);
+}
+
+/** La fin d'une session refusée se charge quand elle sert (`account-end.ts`) : la première peinture n'en porte que le repli. */
+export function endRefusedSession(
+  store: SessionStoreApi,
+  { load = () => import('./account-end'), storage }: { readonly load?: () => Promise<AccountEnd>; readonly storage?: SafeStorage } = {},
+): void {
+  void load()
+    .then(({ endRevokedSession }) => endRevokedSession(store))
+    .catch(() => endWithoutModule(store, storage ?? safeLocalStorage()));
+}
+
+const endSessionOf = (store: SessionStoreApi): void => endRefusedSession(store);
 
 /** Enveloppé par la garde de l'e-mail (#8365) : un refus `EMAIL_NOT_VERIFIED`
  * ouvre la validation et la requête repart au code validé

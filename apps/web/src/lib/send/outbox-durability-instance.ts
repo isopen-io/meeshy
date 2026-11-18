@@ -19,11 +19,14 @@ const activeViewer = (): string | null => resolveViewer({ source: apiDeps.source
 
 const isOnline = (): boolean => (typeof navigator === 'undefined' ? true : navigator.onLine);
 
+/** Les dépendances d'une reprise, liées au compte qui la lance (audit #19352, X1) : téléverser puis envoyer restent à lui. */
+export const durableSendDeps = () => ({ ...ownedApiDeps(), queryClient: appQueryClient, outbox: outboxStore, online: isOnline(), transfer: { ...sendTransfer, media: ownedPostMediaUploadDeps() } });
+
 export const outboxDurability: OutboxDurability = createOutboxDurability({
   outbox: outboxStore,
   records: idbDeviceRecords(),
   activeViewer,
-  deps: () => ({ ...ownedApiDeps(), queryClient: appQueryClient, outbox: outboxStore, online: isOnline(), transfer: { ...sendTransfer, media: ownedPostMediaUploadDeps() } }),
+  deps: durableSendDeps,
 });
 
 let started = false;

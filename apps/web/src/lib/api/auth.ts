@@ -531,10 +531,13 @@ export function createAuthClient({ transport, store, linkSecrets = browserLinkDe
     // COÛTE rien — un « déconnecté localement, session serveur survivante »
     // se répare tout seul au prochain appel authentifié qui échoue en 401 ;
     // l'inverse serait une session fantôme.
+    // Le crédential est FORCÉ (audit #19352) : l'onglet tient peut-être déjà le compte de l'appareil (N4), et une
+    // fermeture émise « sous » lui ferait lire son 401 — la session d'Ada déjà morte — comme le refus de celle de Bob.
     const close = (session: AuthenticatedSession | null) =>
       transport.request<{ message: string }>({
         method: 'POST',
         path: authEndpoints.logout,
+        ...(session === null ? {} : { credential: null, tokenOwner: session.user.id }),
         headers: session === null ? {} : { Authorization: `Bearer ${session.token}`, 'X-Session-Token': session.sessionToken },
       });
     // Les deux fermetures partent ensemble et sont attendues ensemble : un échec
