@@ -246,6 +246,7 @@ public struct UserProfileSheet: View {
                 RelationFaceSelector(face: $face, writeShortcut: writeShortcut)
             }
         }
+        .environment(\.meeshyProfileAccent, profileAccent)
         .task {
             await loadDataIfNeeded()
             await loadConversationsIfNeeded()
