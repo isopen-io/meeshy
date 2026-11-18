@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import MeeshyUI
 
 /// #18870 — la fiche d'un autre est le profil d'une relation en trois faces (loi 1, loi 3), le sélecteur en bas (loi 5).
