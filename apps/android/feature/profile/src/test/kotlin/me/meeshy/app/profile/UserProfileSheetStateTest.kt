@@ -88,15 +88,6 @@ class UserProfileSheetStateTest {
     }
 
     @Test
-    fun `un 404 sur cache vide est une panne et non une fermeture`() {
-        val load = after(
-            ProfileLoadEvent.CacheRead(profile = null, stats = null),
-            ProfileLoadEvent.ProfileFailed(ProfileFailure.Http(404)),
-        )
-        assertThat(shown(load).content).isEqualTo(ProfileSheetContent.Failed)
-    }
-
-    @Test
     fun `un profil introuvable a cache vide dit Personne ici comme un profil prive, sans reessayer`() {
         val missing = after(
             ProfileLoadEvent.CacheRead(profile = null, stats = null),

@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.feature.profile.R
@@ -90,7 +91,7 @@ class UserProfileSheetAccessibilityTest {
         body(UserProfileSheetUiState(user = bob, loadFailed = true), onRetry = { retried++ })
 
         compose.onNodeWithText(context.getString(R.string.profile_state_error_title)).assertIsDisplayed()
-        compose.onNodeWithText(context.getString(R.string.common_retry)).performClick()
+        compose.onNodeWithText(context.getString(R.string.common_retry)).performSemanticsAction(SemanticsActions.OnClick)
         assertThat(retried).isEqualTo(1)
     }
 
