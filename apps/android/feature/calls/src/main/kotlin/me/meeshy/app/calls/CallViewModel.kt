@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.group.GroupCallRoster
@@ -88,6 +89,7 @@ class CallViewModel @Inject constructor(
     private val ringGuard: CallRingGuarding = CallRingGuarding.Inert,
     private val hold: CallHolding = CallHolding.Inert,
     private val ringSilencer: CallRingSilencing = CallRingSilencing.Inert,
+    private val conversationBinding: CallConversationBinding = CallConversationBinding(),
 ) : ViewModel() {
 
     /** Appel établi, socket de signalisation tombée : la bannière « Signalisation interrompue » (le média tient). */
@@ -290,6 +292,9 @@ class CallViewModel @Inject constructor(
         }
         viewModelScope.launch {
             coordinator.groupMesh.map { it.roster }.distinctUntilChanged().collect(::onGroupRoster)
+        }
+        viewModelScope.launch {
+            conversationBinding.bound.filter { it.isRebranched }.collect { coordinator.moveToConversation(it.callId, it.conversationId) }
         }
     }
 

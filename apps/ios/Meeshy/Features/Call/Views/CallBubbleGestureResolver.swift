@@ -11,9 +11,6 @@ enum CallBubbleGestureResolver {
     /// Vélocité horizontale (pt/s) au-delà de laquelle un swipe engage le
     /// collapse même sous le seuil de distance (flick rapide et court).
     static let collapseVelocityThreshold: CGFloat = 500
-
-    /// Diamètre fixe de la bulle — partagé avec `CallBubbleView`.
-    static let bubbleDiameter: CGFloat = 56
     /// Marge entre le bord de la bulle et le bord d'écran quand ancrée (même
     /// convention que `minEdgePadding` du FAB principal, `FloatingButtons.swift:68`).
     static let bubbleEdgeMargin: CGFloat = 20
@@ -46,8 +43,7 @@ enum CallBubbleGestureResolver {
         return min(max(y, minY), maxY)
     }
 
-    /// Rayon de coin fixe (pt) partagé par les 3 paliers rectangle — seul le
-    /// palier `.circle` a un rayon dérivé (moitié du diamètre, cercle parfait).
+    /// Rayon de coin (pt) de la vignette, le même aux trois paliers (#19701 : plus de cercle).
     static let rectangleCornerRadius: CGFloat = 20
     /// Sensibilité du mapping pinch → progression : un delta d'échelle de 0.25
     /// (25% de zoom) parcourt un palier plein. Valeur de confort, ajustable au
@@ -58,13 +54,10 @@ enum CallBubbleGestureResolver {
     /// que `collapseVelocityThreshold` pour le drag de la pilule.
     static let tierVelocityThreshold: CGFloat = 1.5
 
-    /// Taille (pt) du palier donné. `.circle` est un carré (cercle une fois
-    /// clippé en `RoundedRectangle(cornerRadius: diameter/2)`) ; les paliers
-    /// rectangle suivent un ratio 9:16, aligné sur `preferredContentSize` du
-    /// PiP système (`PiPCallController.swift`).
+    /// Taille (pt) du palier donné : un ratio 9:16, aligné sur `preferredContentSize`
+    /// du PiP système (`PiPCallController.swift`).
     static func size(for tier: CallBubbleSizeTier) -> CGSize {
         switch tier {
-        case .circle: return CGSize(width: bubbleDiameter, height: bubbleDiameter)
         case .small: return CGSize(width: 90, height: 160)
         case .medium: return CGSize(width: 120, height: 213)
         case .large: return CGSize(width: 160, height: 284)
@@ -72,7 +65,7 @@ enum CallBubbleGestureResolver {
     }
 
     /// Taille interpolée linéairement pour une progression continue
-    /// `0...3` (`.circle...large`), clampée aux bornes. Alimente le morphing
+    /// `0...2` (`.small...large`), clampée aux bornes. Alimente le morphing
     /// en direct pendant le pinch — `progress` fractionnaire retombe toujours
     /// entre deux paliers adjacents.
     static func interpolatedSize(progress: CGFloat) -> CGSize {
@@ -80,7 +73,7 @@ enum CallBubbleGestureResolver {
         let clamped = min(max(progress, 0), CGFloat(maxTier))
         let lowerRaw = Int(clamped.rounded(.down))
         let upperRaw = min(lowerRaw + 1, maxTier)
-        let lowerTier = CallBubbleSizeTier(rawValue: lowerRaw) ?? .circle
+        let lowerTier = CallBubbleSizeTier(rawValue: lowerRaw) ?? .small
         let upperTier = CallBubbleSizeTier(rawValue: upperRaw) ?? .large
         let fraction = clamped - CGFloat(lowerRaw)
         let lowerSize = size(for: lowerTier)
@@ -91,19 +84,7 @@ enum CallBubbleGestureResolver {
         )
     }
 
-    /// Rayon de coin interpolé. `RoundedRectangle(cornerRadius:)` rend un
-    /// cercle parfait à `progress == 0` (rayon = moitié du diamètre) ; au-delà
-    /// de `progress == 1` le rayon reste fixe (`rectangleCornerRadius`) — les
-    /// 3 paliers rectangle partagent le même arrondi, seule la taille varie
-    /// entre eux.
-    static func interpolatedCornerRadius(progress: CGFloat) -> CGFloat {
-        let clamped = min(max(progress, 0), CGFloat(CallBubbleSizeTier.allCases.count - 1))
-        guard clamped < 1 else { return rectangleCornerRadius }
-        let circleRadius = bubbleDiameter / 2
-        return circleRadius + (rectangleCornerRadius - circleRadius) * clamped
-    }
-
-    /// Progression continue (0...3) correspondant à l'échelle cumulée d'un
+    /// Progression continue (0...2) correspondant à l'échelle cumulée d'un
     /// `MagnificationGesture` en cours, ancrée sur le palier de départ du
     /// geste. `scale == 1` (aucun pinch) retombe exactement sur
     /// `startingTier.rawValue`.
@@ -123,6 +104,27 @@ enum CallBubbleGestureResolver {
         let velocityBias: CGFloat = abs(velocity) > tierVelocityThreshold ? (velocity > 0 ? 0.5 : -0.5) : 0
         let biased = min(max(clamped + velocityBias, 0), maxTier)
         let rawValue = Int(biased.rounded())
-        return CallBubbleSizeTier(rawValue: rawValue) ?? .circle
+        return CallBubbleSizeTier(rawValue: rawValue) ?? .small
     }
+
+    // MARK: - #19701 — le glissé avec élan
+
+    /// Le plus long chemin que l'élan ajoute au geste (pt) : un jet vif fait glisser la
+    /// vignette sans qu'elle traverse l'écran.
+    static let maxGlide: CGFloat = 320
+
+    /// Au lâcher, la vignette poursuit sa course : on vise la position que l'élan du geste
+    /// projette (`predictedEndTranslation` de SwiftUI), le surplus d'élan borné à `maxGlide`
+    /// sur chaque axe. Le bord le plus proche et la borne verticale s'appliquent ensuite.
+    static func glidedTranslation(translation: CGSize, predicted: CGSize) -> CGSize {
+        func glide(_ moved: CGFloat, _ projected: CGFloat) -> CGFloat {
+            moved + min(max(projected - moved, -maxGlide), maxGlide)
+        }
+        return CGSize(width: glide(translation.width, predicted.width), height: glide(translation.height, predicted.height))
+    }
+
+    /// Le ressort qui pose la vignette à sa place : assez long pour qu'on voie la glisse,
+    /// amorti pour ne pas rebondir.
+    static let glideResponse: Double = 0.5
+    static let glideDamping: Double = 0.82
 }

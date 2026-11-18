@@ -7,6 +7,10 @@ import {
   bubbleSize,
   bubbleTranslate,
   BUBBLE_SETTLE_TRANSITION,
+  GLIDE_PROJECTION_MS,
+  glideBubble,
+  MAX_GLIDE,
+  releaseVelocity,
   DEFAULT_BUBBLE,
   fittingTier,
   isBubbleTap,
@@ -186,7 +190,7 @@ describe('bubbleTranslate — la bulle se déplace en `translate`, jamais en lef
   });
 
   test('l’aimantation au bord ne joue QUE `translate`, au tempo de l’ancienne transition', () => {
-    expect(BUBBLE_SETTLE_TRANSITION).toBe('translate 180ms ease-out');
+    expect(BUBBLE_SETTLE_TRANSITION).toBe('translate 420ms cubic-bezier(0.22, 1, 0.36, 1)');
   });
 });
 
@@ -203,3 +207,36 @@ describe('le glissé de la capsule (P18.10)', () => {
     expect(pillSwipeOutcome({ travelled: -PILL_COLLAPSE_DISTANCE, sharing: true })).toBe('stay');
   });
 });
+
+describe('#19701 — la vignette glisse avec élan', () => {
+  test('la vitesse du lâcher se lit sur les derniers instants du doigt', () => {
+    expect(releaseVelocity([])).toEqual({ x: 0, y: 0 });
+    expect(releaseVelocity([{ x: 10, y: 10, t: 0 }])).toEqual({ x: 0, y: 0 });
+    expect(releaseVelocity([{ x: 0, y: 0, t: 0 }, { x: 50, y: -20, t: 50 }])).toEqual({ x: 1, y: -0.4 });
+  });
+
+  test('un échantillon trop ancien ne fausse pas la vitesse : un doigt arrêté avant de lâcher ne lance rien', () => {
+    expect(releaseVelocity([{ x: 0, y: 0, t: 0 }, { x: 80, y: 0, t: 300 }])).toEqual({ x: 0, y: 0 });
+  });
+
+  test('lâchée doucement, elle reste où le doigt l’a laissée ; jetée, elle poursuit sa course', () => {
+    expect(glideBubble({ x: 30, y: 10 }, { x: 0, y: 0 })).toEqual({ x: 30, y: 10 });
+    expect(glideBubble({ x: 30, y: 10 }, { x: 1, y: -0.5 })).toEqual({ x: 30 + GLIDE_PROJECTION_MS, y: 10 - 0.5 * GLIDE_PROJECTION_MS });
+  });
+
+  test('un jet violent est borné sur chaque axe : elle ne traverse pas l’écran', () => {
+    expect(glideBubble({ x: 0, y: 0 }, { x: 50, y: -50 })).toEqual({ x: MAX_GLIDE, y: -MAX_GLIDE });
+  });
+
+  test('jetée vers l’autre bord, elle change de bord ; sans l’élan, elle serait restée', () => {
+    const viewport = { width: 390, height: 844 };
+    const size = bubbleSize('video');
+    const insets = { top: 64, bottom: 120 };
+    const origin = { left: 390 - 12 - size.width, top: 300 };
+    const moved = { x: -60, y: 0 };
+    const centerOf = (point: { readonly x: number; readonly y: number }) => ({ x: origin.left + point.x + size.width / 2, y: origin.top + point.y + size.height / 2 });
+    expect(snapBubble(centerOf(moved), viewport, insets, size).edge).toBe('right');
+    expect(snapBubble(centerOf(glideBubble(moved, { x: -1.2, y: 0 })), viewport, insets, size).edge).toBe('left');
+  });
+});
+
