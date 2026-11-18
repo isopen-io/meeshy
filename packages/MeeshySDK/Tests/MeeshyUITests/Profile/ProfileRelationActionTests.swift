@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import MeeshySDK
 @testable import MeeshyUI
 
@@ -82,5 +83,20 @@ final class ProfileRelationActionTests: XCTestCase {
         XCTAssertNotEqual(friend, close)
         XCTAssertEqual(Set(RelationLevel.allCases.map { ProfileRelationLockedGroup.requirement(opensAt: $0) }).count,
                        RelationLevel.allCases.count)
+    }
+
+    /// #19637 — le cercle reçoit l'accent de la fiche tel quel : la teinte quand la fiche en remet une, `nil` sinon,
+    /// pour que « Partager ma position » retombe sur la couleur du cercle commun au lieu d'une teinte transparente.
+    func test_relationSlot_handsTheSheetAccentToTheCircle_andNilWhenTheSheetHasNone() {
+        var received: [Color?] = []
+        let section = ProfileRelationSection { _, _, _, tint in
+            received.append(tint)
+            return AnyView(EmptyView())
+        }
+        _ = ProfileRelationSlot(section: section, userId: "u1", displayName: "Léo", linked: .constant(false),
+                                tint: .red) { EmptyView() }.body
+        _ = ProfileRelationSlot(section: section, userId: "u1", displayName: "Léo", linked: .constant(false),
+                                tint: nil) { EmptyView() }.body
+        XCTAssertEqual(received, [.red, nil])
     }
 }

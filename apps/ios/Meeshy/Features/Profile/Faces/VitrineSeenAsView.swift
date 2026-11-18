@@ -15,21 +15,26 @@ struct VitrineSeenAsView: View {
     let user: MeeshyUser
     let accentColor: String
 
+    /// Les personnes de chaque cercle (« Mes cercles », en cache) ; `nil` tant que rien n'est servi : aucun compte dit.
+    let circleSummary: ProfileCirclesSummary?
+
     @StateObject private var model: VitrineSeenAsViewModel
-    private let crans: [VitrineCran]
     @State private var linkCopied = false
+    /// Mes publications en cache (celles de « Publications ») : l'aperçu n'en montre que ce que le cercle choisi voit.
+    @State private var publications: [FeedPost] = []
     @Environment(\.dismiss) private var dismiss
     @Environment(\.locale) private var locale
 
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(user: MeeshyUser, accentColor: String, initial: RelationLevel = .public) {
+    init(user: MeeshyUser, accentColor: String, initial: RelationLevel = .public,
+         circleSummary: ProfileCirclesSummary? = nil) {
         self.user = user
         self.accentColor = accentColor
+        self.circleSummary = circleSummary
         _model = StateObject(wrappedValue: VitrineSeenAsViewModel(
             handle: user.username, ownerRole: PlatformRole(raw: user.role), initial: initial
         ))
-        crans = VitrineCran.make(ownerRole: PlatformRole(raw: user.role))
     }
 
     private var accent: Color { Color(hex: accentColor) }
@@ -42,22 +47,24 @@ struct VitrineSeenAsView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                 hero
-                VitrineCransSection(crans: crans, current: model.level, accentColor: accentColor,
+                VitrineCransSection(crans: model.crans, current: model.level, accentColor: accentColor,
                                     onSelect: { level in model.select(level) })
                 if let voice = Self.publicVoice(of: shown) {
                     ProfileVoiceSection(sample: voice, accentColor: accentColor)
                 }
+                publicationsSection
                 lockedSection
                 ladderSection
                 linkFooter
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.bottom, MeeshySpacing.xxxl)
-            .meeshyAnimation(MeeshyAnimation.springDefault, value: model.level)
+            .meeshyMotion(.morph, value: model.level)
         }
         .safeAreaInset(edge: .top, spacing: 0) { header }
         .background(theme.backgroundGradient.ignoresSafeArea())
         .task { model.start() }
+        .task { publications = await Self.cachedPublications(of: user.id) }
         .task(id: linkCopied) {
             guard linkCopied else { return }
             _ = await cancellableSleep(for: .seconds(2))
@@ -80,9 +87,11 @@ struct VitrineSeenAsView: View {
                     Spacer(minLength: 0)
                 }
             }
+            // L'en-tête épinglé ne défile pas : l'échelle y reste une rangée, qui défile de côté plutôt que de
+            // s'empiler en six rangées et de manger l'aperçu.
             ViewThatFits(in: .horizontal) {
                 circlePicker(form: .dots).frame(maxWidth: .infinity)
-                circlePicker(form: .ladder).frame(maxWidth: .infinity, alignment: .leading)
+                ScrollView(.horizontal, showsIndicators: false) { circlePicker(form: .dots) }
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
@@ -90,8 +99,7 @@ struct VitrineSeenAsView: View {
         .meeshyGlass(in: Rectangle(), density: .dense)
     }
 
-    /// Les six cercles d'une rangée ; aux grandes tailles de texte, ils s'empilent en échelle verticale (K33 `ladder`)
-    /// plutôt que de défiler de côté ou d'écraser les noms.
+    /// Les six cercles d'une rangée (K33 `dots`), jamais des noms écrasés.
     private func circlePicker(form: MeeshyCircleScaleForm) -> some View {
         MeeshyCircleScale(
             levels: Self.levels,
@@ -176,15 +184,7 @@ struct VitrineSeenAsView: View {
                     .foregroundStyle(theme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            languageChips
-        }
-    }
-
-    private var languageChips: some View {
-        HStack(spacing: MeeshySpacing.xs) {
-            ForEach(Self.languageNames(of: shown), id: \.self) { name in
-                MeeshyBadge(.label(name), surface: .tonal, kind: .accent, tint: accent)
-            }
+            ProfileLanguageChips(languages: Self.shownLanguages(of: model.preview, owner: user))
         }
     }
 
@@ -194,15 +194,41 @@ struct VitrineSeenAsView: View {
         ProfileCity.seen(city: owner.city, circle: owner.cityCircle, by: level)
     }
 
-    /// Les langues du Prisme que la Vitrine affiche, dans leur ordre, sans doublon.
-    static func languageNames(of user: MeeshyUser) -> [String] {
-        let codes = [user.systemLanguage, user.regionalLanguage, user.customDestinationLanguage]
-            .compactMap { $0 }
-            .filter { !$0.isEmpty }
-        let unique = codes.reduce(into: [String]()) { result, code in
-            if !result.contains(code) { result.append(code) }
+    /// Les langues que CE cercle lit : la liste servie quand le serveur a servi sa fiche (elle ne porte plus les trois
+    /// rangs), mes trois rangs en projection — jamais des pastilles qui disparaissent quand la réponse arrive.
+    static func shownLanguages(of preview: VitrinePreview, owner: MeeshyUser) -> ProfilePrismLanguages {
+        guard preview.source == .served, let served = preview.profile else {
+            return ProfilePrismLanguages(system: owner.systemLanguage ?? "", regional: owner.regionalLanguage ?? "",
+                                         custom: owner.customDestinationLanguage ?? "")
         }
-        return unique.map { LanguageData.info(for: $0)?.nativeName ?? $0 }
+        let ranked = served.languages
+        func rank(_ index: Int) -> String { ranked.indices.contains(index) ? ranked[index] : "" }
+        return ProfilePrismLanguages(system: rank(0), regional: rank(1), custom: rank(2))
+    }
+
+    /// Ce que CE cercle voit de mes publications : la visibilité déclarée de chacune, lue fail-closed — une audience
+    /// choisie (ONLY, EXCEPT), privée ou absente n'est montrée à aucun cercle.
+    static func visiblePublications(_ posts: [FeedPost], to level: RelationLevel) -> [FeedPost] {
+        posts.filter { post in
+            guard let floor = audienceFloor(of: post.visibility) else { return false }
+            return level >= floor
+        }
+    }
+
+    static func audienceFloor(of visibility: String?) -> RelationLevel? {
+        switch PostVisibility(rawValue: (visibility ?? "").uppercased()) {
+        case .public: return .public
+        case .community: return .community
+        case .acquaintances: return .acquaintance
+        case .friends: return .friend
+        case .close: return .close
+        case .blood: return .blood
+        case .except, .only, .private, .none: return nil
+        }
+    }
+
+    private static func cachedPublications(of userId: String) async -> [FeedPost] {
+        await CacheCoordinator.shared.feed.loadIgnoringExpiry(for: "user:\(userId)")?.items ?? []
     }
 
     @ViewBuilder
@@ -217,6 +243,40 @@ struct VitrineSeenAsView: View {
         case .unavailable:
             EmptyView()
         }
+    }
+
+    // MARK: - Publications
+
+    /// « Publications » entre « Ma voix » et « Masqué à ce niveau » (planche `Moi-Apercu`) : les trois dernières que CE
+    /// cercle voit, dans la grille du kit (K49), sous-titrées de leur nombre ; rien de visible ⇒ la section se tait.
+    @ViewBuilder
+    private var publicationsSection: some View {
+        let visible = Self.visiblePublications(publications, to: model.level)
+        if !visible.isEmpty {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                MeeshySectionHeader(title: ProfilePublicationsCopy.title, lead: { EmptyView() }, accessory: {
+                    Text(VitrineSeenAsCopy.publicationsCount(visible.count))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
+                })
+                MeeshyMediaGrid(label: ProfilePublicationsCopy.title,
+                                items: visible.prefix(ProfilePublicationTiles.limit).map { ProfilePublicationTiles.item(for: $0) },
+                                layout: .row, columns: 3, shape: .tall, tint: accent,
+                                onOpen: { _ in },
+                                content: { item, size in publicationThumbnail(item, in: visible, size: size) })
+            }
+            .meeshyTransition(.opacity)
+            .accessibilityIdentifier("profile.seenAs.publications")
+        }
+    }
+
+    private func publicationThumbnail(_ item: MeeshyMediaGridItem, in posts: [FeedPost], size: CGSize) -> some View {
+        let post = posts.first { $0.id == item.id }
+        return CachedAsyncImage(url: post.flatMap { ProfilePublicationTiles.thumbnail(of: $0) }, targetSize: size,
+                                thumbHash: post?.media.first?.thumbHash, showsStatusOverlays: false) {
+            accent.opacity(MeeshyOpacity.light)
+        }
+        .scaledToFill()
     }
 
     // MARK: - Masqué à ce niveau
@@ -266,6 +326,11 @@ struct VitrineSeenAsView: View {
             content: content,
             leading: { MeeshyToggleRowSymbol(VitrineSeenAsCopy.glyph(of: step.level)) },
             titleAccessory: {
+                if let count = Self.ladderCount(of: step.level, in: circleSummary) {
+                    Text(count.formatted(.number.locale(locale)))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                        .foregroundStyle(theme.textMuted)
+                }
                 if isCurrent {
                     MeeshyBadge(.label(VitrineSeenAsCopy.youAreHere), surface: .solid, kind: .accent, tint: accent, size: .s18)
                 }
@@ -273,6 +338,12 @@ struct VitrineSeenAsView: View {
             trailing: { MeeshyToggleRowNoSlot() }
         )
         .opacity(VitrineLadder.isReached(step.level, seenAs: model.level) ? 1 : MeeshyOpacity.strong)
+    }
+
+    /// Les personnes d'un cercle, quand « Mes cercles » les a servies ; le Public n'en a pas.
+    static func ladderCount(of level: RelationLevel, in summary: ProfileCirclesSummary?) -> Int? {
+        guard let summary, ProfileCirclesSummary.levels.contains(level) else { return nil }
+        return summary.count(of: level)
     }
 
     // MARK: - Le lien de la page publique

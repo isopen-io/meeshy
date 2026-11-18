@@ -21,8 +21,16 @@ struct TrackingLinkDetailView: View {
     /// Le lien tel que l'écran le montre : la dernière modification retenue, sinon celui qu'on a ouvert.
     var current: TrackingLink { viewModel.edited ?? link }
 
-    init(link: TrackingLink) {
+    /// Le lien tel que le détail l'a laissé (interrupteur, modification) : la liste qui l'a ouvert le reflète.
+    private let onChanged: @MainActor (TrackingLink) -> Void
+    /// Le lien supprimé : la liste qui l'a ouvert le retire.
+    private let onDeleted: @MainActor (String) -> Void
+
+    init(link: TrackingLink, onChanged: @escaping @MainActor (TrackingLink) -> Void = { _ in },
+         onDeleted: @escaping @MainActor (String) -> Void = { _ in }) {
         self.link = link
+        self.onChanged = onChanged
+        self.onDeleted = onDeleted
         _viewModel = StateObject(wrappedValue: TrackingDetailViewModel(token: link.token, isActive: link.isActive))
     }
 
@@ -48,6 +56,12 @@ struct TrackingLinkDetailView: View {
         }
         .task { await viewModel.load() }
         .task { await viewModel.loadVisitorMap() }
+        .onReceive(viewModel.$isActive.dropFirst().removeDuplicates()) { isActive in
+            onChanged(current.withActive(isActive))
+        }
+        .onReceive(viewModel.$edited.dropFirst().compactMap { $0 }) { edited in
+            onChanged(edited.withActive(viewModel.isActive))
+        }
         .sheet(isPresented: $isEditing) { editSheet }
         .fullScreenCover(isPresented: $isMapEnlarged) { enlargedMap }
         .confirmationDialog(String(localized: "tracking.link.detail.confirmDelete", defaultValue: "Supprimer ce lien ?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
@@ -136,7 +150,10 @@ struct TrackingLinkDetailView: View {
         Task {
             do {
                 try await TrackingLinkService.shared.deleteLink(token: current.token)
-                await MainActor.run { dismiss() }
+                await MainActor.run {
+                    onDeleted(link.id)
+                    dismiss()
+                }
             } catch {
                 await MainActor.run {
                     HapticFeedback.error()

@@ -162,6 +162,7 @@ public struct MeeshyStateBlock<Glyph: View>: View {
             VStack(spacing: MeeshySpacing.md) {
                 switch art {
                 case .ghost(let template, let count): ghosts(template, count: MeeshyStateBlockRecipe.ghostCount(count))
+                case .ghostTiles(let tiles): ghostTiles(MeeshyStateBlockRecipe.shownGhostTiles(tiles), color: color)
                 case .glyph: glyph
                 case .none: EmptyView()
                 }
@@ -194,6 +195,31 @@ public struct MeeshyStateBlock<Glyph: View>: View {
                     .overlay(shape.stroke(Color.secondary.opacity(MeeshyOpacity.light),
                                                 style: StrokeStyle(lineWidth: MeeshyBorder.emphasis, dash: [4, 3])))
                     .frame(width: template == .pin ? height : nil, height: height)
+            }
+        }
+    }
+
+    /// Une rangée de tuiles pointillées, chacune avec son glyphe teinté et sa légende ; muettes (l'image entière est
+    /// cachée au lecteur d'écran : le titre du bloc la dit).
+    private func ghostTiles(_ tiles: [MeeshyStateGhostTile], color: Color) -> some View {
+        let shape = RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+        return HStack(spacing: MeeshySpacing.sm) {
+            ForEach(tiles, id: \.self) { tile in
+                VStack(spacing: MeeshySpacing.xs) {
+                    Image(systemName: tile.systemImage)
+                        .meeshyScaledFont(MeeshyFont.headlineSize, weight: .semibold)
+                        .foregroundStyle(color)
+                    Text(verbatim: tile.caption)
+                        .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .frame(maxWidth: .infinity, minHeight: 72)
+                .padding(.horizontal, MeeshySpacing.xs)
+                .background(shape.fill(Color.secondary.opacity(MeeshyOpacity.faint)))
+                .overlay(shape.strokeBorder(Color.secondary.opacity(MeeshyOpacity.light),
+                                            style: StrokeStyle(lineWidth: MeeshyBorder.emphasis, dash: [4, 3])))
             }
         }
     }

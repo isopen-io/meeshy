@@ -47,12 +47,14 @@ private struct ProfileTalkieSection: View {
 
 // MARK: - Ensemble
 
-/// « Ensemble » : regarder et écouter ensemble dès Proche, Bring dès Ami avec son compteur du jour.
+/// « Ensemble » : regarder et écouter ensemble et lui envoyer un contenu dès Proche, Bring dès Ami avec son compteur du
+/// jour.
 private struct ProfileTogetherSection: View {
     let request: ProfileLiveRequest
     @StateObject private var circle: ProfileCircleViewModel
     @StateObject private var bring: ProfileBringViewModel
     @State private var picking: TogetherMediaKind?
+    @State private var sendingContent = false
 
     init(request: ProfileLiveRequest) {
         self.request = request
@@ -81,6 +83,9 @@ private struct ProfileTogetherSection: View {
                                       tint: request.tint)
             }
         }
+        .sheet(isPresented: $sendingContent) {
+            ProfileSendContentSheet(userId: request.userId, displayName: request.displayName, tint: request.tint)
+        }
     }
 
     private var section: some View {
@@ -97,6 +102,11 @@ private struct ProfileTogetherSection: View {
                 }
                 if circle.offersBring {
                     ProfileBringAction(viewModel: bring, displayName: request.displayName, tint: request.tint)
+                }
+                if circle.offersTogether {
+                    MeeshyLabeledAction(title: ProfileSendContentCopy.title, systemImage: ProfileSendContentCopy.glyph,
+                                        tint: request.tint, action: { sendingContent = true })
+                        .accessibilityIdentifier("together.sendContent")
                 }
             }
             if circle.offersBring {

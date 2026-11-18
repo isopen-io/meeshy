@@ -3,10 +3,13 @@ import Combine
 import os
 import MeeshySDK
 import MeeshyUI
-import Charts
 
-/// « Mon activité » (#18591, ex-Statistiques) : mes trois compteurs (`UserActivityCards`) puis la frise des trente
-/// derniers jours. Les badges ne s'y montrent plus : Ma Légende les porte, et les montrer ici en faisait deux vitrines.
+/// « Mon activité » (#18591, ex-Statistiques) : mes trois compteurs puis la frise des trente derniers jours. Les badges
+/// ne s'y montrent plus : Ma Légende les porte, et les montrer ici en faisait deux vitrines.
+///
+/// L'écran est FAIT DU KIT (#19635, loi 12) : la bande de chiffres K34 dans une carte de groupe K43, la frise K50
+/// (`StatsTimelineChart`), l'échec en bloc d'état K38 avec « Réessayer » (loi 8). Le squelette ne tient que la place
+/// d'une donnée que ni le cache ni le serveur n'ont encore servie.
 struct UserStatsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isPresented) private var isPresented
@@ -43,127 +46,84 @@ struct UserStatsView: View {
 
     // MARK: - Content
 
-    /// L'erreur et la frise paraissent en fondu à la réponse du réseau ; le contenu ne saute plus.
+    /// L'échec et la frise paraissent en fondu à la réponse du réseau ; le contenu ne saute plus.
     private var statsContent: some View {
         VStack(spacing: MeeshySpacing.xl) {
-            if let errorMessage = viewModel.errorMessage {
-                errorBanner(errorMessage)
+            if let failure = viewModel.failure {
+                failureBlock(failure)
                     .meeshyTransition(.move(edge: .top).combined(with: .opacity))
             }
-            statsCards
-            if !viewModel.timeline.isEmpty {
-                timelineChart
-                    .meeshyTransition(.opacity)
-            }
+            figuresCard
+            timelineSection
             Spacer().frame(height: 40)
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.top, MeeshySpacing.sm)
-        .meeshyMotion(.rise, value: viewModel.errorMessage)
+        .meeshyMotion(.rise, value: viewModel.failure)
         .meeshyMotion(.rise, value: viewModel.timeline.isEmpty)
     }
 
-    private func errorBanner(_ message: String) -> some View {
-        HStack(spacing: MeeshySpacing.md) {
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                .foregroundStyle(MeeshyColors.error)
-                .accessibilityHidden(true)
-            Text(message)
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundStyle(MeeshyColors.error)
-            Spacer()
-        }
-        .padding(MeeshySpacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
-        )
+    // MARK: - L'échec (K38)
+
+    /// Une erreur a toujours « Réessayer » (loi 8) ; elle ne retire rien de ce qui est affiché.
+    private func failureBlock(_ failure: UserActivityScreenPlan.Failure) -> some View {
+        MeeshyStateBlock(kind: failure.isOffline ? .offline : .error, title: Self.failureTitle(failure),
+                         primary: MeeshyStateBlockAction(title: ProfilePublicationsCopy.retry,
+                                                         systemImage: "arrow.clockwise",
+                                                         isPending: viewModel.isRetrying,
+                                                         perform: { Task { await viewModel.retry() } }),
+                         art: .none, size: .compact, tint: Color(hex: accentColor),
+                         isOverContent: failure.keepsContent)
+            .accessibilityIdentifier("user.stats.failure")
     }
 
-    // MARK: - Stats Cards
-
-    private var statsCards: some View {
-        VStack(spacing: MeeshySpacing.md) {
-            ForEach(UserActivityCards.make(stats: viewModel.stats)) { card in
-                statCard(card)
-            }
-        }
+    /// Rien d'affiché : Mon activité est indisponible (hors ligne se dit hors ligne). Déjà affichée : elle n'a pas pu
+    /// se mettre à jour, et ce qu'on lit reste.
+    static func failureTitle(_ failure: UserActivityScreenPlan.Failure) -> String {
+        guard failure.keepsContent else { return ProfileActivityBand.unavailableTitle(offline: failure.isOffline) }
+        return String(localized: "user.stats.refresh_failed", defaultValue: "Mon activité n'a pas pu se mettre à jour", bundle: .main)
     }
 
-    private func statCard(_ card: UserActivityCards.Card) -> some View {
-        let color = card.colorHex
-        return HStack(spacing: MeeshySpacing.md) {
-            // Icône figée : glyphe décoratif verrouillé dans une puce 36×36 à géométrie fixe
-            // (doctrine 74i/83i — la valeur/label scalent, le chip ne bouge pas). Masqué VoiceOver.
-            Image(systemName: card.icon)
-                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.xl, weight: .semibold))
-                .foregroundStyle(Color(hex: color))
-                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(Color(hex: color).opacity(MeeshyOpacity.light))
-                )
-                .accessibilityHidden(true)
+    // MARK: - Les chiffres (K34)
 
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(card.value, format: .number)
-                    .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color(hex: card.valueHex(isDark: theme.mode.isDark)))
-
-                Text(card.label)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(theme.textMuted)
-            }
-
-            Spacer()
+    /// Les trois compteurs SONT la bande de chiffres du kit, à l'encre du texte : la carte reste à l'hôte (K43). Les
+    /// valeurs et leurs noms viennent des cartes de Mon activité, comme sur ma fiche — jamais trois zéros inventés.
+    private var figuresCard: some View {
+        let isLoading = UserActivityScreenPlan.figuresAreLoading(hasStats: viewModel.stats != nil,
+                                                                 hasSettled: viewModel.hasSettled)
+        return MeeshyGroupCard(tint: Color(hex: accentColor)) {
+            MeeshyFigureBand(items: ProfileActivityBand.figures(of: viewModel.stats, isLoading: isLoading),
+                             isLoading: isLoading, emptyLabel: ProfileActivityBand.emptyLabel)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, MeeshySpacing.lg)
+                .padding(.horizontal, MeeshySpacing.md)
         }
-        .padding(MeeshySpacing.mdPlus)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(theme.surfaceGradient(tint: color))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(theme.border(tint: color), lineWidth: 1)
-                )
-        )
-        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("user.stats.figures")
     }
 
-    // MARK: - Timeline Chart
+    // MARK: - La frise (K50)
 
     /// La frise dit sa période, pas « ACTIVITÉ » : le titre de l'écran le dit déjà.
     static var timelineHeader: String {
         String(localized: "user.stats.last_30_days", defaultValue: "30 DERNIERS JOURS", bundle: .main)
     }
 
-    private var timelineChart: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                Image(systemName: "chart.xyaxis.line")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.info)
-                    .accessibilityHidden(true)
-                Text(Self.timelineHeader)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                    .foregroundColor(MeeshyColors.info)
-                    .tracking(1.2)
+    @ViewBuilder
+    private var timelineSection: some View {
+        let phase = UserActivityScreenPlan.timeline(pointCount: viewModel.timeline.count,
+                                                    hasSettled: viewModel.hasSettled,
+                                                    failed: viewModel.failure != nil)
+        if phase != .hidden {
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                MeeshySectionHeader(title: Self.timelineHeader, form: .overline)
+                MeeshyGroupCard(tint: Color(hex: MeeshyColors.tileBlueHex)) {
+                    StatsTimelineChart(timeline: viewModel.timeline, isLoading: phase == .skeleton,
+                                       tint: Color(hex: MeeshyColors.tileBlueHex))
+                        .padding(MeeshySpacing.mdPlus)
+                }
             }
-            .padding(.leading, MeeshySpacing.xs)
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isHeader)
-
-            StatsTimelineChart(timeline: viewModel.timeline, color: MeeshyColors.tileBlueHex)
-                .frame(height: 180)
-                .padding(MeeshySpacing.mdPlus)
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .fill(theme.surfaceGradient(tint: MeeshyColors.tileBlueHex))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                .stroke(theme.border(tint: MeeshyColors.tileBlueHex), lineWidth: 1)
-                        )
-                )
+            .meeshyTransition(.opacity)
+            .accessibilityIdentifier("user.stats.timeline")
         }
     }
 }
@@ -179,18 +139,29 @@ final class UserStatsViewModel: ObservableObject {
     nonisolated deinit {}
     @Published var stats: UserStats?
     @Published var timeline: [TimelinePoint] = []
-    @Published var isLoading = false
-    @Published var errorMessage: String?
+    /// Faux tant que ni le cache ni le serveur n'ont répondu : c'est la seule fenêtre où un squelette se dessine.
+    @Published private(set) var hasSettled = false
+    @Published private(set) var failure: UserActivityScreenPlan.Failure?
+    @Published private(set) var isRetrying = false
 
     private static let logger = MeeshyLog.logger(.stats)
 
+    /// « Réessayer » relit le serveur quoi que dise le cache : c'est ce que l'utilisateur vient de demander.
+    func retry() async {
+        guard !isRetrying else { return }
+        isRetrying = true
+        await load(force: true)
+        isRetrying = false
+    }
+
     /// Le cache se peint d'abord ; compteurs et frise se relisent chacun selon SON cache (`UserActivityRefreshLaw`).
-    func load() async {
+    func load(force: Bool = false) async {
+        defer { hasSettled = true }
         let userId = AuthManager.shared.currentUser?.id ?? ""
         let cachedStats = await CacheCoordinator.shared.stats.load(for: userId)
         let cachedTimeline = await CacheCoordinator.shared.timeline.load(for: Self.timelineKey(userId))
         switch cachedStats {
-        case .fresh(let cached, _), .stale(let cached, _): stats = cached.first
+        case .fresh(let cached, _), .stale(let cached, _): if let first = cached.first { stats = first }
         case .expired, .empty: break
         }
         switch cachedTimeline {
@@ -198,45 +169,44 @@ final class UserStatsViewModel: ObservableObject {
         case .expired, .empty: break
         }
         let statsFreshness = UserActivityRefreshLaw.freshness(of: cachedStats)
-        let fetchesStats = UserActivityRefreshLaw.needsStatsFetch(stats: statsFreshness)
-        let fetchesTimeline = UserActivityRefreshLaw.needsTimelineFetch(
+        let fetchesStats = force || UserActivityRefreshLaw.needsStatsFetch(stats: statsFreshness)
+        let fetchesTimeline = force || UserActivityRefreshLaw.needsTimelineFetch(
             stats: statsFreshness, timeline: UserActivityRefreshLaw.freshness(of: cachedTimeline)
         )
         guard fetchesStats || fetchesTimeline else { return }
-        isLoading = stats == nil
-        async let statsFailure = refreshStats(fetchesStats, userId: userId)
-        async let timelineFailure = refreshTimeline(fetchesTimeline, userId: userId)
-        let failures = await [statsFailure, timelineFailure].compactMap { $0 }
-        errorMessage = failures.first
-        isLoading = false
+        async let statsFailed = refreshStats(fetchesStats, userId: userId)
+        async let timelineFailed = refreshTimeline(fetchesTimeline, userId: userId)
+        let failed = await [statsFailed, timelineFailed].contains(true)
+        failure = UserActivityScreenPlan.failure(failed: failed, isOffline: NetworkMonitor.shared.isOffline,
+                                                 hasContent: stats != nil || !timeline.isEmpty)
     }
 
     private static func timelineKey(_ userId: String) -> String { "timeline_\(userId)" }
 
-    /// `nil` au succès (ou sans demande), le message d'erreur sinon.
-    private func refreshStats(_ fetches: Bool, userId: String) async -> String? {
-        guard fetches else { return nil }
+    /// Vrai si la relecture demandée a échoué.
+    private func refreshStats(_ fetches: Bool, userId: String) async -> Bool {
+        guard fetches else { return false }
         do {
             let served = try await StatsService.shared.fetchStats()
             stats = served
             await bestEffort("userStatsView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([served], for: userId) }
-            return nil
+            return false
         } catch {
             UserStatsViewModel.logger.error("stats refresh failed: \(error.localizedDescription)")
-            return error.localizedDescription
+            return true
         }
     }
 
-    private func refreshTimeline(_ fetches: Bool, userId: String) async -> String? {
-        guard fetches else { return nil }
+    private func refreshTimeline(_ fetches: Bool, userId: String) async -> Bool {
+        guard fetches else { return false }
         do {
             let served = try await StatsService.shared.fetchTimeline(days: 30)
             timeline = served
             await bestEffort("userStatsView.timeline.save", category: .cache) { try await CacheCoordinator.shared.timeline.save(served, for: Self.timelineKey(userId)) }
-            return nil
+            return false
         } catch {
             UserStatsViewModel.logger.error("timeline refresh failed: \(error.localizedDescription)")
-            return error.localizedDescription
+            return true
         }
     }
 }

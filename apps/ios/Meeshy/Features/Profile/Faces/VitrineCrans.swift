@@ -14,22 +14,32 @@ struct VitrineCran: Identifiable, Equatable {
     /// Les trois crans de la planche : le plancher, le premier cercle d'amitié, le plus intime.
     static let levels: [RelationLevel] = [.public, .friend, .blood]
 
-    static func make(ownerRole: PlatformRole?) -> [VitrineCran] {
+    /// Chaque cran se lit dans la fiche que le serveur a servie à CE cercle dès qu'elle existe (âge du propriétaire,
+    /// version de la loi), sinon dans la projection : jamais une seconde lecture qui contredirait l'aperçu servi.
+    static func make(ownerRole: PlatformRole?, served: [RelationLevel: PublicProfile] = [:]) -> [VitrineCran] {
         levels.map { level in
-            let seen = VitrineSeenAs.make(view: ProfileCircleView.seenAs(level, ownerRole: ownerRole))
-            let locked = Set(seen.lockedRows.map(\.row))
-            return VitrineCran(level: level,
-                               opened: VitrineSeenAs.Row.allCases.filter { !locked.contains($0) },
-                               contact: seen.contact)
+            make(level: level, seen: VitrinePreview.make(level: level, served: served[level], ownerRole: ownerRole).seen)
         }
     }
 
-    /// « Ami : Présence, Niveau et rang. Écrire » — le cran, ce qu'il ouvre, puis le geste de contact.
+    static func make(level: RelationLevel, seen: VitrineSeenAs) -> VitrineCran {
+        let locked = Set(seen.lockedRows.map(\.row))
+        return VitrineCran(level: level,
+                           opened: VitrineSeenAs.Row.allCases.filter { !locked.contains($0) },
+                           contact: seen.contact)
+    }
+
+    /// « Ami : Présence et Niveau et rang. Écrire » — le cran, ce qu'il ouvre, puis le geste de contact ; la
+    /// ponctuation et l'ordre viennent du catalogue de la langue, la liste du `ListFormatter`.
     var spokenLabel: String {
-        let opens = opened.isEmpty ? VitrineSeenAsCopy.cranNothing : opened.map(VitrineSeenAsCopy.rowTitle).joined(separator: ", ")
-        let contactWord = VitrineCran.contactWord(contact)
-        let head = "\(CircleLevelNames.title(of: level)) : \(opens)"
-        return contactWord.map { "\(head). \($0)" } ?? head
+        let opens = opened.isEmpty
+            ? VitrineSeenAsCopy.cranNothing
+            : ListFormatter.localizedString(byJoining: opened.map(VitrineSeenAsCopy.rowTitle))
+        let circle = CircleLevelNames.title(of: level)
+        guard let contactWord = VitrineCran.contactWord(contact) else {
+            return VitrineSeenAsCopy.cranSpoken(circle: circle, opens: opens)
+        }
+        return VitrineSeenAsCopy.cranSpoken(circle: circle, opens: opens, contact: contactWord)
     }
 
     static func contactWord(_ contact: VitrineSeenAs.Contact) -> String? {
@@ -48,14 +58,23 @@ struct VitrineCransSection: View {
     let accentColor: String
     let onSelect: (RelationLevel) -> Void
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             MeeshySectionHeader(title: VitrineSeenAsCopy.cransTitle)
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: MeeshySpacing.sm) { cards }
+            if Self.stacksVertically(dynamicTypeSize) {
                 VStack(spacing: MeeshySpacing.sm) { cards }
+            } else {
+                HStack(alignment: .top, spacing: MeeshySpacing.sm) { cards }
             }
         }
+    }
+
+    /// Côte à côte comme la planche, trois colonnes égales dont les lignes passent sur deux lignes ; empilées
+    /// seulement aux tailles d'accessibilité — jamais sur la largeur idéale d'un texte d'une seule ligne.
+    static func stacksVertically(_ size: DynamicTypeSize) -> Bool {
+        size.isAccessibilitySize
     }
 
     private var cards: some View {
@@ -74,6 +93,7 @@ struct VitrineCransSection: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressableButtonStyle())
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(cran.spokenLabel)
         .accessibilityAddTraits(isCurrent ? [.isButton, .isSelected] : .isButton)

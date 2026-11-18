@@ -133,4 +133,19 @@ extension ShareLinkArrivalStats {
             recentArrivals: recentArrivals.filter { $0.participantId != participantId }
         )
     }
+
+    /// Le retrait d'UNE arrivée défait sur les statistiques COURANTES : l'arrivée revient à sa place, les comptes
+    /// remontent d'un cran, et un autre retrait déjà accepté reste retiré.
+    nonisolated func restoringArrival(_ arrival: Arrival, at index: Int) -> ShareLinkArrivalStats {
+        guard !recentArrivals.contains(where: { $0.participantId == arrival.participantId }) else { return self }
+        let position = min(max(index, 0), recentArrivals.count)
+        return ShareLinkArrivalStats(
+            visits: visits,
+            arrivals: arrivals + 1,
+            anonymousArrivals: arrival.isAnonymous ? anonymousArrivals + 1 : anonymousArrivals,
+            arrivalsByLanguage: arrivalsByLanguage,
+            arrivalsByCountry: arrivalsByCountry,
+            recentArrivals: Array(recentArrivals.prefix(position)) + [arrival] + Array(recentArrivals.dropFirst(position))
+        )
+    }
 }
