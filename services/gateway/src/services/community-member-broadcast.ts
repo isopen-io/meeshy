@@ -28,6 +28,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
+  ROOMS,
   SERVER_EVENTS,
   type CommunityMemberJoinVia,
   type CommunityMemberJoinedEventData,
@@ -41,6 +42,7 @@ import { deferAfterResponse, type AfterResponse } from '../utils/after-response.
 import { broadcastToUser } from '../utils/socket-broadcast';
 import { announceCommunityLinkEntry } from './community-link-entry-announce';
 import { linkActivityRelayOf } from '../socketio/linkActivityEvents';
+import { emitServerEvent, type ServerEmitTarget } from '../socketio/serverEmit';
 
 const logger = enhancedLogger.child({ module: 'CommunityMemberBroadcast' });
 
@@ -118,35 +120,60 @@ export async function broadcastCommunityMemberChange(
   deps: CommunityMemberBroadcastDeps,
   change: CommunityMemberChange,
 ): Promise<number> {
+  return broadcastCommunityMemberChanges(deps, [change]);
+}
+
+/**
+ * Plusieurs gestes d'UNE même communauté, écrits ensemble (#19406 : un salon
+ * qui naît avec cent participants en fait entrer cent) : la communauté et son
+ * effectif se lisent UNE fois, et chaque geste part sous son propre événement
+ * avec l'effectif d'après l'écriture.
+ */
+export async function broadcastCommunityMemberChanges(
+  deps: CommunityMemberBroadcastDeps,
+  changes: readonly CommunityMemberChange[],
+): Promise<number> {
+  const communityIds = [...new Set(changes.map((change) => change.communityId))];
+  const counts = await Promise.all(
+    communityIds.map((communityId) =>
+      broadcastWithinCommunity(deps, communityId, changes.filter((change) => change.communityId === communityId)),
+    ),
+  );
+  return counts.reduce<number>((sum, one) => sum + one, 0);
+}
+
+async function broadcastWithinCommunity(
+  deps: CommunityMemberBroadcastDeps,
+  communityId: string,
+  changes: readonly CommunityMemberChange[],
+): Promise<number> {
   const community = await deps.prisma.community.findFirst({
-    where: { id: change.communityId, isActive: true },
+    where: { id: communityId, isActive: true },
     select: { id: true, createdBy: true },
   });
   if (!community) return 0;
 
   const members = await deps.prisma.communityMember.findMany({
-    where: { communityId: change.communityId, isActive: true },
+    where: { communityId, isActive: true },
     select: { userId: true, role: true },
   });
 
   const at = (deps.now ?? (() => new Date()))().toISOString();
-  const emission = emissionFor(change, members.length, at);
-  const plain = plainMemberEmission(change, members.length, at);
-  const seesEntry = new Set([
-    community.createdBy,
-    change.userId,
-    ...members.filter((m) => m.role === 'admin' || m.role === 'moderator').map((m) => m.userId),
-  ]);
-  const audience = [...new Set([...members.map((m) => m.userId), community.createdBy, change.userId])];
-
-  const delivered = audience.map((userId) => {
-    try {
-      deps.deliver(userId, seesEntry.has(userId) ? emission : plain);
-      return 1;
-    } catch (error) {
-      logger.warn('community member emit failed', { communityId: change.communityId, event: emission.event, error });
-      return 0;
-    }
+  const animators = members.filter((m) => m.role === 'admin' || m.role === 'moderator').map((m) => m.userId);
+  const delivered = changes.flatMap((change) => {
+    const emission = emissionFor(change, members.length, at);
+    const plain = plainMemberEmission(change, members.length, at);
+    const seesEntry = new Set([community.createdBy, change.userId, ...animators]);
+    const audience = [...new Set([...members.map((m) => m.userId), community.createdBy, change.userId])];
+    return audience.map((userId) => {
+      try {
+        deps.deliver(userId, seesEntry.has(userId) ? emission : plain);
+        return 1;
+      } catch (error) {
+        logger.warn('community member emit failed', { communityId, event: emission.event, error });
+        return 0;
+      }
+    });
   });
   return delivered.reduce<number>((sum, one) => sum + one, 0);
 }
@@ -196,4 +223,50 @@ export function scheduleCommunityMemberBroadcastFrom(fastify: FastifyInstance, c
       'community-link-entry',
     );
   }
+}
+
+/**
+ * Ce que reçoit un ÉCRIVAIN d'appartenance hors de `routes/communities/`
+ * (#19406, #18769) : créer un salon, y ajouter quelqu'un, débannir, rattacher
+ * un salon à une communauté privée font ENTRER dans la communauté sans passer
+ * par ses routes. L'écrivain (`applyCommunityAdmission`) reçoit l'annonce en
+ * paramètre REQUIS : le prochain qui s'ajoute doit dire comment il diffuse.
+ * Les gestes partent après la réponse, en un seul relevé de l'effectif.
+ */
+export type CommunityMemberAnnounce = (changes: readonly CommunityMemberChange[]) => void;
+
+export function communityMemberAnnouncer(
+  deps: CommunityMemberBroadcastDeps,
+  options: { readonly afterResponse?: AfterResponse } = {},
+): CommunityMemberAnnounce {
+  return (changes) => {
+    if (changes.length === 0) return;
+    (options.afterResponse ?? deferAfterResponse)(async () => {
+      try {
+        await broadcastCommunityMemberChanges(deps, changes);
+      } catch (error) {
+        logger.warn('community member broadcast failed', { communityId: changes[0]?.communityId, count: changes.length, error });
+      }
+    }, 'community-member-broadcast');
+  };
+}
+
+/** L'annonce d'une route : la room personnelle de chaque destinataire, par `broadcastToUser`. */
+export function communityMemberAnnouncerFrom(fastify: FastifyInstance): CommunityMemberAnnounce {
+  return communityMemberAnnouncer({
+    prisma: fastify.prisma,
+    deliver: (userId, emission) => deliverToUserRoom(fastify, userId, emission),
+  });
+}
+
+/** L'annonce d'un service qui ne tient que le serveur Socket.IO ; sans serveur, aucune socket à prévenir. */
+export function communityMemberAnnouncerOverIO(
+  prisma: CommunityMemberBroadcastDeps['prisma'],
+  io: { to(room: string): ServerEmitTarget } | null | undefined,
+): CommunityMemberAnnounce {
+  if (!io) return () => undefined;
+  return communityMemberAnnouncer({
+    prisma,
+    deliver: (userId, emission) => emitServerEvent(io.to(ROOMS.user(userId)), emission),
+  });
 }
