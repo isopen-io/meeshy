@@ -66,6 +66,7 @@ class WebRtcCallQualitySampler internal constructor(
                     bytesSent = stats.bandwidth.toLong(),
                     bytesReceived = stats.bytesReceived.toLong(),
                     availableOutgoingBitrateBps = stats.availableOutgoingBitrateBps,
+                    media = stats.media,
                 ),
             )
         }
