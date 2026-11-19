@@ -1485,3 +1485,14 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   présence des observateurs), jamais `SharedLocationSharingCenter` ni le centre Android.
 - Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests rc=0. Swift et
   `sdk-core` ne compilent pas en conteneur : `ios.yml` et `android.yml` feront foi au dégel.
+
+## 2026-11-19 — réveil de 5 h : #19768 (relance après reprise) recalée sur dev
+
+- Reprise : #19768 toujours ouverte, tête a263f99ad intacte ; la CI des PR reste gelée (35 vérifications « skipped »).
+  #19682 attend toujours la décision du porteur (aucune réponse depuis le 2026-11-18). Aucun nouveau lot ouvert.
+- `origin/dev` (96f5519cc : appels, profil iOS, pastilles des avatars) fusionnée à la main, sans conflit : `dev` n'a
+  touché ni `SharedLocationSharingCenter` iOS ni le centre Android (seules les feuilles de carte iOS bougent, hors lot).
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 046) rc=0,
+  couleurs d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
+- Prochain lot recommandé : fusion de #19768 au dégel, puis #19767, plafond `untilStopped` de `listOnlyState`,
+  #19682 une fois décidée.
