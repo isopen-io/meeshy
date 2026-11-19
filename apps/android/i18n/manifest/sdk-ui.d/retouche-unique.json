@@ -329,6 +329,12 @@
           "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "call.effects.face.baby",
+          "androidName": "retouch_effect_baby",
+          "status": "adopted"
+        },
+        {
           "catalog": "ui",
           "iosKey": "story.textEdit.tool.background",
           "androidName": "retouch_text_background",

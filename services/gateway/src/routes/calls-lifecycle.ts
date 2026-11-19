@@ -510,6 +510,10 @@ export function registerCallsLifecycleRoutes(fastify: FastifyInstance, deps: Cal
       return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error joining call', error);
+      // #19778 — parité socket : CALL_ENDED prouve l'appel fini, la carte restée `call-live` se réécrit (idempotent).
+      if (error instanceof CallAlreadyEndedError) {
+        callService.finalizeCallSummary(request.params.callId);
+      }
 
       const errorMessage = error.message || 'Failed to join call';
       const errorCode = errorMessage.split(':')[0];

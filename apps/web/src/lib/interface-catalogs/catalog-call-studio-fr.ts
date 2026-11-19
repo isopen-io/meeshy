@@ -16,6 +16,7 @@ const fr = {
   'callStudio.face.angel': 'Ange',
   'callStudio.face.demon': 'Démon',
   'callStudio.face.volcano': 'Éruption',
+  'callStudio.face.baby': 'Bébé',
   'callStudio.montage.screen': 'Plein écran',
   'callStudio.montage.grid': 'Mosaïque',
   'callStudio.montage.strip': 'Photomaton',

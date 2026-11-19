@@ -5,15 +5,14 @@ import { useStore } from 'zustand/react';
 import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { Glyph, GlyphSvg } from './glyph';
 import { CALLS_GLYPHS } from './glyphs-calls';
-import { conversationActiveCallQueryKey, joinableCall, loadConversationActiveCall } from '@/lib/api/call-sessions';
-import { unwrap } from '@/lib/api/client';
+import { joinableCall } from '@/lib/api/call-sessions';
 import { apiConfig } from '@/lib/api/config';
-import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { callActions } from '@/lib/calls/call-actions';
 import { rememberCallIdentity } from '@/lib/calls/call-notice';
 import { callStore, liveCallIn, type CallMedia } from '@/lib/calls/call-store';
+import { conversationActiveCallQuery } from '@/lib/calls/conversation-active-call-query';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
@@ -69,16 +68,14 @@ export function ThreadCallButton({
 
   const served = useQuery(
     {
-      queryKey: conversationActiveCallQueryKey(conversationId),
-      queryFn: async ({ signal }) => unwrap(await loadConversationActiveCall(apiDeps, conversationId, signal)),
+      ...conversationActiveCallQuery(conversationId),
       enabled: signedIn && !live,
       refetchInterval: THREAD_ACTIVE_CALL_POLL_MS,
       staleTime: THREAD_ACTIVE_CALL_POLL_MS,
-      retry: false,
     },
     appQueryClient,
   );
-  const joinable = joinableCall(served.data, liveCallHint);
+  const joinable = joinableCall(served.data, liveCallHint, { failed: served.isError });
 
   useEffect(() => {
     rememberCallIdentity(conversationId, { title, avatar, isGroup: group });

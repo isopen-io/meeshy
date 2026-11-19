@@ -156,4 +156,11 @@ describe('rejoindre depuis le fil — l’appel et son type (#9111)', () => {
     expect(joinableCall(undefined, null)).toBeNull();
     expect(joinableCall(null, { id: 'k0', kind: 'video' })).toBeNull();
   });
+
+  /* #19778 — un sondage en ÉCHEC n'est pas « avant la réponse » : la ligne de
+     liste, que rien n'a confirmée, rejoignait un appel fini (« appel terminé »). */
+  test('un sondage en échec ne retombe pas sur la ligne de liste', () => {
+    expect(joinableCall(undefined, { id: 'k0', kind: 'video' }, { failed: true })).toBeNull();
+    expect(joinableCall(undefined, { id: 'k0', kind: 'video' }, { failed: false })).toEqual({ callId: 'k0', media: 'video' });
+  });
 });

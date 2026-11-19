@@ -50,10 +50,10 @@ extension CommunityLinkDetailView {
             caption: { candidates[$0].shortName },
             tint: Self.accent,
             cell: { index, size in
-                MeeshyAvatar(name: candidates[index].name, context: .custom(size),
+                LivePresence { MeeshyAvatar(name: candidates[index].name, context: .custom(size),
                              avatarURL: candidates[index].avatar,
                              presenceState: PresenceManager.shared.knownPresenceState(for: candidates[index].id),
-                             ring: candidates[index].ring, enablePulse: false, isDark: isDark)
+                             ring: candidates[index].ring, enablePulse: false, isDark: isDark) }
             }
         )
         .frame(minHeight: MeeshyControlSize.tapTarget)

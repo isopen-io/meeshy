@@ -10,6 +10,7 @@
     <string name="call_effects_face_angel">Ángel</string>
     <string name="call_effects_face_demon">Demonio</string>
     <string name="call_effects_face_volcano">Erupción</string>
+    <string name="call_effects_face_baby">Bebé</string>
     <string name="call_effects_settings">Ajustes</string>
     <string name="call_effects_settings_hint">Muestra el brillo y el desenfoque del fondo en lugar de los efectos</string>
     <string name="call_effects_back">Volver a la llamada</string>

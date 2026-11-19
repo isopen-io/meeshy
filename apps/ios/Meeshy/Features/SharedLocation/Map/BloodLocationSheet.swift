@@ -159,9 +159,9 @@ struct BloodLocationSheet: View {
                 size: .compact,
                 showsDivider: row.id != rows.last?.id,
                 avatar: {
-                    MeeshyAvatar(name: name, context: .custom(32), accentColor: DynamicColorGenerator.colorForName(name),
+                    LivePresence { MeeshyAvatar(name: name, context: .custom(32), accentColor: DynamicColorGenerator.colorForName(name),
                                  avatarURL: model.observers[row.observerId]?.avatarURL,
-                                 presenceState: PresenceManager.shared.knownPresenceState(for: row.observerId))
+                                 presenceState: PresenceManager.shared.knownPresenceState(for: row.observerId)) }
                 },
                 trailing: {
                     if row.isExcessive {
