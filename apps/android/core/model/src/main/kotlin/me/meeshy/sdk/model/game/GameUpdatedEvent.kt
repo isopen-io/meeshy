@@ -25,6 +25,14 @@ data class GameUpdatedEvent(
 }
 
 /**
+ * `game:missions-updated` — miroir de `GameMissionsUpdatedEventData` (packages/shared/types/game-sync.ts, #16425) : une
+ * mission du joueur vient d'AVANCER ou de se TERMINER, ou le coffre du jour vient de s'ouvrir. Une invalidation pure,
+ * émise dans la room `user:<id>` du seul compte concerné : le client relit ses défis de la journée [dayKey].
+ */
+@Serializable
+data class GameMissionsUpdatedEvent(val dayKey: String = "")
+
+/**
  * Faut-il appliquer cet état ? Non seulement s'il est STRICTEMENT plus ancien que le dernier appliqué ; à révision égale
  * les deux états s'équivalent, et une source sans révision (serveur antérieur) s'applique toujours (miroir de
  * `shouldApplyGameState`, packages/shared/types/game-sync-order.ts).
