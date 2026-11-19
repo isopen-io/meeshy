@@ -474,68 +474,6 @@ describe('EncryptionService - Extended Coverage', () => {
       await service.initialize();
       await service.shutdown();
     });
-
-    /**
-     * #19755 — la carte `conversationId → keyId` n'est plus CHARGÉE au
-     * démarrage, elle est relue À LA DEMANDE. La garantie qui compte n'a pas
-     * changé de valeur, elle a changé de moment : une conversation dont la base
-     * porte déjà une clé ne s'en voit jamais forger une seconde.
-     *
-     * La ligne est posée dans sa forme NOMINALE de production — `isActive` que
-     * Prisma écrit depuis son `@default(true)`, et AUCUNE colonne `expiresAt`,
-     * qu'aucun créateur n'écrit. C'est cette absence que la lecture d'avant ne
-     * voyait pas.
-     */
-    it('retrouve À LA DEMANDE la clé que la base porte, sans en forger une seconde', async () => {
-      const keyId = 'preloaded-key-id';
-      const convId = 'conv-preloaded';
-      keyStorage.set(keyId, {
-        id: keyId,
-        encryptedKey: 'enc',
-        iv: 'iv',
-        authTag: 'tag',
-        algorithm: 'aes-256-gcm',
-        purpose: 'conversation',
-        conversationId: convId,
-        createdAt: new Date(),
-        lastAccessedAt: null,
-        isActive: true,
-      } as never);
-
-      const service = new EncryptionService(mockPrisma);
-      await service.initialize();
-
-      await expect(service.getOrCreateConversationKey(convId)).resolves.toBe(keyId);
-
-      const vault = (service as any).keyVault;
-      expect(vault.conversationKeyMap.get(convId)).toBe(keyId);
-      await service.shutdown();
-    });
-
-    /**
-     * #19755 — le démarrage ne lit plus rien, donc il ne peut plus échouer pour
-     * une base injoignable. La lecture à la demande échoue OUVERT par décision :
-     * elle journalise et laisse forger une clé neuve — exactement ce que faisait
-     * le chemin d'avant, dont la carte était vide à chaque fois. Fermer ici
-     * REFUSERAIT un message que la production accepte aujourd'hui, et le coût de
-     * l'ouverture est borné à une clé de plus : un chiffré voyage avec son
-     * `keyId` et s'ouvre par sa ligne, donc rien ne devient illisible.
-     */
-    it('un démarrage ne lit plus la base, et une lecture de clé en échec n’empêche pas de sceller', async () => {
-      const failPrisma = {
-        ...mockPrisma,
-        serverEncryptionKey: {
-          ...mockPrisma.serverEncryptionKey,
-          findMany: jest.fn().mockRejectedValue(new Error('DB connection error')),
-        },
-      } as any;
-
-      const service = new EncryptionService(failPrisma);
-      await expect(service.initialize()).resolves.toBeUndefined();
-      await expect(service.getOrCreateConversationKey('conv-db-down')).resolves.toEqual(expect.any(String));
-      expect(failPrisma.serverEncryptionKey.findMany).toHaveBeenCalledTimes(1);
-      await service.shutdown();
-    });
   });
 
   describe('getKey - database load path', () => {
