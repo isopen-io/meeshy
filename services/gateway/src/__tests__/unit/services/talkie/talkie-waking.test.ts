@@ -10,6 +10,7 @@ import { describe, it, expect, jest, afterEach } from '@jest/globals';
 import { TALKIE_JOIN_WINDOW_MS, TALKIE_MAX_DURATION_MS, TALKIE_SEALED_CODEC } from '@meeshy/shared/types/talkie';
 import { TalkieRelay, TALKIE_WAKING_PROCESS_MAX_BYTES, type TalkieRelayDeps } from '../../../../services/talkie/talkieRelay';
 import type { TalkieVerdict } from '../../../../services/talkie/talkieGate';
+import { matchesMongoWhere } from '../../../helpers/mongo-where';
 
 const FROM = '507f1f77bcf86cd799439011';
 const TO = '507f1f77bcf86cd799439022';
@@ -464,27 +465,58 @@ describe('#17141 — la conversation la plus récente de la paire', () => {
     { userId: TO, conversationId: 'c-quitte', isActive: false },
     { userId: FROM, conversationId: 'c-quitte', isActive: true },
   ];
+  /**
+   * #19803 — les lignes sont à la forme NOMINALE : **aucune clé `deletedAt`**,
+   * ce que produisent les onze chemins de création. L'ancienne fixture n'en
+   * portait pas non plus, mais son double ne lisait du `where` que `id.in` : il
+   * acceptait n'importe quelle clause, y compris l'égalité nue qui n'appariait
+   * rien en production. Le double ÉVALUE désormais la clause reçue contre ces
+   * documents — `deletedAt`, `isActive`, `type` et le régime de chiffrement
+   * compris — et les horloges sont des `Date`, comme la colonne.
+   */
   const conversations = [
-    { id: 'c-direct', lastMessageAt: 1, isActive: true },
-    { id: 'c-groupe', lastMessageAt: 5, isActive: true },
-    { id: 'c-quitte', lastMessageAt: 9, isActive: true },
-    { id: 'c-sans-lui', lastMessageAt: 10, isActive: true },
+    { id: 'c-direct', type: 'direct', isActive: true, encryptionMode: null, lastMessageAt: new Date('2026-11-01T00:00:00Z') },
+    { id: 'c-groupe', type: 'group', isActive: true, encryptionMode: null, lastMessageAt: new Date('2026-11-05T00:00:00Z') },
+    { id: 'c-quitte', type: 'direct', isActive: true, encryptionMode: null, lastMessageAt: new Date('2026-11-09T00:00:00Z') },
+    { id: 'c-sans-lui', type: 'direct', isActive: true, encryptionMode: null, lastMessageAt: new Date('2026-11-10T00:00:00Z') },
   ];
+  const conversationDouble = (rows: readonly Record<string, unknown>[]) => ({
+    findMany: async (args: { where: Record<string, unknown> }) => rows.filter((row) => matchesMongoWhere(row, args.where)),
+  });
   const prisma = {
     participant: {
       findMany: async (args: { where: { userId: string; isActive: boolean; conversationId?: { in: string[] } } }) =>
         participants.filter((p) => p.userId === args.where.userId && p.isActive && (!args.where.conversationId || args.where.conversationId.in.includes(p.conversationId))),
     },
-    conversation: {
-      findFirst: async (args: { where: { id: { in: string[] } } }) =>
-        conversations.filter((c) => args.where.id.in.includes(c.id)).sort((x, y) => y.lastMessageAt - x.lastMessageAt)[0] ?? null,
-    },
+    conversation: conversationDouble(conversations),
   };
 
   it('la plus récente des conversations où les DEUX sont actifs, pas forcément la directe', async () => {
     const { mostRecentSharedConversation } = await import('../../../../services/talkie/talkieFallback');
     expect(await mostRecentSharedConversation(prisma as never, FROM, TO)).toBe('c-groupe');
     expect(await mostRecentSharedConversation(prisma as never, FROM, INTRUS)).toBeNull();
+  });
+
+  /**
+   * #19834 — et « la plus récente » est le RANG. Une conversation REMONTÉE par
+   * une réaction, un appel ou une épingle passe devant celle qui porte le
+   * dernier message : c'est ce que les clients élisent sur `listRankAt`, et
+   * nommer autre chose enverrait la copie vocale ailleurs que là où
+   * l'utilisateur voit sa conversation en tête.
+   */
+  it('une conversation REMONTÉE par son activité passe devant celle du dernier message', async () => {
+    const { mostRecentSharedConversation } = await import('../../../../services/talkie/talkieFallback');
+    const remontée = {
+      id: 'c-direct',
+      type: 'direct',
+      isActive: true,
+      encryptionMode: null,
+      lastMessageAt: new Date('2026-11-01T00:00:00Z'),
+      lastActivityAt: new Date('2026-11-20T00:00:00Z'),
+    };
+    const avecRang = { ...prisma, conversation: conversationDouble([remontée, ...conversations.filter((c) => c.id !== 'c-direct')]) };
+
+    expect(await mostRecentSharedConversation(avecRang as never, FROM, TO)).toBe('c-direct');
   });
 });
 
@@ -499,17 +531,29 @@ describe('#17142 (audit) — ce qui borne le rattrapage et la copie', () => {
     expect(Math.min(...ttls) * 1000).toBeGreaterThanOrEqual(TALKIE_MAX_DURATION_MS + TALKIE_JOIN_WINDOW_MS);
   });
 
+  /**
+   * #19803 — ce témoin assertait sur la FORME de la clause
+   * (`toHaveBeenCalledWith` sur un `findFirst` rendant toujours `null`) : il
+   * passait au vert avec une clause JUSTE comme avec l'égalité nue qui
+   * n'appariait rien. Il assert désormais sur l'EFFET, contre des documents
+   * évalués — ce qui est strictement plus fort, et ce qui aurait attrapé le
+   * filtre mort.
+   */
   it('la copie ne vise qu’un échange privé que le serveur lit : direct ou groupe, jamais chiffré', async () => {
     const { mostRecentSharedConversation } = await import('../../../../services/talkie/talkieFallback');
-    const findFirst = jest.fn(async (_args: unknown) => null);
+    const rows = [
+      { id: 'c-communaute', type: 'community', isActive: true, encryptionMode: null, lastMessageAt: new Date('2026-11-20T00:00:00Z') },
+      { id: 'c-chiffree', type: 'direct', isActive: true, encryptionMode: 'e2ee', lastMessageAt: new Date('2026-11-19T00:00:00Z') },
+      { id: 'c-lisible', type: 'direct', isActive: true, encryptionMode: null, lastMessageAt: new Date('2026-11-01T00:00:00Z') },
+    ];
     const prisma = {
-      participant: { findMany: async () => [{ conversationId: 'c1' }] },
-      conversation: { findFirst },
+      participant: { findMany: async () => rows.map((row) => ({ conversationId: row.id })) },
+      conversation: { findMany: async (args: { where: Record<string, unknown> }) => rows.filter((row) => matchesMongoWhere(row, args.where)) },
     };
-    await mostRecentSharedConversation(prisma as never, FROM, TO);
-    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ type: { in: ['direct', 'group'] }, NOT: expect.objectContaining({ AND: expect.any(Array) }) }),
-    }));
+
+    // La communauté et la chiffrée sont plus récentes : seules les exclusions
+    // peuvent faire gagner la lisible.
+    expect(await mostRecentSharedConversation(prisma as never, FROM, TO)).toBe('c-lisible');
   });
 });
 

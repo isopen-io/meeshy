@@ -242,11 +242,17 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
       await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
 
+      // #19803 — `NOT_DELETED` (`{ isSet: false }`), et non l'égalité nue que
+      // cette assertion ÉPINGLAIT : un commentaire vivant n'a pas la clé, ses
+      // deux créateurs ne l'écrivant pas, si bien que `{ deletedAt: null }`
+      // n'appariait AUCUN commentaire — aucun commentateur précédent n'était
+      // jamais prévenu. Le témoin recopiait la clause, donc il attestait le
+      // défaut : il passait au vert avec la forme fausse comme avec la juste.
       expect(prisma.postComment.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             postId: POST_ID,
-            deletedAt: null,
+            deletedAt: { isSet: false },
           }),
         })
       );

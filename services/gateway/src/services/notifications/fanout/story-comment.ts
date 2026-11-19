@@ -7,6 +7,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger } from '../../../utils/logger-enhanced';
 import { filterPostConsumers } from '../../posts/postAudience';
+import { NOT_DELETED } from '../../posts/softDelete';
 import { textSynthesis } from '../content-synthesis';
 import { FANOUT_ROW_CAP } from './row-cap';
 import { getBlockedUserIdsAmong } from '../../../utils/blocking';
@@ -62,7 +63,14 @@ export async function getStoryNotificationRecipients(
     prisma.postComment.findMany({
       where: {
         postId,
-        deletedAt: null,
+        // #19803 — `NOT_DELETED` (`{ isSet: false }`), la discipline que les 105
+        // autres lectures de `Post` / `PostComment` emploient déjà : un
+        // commentaire non supprimé n'a PAS la clé, ses deux créateurs ne
+        // l'écrivant pas. L'égalité nue qui vivait ici n'appariait donc AUCUN
+        // commentaire — **aucun commentateur précédent n'a jamais été prévenu**
+        // qu'un nouveau commentaire était arrivé sous la story. Ce site était le
+        // seul du dépôt à lire cette colonne par une égalité.
+        deletedAt: NOT_DELETED,
         authorId: { notIn: excludedEngagerIds },
       },
       distinct: ['authorId'],
