@@ -181,8 +181,9 @@ extension CommunityLinkDetailView {
                                meta: entry.username.map { "@\($0)" },
                                showsDivider: false,
                                label: [entry.name, status].joined(separator: ", ")) {
-            MeeshyAvatar(name: entry.name, context: .custom(36), avatarURL: entry.avatar, enablePulse: false,
-                         isDark: isDark)
+            MeeshyAvatar(name: entry.name, context: .custom(36), avatarURL: entry.avatar,
+                         presenceState: PresenceManager.shared.knownPresenceState(for: entry.userId),
+                         enablePulse: false, isDark: isDark)
         }
     }
 }

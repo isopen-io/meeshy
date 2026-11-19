@@ -113,7 +113,7 @@ nonisolated struct ProfileCardQRState: Equatable, Sendable {
 /// l'invitation reste choisie. La vue le pilote par `.task(id:)`, qui l'arrête dès qu'on revient à la vitrine.
 @MainActor
 final class ProfileCardQRModel: ObservableObject {
-    typealias Pause = @Sendable (TimeInterval) async throws -> Void
+    typealias Pause = @concurrent @Sendable (TimeInterval) async throws -> Void
 
     @Published private(set) var state = ProfileCardQRState()
 

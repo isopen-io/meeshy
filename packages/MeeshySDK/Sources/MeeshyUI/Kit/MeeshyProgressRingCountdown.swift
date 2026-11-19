@@ -51,22 +51,21 @@ extension MeeshyProgressRingWords {
     public static func countdownValue(_ countdown: MeeshyProgressRingCountdown,
                                       bundle: Bundle? = nil,
                                       locale: Locale = .current) -> String {
-        let table = bundle ?? .module
         guard let minutes = countdown.remainingMinutes else {
             return String(localized: "kit.progress_ring.countdown.continuous", defaultValue: "en continu",
-                          bundle: table, locale: locale)
+                          bundle: bundle ?? .module, locale: locale)
         }
         guard minutes > 0 else {
             return String(localized: "kit.progress_ring.countdown.over", defaultValue: "terminé",
-                          bundle: table, locale: locale)
+                          bundle: bundle ?? .module, locale: locale)
         }
         guard minutes >= 60 else {
             let format = String(localized: "kit.progress_ring.countdown.minutes", defaultValue: "reste %lld min",
-                                bundle: table, locale: locale)
+                                bundle: bundle ?? .module, locale: locale)
             return String(format: format, locale: locale, minutes)
         }
         let format = String(localized: "kit.progress_ring.countdown.hours", defaultValue: "reste %1$lld h %2$02lld",
-                            bundle: table, locale: locale)
+                            bundle: bundle ?? .module, locale: locale)
         return String(format: format, locale: locale, minutes / 60, minutes % 60)
     }
 }

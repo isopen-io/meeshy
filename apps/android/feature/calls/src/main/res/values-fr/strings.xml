@@ -13,4 +13,5 @@
     <string name="call_peer_quality_degraded">La connexion de %1$s est instable</string>
     <string name="call_peer_muted">%1$s a coupé son micro</string>
     <string name="call_peer_camera_off">%1$s a désactivé sa caméra</string>
+    <string name="call_status_connected">Connectés</string>
 </resources>
