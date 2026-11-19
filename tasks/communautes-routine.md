@@ -610,3 +610,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 
 - Début du run : #19903 (#19869, iOS « Demande envoyée ») ouverte, poussée à 16:55 par une autre session, ses `workflow_dispatch` en file : vivante, cédée.
 - Lot : #19872 (passerelle) — une demande d'entrée se clôt quand la personne entre par une autre porte, et n'attend jamais indéfiniment.
+- Constat : une demande `pending` survivait à une entrée par une autre porte (invitation, ajout, salon) — repartie, la personne relisait « Demande envoyée » et accepter la vieille demande la faisait revenir ; et une demande qu'aucun intendant ne voit (blocage, compte un temps inutilisable) attendait indéfiniment.
+- Passerelle : `services/community-join-request-lifecycle.ts`. `closePendingJoinRequests` (`accepted`, au nom de qui fait entrer, ne lève jamais) appelée par les quatre écrivains d'entrée (`admitCommunityMember`, `…/invite`, `…/members`, `applyCommunityAdmission`) ; `liveJoinRequestWhere` (trente jours, `JOIN_REQUEST_TTL_MS`) dans chaque lecture et bascule : détail du demandeur, liste et décisions des intendants, compteur de `community:join-requested`, déduplication de `requestCommunityEntry`, qui écrit `expired` sur la vieille avant d'en poser une nouvelle. Décision écrite (`services/gateway/decisions/2026-11-19-…-19872.md`) : l'expiration plutôt qu'un refus implicite au blocage, qui le révélerait.
+- Cliquet `community-member-writer-sweep` : chaque écrivain d'entrée doit appeler `closePendingJoinRequests`.
+- Témoins : `join-request-lifecycle-19872.test.ts` (15, rouge prouvé : 11 échecs sur un module vide) ; `communities-core` et `link-entries-19429` ajustés (le `where` porte `createdAt`).
+- Aucun client touché, aucun contrat d'API changé.

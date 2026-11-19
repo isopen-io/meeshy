@@ -19,6 +19,11 @@ import { scheduleCommunityJoinRequestedFrom } from '../../services/community-joi
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import type { EngagementService } from '../../services/engagement/EngagementService';
 import type { CommunityJoinVia } from '../../services/community-entries';
+import {
+  closePendingJoinRequests,
+  expireStaleJoinRequests,
+  liveJoinRequestWhere
+} from '../../services/community-join-request-lifecycle';
 
 const logger = enhancedLogger.child({ module: 'CommunityAdmission' });
 
@@ -42,6 +47,8 @@ export type Admission = {
   readonly joinCountry: string | null;
   /** Le créateur : il ne se paie pas l'engagement en revenant dans la sienne. */
   readonly createdBy: string;
+  /** Qui fait entrer : l'intendant qui accepte ; la personne elle-même par défaut. */
+  readonly decidedBy?: string;
 };
 
 /**
@@ -87,6 +94,9 @@ export async function admitCommunityMember(
 
   scheduleCommunityMemberBroadcastFrom(fastify, { kind: 'joined', communityId, userId, role: 'member', via });
 
+  // #19872 — une demande restée en attente (la communauté validait chaque entrée) se clôt.
+  await closePendingJoinRequests(fastify.prisma, { communityId, userIds: [userId], decidedBy: admission.decidedBy ?? userId });
+
   return { member, admitted: true } as const;
 }
 
@@ -105,8 +115,10 @@ export async function requestCommunityEntry(
   now: Date = new Date()
 ): Promise<EntryRequestOutcome> {
   const { communityId, userId, via, country } = request;
+  await expireStaleJoinRequests(fastify.prisma, { communityId, userId, now });
+  const live = liveJoinRequestWhere(now);
   const pending = await fastify.prisma.communityJoinRequest.findFirst({
-    where: { communityId, userId, status: 'pending' },
+    where: { communityId, userId, ...live },
     select: { id: true }
   });
   if (pending) return { kind: 'pending', requestId: pending.id };
@@ -123,7 +135,7 @@ export async function requestCommunityEntry(
   });
   // Deux envois simultanés ont pu créer chacun la leur : la plus ancienne reste.
   const pendings = await fastify.prisma.communityJoinRequest.findMany({
-    where: { communityId, userId, status: 'pending' },
+    where: { communityId, userId, ...live },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     select: { id: true },
     take: 1
