@@ -55,32 +55,14 @@ export function imageVariantKeys(imageVariants: unknown): readonly string[] {
   return variantCandidates(imageVariants).filter((key) => !key.split('/').includes('..'));
 }
 
-/**
- * Les clés de stockage des pistes TTS traduites d'une ligne (`PostMedia`,
- * #19750), lues sur leur seule `url`. Le `path` est le chemin disque ABSOLU de
- * l'écriture : un stockage qui efface par clé ne sait pas l'adresser (le
- * stockage local le rejette, un stockage objet n'a pas de disque), et le
- * passer reviendrait à confier un absolu venu d'une colonne JSON à un
- * effaceur. Même garde que `imageVariantKeys`, plus une : une clé absolue
- * (`%2Fetc%2F…` décodé) n'est jamais rendue non plus.
- */
-export function translationTrackKeys(translations: unknown): readonly string[] {
-  return translationTracks(translations)
-    .flatMap((track) => (typeof track.url === 'string' ? [storageKeyFromMediaUrl(track.url)] : []))
-    .filter((key): key is string => key !== null && !key.startsWith('/') && !key.split('/').includes('..'));
-}
-
 function translationTrackCandidates(translations: unknown): readonly string[] {
-  return translationTracks(translations).flatMap((track) => {
+  if (!isRecord(translations)) return [];
+  return Object.values(translations).flatMap((track) => {
+    if (!isRecord(track)) return [];
     const fromUrl = typeof track.url === 'string' ? storageKeyFromMediaUrl(track.url) : null;
     const fromPath = typeof track.path === 'string' && track.path.length > 0 ? track.path : null;
     return [fromUrl, fromPath].filter((value): value is string => value !== null);
   });
-}
-
-function translationTracks(translations: unknown): readonly Record<string, unknown>[] {
-  if (!isRecord(translations)) return [];
-  return Object.values(translations).filter(isRecord);
 }
 
 function variantCandidates(imageVariants: unknown): readonly string[] {

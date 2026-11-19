@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { imageVariantKeys, translationTrackKeys } from '../attachments/derivedAttachmentFiles';
+import { imageVariantKeys } from '../attachments/derivedAttachmentFiles';
 
 const log = enhancedLogger.child({ module: 'reclaimPostMediaBytes' });
 
@@ -82,9 +82,7 @@ export type ReclaimMediaPrisma = Pick<PrismaClient, 'sound'>;
 /**
  * Les colonnes d'une ligne `PostMedia` qui désignent des octets. `imageVariants`
  * (#11260) est du JSON jamais validé par la base : une ligne héritée n'en porte
- * pas, et ce qui n'a pas la forme attendue est ignoré, jamais deviné. Même
- * lecture pour `translations` (#19750), les pistes TTS qu'écrit
- * `PostAudioService` : seule leur `url` désigne une clé de stockage.
+ * pas, et ce qui n'a pas la forme attendue est ignoré, jamais deviné.
  */
 export interface PostMediaFileRow {
   readonly fileUrl: string | null;
@@ -92,7 +90,6 @@ export interface PostMediaFileRow {
   readonly imageVariants?: unknown;
   readonly avifVariants?: unknown;
   readonly renditions?: unknown;
-  readonly translations?: unknown;
 }
 
 /**
@@ -106,7 +103,6 @@ export const POST_MEDIA_FILE_COLUMNS = {
   imageVariants: true,
   avifVariants: true,
   renditions: true,
-  translations: true,
 } as const satisfies Record<keyof PostMediaFileRow, true>;
 
 /**
@@ -123,7 +119,7 @@ export const POST_MEDIA_FILE_COLUMNS = {
  *
  * Un module qui requêterait pour son compte servirait mal les deux.
  *
- * @returns le nombre de fichiers effectivement effacés (vignettes, variantes et pistes traduites comprises).
+ * @returns le nombre de fichiers effectivement effacés (vignettes et variantes comprises).
  */
 export async function reclaimMediaRowBytes(
   prisma: ReclaimMediaPrisma,
@@ -136,14 +132,7 @@ export async function reclaimMediaRowBytes(
   const urls = [
     ...new Set(
       rows
-        .flatMap((row) => [
-          row.fileUrl,
-          row.thumbnailUrl,
-          ...imageVariantKeys(row.imageVariants),
-          ...imageVariantKeys(row.avifVariants),
-          ...imageVariantKeys(row.renditions),
-          ...translationTrackKeys(row.translations),
-        ])
+        .flatMap((row) => [row.fileUrl, row.thumbnailUrl, ...imageVariantKeys(row.imageVariants), ...imageVariantKeys(row.avifVariants), ...imageVariantKeys(row.renditions)])
         .filter((url): url is string => !!url),
     ),
   ];
