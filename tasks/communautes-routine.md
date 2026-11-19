@@ -557,3 +557,11 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : passerelle `tsc --noEmit` vert ; 31 suites / 811 tests verts (MaintenanceService, écrivains, diffusion, promesses détachées). Rouge ÉTRANGER : `tsc-never-loaded-tests-ratchet` mesure 80 erreurs non muettes pour un plafond de 76 — identique sur `dev` nu (même liste avant / après le lot).
 - Aucun client touché : les trois lisent déjà `community:member-left`.
 - Prochain lot recommandé : fermer #16857 (ses trois tranches et ses entrées indirectes sont livrées) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-19 — réveil 05:38 UTC
+
+- Début du run : #19763 (#18769, un compte supprimé quitte ses communautés) seule PR de la routine ouverte, dernière poussée à 01:38, donc inactive : run consacré à la mener à la fusion.
+- `dev` (`d88c406d7`, 14 commits : iOS, SDK, garde passerelle `participation-soft-state-equality-filter-guard`) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : passerelle `tsc --noEmit` vert ; `MaintenanceService`, `deactivateDeletedAccountCommunityMemberships`, `community-member-writer-sweep`, `participation-soft-state-equality-filter-guard` et `tsc-never-loaded` verts.
+- Seul rouge : `gateway-test-file-size-budget` règle 3 (`calls-routes.test.ts : 2154 → 2175`), ÉTRANGER et identique sur `dev` nu ; avec la garde web `capability-guard` (`lib/calls/call-network-recovery.ts`), il est corrigé par #19772, vivante (poussée à 05:06 par une autre session) : cédée.
+- Pas de `workflow_dispatch` sur cette tête : son verdict serait rouge pour ces deux causes, et la branche devra reprendre `dev` après #19772.
+- Prochain lot recommandé : dès que #19772 est sur `dev`, reprendre `dev`, lancer `ci.yml` en `workflow_dispatch` et fusionner #19763 sur un verdict vert ; puis fermer #16857.
