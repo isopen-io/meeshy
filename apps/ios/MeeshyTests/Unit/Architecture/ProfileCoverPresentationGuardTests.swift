@@ -40,12 +40,15 @@ final class ProfileCoverPresentationGuardTests: XCTestCase {
         }
     }
 
-    func test_talkieHalos_breathe_moreWhileTalking() {
-        let idle = TalkieHoldHalo.breath(ring: 0, phase: 0.25, isLive: false)
-        let live = TalkieHoldHalo.breath(ring: 0, phase: 0.25, isLive: true)
-        XCTAssertGreaterThan(live, idle)
-        XCTAssertGreaterThan(TalkieHoldHalo.opacity(ring: 0, phase: 0, isLive: true),
-                             TalkieHoldHalo.opacity(ring: 0, phase: 0, isLive: false))
-        XCTAssertEqual(TalkieHoldHalo.phase(at: Date(timeIntervalSinceReferenceDate: 3), isLive: false), 0, accuracy: 0.0001)
+    /// Le bouton talkie de la planche (`.ptt`) est fait du kit : le médaillon K45 plein de 96 pt, deux ondes qui
+    /// s'échappent du bord au repos ; le décompte garde son anneau pendant la parole.
+    func test_talkieButton_isTheKitMedallion_withTwoEscapingWaves() throws {
+        let url = Self.appRoot.appendingPathComponent("Meeshy/Features/Talkie/ProfileTalkieRow.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        XCTAssertTrue(code.contains("MeeshyMedallion("))
+        XCTAssertTrue(code.contains("decor: live ? .none : .waves(count: 2)"))
+        XCTAssertTrue(code.contains("size: .s96"))
+        XCTAssertTrue(code.contains("TalkieCountdownRing("))
+        XCTAssertFalse(code.contains("TalkieHoldHalo"), "plus de halo maison")
     }
 }

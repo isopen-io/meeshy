@@ -2340,6 +2340,10 @@ export class CallEventsHandler {
           message,
           callId: data?.callId
         } as CallError);
+        // #19778 — CALL_ENDED prouve l'appel fini : la carte restée `call-live` se réécrit et se rediffuse (idempotent, sans effet si déjà terminale).
+        if (error instanceof CallAlreadyEndedError && data?.callId) {
+          this.callService.finalizeCallSummary(data.callId);
+        }
       }
       // Item F follow-up (chaos-2 re-test) — the join deliberately does NOT
       // clear the ringing timer anymore: the callee EARLY-joins while still

@@ -136,7 +136,6 @@ private struct ProfileListeningLive: View {
 
     private func pill(_ band: AvatarListening) -> some View {
         Button {
-            HapticFeedback.light()
             meeshyWithMotion(.morph, reduceMotion: reduceMotion) { isExpanded.toggle() }
         } label: {
             HStack(spacing: MeeshySpacing.xsPlus) {

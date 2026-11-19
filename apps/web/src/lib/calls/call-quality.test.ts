@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { aggregateQuality, appliedTier, encodingFor, metricGrade, peerRate, qualityLevel, readStats, TIER_ENCODING, type PeerQuality } from './call-quality';
+import { aggregateQuality, appliedTier, encodingFor, initialTierState, linkTier, metricGrade, peerRate, qualityLevel, readStats, stepTier, TIER_ENCODING, type PeerQuality } from './call-quality';
 
 type Entry = Readonly<Record<string, unknown>>;
 
@@ -124,5 +124,76 @@ describe('les paliers d’encodage vidéo, par pair (#8047)', () => {
   test('un palier réécrit chaque couche d’encodage sans toucher au reste des paramètres', () => {
     const next = encodingFor({ rid: 'q', maxBitrate: 9, active: true }, 'medium');
     expect(next).toEqual({ rid: 'q', ...TIER_ENCODING.medium });
+  });
+});
+
+/**
+ * #19775 — LE PALIER SUIT CE QUE LE LIEN PEUT PORTER, PAS SA LATENCE. Le
+ * navigateur estime ce qu'il peut envoyer (`availableOutgoingBitrate`, TWCC/GCC) :
+ * c'est le débit réel, la latence n'en dit rien. La perte qui compte pour MA
+ * vidéo est celle que le pair constate sur ce que j'envoie (`remote-inbound-rtp`),
+ * pas celle des paquets que je reçois. Seuils d'iOS (`VideoQualityLevel.from`).
+ */
+describe('le palier d’un lien suit son débit estimé et sa perte montante (#19775)', () => {
+  const read = (entries: readonly Entry[]) => readStats(report(entries), 0);
+
+  test('un relevé donne l’estimation de débit sortant et la perte montante de la vidéo', () => {
+    const r = read([
+      { type: 'candidate-pair', nominated: true, state: 'succeeded', currentRoundTripTime: 0.4, availableOutgoingBitrate: 2_300_000 },
+      { type: 'remote-inbound-rtp', kind: 'video', roundTripTime: 0.4, fractionLost: 0.12 },
+      { type: 'remote-inbound-rtp', kind: 'audio', roundTripTime: 0.4, fractionLost: 0.5 },
+    ]);
+    expect(r.availableOutgoingBitrate).toBe(2_300_000);
+    expect(r.uplinkLoss).toBeCloseTo(12);
+  });
+
+  test('sans estimation ni rapport du pair, les deux restent inconnus', () => {
+    const r = read([{ type: 'candidate-pair', nominated: true, state: 'succeeded', currentRoundTripTime: 0.05 }]);
+    expect(r.availableOutgoingBitrate).toBeNull();
+    expect(r.uplinkLoss).toBeNull();
+  });
+
+  test('une latence de 400 ms sur un lien large garde la haute définition', () => {
+    expect(linkTier({ level: 'fair', availableOutgoingBitrate: 3_000_000, uplinkLoss: 0 })).toBe('high');
+  });
+
+  test('le débit estimé choisit le palier : 2 Mb/s, 1 Mb/s, en dessous', () => {
+    expect(linkTier({ level: 'excellent', availableOutgoingBitrate: 2_000_000, uplinkLoss: null })).toBe('high');
+    expect(linkTier({ level: 'excellent', availableOutgoingBitrate: 1_400_000, uplinkLoss: null })).toBe('medium');
+    expect(linkTier({ level: 'excellent', availableOutgoingBitrate: 600_000, uplinkLoss: null })).toBe('low');
+  });
+
+  test('une perte montante de 10 % fait descendre d’un palier', () => {
+    expect(linkTier({ level: 'excellent', availableOutgoingBitrate: 3_000_000, uplinkLoss: 10 })).toBe('medium');
+    expect(linkTier({ level: 'excellent', availableOutgoingBitrate: 1_400_000, uplinkLoss: 15 })).toBe('low');
+    expect(linkTier({ level: 'excellent', availableOutgoingBitrate: 600_000, uplinkLoss: 30 })).toBe('low');
+  });
+
+  test('sans estimation (Firefox), le niveau du lien décide comme avant', () => {
+    expect(linkTier({ level: 'good', availableOutgoingBitrate: null, uplinkLoss: null })).toBe('high');
+    expect(linkTier({ level: 'fair', availableOutgoingBitrate: null, uplinkLoss: null })).toBe('medium');
+    expect(linkTier({ level: 'poor', availableOutgoingBitrate: null, uplinkLoss: null })).toBe('low');
+  });
+
+  test('l’image descend après deux relevés concordants, et remonte après trois : un relevé isolé ne fait pas clignoter la netteté', () => {
+    const once = stepTier(initialTierState(), 'low');
+    expect(once.tier).toBe('high');
+    const twice = stepTier(once, 'low');
+    expect(twice.tier).toBe('low');
+    const up1 = stepTier(twice, 'high');
+    const up2 = stepTier(up1, 'high');
+    expect(up2.tier).toBe('low');
+    expect(stepTier(up2, 'high').tier).toBe('high');
+  });
+
+  test('un relevé contraire remet le compte à zéro', () => {
+    const one = stepTier(initialTierState(), 'medium');
+    const back = stepTier(one, 'high');
+    expect(stepTier(back, 'medium').tier).toBe('high');
+  });
+
+  test('la haute définition va jusqu’à 2,5 Mb/s en 720p30, sans réduction de taille hors des paliers bas', () => {
+    expect(TIER_ENCODING.high).toEqual({ active: true, maxBitrate: 2_500_000, scaleResolutionDownBy: 1, maxFramerate: 30 });
+    expect(TIER_ENCODING.medium.scaleResolutionDownBy).toBe(1);
   });
 });

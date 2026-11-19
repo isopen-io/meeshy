@@ -1,12 +1,12 @@
 import SwiftUI
 
-// MARK: - « Son jeu » sur la Vitrine d'un autre (#19416, planche `Autre-Vitrine`)
+// MARK: - « Sa Légende » sur la Vitrine d'un autre (#19416, planche `Autre-Vitrine`)
 //
 // Le niveau dans son médaillon (K45), le rang, les étincelles, la progression du niveau (K42), puis la rangée de
 // trophées (K45 en rangée) : « 3 trophées sur 5 ». Le SDK ne sait rien du jeu : l'app lit ce que la visibilité du
 // membre lui sert et remet des VALEURS déjà écrites. Rien de servi, rien de posé.
 
-/// Ce que « Son jeu » montre : ce que le serveur a servi à ce lecteur, et rien d'autre.
+/// Ce que « Sa Légende » montre : ce que le serveur a servi à ce lecteur, et rien d'autre.
 public nonisolated struct ProfileGameBoard: Equatable, Sendable {
 
     public nonisolated struct Trophy: Equatable, Sendable, Identifiable {
@@ -51,7 +51,7 @@ public nonisolated struct ProfileGameBoard: Equatable, Sendable {
     public var trophyTotal: Int { max(Self.trophySlots, trophies.count) }
 }
 
-/// L'emplacement de « Son jeu » : la carte que l'app pose dans la Vitrine (`ProfileGameSection.card`).
+/// L'emplacement de « Sa Légende » : la carte que l'app pose dans la Vitrine (`ProfileGameSection.card`).
 public struct ProfileGameBoardView: View {
     private let board: ProfileGameBoard
     private let tint: Color

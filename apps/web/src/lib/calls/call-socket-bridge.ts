@@ -74,6 +74,7 @@ export function bridgeCallEvents(socket: SocketClient, { loadLiveFrame = () => i
       socket.emitWithAck === undefined
         ? Promise.reject(new Error('ack-unsupported'))
         : socket.emitWithAck(event, payload, timeoutMs),
+    reconnect: () => socket.recycle?.(),
   });
   const handlers = CALL_SERVER_EVENTS.map((event) => {
     const history = CALL_HISTORY_EVENTS.has(event) ? queryClient : undefined;

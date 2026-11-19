@@ -85,4 +85,74 @@ final class ProfileCoverAndNextCirclesTests: XCTestCase {
         XCTAssertGreaterThan(midway, 0)
         XCTAssertLessThan(midway, 1)
     }
+
+    // MARK: - Le jeu d'un autre se dit une fois (#19773)
+
+    /// La bannière d'un autre ne porte plus ni niveau ni gloire : « Sa Légende », dans la Vitrine, les dit seule.
+    func test_otherBanner_carriesNoGame_theVitrineCardSaysItOnce() throws {
+        let header = try profileSource("UserProfileSheet+Header.swift")
+        XCTAssertFalse(header.contains("gameSection"), "la bannière d'un autre ne redit pas son jeu")
+        XCTAssertFalse(try profileSource("ProfileGameSection.swift").contains("build:"), "l'emplacement n'offre plus de bannière")
+        XCTAssertTrue(try profileSource("UserProfileSheet+VitrineBlocks.swift").contains("gameSection?.card"))
+    }
+
+    /// « Sa Légende » en miroir de « Ma Légende », dans les sept langues.
+    func test_gameCard_isNamedTheirLegend_inEveryLanguage() throws {
+        let catalog = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Resources/Localizable.xcstrings")
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: catalog)) as? [String: Any])
+        let strings = try XCTUnwrap(root["strings"] as? [String: Any])
+        let entry = try XCTUnwrap(strings["profile.vitrine.game.title"] as? [String: Any])
+        let localizations = try XCTUnwrap(entry["localizations"] as? [String: [String: [String: String]]])
+        XCTAssertEqual(localizations["fr"]?["stringUnit"]?["value"], "Sa Légende")
+        XCTAssertEqual(localizations.count, 7)
+        XCTAssertFalse(ProfileVitrineCopy.gameTitle.isEmpty)
+    }
+
+    private func profileSource(_ name: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Profile/\(name)")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    // MARK: - Les crans vivants (#19785)
+
+    /// Le contour organique de la planche (`mxMorph`, 8 s) : il ondule en continu, jamais sous mouvement réduit.
+    func test_blobMedallion_morphsContinuously_butNeverUnderReducedMotion() {
+        func recipe(reduce: Bool, shape: MeeshyMedallionShape) -> MeeshyMedallionRecipe {
+            MeeshyMedallionRecipe.resolve(kind: .accent, shape: shape, fill: .solid, decor: .halo, size: .s44,
+                                          state: .current, reduceMotion: reduce, supportsShape: true)
+        }
+        XCTAssertTrue(recipe(reduce: false, shape: .blob).morphs)
+        XCTAssertFalse(recipe(reduce: true, shape: .blob).morphs)
+        XCTAssertFalse(recipe(reduce: false, shape: .disc).morphs)
+        XCTAssertEqual(MeeshyMedallionRecipe.morphPhase(elapsed: 0), 0, accuracy: 0.0001)
+        XCTAssertEqual(MeeshyMedallionRecipe.morphPhase(elapsed: 4), Double.pi, accuracy: 0.0001)
+        XCTAssertEqual(MeeshyMedallionRecipe.morphPhase(elapsed: 8), 0, accuracy: 0.0001)
+        XCTAssertEqual(MeeshyMedallionRecipe.morphPhase(elapsed: .nan), 0)
+    }
+
+    func test_nextCircles_areDrawnAsLivingBlobs() throws {
+        let source = try profileSource("ProfileNextCircles.swift")
+        XCTAssertTrue(source.contains("shape: .blob"))
+    }
+
+    // MARK: - Un changement de vue ne vibre pas (#19783)
+
+    /// Les haptiques restent aux actions ; changer de face ou d'onglet, épingler l'en-tête en défilant, revenir en
+    /// arrière par glissement ou déplier une pilule ne vibrent plus.
+    func test_viewChanges_carryNoHaptic() throws {
+        let sources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Sources/MeeshyUI")
+        for path in ["Kit/MeeshySegmented.swift", "Kit/MeeshyCollapsingHero.swift",
+                     "Profile/ProfileCoverPresentation.swift", "Profile/AvatarListeningSource.swift"] {
+            let code = try String(contentsOf: sources.appendingPathComponent(path), encoding: .utf8)
+            XCTAssertFalse(code.contains("HapticFeedback."), "\(path) : un changement de vue ne vibre pas")
+        }
+    }
 }

@@ -11,6 +11,7 @@ const it = {
   'callStudio.face.angel': 'Angelo',
   'callStudio.face.demon': 'Demone',
   'callStudio.face.volcano': 'Eruzione',
+  'callStudio.face.baby': 'Bebè',
   'callStudio.montage.screen': 'Schermo intero',
   'callStudio.montage.grid': 'Mosaico',
   'callStudio.montage.strip': 'Cabina fototessere',

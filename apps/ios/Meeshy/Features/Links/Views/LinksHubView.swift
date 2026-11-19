@@ -27,7 +27,7 @@ struct LinksHubView: View {
             onBack: { router.pop() }
         ) {
             ProfileLinksFace(user: authManager.currentUser, accentColor: accentColor,
-                             showsHeader: false, onOpen: { router.push($0) })
+                             onOpen: { router.push($0) })
                 .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.top, MeeshySpacing.sm)
                 .padding(.bottom, 40)

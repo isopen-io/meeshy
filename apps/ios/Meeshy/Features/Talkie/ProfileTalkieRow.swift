@@ -20,7 +20,6 @@ struct ProfileTalkieRow: View {
     @State private var holding = false
     @State private var shown: TalkieSettled?
     @State private var remainingSeconds: Int?
-    @ScaledMetric(relativeTo: .title) private var holdDiameter: CGFloat = MeeshyControlSize.tapTarget * 1.5
     @Environment(\.openURL) private var openURL
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -62,7 +61,7 @@ struct ProfileTalkieRow: View {
                 .overlay(alignment: .trailing) { TalkieInfoButton(tint: tint) }
             if aftermath?.keepsHoldButton != false {
                 holdButton
-                    .padding(.vertical, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xxl)
             }
             Text(ProfileTalkieWording.text(for: line, name: displayName))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
@@ -83,6 +82,7 @@ struct ProfileTalkieRow: View {
         .padding(MeeshySpacing.lg)
         .frame(maxWidth: .infinity)
         .meeshyAnimation(.easeOut(duration: 0.2), reduced: nil, value: line)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxl))
         .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xxl), tone: .theme, tint: tint)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("talkie.card")
@@ -96,16 +96,25 @@ struct ProfileTalkieRow: View {
         }
     }
 
-    /// Le bouton plein : un disque de l'accent, le micro au repos, les secondes restantes pendant la parole, la coche
-    /// une fois la voix partie. Un anneau fin l'entoure : il respire au repos, il se vide pendant la parole.
+    /// Le bouton de la planche `Autre-Actions` (`.ptt`), fait du kit : le médaillon K45 plein de 96 pt à l'accent, deux
+    /// ondes qui s'échappent de son bord en continu au repos, un reflet en haut et le halo coloré qui le porte. Le micro
+    /// au repos, les secondes restantes pendant la parole — l'anneau du décompte se vide autour —, la coche une fois la
+    /// voix partie. Il s'enfonce sous le doigt.
     private var holdButton: some View {
         let live = holding || sender.isActive
-        return glyph(live: live)
-            .foregroundStyle(MeeshyColors.indigo950)
-            .frame(width: holdDiameter, height: holdDiameter)
-            .background(Circle().fill(tint))
-            .scaleEffect(live ? TalkieHoldHalo.pressedScale : 1)
-            .background(ring(live: live))
+        return MeeshyMedallion(tint: tint, fill: .solid, decor: live ? .none : .waves(count: 2), size: .s96,
+                               label: ProfileTalkieWording.holdA11y(name: displayName))
+            .overlay { glyph(live: live).foregroundStyle(MeeshyColors.plateauNoir) }
+            .overlay {
+                Circle()
+                    .strokeBorder(LinearGradient(colors: [.white.opacity(MeeshyOpacity.heavy), .clear],
+                                                 startPoint: .top, endPoint: .center),
+                                  lineWidth: MeeshyBorder.strong)
+                    .allowsHitTesting(false)
+            }
+            .shadow(color: tint.opacity(MeeshyOpacity.strong), radius: MeeshySpacing.lg, y: MeeshySpacing.md)
+            .scaleEffect(live ? Self.pressedScale : 1)
+            .background { countdown(live: live) }
             .contentShape(Circle())
             .modifier(TalkieHoldModifier(sender: sender, userId: userId, pressed: $holding))
             .accessibilityElement(children: .ignore)
@@ -115,6 +124,12 @@ struct ProfileTalkieRow: View {
             .accessibilityAddTraits([.isButton, .updatesFrequently])
             .accessibilityIdentifier("talkie.send")
     }
+
+    /// Le diamètre du bouton (K45 `.s96`) et l'anneau du décompte, juste autour.
+    static let diameter = CGFloat(MeeshyMedallionSize.s96.rawValue)
+    static let countdownScale: CGFloat = 1.18
+    /// Le bouton s'enfonce sous le doigt.
+    static let pressedScale: CGFloat = 0.94
 
     @ViewBuilder
     private func glyph(live: Bool) -> some View {
@@ -131,11 +146,9 @@ struct ProfileTalkieRow: View {
     }
 
     @ViewBuilder
-    private func ring(live: Bool) -> some View {
+    private func countdown(live: Bool) -> some View {
         if live, let window = sender.talkWindow {
-            TalkieCountdownRing(window: window, diameter: holdDiameter * TalkieHoldHalo.rings[0], tint: tint)
-        } else {
-            TalkieHoldHalo(diameter: holdDiameter, tint: tint, isLive: live)
+            TalkieCountdownRing(window: window, diameter: Self.diameter * Self.countdownScale, tint: tint)
         }
     }
 
@@ -206,57 +219,6 @@ struct TalkieCountdownRing: View {
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-    }
-}
-
-/// Le halo du bouton talkie : un anneau fin, juste autour du disque, qui respire lentement au repos (#19732 : un seul,
-/// sans débord démesuré). Sous « Réduire les animations », il reste posé, immobile. Décoratif, il ne reçoit pas le doigt.
-struct TalkieHoldHalo: View {
-    static let pressedScale: CGFloat = 0.94
-    /// Le rayon du halo, en multiples du bouton.
-    static let rings: [CGFloat] = [1.22]
-
-    let diameter: CGFloat
-    let tint: Color
-    let isLive: Bool
-
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
-
-    var body: some View {
-        let reduce = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion)
-        TimelineView(.animation(minimumInterval: nil, paused: reduce)) { context in
-            let phase = reduce ? 0 : Self.phase(at: context.date, isLive: isLive)
-            ZStack {
-                ForEach(Array(Self.rings.enumerated()), id: \.offset) { index, ring in
-                    Circle()
-                        .stroke(tint.opacity(Self.opacity(ring: index, phase: phase, isLive: isLive)),
-                                lineWidth: MeeshyBorder.strong)
-                        .frame(width: diameter * ring, height: diameter * ring)
-                        .scaleEffect(1 + Self.breath(ring: index, phase: phase, isLive: isLive))
-                }
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
-    /// Une respiration de trois secondes au repos, d'une seconde pendant la prise de parole.
-    static func phase(at date: Date, isLive: Bool) -> Double {
-        let period = isLive ? 1.0 : 3.0
-        return date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
-    }
-
-    static func breath(ring: Int, phase: Double, isLive: Bool) -> CGFloat {
-        let amplitude = isLive ? 0.08 : 0.04
-        let shifted = phase + Double(ring) * 0.25
-        return CGFloat(amplitude * sin(shifted * 2 * .pi))
-    }
-
-    static func opacity(ring: Int, phase: Double, isLive: Bool) -> Double {
-        let base = isLive ? 0.55 : 0.35
-        let fade = Double(ring) * 0.15
-        return max(0.1, base - fade + 0.1 * sin((phase + Double(ring) * 0.25) * 2 * .pi))
     }
 }
 

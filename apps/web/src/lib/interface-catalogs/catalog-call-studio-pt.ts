@@ -11,6 +11,7 @@ const pt = {
   'callStudio.face.angel': 'Anjo',
   'callStudio.face.demon': 'Demônio',
   'callStudio.face.volcano': 'Erupção',
+  'callStudio.face.baby': 'Bebê',
   'callStudio.montage.screen': 'Tela cheia',
   'callStudio.montage.grid': 'Mosaico',
   'callStudio.montage.strip': 'Cabine de fotos',

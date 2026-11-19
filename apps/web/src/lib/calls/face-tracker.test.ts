@@ -49,6 +49,19 @@ describe('avec détecteur', () => {
     expect((moves.at(-1)?.x ?? 0) < first.x).toBe(true);
   });
 
+  test('il dit s’il suit un visage VU : jamais la boîte supposée, oui dès que le détecteur en rend un, non quand il le perd (#19779)', async () => {
+    const answers: (readonly { boundingBox: { x: number; y: number; width: number; height: number } }[])[] = [[{ boundingBox: { x: 100, y: 80, width: 200, height: 260 } }], []];
+    const tracker = createFaceTracker({ detect: async () => answers.shift() ?? [] });
+    expect(createFaceTracker(null).found()).toBe(false);
+    tracker.next(source, frame, 0);
+    expect(tracker.found()).toBe(false);
+    await flush();
+    expect(tracker.found()).toBe(true);
+    tracker.next(source, frame, 5);
+    await flush();
+    expect(tracker.found()).toBe(false);
+  });
+
   test('un échec du détecteur retombe sur la boîte supposée', async () => {
     const tracker = createFaceTracker({ detect: async () => Promise.reject(new Error('busy')) });
     tracker.next(source, frame, 0);

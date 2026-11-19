@@ -28,6 +28,12 @@ internal class CallFaceFrame {
     /** Cheeks then eyes, `(x, y, radius, scale)` each — iOS toad bumps. */
     val bumps = FloatArray(16)
 
+    /** #19779 — the baby: the chin pinched (a NEGATIVE scale), an empty slot, then the two eyes enlarged. */
+    val babyBumps = FloatArray(16)
+
+    /** #19779 — left cheek then right cheek, `(x, y)`: the baby's blush. */
+    val cheeks = FloatArray(4)
+
     /** Left eye then right eye, `(x, y)`. */
     val eyes = FloatArray(4)
 
@@ -64,9 +70,17 @@ internal class CallFaceFrame {
         val box = face.bounds
         val cheeks = CallFaceEffectGeometry.cheekCenters(box)
         val eyeCenters = CallFaceEffectGeometry.eyeCenters(face)
-        cheeks.forEachIndexed { i, cheek -> bump(i, cheek.x, cheek.y, box.width * 0.2f, 0.45f) }
+        cheeks.forEachIndexed { i, cheek ->
+            bump(bumps, i, cheek.x, cheek.y, box.width * 0.2f, 0.45f)
+            this.cheeks[i * 2] = cheek.x
+            this.cheeks[i * 2 + 1] = cheek.y
+        }
+        val chin = CallFaceEffectGeometry.babyChinPinch(box)
+        bump(babyBumps, 0, chin.center.x, chin.center.y, chin.radius, -chin.scale)
+        bump(babyBumps, 1, 0f, 0f, 0f, 0f)
+        CallFaceEffectGeometry.babyEyeBumps(face).forEachIndexed { i, eye -> bump(babyBumps, 2 + i, eye.center.x, eye.center.y, eye.radius, eye.scale) }
         eyeCenters.forEachIndexed { i, eye ->
-            bump(2 + i, eye.x, eye.y, box.width * 0.11f, 0.55f)
+            bump(bumps, 2 + i, eye.x, eye.y, box.width * 0.11f, 0.55f)
             eyes[i * 2] = eye.x
             eyes[i * 2 + 1] = eye.y
         }
@@ -80,10 +94,10 @@ internal class CallFaceFrame {
         horns = CallFaceOrnaments.horns(face)
     }
 
-    private fun bump(index: Int, x: Float, y: Float, radius: Float, scale: Float) {
-        bumps[index * 4] = x
-        bumps[index * 4 + 1] = y
-        bumps[index * 4 + 2] = radius
-        bumps[index * 4 + 3] = scale
+    private fun bump(into: FloatArray, index: Int, x: Float, y: Float, radius: Float, scale: Float) {
+        into[index * 4] = x
+        into[index * 4 + 1] = y
+        into[index * 4 + 2] = radius
+        into[index * 4 + 3] = scale
     }
 }

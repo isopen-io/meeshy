@@ -5,8 +5,8 @@ import { captureShape, type DataProfile } from './call-data-profile';
  * (`call-media-constraints.ts`, tag `legacy-web-final`) : écho, bruit et gain
  * traités par le navigateur, caméra avant par défaut comme iOS (§ 7.7 :
  * caméra avant sur iPhone). La forme de la capture suit le profil de données
- * (#8697, `captureShape`) : 720p et 30 i/s au plus en Wi-Fi, 640×480 à 24 i/s
- * sans profil connu, moins encore en économie.
+ * (#8697, `captureShape`) : 720p et 30 i/s en 16:9, Wi-Fi et cellulaire comme
+ * sans profil connu (#19775), 640×360 en économie.
  */
 
 export type Facing = 'user' | 'environment';
@@ -21,7 +21,7 @@ export const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
   autoGainControl: true,
 };
 
-export function videoConstraints(facing: Facing, profile: DataProfile = 'cellular'): MediaTrackConstraints {
+export function videoConstraints(facing: Facing, profile: DataProfile = 'wifi'): MediaTrackConstraints {
   return { ...captureShape(profile), facingMode: facing };
 }
 
@@ -106,18 +106,21 @@ export function stopStream(stream: MediaStream | null): void {
  * échouer ici, pas ouvrir silencieusement son voisin. `null` rouvre le défaut
  * du système.
  */
-export async function acquireChosenInput(options: { readonly kind: 'camera' | 'microphone'; readonly deviceId: string | null; readonly mediaDevices?: MediaDevicesLike | null }): Promise<MediaStreamTrack> {
+export async function acquireChosenInput(options: { readonly kind: 'camera' | 'microphone'; readonly deviceId: string | null; readonly mediaDevices?: MediaDevicesLike | null; readonly profile?: DataProfile }): Promise<MediaStreamTrack> {
   const source = options.mediaDevices === undefined ? devices() : options.mediaDevices;
   if (source === null) throw Object.assign(new Error('media-devices-missing'), { name: 'NotFoundError' });
   const exact = options.deviceId === null ? {} : { deviceId: { exact: options.deviceId } };
   const stream =
     options.kind === 'microphone'
       ? await source.getUserMedia({ audio: { ...AUDIO_CONSTRAINTS, ...exact }, video: false })
-      : await source.getUserMedia({ audio: false, video: { ...videoInputConstraints('user', options.deviceId), ...exact } });
+      : await source.getUserMedia({ audio: false, video: { ...videoInputConstraints('user', options.deviceId, options.profile), ...exact } });
   const track = (options.kind === 'microphone' ? stream.getAudioTracks() : stream.getVideoTracks())[0];
   if (track === undefined) throw Object.assign(new Error('no-device'), { name: 'NotFoundError' });
   return track;
 }
+
+/** Le texte d'un écran se lit en 1080p ; 15 i/s suffisent à un document (#19777). */
+const SCREEN_CAPTURE: MediaTrackConstraints = { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 15, max: 30 } };
 
 /**
  * L'écran, la fenêtre ou l'onglet que l'utilisateur choisit (#8063) — le
@@ -128,7 +131,7 @@ export async function acquireChosenInput(options: { readonly kind: 'camera' | 'm
 export async function acquireDisplay(options: { readonly mediaDevices?: DisplayDevicesLike | null } = {}): Promise<MediaStreamTrack> {
   const source = options.mediaDevices === undefined ? (devices() as DisplayDevicesLike | null) : options.mediaDevices;
   if (source === null || typeof source.getDisplayMedia !== 'function') throw Object.assign(new Error('display-media-missing'), { name: 'NotSupportedError' });
-  const stream = await source.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 30 } }, audio: false });
+  const stream = await source.getDisplayMedia({ video: SCREEN_CAPTURE, audio: false });
   const track = stream.getVideoTracks()[0];
   if (track === undefined) throw Object.assign(new Error('no-display'), { name: 'NotFoundError' });
   track.contentHint = 'detail';

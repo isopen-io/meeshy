@@ -4,7 +4,8 @@ package me.meeshy.sdk.call.effects
  * The GLSL ES 1.00 programs of the stylized face effects (#13706) — iOS `CallFaceEffectsRenderer`, drawn after the
  * colour like iOS `lensStages` (blur, colour, face):
  * - [STYLIZE]: the whole frame — toad (bumps on cheeks and eyes, green skin in the face ellipse), angel (glow and
- *   warmth), demon (red grade and vignette), eruption (warm grade and lava);
+ *   warmth), demon (red grade and vignette), eruption (warm grade and lava), baby (#19779: the toad's bumps on
+ *   the eyes, the chin pinched by a negative bump, a soft brighter and more saturated grade);
  * - [SPRITE]: one drawing (halo, horn, spot) placed on the face, turned with it, blended over the frame.
  *
  * Positions are reasoned in UPRIGHT pixels (y down, the image the remote sees), like the face the tracker keeps.
@@ -43,8 +44,9 @@ precision mediump float;
 """
 
     /**
-     * `effect`: 1 toad, 2 angel, 3 demon, 4 eruption. `bump0…3` = (centre, radius, scale) in upright pixels, applied
-     * in iOS order (cheeks then eyes), so sampled in reverse. `faceBox` = (centre, half width, height / width).
+     * `effect`: 1 toad, 2 angel, 3 demon, 4 eruption, 5 baby. `bump0…3` = (centre, radius, scale) in upright pixels,
+     * applied in iOS order (toad: cheeks then eyes; baby: chin then eyes), so sampled in reverse; a negative scale
+     * pinches. `faceBox` = (centre, half width, height / width).
      */
     val STYLIZE: String = """
 $PRECISION
@@ -80,6 +82,12 @@ vec3 toad(vec2 p) {
   float inside = 1.0 - clamp((dist - 0.55 * faceBox.z) / max(0.5 * faceBox.z, 1.0), 0.0, 1.0);
   return mix(c, green, 0.65 * inside);
 }
+vec3 baby(vec2 p) {
+  vec2 s = p;
+  if (faceOn > 0.5) { s = bump(bump(bump(bump(s, bump3), bump2), bump1), bump0); }
+  vec3 c = texture2D(src, posOf(s)).rgb + vec3(0.03);
+  return mix(vec3(luma(c)), c, 1.1);
+}
 vec3 angel(vec3 c) {
   if (glowOn > 0.5) {
     vec3 g = texture2D(glow, pos).rgb * 0.55;
@@ -106,7 +114,8 @@ void main() {
   if (effect < 1.5) { c = toad(p); }
   else if (effect < 2.5) { c = angel(texture2D(src, pos).rgb); }
   else if (effect < 3.5) { c = demon(texture2D(src, pos).rgb, p); }
-  else { c = volcano(texture2D(src, pos).rgb, p); }
+  else if (effect < 4.5) { c = volcano(texture2D(src, pos).rgb, p); }
+  else { c = baby(p); }
   gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 }
 """
