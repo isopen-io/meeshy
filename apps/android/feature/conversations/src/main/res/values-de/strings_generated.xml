@@ -106,7 +106,7 @@
     <string name="dialogs_report_error">Meldung fehlgeschlagen</string>
     <string name="dialogs_report_nav_title">Melden</string>
     <string name="dialogs_report_reason_harassment">Belästigung</string>
-    <string name="dialogs_report_reason_hate_speech">Hassrede</string>
+    <string name="dialogs_report_reason_hate_speech">Hass</string>
     <string name="dialogs_report_reason_impersonation">Identitätsdiebstahl</string>
     <string name="dialogs_report_reason_inappropriate">Unangemessener Inhalt</string>
     <string name="dialogs_report_reason_other">Andere</string>

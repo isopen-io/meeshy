@@ -659,6 +659,53 @@ final class CommunityLinkDetailTests: XCTestCase {
         XCTAssertEqual(sut.isClosed, false)
     }
 
+    func test_load_aFailedDetailsFetch_saysSo_soTheFicheCanOfferARetry() async {
+        let (sut, _) = makeSUT(details: .failure(ProbeError.offline), entries: .success([entry("a", daysAgo: 1)]))
+        await sut.load()
+        XCTAssertEqual(sut.detailsPhase, .failed, "« Fermer les entrées » éteint doit dire pourquoi")
+        XCTAssertNil(sut.isClosed)
+    }
+
+    func test_load_servedDetails_areLoaded() async {
+        let (sut, _) = makeSUT()
+        XCTAssertEqual(sut.detailsPhase, .loading)
+        await sut.load()
+        XCTAssertEqual(sut.detailsPhase, .loaded)
+    }
+
+    @MainActor
+    private final class EntriesProbe {
+        weak var sut: CommunityLinkDetailViewModel?
+        var attempts = 0
+        var seen: [CommunityLinkEntriesState] = []
+    }
+
+    func test_retry_afterFailedEntries_showsTheLoadingAgain_untilTheAnswer() async {
+        let probe = EntriesProbe()
+        let sut = CommunityLinkDetailViewModel(
+            link: makeLink(), viewerId: "me",
+            loadDetails: { _ in CommunityLinkDetails(isPrivate: false, role: "admin", memberCount: 350, avatar: nil,
+                                                     settingsCommunity: nil) },
+            loadEntries: { _ in
+                try await MainActor.run {
+                    probe.attempts += 1
+                    if let state = probe.sut?.entries { probe.seen.append(state) }
+                    if probe.attempts == 1 { throw ProbeError.offline }
+                    return [CommunityLinkEntry]()
+                }
+            },
+            setPrivate: { _, _ in }
+        )
+        probe.sut = sut
+
+        await sut.load()
+        XCTAssertEqual(sut.entries, .failed)
+        await sut.load()
+
+        XCTAssertEqual(probe.seen.last, .loading, "« Réessayer » se voit : la section repasse en chargement")
+        XCTAssertEqual(sut.entries, .loaded(CommunityLinkEntries(entries: [], excludingUserId: "me")))
+    }
+
     func test_closeEntries_isOptimistic_andTellsTheServer() async {
         let (sut, calls) = makeSUT()
         await sut.load()

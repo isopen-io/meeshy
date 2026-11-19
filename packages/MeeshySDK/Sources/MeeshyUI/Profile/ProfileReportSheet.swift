@@ -13,12 +13,15 @@ struct ProfileReportSheet: View {
     var avatarURL: String?
     var accentColor = ""
     var ring: ServedProfileDecorItem?
+    var presence: PresenceState?
     let isAlreadyBlocked: Bool
     /// « Joindre des messages » : la source et la personne signalée. Sans source, ou sans limite annoncée par la
     /// passerelle, la section n'existe pas.
     var reportMessages: (any ProfileReportMessagesProviding)?
     var reportedUserId: String?
-    let onSend: (ProfileReportDraft) async -> ProfileReportOutcome
+    let onSend: @MainActor (ProfileReportDraft) async -> ProfileReportOutcome
+    /// Rebloque après un blocage demandé qui n'a pas abouti ; `true` une fois la personne bloquée.
+    var onRetryBlock: @MainActor () async -> Bool = { false }
 
     @Environment(\.dismiss) private var dismiss
     @State private var draft = ProfileReportDraft()
@@ -26,6 +29,7 @@ struct ProfileReportSheet: View {
     @State private var sendFailed = false
     @State private var outcome: ProfileReportOutcome?
     @State private var showsMessagePicker = false
+    @State private var isRetryingBlock = false
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -96,7 +100,8 @@ struct ProfileReportSheet: View {
     /// En tête, qui l'on signale : son avatar, « Signaler Rui », l'anonymat du signalement, et ✕ pour fermer.
     private var header: some View {
         HStack(alignment: .top, spacing: MeeshySpacing.md) {
-            MeeshyAvatar(name: name, context: .userListItem, accentColor: accentColor, avatarURL: avatarURL, ring: ring)
+            MeeshyAvatar(name: name, context: .userListItem, accentColor: accentColor, avatarURL: avatarURL,
+                         presenceState: presence, ring: ring)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(verbatim: ProfileReportCopy.title(name))
@@ -111,15 +116,39 @@ struct ProfileReportSheet: View {
         }
     }
 
+    /// Le succès, et sous lui — quand « Bloquer aussi » était demandé et n'a pas abouti — ce qui manque, avec
+    /// « Réessayer » (loi 8) : l'utilisateur ne croit pas avoir bloqué ce qui ne l'est pas.
     private func sentState(_ outcome: ProfileReportOutcome) -> some View {
-        MeeshyStateBlock(
-            kind: .success,
-            title: ProfileReportCopy.thanks,
-            primary: MeeshyStateBlockAction(title: ProfileReportCopy.close) { dismiss() },
-            art: .none,
-            consequences: outcome.isBlocked ? [ProfileReportCopy.isBlocked(name)] : []
-        )
+        VStack(spacing: MeeshySpacing.lg) {
+            MeeshyStateBlock(
+                kind: .success,
+                title: ProfileReportCopy.thanks,
+                primary: MeeshyStateBlockAction(title: ProfileReportCopy.close) { dismiss() },
+                art: .none,
+                consequences: outcome.isBlocked ? [ProfileReportCopy.isBlocked(name)] : []
+            )
+            if outcome.blockFailed {
+                MeeshyStateBlock(kind: .error, title: ProfileReportCopy.blockFailed,
+                                 primary: MeeshyStateBlockAction(title: ProfileStatesCopy.retry) { retryBlock(outcome) },
+                                 size: .compact)
+                    .disabled(isRetryingBlock)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .accessibilityIdentifier("profile.report.blockFailed")
+            }
+        }
         .padding(.vertical, MeeshySpacing.xxl)
+    }
+
+    private func retryBlock(_ failed: ProfileReportOutcome) {
+        guard !isRetryingBlock else { return }
+        isRetryingBlock = true
+        Task {
+            let blocked = await onRetryBlock()
+            isRetryingBlock = false
+            guard blocked else { return HapticFeedback.error() }
+            HapticFeedback.success()
+            outcome = failed.blocking()
+        }
     }
 
     private func send() {
@@ -184,6 +213,10 @@ enum ProfileReportCopy {
 
     static var thanks: String {
         String(localized: "profile.report.thanks", defaultValue: "Merci. C'est entre nos mains.", bundle: .module)
+    }
+
+    static var blockFailed: String {
+        String(localized: "profile.report.blockFailed", defaultValue: "Le blocage n'a pas abouti", bundle: .module)
     }
 
     static func isBlocked(_ name: String) -> String {

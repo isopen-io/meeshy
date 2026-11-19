@@ -77,32 +77,16 @@ struct LocationMapPinsLayer: View {
             isStale: freshness == .lastKnown,
             onPress: onSelect.map { select in { select(pin.id) } },
             content: { LocationMapPinAvatar(pin: pin, travels: pin.id == travellingId, size: Self.diameter(pin.id == selectedId)) },
-            badge: { presenceDot(pin.presence) },
+            badge: { MeeshyMapPinPresenceDot(color: pin.presence?.dotColor) },
             above: { EmptyView() },
             below: { EmptyView() }
         )
         .position(x: point.x, y: point.y - CGFloat(lift))
     }
 
-    @ViewBuilder
-    private func presenceDot(_ presence: PresenceState?) -> some View {
-        if let presence {
-            Circle()
-                .fill(presence.dotColor)
-                .frame(width: 14, height: 14)
-                .overlay(Circle().strokeBorder(Color.black.opacity(MeeshyOpacity.medium), lineWidth: 2))
-                .accessibilityHidden(true)
-        }
-    }
-
     private var ownPin: some View {
         MeeshyMapPin(label: LocationMapCopy.myPosition(meShare, name: focusedName), kind: .own) {
-            ZStack {
-                MeeshyColors.brandPrimary
-                Image(systemName: "person.fill")
-                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
-                    .foregroundStyle(Color.white)
-            }
+            MeeshyMapPinOwnContent()
         }
     }
 
@@ -148,7 +132,8 @@ struct LocationMapPinAvatar: View {
 
     private var face: some View {
         MeeshyAvatar(name: pin.name, context: .custom(CGFloat(size)),
-                     accentColor: DynamicColorGenerator.colorForName(pin.name), avatarURL: pin.avatarURL)
+                     accentColor: DynamicColorGenerator.colorForName(pin.name), avatarURL: pin.avatarURL,
+                     presenceState: pin.presence)
             .accessibilityHidden(true)
     }
 }

@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.send.AttachmentRightRefusal
+import me.meeshy.sdk.model.sync.ObjectIdInstant
 
 /**
  * L'accusé de `message:send` / `message:send-with-attachments` (miroir de `SendMessageAck`, iOS) : l'identifiant
@@ -30,9 +31,14 @@ data class SendMessageAck(
     }
 }
 
-/** La bulle optimiste devient le message serveur : son identifiant et son horloge, tout le reste est déjà juste. */
+/**
+ * La bulle optimiste devient le message serveur : son identifiant et son horloge, tout le reste est déjà juste. Sans
+ * `createdAt` dans l'accusé (une vieille passerelle), l'horloge est celle que l'id serveur prouve ([ObjectIdInstant]) — la
+ * ligne n'entre jamais dans l'élagage de la fenêtre récente sur l'horloge de l'appareil (#19420). Un id qui n'en est pas
+ * un garde la date locale.
+ */
 fun ApiMessage.acknowledgedBy(ack: SendMessageAck): ApiMessage =
-    copy(id = ack.messageId, createdAt = ack.createdAt ?: createdAt)
+    copy(id = ack.messageId, createdAt = ack.createdAt ?: ObjectIdInstant.isoOrNull(ack.messageId) ?: createdAt)
 
 /**
  * Quand l'échec du REST autorise le repli socket : un échec de transport (`NETWORK`, aucun statut) ou un 5xx — jamais un 4xx,

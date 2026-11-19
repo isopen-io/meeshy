@@ -249,9 +249,11 @@ final class ProfileViewSaveProfileTests: XCTestCase {
 
     func test_serverUserAssignments_inTheThreeUploadPaths_goThroughMergingServerUser() throws {
         let source = try profileViewSource()
+        XCTAssertTrue(try body(of: "private func saveProfile()", in: source).contains("send(request, rollingBackTo: original)"),
+                      "saveProfile envoie par send(_:rollingBackTo:), qui porte la réponse serveur")
 
         for declaration in [
-            "private func saveProfile()",
+            "private func send(",
             "private func upload("
         ] {
             let block = try body(of: declaration, in: source)
@@ -472,9 +474,11 @@ final class ProfileViewSaveProfileTests: XCTestCase {
 
     func test_profileView_mountsTheBadgeTheSwitchesAndTheBand() throws {
         let profile = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Views/ProfileView.swift"))
+        let languages = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Views/ProfilePrismLanguagesSection.swift"))
         XCTAssertTrue(profile.contains("ProfileE2EEBadge()"), "ma vitrine pose le même badge que la fiche d'un autre")
         XCTAssertTrue(profile.contains("ProfileEditOfflineBand(isEditing: isEditing)"), "la bande hors ligne vit dans l'édition")
-        XCTAssertTrue(profile.contains("ProfileEditSettingsCopy.autoTranslate"), "« Traduire automatiquement » vit sous mes langues")
+        XCTAssertTrue(profile.contains("onAutoTranslate: { editSettings.autoTranslate = $0 }"), "ma vitrine relaie l'interrupteur à mes langues")
+        XCTAssertTrue(languages.contains("ProfileEditSettingsCopy.autoTranslate"), "« Traduire automatiquement » vit sous mes langues")
         XCTAssertTrue(profile.contains("autoTranslateEnabled: autoTranslateEdit"), "l'interrupteur part dans le PATCH")
         XCTAssertTrue(profile.contains("voicePublic: voicePublicEdit"), "ma voix publique part dans le PATCH")
     }

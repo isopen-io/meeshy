@@ -112,13 +112,6 @@ const ASYMETRIES: readonly {
     ],
   },
   {
-    absents: ['ios'],
-    raison:
-      "la disparition d'une communauté (#19590) : la passerelle, le web et Android (#19592) la portent ; "
-      + 'iOS (#19591) la lira sur le modèle de `community:updated` — dette mesurée, son issue.',
-    events: ['community:deleted'],
-  },
-  {
     absents: ['web', 'ios'],
     raison:
       "signaux que seul le miroir ANDROID cite : la pièce jointe prête côté SDK Kotlin et le "
@@ -127,10 +120,10 @@ const ASYMETRIES: readonly {
     events: ['attachment:ready', 'user:preferences-community-reordered'],
   },
   {
-    absents: ['web', 'android'],
+    absents: ['android'],
     raison:
-      "le Jeu Meeshy est né sur iOS : ses missions sont un écran iOS, et le web comme Android n'en ont "
-      + 'pas encore la surface. La parité suivra le portage du Jeu, qui a ses propres issues.',
+      "un acte du Rêve qui avance : iOS relit ses actes, le web aussi depuis #17367 (l'acte qui avance se voit "
+      + "à l'envoi). Android relit le bloc `game` par `game:updated` seulement ; sa moitié suit le portage de #17367.",
     events: ['game:missions-updated'],
   },
 ];

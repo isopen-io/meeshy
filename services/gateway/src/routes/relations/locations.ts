@@ -87,6 +87,7 @@ export const ownSharedLocationSchema = {
     },
     expiresAt: { type: ['string', 'null'] },
     shareBattery: { type: 'boolean' },
+    startedAt: { type: 'string' },
   },
 } as const;
 

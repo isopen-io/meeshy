@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 import os
 
 // MARK: - Sélection de la colonne de détail
@@ -177,13 +178,13 @@ extension iPadRootView {
                 await StoryDoor(tray: storyViewModel, viewer: storyViewerCoordinator)
                     .open(postId: postId) { rightPanelRoute = .postDetail(postId) }
             }
-        case .userProfile(let username):
+        case .userProfile(let username, let face):
             // Opens the profile sheet over the two-pane layout. Same
             // surface as friend-request notification taps above
             // (handleNotificationTap → router.deepLinkProfileUser). Même
             // fabrique que `RootView` : un `/l/<token>` de type PROFILE porte
             // un userId, pas un pseudo.
-            router.deepLinkProfileUser = ProfileSheetUser.from(idOrUsername: username)
+            router.deepLinkProfileUser = ProfileSheetUser.from(idOrUsername: username).opening(on: face)
         case .ownProfile:
             // iPad surfaces own profile + user links in the right column,
             // matching the existing achievement / affiliate notification

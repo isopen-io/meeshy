@@ -114,6 +114,21 @@ final class LinksPagesTicketsTests: XCTestCase {
         XCTAssertEqual(refusing.links.first?.isActive, false)
     }
 
+    /// Ce que le détail d'un lien de suivi a changé (interrupteur, modification) ou supprimé revient dans la page qui
+    /// l'a ouvert : le billet ne ment plus au retour (revue 1, #18857).
+    func test_trackingPage_takesBackWhatTheDetailChanged_andForgetsWhatItDeleted() throws {
+        let model = TrackingLinksViewModel(switches: ProfileLinksSwitches(share: { _, _ in }, tracking: { _, _ in }))
+        let active = try trackingLink("t1", active: true)
+        let other = try trackingLink("t2", active: true)
+        model.links = [active, other]
+
+        model.apply(active.withActive(false))
+        XCTAssertEqual(model.links.map(\.isActive), [false, true], "mis en pause dans le détail : le billet le dit")
+
+        model.remove(linkId: "t1")
+        XCTAssertEqual(model.links.map(\.id), ["t2"])
+    }
+
     // MARK: - Loi 12 : chaque page est faite du kit
 
     private static let pages = [
@@ -149,7 +164,8 @@ final class LinksPagesTicketsTests: XCTestCase {
         XCTAssertTrue(share.contains("onDeleted: { viewModel.remove($0) }"))
         XCTAssertTrue(share.contains("showCreate = true"))
         let tracking = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.pages[1]))
-        XCTAssertTrue(tracking.contains(".tracking(link)"))
+        XCTAssertTrue(tracking.contains(".tracking(link, onChanged:"), "le détail d'un lien de suivi s'ouvre, et ses changements se reflètent")
+        XCTAssertTrue(tracking.contains("onDeleted: { model.remove(linkId: $0) }"))
         XCTAssertTrue(tracking.contains("showCreate = true"))
         let community = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.pages[2]))
         XCTAssertTrue(community.contains(".community(link)"))
@@ -186,11 +202,14 @@ private actor PageSwitchLog {
         }
     }
 
-    func test_shareCreation_keepsItsSixSections_andTheirControls() throws {
+    /// Planche `Lien-Creer`, étape 2 : un en-tête numéroté puis UNE carte dont les rangées se suivent — plus six blocs
+    /// séparés (revue 1, #18857). Chaque groupe de rangées garde ses contrôles.
+    func test_shareCreation_isOneNumberedStep_inOneCard_keepingEveryGroupOfRows() throws {
         let form = try shareCreationForm()
-        for section in ["conversationSection", "identitySection", "accessSection", "permissionsSection",
-                        "limitsSection", "languagesSection"] {
-            XCTAssertTrue(form.contains("private var \(section): some View"), "\(section) a disparu")
+        XCTAssertTrue(form.contains("step: (number: 2, state: .current)"), "l'étape 2 n'est pas numérotée")
+        XCTAssertEqual(form.components(separatedBy: "MeeshyGroupCard(").count - 1, 1, "les rangées vivent dans UNE carte")
+        for rows in ["conversationRow", "identityRows", "limitsRows", "accessRows", "permissionsRows", "languagesRows"] {
+            XCTAssertTrue(form.contains("private var \(rows): some View"), "\(rows) a disparu")
         }
         for kept in ["MeeshyStepper(", "LinkExpiryPicker(", "LinkSlugField(", "LinkTicketPreviewView(",
                      "ConversationPickerSheet(", "MeeshyInfoNoted(", "MeeshySplitActionButton(", "MeeshyChipRow(",

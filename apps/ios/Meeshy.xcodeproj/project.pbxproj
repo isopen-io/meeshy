@@ -3508,6 +3508,7 @@
 		B887318F63A427EBE237FC7F /* ReelPageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C649A8D1163C7D5533E3E483 /* ReelPageView.swift */; };
 		B89C6663F2C16F3D053C7F47 /* OurCircleSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A83C8A505064AB95A7BAF34 /* OurCircleSheet.swift */; };
 		B8A6DDF1865634B66E151125 /* StickerSheetHasOneMountSiteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96F59CEEACB2A12EA2F94447 /* StickerSheetHasOneMountSiteTests.swift */; };
+		B8A81D812DC8DD0669733273 /* TalkieCardLaw.swift in Sources */ = {isa = PBXBuildFile; fileRef = F107D29930C6BB16AE85A283 /* TalkieCardLaw.swift */; };
 		B8BD05B7522471AB92E7EC37 /* ConversationHeaderAvatarDoor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEB8CF05E6DBDC8BDA96620E /* ConversationHeaderAvatarDoor.swift */; };
 		B8D5E5EDA40A0AE44E8D4C57 /* ConversationLinkCardCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15EA8F41BE6BBC15DDC429FA /* ConversationLinkCardCopy.swift */; };
 		B91F955A597C93347D104202 /* iPadRightPanelNavigationGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFA0BE1E32F96B182719A8E /* iPadRightPanelNavigationGuardTests.swift */; };
@@ -3819,6 +3820,7 @@
 		C76EA7DB494DA1DEE816ABDA /* ProgressionViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 540C490846D7A8F7E2E6E5AE /* ProgressionViewModel.swift */; };
 		C777A2C0B57C9F5E9A4CFFC4 /* MessageViewsFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 845E05DC789EB029F0311840 /* MessageViewsFilter.swift */; };
 		C78A3DFFEF90093339D961D5 /* MagicLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBAA9266CEBB9D47C9951402 /* MagicLinkView.swift */; };
+		C78DA9D0FD970637C90FE2BF /* TalkieCardLawTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA572372E18217723EFEBF4E /* TalkieCardLawTests.swift */; };
 		C791DAC371FA878AE6E40184 /* StoryVerticalGestureDecisions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C27136ED809A63D2CD6D308 /* StoryVerticalGestureDecisions.swift */; };
 		C7A1DA88B2148CA949543580 /* StoryReaderCardPixelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7264B387CA4C3C8FA39E10A3 /* StoryReaderCardPixelTests.swift */; };
 		C7A59A2C4F2E4AB7FCA8ED68 /* ConversationCardJoinAccountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41FE4B87BE37AA576E7B0ECB /* ConversationCardJoinAccountTests.swift */; };
@@ -9308,6 +9310,7 @@
 		EA47DC36817E59951F9CBBCE /* StoryVisibilityPreferenceStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryVisibilityPreferenceStoreTests.swift; sourceTree = "<group>"; };
 		EA4A6A685777129DA88DA178 /* PostEditComposerHydrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostEditComposerHydrationTests.swift; sourceTree = "<group>"; };
 		EA4B03CB18D21236DB983E22 /* ConversationBackgroundResolution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationBackgroundResolution.swift; sourceTree = "<group>"; };
+		EA572372E18217723EFEBF4E /* TalkieCardLawTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieCardLawTests.swift; sourceTree = "<group>"; };
 		EA594D742BE173DB72C9E7C3 /* ContactsHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsHubView.swift; sourceTree = "<group>"; };
 		EA6E379F81CDC569F11F44D5 /* NumericAccessibilityValueGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericAccessibilityValueGuardTests.swift; sourceTree = "<group>"; };
 		EA84A965ADAAF47873F9707D /* CallManagerHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManagerHost.swift; sourceTree = "<group>"; };
@@ -9463,6 +9466,7 @@
 		F0F74E39641593D314887229 /* ConversationViewModelOpenPublishTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelOpenPublishTests.swift; sourceTree = "<group>"; };
 		F0FB7A9DC4311341A1025B6F /* ConversationMediaGalleryView+LoadFailure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationMediaGalleryView+LoadFailure.swift"; sourceTree = "<group>"; };
 		F10374618070CF3DA7AEB593 /* RootPendingBanners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootPendingBanners.swift; sourceTree = "<group>"; };
+		F107D29930C6BB16AE85A283 /* TalkieCardLaw.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TalkieCardLaw.swift; sourceTree = "<group>"; };
 		F110F530C23C87D5B980B83D /* ConversationAnalysisProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAnalysisProviding.swift; sourceTree = "<group>"; };
 		F1118910D0880BFB743EA43E /* CallBannerContrast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallBannerContrast.swift; sourceTree = "<group>"; };
 		F138DE4F320CD58D8B471318 /* MessageReactionsDetailViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageReactionsDetailViewTests.swift; sourceTree = "<group>"; };
@@ -12336,6 +12340,7 @@
 		5083FD9E2F80799FCBA54364 /* Talkie */ = {
 			isa = PBXGroup;
 			children = (
+				EA572372E18217723EFEBF4E /* TalkieCardLawTests.swift */,
 				461283F5DDE32AA7BECA0115 /* TalkieCenterTests.swift */,
 				A9A6823CFDCB95E28834D30C /* TalkieHeaderBarTests.swift */,
 				B3393ED1234D3FB753C56A38 /* TalkieHeaderTests.swift */,
@@ -12856,6 +12861,7 @@
 			isa = PBXGroup;
 			children = (
 				D76F1F86FC9CFA9E3CA49E9C /* ProfileTalkieRow.swift */,
+				F107D29930C6BB16AE85A283 /* TalkieCardLaw.swift */,
 				E84B7805ED8F38A2037853FC /* TalkieCenter.swift */,
 				FB174EB73DC6E224C29B44D8 /* TalkieHeaderBarLaw.swift */,
 				6F48DBFF915FE1AB6CE4E9FC /* TalkieHeaderLiveBar.swift */,
@@ -19106,6 +19112,7 @@
 				708A0A27E526D7AFEC203844 /* SyncPillPlacement.swift in Sources */,
 				EC81A5BEF3DA6082992609A1 /* SyncPillRotator.swift in Sources */,
 				30A6369B86CB19806D00A77C /* SyncPillViewModel.swift in Sources */,
+				B8A81D812DC8DD0669733273 /* TalkieCardLaw.swift in Sources */,
 				8F2C9DF9EA53963988957FD3 /* TalkieCenter.swift in Sources */,
 				950DFCC37F9C9EF2AD770A67 /* TalkieHeaderBarLaw.swift in Sources */,
 				8E7AFF4F033344739F356547 /* TalkieHeaderLiveBar.swift in Sources */,
@@ -21237,6 +21244,7 @@
 				6CEED65191970F45220CDE32 /* SyncPillViewModelDeriveTests.swift in Sources */,
 				8E55ECCF1C9DAB655ED2DF0D /* SystemNoticeEngravedTimeTests.swift in Sources */,
 				1B62F5AE4FD676F53ED74106 /* TabNavigationTests.swift in Sources */,
+				C78DA9D0FD970637C90FE2BF /* TalkieCardLawTests.swift in Sources */,
 				AC0F9C3C14A9C13BC6DB4334 /* TalkieCenterTests.swift in Sources */,
 				1735F3EC1EDA776768D8CB28 /* TalkieHeaderBarTests.swift in Sources */,
 				69D7403D391A2C1D1169CAD0 /* TalkieHeaderTests.swift in Sources */,

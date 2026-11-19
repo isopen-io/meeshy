@@ -400,4 +400,120 @@ class SharedLocationSharingSyncTest {
         assertThat(device.center.roster.value.entry(alice)).isNotNull()
         assertThat(device.stops).isEqualTo(0)
     }
+
+    private val mine = "2026-01-01T00:00:00.000Z"
+    private val elsewhere = "2026-01-01T00:00:05.000Z"
+
+    private fun servedFrom(startedAt: String?, vararg people: Pair<String, Long>) =
+        SharedLocationOwnSnapshot(served(*people).recipients, startedAt)
+
+    private suspend fun TestScope.publishing(device: Device) {
+        runCurrent()
+        device.startVerdict = SharedLocationStartVerdict.Started(hour, mine)
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+        assertThat(device.following).isEqualTo(1)
+    }
+
+    @Test
+    fun `un autre demarrage servi fait ceder l'appareil qui publiait, aucun releve ne part plus`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val sent = device.updates.size
+        device.servedSnapshot = servedFrom(elsewhere, alice to hour, bob to hour)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        advanceTimeBy(10_000L)
+        device.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(device.center.roster.value.entry(bob)).isNotNull()
+        assertThat(device.updates).hasSize(sent)
+        assertThat(device.receivedMarks["me"]).isTrue()
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        assertThat(relaunched.following).isEqualTo(0)
+    }
+
+    @Test
+    fun `la meme personne repartagee ailleurs, liste identique, fait ceder aussi`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.servedSnapshot = servedFrom(elsewhere, alice to hour)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isTrue()
+    }
+
+    @Test
+    fun `son propre demarrage relu avec une echeance decalee de dix minutes ne fait pas ceder`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val sent = device.updates.size
+        device.servedSnapshot = servedFrom(mine, alice to hour + 600_000L)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        advanceTimeBy(10_000L)
+        device.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
+        assertThat(device.updates.size).isGreaterThan(sent)
+    }
+
+    @Test
+    fun `un accuse perdu prend le demarrage servi pour le sien, puis cede au suivant`() = runTest {
+        val device = Device(this)
+        runCurrent()
+        device.startVerdict = SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.UNCONFIRMED)
+        device.center.share(alice, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        device.servedSnapshot = servedFrom(mine, alice to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+        assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
+
+        device.servedSnapshot = servedFrom(elsewhere, alice to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isTrue()
+    }
+
+    @Test
+    fun `une passerelle qui ne nomme pas le demarrage ne fait jamais ceder`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.servedSnapshot = servedFrom(null, alice to hour, bob to hour)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
+    }
+
+    @Test
+    fun `le demarrage d'un autre compte du telephone ne fait pas ceder le partage de celui-ci`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.account = "other"
+        device.center.clear()
+        runCurrent()
+        device.startVerdict = SharedLocationStartVerdict.Started(hour, elsewhere)
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+
+        device.account = "me"
+        device.center.clear()
+        runCurrent()
+        device.servedSnapshot = servedFrom(mine, alice to hour)
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
+    }
 }

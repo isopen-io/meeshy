@@ -15,14 +15,18 @@ private func filledCircleGlyph(_ level: RelationLevel) -> String {
 struct ProfileRelationPillView: View {
     @StateObject private var viewModel: ProfileCircleViewModel
     let displayName: String
+    /// Le lien montré, publié à la fiche depuis l'en-tête — toujours monté, quelle que soit la face lue (#18857) : la
+    /// Vitrine sait dès le cache qu'écrire n'est plus une demande.
+    @Binding var standing: ProfileRelationStanding
     @State private var showsOurCircle = false
     /// L'accent de la fiche ouverte (#19674) : la pilule et « Notre cercle » prennent la couleur de la personne, comme
     /// la planche `Autre-Cercle` ; hors d'une fiche, la couleur du cercle.
     @Environment(\.meeshyProfileAccent) private var profileAccent
 
-    init(userId: String, displayName: String) {
+    init(userId: String, displayName: String, standing: Binding<ProfileRelationStanding> = .constant(.unresolved)) {
         _viewModel = StateObject(wrappedValue: ProfileCircleModels.model(for: userId))
         self.displayName = displayName
+        _standing = standing
     }
 
     var body: some View {
@@ -43,6 +47,7 @@ struct ProfileRelationPillView: View {
         }
         .meeshyMotion(.morph, value: viewModel.shownLevel)
         .task(id: viewModel.userId) { await viewModel.load() }
+        .adaptiveOnChange(of: viewModel.standing, initial: true) { _, read in standing = read }
         .sheet(isPresented: $showsOurCircle) {
             OurCircleSheet(viewModel: viewModel, displayName: displayName, accentHex: profileAccent)
                 .presentationDetents([.large])
@@ -65,8 +70,11 @@ struct OurCircleSheet: View {
     var accentHex: String? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var confirmedLowering: ProfileCircleLowering?
+    @State private var them: MeeshyUser?
     private var theme: ThemeManager { ThemeManager.shared }
     private var me: MeeshyUser? { AuthManager.shared.currentUser }
+    private var myFace: OurCircleFace { OurCircleFace.of(me, userId: me?.id) }
+    private var theirFace: OurCircleFace { OurCircleFace.of(them, userId: viewModel.userId) }
     private var myName: String {
         me.map { $0.displayName ?? $0.username } ?? ""
     }
@@ -87,8 +95,8 @@ struct OurCircleSheet: View {
                     orbit(summary)
                     headline(summary)
                     OurCircleGrantBars(summary: summary, theirName: displayName, myName: myName,
-                                       theirAccentHex: accentHex, myAccentHex: myAccentHex, myAvatarURL: me?.avatar,
-                                       theirTint: theirTint(summary), myTint: myTint(summary))
+                                       theirAccentHex: accentHex, myAccentHex: myAccentHex, theirFace: theirFace,
+                                       myFace: myFace, theirTint: theirTint(summary), myTint: myTint(summary))
                         .meeshyCascade(rank: 2)
                     opened(summary)
                     nextOpens(summary)
@@ -105,6 +113,17 @@ struct OurCircleSheet: View {
         .background(theme.backgroundPrimary)
         .adaptiveOnChange(of: viewModel.didUnlink) { _, unlinked in
             if unlinked { dismiss() }
+        }
+        .task(id: viewModel.userId) { await loadThem() }
+    }
+
+    /// La photo et le contour de la personne, relus du profil que sa fiche a mis en cache.
+    private func loadThem() async {
+        switch await CacheCoordinator.shared.profiles.load(for: viewModel.userId) {
+        case .fresh(let users, _), .stale(let users, _):
+            them = users.first
+        case .expired, .empty:
+            break
         }
     }
 
@@ -134,11 +153,13 @@ struct OurCircleSheet: View {
             label: OurCircleCopy.scaleLabel,
             center: {
                 MeeshyAvatar(name: myName, context: .custom(OurCircleGrantBars.centerAvatar),
-                             accentColor: myAccentHex, avatarURL: me?.avatar)
+                             accentColor: myAccentHex, avatarURL: myFace.avatarURL, presenceState: myFace.presence,
+                             ring: myFace.ring)
             },
             marker: {
                 MeeshyAvatar(name: displayName, context: .custom(OurCircleGrantBars.markerAvatar),
-                             accentColor: accentHex ?? DynamicColorGenerator.colorForName(displayName))
+                             accentColor: accentHex ?? DynamicColorGenerator.colorForName(displayName),
+                             avatarURL: theirFace.avatarURL, presenceState: theirFace.presence, ring: theirFace.ring)
             }
         )
         .frame(maxWidth: .infinity)

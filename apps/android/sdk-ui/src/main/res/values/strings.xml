@@ -39,4 +39,5 @@
     <string name="bubble_a11y_pinned">Pinned</string>
     <string name="bubble_a11y_ephemeral">Self-destructing message</string>
     <string name="skeleton_link_row_loading">Loading a link</string>
+    <string name="talkie_send_voice">The walkie-talkie can’t get through right now: send a voice message instead.</string>
 </resources>

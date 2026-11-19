@@ -12,9 +12,10 @@ struct CommunityLinkDetailView: View {
     @StateObject var viewModel: CommunityLinkDetailViewModel
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.routerCommands) var router
     @State private var showsMore = false
     @State private var isEditing = false
-    @State private var qrShareImage: QRShareImage?
+    @State private var enlargedQR: LinkQRPresentation?
     @State private var sharedLink: ShareableLink?
     @State var selectedDay: String?
 
@@ -34,6 +35,7 @@ struct CommunityLinkDetailView: View {
                 figuresBand
                 entriesChart
                 entryRules
+                detailsFailedBlock
                 recentSection
                 invitationSection
                 closeButton
@@ -53,7 +55,7 @@ struct CommunityLinkDetailView: View {
             Button(ShareLinkDetailCopy.cancel, role: .cancel) {}
         }
         .sheet(isPresented: $isEditing) { editSheet }
-        .sheet(item: $qrShareImage) { qr in ShareSheet(activityItems: [qr.image]) }
+        .sheet(item: $enlargedQR) { qr in LinkQRSheet(presentation: qr, tint: Self.accent) }
         .sheet(item: $sharedLink) { shared in ShareSheet(activityItems: shared.activityItems) }
     }
 
@@ -85,20 +87,28 @@ struct CommunityLinkDetailView: View {
         .accessibilityIdentifier("communityLink.detail.hero")
     }
 
-    /// « Tu l'animes · 342 membres » : la pile des entrées récentes (K48) quand il y en a, sinon l'avatar de la
-    /// communauté.
+    /// « Tu l'animes · 342 membres › » : la pile des entrées récentes (K48) quand il y en a, sinon l'avatar de la
+    /// communauté ; le toucher ouvre la communauté.
     private var heroStub: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             let faces = viewModel.headFaces
             if faces.isEmpty {
-                MeeshyPersonRow(title: stewardshipLine, size: .inline, showsDivider: false) {
+                MeeshyPersonRow(title: stewardshipLine, size: .inline, showsDivider: false,
+                                onPress: { openCommunity() }) {
                     MeeshyAvatar(name: link.name, context: .custom(26), kind: .entity,
                                  avatarURL: viewModel.details?.avatar, isDark: isDark)
+                } trailing: {
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
                 }
+                .accessibilityHint(CommunityLinkDetailCopy.openCommunityHint)
             } else {
                 LinksFaceStack(members: faces, summary: stewardshipLine,
                                label: ProfileLinksCopy.facesLabel(stewardshipLine, faces: faces),
-                               tint: Self.accent)
+                               tint: Self.accent, hint: CommunityLinkDetailCopy.openCommunityHint,
+                               onPress: { openCommunity() })
                     .accessibilityIdentifier("communityLink.detail.faces")
             }
             heroActions
@@ -135,6 +145,9 @@ struct CommunityLinkDetailView: View {
 
     // MARK: - Fermer les entrées (K40)
 
+    /// La planche pose aussi « Actif » sous les gestes et « Supprimer ce lien » en pied de fiche. Le lien d'une
+    /// communauté est son adresse même : tant que la passerelle ne sert ni pause ni révocation (#19661), la fiche ne
+    /// les montre pas, plutôt que de désactiver ou supprimer la communauté.
     private var closeButton: some View {
         let isClosed = viewModel.isClosed ?? false
         return MeeshyButton(isClosed ? CommunityLinkDetailCopy.reopenEntries : CommunityLinkDetailCopy.closeEntries,
@@ -165,8 +178,13 @@ struct CommunityLinkDetailView: View {
 
     // MARK: - Actions
 
+    /// Le QR s'agrandit dans sa feuille (K31), comme sur la face Liens ; on le partage depuis elle.
     private func showQR() {
-        qrShareImage = LinkQRCode.shareImage(for: link.joinUrl)
+        enlargedQR = LinkQRPresentation(address: link.joinUrl, title: link.name)
+    }
+
+    func openCommunity() {
+        DeepLinkRouter.shared.pendingDeepLink = .community(id: link.id)
     }
 
     private func setClosed(_ closed: Bool) {
@@ -209,7 +227,7 @@ extension CommunityLinkDetailViewModel {
                 await FriendsCacheAudienceContacts().cachedContacts().map { contact in
                     let name = contact.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                     return CommunityInviteCandidate(id: contact.id, name: name.isEmpty ? contact.username : name,
-                                                    avatar: contact.avatar)
+                                                    avatar: contact.avatar, ring: contact.avatarRing)
                 }
             },
             invite: { communityId, userId in

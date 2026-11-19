@@ -30,6 +30,13 @@ nonisolated struct CommunityLinkDetails: Equatable, Sendable {
     }
 }
 
+/// La communauté d'un lien : en chemin, servie, ou introuvable.
+nonisolated enum CommunityLinkDetailsPhase: Equatable, Sendable {
+    case loading
+    case loaded
+    case failed
+}
+
 /// Les entrées du lien : en chemin, servies, ou introuvables.
 nonisolated enum CommunityLinkEntriesState: Equatable, Sendable {
     case loading
@@ -46,6 +53,8 @@ final class CommunityLinkDetailViewModel: ObservableObject {
     nonisolated deinit {}
 
     @Published private(set) var details: CommunityLinkDetails?
+    /// La lecture de la communauté : en chemin, servie, ou échouée — « Fermer les entrées » éteint dit alors pourquoi.
+    @Published private(set) var detailsPhase: CommunityLinkDetailsPhase = .loading
     @Published private(set) var entries: CommunityLinkEntriesState = .loading
     @Published private(set) var isClosed: Bool?
     /// Les amis que l'on peut inviter, lus dans le cache (#19505) ; la rangée n'attend pas le réseau.
@@ -57,19 +66,19 @@ final class CommunityLinkDetailViewModel: ObservableObject {
 
     let link: CommunityLink
     let viewerId: String?
-    let inviteUser: @Sendable (String, String) async throws -> Void
-    private let loadDetails: @Sendable (String) async throws -> CommunityLinkDetails
-    private let loadEntries: @Sendable (String) async throws -> [CommunityLinkEntry]
-    private let setPrivate: @Sendable (String, Bool) async throws -> Void
-    private let loadFriends: @Sendable () async -> [CommunityInviteCandidate]
+    let inviteUser: @concurrent @Sendable (String, String) async throws -> Void
+    private let loadDetails: @concurrent @Sendable (String) async throws -> CommunityLinkDetails
+    private let loadEntries: @concurrent @Sendable (String) async throws -> [CommunityLinkEntry]
+    private let setPrivate: @concurrent @Sendable (String, Bool) async throws -> Void
+    private let loadFriends: @concurrent @Sendable () async -> [CommunityInviteCandidate]
 
     init(link: CommunityLink,
          viewerId: String?,
-         loadDetails: @escaping @Sendable (String) async throws -> CommunityLinkDetails,
-         loadEntries: @escaping @Sendable (String) async throws -> [CommunityLinkEntry],
-         setPrivate: @escaping @Sendable (String, Bool) async throws -> Void,
-         loadFriends: @escaping @Sendable () async -> [CommunityInviteCandidate] = { [] },
-         invite: @escaping @Sendable (String, String) async throws -> Void = { _, _ in }) {
+         loadDetails: @escaping @concurrent @Sendable (String) async throws -> CommunityLinkDetails,
+         loadEntries: @escaping @concurrent @Sendable (String) async throws -> [CommunityLinkEntry],
+         setPrivate: @escaping @concurrent @Sendable (String, Bool) async throws -> Void,
+         loadFriends: @escaping @concurrent @Sendable () async -> [CommunityInviteCandidate] = { [] },
+         invite: @escaping @concurrent @Sendable (String, String) async throws -> Void = { _, _ in }) {
         self.link = link
         self.viewerId = viewerId
         self.loadDetails = loadDetails
@@ -99,7 +108,11 @@ final class CommunityLinkDetailViewModel: ObservableObject {
         return loaded
     }
 
+    /// Lit la communauté et ses entrées. « Réessayer » se voit : ce qui avait échoué repasse en chargement, jamais
+    /// ce qui est déjà servi.
     func load() async {
+        if entries == .failed { entries = .loading }
+        if detailsPhase == .failed { detailsPhase = .loading }
         if friends.isEmpty { friends = await loadFriends() }
         let id = link.id
         let loadDetails = self.loadDetails
@@ -110,6 +123,9 @@ final class CommunityLinkDetailViewModel: ObservableObject {
         if let fetchedDetails {
             details = fetchedDetails
             isClosed = fetchedDetails.isPrivate
+            detailsPhase = .loaded
+        } else if details == nil {
+            detailsPhase = .failed
         }
         if let fetchedEntries {
             entries = .loaded(CommunityLinkEntries(entries: fetchedEntries, excludingUserId: viewerId))

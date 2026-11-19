@@ -56,7 +56,7 @@ struct ContactlessExchangeSection: View {
         if let theirs = state.theirs {
             receipt(theirs)
         } else if let peer = state.peer, state.step == .found {
-            person(name: ContactlessCopy.isHere(peer.displayName), username: peer.username, avatar: nil)
+            person(name: ContactlessCopy.isHere(peer.displayName), username: peer.username, avatar: nil, userId: nil)
         }
         if state.step == .found {
             choice
@@ -65,9 +65,10 @@ struct ContactlessExchangeSection: View {
         }
     }
 
-    private func person(name: String, username: String, avatar: String?) -> some View {
+    private func person(name: String, username: String, avatar: String?, userId: String?) -> some View {
         HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(name: username, context: .custom(56), accentColor: accentColor, avatarURL: avatar)
+            MeeshyAvatar(name: username, context: .custom(56), accentColor: accentColor, avatarURL: avatar,
+                         presenceState: userId.flatMap { PresenceManager.shared.knownPresenceState(for: $0) })
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: name)
@@ -119,7 +120,8 @@ struct ContactlessExchangeSection: View {
 
     private func receipt(_ theirs: ContactExchangeAccepted) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            person(name: theirs.issuer.shownName, username: theirs.issuer.username, avatar: theirs.issuer.avatar)
+            person(name: theirs.issuer.shownName, username: theirs.issuer.username, avatar: theirs.issuer.avatar,
+                   userId: theirs.issuer.id)
             if let bio = theirs.bio {
                 Text(verbatim: bio)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize))

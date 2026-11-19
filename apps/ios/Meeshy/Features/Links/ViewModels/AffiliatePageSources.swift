@@ -49,8 +49,8 @@ final class AffiliatePageCache: AffiliatePageCacheProviding {
 struct AffiliatePageSources {
     let affiliateService: AffiliateServiceProviding
     let invitationsService: SentInvitationsProviding
-    let deleteToken: @Sendable (String) async throws -> Void
-    let sendEmailInvitation: @Sendable (String) async throws -> Void
+    let deleteToken: @concurrent @Sendable (String) async throws -> Void
+    let sendEmailInvitation: @concurrent @Sendable (String) async throws -> Void
     let conversationCreator: ConversationCreating
     let currentUserId: String
     let store: AffiliatePageCacheProviding

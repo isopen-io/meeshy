@@ -262,26 +262,30 @@ public enum SharedLocationSendOutcome: String, Sendable, Equatable {
 /// terme (#19616) ; une clé absente reste illisible.
 struct SharedLocationStartedWire: Decodable, Sendable, Equatable {
     let expiresAt: String?
+    /// Le dernier démarrage AVEC position (#18580) ; absent d'une passerelle antérieure.
+    let startedAt: String?
 
-    private enum CodingKeys: String, CodingKey { case expiresAt }
+    private enum CodingKeys: String, CodingKey { case expiresAt, startedAt }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         expiresAt = try c.decodeNil(forKey: .expiresAt) ? nil : try c.decode(String.self, forKey: .expiresAt)
+        startedAt = (try? c.decodeIfPresent(String.self, forKey: .startedAt)) ?? nil
     }
 }
 
 /// Le verdict d'un démarrage ou d'une mise à jour : le terme servi, ou le refus.
 public enum SharedLocationStartVerdict: Sendable, Equatable {
-    case started(expiresAt: Date)
+    /// `startedAt` : le démarrage que la passerelle nomme (#18580), que la relecture de mon partage sert ensuite.
+    case started(expiresAt: Date, startedAt: String? = nil)
     case refused(SharedLocationSendOutcome)
 
     static func read(_ ack: SocketAck<SharedLocationStartedWire>) -> SharedLocationStartVerdict {
         switch ack {
         case .accepted(let wire):
-            guard let raw = wire.expiresAt else { return .started(expiresAt: SharedLocationShareTerm.openEndedDeadline) }
+            guard let raw = wire.expiresAt else { return .started(expiresAt: SharedLocationShareTerm.openEndedDeadline, startedAt: wire.startedAt) }
             guard let expiresAt = WireDate.date(from: raw) else { return .refused(.failed) }
-            return .started(expiresAt: expiresAt)
+            return .started(expiresAt: expiresAt, startedAt: wire.startedAt)
         case .acceptedWithoutPayload, .undecodable:
             return .refused(.failed)
         case .refused(let refusal):

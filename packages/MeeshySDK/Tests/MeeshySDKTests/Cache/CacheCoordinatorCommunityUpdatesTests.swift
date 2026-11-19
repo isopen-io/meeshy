@@ -116,3 +116,54 @@ final class CacheCoordinatorCommunityMemberChangesTests: XCTestCase {
         XCTAssertEqual(counts, [3])
     }
 }
+
+/// `community:deleted` (#19591) retire la communauté du cache PERSISTÉ, sous
+/// toutes ses clés : le prochain démarrage à froid ne la ressert pas.
+final class CacheCoordinatorCommunityDeletionsTests: XCTestCase {
+
+    private func makeSUT() throws -> (CacheCoordinator, MockMessageSocket) {
+        let db = try DatabaseQueue(configuration: Configuration())
+        try AppDatabase.runMigrations(on: db)
+        let socket = MockMessageSocket()
+        return (CacheCoordinator(messageSocket: socket, socialSocket: MockSocialSocket(), db: db), socket)
+    }
+
+    private func row(id: String) -> APICommunity {
+        APICommunity(
+            id: id, identifier: "mshy_\(id)", name: id, description: nil, avatar: nil, banner: nil,
+            isPrivate: false, createdBy: "u-creator", createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000), creator: nil, members: nil, _count: nil,
+            memberCount: 3, conversationCount: 1, currentUserRole: "member"
+        )
+    }
+
+    func test_deleted_removesTheCommunityUnderEveryKey_andOnlyIt() async throws {
+        let (cache, socket) = try makeSUT()
+        await cache.start()
+        try await cache.communities.save([row(id: "c1"), row(id: "c2")], for: "list")
+        try await cache.communities.save([row(id: "c1")], for: "detail:c1")
+
+        socket.communityDeleted.send("c1")
+
+        let deadline = Date().addingTimeInterval(2)
+        var listed: [String] = []
+        while Date() < deadline {
+            listed = await cache.communities.load(for: "list").snapshot()?.map(\.id) ?? []
+            if listed == ["c2"] { break }
+            try? await Task.sleep(nanoseconds: 15_000_000)
+        }
+        XCTAssertEqual(listed, ["c2"])
+        let detail = await cache.communities.load(for: "detail:c1").snapshot()?.map(\.id) ?? []
+        XCTAssertEqual(detail, [])
+    }
+
+    func test_unknownCommunity_leavesTheCacheIntact() async throws {
+        let (cache, _) = try makeSUT()
+        try await cache.communities.save([row(id: "c1")], for: "list")
+
+        await cache.applyCommunityDeletion("ghost")
+
+        let ids = await cache.communities.load(for: "list").snapshot()?.map(\.id)
+        XCTAssertEqual(ids, ["c1"])
+    }
+}

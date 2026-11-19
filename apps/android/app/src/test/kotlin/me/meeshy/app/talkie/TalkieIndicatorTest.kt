@@ -30,7 +30,7 @@ class TalkieIndicatorTest {
         val muted = mutableListOf<String>()
         compose.setContent { MeeshyTheme { TalkieIndicatorHost(speaker = speaker("Alice"), onMute = { muted += it }) } }
 
-        compose.onNodeWithText("Alice vous parle").assertIsDisplayed()
+        compose.onNodeWithText("Alice te parle").assertIsDisplayed()
         compose.onNodeWithContentDescription("Couper la voix de Alice").performClick()
 
         assertThat(muted).containsExactly("t1")
@@ -40,7 +40,7 @@ class TalkieIndicatorTest {
     fun `sans nom dans les caches, la voix sort sous Quelqu'un`() {
         compose.setContent { MeeshyTheme { TalkieIndicatorHost(speaker = speaker(null), onMute = {}) } }
 
-        compose.onNodeWithText("Quelqu’un vous parle").assertIsDisplayed()
+        compose.onNodeWithText("Quelqu’un te parle").assertIsDisplayed()
     }
 
     @Test

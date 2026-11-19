@@ -27,6 +27,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     private let myCommunities: MyCommunitiesWrites
     private var liveUpdates: AnyCancellable?
     private var liveMembers: AnyCancellable?
+    private var liveDeletions: AnyCancellable?
     private let memberLane = OrderedEventLane()
 
     /// `communityUpdates` : `community:updated` (#18439) réécrit l'identité
@@ -34,6 +35,8 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     /// effectif — sans relance réseau ni toucher au rôle du lecteur.
     /// `memberChanges` : `community:member-*` (#18767) recopie l'effectif et
     /// fait suivre le rôle du lecteur quand le geste le concerne.
+    /// `deletions` : `community:deleted` (#19591) rend la fiche indisponible
+    /// sur-le-champ, puis la relit en silence.
     init(
         communityId: String,
         service: CommunityServiceProviding = CommunityService.shared,
@@ -41,6 +44,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         postsCache: @escaping @MainActor () async -> CommunityPostsCache? = { nil },
         communityUpdates: AnyPublisher<CommunityUpdatedEvent, Never> = CommunityUpdateChannel.live,
         memberChanges: AnyPublisher<CommunityMemberChange, Never> = CommunityMemberChannel.live,
+        deletions: AnyPublisher<String, Never> = CommunityDeletedChannel.live,
         myCommunities: MyCommunitiesWrites = .live
     ) {
         self.communityId = communityId
@@ -53,6 +57,25 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
             .sink { [weak self] event in self?.apply(event) }
         self.liveMembers = memberChanges
             .relay(through: memberLane) { [weak self] change in await self?.apply(change) }
+        self.liveDeletions = deletions
+            .relay(through: memberLane) { [weak self] communityId in await self?.applyDisappearance(of: communityId) }
+    }
+
+    /// La communauté regardée a été supprimée ou désactivée : l'écran dit
+    /// aussitôt qu'elle n'est plus disponible — plus aucun geste n'est offert —,
+    /// oublie ses canaux et ses publications gardées, la retire de « mes
+    /// communautés », puis la relit sans indicateur (un compte qui la lit
+    /// encore la retrouve).
+    func applyDisappearance(of disappearedId: String) async {
+        guard disappearedId == communityId else { return }
+        community = nil
+        conversations = []
+        isCreator = false
+        adopt(role: nil)
+        loadFailure = .refused
+        await forgetCachedPosts()
+        await myCommunities.remove(communityId)
+        await loadServed(showsProgress: false)
     }
 
     func apply(_ event: CommunityUpdatedEvent) {
@@ -91,9 +114,9 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
 
     /// Ce que le serveur sert de la communauté, `nil` sur un échec.
     @discardableResult
-    private func loadServed() async -> APICommunity? {
-        isLoading = true
-        defer { isLoading = false }
+    private func loadServed(showsProgress: Bool = true) async -> APICommunity? {
+        if showsProgress { isLoading = true }
+        defer { if showsProgress { isLoading = false } }
 
         do {
             let apiCommunity = try await service.get(communityId: communityId)

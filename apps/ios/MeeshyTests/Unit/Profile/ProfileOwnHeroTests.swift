@@ -116,6 +116,6 @@ final class ProfileOwnHeroTests: XCTestCase {
     func test_vitrine_stillLeavesThroughTheSystemBackGesture_andVoiceOverEscape() throws {
         let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
         XCTAssertTrue(profile.contains(".background(InteractivePopEnabler())"), "le glissé du bord ramène en arrière")
-        XCTAssertTrue(profile.contains(".accessibilityAction(.escape)"), "le geste d'échappement de VoiceOver aussi")
+        XCTAssertTrue(profile.contains(".dismissOnEscape { leaveOrCancel() }"), "le geste d'échappement de VoiceOver et Échap au clavier aussi")
     }
 }

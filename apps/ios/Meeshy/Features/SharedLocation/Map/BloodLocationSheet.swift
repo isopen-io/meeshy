@@ -79,10 +79,10 @@ struct BloodLocationSheet: View {
     private var history: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             MeeshySectionHeader(title: BloodLocationCopy.lastDays, form: .overline, size: .sheet)
-            MeeshyFigure(value: BloodLocationCopy.summary(range: model.range,
-                                                          distance: LocationMapCopy.distance(model.shownDistanceMeters, locale: locale)),
-                         unit: BloodLocationCopy.stops(model.stops.count), size: .compact,
-                         emptyLabel: BloodLocationCopy.empty)
+            MeeshySectionHeader(title: BloodLocationCopy.summary(range: model.range,
+                                                                 distance: LocationMapCopy.distance(model.shownDistanceMeters, locale: locale)),
+                                size: .sheet, detail: BloodLocationCopy.stops(model.stops.count), level: 2,
+                                lead: { EmptyView() }, accessory: { EmptyView() })
         }
         MeeshyChart(kind: .strip, points: dayPoints, summary: BloodLocationCopy.lastDays, tint: tint, size: .compact,
                     markers: [.today], emptyText: BloodLocationCopy.empty)
@@ -160,7 +160,8 @@ struct BloodLocationSheet: View {
                 showsDivider: row.id != rows.last?.id,
                 avatar: {
                     MeeshyAvatar(name: name, context: .custom(32), accentColor: DynamicColorGenerator.colorForName(name),
-                                 avatarURL: model.observers[row.observerId]?.avatarURL)
+                                 avatarURL: model.observers[row.observerId]?.avatarURL,
+                                 presenceState: PresenceManager.shared.knownPresenceState(for: row.observerId))
                 },
                 trailing: {
                     if row.isExcessive {

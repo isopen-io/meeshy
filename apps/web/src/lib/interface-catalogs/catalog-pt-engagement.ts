@@ -20,6 +20,11 @@ const ptEngagement = {
   'engagement.card.open': 'Ver o jogo',
   'engagement.card.hide': 'Ocultar a chama',
   'engagement.card.title': 'Nesta conversa',
+  'engagement.act.easy': 'Ato I',
+  'engagement.act.medium': 'Ato II',
+  'engagement.act.hard': 'Ato III',
+  'engagement.act.gold': 'Ato de ouro',
+  'engagement.act.advance': '{act} · {progress} de {target}',
 } as const;
 
 export default ptEngagement;

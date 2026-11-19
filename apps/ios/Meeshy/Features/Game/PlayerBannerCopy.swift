@@ -100,8 +100,8 @@ enum PlayerBannerCopy {
         }
     }
 
-    /// Ce que lit VoiceOver, en UNE phrase et dans l'ordre de la bannière : « Niveau 34, Éclat, 78 % vers le 35,
-    /// 12 Meeshes, Conteur III, ligue Jade 4e, Flamme 23 jours ». Ce qui n'existe pas ne se dit pas.
+    /// Ce que lit VoiceOver, en UNE phrase et dans l'ordre de la bannière — le rang en tête (#19705) : « Conteur III,
+    /// Niveau 34, Éclat, 78 % vers le 35, 12 Meeshes, ligue Jade 4e, Flamme 23 jours ». Ce qui n'existe pas ne se dit pas.
     static func accessibilityLabel(for banner: GamePlayerBanner) -> String {
         let toNext = banner.nextLevel.map {
             GameText.bannerToNext(percent: GameCopy.formatCount(banner.percent), level: GameCopy.formatCount($0))
@@ -110,9 +110,9 @@ enum PlayerBannerCopy {
         let levelParts: [String?] = banner.showsLevel
             ? [GameText.bannerLevel(level: GameCopy.formatCount(banner.level)), GameCopy.tierName(banner.tier), toNext]
             : [banner.showsScore ? GameText.bannerPoints(points: GameCopy.formatCount(banner.score)) : nil]
-        let parts: [String?] = levelParts + [
+        let rankPart: [String?] = [banner.rank.map { GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic) }]
+        let parts: [String?] = rankPart + levelParts + [
             banner.meeshes.map { GameCopy.meeshes($0) },
-            banner.rank.map { GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic) },
             banner.league.map {
                 GameText.bannerLeague(league: GameText.leagueName($0.league), place: GameText.bannerPlace(count: $0.place))
             },

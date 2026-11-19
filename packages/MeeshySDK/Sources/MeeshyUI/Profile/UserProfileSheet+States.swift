@@ -36,7 +36,8 @@ extension UserProfileSheet {
     // MARK: - Je l'ai bloqué
 
     /// La fiche réduite : l'identité grisée, ce que le blocage ferme, « Débloquer », « Signaler aussi », et ce qui
-    /// reste — son lien, nos conversations en lecture seule.
+    /// reste — son lien, nos conversations en lecture seule. Sans conversation en commun, rien de plus : le bloc du
+    /// haut a déjà dit la fermeture.
     var blockedLayout: some View {
         heroScrollView(
             VStack(spacing: 0) {
@@ -77,7 +78,9 @@ extension UserProfileSheet {
                 }
                 .padding(.horizontal, MeeshySpacing.xl)
             }
-            conversationsTab
+            if !effectiveConversations.isEmpty {
+                sharedConversationRows
+            }
         }
     }
 }
@@ -140,8 +143,9 @@ struct ProfileCacheFallbackBanner: View {
 }
 
 /// Introuvable, privé, ou il m'a bloqué : le même écran pour les trois (loi 9), sans rien de lui — ni nom, ni photo,
-/// ni bannière. Rien ne dit qu'on est bloqué. L'adresse demandée — celle que je connaissais déjà — se lit barrée, et
-/// les sorties de l'app (chercher, scanner) remplacent « Retour » quand elle les offre.
+/// ni bannière. Rien ne dit qu'on est bloqué. Dans l'ordre de la planche `Etat-Introuvable` : le bloc d'état (K38) sans
+/// action, l'adresse demandée — celle que je connaissais déjà — barrée, « Tu cherchais peut-être », puis EN BAS la
+/// colonne des sorties : chercher, scanner quand l'app les offre, et toujours « Retour ».
 struct ProfileUnavailableView: View {
     var requestedUsername: String?
     let onBack: () -> Void
@@ -151,16 +155,14 @@ struct ProfileUnavailableView: View {
     @State private var suggestion: UserSearchResult?
 
     var body: some View {
-        let plan = ProfileUnavailableExit.resolve(canSearch: exits?.search != nil, canScan: exits?.scanner != nil)
-        return ScrollView(showsIndicators: false) {
+        ScrollView(showsIndicators: false) {
             VStack(spacing: MeeshySpacing.xl) {
                 Spacer(minLength: MeeshySpacing.xxl * 2)
                 MeeshyStateBlock(
                     kind: .empty,
                     title: ProfileStatesCopy.unavailableTitle,
                     message: ProfileStatesCopy.unavailableMessage,
-                    primary: action(plan.primary),
-                    secondary: plan.secondary.map { action($0) },
+                    primary: nil,
                     art: .none,
                     tint: theme.textMuted,
                     systemImage: "person.crop.circle.badge.questionmark"
@@ -172,6 +174,7 @@ struct ProfileUnavailableView: View {
                         .padding(.horizontal, MeeshySpacing.xl)
                 }
                 if let suggestion { suggested(suggestion) }
+                exitColumn
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -184,20 +187,47 @@ struct ProfileUnavailableView: View {
         }
     }
 
+    /// Les sorties, en bas : la première en bouton principal, la deuxième en contour, « Retour » en texte (K40).
+    private var exitColumn: some View {
+        let plan = ProfileUnavailableExit.resolve(canSearch: exits?.search != nil, canScan: exits?.scanner != nil)
+        return VStack(spacing: MeeshySpacing.sm) {
+            ForEach(Array(plan.enumerated()), id: \.offset) { rank, exit in
+                exitButton(exit, kind: exit == .back ? .text : (rank == 0 ? .primary : .outline))
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.bottom, MeeshySpacing.xxl)
+    }
+
+    private func exitButton(_ exit: ProfileUnavailableExit, kind: MeeshyButtonKind) -> some View {
+        switch exit {
+        case .search:
+            return MeeshyButton(ProfileStatesCopy.searchSomeone, systemImage: "magnifyingglass", kind: kind, width: .fill,
+                                action: {
+                                    exits?.search?()
+                                    onBack()
+                                })
+        case .scan:
+            return MeeshyButton(ProfileStatesCopy.scanQR, systemImage: "qrcode.viewfinder", kind: kind, width: .fill,
+                                action: { scannerShown = true })
+        case .back:
+            return MeeshyButton(ProfileStatesCopy.back, kind: kind, width: .fill, action: onBack)
+        }
+    }
+
     /// « Tu cherchais peut-être » : la personne au pseudo voisin, qui ouvre sa fiche une fois celle-ci fermée.
     private func suggested(_ person: UserSearchResult) -> some View {
         let name = person.displayName ?? person.username
         return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             MeeshySectionHeader(title: ProfileStatesCopy.didYouMean, form: .overline)
             MeeshyPersonRow(title: name, subtitle: "@\(person.username)", showsDivider: false,
-                            onPress: {
-                                exits?.openSuggestion?(person)
-                                onBack()
-                            },
+                            onPress: { exits?.openSuggestionClosingFirst(person, close: { onBack() }) },
                             avatar: {
                                 MeeshyAvatar(name: name, context: .userListItem,
                                              accentColor: DynamicColorGenerator.colorForName(person.username),
-                                             avatarURL: person.avatar, ring: person.avatarRing)
+                                             avatarURL: person.avatar,
+                                             presenceState: person.isOnline.map { UserPresence(isOnline: $0).state },
+                                             ring: person.avatarRing)
                             })
         }
         .padding(.horizontal, MeeshySpacing.xl)
@@ -208,22 +238,6 @@ struct ProfileUnavailableView: View {
         guard let requestedUsername, let suggest = exits?.suggest, exits?.openSuggestion != nil else { return }
         let found = await suggest(requestedUsername)
         suggestion = ProfileUnavailableSuggestion.pick(requested: requestedUsername, among: found)
-    }
-
-    private func action(_ exit: ProfileUnavailableExit) -> MeeshyStateBlockAction {
-        switch exit {
-        case .search:
-            return MeeshyStateBlockAction(title: ProfileStatesCopy.searchSomeone, systemImage: "magnifyingglass") {
-                exits?.search?()
-                onBack()
-            }
-        case .scan:
-            return MeeshyStateBlockAction(title: ProfileStatesCopy.scanQR, systemImage: "qrcode.viewfinder") {
-                scannerShown = true
-            }
-        case .back:
-            return MeeshyStateBlockAction(title: ProfileStatesCopy.back, perform: onBack)
-        }
     }
 }
 
@@ -323,6 +337,11 @@ enum ProfileStatesCopy {
 
     static var reportToo: String {
         String(localized: "profile.state.blocked.reportToo", defaultValue: "Signaler aussi", bundle: .module)
+    }
+
+    /// La puce de la barre d'une fiche que j'ai bloquée (planche `Etat-Bloque`).
+    static var blockedChip: String {
+        String(localized: "profile.state.blocked.chip", defaultValue: "Bloqué", bundle: .module)
     }
 
     static var remainsTitle: String {

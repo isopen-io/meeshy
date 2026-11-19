@@ -5,6 +5,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.conversation.ConversationCacheSource
+import me.meeshy.sdk.conversation.MessageChildRows
 import me.meeshy.sdk.conversation.ThreadSyncKey
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiPost
@@ -98,6 +99,7 @@ public class RoomCachePayloadStores(private val database: MeeshyDatabase) : Cach
         override suspend fun bytes(): Long = dao.purgeablePayloadBytes()
         override suspend fun clear(): Long = database.withTransaction {
             dao.purgeablePayloadBytes().also {
+                MessageChildRows.delete(database, dao.purgeableKeys())
                 dao.clearPurgeable()
                 database.syncMetaDao().deleteByPrefix(ThreadSyncKey.PREFIX)
             }

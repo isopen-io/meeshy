@@ -610,7 +610,7 @@
     <string name="report_message_submit">Invia la segnalazione</string>
     <string name="report_message_title">Perché segnali questo messaggio?</string>
     <string name="report_reason_harassment">Molestie</string>
-    <string name="report_reason_hate_speech">Incitamento all\'odio</string>
+    <string name="report_reason_hate_speech">Odio</string>
     <string name="report_reason_impersonation">Furto d\'identità</string>
     <string name="report_reason_inappropriate">Contenuto inappropriato</string>
     <string name="report_reason_other">Altro</string>

@@ -93,9 +93,9 @@ final class ProfileRelationActionTests: XCTestCase {
             received.append(tint)
             return AnyView(EmptyView())
         }
-        _ = ProfileRelationSlot(section: section, userId: "u1", displayName: "Léo", linked: .constant(false),
+        _ = ProfileRelationSlot(section: section, userId: "u1", displayName: "Léo", standing: .constant(.unresolved),
                                 tint: .red) { EmptyView() }.body
-        _ = ProfileRelationSlot(section: section, userId: "u1", displayName: "Léo", linked: .constant(false),
+        _ = ProfileRelationSlot(section: section, userId: "u1", displayName: "Léo", standing: .constant(.unresolved),
                                 tint: nil) { EmptyView() }.body
         XCTAssertEqual(received, [.red, nil])
     }

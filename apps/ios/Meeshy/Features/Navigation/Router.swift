@@ -796,8 +796,8 @@ final class Router: ObservableObject {
             case .ownProfile:
                 replaceStack(with: .profile)
 
-            case .userProfile(let username):
-                deepLinkProfileUser = ProfileSheetUser(username: username)
+            case .userProfile(let username, let face):
+                deepLinkProfileUser = ProfileSheetUser(username: username).opening(on: face)
 
             case .trackedLink(let token):
                 // `/l/<token>` resolved async by targetType (records the click).

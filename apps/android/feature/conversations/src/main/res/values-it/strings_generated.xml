@@ -106,7 +106,7 @@
     <string name="dialogs_report_error">Errore durante la segnalazione</string>
     <string name="dialogs_report_nav_title">Segnala</string>
     <string name="dialogs_report_reason_harassment">Molestie</string>
-    <string name="dialogs_report_reason_hate_speech">Incitamento all\'odio</string>
+    <string name="dialogs_report_reason_hate_speech">Odio</string>
     <string name="dialogs_report_reason_impersonation">Furto d\'identità</string>
     <string name="dialogs_report_reason_inappropriate">Contenuto inappropriato</string>
     <string name="dialogs_report_reason_other">Altro</string>

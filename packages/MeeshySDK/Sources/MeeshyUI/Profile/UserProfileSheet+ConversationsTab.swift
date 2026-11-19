@@ -3,9 +3,9 @@ import MeeshySDK
 
 // MARK: - UserProfileSheet — Conversations tab
 //
-// Moved verbatim from the historical `conversationsTabContent`. Reuses
-// `sendMessageButton`, `MeeshyAvatar`, and the shared-conversation navigation. Sans conversation en commun, le bloc
-// d'état du kit (K38) dit le vide et propose « Envoyer un premier message » (planche `Etat-Vide`, #18873).
+// Nos conversations en commun et leur navigation. Sans conversation en commun, le bloc d'état du kit (K38) dit le vide
+// et propose « Envoyer un premier message » (planche `Etat-Vide`, #18873). « Écrire » vit dans « Avec lui » et dans le
+// raccourci du sélecteur : la liste ne le redouble pas. Les rangées entrent avec la cascade K26 de leur section.
 
 extension UserProfileSheet {
 
@@ -28,29 +28,24 @@ extension UserProfileSheet {
             )
             .padding(.horizontal, MeeshySpacing.xl)
         } else {
-            VStack(spacing: 0) {
-                if !isCurrentUser {
-                    sendMessageButton
-                        .padding(.horizontal, MeeshySpacing.xl)
-                        .padding(.top, MeeshySpacing.sm)
-                        .padding(.bottom, MeeshySpacing.lg)
-                        .opacity(isInteractionDisabled ? 0.35 : 1)
-                        .allowsHitTesting(!isInteractionDisabled)
+            sharedConversationRows
+        }
+    }
+
+    /// Les rangées de nos conversations en commun, en lecture seule quand je l'ai bloqué.
+    var sharedConversationRows: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(effectiveConversations.enumerated()), id: \.element.id) { index, conv in
+                ProfileSharedConversationRow(conversation: conv, access: sharedConversationAccess) {
+                    HapticFeedback.light()
+                    guard let onNavigateToConversation else { return openSharedConversation(conv) }
+                    onNavigateToConversation(conv)
                 }
 
-                ForEach(Array(effectiveConversations.enumerated()), id: \.element.id) { index, conv in
-                    ProfileSharedConversationRow(conversation: conv, access: sharedConversationAccess) {
-                        HapticFeedback.light()
-                        guard let onNavigateToConversation else { return openSharedConversation(conv) }
-                        onNavigateToConversation(conv)
-                    }
-                    .staggeredAppear(index: index)
-
-                    if index < effectiveConversations.count - 1 {
-                        Divider()
-                            .padding(.leading, 64)
-                            .opacity(MeeshyOpacity.medium)
-                    }
+                if index < effectiveConversations.count - 1 {
+                    Divider()
+                        .padding(.leading, 64)
+                        .opacity(MeeshyOpacity.medium)
                 }
             }
         }

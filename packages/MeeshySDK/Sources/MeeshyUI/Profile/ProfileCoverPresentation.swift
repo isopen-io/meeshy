@@ -17,7 +17,7 @@ public nonisolated enum ProfilePresentationStyle: Sendable, Equatable {
     public var leadingSymbol: String {
         switch self {
         case .sheet: return "chevron.down"
-        case .cover: return "chevron.left"
+        case .cover: return "chevron.backward"
         }
     }
 }

@@ -34,6 +34,7 @@ describe('mon partage, tel que la passerelle le sert à mes appareils', () => {
       ].sort((a, b) => a.userId.localeCompare(b.userId)),
       expiresAt: iso(T0 + HEURE),
       shareBattery: false,
+      startedAt: iso(T0),
     });
   });
 
@@ -76,5 +77,34 @@ describe('mon partage, tel que la passerelle le sert à mes appareils', () => {
     const m = monde();
     await demarrer(m);
     expect(await ownSharedLocationFor(m.deps, AMI)).toEqual(AUCUN);
+  });
+});
+
+/**
+ * UN SEUL APPAREIL PUBLIE (#18580, #18714). `startedAt` nomme le dernier démarrage AVEC position : l'accusé le rend à
+ * l'appareil qui l'a fait, la relecture le sert à tous. Un appareil dont l'accusé porte un autre `startedAt` que celui
+ * servi sait qu'un autre a partagé après lui, sans comparer d'horloges. La liste seule (aucune position) le garde.
+ */
+describe('l’identité du dernier « Partager »', () => {
+  const startedAtOf = (ack: Awaited<ReturnType<typeof startSharedLocation>>): string | undefined =>
+    ack.success ? ack.data.startedAt : undefined;
+
+  it('l’accusé d’un démarrage avec position rend le `startedAt` que la relecture sert', async () => {
+    const m = monde();
+    const ack = await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI }], durationMinutes: 60, position: PARIS });
+    expect(startedAtOf(ack)).toBe(iso(T0));
+    expect((await ownSharedLocationFor(m.deps, EMETTEUR)).startedAt).toBe(iso(T0));
+  });
+
+  it('un autre démarrage avec position le renouvelle ; une liste seule le garde', async () => {
+    const m = monde();
+    await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI }, { userId: PROCHE }], durationMinutes: 60, position: PARIS });
+    m.avancer(1_000);
+    const second = await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI }, { userId: PROCHE }], durationMinutes: 60, position: PARIS });
+    expect(startedAtOf(second)).toBe(iso(T0 + 1_000));
+    m.avancer(1_000);
+    const listOnly = await startSharedLocation(m.deps, EMETTEUR, { recipients: [{ userId: AMI }], durationMinutes: 60 });
+    expect(startedAtOf(listOnly)).toBe(iso(T0 + 1_000));
+    expect((await ownSharedLocationFor(m.deps, EMETTEUR)).startedAt).toBe(iso(T0 + 1_000));
   });
 });

@@ -61,7 +61,7 @@ struct ProfileShareLocationRow: View {
                             choosing = true
                         })
             .disabled(center.isBusy)
-            .accessibilityHint(ShareLocationWording.actionAccessibility(name: displayName))
+            .accessibilityHint(ShareLocationWording.shareHint)
             .accessibilityIdentifier("sharedLocation.share")
     }
 
@@ -119,8 +119,9 @@ struct ProfileShareLocationLine: Equatable {
 /// Les phrases du partage de ma position, une clé par sens (sept langues dans `Localizable.xcstrings`). Les précisions
 /// reprennent celles de la carte de réception, pour que l'émetteur et le lecteur lisent le même mot.
 enum ShareLocationWording {
-    static func actionAccessibility(name: String) -> String {
-        String(format: String(localized: "sharedLocation.share.actionAccessibility", defaultValue: "Partager ma position avec %@", bundle: .main), name)
+    /// L'indice dit ce que fait le geste : le titre de la rangée dit déjà avec qui on partage.
+    static var shareHint: String {
+        String(localized: "sharedLocation.share.choiceAccessibility", defaultValue: "Choisir la durée et la précision", bundle: .main)
     }
 
     static func sheetTitle(name: String) -> String {

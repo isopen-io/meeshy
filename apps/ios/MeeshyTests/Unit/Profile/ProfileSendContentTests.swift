@@ -28,6 +28,61 @@ final class ProfileSendContentTests: XCTestCase {
         XCTAssertFalse(ProfileSendContentKind.story.accepts(makePost(type: "REEL")))
     }
 
+    // MARK: - Ce que la rangée annonce avant de conclure au vide
+
+    func test_listing_beforeTheFirstReadSettles_isLoading_neverEmpty() {
+        let listing = ProfileSendContentListing.resolve(
+            hasChoices: false, settled: false, isLoading: false, hasMore: true, pagination: .idle)
+        XCTAssertEqual(listing, .loading)
+    }
+
+    func test_listing_failedReadWithNothingServed_isFailed_notEmpty() {
+        let listing = ProfileSendContentListing.resolve(
+            hasChoices: false, settled: true, isLoading: false, hasMore: true, pagination: .error("réseau"))
+        XCTAssertEqual(listing, .failed)
+    }
+
+    func test_listing_noMatchOnThisPageButMoreToRead_keepsLoading_andPagesFurther() {
+        let listing = ProfileSendContentListing.resolve(
+            hasChoices: false, settled: true, isLoading: false, hasMore: true, pagination: .idle)
+        let pages = ProfileSendContentListing.pagesFurther(
+            hasChoices: false, settled: true, isLoading: false, hasMore: true, pagination: .idle)
+        XCTAssertEqual(listing, .loading)
+        XCTAssertTrue(pages)
+    }
+
+    func test_listing_exhaustedWithoutMatch_isEmpty_andStopsPaging() {
+        let listing = ProfileSendContentListing.resolve(
+            hasChoices: false, settled: true, isLoading: false, hasMore: false, pagination: .exhausted)
+        let pages = ProfileSendContentListing.pagesFurther(
+            hasChoices: false, settled: true, isLoading: false, hasMore: false, pagination: .exhausted)
+        XCTAssertEqual(listing, .empty)
+        XCTAssertFalse(pages)
+    }
+
+    func test_listing_failedPage_doesNotPageAgainOnItsOwn() {
+        let pages = ProfileSendContentListing.pagesFurther(
+            hasChoices: false, settled: true, isLoading: false, hasMore: true, pagination: .error("réseau"))
+        XCTAssertFalse(pages)
+    }
+
+    func test_listing_servedChoices_winOverAnyLoadingOrFailure() {
+        let listing = ProfileSendContentListing.resolve(
+            hasChoices: true, settled: false, isLoading: true, hasMore: true, pagination: .error("réseau"))
+        XCTAssertEqual(listing, .choices)
+    }
+
+    // MARK: - Une publication sans média se reconnaît à son texte
+
+    func test_textTile_textOnlyPost_showsItsFirstLine() {
+        let post = FeedPost(id: "t1", author: "Moi", authorId: "me", type: "POST", content: "Premier jour\nla suite")
+        XCTAssertEqual(ProfileSendContentCopy.textTile(of: post), "Premier jour")
+    }
+
+    func test_textTile_mediaPost_hasNoText() {
+        XCTAssertNil(ProfileSendContentCopy.textTile(of: makePhoto()))
+    }
+
     // MARK: - L'envoi
 
     func test_send_publication_goesToThePerson_withTheTrackedLink() async {

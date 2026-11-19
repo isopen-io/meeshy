@@ -115,7 +115,7 @@ struct ProfileView: View {
             }
         }
         .background(InteractivePopEnabler())
-        .accessibilityAction(.escape) { leaveOrCancel() }
+        .dismissOnEscape { leaveOrCancel() }
         .modifier(ProfileFacesPresentations(
             user: user, authManager: authManager,
             seenAsShown: $seenAsShown, shareShown: $shareShown, securityShown: $securityShown,

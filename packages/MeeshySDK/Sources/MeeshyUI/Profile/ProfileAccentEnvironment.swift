@@ -12,3 +12,16 @@ public extension EnvironmentValues {
         set { self[ProfileAccentKey.self] = newValue }
     }
 }
+
+private struct ProfileNetworkIsOfflineKey: EnvironmentKey {
+    static let defaultValue: Bool? = nil
+}
+
+public extension EnvironmentValues {
+    /// La connectivité que l'app observe (son moniteur réseau), remise telle quelle : `true` sans réseau. `nil` quand
+    /// l'app n'en remet aucune — la fiche déduit alors l'absence de réseau de son dernier chargement.
+    var profileNetworkIsOffline: Bool? {
+        get { self[ProfileNetworkIsOfflineKey.self] }
+        set { self[ProfileNetworkIsOfflineKey.self] = newValue }
+    }
+}

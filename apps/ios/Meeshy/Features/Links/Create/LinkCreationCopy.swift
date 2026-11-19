@@ -8,6 +8,7 @@ nonisolated enum LinkCreationCopy {
     static var trackingKind: String { String(localized: "links.create.tracking.kind", defaultValue: "Lien de suivi", bundle: .main) }
     static var whatToTrack: String { String(localized: "links.create.tracking.step1", defaultValue: "Que veux-tu suivre ?", bundle: .main) }
     static var ruleTheLink: String { String(localized: "links.create.tracking.step2", defaultValue: "Règle ton lien", bundle: .main) }
+    static var ruleShareLink: String { String(localized: "links.create.share.step2", defaultValue: "Règle ton lien de partage", bundle: .main) }
     static var nameLabel: String { String(localized: "links.create.tracking.name", defaultValue: "Nom", bundle: .main) }
     static var addressLabel: String { String(localized: "links.create.address", defaultValue: "Adresse", bundle: .main) }
     static var addressNote: MeeshyInfoNote {

@@ -106,7 +106,7 @@
     <string name="dialogs_report_error">Could not send the report</string>
     <string name="dialogs_report_nav_title">Report</string>
     <string name="dialogs_report_reason_harassment">Harassment</string>
-    <string name="dialogs_report_reason_hate_speech">Hate speech</string>
+    <string name="dialogs_report_reason_hate_speech">Hate</string>
     <string name="dialogs_report_reason_impersonation">Impersonation</string>
     <string name="dialogs_report_reason_inappropriate">Inappropriate content</string>
     <string name="dialogs_report_reason_other">Other</string>

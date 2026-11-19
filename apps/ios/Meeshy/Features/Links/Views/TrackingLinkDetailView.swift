@@ -12,7 +12,7 @@ struct TrackingLinkDetailView: View {
     @State var period: TrackingInsightsPeriod = .month
     @State var selectedDay: String?
     @State private var showDeleteConfirm = false
-    @State private var qrShareImage: QRShareImage?
+    @State private var enlargedQR: LinkQRPresentation?
     @State private var sharedLink: ShareableLink?
     @State var isEditing = false
     @State var isMapEnlarged = false
@@ -40,11 +40,17 @@ struct TrackingLinkDetailView: View {
                 heroTicket
                 activeRow
                 figuresBand
-                clicksChart
+                if viewModel.loadFailed {
+                    clicksFailedBlock
+                } else {
+                    clicksChart
+                }
                 visitorMapSection
-                originsSection
-                meansSection
-                recentClicksSection
+                if !viewModel.loadFailed {
+                    originsSection
+                    meansSection
+                    recentClicksSection
+                }
                 utmInfoSection
                 deleteButton
             }
@@ -59,8 +65,8 @@ struct TrackingLinkDetailView: View {
         .onReceive(viewModel.$isActive.dropFirst().removeDuplicates()) { isActive in
             onChanged(current.withActive(isActive))
         }
-        .onReceive(viewModel.$edited.dropFirst().compactMap { $0 }) { edited in
-            onChanged(edited.withActive(viewModel.isActive))
+        .onReceive(viewModel.$edited.dropFirst()) { edited in
+            onChanged((edited ?? link).withActive(viewModel.isActive))
         }
         .sheet(isPresented: $isEditing) { editSheet }
         .fullScreenCover(isPresented: $isMapEnlarged) { enlargedMap }
@@ -68,8 +74,8 @@ struct TrackingLinkDetailView: View {
             Button(String(localized: "tracking.link.detail.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) { deleteLink() }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         }
-        .sheet(item: $qrShareImage) { qr in
-            ShareSheet(activityItems: [qr.image])
+        .sheet(item: $enlargedQR) { qr in
+            LinkQRSheet(presentation: qr, tint: MeeshyColors.trackingAccent)
         }
     }
 
@@ -93,7 +99,7 @@ struct TrackingLinkDetailView: View {
             trailing: {
                 MeeshyCodeCard(payload: URL(string: current.shortUrl)?.absoluteString, label: TrackingDetailCopy.enlargeQR,
                                tint: MeeshyColors.trackingAccent, style: .plain, size: .mini, tilt: .none,
-                               boostsBrightness: false, onPress: { generateQRAndShare() })
+                               boostsBrightness: false, onPress: { enlargeQR() })
             },
             status: { EmptyView() },
             back: { EmptyView() }
@@ -108,7 +114,7 @@ struct TrackingLinkDetailView: View {
                 LinksClipboard.copy(current.shortUrl, confirmation: .inline, message: TrackingDetailCopy.copied)
             })
             MeeshyLabeledAction(title: TrackingDetailCopy.qr, systemImage: "qrcode", tint: MeeshyColors.trackingAccent,
-                                action: { generateQRAndShare() })
+                                action: { enlargeQR() })
             MeeshyLabeledAction(title: TrackingDetailCopy.share, systemImage: "square.and.arrow.up",
                                 tint: MeeshyColors.trackingAccent, action: {
                 sharedLink = URL(string: current.shortUrl).map { ShareableLink(url: $0) }
@@ -142,8 +148,9 @@ struct TrackingLinkDetailView: View {
 
     // MARK: - QR
 
-    private func generateQRAndShare() {
-        qrShareImage = LinkQRCode.shareImage(for: current.shortUrl)
+    /// Le QR s'agrandit dans sa feuille (K31), comme sur la face Liens ; on le partage depuis elle.
+    private func enlargeQR() {
+        enlargedQR = LinkQRPresentation(address: current.shortUrl, title: current.displayName)
     }
 
     private func deleteLink() {
@@ -183,24 +190,31 @@ class TrackingDetailViewModel: ObservableObject {
     @Published var visitorMap: TrackingVisitorMapState?
 
     let token: String
-    private let setActiveRemote: @Sendable (String, Bool) async throws -> Void
-    let placesRemote: @Sendable (String, Date) async throws -> TrackingLinkPlaceStats
-    let updateRemote: @Sendable (String, TrackingLinkChanges) async throws -> TrackingLink
+    private let setActiveRemote: @concurrent @Sendable (String, Bool) async throws -> Void
+    let placesRemote: @concurrent @Sendable (String, Date) async throws -> TrackingLinkPlaceStats
+    let updateRemote: @concurrent @Sendable (String, TrackingLinkChanges) async throws -> TrackingLink
     let locate: @MainActor (TrackingVisitorPlace) async -> TrackingVisitorZone?
+    private let clicksRemote: @concurrent @Sendable (String) async throws -> [TrackingLinkClick]
+
+    /// Où en est la lecture des clics : en chemin (squelette), servie, ou échouée sans rien à montrer (loi 8).
+    @Published private(set) var phase: TrackingDetailPhase = .loading
 
     init(token: String,
          isActive: Bool = true,
-         setActiveRemote: @escaping @Sendable (String, Bool) async throws -> Void = { token, isActive in
+         setActiveRemote: @escaping @concurrent @Sendable (String, Bool) async throws -> Void = { token, isActive in
              try await TrackingLinkService.shared.setActive(token: token, isActive: isActive)
          },
-         placesRemote: @escaping @Sendable (String, Date) async throws -> TrackingLinkPlaceStats = { token, since in
+         placesRemote: @escaping @concurrent @Sendable (String, Date) async throws -> TrackingLinkPlaceStats = { token, since in
              try await TrackingLinkService.shared.fetchVisitorPlaces(token: token, since: since)
          },
-         updateRemote: @escaping @Sendable (String, TrackingLinkChanges) async throws -> TrackingLink = { token, changes in
+         updateRemote: @escaping @concurrent @Sendable (String, TrackingLinkChanges) async throws -> TrackingLink = { token, changes in
              try await TrackingLinkService.shared.updateLink(token: token, changes: changes)
          },
          locate: @escaping @MainActor (TrackingVisitorPlace) async -> TrackingVisitorZone? = { place in
              await TrackingPlaceGeocoder.locate(place)
+         },
+         clicksRemote: @escaping @concurrent @Sendable (String) async throws -> [TrackingLinkClick] = { token in
+             try await TrackingLinkService.shared.fetchClicks(token: token).clicks
          }) {
         self.token = token
         self.isActive = isActive
@@ -208,14 +222,22 @@ class TrackingDetailViewModel: ObservableObject {
         self.placesRemote = placesRemote
         self.updateRemote = updateRemote
         self.locate = locate
+        self.clicksRemote = clicksRemote
     }
 
+    /// Relit les clics. « Réessayer » repasse au squelette ; un échec garde les clics déjà montrés (cache d'abord) et
+    /// ne se dit que s'il n'y a rien à montrer.
     func load() async {
+        if clicks.isEmpty { phase = .loading }
         isLoadingMore = true
         defer { isLoadingMore = false }
-        if let detail = try? await TrackingLinkService.shared.fetchClicks(token: token) {
-            clicks = detail.clicks
-            insights = TrackingLinkInsights(samples: detail.clicks.map { TrackingClickSample(click: $0) })
+        do {
+            let served = try await clicksRemote(token)
+            clicks = served
+            insights = TrackingLinkInsights(samples: served.map { TrackingClickSample(click: $0) })
+            phase = .loaded
+        } catch {
+            phase = clicks.isEmpty ? .failed : .loaded
         }
     }
 
@@ -234,5 +256,15 @@ class TrackingDetailViewModel: ObservableObject {
     }
 
     /// Avant le premier chargement, la vue montre un squelette — jamais quand des clics sont déjà là.
-    var isFirstLoad: Bool { isLoadingMore && clicks.isEmpty }
+    var isFirstLoad: Bool { phase == .loading && clicks.isEmpty }
+
+    /// La lecture a échoué et rien n'est montré : la fiche le dit et offre « Réessayer ».
+    var loadFailed: Bool { phase == .failed }
+}
+
+/// La lecture des clics d'un lien de suivi : en chemin, servie, ou échouée sans rien à montrer.
+nonisolated enum TrackingDetailPhase: Equatable, Sendable {
+    case loading
+    case loaded
+    case failed
 }

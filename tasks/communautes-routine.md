@@ -516,8 +516,33 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Aucun client touché : web, iOS et Android lisent déjà `community:member-joined` (#18766, #18767, #18768).
 - Prochain lot recommandé : #19591 (iOS lit la disparition) dès que #19665 / #19667 sont fusionnées ; sinon la moitié « compte supprimé » de #18769.
 
+## 2026-11-18 — réveil 13:38 UTC
+
+- Début du run : #19678 (#19406, admissions implicites) ouverte, poussée à 13:12 : vivante, cédée. #19655 (#19592, Android) fusionnée.
+- Lot : #19591 (iOS lit la disparition), le dernier client. SDK : `CommunityDeletedEvent` (miroir de `CommunityDeletedEventData` : `communityId`, `reason`, `at` ; `disappearedId` nul si la charge ne désigne rien), `CommunityDeletedChannel` (publie l'identifiant, écarte une charge vide), route `community:deleted`, `MessageSocketProviding.communityDeleted`. `CacheCoordinator.applyCommunityDeletion` retire la communauté de TOUTES les clés de `communities` (`removeEverywhere`), sans réseau.
+- App : `CommunityDetailViewModel.applyDisappearance` — la fiche regardée passe aussitôt à l'état « indisponible » (`community` nul, `loadFailure = .refused`, plus aucun rôle ni geste de créateur), oublie canaux et publications gardées, quitte « mes communautés », puis se relit SANS indicateur (un compte qui la lit encore la retrouve). `CommunityListViewModel` retire la ligne sans relance ; `MyCommunities` la retire de la bande et du cache de partage.
+- Cliquets partagés : la famille « disparition d'une communauté » quitte `ASYMETRIES` (les trois clients lisent) ; `SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE` 166 → 167 (+1, `community:deleted`, après le correctif appels de dev).
+- Rouges ÉTRANGERS trouvés sur `dev` nu (`3bb5b20e8`), reproduits avant le lot : `swift-socket-payload-shape-gate` mesure 160 au lieu de 165 (cinq événements d'appel ne sont plus balayés : `call:invite-declined`, `call:invite-expired`, `call:muted-by-moderator`, `call:participant-invited`, `call:reaction-received`, après le lot appels `65738b005`) et `socket-event-platform-parity-gate` signale `call:conversation-changed` absent d'Android. Avec le lot : 161 (+1).
+- Témoins : SDK `CommunityDeletedEventTests` (5), `CacheCoordinatorCommunityDeletionsTests` (2), `SocketInboundRouteTableTests` (+1, relevé figé +1 nom) ; app `CommunityDetailViewModelTests` (+3), `CommunityListViewModelTests` (+2), `MyCommunitiesTests` (+1). Preuve : CI iOS de la PR. Gardes iOS locales : `check_house_rules.sh` (42 règles), `check_cohesion_budget.sh`, `check_test_registration.sh`, accent-color verts.
+- Prochain lot recommandé : ouvrir l'issue des entrées INDIRECTES restantes puis fermer #16857 ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
 ## 2026-11-18 — réveil 15:38 UTC
 
 - Début du run : #19694 (#19591, iOS lit la disparition) poussée à 15:01, donc vivante : cédée. #19678 (#19406) inactive depuis 14:20 : run consacré à la mener à la fusion.
 - `dev` (11 commits, appels et miroirs Swift ; seul `packages/shared/types/call-rules.ts` côté partagé) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : passerelle `tsc --noEmit` vert, `unit/routes` + `unit/services/conversations` + `services/conversations/__tests__` + balayage des écrivains + `tsc-never-loaded` 976 suites / 14 845 tests verts ; shared `__tests__/ci/` 25 fichiers / 216 tests verts.
 - Prochain lot recommandé : la moitié « compte supprimé » de #18769 ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-18 — réveil 17:38 UTC
+
+- Début du run : deux PR de la routine ouvertes, inactives depuis plus d'une heure (dernières poussées 16:26 et 16:31) : #19694 (#19591, iOS lit la disparition) et #19678 (#19406, admissions implicites). Run consacré à les mener à la fusion.
+- État trouvé : leur CI n'avait pas démarré (102 runs en file sur le dépôt), et `dev` avait reçu deux commits utiles aux deux branches : `725488896` (la deinit isolée au MainActor qui tuait xctest au démontage) et `2fcb40b94` (leçon jvm-check, garde `journal-one-file-per-entry-guard`).
+- `dev` (`2fcb40b94`) fusionnée dans les deux branches sans conflit. Rejoués sur les arbres fusionnés : shared `__tests__/ci/` 25 fichiers / 216 tests verts (les deux), gardes de leçons de la passerelle vertes ; pour #19694, `check_house_rules.sh`, `check_cohesion_budget.sh`, `check_test_registration.sh` et `check-accent-color-hardcoding.mjs` (410 = référence) verts.
+- Prochain lot recommandé : fusionner #19694 et #19678 dès que leur CI est verte sur ces têtes (la seconde fusionnée devra reprendre `dev` : les deux écrivent ce journal) ; puis fermer #16857.
+- 17:43 : #19678 fusionnée par Jacques (`ba1f209bf`), #19406 fermée. `dev` reprise dans #19694 (seul conflit : ce journal, les deux entrées gardées dans l'ordre des réveils).
+
+## 2026-11-18 — réveil 19:38 UTC
+
+- Début du run : CI du dépôt gelée par le porteur depuis 19:20 (tous les workflows désactivés) ; la session `v2-meeshy-88` fusionne seule vers `dev`. #19694 (#19591, iOS lit la disparition) seule PR ouverte de la routine, déclarée « prête » à 19:27 sur `dev` `ffb60040e`.
+- `dev` avait avancé (`c465db99c`, dont `packages/shared/types/voice-api.ts` et `api-schemas/message-attachment.ts`) : fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 216 tests verts ; `check_house_rules.sh` (42 règles), `check_cohesion_budget.sh`, `check_test_registration.sh` (2 045 fichiers inscrits), `check-accent-color-hardcoding.mjs` (168 / 410 = références) verts. Branche redéclarée prête sur la PR.
+- Aucun nouveau lot ouvert : une seule PR de la routine à la fois, et rien ne se prouve tant que la CI est gelée.
+- Prochain lot recommandé : après la fusion de #19694, ouvrir l'issue des entrées INDIRECTES restantes et fermer #16857, puis la moitié « compte supprimé » de #18769.

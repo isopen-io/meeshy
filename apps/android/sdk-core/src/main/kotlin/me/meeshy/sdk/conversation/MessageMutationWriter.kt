@@ -19,6 +19,7 @@ import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.PinPayload
 import me.meeshy.sdk.outbox.ReactionPayload
+import me.meeshy.sdk.session.AccountTicket
 
 /**
  * The optimistic mutations of a server-acked message (ARCHITECTURE.md §5): the cached row moves
@@ -117,6 +118,19 @@ internal class MessageMutationWriter(
     /** Retour arrière d'une suppression refusée ; voir [MessageTombstoneWriter.markUndeleted]. */
     suspend fun markUndeleted(messageId: String, snapshot: ApiMessage? = null): Boolean =
         tombstones.markUndeleted(messageId, snapshot)
+
+    /** Le compte du geste qui commence MAINTENANT ; voir [settleRefusedDeletion][MessageRepository.settleRefusedDeletion]. */
+    suspend fun ticket(): AccountTicket? = updater.ticket()
+
+    /** Le compte de [ticket] est-il encore le courant ? */
+    fun isCurrent(ticket: AccountTicket?): Boolean = updater.isCurrent(ticket)
+
+    /** [markUndeleted] sous [ticket] : n'écrit que si le compte qui a demandé la relecture est toujours le courant (#19422). */
+    suspend fun markUndeleted(ticket: AccountTicket?, messageId: String, snapshot: ApiMessage?): Boolean =
+        tombstones.markUndeleted(ticket, messageId, snapshot)
+
+    /** [write] sous [ticket] ; `null` quand le compte s'est fermé entre-temps. */
+    suspend fun <T> commitUnder(ticket: AccountTicket?, write: suspend () -> T): T? = updater.commit(ticket, write)
 
     /** Retire les lignes nommées — par l'une ou l'autre de leurs deux clés — et leurs versions antérieures. */
     suspend fun purgeMessages(messageIds: Collection<String>) = updater.purge(updater.ticket(), messageIds)

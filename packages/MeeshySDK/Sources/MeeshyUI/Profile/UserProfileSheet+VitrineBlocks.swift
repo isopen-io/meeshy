@@ -18,8 +18,8 @@ extension UserProfileSheet {
     var withThemSection: some View {
         if showsRelationBlocks, !ProfileAcquaintanceSection.replacesWithThem(self) {
             ProfileWithThemCard(
-                name: displayUser.resolvedDisplayName, isOffline: ProfileTalkReach.isOffline(phase),
-                offersCall: offersCall, writeBadge: writeBadge, tint: accentTint, map: locationMap,
+                name: displayUser.resolvedDisplayName, isOffline: talksOffline,
+                knowsDirect: directDigest.knowsDirect, offersCall: offersCall, writeBadge: writeBadge, tint: accentTint, map: locationMap,
                 mapRequest: vitrineMapRequest,
                 onWrite: { openConversation() }, onCall: { requestCall(isVideo: $0) }, onSeeAll: { face = .actions }
             )
@@ -68,6 +68,8 @@ extension ProfileSheetPhase {
 struct ProfileWithThemCard: View {
     let name: String
     let isOffline: Bool
+    /// Une directe existe déjà : hors ligne, « Écrire » partira au retour du réseau ; sans elle, il attend le réseau.
+    let knowsDirect: Bool
     let offersCall: Bool
     /// Les non-lus de notre conversation sur « Écrire » (#19646).
     let writeBadge: ProfileWriteBadge
@@ -119,7 +121,8 @@ struct ProfileWithThemCard: View {
 
     private func talk(_ operation: ProfileRelationAction, badge: ProfileWriteBadge = .empty,
                       perform: @escaping () -> Void) -> some View {
-        ProfileTalkAction(operation: operation, reach: ProfileTalkReach.resolve(operation, isOffline: isOffline),
+        ProfileTalkAction(operation: operation, reach: ProfileTalkReach.resolve(operation, isOffline: isOffline,
+                                                                                 knowsDirect: knowsDirect),
                           badge: badge, tint: tint, action: perform)
     }
 }

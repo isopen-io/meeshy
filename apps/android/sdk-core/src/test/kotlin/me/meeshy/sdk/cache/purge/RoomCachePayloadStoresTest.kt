@@ -5,9 +5,17 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.core.database.entity.EditRevisionEntity
+import me.meeshy.core.database.entity.EphemeralReceiptEntity
 import me.meeshy.core.database.entity.MessageEntity
+import me.meeshy.core.database.entity.MessageTranslationEntity
+import me.meeshy.core.database.entity.PendingIdEntity
 import me.meeshy.core.database.entity.StoryEntity
 import me.meeshy.core.database.entity.SyncMetaEntity
+import me.meeshy.sdk.conversation.LocalMessage
+import me.meeshy.sdk.conversation.TranslationLayer
+import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.StoredTextTranslation
 import me.meeshy.sdk.model.mediacache.CacheDataKind
 import me.meeshy.sdk.model.mediacache.CacheDomain
 import org.junit.After
@@ -75,5 +83,49 @@ class RoomCachePayloadStoresTest {
 
         assertThat(db.storyDao().payloadBytes()).isEqualTo(0L)
         assertThat(db.syncMetaDao().lastSyncedAt("stories")).isNull()
+    }
+
+    private fun row(id: String, sendState: String? = null) =
+        MessageEntity(id = id, conversationId = "c1", seq = null, payload = "{}", createdAt = 1L, cachedAt = 0L, sendState = sendState)
+
+    /**
+     * #19440 — « Vider le cache » removes message rows by the same rule as every other gate ([MessageChildRows]): the past
+     * texts of an edited message, its id bridge, its ephemeral receipt and its retained translations leave with it. A bubble still waiting to be
+     * sent is not purgeable, and keeps its own.
+     */
+    @Test
+    fun `purging the messages takes the edit history, the id bridge, the receipt and the translations of the purged rows only`() = runTest {
+        db.messageDao().upsertAll(listOf(row("m1"), row("cid_2", sendState = "SENDING")))
+        listOf("m1", "cid_2").forEach { id ->
+            db.editRevisionDao().upsert(EditRevisionEntity(id, 1, "texte antérieur de $id", 1L))
+            db.messageTranslationDao().upsertText(MessageTranslationEntity(id, "fr", "traduit $id", "en", null, null, 1L))
+        }
+        db.pendingIdDao().upsert(PendingIdEntity("cid_1", "m1", "c1", null))
+        db.ephemeralReceiptDao().insertIfAbsent(EphemeralReceiptEntity("m1", "c1", 1L, null))
+
+        stores.store(CacheDataKind.MESSAGES, CacheDomain.CONVERSATIONS)!!.clear()
+
+        assertThat(db.messageDao().find("m1")).isNull()
+        assertThat(db.editRevisionDao().forMessage("m1")).isEmpty()
+        assertThat(db.messageTranslationDao().textsFor(listOf("m1"))).isEmpty()
+        assertThat(db.pendingIdDao().byServerId("m1")).isNull()
+        assertThat(db.ephemeralReceiptDao().find("m1")).isNull()
+        assertThat(db.messageDao().find("cid_2")).isNotNull()
+        assertThat(db.editRevisionDao().forMessage("cid_2")).hasSize(1)
+        assertThat(db.messageTranslationDao().textsFor(listOf("cid_2"))).hasSize(1)
+    }
+
+    /** #19440 — « Vider le cache » makes the memory of the translations forget the purged rows, not only the disk. */
+    @Test
+    fun `purging the messages makes the translation memory forget them`() = runTest {
+        db.messageDao().upsertAll(listOf(row("m1")))
+        val layer = TranslationLayer.of(db)
+        layer.saveText("m1", StoredTextTranslation("m1", "fr", "traduit m1", "en", null, null), 1L)
+        val local = LocalMessage(ApiMessage(id = "m1", conversationId = "c1", content = "texte m1", originalLanguage = "en"))
+        assertThat(layer.project(local).message.translations).isNotEmpty()
+
+        stores.store(CacheDataKind.MESSAGES, CacheDomain.CONVERSATIONS)!!.clear()
+
+        assertThat(layer.project(local).message.translations).isEmpty()
     }
 }

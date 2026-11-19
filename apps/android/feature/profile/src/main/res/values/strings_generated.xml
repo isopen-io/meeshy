@@ -11,7 +11,6 @@
     <string name="profile_action_decline_connection">Decline connection</string>
     <string name="profile_action_report">Report</string>
     <string name="profile_action_resend_request">Resend request</string>
-    <string name="profile_action_send_message">Send a message</string>
     <string name="profile_activity_title">Activity</string>
     <string name="profile_avatar_edit">Edit profile photo</string>
     <string name="profile_bio_label">Bio</string>
@@ -53,7 +52,7 @@
     <string name="profile_progression_title">My Legend</string>
     <string name="profile_report_quick_reason_fake_profile">Fake profile</string>
     <string name="profile_report_quick_reason_harassment">Harassment</string>
-    <string name="profile_report_quick_reason_hate_speech">Hate speech</string>
+    <string name="profile_report_quick_reason_hate_speech">Hate</string>
     <string name="profile_report_quick_reason_impersonation">Impersonation</string>
     <string name="profile_report_quick_reason_inappropriate">Inappropriate content</string>
     <string name="profile_report_quick_reason_other">Other</string>
@@ -61,7 +60,6 @@
     <string name="profile_report_quick_reason_violence">Violence</string>
     <string name="profile_save">Save</string>
     <string name="profile_save_error">Error while saving</string>
-    <string name="profile_section_about">About</string>
     <string name="profile_section_actions">Actions</string>
     <string name="profile_section_contact">CONTACT</string>
     <string name="profile_section_identity">IDENTITY</string>
@@ -77,11 +75,9 @@
     <string name="profile_stats_conversations">Conversations</string>
     <string name="profile_stats_daysShort">Days</string>
     <string name="profile_stats_friends">Friends</string>
-    <string name="profile_stats_memberSince">Member since</string>
     <string name="profile_stats_messages">Messages</string>
     <string name="profile_stats_messagesShort">Messages</string>
     <string name="profile_stats_title">Statistics</string>
-    <string name="profile_status_connected">Connected</string>
     <string name="profile_tab_conversations">Conversations</string>
     <string name="profile_tab_posts">Posts</string>
     <string name="profile_title">Profile</string>
@@ -92,7 +88,6 @@
     <string name="profile_username">Username</string>
     <string name="profile_verified">Verified</string>
     <string name="profile_view_posts">Posts</string>
-    <string name="profile_voice_title">Voice</string>
     <string name="report_close">Close</string>
     <string name="report_details_header">Details (optional)</string>
     <string name="report_error">Error sending report</string>
@@ -111,7 +106,6 @@
     <string name="shared_location_precision_exact">Exact location</string>
     <string name="shared_location_precision_neighborhood">To the neighborhood</string>
     <string name="shared_location_share_action">Share my location</string>
-    <string name="shared_location_share_action_a11y">Share my location with %1$s</string>
     <string name="shared_location_share_active">%1$s sees your location (%2$s) until %3$s</string>
     <string name="shared_location_share_confirm">Share</string>
     <string name="shared_location_share_denied">Allow location access in Settings to share your location</string>

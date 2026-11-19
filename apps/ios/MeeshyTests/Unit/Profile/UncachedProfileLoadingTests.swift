@@ -104,6 +104,16 @@ final class LiveProfileAcquaintanceTests: XCTestCase {
         XCTAssertEqual(verdict, false)
     }
 
+    /// #16623 — entre deux comptes de l'équipe, le niveau servi aux outils de cercle juge aussi l'écriture.
+    func test_writesARequest_aServedBloodToolLevelWithoutALink_isNotARequest() async {
+        let (sut, _) = makeSUT(link: .success(RelationLink(userId: "u-rui", effectiveLevel: .public, grantedByMe: .public,
+                                                            accessLevel: .blood)))
+
+        let verdict = await sut.writesARequest(to: "u-rui")
+
+        XCTAssertEqual(verdict, false)
+    }
+
     func test_writesARequest_unreadOrSomeoneElse_isUnknown() async {
         let (failing, _) = makeSUT(link: .failure(NSError(domain: "test", code: 500)))
         let (other, _) = makeSUT(link: .success(RelationLink(userId: "u-leo", effectiveLevel: .public, grantedByMe: .public)))

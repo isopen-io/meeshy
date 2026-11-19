@@ -11,12 +11,14 @@ public nonisolated enum ProfileLoadFailure: Sendable, Equatable {
     case offline
     case unreachable
 
+    /// Le même partage que le pipeline (`APIFailureMapping`) : un hôte introuvable ou qui refuse la connexion est une
+    /// passerelle injoignable (« Ta connexion va bien »), un délai dépassé reste un réseau absent (`.timeout`).
     private static let offlineCodes: Set<URLError.Code> = [
-        .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .internationalRoamingOff,
-        .cannotFindHost, .cannotConnectToHost, .timedOut, .dnsLookupFailed
+        .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed, .internationalRoamingOff, .timedOut
     ]
 
-    /// Une absence de réseau, sous toutes les formes que le transport lève ; tout le reste est une panne en face.
+    /// Une absence de réseau, sous toutes les formes que le transport lève ; tout le reste est une panne en face. Une
+    /// erreur brute et la même passée par le pipeline rendent le même verdict.
     public static func classify(_ error: Error) -> ProfileLoadFailure {
         if let urlError = error as? URLError {
             return offlineCodes.contains(urlError.code) ? .offline : .unreachable
@@ -102,24 +104,35 @@ nonisolated enum ProfileSharedConversationAccess: Sendable, Equatable {
     }
 }
 
-/// Ce qu'une action de « Parler » peut faire hors ligne (planche `Etat-HorsLigne`) : « Écrire » part au retour du réseau,
-/// les appels attendent le réseau ; en ligne, tout est offert sans mention.
+/// Ce qu'une action de « Parler » peut faire hors ligne (planche `Etat-HorsLigne`) : « Écrire » part au retour du réseau
+/// quand une conversation directe existe déjà, les appels — et une première conversation, que l'app ne sait pas créer
+/// sans réseau — attendent le réseau ; en ligne, tout est offert sans mention.
 nonisolated enum ProfileTalkReach: Equatable, Sendable {
     case available
     case queued
     case needsNetwork
 
-    static func resolve(_ action: ProfileRelationAction, isOffline: Bool) -> ProfileTalkReach {
+    /// - Parameter knowsDirect: une conversation directe avec la personne est déjà connue du cache de la liste.
+    static func resolve(_ action: ProfileRelationAction, isOffline: Bool, knowsDirect: Bool = true) -> ProfileTalkReach {
         guard isOffline else { return .available }
         switch action {
+        case .write: return knowsDirect ? .queued : .needsNetwork
         case .call, .video: return .needsNetwork
         default: return .queued
         }
     }
 
-    /// Hors ligne : la fiche lue vient du cache parce que le téléphone n'a pas de réseau.
-    static func isOffline(_ phase: ProfileSheetPhase) -> Bool {
+    /// Hors ligne : la connectivité que l'app observe, quand elle la remet ; sans elle, la fiche lue depuis le cache
+    /// parce que le téléphone n'a pas de réseau.
+    static func isOffline(_ phase: ProfileSheetPhase, network: Bool? = nil) -> Bool {
+        if let network { return network }
         guard case .shown(let fallback?) = phase else { return false }
+        return fallback.failure == .offline
+    }
+
+    /// Le réseau revient alors que la fiche se lit depuis le cache faute de réseau : elle se relit en silence.
+    static func reloadsOnReconnect(from old: Bool?, to new: Bool?, phase: ProfileSheetPhase) -> Bool {
+        guard old == true, new == false, case .shown(let fallback?) = phase else { return false }
         return fallback.failure == .offline
     }
 }

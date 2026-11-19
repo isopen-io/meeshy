@@ -82,7 +82,7 @@
     <string name="feed_reel_republished_by">Republié par %1$s</string>
     <string name="feed_reel_views">Vues</string>
     <string name="feed_report_reason_harassment">Harcèlement</string>
-    <string name="feed_report_reason_hate_speech">Discours haineux</string>
+    <string name="feed_report_reason_hate_speech">Haine</string>
     <string name="feed_report_reason_impersonation">Usurpation d\'identité</string>
     <string name="feed_report_reason_inappropriate">Contenu inapproprié</string>
     <string name="feed_report_reason_other">Autre</string>

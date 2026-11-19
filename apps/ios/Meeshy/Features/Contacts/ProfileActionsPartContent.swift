@@ -182,21 +182,25 @@ private struct ProfilePhoneSection: View {
             unreachable = nil
             for await next in PhoneReachabilityLiveState.stream(of: request.userId).values { unreachable = next }
         }
+        .adaptiveOnChange(of: circle.offersBattery) { _, offered in if !offered { battery = nil } }
+        .adaptiveOnChange(of: circle.offersPhoneReachability) { _, offered in if !offered { unreachable = nil } }
     }
 
+    /// Un relevé n'est rendu qu'au cercle qui l'ouvre : passé sous lui, la dernière valeur en mémoire ne se montre plus.
     private func section(now: Date) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+        let shownUnreachable = circle.offersPhoneReachability ? unreachable : nil
+        return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileActionsWording.phone)
             InactivityAlertDetailSection(userId: request.userId)
             if let board = ProfileLiveBoard.resolve(
                 level: circle.toolGateLevel, place: nil,
-                battery: ProfileLiveSourceRules.battery(battery, now: now),
-                unreachableSince: unreachable?.unreachableSince,
+                battery: circle.offersBattery ? ProfileLiveSourceRules.battery(battery, now: now) : nil,
+                unreachableSince: shownUnreachable?.unreachableSince,
                 isOnline: request.isOnline, staleAge: request.staleAge
             ) {
                 ProfileDeviceTiles(board: board, now: now)
             }
-            if let state = unreachable, let cause = PhoneReachabilityWording.cause(state.cause) {
+            if let state = shownUnreachable, let cause = PhoneReachabilityWording.cause(state.cause) {
                 MeeshyNote(cause, lead: .systemImage("info.circle"))
             }
             if circle.offersPhoneReachability {

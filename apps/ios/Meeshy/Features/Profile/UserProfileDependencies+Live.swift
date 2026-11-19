@@ -32,6 +32,11 @@ final class LiveProfileDirectUnread: ProfileDirectUnreadProviding {
             return []
         }
     }
+
+    /// Chaque réécriture du cache de la liste (`ConversationListPersister`) : la fiche ouverte relit sa pastille.
+    func conversationListChanges() -> AsyncStream<Void> {
+        ConversationListCacheSignal.shared.changes()
+    }
 }
 
 /// « Joindre des messages » à un signalement (#19609) : nos messages communs viennent de la base locale des messages
@@ -146,7 +151,7 @@ final class LiveProfileAcquaintance: ProfileAcquaintanceProviding {
     func writesARequest(to userId: String) async -> Bool? {
         guard let served = try? await relations.link(userId: userId),
               served.userId.lowercased() == userId.lowercased() else { return nil }
-        return ProfileRelationAction.writesARequest(at: served.effectiveLevel)
+        return ProfileRelationAction.writesARequest(at: served.toolLevel)
     }
 
     func sendMessageRequest(to userId: String, text: String) async -> Bool {
