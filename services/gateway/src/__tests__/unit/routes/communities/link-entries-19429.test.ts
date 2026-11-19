@@ -335,7 +335,7 @@ describe('Les demandes en attente', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().data[0]).toEqual(expect.objectContaining({ id: REQUEST, userId: ARRIVANT, country: 'SN', via: 'link' }));
     expect(prisma.communityJoinRequest.findMany.mock.calls[0][0]).toEqual(expect.objectContaining({
-      where: { communityId: COMM, status: 'pending' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      where: { communityId: COMM, status: 'pending', createdAt: { gte: expect.any(Date) } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     }));
   });
 
@@ -427,7 +427,7 @@ describe('Les demandes en attente', () => {
       communityId: COMM, userId: ARRIVANT, role: 'member', joinedVia: 'link', joinCountry: 'SN',
     }));
     expect(prisma.communityJoinRequest.updateMany.mock.calls[0][0]).toEqual({
-      where: { id: REQUEST, communityId: COMM, status: 'pending' },
+      where: { id: REQUEST, communityId: COMM, status: 'pending', createdAt: { gte: expect.any(Date) } },
       data: expect.objectContaining({ status: 'accepted', decidedBy: VIEWER, decidedAt: expect.any(Date) }),
     });
     expect(broadcasts).toEqual([expect.objectContaining({ kind: 'joined', userId: ARRIVANT, via: 'link' })]);
@@ -483,7 +483,7 @@ describe('Les demandes en attente', () => {
     expect(res.statusCode).toBe(200);
     expect(prisma.communityMember.create).not.toHaveBeenCalled();
     expect(prisma.communityJoinRequest.updateMany.mock.calls[0][0]).toEqual({
-      where: { id: REQUEST, communityId: COMM, status: 'pending' },
+      where: { id: REQUEST, communityId: COMM, status: 'pending', createdAt: { gte: expect.any(Date) } },
       data: expect.objectContaining({ status: 'rejected', decidedBy: VIEWER }),
     });
   });
