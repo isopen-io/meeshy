@@ -66,11 +66,11 @@ describe('CommunityMembershipAction', () => {
     expect(html).not.toContain(' disabled="');
   });
 
-  test('« Demande envoyée » est inerte, et dit qui doit l’accepter (#19868)', () => {
+  test('« Demande envoyée » est un état, pas un bouton, et dit qui doit l’accepter (#19868)', () => {
     const html = renderToStaticMarkup(<CommunityMembershipAction language="fr" action="requested" {...base} />);
     expect(html).toContain('data-community-join-requested');
     expect(html).toContain('Demande envoyée');
-    expect(html).toContain(' disabled="');
+    expect(html).not.toContain('<button');
     expect(html).toContain('role="status"');
     expect(html).toContain('administrateur ou un modérateur');
   });

@@ -22,7 +22,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  *
  * Une communauté qui valide chaque entrée (#19868) offre « Demander à
  * rejoindre » (`request`, même bouton de marque), puis « Demande envoyée »
- * (`requested`) : un état INERTE, annoncé comme statut, qui dit qui doit
+ * (`requested`) : un ÉTAT, pas un contrôle (loi 4 — rien à presser), annoncé comme statut, qui dit qui doit
  * l'accepter — jamais un second envoi, jamais un faux « Quitter ».
  */
 
@@ -95,18 +95,11 @@ export function CommunityMembershipAction({
           {translateMembership(language, action === 'join' ? 'community.membership.join' : 'community.membership.request')}
         </button>
       ) : action === 'requested' ? (
-        <div role="status" className="grid gap-1">
-          <button
-            type="button"
-            data-community-join-requested
-            disabled
-            aria-disabled
-            className="flex w-full items-center justify-center gap-2 rounded-card text-body font-semibold"
-            style={REQUESTED_STYLE}
-          >
+        <div role="status" className="grid gap-1" data-community-join-requested>
+          <p className="flex w-full items-center justify-center gap-2 rounded-card text-body font-semibold" style={REQUESTED_STYLE}>
             <GlyphSvg glyph={COMMUNITIES_GLYPHS.clock} size={18} />
             {translateMembership(language, 'community.membership.requested')}
-          </button>
+          </p>
           <p className="text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
             {translateMembership(language, 'community.membership.requested.hint')}
           </p>

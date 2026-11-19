@@ -577,3 +577,11 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 
 - Début du run : #19763 (#18769) fusionnée (`1ff276909`) ; aucune PR de la routine ouverte.
 - Lot : #19868 — demander à rejoindre une communauté qui valide chaque entrée dit « Demande envoyée » (passerelle + web), jamais un faux membre.
+- Constat : le web lisait le 409 `COMMUNITY_JOIN_PENDING` d'une communauté qui valide chaque entrée (#19429) comme « déjà membre » — « Quitter », compteur +1 et entrée dans « mes communautés » pour quelqu'un qui n'était pas entré. iOS affichait le message brut en anglais.
+- Passerelle : `GET /communities/:id` sert `currentUserJoinRequest` (`'pending' | null`, additif), la demande du LECTEUR seul, lue seulement pour un non-membre d'une communauté qui valide chaque entrée (`routes/communities/join-request-state.ts`) ; lecture qui lève ⇒ `null`.
+- Web : la jonction annonce `acceptsPending` ; « Demander à rejoindre », puis l'état « Demande envoyée » (un statut, pas un bouton) ; 403 `COMMUNITY_JOIN_COOLDOWN` dit le délai ; un 202 sur un cache périmé défait l'entrée optimiste ; `community:member-joined` sur soi efface la demande. Quatre clés en sept langues ; budget `interface_catalogs_community_membership` 7 → 8 Ko (7,11 Ko au `measure-weight`). Glyphe `clock` ajouté au jeu des communautés (`extract-glyphs.mjs`).
+- Témoins : passerelle `communities-core.test.ts` (+6, rouge prouvé : 5 échecs) ; web `community-membership.test.ts` (+8), `view.test.ts` (+3), `community-membership.test.tsx` (+3), `community-member-live.test.ts` (+1) — rouge prouvé (12 échecs).
+- Gates locaux : passerelle `tsc --noEmit` vert, 51 suites / 772 tests verts (communautés, `routes/__tests__`, `tsc-never-loaded`) ; shared `__tests__/ci/` 25 / 216 verts ; web `tsc --noEmit` vert, build vert, `measure-weight` vert, suite complète 34 700 verts, 1 rouge ÉTRANGER (`act-leak-guard.test.ts`, identique sur `dev` nu `cd0157b87`).
+- Auditeur adversarial : non bloquant ; deux états hérités relevés → #19872.
+- Suivis ouverts (milestone 284) : iOS #19869, Android #19870, intendants (liste, accepter, refuser, `community:join-requested`) #19871, clôture des demandes #19872.
+- Prochain lot recommandé : #19871 (web d'abord), sans quoi une demande envoyée n'a personne pour y répondre.
