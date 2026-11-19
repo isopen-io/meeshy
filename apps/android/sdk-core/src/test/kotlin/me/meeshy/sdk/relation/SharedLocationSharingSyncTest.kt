@@ -563,6 +563,84 @@ class SharedLocationSharingSyncTest {
     }
 
     @Test
+    fun `relance, un releve arrive avant la relecture ne part pas, et l'appareil cede a celui qui a repris`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+
+        relaunched.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+        assertThat(relaunched.updates).isEmpty()
+
+        relaunched.servedSnapshot = servedFrom(elsewhere, alice to hour)
+        relaunched.ownChanged.emit(Unit)
+        runCurrent()
+        advanceTimeBy(10_000L)
+        relaunched.stream.emit(LiveLocationFix(45.1, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(relaunched.updates).isEmpty()
+        assertThat(relaunched.receivedMarks["me"]).isTrue()
+    }
+
+    @Test
+    fun `relance, une relecture qui echoue leve l'attente et le releve suivant part`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        relaunched.servedFailure = IllegalStateException("hors ligne")
+
+        relaunched.ownChanged.emit(Unit)
+        runCurrent()
+        relaunched.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(relaunched.reads).isEqualTo(1)
+        assertThat(relaunched.updates).hasSize(1)
+    }
+
+    @Test
+    fun `relance, partager d'ici avant la relecture fait publier aussitot`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        relaunched.startVerdict = SharedLocationStartVerdict.Started(hour, elsewhere)
+
+        relaunched.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+        advanceTimeBy(10_000L)
+        relaunched.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(relaunched.updates).hasSize(1)
+    }
+
+    @Test
+    fun `relance, une passerelle d'avant la liste seule ne recoit jamais la position d'ici avant la relecture`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        relaunched.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID)
+
+        val problem = relaunched.center.stopSharing(bob)
+        runCurrent()
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(relaunched.starts.all { it.isListOnly }).isTrue()
+        assertThat(relaunched.fixAsks).isEqualTo(0)
+    }
+
+    @Test
     fun `un partage arrete ailleurs oublie le demarrage garde`() = runTest {
         val device = Device(this)
         publishing(device)

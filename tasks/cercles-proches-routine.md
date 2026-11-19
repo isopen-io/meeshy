@@ -1506,3 +1506,89 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 046) rc=0,
   couleurs d'accent rc=0.
 - Prochain lot recommandé : inchangé (fusion de #19768 au dégel, puis #19767, plafond `untilStopped`, #19682 décidée).
+
+## 2026-11-19 — réveil de 11 h : aucune position avant la relecture du partage servi (#19767)
+
+- Reprise : #19768 fusionnée dans `dev` (f3be4322a), #19681 fermée. #19682 attend toujours la décision du porteur.
+- Lot : #19767. iOS et Android suivent l'appareil au relancement mais n'envoient aucun relevé avant la première
+  relecture du partage servi (`awaitsServedTruth`) ; une relecture qui échoue, ou un « Partager » d'ici, lève l'attente.
+  iOS : la liste porte l'identifiant d'installation (`PushDeviceIdentity`, trousseau `ThisDeviceOnly`) de l'appareil
+  qui l'a écrite ; restaurée depuis la sauvegarde iCloud d'un AUTRE appareil, elle est reçue et sans démarrage gardé.
+  Une liste d'avant la marque est adoptée telle quelle puis marquée. Android épargné (`allowBackup="false"`).
+- Témoins : iOS `SharedLocationSharingSyncTests` (relevé avant relecture, relecture confirmée, relecture en échec,
+  « Partager » avant relecture, sauvegarde restaurée ailleurs, même appareil, liste d'avant la marque) ; Android
+  `SharedLocationSharingSyncTest` (trois cas). Swift et `sdk-core` se prouvent par la CI.
+- Gardes iOS : règles maison (42) rc=0, cohésion rc=0, couleurs d'accent rc=0 ; inscription des tests rc=1, rouge
+  HÉRITÉ de `dev` (cd0157b87 : `AnchoredSheetNamingGuardTests.swift` absent du pbxproj), étranger au lot.
+- Contre-audit : un BLOQUANT corrigé (la marque d'appareil était réécrite avant que la liste reçue soit enregistrée :
+  la cession ne tenait qu'un lancement — la liste est désormais écrite « reçue », sans démarrage, avant la marque) et
+  un repli fermé (une passerelle d'avant la liste seule ne reçoit pas la position de l'appareil avant la relecture ; le
+  retrait reste en attente). Restent assumés : une relecture en échec lève l'attente (critère de l'issue), une liste
+  d'avant la marque restaurée ailleurs publie encore (décision au porteur).
+- Prochain lot recommandé : fusion de cette PR, plafond `untilStopped` de `listOnlyState`, #19682 une fois décidée.
+
+## 2026-11-19 — réveil de 11 h 14 : #19864 (relevé avant relecture, #19767) recalée sur dev
+
+- Reprise : #19864 toujours ouverte, tête d8648e64d intacte ; la CI des PR reste gelée (30 vérifications « skipped »).
+  #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (fd1bb9f46 : pistes vocales de post, profil iOS, pbxproj régénéré) fusionnée à la main, sans conflit et
+  sans fichier commun avec le lot.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, couleurs d'accent rc=0, et inscription des
+  tests (2 055) rc=0 — le rouge hérité de `dev` (AnchoredSheetNamingGuardTests) est soldé par a14f751ff.
+- Prochain lot recommandé : fusion de #19864 au dégel, puis le plafond `untilStopped` de `listOnlyState`, #19682 décidée.
+
+## 2026-11-19 — réveil de 13 h : #19864 recalée sur dev (7ef068889)
+
+- Reprise : #19864 toujours ouverte, tête e44bb5cb5 intacte ; la CI des PR reste gelée (35 vérifications « skipped »).
+  #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (7ef068889 : carte iOS — épingles en éventail, feuilles rangeables, talkie à l'appui long ; rang de
+  liste ; communautés) fusionnée à la main, sans conflit : `dev` n'a touché que les écrans de carte iOS, jamais
+  `SharedLocationSharingCenter` ni le centre Android.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 055) rc=0,
+  couleurs d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
+- Prochain lot recommandé : fusion de #19864 au dégel, puis plafond `untilStopped` de `listOnlyState`, #19682 décidée.
+
+## 2026-11-19 — réveil de 15 h : #19864 (relevé avant relecture) recalée sur dev (07609bfa9)
+
+- Reprise : #19864 toujours ouverte, tête 4228a2fcc intacte ; la CI des PR reste gelée (35 vérifications « skipped »,
+  `dev` lui-même sans vérification jouée). #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (07609bfa9 : mouvement sur l'épingle, pièces jointes reprenables, qualité d'appel web) fusionnée à la
+  main, sans conflit. `dev` a touché `SharedLocationSharingHolder` (l'émetteur est désormais enveloppé par
+  `SharedLocationMotionTaggingEmitter`) : la ligne du magasin marqué par l'identifiant d'installation est gardée,
+  et `didMove` garde sa retenue `awaitsServedTruth` avant tout envoi, mouvement compris. Android non touché par `dev`.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 056) rc=0,
+  couleurs d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
+- Prochain lot recommandé : inchangé (fusion de #19864 au dégel, plafond `untilStopped` de `listOnlyState`, #19682
+  décidée).
+
+## 2026-11-19 — réveil de 17 h : #19864 recalée sur dev (1c183a31c)
+
+- Reprise : #19864 toujours ouverte, tête cd6681ff1 intacte ; la CI des PR reste gelée (35 vérifications « skipped »
+  sur sa tête). #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (1c183a31c : demandes d'entrée des communautés, discipline des états en attente) fusionnée à la main,
+  sans conflit et sans fichier commun avec le lot.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 056) rc=0,
+  couleurs d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
+- Prochain lot recommandé : fusion de #19864 au dégel, puis plafond `untilStopped` de `listOnlyState`, #19682 décidée.
+
+## 2026-11-19 — réveil de 19 h : #19864 recalée sur dev 56b3abc7c
+
+- Reprise : #19864 toujours ouverte, tête 9dd6c1e6e intacte ; la CI des PR reste gelée (35 vérifications « skipped »).
+  #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (56b3abc7c : rang « la plus récemment active », métriques d'appel Android et web, file des partenaires)
+  fusionnée à la main, sans conflit et sans fichier commun avec le lot ; `dev` n'a touché ni iOS ni le SDK.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 056) rc=0,
+  couleurs d'accent rc=0.
+- Prochain lot recommandé : inchangé (fusion de #19864 au dégel, plafond `untilStopped` de `listOnlyState`, #19682
+  une fois décidée).
+
+## 2026-11-19 — réveil de 21 h : #19864 recalée sur dev d156266e8
+
+- Reprise : #19864 toujours ouverte, tête 86c9e9584 intacte ; la CI des PR reste gelée (35 vérifications « skipped »).
+  #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (d156266e8 : profil iOS, concepts de progression, demandes d'entrée des communautés) fusionnée à la
+  main, sans conflit et sans fichier commun avec le lot (`dev` touche `LocationMapPinsLayer.swift`, hors lot).
+- Gardes iOS sur l'arbre fusionné : règles maison rc=0, cohésion rc=0, inscription des tests (2 056) rc=0, couleurs
+  d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
+- Prochain lot recommandé : inchangé (fusion de #19864 au dégel, plafond `untilStopped` de `listOnlyState`, #19682
+  une fois décidée).
