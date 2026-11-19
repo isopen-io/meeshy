@@ -114,6 +114,46 @@ describe('une conversation sans la clé `deletedAt` reste candidate (#19905)', (
   });
 });
 
+describe('la copie n’atterrit pas dans une COMMUNAUTÉ (#19919)', () => {
+  /**
+   * Le doc-comment du fichier le PROMET depuis #17141 — « une copie n'atterrit ni
+   * dans une communauté, ni dans une conversation chiffrée » — et la moitié
+   * « communauté » n'était tenue par RIEN. Elle était INERTE tant que la fonction
+   * rendait `null` pour tout le monde : réparer la population l'arme.
+   *
+   * Un salon de communauté est une `Conversation` de type `group` portant un
+   * `communityId` (`routes/conversations/core-lifecycle.ts` : `type` libre,
+   * `communityId: communityId || null`), et ses membres y ont des lignes
+   * `Participant` actives (`admitSalonOccupants`). Deux membres d'une même
+   * communauté le PARTAGENT donc, au sens de cette fonction.
+   *
+   * Ce que ça coûtait : les trois clients ne rejouent PAS leur propre loi quand le
+   * serveur NOMME une conversation — le web court-circuite `mayCarryTheCopy`
+   * (`talkie-voice-copy.ts`), iOS ne contrôle même rien (`TalkieVoiceCopy.swift`).
+   * Le message vocal privé d'Alice à Bob serait publié dans le salon, lisible par
+   * TOUS les membres de la communauté.
+   */
+  it('un salon de communauté n’est jamais la destination, même au plus haut rang', async () => {
+    const chosen = await destination([
+      vivante(AUTRE, { type: 'group', communityId: '507f1f77bcf86cd7994390f1', lastActivityAt: LATE }),
+      vivante(VIVANTE, { lastMessageAt: EARLY }),
+    ]);
+    expect(chosen).toBe(VIVANTE);
+  });
+
+  it('seul un salon partagé ⇒ aucune destination, et le client ouvrira le direct', async () => {
+    const chosen = await destination([
+      vivante(AUTRE, { type: 'group', communityId: '507f1f77bcf86cd7994390f1', lastActivityAt: LATE }),
+    ]);
+    expect(chosen).toBeNull();
+  });
+
+  it('`communityId` à null, et la clé ABSENTE, restent toutes deux candidates', async () => {
+    expect(await destination([vivante(VIVANTE, { communityId: null })])).toBe(VIVANTE);
+    expect(await destination([vivante(VIVANTE)])).toBe(VIVANTE);
+  });
+});
+
 describe('le régime se lit POSITIVEMENT, et le chiffré reste exclu (#19905)', () => {
   it('une conversation sans la clé `encryptionMode` est servable : le serveur la lit', async () => {
     expect(await destination([vivante(VIVANTE)])).toBe(VIVANTE);
@@ -154,6 +194,7 @@ describe('les deux clauses se composent sans s’écraser (#19905)', () => {
     const branches = JSON.stringify(where.AND);
     expect(branches).toContain('isSet');
     expect(branches).toContain('deletedAt');
+    expect(branches).toContain('communityId');
     expect(branches).toContain('encryptionMode');
   });
 });

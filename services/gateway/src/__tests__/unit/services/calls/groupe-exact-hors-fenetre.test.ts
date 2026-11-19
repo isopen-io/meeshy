@@ -92,13 +92,20 @@ describe('un groupe exact rangé derrière plus de vingt sur-ensembles reste tro
   it('le `where` dit l’exactitude lui-même : tous les visés DEDANS, aucun autre actif', async () => {
     const { findMany } = await candidates([group(EXACT, new Date('2026-11-01T10:00:00Z'), TARGET)]);
     const where = (findMany.mock.calls[0][0] as unknown as { where: Record<string, unknown> }).where;
-    expect(where.AND).toEqual(TARGET.map((userId) => ({ participants: { some: { userId, isActive: true } } })));
+    expect(where.AND).toEqual(expect.arrayContaining(
+      TARGET.map((userId) => ({ participants: { some: { userId, isActive: true } } }))
+    ));
     expect(where.participants).toEqual({
       none: {
         isActive: true,
         OR: [{ userId: { isSet: false } }, { userId: null }, { userId: { notIn: TARGET } }],
       },
     });
+    const eligibilite = JSON.stringify(where.AND);
+    expect(eligibilite).toContain('closedAt');
+    expect(eligibilite).toContain('deletedAt');
+    expect(eligibilite).toContain('communityId');
+    expect(eligibilite).toContain('isSet');
   });
 
   it('un sur-ensemble n’est jamais rendu, même seul et au plus haut rang', async () => {
@@ -113,6 +120,77 @@ describe('un groupe exact rangé derrière plus de vingt sur-ensembles reste tro
 
   it('un groupe dont un membre actif n’a PAS de compte est un sur-ensemble, pas un groupe exact', async () => {
     const { ids } = await candidates([group(hex(3), new Date('2026-11-18T10:00:00Z'), [...TARGET, 'anonyme'])]);
+    expect(ids).toEqual([]);
+  });
+
+  /**
+   * **Le témoin ci-dessus passe pour une raison autre que celle qu'il annonce**, et
+   * ce n'est pas réparable à son échelle : `sameSet` rejette l'anonyme sur la
+   * LONGUEUR, donc il reste vert même si la branche `{ userId: { isSet: false } }`
+   * disparaît du `where`. Il atteste le filtre mémoire, pas la branche.
+   *
+   * Ce que cette branche décide VRAIMENT est une place dans la FENÊTRE. Sans elle,
+   * l'anonyme n'apparie ni `{ userId: null }` (clé absente) ni
+   * `{ userId: { notIn } }` (toute négation exige la clé présente, #8309) : le
+   * `none` ne le voit pas comme intrus, son groupe est RETENU en base, et vingt de
+   * ces groupes remplissent la fenêtre que le groupe exact attendait.
+   *
+   * Un témoin de branche de filtre de base se construit donc SOUS PRESSION de
+   * fenêtre — c'est le seul régime où le filtre de base a un effet observable.
+   */
+  it('vingt groupes à membre anonyme ne volent pas la fenêtre du groupe exact', async () => {
+    const anonymes = Array.from({ length: 20 }, (_, index) =>
+      group(hex(200 + index), new Date(Date.UTC(2026, 10, 18, 1, index)), [...TARGET, 'anonyme'])
+    );
+    const { ids } = await candidates([...anonymes, group(EXACT, new Date('2026-11-01T10:00:00Z'), TARGET)]);
+    expect(ids).toEqual([EXACT]);
+  });
+
+  /**
+   * L'ÉLIGIBILITÉ descend elle aussi en base pour ce qu'elle peut y descendre
+   * EXACTEMENT (#19906 bis) : `closedAt`, `deletedAt` et `communityId` sont trois
+   * `DateTime?`/`String?`, donc `unsetOrNull` les dit sans amputer. Sans elles, le
+   * `where` ne disait que l'exactitude des MEMBRES, `isPlainLiveGroup` jugeait
+   * l'éligibilité APRÈS la fenêtre, et vingt salons de communauté aux membres
+   * exacts suffisaient à cacher le groupe ordinaire — le défaut même que ce lot
+   * déclare fermé, à une probabilité plus basse.
+   */
+  it('vingt salons de communauté aux membres exacts ne volent pas la fenêtre', async () => {
+    const salons = Array.from({ length: 20 }, (_, index) => ({
+      ...group(hex(300 + index), new Date(Date.UTC(2026, 10, 18, 2, index)), TARGET),
+      communityId: '507f1f77bcf86cd7994390f1',
+    }));
+    const { ids } = await candidates([...salons, group(EXACT, new Date('2026-11-01T10:00:00Z'), TARGET)]);
+    expect(ids).toEqual([EXACT]);
+  });
+
+  it('vingt groupes mis au rebut aux membres exacts ne volent pas la fenêtre', async () => {
+    const rebut = Array.from({ length: 20 }, (_, index) => ({
+      ...group(hex(400 + index), new Date(Date.UTC(2026, 10, 18, 3, index)), TARGET),
+      deletedAt: new Date('2026-11-17T10:00:00Z'),
+      closedAt: new Date('2026-11-17T10:00:00Z'),
+    }));
+    const { ids } = await candidates([...rebut, group(EXACT, new Date('2026-11-01T10:00:00Z'), TARGET)]);
+    expect(ids).toEqual([EXACT]);
+  });
+
+  /**
+   * **Ce que la fenêtre peut ENCORE tronquer, et pourquoi on le laisse là.**
+   * `isActive: false` et `isAnnouncementChannel: true` sont des booléens REQUIS au
+   * schéma : Prisma n'offre pas d'`isSet` dessus, et une égalité nue amputerait un
+   * document d'avant la colonne — le piège qu'on vient de fermer deux fois. Le
+   * RÉGIME, lui, ne descend pas pour une autre raison : `isPlainLiveGroup` admet un
+   * mode INCONNU (`!isEndToEndMode`) là où `SERVER_READABLE_REGIME_FILTER` le
+   * refuse, donc le descendre changerait la POLITIQUE d'un appel de groupe — une
+   * décision qui ne se prend pas au détour d'un lot de fenêtre.
+   */
+  it('un groupe clos par `isActive: false` reste écarté — en mémoire, après la fenêtre', async () => {
+    const { ids } = await candidates([{ ...group(hex(5), new Date('2026-11-18T10:00:00Z'), TARGET), isActive: false }]);
+    expect(ids).toEqual([]);
+  });
+
+  it('un groupe chiffré de bout en bout reste écarté — en mémoire, après la fenêtre', async () => {
+    const { ids } = await candidates([{ ...group(hex(6), new Date('2026-11-18T10:00:00Z'), TARGET), encryptionMode: 'e2ee' }]);
     expect(ids).toEqual([]);
   });
 

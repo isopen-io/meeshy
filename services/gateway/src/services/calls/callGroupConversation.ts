@@ -6,6 +6,7 @@ import { implicitConversationRegime } from '../conversations/creationRegime';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../participantRights';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { RANK_SELECT, highestRankedConversations } from '../conversations/highestRanked';
+import { unsetOrNull } from '../../utils/prisma-unset';
 
 /**
  * La fenêtre de chaque flux du rang. **Elle ne décide plus de ce qui est TROUVÉ**
@@ -17,13 +18,25 @@ import { RANK_SELECT, highestRankedConversations } from '../conversations/highes
  * invisible — et l'appel en créait alors un neuf (`reserveTarget`,
  * `callConversationRebranch.ts`) : un doublon, sans erreur ni trace.
  *
- * L'exactitude se dit désormais DANS le `where` (voir `findExactCallGroups`), si
- * bien que ce que la fenêtre tronque est la queue d'un ensemble DÉJÀ exact,
- * ordonné par le rang sur lequel l'appelant choisit. La preuve du top-K
+ * L'exactitude des MEMBRES se dit désormais DANS le `where`, et l'ÉLIGIBILITÉ y
+ * descend pour ce qu'elle peut y descendre exactement (`closedAt`, `deletedAt`,
+ * `communityId` — trois colonnes nullables, donc `unsetOrNull`). Ce que la
+ * fenêtre tronque est la queue d'un ensemble déjà exact et déjà largement épuré,
+ * ordonné par le rang sur lequel l'appelant choisit ; la preuve du top-K
  * (`highestRanked.ts`) garantit que les vingt premiers par rang SONT les vingt
- * premiers ; `reserveTarget` les consomme dans cet ordre et s'arrête au premier
- * dont la réservation se prend. Ce que la preuve EXIGE par ailleurs reste vrai :
- * les deux flux lisent la MÊME fenêtre, quelle qu'elle soit.
+ * premiers, et `reserveTarget` les consomme dans cet ordre. Ce que la preuve
+ * EXIGE par ailleurs reste vrai : les deux flux lisent la MÊME fenêtre.
+ *
+ * **Ce que la fenêtre peut ENCORE tronquer, dit sans l'arrondir** : les groupes
+ * que seul `isPlainLiveGroup` écarte, c'est-à-dire `isActive: false`,
+ * `isAnnouncementChannel: true` et le régime. Les deux premiers sont des booléens
+ * REQUIS au schéma — Prisma n'offre pas d'`isSet` dessus, et une égalité nue
+ * amputerait un document d'avant la colonne, soit le piège que ce lot vient de
+ * fermer deux fois. Le RÉGIME ne descend pas pour une raison différente, et c'est
+ * la plus importante : `isPlainLiveGroup` admet un mode INCONNU
+ * (`!isEndToEndMode`) là où `SERVER_READABLE_REGIME_FILTER` le refuse — le
+ * descendre changerait la POLITIQUE d'un appel de groupe, décision qui ne se
+ * prend pas au détour d'un lot de fenêtre.
  *
  * **Ce que 20 vaut n'est toujours mesuré par rien, et ce n'est plus une dette
  * de correction** : c'est le nombre de groupes qu'un même ensemble de membres
@@ -129,7 +142,17 @@ export async function findExactCallGroups(
   // RESSERRER, donc il n'introduit aucun faux positif.
   const where = {
     type: 'group',
-    AND: input.memberUserIds.map((userId) => ({ participants: { some: { userId, isActive: true } } })),
+    AND: [
+      ...input.memberUserIds.map((userId) => ({ participants: { some: { userId, isActive: true } } })),
+      // #19906 bis — l'ÉLIGIBILITÉ descend pour ce qu'elle peut descendre
+      // EXACTEMENT : trois colonnes nullables, donc `unsetOrNull` les dit sans
+      // amputer. Sans elles, le `where` ne disait que l'exactitude des MEMBRES et
+      // `isPlainLiveGroup` jugeait APRÈS la fenêtre — vingt salons de communauté
+      // aux membres exacts suffisaient à cacher le groupe ordinaire.
+      unsetOrNull('closedAt'),
+      unsetOrNull('deletedAt'),
+      unsetOrNull('communityId'),
+    ],
     participants: {
       none: {
         isActive: true,
