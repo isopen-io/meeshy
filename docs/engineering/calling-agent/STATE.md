@@ -1733,3 +1733,29 @@ socket jusqu'au client.
 2. Puis #19702, #19673, #19735, #19751 et #19806.
 3. #19520, second critère : constat sur le serveur avec `sre-infra`, dans la même séance que la mesure des journaux d'accès pour #19471.
 4. **Recentrer sur les appels eux-mêmes** dès que la dette des pistes de post est soldée : latence de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
+
+## Cycle 51 — 2026-11-19
+
+- **Base** : `origin/dev` @ `d65d51c29`, puis `dev` @ `cd0157b87` fusionnée dans la branche. #19810 (cycle 50, #19749) a été fusionnée dans `dev` alors que ses conditions A, C et D étaient encore ouvertes. Elles sont reprises ici, sous l'issue #19841.
+- **Branche** : `claude/determined-volta-evhnjw`.
+- **Objectif** : #19841. La voix traduite d'un post privé ne se télécharge plus par une adresse devinable.
+- **Livré** (passerelle seule) :
+  - **Clé de piste** : `translated/post/<postMediaId>_<lang>_<jeton>.<ext>`, avec un jeton de 128 bits tiré à chaque écriture (`postTranslatedTrack.ts`). Une clé neuve par écriture : le cache d'un an ne fige plus une piste périmée.
+  - **Ancienne forme** : `resolveFileRouteVerdict` répond `gone` à toute clé sous `translated/post/` qui n'a pas la forme à jeton. Les routes nue et signée la servent comme un fichier absent (404).
+  - **Remplacement** : la piste remplacée de la même langue s'efface après l'écriture, à deux conditions : que la ligne relue ne la référence plus, et que la piste nouvelle ait été écrite. Les écritures d'un même média sont sérialisées dans le processus. Une écriture en base qui échoue efface les fichiers neufs.
+  - **Formats** : `mp4` devient `m4a`, `flac` est admis et servi en `audio/flac`. Un format hors liste ramène l'entrée au texte au lieu de l'écarter. Une langue en double n'écrit qu'une piste. Le jeton ne passe plus dans les journaux.
+- **Tests** :
+  - Rouge : `postAudioResult` `10 failed, 13 passed`. Après l'audit : `4 failed / 40` (course, orphelin, jeton journalisé, `flac`).
+  - Vert, relancé par moi sur l'arbre fusionné : `5 suites, 56 passed`. `tsc --noEmit` : 0.
+  - Spécialiste : 911 des 916 suites liées sont vertes. Les 5 rouges sont des suites d'images (sharp, HEIF, AVIF), rouges aussi sans le lot.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves. R1, R2, R4, R5 et R6 sont corrigées dans le lot, et tous les mutants qu'elles visaient sont tués.
+- **Limites** :
+  - **Course entre deux instances de passerelle** : pas de version sur `PostMedia`, donc une piste peut encore s'effacer pendant que l'autre instance l'inscrit. Rattachée à #19804.
+  - **R3** : je n'ai pas pu vérifier sur staging s'il reste des pistes à l'ancienne forme. Ces pistes rendent 404 jusqu'à leur retraduction, et la purge #19750 les efface toujours.
+  - **Événement audio à moitié nommé** : la recherche de repli l'accepte, mais `transcription_ready` le refuse.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, prouver sa CI par `workflow_dispatch` de `ci.yml`, puis la fusionner.
+1. #19804 (version ou compare-and-swap sur `PostMedia.translations`, vérifié contre un vrai Mongo), puis #19825 et #19806.
+2. **Recentrer sur les appels** : latence de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.

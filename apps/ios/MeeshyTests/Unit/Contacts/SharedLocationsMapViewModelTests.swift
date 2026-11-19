@@ -662,3 +662,34 @@ final class BloodLocationRecorderTests: XCTestCase {
         XCTAssertEqual(LocationMapCopy.whereDetail(.city, window: window), LocationMapCopy.precisionPill(.city))
     }
 }
+
+/// #19851 — des personnes posées au même point s'écartent en éventail : chacune reste visible, avec SON cercle.
+final class LocationMapFanTests: XCTestCase {
+
+    func test_pinsAtTheSamePoint_spreadApart_soNoneHidesAnother() {
+        let points = ["a", "b", "c", "d"].map { ($0, CGPoint(x: 100, y: 100)) }
+        let placed = LocationMapFan.spread(points, minimumDistance: 40)
+        XCTAssertEqual(Set(placed.keys), ["a", "b", "c", "d"])
+        let values = Array(placed.values)
+        for i in values.indices { for j in values.indices where i < j {
+            XCTAssertGreaterThanOrEqual(hypot(values[i].x - values[j].x, values[i].y - values[j].y), 39.9)
+        } }
+    }
+
+    func test_aLonelyPin_staysAtItsServedPoint() {
+        let placed = LocationMapFan.spread([("a", CGPoint(x: 10, y: 10)), ("b", CGPoint(x: 300, y: 300))],
+                                           minimumDistance: 40)
+        XCTAssertEqual(placed["a"], CGPoint(x: 10, y: 10))
+        XCTAssertEqual(placed["b"], CGPoint(x: 300, y: 300))
+    }
+
+    func test_theFan_isCentredOnTheSharedPoint_andStableForTheSameInput() {
+        let points = ["b", "a", "c"].map { ($0, CGPoint(x: 50, y: 80)) }
+        let placed = LocationMapFan.spread(points, minimumDistance: 40)
+        let cx = placed.values.map(\.x).reduce(0, +) / 3
+        let cy = placed.values.map(\.y).reduce(0, +) / 3
+        XCTAssertEqual(cx, 50, accuracy: 0.001)
+        XCTAssertEqual(cy, 80, accuracy: 0.001)
+        XCTAssertEqual(placed, LocationMapFan.spread(points.reversed(), minimumDistance: 40))
+    }
+}

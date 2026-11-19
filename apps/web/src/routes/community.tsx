@@ -78,6 +78,8 @@ import { href, navigate } from '@/routes/route-table';
 const CommunityInviteSheet = lazy(() => import('@/routes/community-invite'));
 const CommunityPostsPanel = lazy(() => import('@/routes/community-posts'));
 
+const JOIN_FAILURE = { refused: 'refused', cooldown: 'cooldown', offline: 'offline', error: 'join' } as const satisfies Readonly<Record<string, MembershipFailure>>;
+
 const ROW_SEPARATOR = '1px solid color-mix(in srgb, var(--color-ios-ink-3) 18%, transparent)';
 
 export default function CommunityScreen() {
@@ -130,7 +132,7 @@ export default function CommunityScreen() {
     if (gesture === 'join') {
       const outcome = await performJoinCommunity({ community, deps: actionDeps });
       setMembershipPending(false);
-      if (outcome.status !== 'joined') setMembershipFailure(outcome.status === 'refused' ? 'refused' : outcome.status === 'offline' ? 'offline' : 'join');
+      if (outcome.status !== 'joined' && outcome.status !== 'requested') setMembershipFailure(JOIN_FAILURE[outcome.status]);
       return;
     }
     const outcome = await performLeaveCommunity({ community, deps: actionDeps });

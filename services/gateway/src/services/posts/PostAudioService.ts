@@ -20,6 +20,9 @@ import { postInclude, commentMediaInclude, NOT_DELETED } from './postIncludes';
 import { withMentions } from './postReferences';
 import { WIRE_BROADCAST } from './storyEffectsV3';
 import { mergeTranslationEntries } from '../message-translation/translatedTrackSave';
+import { postTrackUrls, supersededPostTrackUrls } from '../attachments/postTranslatedTrack';
+import { MediaService } from '../MediaService';
+import type { PostMediaByteRemover } from './reclaimPostMediaBytes';
 
 const log = enhancedLogger.child({ module: 'PostAudioService' });
 
@@ -75,14 +78,20 @@ type HandleAudioTranslationsReadyParams = {
 
 export class PostAudioService {
   private static _shared: PostAudioService | null = null;
+  private readonly inscriptions = new Map<string, Promise<void>>();
 
   private constructor(
     private readonly prisma: PrismaClient,
     private readonly socialEvents: SocialEventsHandler,
+    private readonly trackRemover: PostMediaByteRemover,
   ) {}
 
-  static init(prisma: PrismaClient, socialEvents: SocialEventsHandler): PostAudioService {
-    PostAudioService._shared = new PostAudioService(prisma, socialEvents);
+  static init(
+    prisma: PrismaClient,
+    socialEvents: SocialEventsHandler,
+    trackRemover: PostMediaByteRemover = new MediaService(),
+  ): PostAudioService {
+    PostAudioService._shared = new PostAudioService(prisma, socialEvents, trackRemover);
     return PostAudioService._shared;
   }
 
@@ -229,34 +238,86 @@ export class PostAudioService {
   /**
    * Called when the translator returns audioProcessCompleted with translations for a post.
    * Persists translated audio files + text translations to PostMedia.translations.
+   *
+   * #19841 — les inscriptions d'un même média se suivent (lecture → fusion →
+   * écriture sans entrelacement), et un fichier de piste ne s'efface que si la
+   * ligne RELUE après l'écriture ne le référence plus : une piste remplacée,
+   * ou une piste neuve que l'écriture n'a pas gardée. Une écriture en échec
+   * efface les pistes neuves de ce résultat ; une relecture en échec n'efface rien.
    */
   async handleAudioTranslationsReady(params: HandleAudioTranslationsReadyParams): Promise<void> {
+    const previous = this.inscriptions.get(params.postMediaId) ?? Promise.resolve();
+    const inscription = previous.then(() => this.inscribeAudioTranslations(params)).catch((err: unknown) => {
+      log.error('handleAudioTranslationsReady failed', err, { postId: params.postId, postMediaId: params.postMediaId });
+    });
+    this.inscriptions.set(params.postMediaId, inscription);
+    try {
+      await inscription;
+    } finally {
+      if (this.inscriptions.get(params.postMediaId) === inscription) this.inscriptions.delete(params.postMediaId);
+    }
+  }
+
+  private async inscribeAudioTranslations(params: HandleAudioTranslationsReadyParams): Promise<void> {
     const { postId, postMediaId, translations } = params;
+    const fresh = postTrackUrls(translations);
+    const langCount = Object.keys(translations).length;
+    log.info('Post audio translations ready — persisting', { postId, postMediaId, langCount });
+
+    const persisted = await this.persistTranslations(postMediaId, translations).catch(async (err: unknown) => {
+      log.error('handleAudioTranslationsReady failed', err, { postId, postMediaId });
+      await this.removeTracks(fresh);
+      return null;
+    });
+    if (!persisted) return;
+
+    await this.removeUnreferencedTracks(postMediaId, [...persisted.superseded, ...fresh]);
 
     try {
-      const langCount = Object.keys(translations).length;
-      log.info('Post audio translations ready — persisting', { postId, postMediaId, langCount });
-
-      const current = await this.prisma.postMedia.findUnique({
-        where: { id: postMediaId },
-        select: { translations: true },
-      });
-      const existing = (current?.translations ?? {}) as unknown as HandleAudioTranslationsReadyParams['translations'];
-      const merged = mergeTranslationEntries(existing, translations);
-      const translationsPayload: Prisma.InputJsonValue = merged as unknown as Prisma.InputJsonValue;
-
-      const updated = await this.prisma.postMedia.update({
-        where: { id: postMediaId },
-        data: { translations: translationsPayload },
-        select: { commentId: true },
-      });
-
       log.info('Translations persisted — broadcasting media owner update', { postId, postMediaId, langCount });
-
-      await this.broadcastMediaOwnerUpdate(postId, updated.commentId);
+      await this.broadcastMediaOwnerUpdate(postId, persisted.commentId);
     } catch (err: unknown) {
-      log.error('handleAudioTranslationsReady failed', err, { postId, postMediaId });
+      log.error('handleAudioTranslationsReady broadcast failed', err, { postId, postMediaId });
     }
+  }
+
+  private async persistTranslations(
+    postMediaId: string,
+    translations: HandleAudioTranslationsReadyParams['translations'],
+  ): Promise<{ readonly commentId: string | null; readonly superseded: readonly string[] }> {
+    const current = await this.prisma.postMedia.findUnique({
+      where: { id: postMediaId },
+      select: { translations: true },
+    });
+    const existing = (current?.translations ?? {}) as unknown as HandleAudioTranslationsReadyParams['translations'];
+    const merged = mergeTranslationEntries(existing, translations);
+    const translationsPayload: Prisma.InputJsonValue = merged as unknown as Prisma.InputJsonValue;
+
+    const updated = await this.prisma.postMedia.update({
+      where: { id: postMediaId },
+      data: { translations: translationsPayload },
+      select: { commentId: true },
+    });
+    return { commentId: updated.commentId, superseded: supersededPostTrackUrls(existing, merged, Object.keys(translations)) };
+  }
+
+  private async removeUnreferencedTracks(postMediaId: string, candidates: readonly string[]): Promise<void> {
+    if (candidates.length === 0) return;
+    const stored = await this.prisma.postMedia
+      .findUnique({ where: { id: postMediaId }, select: { translations: true } })
+      .catch((err: unknown) => {
+        log.warn('post tracks: row not re-read, nothing removed', { postMediaId, reason: err instanceof Error ? err.name : 'unknown' });
+        return undefined;
+      });
+    if (stored === undefined) return;
+    const referenced = new Set(postTrackUrls(stored?.translations as Parameters<typeof postTrackUrls>[0]));
+    await this.removeTracks(candidates.filter((url) => !referenced.has(url)));
+  }
+
+  private async removeTracks(urls: readonly string[]): Promise<void> {
+    const outcomes = await Promise.allSettled([...new Set(urls)].map((url) => this.trackRemover.delete(url)));
+    const failed = outcomes.filter((outcome) => outcome.status === 'rejected').length;
+    if (failed > 0) log.warn('post tracks: some files resisted removal', { failed });
   }
 
   /**
