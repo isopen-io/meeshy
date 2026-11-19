@@ -92,14 +92,23 @@ public struct MeeshyMedallion: View {
 
     @ViewBuilder
     private func plate(of recipe: MeeshyMedallionRecipe, tone: Color, isDark: Bool) -> some View {
-        let outline = recipe.isLocked
-        MeeshyMedallionOutline(shape: recipe.shape, cornerRadius: CGFloat(recipe.cornerRadius))
-            .fill(background(recipe: recipe, tone: tone))
-            .overlay(
-                MeeshyMedallionOutline(shape: recipe.shape, cornerRadius: CGFloat(recipe.cornerRadius))
-                    .stroke(tone, lineWidth: outline ? CGFloat(recipe.outlineWidth) : 0)
-            )
+        if recipe.morphs {
+            TimelineView(.animation) { context in
+                plateShape(of: recipe, tone: tone,
+                           phase: MeeshyMedallionRecipe.morphPhase(elapsed: context.date.timeIntervalSinceReferenceDate))
+            }
+        } else {
+            plateShape(of: recipe, tone: tone, phase: 0)
+        }
         content(recipe: recipe, tone: tone, isDark: isDark)
+    }
+
+    private func plateShape(of recipe: MeeshyMedallionRecipe, tone: Color, phase: Double) -> some View {
+        let outline = MeeshyMedallionOutline(shape: recipe.shape, cornerRadius: CGFloat(recipe.cornerRadius),
+                                             phase: phase)
+        return outline
+            .fill(background(recipe: recipe, tone: tone))
+            .overlay(outline.stroke(tone, lineWidth: recipe.isLocked ? CGFloat(recipe.outlineWidth) : 0))
     }
 
     private func background(recipe: MeeshyMedallionRecipe, tone: Color) -> AnyShapeStyle {
@@ -175,6 +184,8 @@ private struct MeeshyMedallionAccessibility: ViewModifier {
 nonisolated private struct MeeshyMedallionOutline: Shape {
     let shape: MeeshyMedallionShape
     let cornerRadius: CGFloat
+    /// La phase du contour organique (0 à 2π) : ses lobes glissent, le contour ondule sans jamais se rompre.
+    var phase: Double = 0
 
     func path(in rect: CGRect) -> Path {
         switch shape {
@@ -188,7 +199,8 @@ nonisolated private struct MeeshyMedallionOutline: Shape {
             }
         case .blob:
             return polar(in: rect) { angle in
-                1 - MeeshyMedallionOutline.blobDepth * (1 + sin(2 * angle + 0.6) * 0.6 + sin(3 * angle) * 0.4) / 2
+                1 - MeeshyMedallionOutline.blobDepth
+                    * (1 + sin(2 * angle + 0.6 + phase) * 0.6 + sin(3 * angle - phase) * 0.4) / 2
             }
         }
     }
