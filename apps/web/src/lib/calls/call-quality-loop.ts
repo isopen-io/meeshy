@@ -1,3 +1,4 @@
+import { readMediaQuality, type MediaQuality } from './call-analytics-stats';
 import { audioBitrateFor, DATA_PROFILES, profiledEncoding, type DataProfile } from './call-data-profile';
 import { aggregateQuality, initialTierState, linkTier, peerRate, readStats, sentTier, stepTier, TIER_ENCODING, type MediaPath, type PeerQuality, type StatsRead, type TierEncoding, type TierState, type VideoTier } from './call-quality';
 import { initialSurvival, stepSurvival, type SurvivalStage, type SurvivalState } from './call-survival';
@@ -29,6 +30,8 @@ export type QualityTick = {
   readonly profile: DataProfile;
   readonly audioBitrate: number;
   readonly path: MediaPath | null;
+  /** #19876 — gels, limitation et route élue de chaque pair, lus sur le même relevé ; le rapport de fin les accumule. */
+  readonly media?: readonly MediaQuality[];
 };
 
 export type QualityLoopDeps = {
@@ -77,10 +80,10 @@ export function createQualityLoop(deps: QualityLoopDeps): QualityLoop {
   let steady: ReadonlyMap<string, readonly [RTCPeerConnection, TierState]> = new Map();
   let voiced: ReadonlyMap<string, readonly [RTCPeerConnection, number]> = new Map();
 
-  const measure = async ([userId, pc]: readonly [string, RTCPeerConnection]): Promise<readonly [string, RTCPeerConnection, StatsRead] | null> => {
+  const measure = async ([userId, pc]: readonly [string, RTCPeerConnection]): Promise<readonly [string, RTCPeerConnection, StatsRead, MediaQuality] | null> => {
     if (typeof pc.getStats !== 'function') return null;
     const report = await pc.getStats().catch(() => null);
-    return report === null ? null : [userId, pc, readStats(report, deps.now())];
+    return report === null ? null : [userId, pc, readStats(report, deps.now()), readMediaQuality(report)];
   };
 
   const voice = async (userId: string, pc: RTCPeerConnection, bitrate: number): Promise<readonly [string, readonly [RTCPeerConnection, number]] | null> => {
@@ -106,7 +109,7 @@ export function createQualityLoop(deps: QualityLoopDeps): QualityLoop {
   let inFlight = false;
 
   const measureAll = async (): Promise<QualityTick | null> => {
-    const reads = (await Promise.all(deps.links().map(measure))).filter((entry): entry is readonly [string, RTCPeerConnection, StatsRead] => entry !== null);
+    const reads = (await Promise.all(deps.links().map(measure))).filter((entry): entry is readonly [string, RTCPeerConnection, StatsRead, MediaQuality] => entry !== null);
     const rates = reads.map(([userId, pc, read]) => [userId, pc, peerRate(read, previous.get(userId) ?? null), read] as const);
     previous = new Map(reads.map(([userId, , read]) => [userId, read]));
     const total = aggregateQuality(rates.map(([, , rate]) => rate));
@@ -129,6 +132,7 @@ export function createQualityLoop(deps: QualityLoopDeps): QualityLoop {
       profile,
       audioBitrate: audioBitrateFor(profile, total.level),
       path: paths.includes('relay') ? 'relay' : paths.includes('direct') ? 'direct' : null,
+      media: reads.map(([, , , media]) => media),
     };
   };
 
