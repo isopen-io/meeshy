@@ -111,7 +111,12 @@ const dominantLimitation = (counts: Readonly<Record<LimitationReason, number>>):
 
 const present = <K extends string, V>(key: K, value: V | null): Partial<Record<K, V>> => (value === null ? {} : ({ [key]: value } as Record<K, V>));
 
-const count = (value: number | null): number | null => (value === null ? null : Math.round(value));
+const measure = (value: number | null): number | null => (value !== null && Number.isFinite(value) && value >= 0 ? value : null);
+
+const count = (value: number | null): number | null => {
+  const rounded = value === null ? null : Math.round(value);
+  return rounded !== null && rounded >= 0 && rounded <= Number.MAX_SAFE_INTEGER ? rounded : null;
+};
 
 /** Les champs de qualité (#11277), chacun SEULEMENT s'il a été mesuré : un client n'invente aucune valeur. */
 function mediaFields(telemetry: Telemetry, averageRtt: number, averagePacketLoss: number): Partial<CallAnalyticsEvent> {
@@ -122,9 +127,9 @@ function mediaFields(telemetry: Telemetry, averageRtt: number, averagePacketLoss
   const mos = estimateCallMos({ roundTripTimeMs: averageRtt, jitterMs: telemetry.jitterSum / mediaSamples, packetLossPercent: averagePacketLoss });
   return {
     ...present('freezeCount', count(media.freezeCount)),
-    ...present('totalFreezesDuration', media.totalFreezesDuration),
+    ...present('totalFreezesDuration', measure(media.totalFreezesDuration)),
     ...present('qualityLimitationReason', dominantLimitation(telemetry.limitations)),
-    ...present('jitterBufferDelay', media.jitterBufferDelay === null || emitted <= 0 ? null : (media.jitterBufferDelay * 1000) / emitted),
+    ...present('jitterBufferDelay', media.jitterBufferDelay === null || emitted <= 0 ? null : measure((media.jitterBufferDelay * 1000) / emitted)),
     ...present('concealedSamples', count(media.concealedSamples)),
     ...present('nackCount', count(media.nackCount)),
     ...present('pliCount', count(media.pliCount)),
