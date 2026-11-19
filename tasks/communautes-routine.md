@@ -626,3 +626,15 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `join-request-lifecycle-19872.test.ts` (15, rouge prouvé : 11 échecs sur un module vide) ; `communities-core` et `link-entries-19429` ajustés (le `where` porte `createdAt`).
 - Aucun client touché, aucun contrat d'API changé.
 - Auditeur adversarial : non bloquant. Corrigés dans le lot : une invitation qui fait entrer pendant que la demande s'écrit (la demande naît close, personne n'est relancé) ; une réactivation déjà faite par une course clôt quand même (tout le plan d'`applyCommunityAdmission`) ; témoin de l'ajout sur une ligne réactivée. Rouge prouvé (2 échecs sans les correctifs). Ouverte, préexistante : #19914 (accepter rouvre la demande si une panne survient après l'entrée). Rappel : pas d'index unique sur la paire `CommunityMember` (#16696).
+
+## 2026-11-19 — réveil 19:38 UTC
+
+- Début du run : #19903 (#19869, iOS « Demande envoyée ») ouverte et inactive depuis 16:56 ; une autre session y a fusionné `dev` à 19:39 et relancé ses vérifications : vivante, cédée.
+- Lot : #19914 (passerelle) — accepter une demande d'entrée ne la rouvre jamais quand la personne est déjà entrée.
+- Constat : `POST …/join-requests/:requestId/accept` remettait la demande en `pending` sur TOUTE exception d'`admitCommunityMember`, y compris une panne levée APRÈS l'écriture de l'appartenance (diffusion, engagement levant en synchrone) : membre active ET demande de nouveau tranchable, 500 pour l'intendant.
+- Passerelle : `admitCommunityMember` sépare l'ÉCRITURE de ses suites (`afterEntry` : succès « cercles », engagement, diffusion, clôture des demandes), chacune gardée seule et journalisée, jamais remontée — le correctif vaut aussi pour l'adhésion directe. Sur erreur, l'acceptation relit l'appartenance (`membershipAfterFailure`, trois états) : `entered` ⇒ succès et membre servi ; `absent` ⇒ la demande redevient tranchable ; `unknown` (la relecture lève) ⇒ 500 sans rouvrir, une ignorance ne rouvre rien.
+- Témoins : `join-request-accept-19914.test.ts` (8, rouge prouvé : 4 échecs avant le correctif, puis 2 sur la présence).
+- Auditeur adversarial : non bloquant. Corrigé dans le lot : la réponse de l'acceptation servait l'`isOnline` brut du nouveau membre à l'intendant (préexistant, et le chemin `entered` l'étendait) ; elle passe désormais par `gateCoMemberPresence`, comme l'ajout d'un membre (`deactivatedAt` lu, jamais servi). Ouverte : #19924 (une demande `accepted` sans membre, quand écriture et relecture ont échoué, n'est réparée par rien). Rappel : pas d'index unique sur la paire `CommunityMember` (#16696).
+- Gates locaux : passerelle `tsc --noEmit` vert ; suites communautés / demandes / admission / présence / balayages / `tsc-never-loaded` 169 fichiers, 2 258 tests verts ; balayages et cliquets (`sweep|ratchet|guard`) 135 / 136 fichiers verts, 1 rouge ÉTRANGER (`DoubleRatchet.test.ts`, 2 échecs identiques sans le lot).
+- Aucun client touché, aucun contrat d'API changé.
+- Prochain lot recommandé : iOS #19877 (intendants) une fois #19903 fusionnée, sinon #19879 (refus notifié, passerelle + web).
