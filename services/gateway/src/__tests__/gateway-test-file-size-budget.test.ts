@@ -207,7 +207,12 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   // disponible pour la prochaine addition.
   '__tests__/unit/services/NotificationService.pushMessage.test.ts': 1061,
   '__tests__/unit/routes/admin/admin-content-routes.test.ts': 1087,
-  '__tests__/unit/services/EncryptionService.test.ts': 1044,
+  // 1044 → SORTIE DE LA DETTE (#19755, 2026-11-19) : les deux témoins du
+  // démarrage du coffre ont rejoint `serverKeyVaultConversationKeyLookup.test.ts`,
+  // là où vit la règle qu'ils gardent, et la suite est repassée sous 1 000. Le
+  // fichier était hors budget, donc interdit d'addition : ce lot n'avait pas le
+  // droit d'y ajouter ses témoins, et l'extraction est le correctif, jamais une
+  // marge à relever.
   '__tests__/unit/services/MetadataManager.test.ts': 1044,
   '__tests__/unit/routes/posts/interactions2.test.ts': 1039,
   '__tests__/unit/routes/communities-presence-gate.test.ts': 1038,

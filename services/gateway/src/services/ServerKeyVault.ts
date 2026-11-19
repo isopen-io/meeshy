@@ -1,7 +1,9 @@
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, type Prisma } from '@meeshy/shared/prisma/client';
 import * as crypto from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { readMasterKey, ServerAtRestUnavailableError, type MasterKeyState } from './messaging/serverAtRest';
+import { unsetOrNull } from '../utils/prisma-unset';
+import { isAddressableConversationId } from '../socketio/queuedEventContract';
 
 const logger = enhancedLogger.child({ module: 'EncryptionService' });
 
@@ -40,6 +42,63 @@ export type LoadedKey =
   | { readonly status: 'unavailable' };
 
 const MAX_DESIGNATION_CACHE = 2000;
+const MAX_CONVERSATION_KEY_CACHE = 2000;
+
+/**
+ * La clé de conversation sous laquelle le coffre peut encore SCELLER.
+ *
+ * `expiresAt` dit l'absence À CÔTÉ (#19755). Sous MongoDB `{ expiresAt: null }`
+ * — et sa jumelle `{ equals: null }` — est une ÉGALITÉ : elle n'apparie pas un
+ * document dont la clé est ABSENTE, et **aucun des deux créateurs de clés
+ * n'écrit la colonne** (`generateKey` ici, `AttachmentEncryptionService.generateKey`).
+ * L'absence est donc l'état de l'immense majorité des clés, et le filtre nu
+ * n'en retenait aucune : la carte `conversationId → keyId` partait vide à
+ * chaque démarrage, et le chemin rapide de `getOrCreateConversationKey` forgeait
+ * une clé neuve pour une conversation qui en avait déjà une.
+ *
+ * Et ce prédicat dit « AUCUNE échéance », pas « non expirée » — il écarte donc
+ * aussi une clé dont l'échéance est à VENIR. C'est délibéré, et c'est l'écart
+ * assumé avec le chemin de LECTURE jumeau (`AttachmentEncryptionService`), qui ne
+ * refuse qu'une échéance PASSÉE : on peut ouvrir un chiffré avec une clé qui
+ * expire bientôt, on ne doit pas en SCELLER un neuf dessous. Un chemin
+ * d'écriture a le droit d'être plus strict que son chemin de lecture ; l'inverse
+ * serait un défaut.
+ *
+ * `isActive` reste une ÉGALITÉ NUE, et la raison n'est plus une affirmation : la
+ * colonne est **REQUISE** au schéma (`isActive Boolean @default(true)`, pas
+ * `Boolean?`), à la différence d'`expiresAt` et de `conversationId`. La
+ * distinction n'est pas une lecture du schéma mais une MESURE du compilateur :
+ * `differsOrUnset('isActive', false)` ne compile pas —
+ * `TS2322: Type '{ isSet: false }' is not assignable to type 'boolean | BoolFilter'` —
+ * parce que Prisma n'expose `isSet` que sur les colonnes OPTIONNELLES, celles
+ * qui peuvent manquer du document. Le piège que ce lot répare n'existe donc PAS
+ * sur cette colonne-là, et c'est le compilateur qui le dit.
+ *
+ * (La version d'abord livrée justifiait la même égalité par « Prisma écrit son
+ * `@default(true)` à chaque création » — vrai, mais AFFIRMÉ : aucune base ici, et
+ * la fixture CUISAIT la colonne en la posant à la main, donc aucun témoin ne
+ * pouvait la falsifier. L'audit adversarial du cycle 181 l'a relevé comme le
+ * défaut du lot reproduit sur la colonne voisine. La correction n'était pas de
+ * changer le prédicat mais de trouver la mesure qui le fonde.)
+ *
+ * Ce qu'elle achète est en revanche DORMANT, et il faut le dire : `isActive: false`
+ * n'est écrit que par `AttachmentKeyVault.deleteKey` et `cleanupExpiredKeys`,
+ * dont aucun appelant de production n'existe aujourd'hui (la purge, elle,
+ * SUPPRIME les lignes). Le filtre garde un chemin qui dort ; il ne garde rien
+ * qui s'écrive.
+ *
+ * Le type n'est pas décoratif : extraire un filtre dans une constante le met
+ * hors de portée du cliquet qui garde cette règle
+ * (`__tests__/soft-state-equality-filter-guard.test.ts`, qui cherche un cadre
+ * `where`), et l'annotation `Prisma.…WhereInput` est précisément ce qui le lui
+ * redéclare. Un lot qui répare une égalité nue en la DÉPLAÇANT sortirait sinon
+ * du champ de sa propre garde.
+ */
+const WRITABLE_CONVERSATION_KEY: Prisma.ServerEncryptionKeyWhereInput = {
+  purpose: 'conversation',
+  isActive: true,
+  ...unsetOrNull('expiresAt'),
+};
 
 /**
  * Server Key Vault - Manages encryption keys with database persistence
@@ -79,37 +138,94 @@ export class ServerKeyVault {
   }
 
   /**
-   * Initialize vault - load existing keys from database
+   * Prépare le coffre. Il ne LIT rien : la carte `conversationId → keyId` est un
+   * cache read-through et BORNÉ (`conversationKeyId`), pas un index à charger.
+   *
+   * #19755 — ce démarrage balayait la table des clés de conversation pour les
+   * tenir TOUTES dans une `Map` sans borne ni éviction. Le filtre était faux
+   * (voir `WRITABLE_CONVERSATION_KEY`), donc le balayage ne chargeait rien et la
+   * rétention ne s'est jamais vue ; le réparer en place l'aurait rendue
+   * proportionnelle au nombre de conversations, et aurait fait du premier
+   * chiffrement un plein scan. Un cache dont le manque se remplit en UNE lecture
+   * n'a pas besoin d'être chargé d'avance.
    */
   async initialize(): Promise<void> {
-    logger.info('Initializing ServerKeyVault');
+    logger.info('ServerKeyVault ready', { cacheSize: this.keyCache.size });
+  }
+
+  /**
+   * La clé sous laquelle cette conversation SCELLE, relue en base au premier
+   * besoin ; `undefined` quand elle n'en a aucune encore.
+   *
+   * La carte n'est pas une autorité de lecture — un chiffré voyage avec son
+   * `keyId` et s'ouvre par sa ligne (`loadKey`, `getKeyFor`) : elle évite de
+   * forger une clé de plus là où la base en porte déjà une.
+   *
+   * L'ordre est un ordre TOTAL — `createdAt` décroissant, puis `id`, qui est un
+   * UUID donc unique. `createdAt` seul n'aurait pas de départage, et l'égalité y
+   * est le cas RÉALISTE : il n'existe aucun verrou inter-instances
+   * (`keyGenerationLocks` est par processus), donc deux instances qui forgent la
+   * première clé d'une conversation le font dans la même milliseconde. Ce que
+   * l'ordre garantit est que deux instances élisent la MÊME clé sur un défaut de
+   * cache ; il ne les rapproche pas une fois chacune servie par sa carte, qu'aucun
+   * chemin n'invalide — deux processus peuvent sceller sous deux clés différentes,
+   * ce qui ne perd rien (les deux lignes portent leur `conversationId`) mais n'est
+   * pas de la cohérence.
+   */
+  async conversationKeyId(conversationId: string): Promise<string | undefined> {
+    const cached = this.conversationKeyMap.get(conversationId);
+    if (cached) return cached;
+
+    const keyId = await this.readConversationKeyId(conversationId);
+    if (keyId) this.rememberConversationKey(conversationId, keyId);
+    return keyId;
+  }
+
+  /**
+   * La lecture elle-même, fail-OUVERT : une base injoignable rend `undefined`,
+   * donc l'appelant forge une clé neuve — exactement ce que faisait le chemin
+   * d'avant, dont la carte était vide à CHAQUE fois.
+   *
+   * Fermer ici REFUSERAIT un message que la production accepte aujourd'hui
+   * (`SERVER_AT_REST_UNAVAILABLE`), et le coût de l'ouverture est borné à une
+   * clé de plus : un chiffré voyage avec son `keyId` et s'ouvre par sa ligne
+   * (`loadKey`, `getKeyFor`), donc rien ne devient illisible. C'est l'arbitrage
+   * du cycle 127 — fail-CLOSED sur une preuve, fail-OUVERT sur une absence de
+   * preuve, ici une LIVRAISON et non un secret.
+   *
+   * `try`/`catch` et non `.catch` : un client qui n'expose pas la méthode jette
+   * SYNCHRONEMENT, et une promesse jamais construite ne porte pas de `.catch`.
+   * Les deux gardes sont disjointes, et c'est la décision ci-dessus qui exige
+   * de couvrir les deux formes d'échec.
+   */
+  private async readConversationKeyId(conversationId: string): Promise<string | undefined> {
+    // La garde de FORME va AVANT l'appel : `ServerEncryptionKey.conversationId`
+    // est un `@db.ObjectId`, et un id qui n'en a pas la forme fait rendre au
+    // moteur `Malformed ObjectID` — que le `catch` ci-dessous traduirait en « pas
+    // de clé », donc en une clé forgée à CHAQUE appel, sans autre trace qu'un
+    // `warn` indistinct. Un `catch` fail-ouvert ne peut pas réparer ce qu'il ne
+    // peut pas ATTRIBUER (cf. `isAddressableConversationId`, #19690 / cycle 112) :
+    // les deux refus ne s'arbitrent pas pareil, donc ils se journalisent à part.
+    if (!isAddressableConversationId(conversationId)) {
+      logger.warn('clé de conversation non cherchée : cet identifiant n’a pas la forme d’un ObjectId', {
+        conversationId, reason: 'unaddressable-conversation-id',
+      });
+      return undefined;
+    }
 
     try {
-      // Load conversation key mappings from database
-      const existingKeys = await this.prisma.serverEncryptionKey.findMany({
-        where: {
-          purpose: 'conversation',
-          expiresAt: { equals: null }, // Non-expired keys
-        },
-        select: {
-          id: true,
-          conversationId: true,
-        },
+      const rows = await this.prisma.serverEncryptionKey.findMany({
+        where: { conversationId, ...WRITABLE_CONVERSATION_KEY },
+        select: { id: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 1,
       });
-
-      for (const key of existingKeys) {
-        if (key.conversationId) {
-          this.conversationKeyMap.set(key.conversationId, key.id);
-        }
-      }
-
-      logger.info('ServerKeyVault initialized', {
-        conversationKeysLoaded: existingKeys.length,
-        cacheSize: this.keyCache.size
-      });
+      return rows[0]?.id;
     } catch (error) {
-      logger.error('Failed to initialize ServerKeyVault', error);
-      throw error;
+      logger.warn('lecture de la clé de conversation impossible pour le moment : une clé neuve sera scellée', {
+        conversationId, error: error instanceof Error ? error.message : 'unknown',
+      });
+      return undefined;
     }
   }
 
@@ -253,6 +369,19 @@ export class ServerKeyVault {
     return designated ?? nextKeyId;
   }
 
+  /**
+   * #19755 — la carte des clés de conversation est BORNÉE, comme celle des
+   * désignations : c'est un cache dont le manque coûte une lecture, et une
+   * passerelle qui sert 100 000 conversations n'a pas à les tenir toutes.
+   */
+  private rememberConversationKey(conversationId: string, keyId: string): void {
+    if (this.conversationKeyMap.size >= MAX_CONVERSATION_KEY_CACHE && !this.conversationKeyMap.has(conversationId)) {
+      const oldest = this.conversationKeyMap.keys().next().value;
+      if (oldest !== undefined) this.conversationKeyMap.delete(oldest);
+    }
+    this.conversationKeyMap.set(conversationId, keyId);
+  }
+
   private rememberDesignation(conversationId: string, keyId: string): void {
     if (this.designationCache.size >= MAX_DESIGNATION_CACHE) {
       const oldest = this.designationCache.keys().next().value;
@@ -281,7 +410,7 @@ export class ServerKeyVault {
         data: { conversationId, purpose: 'conversation' },
       });
       if (count === 0) return;
-      this.conversationKeyMap.set(conversationId, keyId);
+      this.rememberConversationKey(conversationId, keyId);
       const cached = this.keyCache.get(keyId);
       if (cached) cached.owner = conversationId;
       logger.info('clé de conversation d’avant le chiffrement au repos rattachée à sa conversation', { conversationId, keyId });
@@ -296,7 +425,7 @@ export class ServerKeyVault {
    * Set conversation to key mapping
    */
   async setConversationKey(conversationId: string, keyId: string): Promise<void> {
-    this.conversationKeyMap.set(conversationId, keyId);
+    this.rememberConversationKey(conversationId, keyId);
     const cached = this.keyCache.get(keyId);
     if (cached) cached.owner = conversationId;
 
