@@ -27,6 +27,8 @@ export type FallDetectionConfig = {
   readonly maxFutureSkewMinutes: number;
   /** Une seconde chute à moins de ce délai de l'épisode en cours ne repousse rien. */
   readonly dedupeWindowMinutes: number;
+  /** Au-delà de ce nombre d'épisodes sur 24 h glissantes, l'alerte est servie mais son push ne perce plus. */
+  readonly maxUrgentEpisodesPerDay: number;
 };
 
 export const FALL_DETECTION_CONFIG: FallDetectionConfig = {
@@ -34,6 +36,7 @@ export const FALL_DETECTION_CONFIG: FallDetectionConfig = {
   maxReportAgeMinutes: 30,
   maxFutureSkewMinutes: 2,
   dedupeWindowMinutes: 10,
+  maxUrgentEpisodesPerDay: 3,
 };
 
 /** La version du texte d'accord : un texte changé se reconsent (le client compare `consentVersion`). */
@@ -42,9 +45,12 @@ export const FALL_CONSENT_VERSION = '2026-11-19';
 /** Sous cet âge DÉCLARÉ, l'accord est refusé (`FALL_CONSENT_MINOR`) : art. 8 RGPD, seuil français. */
 export const FALL_CONSENT_MINIMUM_AGE = 15;
 
-/** Les types des pushs (aucune ligne `Notification` : rien de la chute ne survit à l'épisode). */
-export const FALL_DETECTED_PUSH_TYPE = 'fall_detected' as const;
-export const FALL_CLEARED_PUSH_TYPE = 'fall_cleared' as const;
+/**
+ * Les types des pushs (aucune ligne `Notification` : rien de la chute ne survit à l'épisode). NEUTRES :
+ * la charge APNs/FCM traverse Apple et Google, et rien n'y dit la santé.
+ */
+export const SAFETY_ALERT_PUSH_TYPE = 'safety_alert' as const;
+export const SAFETY_ALERT_CLEARED_PUSH_TYPE = 'safety_alert_cleared' as const;
 
 export const FALL_CLEARED_REASONS = ['responded', 'expired', 'withdrawn'] as const;
 export type FallClearedReason = (typeof FALL_CLEARED_REASONS)[number];
