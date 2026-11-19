@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createPeerLink, ICE_DISCONNECT_GRACE_MS, ICE_RESTART_MAX_ATTEMPTS, isPolitePeer, isStaleEpoch, orderVideoCodecs, peerConfiguration, restartBackoffMs, type LinkState, type OutgoingSignal } from './peer-link';
+import { createPeerLink, ICE_DISCONNECT_GRACE_MS, ICE_RESTART_MAX_ATTEMPTS, ICE_RESTART_WATCHDOG_MS, isPolitePeer, isStaleEpoch, orderVideoCodecs, peerConfiguration, restartBackoffMs, type LinkState, type OutgoingSignal } from './peer-link';
 
 /**
  * LE LIEN PAIR-À-PAIR (#6382, #8044) — les trois règles d'iOS
@@ -58,7 +58,7 @@ function fakeConnection(options: { readonly codecPreferences?: boolean } = {}) {
     },
     addIceCandidate: async (candidate: { candidate?: string }) => void calls.push(`candidate:${candidate.candidate ?? ''}`),
     getConfiguration: () => ({ iceServers: [] }),
-    setConfiguration: (config: { iceServers: unknown[] }) => void calls.push(`config:${config.iceServers.length}`),
+    setConfiguration: (config: { iceServers: unknown[]; iceTransportPolicy?: string }) => void calls.push(`config:${config.iceServers.length}${config.iceTransportPolicy === undefined ? '' : `:${config.iceTransportPolicy}`}`),
     close: () => void calls.push('close'),
   };
   const setState = (state: string) => {
@@ -68,7 +68,7 @@ function fakeConnection(options: { readonly codecPreferences?: boolean } = {}) {
   return { pc, calls, setState };
 }
 
-function link(options: { readonly local?: string; readonly remote?: string; readonly video?: boolean; readonly receiveOnly?: boolean; readonly shapeSdp?: (sdp: string) => string; readonly codecPreferences?: boolean } = {}) {
+function link(options: { readonly local?: string; readonly remote?: string; readonly video?: boolean; readonly receiveOnly?: boolean; readonly shapeSdp?: (sdp: string) => string; readonly codecPreferences?: boolean; readonly iceServers?: readonly RTCIceServer[] } = {}) {
   const fake = fakeConnection(options.codecPreferences === undefined ? {} : { codecPreferences: options.codecPreferences });
   const sent: OutgoingSignal[] = [];
   const states: LinkState[] = [];
@@ -80,7 +80,7 @@ function link(options: { readonly local?: string; readonly remote?: string; read
   const peer = createPeerLink({
     localUserId: options.local ?? 'u-a',
     remoteUserId: options.remote ?? 'u-b',
-    iceServers: [],
+    iceServers: options.iceServers ?? [],
     localStream,
     ...(options.receiveOnly === true ? { receiveOnly: true } : {}),
     ...(options.shapeSdp === undefined ? {} : { shapeSdp: options.shapeSdp }),
@@ -261,6 +261,110 @@ describe('reprise ICE', () => {
     fake.setState('connected');
     for (let attempt = 0; attempt <= ICE_RESTART_MAX_ATTEMPTS; attempt += 1) fake.setState('failed');
     expect(states.at(-1)).toBe('failed');
+  });
+
+  test('une offre de reprise restée sans réponse est RENVOYÉE, sans attendre un nouvel état (#19776)', async () => {
+    const { fake, timers, runTimers } = link();
+    fake.setState('connected');
+    fake.setState('failed');
+    runTimers();
+    await flush();
+    expect(fake.calls.filter((call) => call === 'createOffer:restart')).toHaveLength(1);
+    expect(timers.some((timer) => timer.active && timer.ms === ICE_RESTART_WATCHDOG_MS)).toBe(true);
+    runTimers();
+    runTimers();
+    await flush();
+    expect(fake.calls.filter((call) => call === 'createOffer:restart')).toHaveLength(2);
+  });
+
+  test('l’offre bloquée en have-local-offer est annulée AVANT d’être refaite (#19776)', async () => {
+    const { fake, sent, runTimers } = link();
+    fake.setState('connected');
+    fake.setState('failed');
+    runTimers();
+    await flush();
+    expect(fake.pc.signalingState).toBe('have-local-offer');
+    fake.calls.length = 0;
+    runTimers();
+    runTimers();
+    await flush();
+    expect(fake.calls.slice(0, 3)).toEqual(['setLocal:rollback', 'createOffer:restart', 'setLocal:offer']);
+    expect(sent.filter((signal) => signal.type === 'offer').map((signal) => signal.negotiationId)).toEqual([1, 2]);
+  });
+
+  test('une reprise répondue et reconnectée arrête la veille : aucune offre de plus', async () => {
+    const { fake, runTimers } = link();
+    fake.setState('connected');
+    fake.setState('failed');
+    runTimers();
+    await flush();
+    fake.pc.signalingState = 'stable';
+    fake.setState('connected');
+    runTimers();
+    runTimers();
+    await flush();
+    expect(fake.calls.filter((call) => call === 'createOffer:restart')).toHaveLength(1);
+  });
+
+  test('restartIce relance tout de suite un lien connecté, sans le dire « reconnexion » (#19776)', async () => {
+    const { peer, fake, states, timers } = link();
+    fake.setState('connected');
+    peer.restartIce();
+    await flush();
+    expect(fake.calls).toContain('createOffer:restart');
+    expect(states).toEqual(['connected']);
+    expect(timers.some((timer) => timer.active && timer.ms === ICE_RESTART_WATCHDOG_MS)).toBe(true);
+  });
+
+  test('restartIce n’interrompt pas une première négociation', async () => {
+    const { peer, fake } = link();
+    await peer.offer();
+    peer.restartIce();
+    await flush();
+    expect(fake.calls).not.toContain('createOffer:restart');
+  });
+
+  test('si la veille trouve le lien connecté mais l’offre sans réponse, elle l’annule sans rien renvoyer', async () => {
+    const { peer, fake, states, runTimers } = link();
+    fake.setState('connected');
+    peer.restartIce();
+    await flush();
+    fake.calls.length = 0;
+    runTimers();
+    await flush();
+    expect(fake.calls).toEqual(['setLocal:rollback']);
+    expect(states).toEqual(['connected']);
+  });
+
+  test(`après ${ICE_RESTART_MAX_ATTEMPTS} reprises ratées, un relais TURN est imposé pour UNE dernière reprise, puis « failed » (#19776)`, async () => {
+    const { fake, states, runTimers } = link({ iceServers: [{ urls: 'stun:stun.example.test' }, { urls: 'turn:relay.example.test:3478', username: 'u', credential: 'c' }] });
+    fake.setState('connected');
+    for (let attempt = 0; attempt < ICE_RESTART_MAX_ATTEMPTS; attempt += 1) fake.setState('failed');
+    expect(fake.calls.some((call) => call.endsWith(':relay'))).toBe(false);
+    fake.setState('failed');
+    expect(fake.calls).toContain('config:0:relay');
+    expect(states.at(-1)).toBe('reconnecting');
+    runTimers();
+    await flush();
+    expect(fake.calls.at(-1)).toBe('setLocal:offer');
+    fake.setState('failed');
+    expect(states.at(-1)).toBe('failed');
+  });
+
+  test('sans relais TURN connu, aucune bascule : « failed » après les reprises', () => {
+    const { fake } = link({ iceServers: [{ urls: 'stun:stun.example.test' }] });
+    fake.setState('connected');
+    for (let attempt = 0; attempt <= ICE_RESTART_MAX_ATTEMPTS; attempt += 1) fake.setState('failed');
+    expect(fake.calls.some((call) => call.startsWith('config:'))).toBe(false);
+  });
+
+  test('fermer arrête aussi la veille des reprises', async () => {
+    const { peer, fake, timers } = link();
+    fake.setState('connected');
+    peer.restartIce();
+    await flush();
+    peer.close();
+    expect(timers.filter((timer) => timer.active)).toHaveLength(0);
   });
 
   test('fermer coupe les écouteurs et la connexion', () => {

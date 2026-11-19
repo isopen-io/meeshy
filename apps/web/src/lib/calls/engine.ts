@@ -48,6 +48,7 @@ import { listenCallEvents, type CallTransport } from './call-transport';
 import { callNoticeStore, callReactionStore, showNotice, type CallNoticeStoreApi, type CallReactionStoreApi } from './call-control-state';
 import { createEngineCamera } from './engine-camera';
 import { createEngineControls } from './engine-controls';
+import { createNetworkRecovery, watchBrowserNetworkPath } from './call-network-recovery';
 import { createEnginePreview } from './engine-preview';
 import { loadDefaultEngineDeps } from './engine-defaults';
 import { baseCall, emptySession } from './engine-session';
@@ -132,6 +133,8 @@ export type CallEngineDeps = {
   readonly createQualityLoop: (deps: QualityLoopDeps) => QualityLoop;
   /** Chaque changement de réseau (`online`, le type de connexion) — rend le désabonnement. */
   readonly watchNetwork: (onChange: () => void) => () => void;
+  /** Le CHEMIN réseau qui change (#19776) — la socket est recyclée et ICE relancé ; le navigateur par défaut. */
+  readonly watchNetworkPath?: (onChange: () => void) => () => void;
   readonly platform: () => string;
   readonly deviceModel: () => string;
   /** Le tirage de l'échantillon de la note d'après-appel (#8072) ; `Math.random` par défaut. */
@@ -458,7 +461,13 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       sharingScreen: () => read()?.screenSharing === true,
       now: deps.now,
     });
-    session.unwatchNetwork = deps.watchNetwork(() => void (session.telemetry = markNetworkChange(session.telemetry)));
+    const unwatchTelemetry = deps.watchNetwork(() => void (session.telemetry = markNetworkChange(session.telemetry)));
+    const recover = createNetworkRecovery({ now: deps.now, reconnect: () => deps.transport()?.reconnect?.(), links: () => session.links.values() });
+    const unwatchPath = (deps.watchNetworkPath ?? watchBrowserNetworkPath)(recover);
+    session.unwatchNetwork = () => {
+      unwatchTelemetry();
+      unwatchPath();
+    };
     session.qualityTimer = deps.repeat(() => void sampleQuality(), QUALITY_INTERVAL_MS);
   };
 

@@ -40,7 +40,7 @@ export const stream = (tracks: readonly FakeTrack[]): MediaStream => {
   return fake as unknown as MediaStream;
 };
 
-export type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; closed: boolean; received: string[]; sent: unknown[] };
+export type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; restarts: number; closed: boolean; received: string[]; sent: unknown[] };
 
 export function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly videoRefused?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort; readonly acquireCamera?: CallEngineDeps['acquireCamera']; readonly acquireCameraDevice?: CallEngineDeps['acquireCameraDevice'] } = {}) {
   resetCallTransportForTests();
@@ -57,12 +57,15 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
   const notices = createCallNoticeStore();
   const repeats: Array<{ readonly fn: () => void; readonly ms: number; stopped: boolean }> = [];
   const networkListeners: Array<() => void> = [];
+  const pathListeners: Array<() => void> = [];
+  const socket = { reconnects: 0 };
   let clock = 1_000;
   let nextTimer = 1;
   const acks: Record<string, unknown> = { [CLIENT_EVENTS.CALL_INITIATE]: { success: true, data: { callId: 'call-1', mode: 'p2p', iceServers: [{ urls: 'stun:stun.example' }] } }, [CLIENT_EVENTS.CALL_JOIN]: { success: true, data: { callSession: { participants: [] }, iceServers: [] } }, ...options.acks };
 
   const transport: CallTransport = {
     connected: () => true,
+    reconnect: () => void (socket.reconnects += 1),
     emit: (event, payload) => void emitted.push([event, payload]),
     request: async (event, payload) => {
       requested.push([event, payload]);
@@ -110,6 +113,7 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
       const link: FakeLink = {
         deps: linkDeps,
         offers: 0,
+        restarts: 0,
         closed: false,
         received: [],
         sent: [],
@@ -119,6 +123,7 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
         setVideoTrack: async (sent) => void link.sent.push(sent),
         setAudioTrack: async (sent) => void link.sent.push(sent),
         setIceServers: () => undefined,
+        restartIce: () => void (link.restarts += 1),
         connection: () => ({}) as RTCPeerConnection,
         close: () => void (link.closed = true),
       };
@@ -145,6 +150,10 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
     watchNetwork: (onChange) => {
       networkListeners.push(onChange);
       return () => void networkListeners.splice(networkListeners.indexOf(onChange), 1);
+    },
+    watchNetworkPath: (onChange) => {
+      pathListeners.push(onChange);
+      return () => void pathListeners.splice(pathListeners.indexOf(onChange), 1);
     },
     platform: () => 'web',
     deviceModel: () => 'Chrome · Linux',
@@ -173,8 +182,9 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
     await flush();
   };
   const networkChanged = (): void => networkListeners.forEach((listener) => listener());
+  const networkPathChanged = (): void => [...pathListeners].forEach((listener) => listener());
 
-  return { engine, store, emitted, requested, links, tones, displays, cameras, remembered, notices, advance, call, names, linkState, binding, sampleQuality, networkChanged, qualityDeps: () => qualityDeps };
+  return { engine, store, emitted, requested, links, tones, displays, cameras, remembered, notices, advance, call, names, linkState, binding, sampleQuality, networkChanged, networkPathChanged, socket, qualityDeps: () => qualityDeps };
 }
 
 export const DIRECT: StartCallRequest = { conversationId: 'c-1', media: 'audio', title: 'Amina', avatar: null, isGroup: false };

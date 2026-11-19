@@ -24,6 +24,11 @@
  *
  * La reprise ICE : `disconnected` attend 3 s avant de relancer, `failed`
  * relance tout de suite, puis 2 → 16 s entre deux tentatives, 5 au plus.
+ * Une offre de reprise est VEILLÉE (#19776) : sans lien reconnecté 5 s plus
+ * tard, elle repart — même si aucun état ne bouge, ce qui arrive quand la
+ * signalisation l'a perdue (socket morte après un changement de réseau) ;
+ * une offre restée en `have-local-offer` est annulée avant d'être refaite.
+ * Les reprises épuisées, un relais TURN est imposé pour une dernière.
  */
 
 export type LinkState = 'connecting' | 'connected' | 'reconnecting' | 'failed';
@@ -61,12 +66,15 @@ export type PeerLink = {
   readonly setVideoTrack: (track: MediaStreamTrack | null) => Promise<void>;
   readonly setAudioTrack: (track: MediaStreamTrack | null) => Promise<void>;
   readonly setIceServers: (servers: readonly RTCIceServer[]) => void;
+  /** Le réseau a changé (#19776) : une reprise ICE tout de suite, veillée, sans annoncer de reconnexion. */
+  readonly restartIce: () => void;
   readonly connection: () => RTCPeerConnection;
   readonly close: () => void;
 };
 
 export const ICE_DISCONNECT_GRACE_MS = 3_000;
 export const ICE_RESTART_MAX_ATTEMPTS = 5;
+export const ICE_RESTART_WATCHDOG_MS = 5_000;
 const RESTART_BACKOFF_BASE_MS = 2_000;
 const RESTART_BACKOFF_MAX_MS = 16_000;
 
@@ -107,6 +115,13 @@ function preferVideoCodecs(transceiver: RTCRtpTransceiver): void {
   } catch {
     /* Navigateur sans préférence de codec : la négociation par défaut tient. */
   }
+}
+
+const RELAY_URL = /^turns?:/i;
+
+/** Un relais TURN est-il connu ? Sans lui, imposer `relay` ne rassemblerait aucun candidat. */
+export function hasRelay(servers: readonly RTCIceServer[]): boolean {
+  return servers.some((server) => (Array.isArray(server.urls) ? server.urls : [server.urls]).some((url) => RELAY_URL.test(url)));
 }
 
 export function restartBackoffMs(attempt: number): number {
@@ -150,6 +165,9 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
   let restartAttempt = 0;
   let graceTimer: unknown = null;
   let restartTimer: unknown = null;
+  let watchdogTimer: unknown = null;
+  let relayForced = false;
+  let servers: readonly RTCIceServer[] = deps.iceServers;
   let pendingCandidates: readonly RTCIceCandidateInit[] = [];
   let audioTransceiver: RTCRtpTransceiver | null = null;
   let videoTransceiver: RTCRtpTransceiver | null = null;
@@ -168,8 +186,10 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
     try {
       makingOffer = true;
       epoch += 1;
-      if (options?.iceRestart === true) await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
-      else await pc.setLocalDescription();
+      if (options?.iceRestart === true) {
+        if (pc.signalingState === 'have-local-offer') await pc.setLocalDescription({ type: 'rollback' });
+        await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
+      } else await pc.setLocalDescription();
       sendDescription();
     } finally {
       makingOffer = false;
@@ -181,19 +201,52 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
     return null;
   };
 
+  /** La dernière chance : tout passer par le relais TURN (UDP bloqué, NAT symétrique des deux côtés). */
+  const forceRelay = (): boolean => {
+    if (relayForced || !hasRelay(servers)) return false;
+    try {
+      pc.setConfiguration({ ...pc.getConfiguration(), iceTransportPolicy: 'relay' });
+    } catch {
+      return false;
+    }
+    relayForced = true;
+    return true;
+  };
+
+  const sendRestart = async (): Promise<void> => {
+    watchdogTimer = clearTimer(watchdogTimer);
+    if (closed) return;
+    watchdogTimer = schedule(watch, ICE_RESTART_WATCHDOG_MS);
+    await makeOffer({ iceRestart: true });
+  };
+
+  /** La veille d'une offre de reprise : reconnecté, rien ; ICE vivant mais offre sans réponse, on l'annule ; sinon on relance. */
+  const watch = (): void => {
+    watchdogTimer = null;
+    if (closed) return;
+    if (pc.connectionState !== 'connected') {
+      restart();
+      return;
+    }
+    if (pc.signalingState === 'have-local-offer' && !makingOffer) void pc.setLocalDescription({ type: 'rollback' }).catch(() => undefined);
+  };
+
   const restart = (): void => {
     restartTimer = clearTimer(restartTimer);
+    graceTimer = clearTimer(graceTimer);
+    watchdogTimer = clearTimer(watchdogTimer);
     if (closed) return;
     restartAttempt += 1;
-    if (restartAttempt > ICE_RESTART_MAX_ATTEMPTS) {
+    const lastChance = restartAttempt > ICE_RESTART_MAX_ATTEMPTS;
+    if (lastChance && !forceRelay()) {
       deps.onState('failed');
       return;
     }
     deps.onState('reconnecting');
     restartTimer = schedule(() => {
       restartTimer = null;
-      void makeOffer({ iceRestart: true }).catch(() => undefined);
-    }, restartBackoffMs(restartAttempt));
+      void sendRestart().catch(() => undefined);
+    }, lastChance ? 0 : restartBackoffMs(restartAttempt));
   };
 
   pc.onicecandidate = (event) => {
@@ -349,9 +402,18 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
       await audioTransceiver.sender.replaceTrack(track);
     },
 
-    setIceServers: (servers) => {
+    setIceServers: (next) => {
       if (closed) return;
-      pc.setConfiguration({ ...pc.getConfiguration(), iceServers: [...servers] });
+      servers = next;
+      pc.setConfiguration({ ...pc.getConfiguration(), iceServers: [...next] });
+    },
+
+    restartIce: () => {
+      if (closed || !everConnected) return;
+      graceTimer = clearTimer(graceTimer);
+      restartTimer = clearTimer(restartTimer);
+      restartAttempt = 1;
+      void sendRestart().catch(() => undefined);
     },
 
     connection: () => pc,
@@ -361,6 +423,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
       closed = true;
       graceTimer = clearTimer(graceTimer);
       restartTimer = clearTimer(restartTimer);
+      watchdogTimer = clearTimer(watchdogTimer);
       pc.onicecandidate = null;
       pc.ontrack = null;
       pc.ondatachannel = null;
