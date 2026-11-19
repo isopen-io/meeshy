@@ -157,6 +157,12 @@ enum ProfileVitrineCopy {
                String(level))
     }
 
+    /// « Niveau 31 · 2 410 étincelles » (#19854) : le total des étincelles suit le niveau.
+    static func levelAndSparks(_ level: Int, sparks: String) -> String {
+        String(format: String(localized: "profile.vitrine.game.levelSparks", defaultValue: "Niveau %1$@ · %2$@ étincelles",
+                              bundle: .module), String(level), sparks)
+    }
+
     /// « Niveau 31 », ce que lit le médaillon.
     static func level(_ level: Int) -> String {
         String(format: String(localized: "profile.vitrine.game.level", defaultValue: "Niveau %@", bundle: .module),

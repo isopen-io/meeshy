@@ -104,6 +104,8 @@ public struct UserProfileSheet: View {
     /// while scrolling content down. Updated by the iOS 16-17 preference path
     /// and the iOS 18+ `trackScrollContentOffset` path simultaneously.
     @State var scrollRelay = ScrollOffsetRelay()
+    /// La hauteur de la barre système, lue sous l'en-tête plein écran (#19854) ; 0 en feuille.
+    @State var heroStatusBar: Double = 0
     /// #10093 — profil et statistiques : le cache d'abord, la synchronisation dès l'ouverture.
     @StateObject var loader = ProfileSheetLoader()
     @StateObject var acquaintance = ProfileAcquaintanceModel()
