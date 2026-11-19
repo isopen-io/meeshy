@@ -570,3 +570,197 @@ struct HeaderFlameCard: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+// MARK: - L'acte du Rêve qui avance, vu à l'envoi (#17367, tranche iOS #19716)
+
+/// MIROIR de `watchActAdvance` (web, `apps/web/src/lib/view/act-advance.ts`). L'envoi ARME le guet quinze secondes
+/// (`HeaderFlameReplay`, le même signal que la flamme rejoue) ; pendant ce temps, chaque nouvelle lecture du bloc
+/// `game` se compare à la précédente par la loi du SDK (`GameActAdvance`) : `game:updated` porte le bloc,
+/// `game:missions-updated` le fait relire une fois, une écriture du cache se relit sans requête. Rien hors du guet,
+/// rien sous « Jeu masqué », et aucune notification n'en découle (#17368).
+@MainActor
+final class ConversationActAdvanceWatch: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466), cf. `ConversationHeaderMemory`.
+    nonisolated deinit {}
+
+    /// Le temps, après un envoi, pendant lequel une avancée d'acte lui est attribuée.
+    static let armedSeconds: TimeInterval = 15
+    /// Le temps pendant lequel la pastille reste lisible avant de s'effacer.
+    static let shownSeconds: Double = 2.6
+
+    @Published private(set) var shown: GameActAdvance?
+
+    private let source: PlayerBannerSourcing
+    private let isHidden: @MainActor () -> Bool
+    private let now: () -> Date
+    private let announce: @MainActor (GameActAdvance) -> Void
+    private var last: GameBlock.Missions?
+    private var armedUntil: Date?
+    private var fetching = false
+    private var subscriptions = Set<AnyCancellable>()
+    /// La dernière relecture lancée par un événement ; la suivante prend sa place, jamais un fil sans référence.
+    private var pendingRead: Task<Void, Never>?
+    private var fading: Task<Void, Never>?
+
+    init(source: PlayerBannerSourcing = EngagementPlayerBannerSource(),
+         isHidden: @escaping @MainActor () -> Bool = { GameDevicePrefsStore.current().prefs.hidden },
+         now: @escaping () -> Date = Date.init,
+         announce: @escaping @MainActor (GameActAdvance) -> Void = ConversationActAdvancePill.announce) {
+        self.source = source
+        self.isHidden = isHidden
+        self.now = now
+        self.announce = announce
+    }
+
+    var isArmed: Bool {
+        guard let armedUntil else { return false }
+        return now() < armedUntil
+    }
+
+    /// Un message est parti : le guet s'arme, et le bloc en cache sert d'« avant », comme le web le relit à chaque
+    /// envoi ; un cache vide garde la dernière lecture reçue.
+    func arm() async {
+        guard !isHidden() else { return }
+        armedUntil = now().addingTimeInterval(Self.armedSeconds)
+        subscribeOnce()
+        if let cached = await source.cached() { last = cached.missions }
+    }
+
+    /// Une nouvelle lecture du bloc : elle devient l'« avant » de la suivante, et parle si le guet est armé.
+    func receive(_ game: GameBlock?) {
+        guard let missions = game?.missions else { return }
+        let before = last
+        last = missions
+        guard isArmed, let advance = GameActAdvance.between(before, missions, hidden: isHidden()) else { return }
+        show(advance)
+    }
+
+    /// `game:missions-updated` : l'événement ne porte pas l'état, il se relit — le guet armé seulement, une fois.
+    func missionsUpdated() async {
+        guard isArmed, !fetching else { return }
+        fetching = true
+        defer { fetching = false }
+        receive(await source.fetch())
+    }
+
+    /// `game:updated` porte le bloc ; un bloc illisible se relit comme `game:missions-updated`.
+    func stateUpdated(_ event: GameUpdatedEvent) async {
+        guard let game = event.game else { return await missionsUpdated() }
+        receive(game)
+    }
+
+    /// Quelqu'un vient d'écrire le cache (Progression, le bandeau) : relu sans requête, le guet armé seulement.
+    func cacheWritten() async {
+        guard isArmed else { return }
+        receive(await source.cached())
+    }
+
+    private func show(_ advance: GameActAdvance) {
+        shown = advance
+        announce(advance)
+        fading?.cancel()
+        fading = Task { [weak self] in
+            guard await cancellableSleep(for: .seconds(Self.shownSeconds)) else { return }
+            self?.shown = nil
+        }
+    }
+
+    /// Ce qu'un événement demande de relire.
+    private enum Reread: Sendable {
+        case missions
+        case state(GameUpdatedEvent)
+        case cache
+    }
+
+    private func schedule(_ reread: Reread) {
+        pendingRead = Task { [weak self] in
+            switch reread {
+            case .missions: await self?.missionsUpdated()
+            case .state(let event): await self?.stateUpdated(event)
+            case .cache: await self?.cacheWritten()
+            }
+        }
+    }
+
+    private func subscribeOnce() {
+        guard subscriptions.isEmpty else { return }
+        let center = NotificationCenter.default
+        center.publisher(for: .gameMissionsUpdated)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.schedule(.missions) }
+            .store(in: &subscriptions)
+        center.publisher(for: .gameStateUpdated)
+            .compactMap { $0.object as? GameUpdatedEvent }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.schedule(.state(event)) }
+            .store(in: &subscriptions)
+        center.publisher(for: .engagementSnapshotPersisted)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.schedule(.cache) }
+            .store(in: &subscriptions)
+    }
+}
+
+/// La pastille « Acte II · 3 sur 5 », posée sous l'en-tête de la conversation : capsule de verre neutre, jamais sur la
+/// zone de saisie ni à la couleur d'accent, insensible au toucher. VoiceOver l'annonce une fois sans voler le focus de
+/// la saisie. Elle ne se rend qu'à l'envoi et à l'avancée : la frappe ne la touche pas. Miroir d'`ActAdvancePill` (web).
+struct ConversationActAdvancePill: View {
+    let conversationId: String
+
+    @StateObject private var watch = ConversationActAdvanceWatch()
+
+    var body: some View {
+        // Une ancre d'un point : la capsule y pend par le haut sans jamais agrandir l'hôte, et l'abonnement au signal
+        // d'envoi vit même quand rien ne se montre.
+        Color.clear
+            .frame(width: 1, height: 1)
+            .overlay(alignment: .top) {
+                if let shown = watch.shown {
+                    Text(verbatim: Self.label(for: shown))
+                        .font(.footnote.weight(.semibold))
+                        .monospacedDigit()
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5))
+                        .fixedSize()
+                        .accessibilityIdentifier("conversation.act.advance")
+                        .meeshyTransition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+            }
+            .allowsHitTesting(false)
+            .meeshyAnimation(.easeOut(duration: 0.25), reduced: .easeOut(duration: 0.15), value: watch.shown)
+            .onReceive(HeaderFlameReplay.sent.receive(on: DispatchQueue.main)) { sentIn in
+                guard sentIn == conversationId else { return }
+                Task { await watch.arm() }
+            }
+    }
+
+    static func label(for advance: GameActAdvance) -> String {
+        String(
+            format: String(localized: "game.act.advance", defaultValue: "%1$@ · %2$lld sur %3$lld", bundle: .main),
+            GameCopy.difficultyName(advance.difficulty), advance.progress, advance.target
+        )
+    }
+
+    static func announce(_ advance: GameActAdvance) {
+        UIAccessibility.post(notification: .announcement, argument: label(for: advance))
+    }
+}
+
+/// Pose la pastille de l'acte qui avance sous la bande repliée de l'en-tête, jamais sur la zone de saisie (#19716).
+/// `conversationId` nul (invité anonyme, aperçu sans conversation) : rien n'est posé.
+struct ConversationActAdvanceAnchor: ViewModifier {
+    let conversationId: String?
+    let below: CGFloat
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .top) {
+            if let conversationId {
+                ConversationActAdvancePill(conversationId: conversationId)
+                    .padding(.top, below + MeeshySpacing.sm)
+            }
+        }
+    }
+}
