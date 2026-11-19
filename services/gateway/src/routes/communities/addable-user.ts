@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import { isBlockedBetween } from '../../utils/blocking';
 import { USABLE_ACCOUNT_WHERE } from '../../services/relations/usableAccount';
+import { declaredAgeClass } from '@meeshy/shared/utils/age';
 
 /**
  * QUI PEUT ÊTRE AJOUTÉ À UNE COMMUNAUTÉ (#6376) — le site unique des deux
@@ -58,8 +59,21 @@ import { USABLE_ACCOUNT_WHERE } from '../../services/relations/usableAccount';
 export async function isAddableUser(prisma: Pick<PrismaClient, 'user'>, actorId: string, targetId: string): Promise<boolean> {
   const target = await prisma.user.findFirst({
     where: { id: targetId, ...USABLE_ACCOUNT_WHERE },
-    select: { id: true },
+    select: { id: true, birthDate: true },
   });
   if (target === null) return false;
+  // PROVISOIRE, fail-CLOSED, le temps que #19811 revienne. Cette porte entre en
+  // service avec #19799 ; admettre est IRRÉVERSIBLE (la ligne `CommunityMember`
+  // est écrite, le niveau `COMMUNITY` est acquis, la notification est poussée),
+  // refuser ne l'est pas. Refuser un mineur DÉCLARÉ ne tranche donc rien : ça
+  // préserve, pour la seule population que le dépôt protège par une loi dédiée,
+  // l'état d'avant le lot — où personne n'était ajoutable. L'inconnu n'est pas
+  // refusé (`declaredAgeClass` rend `unknown`, jamais `adult`), conformément à
+  // « ne rien déclarer ne restreint rien ».
+  //
+  // Ce n'est PAS la loi finale : le bouclier réel est par FEATURE et par NIVEAU
+  // (`RELATION_MINOR_TARGET_MIN_LEVEL`), et cette porte n'a ni l'un ni l'autre.
+  // #19811 décide, et retire ou remplace ces deux lignes.
+  if (declaredAgeClass(target.birthDate ?? null, new Date()) === 'minor') return false;
   return !(await isBlockedBetween(prisma, actorId, targetId));
 }

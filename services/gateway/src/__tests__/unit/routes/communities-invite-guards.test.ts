@@ -49,6 +49,8 @@ const SELF_DELETED = '507f1f77bcf86cd799439107';
 // rang AUTRE que le premier (audit adversarial du cycle 181, constat C2).
 const DEACTIVATED_STILL_ACTIVE = '507f1f77bcf86cd799439108';
 const DELETED_STILL_ACTIVE = '507f1f77bcf86cd799439109';
+const MINEUR_DECLARE = '507f1f77bcf86cd79943910a';
+const AGE_INCONNU = '507f1f77bcf86cd79943910b';
 const COMMUNITY = '507f1f77bcf86cd7994391a1';
 
 type Row = Record<string, unknown>;
@@ -72,6 +74,11 @@ const USERS: Row[] = [
   { id: SELF_DELETED, isActive: false, deletedAt: new Date('2026-10-02'), blockedUserIds: [] },
   { id: DEACTIVATED_STILL_ACTIVE, isActive: true, deactivatedAt: new Date('2026-10-03'), blockedUserIds: [] },
   { id: DELETED_STILL_ACTIVE, isActive: true, deletedAt: new Date('2026-10-04'), blockedUserIds: [] },
+  { id: MINEUR_DECLARE, isActive: true, birthDate: new Date('2014-01-01'), blockedUserIds: [] },
+  // Date ABSENTE : `declaredAgeClass` rend `unknown`, jamais `adult` — et ne rien
+  // déclarer ne restreint rien. C'est le témoin qui empêche de lire le refus du
+  // mineur comme « tout compte sans date majeure est refusé ».
+  { id: AGE_INCONNU, isActive: true, blockedUserIds: [] },
 ];
 
 function makePrisma() {
@@ -167,6 +174,20 @@ describe('POST /communities/:id/invite — qui peut être ajouté', () => {
     await app.close();
   });
 
+  it('un mineur DÉCLARÉ n’est pas ajouté : 404, sans écriture — fail-closed provisoire (#19811)', async () => {
+    const { app, writes } = await build(ADMIN);
+    expect((await invite(app, MINEUR_DECLARE)).statusCode).toBe(404);
+    expect(writes).toHaveLength(0);
+    await app.close();
+  });
+
+  it('un âge INCONNU est ajouté : ne rien déclarer ne restreint rien', async () => {
+    const { app, writes } = await build(ADMIN);
+    expect((await invite(app, AGE_INCONNU)).statusCode).toBe(200);
+    expect(writes).toHaveLength(1);
+    await app.close();
+  });
+
   it('une personne qui a bloqué l’inviteur n’est pas ajoutée : 404 comme un inconnu, sans écriture', async () => {
     const { app, writes } = await build(ADMIN);
     const res = await invite(app, BLOCKS_ADMIN);
@@ -207,6 +228,7 @@ describe('POST /communities/:id/members — la route jumelle de l’administrate
     ['un compte supprimé par son titulaire', SELF_DELETED],
     ['un compte désactivé dont `isActive` est resté à `true`', DEACTIVATED_STILL_ACTIVE],
     ['un compte supprimé dont `isActive` est resté à `true`', DELETED_STILL_ACTIVE],
+    ['un mineur déclaré (fail-closed provisoire, #19811)', MINEUR_DECLARE],
     ['une personne qui a bloqué l’administrateur', BLOCKS_ADMIN],
     ['une personne que l’administrateur a bloquée', BLOCKED_BY_ADMIN],
   ])('%s n’est pas ajouté : 404, sans écriture', async (_label, target) => {

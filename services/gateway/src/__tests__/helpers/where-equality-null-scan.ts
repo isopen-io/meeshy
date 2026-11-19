@@ -127,8 +127,21 @@ const blankKeepingLines = (texte: string): string => texte.replace(/[^\n]/g, ' '
  *    actionnable des quatre — à `:8` il n'y a rien, et la conclusion naturelle du
  *    lecteur est que le cliquet s'est trompé de SITE ;
  *  · le CONTENU d'un littéral de chaîne n'est pas du code. Un libellé, un message
- *    de journal ou une fixture qui CITE `champ: { isSet: false }` bénissait un
- *    filtre nu posé à côté — même raison que les commentaires.
+ *    de journal ou une fixture qui CITE `champ: { isSet: false }` est dépouillé
+ *    comme un commentaire, pour la même raison.
+ *
+ *    **Ce dépouillement est une CEINTURE, pas la garde** — mesuré : c'est
+ *    l'ancrage `^…$` d'`isAbsencePredicate` sur la BRANCHE qui refuse déjà une
+ *    citation, une branche `{ label: "…" }` n'étant pas un prédicat d'absence
+ *    canonique. Lui attribuer cette fermeture serait une affirmation fausse de
+ *    plus dans un doc-comment. Ce qu'il porte vraiment : il met le filtre hors
+ *    d'atteinte de toute recherche TEXTUELLE future posée sur la même source.
+ *
+ *    Et il est SÛR pour une raison précise, qui tient à son motif et non au
+ *    hasard : les deux premières alternatives exigent la quote fermante **sur la
+ *    même ligne** (`[^'\\\n]`), si bien qu'une quote orpheline — le `/['"]/` d'un
+ *    littéral de regex — n'ouvre pas de chaîne et ne désynchronise rien. Mesuré
+ *    sur les 1722 fichiers de production : 0 site gagné, 0 site perdu.
  *
  * Le bloc est donc remplacé par ses PROPRES retours à la ligne, et le contenu
  * d'une chaîne par des espaces, ses `\n` gardés.

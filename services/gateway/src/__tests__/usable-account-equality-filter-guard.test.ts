@@ -1,7 +1,17 @@
 /**
- * Le jumeau de `participation-soft-state-equality-filter-guard` sur l'autre
- * table : celui-là garde les colonnes de départ d'une PARTICIPATION, celui-ci
- * garde l'état d'un COMPTE — `User.deactivatedAt`.
+ * Le jumeau de `soft-state-equality-filter-guard` sur l'autre table : celui-là
+ * garde `leftAt`, `bannedAt` et `expiresAt`, celui-ci garde l'état d'un COMPTE —
+ * `User.deactivatedAt`.
+ *
+ * **Les deux cliquets partagent l'instrument et PAS leur politique
+ * d'absolution**, et c'est délibéré : le voisin porte un mécanisme
+ * (`DISCIPLINE_D_ECRITURE`) qui absout une colonne dont tous les créateurs
+ * écrivent la valeur, parce que ses trois colonnes en comptent de tels cas.
+ * `deactivatedAt` n'en a aucun — aucun chemin de création de compte ne l'écrit —
+ * donc il n'y a ici **rien à absoudre** : quand ce cliquet tombe, la réparation
+ * est `USABLE_ACCOUNT_WHERE`, jamais une ligne d'inventaire ni une absolution.
+ * Dit ici pour que personne, voyant celui-ci rougir, n'aille chercher le
+ * mécanisme du voisin.
  *
  * ─── POURQUOI CETTE COLONNE, ET ELLE SEULE ───────────────────────────────────
  *
@@ -25,8 +35,8 @@
  * ─── CE QUE CE FICHIER NE REFAIT PAS ─────────────────────────────────────────
  *
  * Le balayage lui-même — pile des cadres, écriture contre filtre, `where`
- * imbriqué, commentaires dépouillés, conjonction impossible — est prouvé chez
- * son jumeau. Ici on prouve DEUX choses de plus, et elles ne se déduisent pas de
+ * imbriqué, commentaires dépouillés, conjonction impossible, résolution des
+ * fragments nommés — est prouvé chez son jumeau. Ici on prouve DEUX choses de plus, et elles ne se déduisent pas de
  * là-bas : que l'instrument voit une forme nue **sur CETTE colonne** (cycle 180,
  * constat H : une sonde satisfaite par une seule colonne est aveugle sur
  * l'autre), et que les DEUX moitiés de la loi — la lecture JS et la sélection —
