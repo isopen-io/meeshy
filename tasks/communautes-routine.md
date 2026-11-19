@@ -585,3 +585,23 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Auditeur adversarial : non bloquant ; deux états hérités relevés → #19872.
 - Suivis ouverts (milestone 284) : iOS #19869, Android #19870, intendants (liste, accepter, refuser, `community:join-requested`) #19871, clôture des demandes #19872.
 - Prochain lot recommandé : #19871 (web d'abord), sans quoi une demande envoyée n'a personne pour y répondre.
+
+## 2026-11-19 — réveil 11:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #19868 fusionnée (`6f3155bf4`).
+- Lot : #19871 — les intendants d'une communauté voient, acceptent et refusent les demandes d'entrée (web d'abord).
+- Web : l'écran Membres ouvre, pour l'intendant SEUL (`isCommunityStewardOf` : administrateur, modérateur, créateur, lus dans ce que le détail sert), la section « Demandes en attente · N » (« + » quand d'autres pages restent) : avatar, nom, pays (code ISO rendu par `Intl.DisplayNames`), date ; « Accepter » et « Refuser », vrais boutons de 44 nommés pour le lecteur d'écran ; refuser est confirmé (sept jours avant une nouvelle demande). La liste n'est même pas demandée à un autre lecteur (la passerelle lui répondrait 404).
+- Optimiste (`community-join-request-actions.ts`) : la ligne part au geste, accepter fait monter `memberCount` aussitôt et le membre servi entre dans l'effectif ; un échec rend exactement le cache d'avant ; un 404 (déjà tranchée ailleurs, compte fermé, blocage) laisse la ligne partie, remet le compteur et relit liste, effectif et fiche. Hors ligne, rien ne part.
+- Temps réel : `community:join-requested` relit la liste de CETTE communauté (`community-join-request-live.ts`, branché dans `bindCommunityLive`) ; `community:member-joined` la relit aussi (une demande acceptée par un autre intendant s'efface).
+- Passerelle inchangée. Cliquets partagés : `community:join-requested` quitte `SANS_LECTEUR` (orphan gate) et entre dans l'asymétrie « web seul » (parity gate, iOS #19877, Android #19878) ; `check-ts-catalog-dead-entries.mjs` perd les trois entrées `join-requests` (269 = référence). Budget `interface_catalogs_community_membership` 8 → 9 Ko (8,16 Ko mesurés).
+- Gardes web ajustées : `press-ratchet` (réponse d’appui sur les trois boutons), `avatar-presence-guard` (exemption : un demandeur n’a pas de présence servie), `community-live-binding.test.ts` (sept événements écoutés). Suite web complète : 34 719 verts, 1 rouge ÉTRANGER (`act-leak-guard.test.ts`, rouge aussi sans le lot).
+- Témoins : `community-join-requests.test.ts` (13), `community-join-requests.test.tsx` (6), `community-live.test.ts` (+1), `community-member-live.test.ts` (+1) — rouge prouvé sur les deux branchements temps réel (2 échecs sans eux).
+- Suivis ouverts (milestone 284) : iOS #19877, Android #19878, refus notifié au demandeur #19879.
+
+## 2026-11-19 — réveil 13:38 UTC
+
+- Début du run : #19880 (#19871, intendants web) seule PR de la routine ouverte, dernière poussée à 11:55, donc inactive : run consacré à la mener à la fusion.
+- Verdict trouvé sur `4390a6065` : seconde tentative du `workflow_dispatch` de `ci.yml`, tous les travaux verts (les rouges de la première tentative étaient d'infrastructure : miroir apt de Playwright, tranche passerelle annulée).
+- `dev` (`fbfaa617b`, 20 fichiers : position partagée, rang de liste, carte iOS ; aucun chemin du lot) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 216 tests verts ; web `tsc --noEmit` vert, suites du lot (6 fichiers, 41 tests) vertes, `check-ts-catalog-dead-entries` 269 = référence.
+- 15:29 : `ci.yml` (`workflow_dispatch`) VERT sur `2d4149e7c`. `dev` ayant reçu 21 commits (appels web, position partagée, relations ; aucun chemin du lot), `dev` `07609bfa9` refusionnée sans conflit ; rejoués : shared `__tests__/ci/` 216 verts, web `tsc --noEmit` vert, suites communautés + appels (182 fichiers, 2 632 tests) vertes, catalogue 269 = référence.
+- Prochain lot recommandé : iOS #19877 (les intendants tranchent les demandes), puis #19869 / #19879.
