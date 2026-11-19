@@ -7,9 +7,9 @@
  */
 
 import type { PostType } from './post.js';
-import type { BaseNotificationMetadata } from './notification-base-metadata.js';
 import type { NotificationAttachmentWire } from './notification-attachment-wire.js';
 import type { NotificationContentDetail } from './notification-content-detail.js';
+import type { BaseNotificationMetadata } from './notification-metadata-base.js';
 import type {
   ContactRecentlyActiveNotificationMetadata,
   RelationAcquaintanceNotificationMetadata,
@@ -423,11 +423,6 @@ export interface NotificationDelivery {
 // =====================================================
 // METADATA - Type-specific data (Discriminated Unions)
 // =====================================================
-
-/**
- * Metadata de base commune à toutes les notifications
- */
-export type { BaseNotificationMetadata } from './notification-base-metadata.js';
 
 /**
  * Metadata pour new_message
