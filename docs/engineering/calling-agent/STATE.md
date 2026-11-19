@@ -1759,3 +1759,42 @@ socket jusqu'au client.
 0. Si la PR de ce cycle n'est pas fusionnée, prouver sa CI par `workflow_dispatch` de `ci.yml`, puis la fusionner.
 1. #19804 (version ou compare-and-swap sur `PostMedia.translations`, vérifié contre un vrai Mongo), puis #19825 et #19806.
 2. **Recentrer sur les appels** : latence de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
+
+## Cycle 52 — 2026-11-19
+
+- **Base** : `origin/dev` @ `3bbd958d2`. #19857 (cycle 51, #19841) est fusionnée. Le travail recentre sur les appels eux-mêmes et sort de la dette des pistes de post.
+- **Branche** : `claude/determined-volta-vxgvmw`.
+- **Objectif** : #19876, la moitié web de #11932. Le web rapporte, dans `call:analytics`, les gels, la cause de limitation, le MOS et la route élue de chaque appel.
+- **Livré** :
+  - **MOS, une seule source TS** : `packages/shared/utils/call-mos.ts` (`estimateCallMos`), copie ligne à ligne de `CallMOS.swift`. Le témoin reprend les six cas de `CallMOSTests.swift`.
+  - **Lecture des stats** : `apps/web/src/lib/calls/call-analytics-stats.ts` lit chaque relevé de la boucle de qualité, sur le même `getStats` que `readStats` :
+    - inbound-rtp vidéo : gels, NACK, PLI ;
+    - inbound-rtp audio : tampon de gigue, échantillons masqués ;
+    - outbound-rtp vidéo : limitation ;
+    - paire élue, prise au transport puis à défaut à la paire nominée : seulement `candidateType`, et `relayProtocol` si `relay`. Ni adresse, ni ufrag, ni URL TURN.
+  - **Rapport** : `analyticsPayload` émet chaque champ seulement s'il est mesuré, jamais un 0 inventé.
+    - Rien n'appelle `getStats` au raccrochage : le rapport part du dernier relevé.
+    - Il garde le dernier relevé de chaque pair, combinés à la fin, pour qu'un pair parti ne soit pas perdu (QA R1).
+    - Le tampon de gigue ne compte que les flux qui portent le délai et un compte émis positif (QA R2).
+  - **Schéma** : `socketCallAnalyticsSchema` n'est pas modifié, et tous les champs restent optionnels.
+- **Tests** :
+  - Rouge, puis vert, à chaque étape. Le détail est dans les commits.
+  - `bun test src/lib/calls/` → `2439 pass / 0 fail`, et `tsc --noEmit` donne 0.
+  - `vitest run utils/call-mos` → `6 passed`.
+  - Relancé par moi : `call-analytics*` + `call-quality-loop`, `28 pass` après correction, et MOS `6 passed`.
+  - Suite web complète, chez le spécialiste : `34717 pass, 1 fail`. Le rouge, `act-leak-guard.test.ts`, est déjà rouge sans le lot.
+- **QA** : favorable avec réserves.
+  - R1 et R2 sont corrigées dans le lot.
+  - R3 n'est pas corrigée : `readStats`, pour le rtt, prend la paire nominée, et la lecture média prend la paire du transport. C'est mineur.
+  - Un témoin de stats hostiles (NaN, Infinity, chaînes, `null`) vérifie que le rapport passe toujours le schéma de la passerelle. Un payload invalide aurait perdu toute la télémétrie de l'appel.
+- **Limites** :
+  - **Écart avec iOS** : iOS émet certains compteurs à 0 quand une mesure manque, et n'émet pas `candidateType` ni `relayProtocol` (il n'émet que `relayed`). Écart consigné dans le commentaire de #11932.
+  - **Non vérifié ici** : les gardes navigateur `check-calls-*.mjs`, faute de Chromium joignable par ces scripts dans ce conteneur.
+  - **Non vérifié non plus** : un agrégat non nul sur staging après un appel web réel.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la prouver par `workflow_dispatch` de `ci.yml`, puis la fusionner.
+1. Sur staging, un appel web↔web ou web↔iOS, puis `GET /admin/analytics/calls` : `quality.reportingCalls` > 0. C'est le critère qui ferme #19876.
+2. Android, moitié restante de #11932 (même MOS, dont la source unique reste `CallMOS.swift` / `call-mos.ts`).
+3. #12236 (ancrage de la négociation de l'appelant sur la réponse, iOS et web), puis #16933 (export Prometheus du débordement de la voie rapide des sous-titres).

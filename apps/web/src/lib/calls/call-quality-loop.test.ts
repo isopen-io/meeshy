@@ -218,6 +218,17 @@ describe('la boucle de qualité d’un appel (#8047)', () => {
     expect(relayed?.profile).toBe('wifi');
   });
 
+  test('le relevé porte, par pair, les compteurs de gels, de limitation et la route élue, lus sur le MÊME getStats (#19876)', async () => {
+    const h = harness();
+    h.add('a');
+    h.add('b');
+    (h.networks.get('b') as { relay?: boolean }).relay = true;
+    const [tick] = await h.advance(2_000);
+    expect(tick?.media?.a?.candidateType).toBe('srflx');
+    expect(tick?.media?.b?.candidateType).toBe('relay');
+    expect(tick?.media?.a?.freezeCount).toBeNull();
+  });
+
   test('un navigateur qui refuse la préférence de dégradation reçoit quand même le plafond du profil, une seule fois (#8697)', async () => {
     const h = harness({ profile: () => 'cellular' });
     h.add('a', true);

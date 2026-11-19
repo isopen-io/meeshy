@@ -744,7 +744,7 @@ enum SharedLocationSharingHolder {
         if let current, current.userId == userId { return current.center }
         current?.center.abandon()
         let center = SharedLocationSharingCenter(
-            emitter: SharedLocationSocketEmitter.shared,
+            emitter: SharedLocationMotionTaggingEmitter(inner: SharedLocationSocketEmitter.shared, motion: SharedLocationMotionSource()),
             fixes: SharedLocationFixSource(),
             store: UserDefaultsSharedLocationRosterStore(userId: userId, deviceId: PushDeviceIdentity.current().deviceId),
             owner: userId,
