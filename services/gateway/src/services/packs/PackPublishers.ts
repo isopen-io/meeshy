@@ -606,7 +606,21 @@ export class PackPublishers {
     const { displayName, nameKey } = claim.kind === 'ok' ? claim : { displayName: NEUTRAL_PUBLISHER_NAME, nameKey: null };
     const now = this.now();
     try {
-      await this.prisma.partnerProfile.upsert({ where: { userId }, create: { userId, displayName, nameKey, createdAt: now, updatedAt: now }, update: {} });
+      // #19802 — `verifiedAt: null` se POSE : Prisma n'écrit pas un champ
+      // optionnel qu'on ne lui donne pas, et `LensPartners.pending()` — la file
+      // de vérification — lit `{ verifiedAt: null }`, une ÉGALITÉ qui sous
+      // MongoDB exige la clé PRÉSENTE (`utils/prisma-unset.ts`). Sans elle, un
+      // éditeur créé ici ne pouvait JAMAIS être vérifié une première fois : il
+      // n'entrait dans aucune file, et rien ne le disait. Les deux autres
+      // créateurs de `PartnerProfile` l'écrivent déjà — `LensPartners` par le
+      // spread de son `data`, l'éditeur officiel avec une date réelle.
+      // Cette ligne ne porte NI `website` NI les colonnes de logo, et c'est
+      // assumé : un éditeur adopté n'a rien déclaré. C'est l'INSTANTANÉ de
+      // vérification qui doit dire cette absence — `snapshotWhere`
+      // (`LensPartners.ts:144`) l'apparie désormais par `unsetOrNull`, sans
+      // quoi la ligne entrait dans la file de vérification sans que `verify()`
+      // puisse jamais l'écrire (409 `PARTNER_PROFILE_CHANGED` perpétuel).
+      await this.prisma.partnerProfile.upsert({ where: { userId }, create: { userId, displayName, nameKey, verifiedAt: null, createdAt: now, updatedAt: now }, update: {} });
     } catch (error) {
       if (isNameKeyViolation(error)) return 'name-taken';
       if (!isUniqueViolation(error)) throw error;
