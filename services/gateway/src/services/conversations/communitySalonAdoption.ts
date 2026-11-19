@@ -9,7 +9,7 @@ import { USABLE_ACCOUNT_WHERE } from '../relations/usableAccount';
 
 const logger = enhancedLogger.child({ module: 'CommunitySalonAdoption' });
 
-export type SalonAdoptionPrisma = Pick<PrismaClient, 'community' | 'conversation' | 'participant' | 'communityMember' | 'user'>;
+export type SalonAdoptionPrisma = Pick<PrismaClient, 'community' | 'conversation' | 'participant' | 'communityMember' | 'communityJoinRequest' | 'user'>;
 
 export type SalonAdoptionRequest = {
   readonly communityId: string;
