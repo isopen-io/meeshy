@@ -71,6 +71,16 @@ const ptCommunityMembership = {
   'community.posts.error.offline': "Sem conexão: as publicações aparecerão quando a rede voltar.",
   'community.posts.retry': "Tentar de novo",
   'community.posts.loadingMore': "Carregando mais",
+  'community.members.requests.section': "Pedidos pendentes",
+  'community.members.requests.asked': "Pedido em {date}",
+  'community.members.requests.accept': "Aceitar",
+  'community.members.requests.reject': "Recusar",
+  'community.members.requests.acceptLabel': "Aceitar o pedido de {name}",
+  'community.members.requests.rejectLabel': "Recusar o pedido de {name}",
+  'community.members.requests.reject.confirm.body': "{name} só poderá pedir de novo daqui a sete dias.",
+  'community.members.requests.gone': "Este pedido já foi tratado.",
+  'community.members.requests.accepted': "{name} agora faz parte da comunidade.",
+  'community.members.requests.more': "Ver mais pedidos",
 } as const satisfies CommunityMembershipCatalog;
 
 export default ptCommunityMembership;
