@@ -145,7 +145,14 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   '__tests__/unit/PostService.test.ts': 2649,
   '__tests__/unit/services/ZmqTranslationClient.test.ts': 2476,
   '__tests__/unit/services/AuthService.test.ts': 2472,
-  '__tests__/unit/routes/calls-routes.test.ts': 2154,
+  // 2154 → 2008 (#19808, 2026-11-19) : les 228 lignes de harnais du fichier
+  // ont rejoint `helpers/calls-routes-{mocks,harness}.ts` — aucun témoin
+  // déplacé, 93 verts avant comme après. Le fichier avait GROSSI à 2 175 par
+  // 7630c0fc8, ce que la règle 3 refuse (un fichier hors budget est interdit
+  // d'addition), et le rouge était sur `dev`, donc sur toute branche qui le
+  // contient. La dette se BAISSE au compte rendu, jamais ne se monte au réel :
+  // sinon la marge rendue reste disponible pour la prochaine addition (#7093).
+  '__tests__/unit/routes/calls-routes.test.ts': 2008,
   '__tests__/unit/routes/admin/admin-routes-group2.test.ts': 2153,
   '__tests__/unit/services/MessageTranslationService.test.ts': 2085,
   '__tests__/unit/services/MentionService.test.ts': 2063,

@@ -18,229 +18,62 @@
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
-// ─── Module-level mock variables (hoisted before jest.mock()) ─────────────────
+// ─── Doubles et harnais : PARTAGÉS, jamais redéclarés ────────────────────────
+//
+// #19808 — les 228 lignes de harnais qui vivaient ici ont rejoint
+// `__tests__/helpers/calls-routes-{mocks,harness}.ts`. Aucun témoin n'a bougé :
+// le fichier dépassait sa dette de taille (2 154 → 2 175, par 7630c0fc8) et la
+// règle 3 du budget rougissait sur `dev`, donc sur toute branche qui le
+// contient. Sortir le harnais est la réparation qui ne touche à aucun
+// comportement.
+//
+// Les fabriques de doubles sont requises PARESSEUSEMENT dans chaque `jest.mock` :
+// une fabrique hoistée ne peut pas lire une liaison importée, et les doubles
+// vivent dans un module SANS le SUT pour qu'aucun cycle ne les attrape à moitié
+// chargés (la raison est écrite dans `calls-routes-mocks.ts`).
 
-const mockInitiateCall = jest.fn<any>();
-const mockGetCallSession = jest.fn<any>();
-const mockGetCallTranscript = jest.fn<any>();
-const mockEndCall = jest.fn<any>();
-const mockJoinCall = jest.fn<any>();
-const mockLeaveCall = jest.fn<any>();
-const mockGetActiveCallForConversation = jest.fn<any>();
-const mockListHistory = jest.fn<any>();
-const mockFinalizeCallSummary = jest.fn<any>();
-const mockBroadcastCallEndedIfTerminal = jest.fn<any>();
-const mockInvalidateSignalCache = jest.fn<any>();
-const mockBroadcastParticipantLeft = jest.fn<any>();
+jest.mock('../../../services/CallService', () =>
+  require('../../helpers/calls-routes-mocks').callServiceModule());
 
-const mockSendSuccess = jest.fn<any>((reply: any, data: any, opts?: any) => {
-  const statusCode = opts?.statusCode ?? 200;
-  reply.statusCode = statusCode;
-  reply._body = { success: true, data };
-  return reply;
-});
+jest.mock('../../../middleware/auth', () =>
+  require('../../helpers/calls-routes-mocks').authMiddlewareModule());
 
-// ─── Module mocks ─────────────────────────────────────────────────────────────
+jest.mock('../../../middleware/validation', () =>
+  require('../../helpers/calls-routes-mocks').validationMiddlewareModule());
 
-jest.mock('../../../services/CallService', () => {
-  // Mirrors the real CallAlreadyEndedError (services/CallService.ts) — same
-  // message shape `parseCallHandlerError` splits on, plus the `endReason`
-  // the production class carries on top of it. Issue #3581: endCall() now
-  // throws this on a call already in a terminal state instead of returning
-  // silently — the route must treat it as an idempotent 200, not an error.
-  class CallAlreadyEndedError extends Error {
-    readonly endReason: string;
-    constructor(endReason: string) {
-      super('CALL_ENDED: This call has already ended');
-      this.name = 'CallAlreadyEndedError';
-      this.endReason = endReason;
-    }
-  }
-  return {
-    CallService: jest.fn<any>().mockImplementation(() => ({
-      initiateCall: (...args: any[]) => mockInitiateCall(...args),
-      getCallSession: (...args: any[]) => mockGetCallSession(...args),
-      getCallTranscript: (...args: any[]) => mockGetCallTranscript(...args),
-      endCall: (...args: any[]) => mockEndCall(...args),
-      joinCall: (...args: any[]) => mockJoinCall(...args),
-      leaveCall: (...args: any[]) => mockLeaveCall(...args),
-      getActiveCallForConversation: (...args: any[]) =>
-        mockGetActiveCallForConversation(...args),
-      listHistory: (...args: any[]) => mockListHistory(...args),
-      finalizeCallSummary: (...args: any[]) => mockFinalizeCallSummary(...args),
-      broadcastCallEndedIfTerminal: (...args: any[]) => mockBroadcastCallEndedIfTerminal(...args),
-      invalidateSignalCache: (...args: any[]) => mockInvalidateSignalCache(...args),
-      broadcastParticipantLeft: (...args: any[]) => mockBroadcastParticipantLeft(...args),
-    })),
-    CallAlreadyEndedError,
-  };
-});
+jest.mock('../../../middleware/rate-limit', () =>
+  require('../../helpers/calls-routes-mocks').rateLimitModule());
 
-jest.mock('../../../middleware/auth', () => ({
-  createUnifiedAuthMiddleware: jest.fn<any>().mockReturnValue(jest.fn<any>()),
-}));
+jest.mock('../../../utils/logger', () =>
+  require('../../helpers/calls-routes-mocks').loggerModule());
 
-jest.mock('../../../middleware/validation', () => ({
-  createValidationMiddleware: jest.fn<any>().mockReturnValue(jest.fn<any>()),
-}));
+jest.mock('../../../utils/response', () =>
+  require('../../helpers/calls-routes-mocks').responseModule(
+    jest.requireActual('../../../utils/response') as Record<string, unknown>));
 
-jest.mock('../../../middleware/rate-limit', () => ({
-  ROUTE_RATE_LIMITS: { initiateCall: {}, joinCall: {}, callOperations: {}, activeCallProbe: {} },
-}));
+jest.mock('@meeshy/shared/types/api-schemas', () =>
+  require('../../helpers/calls-routes-mocks').apiSchemasModule());
 
-jest.mock('../../../utils/logger', () => ({
-  logger: {
-    info: jest.fn<any>(),
-    warn: jest.fn<any>(),
-    error: jest.fn<any>(),
-    debug: jest.fn<any>(),
-  },
-}));
-
-jest.mock('../../../utils/response', () => {
-  const actual = jest.requireActual('../../../utils/response') as Record<string, any>;
-  return {
-    ...actual,
-    sendSuccess: (...args: any[]) => mockSendSuccess(...args),
-  };
-});
-
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  callSessionSchema: { type: 'object' },
-  callSessionMinimalSchema: { type: 'object' },
-  startCallRequestSchema: { type: 'object' },
-  errorResponseSchema: { type: 'object' },
-}));
-
-// ─── Import SUT after mocks ────────────────────────────────────────────────────
-
-import callRoutes from '../../../routes/calls';
 import { CallAlreadyEndedError } from '../../../services/CallService';
+import { callMocks, mockSendSuccess } from '../../helpers/calls-routes-mocks';
+import {
+  CALL_ID, USER_ID, CONV_ID, PART_ID, TARGET_PART_ID,
+  makeCallSession, makeMembership, makeActiveCall,
+  createMockFastify, createMockReply, makeRequest, getRoute, setup,
+  type RouteHandler, type RouteReg,
+} from '../../helpers/calls-routes-harness';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const CALL_ID = '507f1f77bcf86cd799439011';
-const USER_ID = '507f1f77bcf86cd799439022';
-const CONV_ID = '507f1f77bcf86cd799439033';
-const PART_ID = '507f1f77bcf86cd799439044';
-const TARGET_PART_ID = '507f1f77bcf86cd799439055';
-
-// ─── Factories ────────────────────────────────────────────────────────────────
-
-type RouteHandler = (req: any, reply: any) => Promise<any>;
-type RouteReg = { method: string; path: string; handler: RouteHandler };
-
-function makeCallSession(overrides: Record<string, any> = {}) {
-  return {
-    id: CALL_ID,
-    conversationId: CONV_ID,
-    initiatorId: USER_ID,
-    status: 'active',
-    type: 'video',
-    startedAt: new Date('2026-06-21T00:00:00.000Z'),
-    participants: [],
-    ...overrides,
-  };
-}
-
-function makeMembership(overrides: Record<string, any> = {}) {
-  return {
-    id: PART_ID,
-    userId: USER_ID,
-    conversationId: CONV_ID,
-    role: 'member',
-    isActive: true,
-    ...overrides,
-  };
-}
-
-function makeActiveCall(overrides: Record<string, any> = {}) {
-  return {
-    id: CALL_ID,
-    conversationId: CONV_ID,
-    status: 'active',
-    participants: [],
-    startedAt: new Date('2026-06-21T00:00:00.000Z'),
-    ...overrides,
-  };
-}
-
-function createMockFastify(prismaOverrides?: Record<string, any>) {
-  const routes: RouteReg[] = [];
-  const defaultPrisma = {
-    participant: {
-      findFirst: jest.fn<any>().mockResolvedValue(null),
-    },
-    callSession: {
-      findFirst: jest.fn<any>().mockResolvedValue(null),
-    },
-    conversation: {
-      findUnique: jest.fn<any>().mockResolvedValue({ activeCallId: null }),
-    },
-  };
-  const prisma = prismaOverrides
-    ? { ...defaultPrisma, ...prismaOverrides }
-    : defaultPrisma;
-
-  const fastify: any = {
-    prisma,
-    post: jest.fn<any>((path: string, _opts: any, handler: RouteHandler) => {
-      routes.push({ method: 'POST', path, handler });
-    }),
-    get: jest.fn<any>((path: string, _opts: any, handler: RouteHandler) => {
-      routes.push({ method: 'GET', path, handler });
-    }),
-    delete: jest.fn<any>((path: string, _opts: any, handler: RouteHandler) => {
-      routes.push({ method: 'DELETE', path, handler });
-    }),
-  };
-
-  return { fastify, routes, prisma };
-}
-
-function createMockReply(): any {
-  const reply: any = {
-    _body: undefined,
-    statusCode: 200,
-    status: jest.fn<any>(),
-    send: jest.fn<any>((body: any) => {
-      reply._body = body;
-      return reply;
-    }),
-  };
-  reply.status.mockReturnValue(reply);
-  return reply;
-}
-
-function makeRequest(overrides: Record<string, any> = {}) {
-  return {
-    params: {},
-    body: {},
-    query: {},
-    authContext: {
-      userId: USER_ID,
-      participantId: PART_ID,
-      type: 'user',
-      hasFullAccess: true,
-      registeredUser: { id: USER_ID, role: 'USER' },
-    },
-    ...overrides,
-  };
-}
-
-function getRoute(routes: RouteReg[], method: string, pathFragment: string): RouteHandler {
-  const r = routes.find(
-    (r) => r.method === method && r.path.includes(pathFragment)
-  );
-  if (!r) throw new Error(`Route ${method} *${pathFragment}* not found`);
-  return r.handler;
-}
-
-function setup(prismaOverrides?: Record<string, any>) {
-  const { fastify, routes, prisma } = createMockFastify(prismaOverrides);
-  callRoutes(fastify);
-  return { routes, prisma, reply: createMockReply() };
-}
+// Les anciens noms de module, pour que les 93 témoins restent écrits tels quels.
+const {
+  initiateCall: mockInitiateCall, getCallSession: mockGetCallSession,
+  getCallTranscript: mockGetCallTranscript, endCall: mockEndCall,
+  joinCall: mockJoinCall, leaveCall: mockLeaveCall,
+  getActiveCallForConversation: mockGetActiveCallForConversation,
+  listHistory: mockListHistory, finalizeCallSummary: mockFinalizeCallSummary,
+  broadcastCallEndedIfTerminal: mockBroadcastCallEndedIfTerminal,
+  invalidateSignalCache: mockInvalidateSignalCache,
+  broadcastParticipantLeft: mockBroadcastParticipantLeft,
+} = callMocks;
 
 // ─── Tests ─────────────────────────────────────────────────────────────────────
 
