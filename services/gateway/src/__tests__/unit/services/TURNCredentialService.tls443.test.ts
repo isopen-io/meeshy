@@ -77,11 +77,12 @@ describe('TURN sur TLS 443 — la liste des serveurs ICE (#11278)', () => {
     expect(urls.filter((url) => url === 'turns:turn.example.com:443?transport=tcp')).toHaveLength(1);
   });
 
-  it('ne change RIEN quand TURN_TLS_SERVERS est absent : la production d’aujourd’hui sert la même liste', () => {
+  it('n’ajoute aucune entrée 443 quand TURN_TLS_SERVERS est absent', () => {
     const urls = urlsOf(serviceWith({ TURN_SERVERS: 'turn.example.com:3478' }).generateCredentials('u1'));
 
     expect(urls.filter((url) => url.startsWith('turn')).sort()).toEqual([
       'turn:turn.example.com:3478',
+      'turn:turn.example.com:3478?transport=tcp',
       'turns:turn.example.com:5349?transport=tcp',
     ]);
   });

@@ -60,7 +60,7 @@ struct NearbyMapScreen: View {
         }
         .sheet(isPresented: $sharesMine) {
             ShareMyLocationSheet(recipients: model.pins.map {
-                ShareMyLocationRecipient(userId: $0.id, name: $0.name, circle: $0.circle)
+                ShareMyLocationRecipient(userId: $0.id, name: $0.name, circle: $0.circle, avatarURL: $0.avatarURL)
             })
         }
     }
@@ -131,7 +131,7 @@ struct NearbyMapScreen: View {
             MeeshyGlassButtonFace(systemImage: "line.3.horizontal.decrease", kind: filter == .all && sort == .nearest ? .normal : .active)
         }
         .accessibilityLabel(LocationMapCopy.sortLabel)
-        .accessibilityValue("\(LocationMapCopy.sort(sort)), \(filter.level.map { CircleLevelNames.title(of: $0) } ?? LocationMapCopy.all)")
+        .accessibilityValue(LocationMapCopy.sortValue(sort, circles: filter.level.map { CircleLevelNames.title(of: $0) } ?? LocationMapCopy.all))
     }
 
     private var filters: some View {
@@ -224,7 +224,8 @@ struct NearbyMapScreen: View {
                         showsDivider: person.id != ended.last?.id || !ghosts.isEmpty,
                         avatar: {
                             MeeshyAvatar(name: person.name, context: .custom(44),
-                                         accentColor: DynamicColorGenerator.colorForName(person.name), avatarURL: person.avatarURL)
+                                         accentColor: DynamicColorGenerator.colorForName(person.name), avatarURL: person.avatarURL,
+                                         presenceState: PresenceManager.shared.knownPresenceState(for: person.id))
                         },
                         trailing: { reaskButton(person) }
                     )
@@ -302,7 +303,7 @@ struct NearbyMapScreen: View {
 
     private func open(_ userId: String) {
         guard let pin = model.pin(for: userId) else { return }
-        opened = ShareMyLocationRecipient(userId: pin.id, name: pin.name, circle: pin.circle)
+        opened = ShareMyLocationRecipient(userId: pin.id, name: pin.name, circle: pin.circle, avatarURL: pin.avatarURL)
     }
 
     private func appear() async {

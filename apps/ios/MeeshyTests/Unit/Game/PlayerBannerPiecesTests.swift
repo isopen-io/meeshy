@@ -82,14 +82,15 @@ final class PlayerBannerPiecesTests: XCTestCase {
         }
     }
 
-    func test_theMiddle_holdsTheFlameTheMeeshesAndTheMission_betweenTheSparksAndTheGlory() throws {
+    func test_theMiddle_holdsTheFlameTheMeeshesAndTheMission_afterTheGloryAndTheSparks() throws {
         let screen = mounted(width: 390)
         let sparks = try XCTUnwrap(screen.frame(of: "game.player_banner.sparks", borne: 5))
         let rank = try XCTUnwrap(screen.frame(of: "game.player_banner.rank", borne: 5))
+        XCTAssertLessThanOrEqual(rank.maxX, sparks.minX + 0.5, "la Gloire avant les étincelles (#19705)")
         for piece in full.pieces where PlayerBannerView.middlePieces.contains(piece) {
             let frame = try XCTUnwrap(screen.frame(of: "game.player_banner.\(piece.rawValue)", borne: 5), "\(piece)")
             XCTAssertGreaterThanOrEqual(frame.minX, sparks.maxX - 0.5, "\(piece) après les étincelles")
-            XCTAssertLessThanOrEqual(frame.maxX, rank.minX + 0.5, "\(piece) avant la Gloire")
+            XCTAssertLessThanOrEqual(frame.maxX, 390 - 12 + 0.5, "\(piece) dans la rangée")
         }
         let flame = try XCTUnwrap(screen.frame(of: "game.player_banner.flame", borne: 5))
         let mission = try XCTUnwrap(screen.frame(of: "game.player_banner.mission", borne: 5))
@@ -112,11 +113,11 @@ final class PlayerBannerPiecesTests: XCTestCase {
         XCTAssertTrue(PlayerBannerCopy.accessibilityLabel(for: full).contains(GameCopy.treasuryName(.coffre)))
     }
 
-    func test_theGloryGauge_closesTheRow_onTheRight() throws {
+    func test_theGloryGauge_opensTheRow_onTheLeft() throws {
         let screen = mounted(width: 390)
         let rank = try XCTUnwrap(screen.frame(of: "game.player_banner.rank", borne: 5))
         XCTAssertGreaterThanOrEqual(rank.width, 80, "le rang porte son nom et sa jauge, pas un blason seul")
-        XCTAssertEqual(rank.maxX, 390 - 12, accuracy: 2, "la Gloire ferme la rangée à droite")
+        XCTAssertEqual(rank.minX, 12, accuracy: 2, "la Gloire ouvre la rangée à gauche (#19705)")
     }
 
     func test_theGloryTexts_sayTheRank_andWhatRemainsTowardTheNext() {

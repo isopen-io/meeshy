@@ -162,6 +162,13 @@ final class MessageAuthorRingTests: XCTestCase {
         "SharedLocation/Map/LocationMapPinsLayer.swift": (1, "épingles de la carte — la position servie ne porte pas le contour (#10957)"),
         "SharedLocation/Map/BloodLocationSheet.swift": (1, "qui a regardé ma position — l'observateur servi ne porte pas le contour (#10957)"),
         "SharedLocation/Map/ShareMyLocationSheet.swift": (1, "destinataires du partage de position — le destinataire choisi ne porte pas le contour (#10957)"),
+        "Battery/BatteryPullRequestsCard.swift": (1, "demande de batterie — le demandeur servi (`BatteryPullRequester`) ne porte pas le contour (#10957)"),
+        "Links/Views/AffiliateView+Referral.swift": (1, "filleuls — `ReferredUser` servi ne porte pas le contour (#10957)"),
+        "Profile/Contactless/ContactlessExchangeSection.swift": (1, "échange sans contact — l'annonce de proximité et `ContactExchangePerson` servi ne portent pas le contour (#10957)"),
+        "Profile/Views/ProfileEditImageControls.swift": (1, "soi, édition du profil — le contour se pose AUTOUR de l'avatar (`.avatarRing`), comme sur la fiche de profil"),
+        "MeeshyUI/JoinFlow/JoinFlowScreen.swift": (1, "lien expiré — le créateur servi (`JoinFlowGoneLink.Creator`) ne porte pas le contour (#10957)"),
+        "MeeshyUI/Profile/LinksFaceStack.swift": (1, "visages d'un lien — `LinksFaceMember` servi ne porte pas le contour (#10957)"),
+        "MeeshyUI/Profile/ProfileInCommonParts.swift": (2, "amis en commun — `InCommonFriend` servi ne porte pas le contour (#10957)"),
     ]
 
     func test_everyPersonAvatar_passesTheServedRing_orIsCountedWithItsReason() throws {

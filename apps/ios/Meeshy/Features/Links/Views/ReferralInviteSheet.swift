@@ -5,7 +5,7 @@ import MeeshyUI
 /// « Par e-mail » / « Inviter quelqu'un » (planche `Parrainage`, #19507) : une adresse, un bouton. L'invitation
 /// porte le lien de parrainage ; la passerelle la masque dans « Invitations envoyées », l'appareil ne la garde pas.
 struct ReferralInviteSheet: View {
-    let onSend: (String) async -> Bool
+    let onSend: @MainActor (String) async -> Bool
 
     @Environment(\.dismiss) private var dismiss
     @State private var email = ""

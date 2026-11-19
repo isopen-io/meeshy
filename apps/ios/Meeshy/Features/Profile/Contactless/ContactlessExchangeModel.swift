@@ -7,7 +7,7 @@ import MeeshySDK
 /// et mon pseudo, et le jeton n'encode que ce que j'ai choisi.
 @MainActor
 final class ContactlessExchangeModel: ObservableObject {
-    typealias AskFriend = @Sendable (_ userId: String) async throws -> Void
+    typealias AskFriend = @concurrent @Sendable (_ userId: String) async throws -> Void
 
     @Published private(set) var state = ContactlessExchangeState()
 

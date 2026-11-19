@@ -1,9 +1,13 @@
-import { lazy, Suspense, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
+import { appQueryClient } from '@/lib/api/query-client';
 import { callActions } from '@/lib/calls/call-actions';
 import { callJournalMemory } from '@/lib/calls/call-journal-memory';
-import { callIdentityOf, callParticipantsLine, type CallNoticeTarget } from '@/lib/calls/call-notice';
+import { callIdentityOf, callNoticeGesture, callParticipantsLine, type CallNoticeGesture, type CallNoticeTarget } from '@/lib/calls/call-notice';
 import { callsAvailable } from '@/lib/calls/calls-availability';
+import { conversationActiveCallQuery } from '@/lib/calls/conversation-active-call-query';
+import { repairEndedCall } from '@/lib/calls/ended-call-repair';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { SystemRow } from '@/lib/view/message-badges';
@@ -45,15 +49,40 @@ export function CallNotice({
   readonly language: InterfaceLanguage;
 }) {
   const target = callTarget !== null && callsAvailable() ? callTarget : null;
+  const gesture = useCallNoticeGesture(target);
   const participants = callTarget === null ? null : callParticipantsLine({ participants: callTarget.participants, viewerId: callTarget.viewerId, language });
-  const label = systemRowLabel(row, language);
+  const shown = target?.live === true && gesture === 'call-back' ? { ...row, text: translate(language, 'call.ended.remote') } : row;
+  const label = systemRowLabel(shown, language);
   return (
     <div data-system="call" className="flex flex-col items-center gap-[3px]" aria-label={participants === null ? label : `${label}, ${participants}`}>
       <SystemNoticeTime timeString={timeString} />
-      <CallCard row={row} target={target} participants={participants} language={language} />
-      {target !== null ? <CallNoticeAction target={target} languages={languages} language={language} /> : null}
+      <CallCard row={shown} target={target} participants={participants} language={language} />
+      {target !== null ? <CallNoticeAction target={target} gesture={gesture} languages={languages} language={language} /> : null}
     </div>
   );
+}
+
+/** Les appels qu'une carte a déjà réparés (#19778) : une carte restée `call-live` en base ne relit son fil qu'une fois par session, même remontée par le défilement. */
+const repairedCalls = new Set<string>();
+
+/**
+ * Le geste de la carte (#19778, `callNoticeGesture`) : une carte « en cours » reconfirme le sondage du fil à
+ * chaque montage (`staleTime: 0`, requête partagée avec la pastille de l'en-tête) ; quand la passerelle ne voit
+ * plus cet appel, la carte répare ce que le client en tenait pour vivant (`repairEndedCall`).
+ */
+function useCallNoticeGesture(target: CallNoticeTarget | null): CallNoticeGesture | null {
+  const live = target?.live === true;
+  const probe = useQuery({ ...conversationActiveCallQuery(target?.conversationId ?? ''), enabled: live, staleTime: 0 }, appQueryClient);
+  const gesture = target === null ? null : callNoticeGesture(target, { served: probe.data, confirming: probe.isFetching });
+  const conversationId = target?.conversationId ?? null;
+  const callId = target?.callId ?? null;
+  const ended = live && gesture === 'call-back';
+  useEffect(() => {
+    if (!ended || conversationId === null || callId === null || repairedCalls.has(callId)) return;
+    repairedCalls.add(callId);
+    repairEndedCall(appQueryClient, { conversationId, callId });
+  }, [ended, conversationId, callId]);
+  return gesture;
 }
 
 function CallCard({ row, target, participants, language }: { readonly row: CallRow; readonly target: CallNoticeTarget | null; readonly participants: string | null; readonly language: InterfaceLanguage }) {
@@ -112,17 +141,19 @@ function CallCard({ row, target, participants, language }: { readonly row: CallR
  * qui défile ne sonne chez personne ; au web, un bouton NOMMÉ sous la carte porte le même geste sans rien de
  * caché. L'enregistrement consenti se réécoute dessous.
  */
-function CallNoticeAction({ target, languages, language }: { readonly target: CallNoticeTarget; readonly languages: readonly string[]; readonly language: InterfaceLanguage }) {
+function CallNoticeAction({ target, gesture, languages, language }: { readonly target: CallNoticeTarget; readonly gesture: CallNoticeGesture | null; readonly languages: readonly string[]; readonly language: InterfaceLanguage }) {
   const onClick = () => {
     const request = { conversationId: target.conversationId, media: target.media, ...callIdentityOf(target.conversationId) };
-    if (target.live) callActions.join({ ...request, callId: target.callId });
+    if (gesture === 'join') callActions.join({ ...request, callId: target.callId });
     else callActions.start(request);
   };
   return (
     <>
-      <button type="button" data-call-notice-action={target.live ? 'join' : 'call-back'} onClick={onClick} className="min-h-11 rounded-chip px-3 text-[12.5px] font-semibold" style={{ color: 'var(--accent)' }}>
-        {translate(language, target.live ? 'call.bubble.join' : 'call.bubble.callBack')}
-      </button>
+      {gesture === null ? null : (
+        <button type="button" data-call-notice-action={gesture} onClick={onClick} className="min-h-11 rounded-chip px-3 text-[12.5px] font-semibold" style={{ color: 'var(--accent)' }}>
+          {translate(language, gesture === 'join' ? 'call.bubble.join' : 'call.bubble.callBack')}
+        </button>
+      )}
       {target.recording !== null ? (
         <div data-call-recording={target.recording.attachment.id} className="flex w-full max-w-[320px] justify-center">
           <Attachments attachments={[target.recording.attachment]} languages={languages} fallbackLanguage={target.recording.language} mediaFrame="box" />

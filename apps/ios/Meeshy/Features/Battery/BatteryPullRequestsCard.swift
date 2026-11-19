@@ -7,7 +7,7 @@ import MeeshyUI
 /// échue disparaît d'elle-même. Sans demande nommée, rien ne s'affiche.
 struct BatteryPullRequestsCard: View {
     @ObservedObject var inbox: BatteryPullInbox
-    let send: (String) async -> Bool
+    let send: @MainActor (String) async -> Bool
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -35,8 +35,9 @@ struct BatteryPullRequestsCard: View {
             showsDivider: false,
             label: [BatteryPullWording.title(name: name), detail].joined(separator: ", ")
         ) {
-            MeeshyAvatar(name: name, context: .custom(36), avatarURL: request.requester.avatar, enablePulse: false,
-                         isDark: isDark)
+            MeeshyAvatar(name: name, context: .custom(36), avatarURL: request.requester.avatar,
+                         presenceState: PresenceManager.shared.knownPresenceState(for: request.requester.id),
+                         enablePulse: false, isDark: isDark)
         } trailing: {
             MeeshyButton(BatteryPullWording.send, kind: .primary, size: .s36, action: { dispatch(request.id) })
                 .accessibilityHint(BatteryPullWording.sendHint(name: name))

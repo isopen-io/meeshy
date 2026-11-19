@@ -40,12 +40,12 @@ struct BatterySharingSettingsSection: View {
     let isPhone: Bool
     @StateObject private var viewModel = BatterySharingSettingsViewModel()
     @ObservedObject private var pullInbox: BatteryPullInbox
-    private let send: (String) async -> Bool
+    private let send: @MainActor (String) async -> Bool
 
     init(accentColor: String,
          isPhone: Bool = BatteryCenter.shared.reporter.isAvailable,
          pullInbox: BatteryPullInbox = BatteryCenter.shared.pullInbox,
-         send: @escaping (String) async -> Bool = { id in await BatteryCenter.shared.send(id) }) {
+         send: @escaping @MainActor (String) async -> Bool = { id in await BatteryCenter.shared.send(id) }) {
         self.accentColor = accentColor
         self.isPhone = isPhone
         self._pullInbox = ObservedObject(wrappedValue: pullInbox)

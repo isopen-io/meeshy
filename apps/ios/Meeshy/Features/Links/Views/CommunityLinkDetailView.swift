@@ -98,7 +98,7 @@ struct CommunityLinkDetailView: View {
                     MeeshyAvatar(name: link.name, context: .custom(26), kind: .entity,
                                  avatarURL: viewModel.details?.avatar, isDark: isDark)
                 } trailing: {
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .accessibilityHidden(true)
@@ -227,7 +227,7 @@ extension CommunityLinkDetailViewModel {
                 await FriendsCacheAudienceContacts().cachedContacts().map { contact in
                     let name = contact.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                     return CommunityInviteCandidate(id: contact.id, name: name.isEmpty ? contact.username : name,
-                                                    avatar: contact.avatar)
+                                                    avatar: contact.avatar, ring: contact.avatarRing)
                 }
             },
             invite: { communityId, userId in

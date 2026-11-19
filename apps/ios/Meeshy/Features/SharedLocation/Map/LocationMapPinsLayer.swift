@@ -132,7 +132,8 @@ struct LocationMapPinAvatar: View {
 
     private var face: some View {
         MeeshyAvatar(name: pin.name, context: .custom(CGFloat(size)),
-                     accentColor: DynamicColorGenerator.colorForName(pin.name), avatarURL: pin.avatarURL)
+                     accentColor: DynamicColorGenerator.colorForName(pin.name), avatarURL: pin.avatarURL,
+                     presenceState: pin.presence)
             .accessibilityHidden(true)
     }
 }

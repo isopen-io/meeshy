@@ -190,30 +190,30 @@ class TrackingDetailViewModel: ObservableObject {
     @Published var visitorMap: TrackingVisitorMapState?
 
     let token: String
-    private let setActiveRemote: @Sendable (String, Bool) async throws -> Void
-    let placesRemote: @Sendable (String, Date) async throws -> TrackingLinkPlaceStats
-    let updateRemote: @Sendable (String, TrackingLinkChanges) async throws -> TrackingLink
+    private let setActiveRemote: @concurrent @Sendable (String, Bool) async throws -> Void
+    let placesRemote: @concurrent @Sendable (String, Date) async throws -> TrackingLinkPlaceStats
+    let updateRemote: @concurrent @Sendable (String, TrackingLinkChanges) async throws -> TrackingLink
     let locate: @MainActor (TrackingVisitorPlace) async -> TrackingVisitorZone?
-    private let clicksRemote: @Sendable (String) async throws -> [TrackingLinkClick]
+    private let clicksRemote: @concurrent @Sendable (String) async throws -> [TrackingLinkClick]
 
     /// Où en est la lecture des clics : en chemin (squelette), servie, ou échouée sans rien à montrer (loi 8).
     @Published private(set) var phase: TrackingDetailPhase = .loading
 
     init(token: String,
          isActive: Bool = true,
-         setActiveRemote: @escaping @Sendable (String, Bool) async throws -> Void = { token, isActive in
+         setActiveRemote: @escaping @concurrent @Sendable (String, Bool) async throws -> Void = { token, isActive in
              try await TrackingLinkService.shared.setActive(token: token, isActive: isActive)
          },
-         placesRemote: @escaping @Sendable (String, Date) async throws -> TrackingLinkPlaceStats = { token, since in
+         placesRemote: @escaping @concurrent @Sendable (String, Date) async throws -> TrackingLinkPlaceStats = { token, since in
              try await TrackingLinkService.shared.fetchVisitorPlaces(token: token, since: since)
          },
-         updateRemote: @escaping @Sendable (String, TrackingLinkChanges) async throws -> TrackingLink = { token, changes in
+         updateRemote: @escaping @concurrent @Sendable (String, TrackingLinkChanges) async throws -> TrackingLink = { token, changes in
              try await TrackingLinkService.shared.updateLink(token: token, changes: changes)
          },
          locate: @escaping @MainActor (TrackingVisitorPlace) async -> TrackingVisitorZone? = { place in
              await TrackingPlaceGeocoder.locate(place)
          },
-         clicksRemote: @escaping @Sendable (String) async throws -> [TrackingLinkClick] = { token in
+         clicksRemote: @escaping @concurrent @Sendable (String) async throws -> [TrackingLinkClick] = { token in
              try await TrackingLinkService.shared.fetchClicks(token: token).clicks
          }) {
         self.token = token

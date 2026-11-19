@@ -219,7 +219,7 @@ final class ProfileSectionsTests: XCTestCase {
         let circles = try code("Meeshy/Features/Profile/Views/ProfileCirclesSection.swift")
         XCTAssertTrue(circles.contains("MeeshyCircleScale("), "les pastilles sont l'échelle K33")
         XCTAssertTrue(circles.contains("form: .dots"))
-        XCTAssertTrue(circles.contains("counts: Self.scaleCounts(of: summary)"))
+        XCTAssertTrue(circles.contains("counts: phase == .counts ? Self.scaleCounts(of: summary) : nil"), "les nombres ne paraissent qu'une fois servis, jamais cinq zéros au chargement")
         XCTAssertTrue(circles.contains("ScrollView(.horizontal"), "aux grandes tailles, l'échelle défile au lieu d'écraser les noms")
         XCTAssertFalse(circles.contains("ProfileCirclePill"), "aucune pastille redessinée sur place (loi 12)")
         let band = try code("Meeshy/Features/Profile/Views/ProfileActivityBand.swift")
@@ -484,22 +484,15 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertNil(ProfileActionsCopy.handle(of: nil))
     }
 
-    func test_actionsFace_opensWithMyAvatar_theActionsTitle_andMyHandle() throws {
-        let face = try code("Meeshy/Features/Profile/Faces/ProfileActionsFace.swift")
-        let header = try code("Meeshy/Features/Profile/Faces/ProfileFaceHeader.swift")
-        XCTAssertTrue(face.contains("ProfileFaceHeader(user: user, title: ProfileActionsCopy.title"),
-                      "l'en-tête commun des faces, titré « Actions »")
-        XCTAssertTrue(header.contains("MeeshyAvatar(name:"), "l'avatar de la planche, celui du kit")
-        XCTAssertTrue(header.contains("ProfileActionsCopy.handle(of: user)"))
-        XCTAssertTrue(header.contains(".accessibilityAddTraits(.isHeader)"), "le nom de la face est son titre pour VoiceOver")
-    }
-
-    func test_actionsHeader_sitsOnTheLivingBannerOfTheKit_asAVeilOfThePlancheHeight() throws {
-        let header = try code("Meeshy/Features/Profile/Faces/ProfileFaceHeader.swift")
-        XCTAssertTrue(header.contains("MeeshyLivingBanner(tint: Color(hex: accentColor), mode: .veil, height: Self.height)"),
-                      "le dégradé et les orbes de la planche sont la bannière K27, jamais redessinés (loi 12)")
-        XCTAssertFalse(header.contains("LinearGradient("), "aucun dégradé redessiné sur place")
-        XCTAssertEqual(ProfileFaceHeader<EmptyView>.height, 150, "la hauteur de l'en-tête de Moi-Actions et Moi-Liens")
+    /// #19782 — les faces Liens et Actions de ma fiche n'ont plus de bloc d'en-tête (avatar, nom de la face en grand,
+    /// pseudo) : la fiche les porte déjà au-dessus. Le bloc commun a quitté le dépôt.
+    func test_myFaces_carryNoTitleHeaderBlock() throws {
+        for path in ["Meeshy/Features/Profile/Faces/ProfileActionsFace.swift",
+                     "Meeshy/Features/Profile/Faces/ProfileLinksFace.swift"] {
+            let face = try code(path)
+            XCTAssertFalse(face.contains("ProfileFaceHeader("), "\(path) : plus de bloc d'en-tête titré")
+            XCTAssertFalse(face.contains("header.meeshyCascade"), "\(path)")
+        }
     }
 
     func test_actionsFace_offersMyStatus_whichOpensTheMoodComposerDoor_onlyWhereTheStatusModelIsServed() throws {
@@ -890,7 +883,7 @@ final class ProfileLinksFaceTests: XCTestCase {
     func test_linksFace_isMadeOfTheKit() throws {
         let face = try code("Meeshy/Features/Profile/Faces/ProfileLinksFace.swift")
         XCTAssertTrue(face.contains("MeeshyTicket("), "le lien de profil est un billet K30")
-        XCTAssertTrue(face.contains("MeeshyCodeCard("), "son QR est la carte de code K31")
+        XCTAssertTrue(face.contains("MeeshyCodePlate("), "son QR est la plaque de la carte de code K31")
         XCTAssertTrue(face.contains("MeeshyLabeledAction("), "ses gestes sont des actions libellées K32")
         for drawn in ["RoundedRectangle(", "LinearGradient(", "Capsule("] {
             XCTAssertFalse(face.contains(drawn), "\(drawn) : aucun composant redessiné sur place")
@@ -900,7 +893,7 @@ final class ProfileLinksFaceTests: XCTestCase {
     func test_linksHub_isTheLinksFace_inAPushedPage() throws {
         let hub = try code("Meeshy/Features/Links/Views/LinksHubView.swift")
         XCTAssertTrue(hub.contains("ProfileLinksFace(user: authManager.currentUser"))
-        XCTAssertTrue(hub.contains("showsHeader: false"), "la page poussée a déjà son en-tête")
+        XCTAssertTrue(hub.contains("LinksPage("), "la page poussée a son propre en-tête")
     }
 
     func test_profileCard_sendsTheProfileAsACardAndShowsOnlyThePublicAddress() {
@@ -1092,7 +1085,8 @@ final class TrackingLinkInsightsTests: XCTestCase {
         let card = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Links/ProfileCardView.swift"))
         XCTAssertTrue(card.contains("MeeshyStateBlock(kind: .denied, title: ProfileLinksCopy.contactlessUnavailable"),
                       "« Ce téléphone ne sait pas faire ça » est un bloc d'état K38")
-        XCTAssertTrue(card.contains("MeeshySectionHeader(title: ProfileLinksCopy.instead"), "« À la place »")
+        XCTAssertTrue(card.contains("MeeshySectionHeader(title: contactlessUnavailable ? ProfileLinksCopy.instead : ContactlessCopy.withoutChip"),
+                      "« À la place » quand le téléphone ne peut pas, « Sans la puce » sinon")
         XCTAssertTrue(card.contains("action: { mode = .qr }"), "« Montrer mon QR » passe au QR")
         XCTAssertTrue(card.contains("scannerShown = true"), "scanner celui de l'autre reste possible")
     }
