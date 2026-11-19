@@ -402,3 +402,26 @@ cryptographique tiers.** Avant toute promotion en production de cette famille de
 lots, une revue externe reste requise — clé maîtresse (dérivation, stockage,
 rotation : aucune), absence de confidentialité persistante au repos, et le modèle
 de menace du mode `hybrid`, où le serveur détient le clair par conception.
+
+---
+
+## Preuve finale, sur l'arbre FUSIONNÉ (`6597a37fe`, `origin/dev` à `56a24345c`)
+
+- `tsc --noEmit` sur `services/gateway` : **EXIT=0** ;
+- **suite gateway complète : 2 898 suites vertes sur 2 904, 43 811 témoins verts
+  sur 43 829.** Les six rouges sont les suites de codecs d'image — HEIF ×3,
+  EXIF ×2, AVIF ×1 —, rouges pour `spawn heif-convert ENOENT` : le binaire n'est
+  pas dans ce conteneur. C'est **exactement** la ligne de base que le cycle 180 a
+  consignée (mêmes 6 suites, mêmes 17 témoins). **Le lot n'ajoute aucun échec.**
+- les deux suites du lot : `serverKeyVaultConversationKeyLookup` **17 verts**,
+  `soft-state-equality-filter-guard` **21 verts** ;
+- RED prouvé par **neuf** mutations au total : six sur le filtre et la carte
+  (filtre nu, sans `isActive`, sans le prédicat d'absence, sans la borne de
+  conversation, sans l'ordre, carte non bornée), trois sur les clauses ajoutées
+  par l'audit (garde de forme de l'id, départage de l'ordre, échéance future) —
+  plus, sur le cliquet, le filtre nu réinstallé **avec son annotation retirée**
+  (il NOMME le site là où il restait vert avant l'audit) et une absolution dont le
+  compte ne décrit plus le dépôt ;
+- les cliquets de taille : `EncryptionService.test.ts` QUITTE la dette (1 044 →
+  996, sous le plafond de 1 000) — le fichier était hors budget, donc interdit
+  d'addition, et l'extraction est le correctif.
