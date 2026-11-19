@@ -252,4 +252,11 @@ describe('une lens MeeshyLens v1 (W14, #11320)', () => {
     createFrameEngine(withLens(), { ...h.env, lens: l.stage }).close();
     expect(l.journal).toEqual([['close']]);
   });
+
+  test('fermer le moteur rend le gréement du visage et son modèle (#19779)', () => {
+    const h = harness();
+    const closed: string[] = [];
+    createFrameEngine(settings({ faceEffect: 'baby' }), { ...h.env, faceRig: { close: () => void closed.push('rig') } }).close();
+    expect(closed).toEqual(['rig']);
+  });
 });

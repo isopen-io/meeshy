@@ -522,7 +522,7 @@ struct SystemThemeDetector<Content: View>: View {
 // MARK: - Profile sheet environment
 
 struct ProfileSheetEnvironment: ViewModifier {
-    /// Le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche, et « Son jeu » dans sa Vitrine : ce que SA
+    /// « Sa Légende » dans la Vitrine d'un membre — et nulle part ailleurs, ni sur sa bannière (#19773) : ce que SA
     /// visibilité autorise, rien sinon. « En direct » dès Proche (#19416). Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
     /// injection, toutes les feuilles de profil la reçoivent.
     /// La connectivité que la fiche lit pour « Parler » hors ligne (#18857) : le moniteur réseau de l'app, pas le
@@ -533,7 +533,6 @@ struct ProfileSheetEnvironment: ViewModifier {
         content
             .environment(\.profileNetworkIsOffline, network.isOffline)
             .environment(\.profileGameSection, ProfileGameSection(
-                build: { userId, displayName in ProfileSlot.view(.banner, userId: userId, displayName: displayName) },
                 card: { userId, tint in ProfileSlot.view(.gameCard, userId: userId, displayName: "", tint: tint) }
             ))
             .environment(\.profileLiveSection, ProfileLiveSection { request in
@@ -576,7 +575,7 @@ struct ProfileSheetEnvironment: ViewModifier {
 /// place de « Connectés » (#13940), la pilule du cercle commun sous le nom (#18870). Le cercle se reconstruit à chaque membre (`.id`) : la fiche garde ses vues d'un
 /// membre à l'autre, et le niveau du précédent ne doit jamais se peindre sous le nom du suivant.
 enum ProfileSlot {
-    case banner, relation, pill, locationMap, whereTheyAre, scanner, gameCard, live, actions, send
+    case relation, pill, locationMap, whereTheyAre, scanner, gameCard, live, actions, send
 
     static func view(_ slot: ProfileSlot, userId: String, displayName: String,
                      standing: Binding<ProfileRelationStanding> = .constant(.unresolved),
@@ -606,8 +605,6 @@ private struct ProfileSlotContent: View {
 
     var body: some View {
         switch slot {
-        case .banner:
-            GameBannerBadge(userId: userId)
         case .relation:
             ProfileCircleSection(userId: userId, displayName: displayName, standing: $standing, tint: tint)
                 .id(userId)

@@ -148,6 +148,47 @@ final class CallFaceTrackingTests: XCTestCase {
         XCTAssertNotEqual(smoothed, original, "le visage, lui, est lissé")
     }
 
+    // MARK: - Bébé (#19779)
+
+    func test_baby_withoutAFace_onlySoftensTheColour() {
+        let frame = CallSyntheticFrame.make(width: 64, height: 48)
+        let original = PixelProbe.render(CIImage(cvPixelBuffer: frame))
+        let faceless = makeRenderer(detector: CountingFaceDetector(result: nil))
+        _ = render(faceless, .baby, frame: frame)
+        _ = render(faceless, .baby, frame: frame)
+
+        let softened = PixelProbe.render(render(faceless, .baby, frame: frame))
+
+        XCTAssertNotEqual(softened, original, "l'étalonnage doux du bébé touche toute l'image")
+    }
+
+    func test_baby_withAFace_reshapesTheFaceBeyondTheColour() {
+        let frame = CallSyntheticFrame.make(width: 64, height: 48)
+        let faced = makeRenderer()
+        let faceless = makeRenderer(detector: CountingFaceDetector(result: nil))
+        [faced, faceless].forEach { sut in
+            _ = render(sut, .baby, frame: frame)
+            _ = render(sut, .baby, frame: frame)
+        }
+
+        let withFace = PixelProbe.render(render(faced, .baby, frame: frame))
+        let withoutFace = PixelProbe.render(render(faceless, .baby, frame: frame))
+
+        XCTAssertNotEqual(withFace, withoutFace, "sur un visage VU : yeux agrandis, bas du visage resserré, joues roses")
+    }
+
+    func test_baby_eyesAreBumpedOutward_chinPinchedInward() {
+        let face = CGRect(x: 100, y: 100, width: 200, height: 260)
+        let landmarks = CallFaceLandmarks(bounds: face, leftEye: CGPoint(x: 160, y: 250), rightEye: CGPoint(x: 240, y: 250))
+        let bumps = CallFaceEffectGeometry.babyEyeBumps(for: landmarks)
+        XCTAssertEqual(bumps.map(\.center), [CGPoint(x: 160, y: 250), CGPoint(x: 240, y: 250)])
+        XCTAssertTrue(bumps.allSatisfy { $0.scale > 0 && $0.radius > face.width * 0.1 }, "une bosse positive agrandit l'œil")
+        let chin = CallFaceEffectGeometry.babyChinPinch(for: face)
+        XCTAssertLessThan(chin.center.y, face.midY, "le bas du visage (origine en bas, Core Image)")
+        XCTAssertGreaterThan(chin.scale, 0)
+        XCTAssertLessThan(chin.scale, 0.5, "un resserrement léger, jamais une grimace")
+    }
+
     // MARK: - Volcano embers
 
     func test_volcano_embersAreCachedSprites() {

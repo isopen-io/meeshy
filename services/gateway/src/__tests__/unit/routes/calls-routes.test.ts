@@ -945,6 +945,28 @@ describe('callRoutes', () => {
       expect(reply._body?.error).toBe('CALL_NOT_FOUND');
     });
 
+    it('#19778 — un join refusé CALL_ENDED finalise la carte de cet appel et répond 400 CALL_ENDED', async () => {
+      const { routes, reply } = setup();
+      mockJoinCall.mockRejectedValueOnce(new CallAlreadyEndedError('completed'));
+
+      const req = makeRequest({ params: { callId: CALL_ID }, body: {} });
+      await getRoute(routes, 'POST', '/calls/:callId/participants')(req, reply);
+
+      expect(reply.status).toHaveBeenCalledWith(400);
+      expect(reply._body?.error).toBe('CALL_ENDED');
+      expect(mockFinalizeCallSummary).toHaveBeenCalledWith(CALL_ID);
+    });
+
+    it('#19778 — un autre échec de join ne finalise rien', async () => {
+      const { routes, reply } = setup();
+      mockJoinCall.mockRejectedValueOnce(new Error('CALL_NOT_FOUND: gone'));
+
+      const req = makeRequest({ params: { callId: CALL_ID }, body: {} });
+      await getRoute(routes, 'POST', '/calls/:callId/participants')(req, reply);
+
+      expect(mockFinalizeCallSummary).not.toHaveBeenCalled();
+    });
+
     it('returns 400 on other errors', async () => {
       const { routes, reply } = setup();
       mockJoinCall.mockRejectedValueOnce(new Error('ALREADY_IN_CALL: already joined'));

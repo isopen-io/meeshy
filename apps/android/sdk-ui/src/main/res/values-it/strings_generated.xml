@@ -418,6 +418,7 @@
     <string name="reading_mode_summary_title">Riepilogo</string>
     <string name="retouch_crop_original">Originale</string>
     <string name="retouch_effect_angel">Angelo</string>
+    <string name="retouch_effect_baby">Bebè</string>
     <string name="retouch_effect_demon">Demone</string>
     <string name="retouch_effect_none">Nessuno</string>
     <string name="retouch_effect_smoothing">Pelle levigata</string>

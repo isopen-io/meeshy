@@ -1,5 +1,7 @@
 import {
+  babyCheeksOf,
   demonEyesOf,
+  eyesOf,
   FROZEN_T,
   glowBucket,
   haloOf,
@@ -10,10 +12,12 @@ import {
   sparklesOf,
   toadOf,
   type Box,
+  type Circle,
   type EffectLoad,
   type Horn,
   type Particle,
 } from './face-effects';
+import type { FaceRig } from './face-rig-port';
 import { createFaceTracker, type FaceDetectorPort } from './face-tracker';
 import type { FaceLayer, FaceTarget } from './video-effects-pipeline';
 import type { FaceEffect } from './video-effects';
@@ -36,6 +40,12 @@ import type { FaceEffect } from './video-effects';
  * (particules, étincelles, fumée) sont abandonnés et l'effet garde sa forme et
  * sa couleur. Sous `prefers-reduced-motion`, le temps est figé et les
  * ornements partent.
+ *
+ * Le GRÉEMENT (#19779, `face-rig-port.ts`, chargé à la demande) donne la POSE
+ * quand les 478 repères sont lus : le halo, les cornes et les joues tournent
+ * avec la tête (`rolled`), les yeux du démon et du bébé sont les vrais. Le
+ * BÉBÉ ne se pose que sur un visage VU — jamais sur la boîte supposée :
+ * peau lissée, yeux grossis par la loupe du gréement, joues roses.
  */
 
 type Surface2D = FaceTarget['context'];
@@ -50,6 +60,7 @@ export type FaceLayerOptions = {
   readonly reducedMotion?: () => boolean;
   readonly clock?: () => number;
   readonly flush?: (context: Surface2D) => void;
+  readonly rig?: FaceRig;
 };
 
 export const FACE_COST_SAMPLE_EVERY = 10;
@@ -111,7 +122,19 @@ function sprites(surface: SurfacePort): Sprites {
   };
 }
 
-type Scene = { readonly target: FaceTarget; readonly face: Box; readonly rich: boolean; readonly sprites: Sprites };
+type Scene = {
+  readonly target: FaceTarget;
+  readonly face: Box;
+  readonly rich: boolean;
+  readonly sprites: Sprites;
+  /** L'inclinaison de la tête, lue sur les repères ; 0 avec une boîte seule. */
+  readonly roll: number;
+  /** Les vrais yeux, lus sur les repères ; `null` avec une boîte seule. */
+  readonly eyes: readonly Circle[] | null;
+  /** Un visage VU, pas la boîte supposée. */
+  readonly found: boolean;
+  readonly rig: FaceRig | null;
+};
 
 type Draw = (scene: Scene) => void;
 
@@ -142,6 +165,22 @@ function glow(scene: Scene, { rgb, inner, cx, cy, radius, alpha }: { readonly rg
   if (sprite === null) paint(context, cx, cy, radius);
   else context.drawImage(sprite, cx - radius, cy - radius, radius * 2, radius * 2);
   context.globalAlpha = 1;
+}
+
+/** Trace `paint` dans le repère du visage : tourné de son inclinaison autour de son centre. */
+function rolled({ target: { context }, face, roll }: Scene, paint: () => void): void {
+  if (roll === 0) {
+    paint();
+    return;
+  }
+  const cx = face.x + face.width / 2;
+  const cy = face.y + face.height / 2;
+  context.save();
+  context.translate(cx, cy);
+  context.rotate(roll);
+  context.translate(-cx, -cy);
+  paint();
+  context.restore();
 }
 
 const smoothing: Draw = ({ target: { context, source, width, height }, face, sprites: cache }) => {
@@ -228,7 +267,9 @@ function strokeHalo(into: Surface2D, ring: { readonly cx: number; readonly cy: n
   into.stroke();
 }
 
-const angel: Draw = (scene) => {
+const angel: Draw = (scene) => rolled(scene, () => angelHalo(scene));
+
+const angelHalo = (scene: Scene): void => {
   const { target, face, rich } = scene;
   const { context, t } = target;
   const halo = haloOf(face, t);
@@ -297,8 +338,8 @@ const demon: Draw = (scene) => {
   context.fillStyle = 'rgba(210, 40, 30, 0.28)';
   context.fillRect(0, 0, width, height);
   context.globalCompositeOperation = 'source-over';
-  horns(scene);
-  demonEyesOf(face, t).forEach((eye) => {
+  rolled(scene, () => horns(scene));
+  demonEyesOf(face, t, scene.eyes ?? undefined).forEach((eye) => {
     glow(scene, { rgb: '255, 60, 20', inner: 0.25, cx: eye.cx, cy: eye.cy, radius: eye.r * 4, alpha: eye.glow });
     context.globalAlpha = 0.55 + 0.35 * eye.glow;
     context.fillStyle = 'rgb(255, 70, 30)';
@@ -343,11 +384,21 @@ const volcano: Draw = (scene) => {
   context.restore();
 };
 
-const DRAW: Readonly<Record<Exclude<FaceEffect, 'none'>, Draw>> = { smoothing, toad, angel, demon, volcano };
+const BLUSH = '255, 150, 170';
+
+const baby: Draw = (scene) => {
+  if (!scene.found) return;
+  smoothing(scene);
+  scene.rig?.magnify(scene.target, scene.eyes ?? eyesOf(scene.face));
+  rolled(scene, () => babyCheeksOf(scene.face).forEach((cheek) => glow(scene, { rgb: BLUSH, inner: 0.1, cx: cheek.cx, cy: cheek.cy, radius: cheek.r, alpha: 0.32 })));
+};
+
+const DRAW: Readonly<Record<Exclude<FaceEffect, 'none'>, Draw>> = { smoothing, toad, angel, demon, volcano, baby };
 
 /** Le calque du traitement des images : le visage suivi, le coût surveillé, l'effet tracé. */
 export function createFaceLayer(detector: FaceDetectorPort | null, options: FaceLayerOptions = {}): FaceLayer {
-  const tracker = createFaceTracker(detector);
+  const rig = options.rig ?? null;
+  const tracker = createFaceTracker(rig?.detector ?? detector);
   const cache = sprites(options.surface ?? browserSurface());
   const reducedMotion = options.reducedMotion ?? browserReducedMotion();
   const clock = options.clock ?? browserClock;
@@ -358,10 +409,12 @@ export function createFaceLayer(detector: FaceDetectorPort | null, options: Face
     if (effects.faceEffect === 'none') return;
     const sampled = frameIndex % FACE_COST_SAMPLE_EVERY === FACE_COST_SAMPLE_EVERY - 1;
     const started = sampled ? clock() : 0;
-    const face = tracker.next(target.source, target, frameIndex);
+    const box = tracker.next(target.source, target, frameIndex);
     frameIndex += 1;
+    const found = tracker.found();
+    const pose = found ? (rig?.pose(target) ?? null) : null;
     const still = reducedMotion();
-    DRAW[effects.faceEffect]({ target: still ? { ...target, t: FROZEN_T } : target, face, rich: !still && !load.degraded, sprites: cache });
+    DRAW[effects.faceEffect]({ target: still ? { ...target, t: FROZEN_T } : target, face: pose?.face ?? box, roll: pose?.roll ?? 0, eyes: pose?.eyes ?? null, found, rig, rich: !still && !load.degraded, sprites: cache });
     if (!sampled) return;
     flush(target.context);
     load = nextEffectLoad(load, clock() - started);

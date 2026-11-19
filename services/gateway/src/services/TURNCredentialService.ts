@@ -271,17 +271,19 @@ export class TURNCredentialService {
       turnServersCount: this.turnServers.length
     });
 
-    // Build TURN server configurations
-    const turnServerConfigs: RTCIceServer[] = this.turnServers.map(server => {
+    // Build TURN server configurations — UDP then TCP for each relay (#19776).
+    // A browser tries a bare `turn:` URL over UDP only; the `?transport=tcp`
+    // twin keeps the relay reachable on networks that drop outbound UDP
+    // without waiting for the TLS fallback below.
+    const turnServerConfigs: RTCIceServer[] = this.turnServers.flatMap(server => {
       const turnUrl = server.port
         ? `turn:${server.host}:${server.port}`
         : `turn:${server.host}`;
 
-      return {
-        urls: turnUrl,
-        username,
-        credential
-      };
+      return [
+        { urls: turnUrl, username, credential },
+        { urls: `${turnUrl}?transport=tcp`, username, credential }
+      ];
     });
 
     // TURN-over-TLS (turns:) — same credentials, TCP-only transport (RFC
