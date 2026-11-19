@@ -254,6 +254,16 @@
    ]
   },
   {
+   "status": "hors-perimetre-mobile",
+   "reason": "Chute détectée par l'Apple Watch (#18748) : seul l'iPhone couplé à une montre émet une chute, la lève (« ça va ») et règle sa détection ; Android ne fait que lire les chutes de ses Sangs et régler celles qu'il reçoit (FallApi).",
+   "routes": [
+    "GET /api/v1/me/health/fall/settings",
+    "POST /api/v1/me/health/fall",
+    "POST /api/v1/me/health/fall/ok",
+    "PUT /api/v1/me/health/fall/settings"
+   ]
+  },
+  {
    "status": "ops-only",
    "reason": "Sonde d'exploitation (santé, métriques) pour l'infrastructure, pas pour un écran.",
    "routes": [
