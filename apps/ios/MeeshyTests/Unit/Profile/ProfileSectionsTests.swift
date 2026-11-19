@@ -329,7 +329,8 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertFalse(profile.contains(".onTapGesture"), "un toucher nu ne répond pas avant le zoom")
         XCTAssertTrue(profile.contains("photoButton(ProfileOwnBanner.openablePhoto(of: user))"))
         XCTAssertTrue(profile.contains("photoButton(user?.avatar)"))
-        XCTAssertTrue(profile.contains(".zoomTransitionSource(id: url ?? \"\", in: photoZoomSpace)"))
+        XCTAssertTrue(profile.contains(".zoomTransitionSource(id: url ?? \"\", in: opens ? photoZoomSpace : nil)"),
+                      "#19925 : seule une photo qui s'ouvre est source du zoom, qui découpe ce qu'il enveloppe")
     }
 
     func test_profileView_securitySheet_declaresItselfToTheSurfaceRegistry() throws {

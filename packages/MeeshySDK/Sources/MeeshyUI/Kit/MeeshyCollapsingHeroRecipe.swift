@@ -108,10 +108,34 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
         keepsBannerInBar ? 1 : recipe.bannerOpacity
     }
 
-    /// Les coins bas de la bannière gardée : droits dépliée, ceux de la barre une fois le verre posé ; toujours
-    /// droits pour une bannière qui s'efface.
+    /// Les coins bas de la bannière : toujours droits. Une bannière gardée dans sa barre (fiche de profil) se replie en
+    /// barre DROITE, de bord à bord (#19925) ; une bannière qui s'efface n'a plus rien à arrondir.
     public static func bannerCornerRadius(_ recipe: MeeshyCollapsingHeroRecipe, keepsBannerInBar: Bool) -> Double {
-        keepsBannerInBar ? barCornerRadius * recipe.glassOpacity : 0
+        0
+    }
+
+    /// Les coins bas du verre de la barre : droits quand la bannière y reste (fiche de profil, #19925), arrondis de 28
+    /// sinon.
+    public static func glassCornerRadius(keepsBannerInBar: Bool) -> Double {
+        keepsBannerInBar ? 0 : barCornerRadius
+    }
+
+    /// L'écart entre le bas de l'avatar déplié et le nom : 10, ou davantage quand le cadre illustré de l'avatar peint
+    /// sous son bord (`avatarSpill`), pour que le nom ne passe jamais sous le film du cadre (#19925).
+    public static let titleGap: Double = 10
+
+    /// Le bord de début de l'avatar déplié : 20, ou davantage quand le film du cadre déborde sur les côtés, pour qu'il
+    /// ne passe jamais hors de l'écran (#19925).
+    public static let avatarInset: Double = 20
+
+    public static func avatarInset(avatarSpill: Double) -> Double {
+        guard avatarSpill.isFinite else { return avatarInset }
+        return max(avatarInset, avatarSpill + 8)
+    }
+
+    public static func titleGap(avatarSpill: Double) -> Double {
+        guard avatarSpill.isFinite else { return titleGap }
+        return max(titleGap, avatarSpill + 4)
     }
 
     private static func travelShare(_ share: Double, reduceMotion: Bool) -> Double {
