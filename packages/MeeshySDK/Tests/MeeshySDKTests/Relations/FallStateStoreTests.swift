@@ -29,7 +29,7 @@ final class FallStateStoreTests: XCTestCase {
     private func makeSUT(cached: [FallState] = []) -> (FallStateStore, MemoryFallPersistence) {
         let persistence = MemoryFallPersistence(cached)
         let clock = self.clock
-        return (FallStateStore(persistence: persistence, now: { clock }), persistence)
+        return (FallStateStore(persistence: persistence, now: { clock }, sleep: { _ in }), persistence)
     }
 
     func test_init_servesTheCacheImmediately_andDropsWhatExpired() {
@@ -80,15 +80,73 @@ final class FallStateStoreTests: XCTestCase {
         XCTAssertTrue(persistence.saved.isEmpty)
     }
 
-    func test_userDefaultsPersistence_neverWritesAPosition() throws {
-        let suite = "fall.store.tests.\(UUID().uuidString)"
-        let persistence = UserDefaultsFallStatePersistence(key: "states", suiteName: suite)
+    func test_aWrite_prunesWhatExpiredSinceItWasHeld() {
+        let instant = MutableClock(clock)
+        let persistence = MemoryFallPersistence()
+        let sut = FallStateStore(persistence: persistence, now: { instant.now }, sleep: { _ in })
+        sut.apply(FallDetected(userId: "short", state: state("short", expiresIn: 60)))
+        instant.now = clock.addingTimeInterval(120)
+        sut.apply(FallDetected(userId: "u2", state: state("u2", expiresIn: 3_600)))
+        XCTAssertEqual(sut.states.keys.sorted(), ["u2"])
+        XCTAssertEqual(persistence.saved.map(\.userId), ["u2"])
+    }
+
+    func test_nextExpiry_isTheClosestExpiresAt() {
+        let (sut, _) = makeSUT(cached: [state("late", expiresIn: 3_600), state("soon", expiresIn: 600)])
+        XCTAssertEqual(sut.nextExpiry, clock.addingTimeInterval(600))
+    }
+
+    func test_theStoreDropsEachEpisodeAtItsExpiresAt_onDiskToo_withoutWaitingForAnotherWrite() async {
+        let instant = MutableClock(clock)
+        let persistence = MemoryFallPersistence([state("soon", expiresIn: 600), state("late", expiresIn: 3_600)])
+        let sut = FallStateStore(persistence: persistence, now: { instant.now }, sleep: { delay in
+            instant.waited.append(delay)
+            instant.now = instant.now.addingTimeInterval(delay)
+        })
+        var played = Set<Task<Void, Never>>()
+        while let task = sut.expiryTask, played.insert(task).inserted { await task.value }
+        XCTAssertEqual(instant.waited, [600, 3_000])
+        XCTAssertTrue(sut.states.isEmpty)
+        XCTAssertTrue(persistence.saved.isEmpty)
+    }
+
+    func test_filePersistence_neverWritesAPosition_andStaysOutOfTheBackup() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("fall.store.tests.\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = FileFallStatePersistence(directory: directory)
         persistence.save([state("u1", position: position)])
-        let raw = try XCTUnwrap(UserDefaults(suiteName: suite)?.data(forKey: "states"))
-        let text = try XCTUnwrap(String(data: raw, encoding: .utf8))
+        let file = directory.appendingPathComponent(FileFallStatePersistence.fileName)
+        let text = try XCTUnwrap(String(data: Data(contentsOf: file), encoding: .utf8))
         XCTAssertFalse(text.contains("latitude"))
         XCTAssertFalse(text.contains("48.85"))
         XCTAssertEqual(persistence.load().first?.lastBattery?.level, 41)
+        XCTAssertEqual(try directory.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true)
+    }
+
+    func test_filePersistence_anEmptySaveRemovesTheFile() {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("fall.store.tests.\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = FileFallStatePersistence(directory: directory)
+        persistence.save([state("u1")])
+        persistence.save([])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent(FileFallStatePersistence.fileName).path))
+        XCTAssertTrue(persistence.load().isEmpty)
+    }
+
+    func test_filePersistence_forgetsTheLegacyCopyKeptInUserDefaults() {
+        let suite = "fall.store.tests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)
+        defaults?.set(Data("[]".utf8), forKey: FileFallStatePersistence.legacyDefaultsKey)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("fall.store.tests.\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        _ = FileFallStatePersistence(directory: directory, legacyDefaults: defaults)
+        XCTAssertNil(defaults?.data(forKey: FileFallStatePersistence.legacyDefaultsKey))
         UserDefaults().removePersistentDomain(forName: suite)
     }
+}
+
+private final class MutableClock: @unchecked Sendable {
+    var now: Date
+    var waited: [TimeInterval] = []
+    init(_ now: Date) { self.now = now }
 }
