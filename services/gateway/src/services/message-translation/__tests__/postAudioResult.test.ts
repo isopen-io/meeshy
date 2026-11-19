@@ -44,6 +44,7 @@ type AttachmentLookup = { where: { id: string }; select: Record<string, unknown>
 
 const makePrisma = (medias: Record<string, Media>) => {
   const updates: Update[] = [];
+  const stored: Record<string, unknown> = {};
   const attachmentLookups: AttachmentLookup[] = [];
   const prisma = {
     messageAttachment: {
@@ -58,11 +59,12 @@ const makePrisma = (medias: Record<string, Media>) => {
       findUnique: async (args: { where: { id: string }; select: Record<string, unknown> }) => {
         const media = medias[args.where.id];
         if (!media) return null;
-        if (args.select.translations) return { translations: {} };
+        if (args.select.translations) return { translations: stored[args.where.id] ?? {} };
         return { id: args.where.id, postId: media.postId, comment: media.commentPostId ? { postId: media.commentPostId } : null };
       },
       update: async (args: Update) => {
         updates.push(args);
+        if ('translations' in args.data) stored[args.where.id] = args.data.translations;
         return { commentId: null };
       },
     },
@@ -138,7 +140,9 @@ const listFiles = async (root: string): Promise<string[]> => {
   return nested.flat();
 };
 
-const TRACK_URL = `/api/v1/attachments/file/translated/post/${POST_MEDIA_ID}_en.mp3`;
+const TRACK_KEY = (language: string, ext: string) => new RegExp(`^translated/post/${POST_MEDIA_ID}_${language}_[0-9a-f]{32}\\.${ext}$`);
+const LEGACY_TRACK_KEY = `translated/post/${POST_MEDIA_ID}_en.mp3`;
+const FILE_ROUTE = '/api/v1/attachments/file/';
 
 describe('#19749 — la piste vocale traduite d’un post arrive dans PostMedia.translations', () => {
   const previousUploadPath = process.env.UPLOAD_PATH;
@@ -160,22 +164,36 @@ describe('#19749 — la piste vocale traduite d’un post arrive dans PostMedia.
     return { sandbox, uploadRoot, prisma, updates, attachmentLookups, handler };
   };
 
-  const englishEntry = async (updates: Update[]) => {
-    const update = await until(() => updates.find((u) => u.where.id === POST_MEDIA_ID && 'translations' in u.data));
-    return (update.data.translations as Record<string, { url?: string; path?: string; transcription: string }>).en;
+  type Entry = { url?: string; path?: string; transcription: string };
+
+  const entryOf = async (updates: Update[], language: string, nth = 0) => {
+    const update = await until(() => updates.filter((u) => u.where.id === POST_MEDIA_ID && 'translations' in u.data)[nth]);
+    return (update.data.translations as Record<string, Entry>)[language];
+  };
+
+  const englishEntry = (updates: Update[], nth = 0) => entryOf(updates, 'en', nth);
+
+  const keyOf = (entry: Entry) => (entry.url ?? '').replace(FILE_ROUTE, '');
+
+  const routeOn = async (uploadRoot: string, prisma: PrismaClient) => {
+    const app = Fastify({ logger: false });
+    registerFileStreamRoute(app, prisma as never, { uploadRoot, mirror: null });
+    await app.ready();
+    return app;
   };
 
   const expectTrackWrittenByGateway = async (uploadRoot: string, updates: Update[]) => {
     const english = await englishEntry(updates);
-    const key = `translated/post/${POST_MEDIA_ID}_en.mp3`;
-    expect(english.url).toBe(TRACK_URL);
+    const key = keyOf(english);
+    expect(english.url).toBe(`${FILE_ROUTE}${key}`);
+    expect(key).toMatch(TRACK_KEY('en', 'mp3'));
     expect(english.path).toBe(path.join(uploadRoot, key));
     expect(JSON.stringify(english)).not.toContain('/outputs/');
     expect(english.transcription).toBe('Hello everyone');
     expect(await fs.readFile(path.join(uploadRoot, key))).toEqual(TRACK_BYTES);
   };
 
-  it('écrit la piste sous translated/post/<postMediaId>_<langue> quand l’événement nomme le post, sans passer par la voie message', async () => {
+  it('écrit la piste sous translated/post/<postMediaId>_<langue>_<jeton> quand l’événement nomme le post, sans passer par la voie message', async () => {
     const { uploadRoot, updates, attachmentLookups, handler } = await gatewayOn(postMedia);
 
     await handler.handleMessage(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID }));
@@ -187,14 +205,12 @@ describe('#19749 — la piste vocale traduite d’un post arrive dans PostMedia.
   it('la piste écrite se lit par la route de fichiers, 200 et ses octets, sous le régime du fichier d’origine d’un média de post', async () => {
     const { uploadRoot, prisma, updates, handler } = await gatewayOn(postMedia);
     await handler.handleMessage(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID }));
-    await englishEntry(updates);
+    const english = await englishEntry(updates);
     await fs.mkdir(path.join(uploadRoot, '2026/11'), { recursive: true });
     await fs.writeFile(path.join(uploadRoot, '2026/11/voice.m4a'), 'ORIGINE');
-    const app = Fastify({ logger: false });
-    registerFileStreamRoute(app, prisma as never, { uploadRoot, mirror: null });
-    await app.ready();
+    const app = await routeOn(uploadRoot, prisma);
     try {
-      const track = await app.inject({ method: 'GET', url: TRACK_URL.replace('/api/v1', '') });
+      const track = await app.inject({ method: 'GET', url: (english.url ?? '').replace('/api/v1', '') });
       const origin = await app.inject({ method: 'GET', url: '/attachments/file/2026/11/voice.m4a' });
 
       expect(track.statusCode).toBe(200);
@@ -258,6 +274,80 @@ describe('#19749 — la piste vocale traduite d’un post arrive dans PostMedia.
     expect(await listFiles(sandbox)).toEqual([]);
   });
 
+  it('#19841 — la clé d’une piste ne se déduit pas de postMediaId et de la langue : deux écritures, deux jetons de 128 bits', async () => {
+    const { updates, handler } = await gatewayOn(postMedia);
+
+    await handler.handleMessage(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID }));
+    const first = keyOf(await englishEntry(updates, 0));
+    await handler.handleMessage(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID }));
+    const second = keyOf(await englishEntry(updates, 1));
+
+    expect(first).toMatch(TRACK_KEY('en', 'mp3'));
+    expect(second).toMatch(TRACK_KEY('en', 'mp3'));
+    expect(second).not.toBe(first);
+    expect(first).not.toBe(LEGACY_TRACK_KEY);
+  });
+
+  it('#19841 — une retraduction efface la piste précédente de SA langue, et seulement elle', async () => {
+    const { uploadRoot, updates, handler } = await gatewayOn(postMedia);
+    await handler.handleMessage(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID }, { targetLanguage: 'es' }));
+    const spanish = keyOf(await entryOf(updates, 'es', 0));
+    await handler.handleMessage(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID }));
+    const first = keyOf(await englishEntry(updates, 1));
+
+    await handler.handleMessage(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID }));
+    const second = keyOf(await englishEntry(updates, 2));
+    await until(() => (existsSync(path.join(uploadRoot, first)) ? undefined : true));
+
+    expect(existsSync(path.join(uploadRoot, second))).toBe(true);
+    expect(existsSync(path.join(uploadRoot, spanish))).toBe(true);
+  });
+
+  it('#19841 — une piste à l’ancienne clé devinable (sans jeton) répond comme un fichier absent, la nouvelle se sert', async () => {
+    const { uploadRoot, prisma, updates, handler } = await gatewayOn(postMedia);
+    await handler.handleMessage(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID }));
+    const english = await englishEntry(updates);
+    await fs.writeFile(path.join(uploadRoot, LEGACY_TRACK_KEY), TRACK_BYTES);
+    const app = await routeOn(uploadRoot, prisma);
+    try {
+      const legacy = await app.inject({ method: 'GET', url: `/attachments/file/${LEGACY_TRACK_KEY}` });
+      const missing = await app.inject({ method: 'GET', url: `/attachments/file/translated/post/${OTHER_POST_ID}_en.mp3` });
+      const current = await app.inject({ method: 'GET', url: `/attachments/file/${keyOf(english)}` });
+
+      expect(legacy.statusCode).toBe(404);
+      expect(legacy.body).toBe(missing.body);
+      expect(current.statusCode).toBe(200);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it.each([
+    ['audio/mpeg', 'mp3'],
+    ['audio/mp4', 'm4a'],
+    ['audio/flac', 'flac'],
+  ])('#19841 — %s s’écrit en .%s', async (audioMimeType, ext) => {
+    const { uploadRoot, updates, handler } = await gatewayOn(postMedia);
+
+    await handler.handleMessage(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID }, { audioMimeType }));
+
+    const key = keyOf(await englishEntry(updates));
+    expect(key).toMatch(TRACK_KEY('en', ext));
+    expect(await fs.readFile(path.join(uploadRoot, key))).toEqual(TRACK_BYTES);
+  });
+
+  it('#19841 — un format hors liste garde la traduction en TEXTE seul, sans piste ni adresse', async () => {
+    const { uploadRoot, updates, handler } = await gatewayOn(postMedia);
+
+    await handler.handleMessage(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID }, { audioMimeType: 'audio/x-unknown' }));
+
+    const english = await englishEntry(updates);
+    expect(english.transcription).toBe('Hello everyone');
+    expect(english).not.toHaveProperty('url');
+    expect(english).not.toHaveProperty('path');
+    expect(await listFiles(uploadRoot)).toEqual([]);
+  });
+
   it.each([
     ['un postMediaId qui remonte l’arborescence', { postId: POST_ID, postMediaId: '../../evil' }, {}],
     ['un postId qui n’est pas celui du média', { postId: OTHER_POST_ID, postMediaId: POST_MEDIA_ID }, {}],
@@ -307,17 +397,28 @@ describe('#19749 — la transcription d’un post atteint PostAudioService.handl
 
     await handler.handleMessage(transcriptionReadyFrame(postReference));
 
-    return until(() => received[0]);
+    return { received, until: () => until(() => received[0]) };
   };
 
   it('quand l’événement nomme le post', async () => {
-    const call = await routedToPost({ postId: POST_ID, postMediaId: POST_MEDIA_ID });
+    const call = await (await routedToPost({ postId: POST_ID, postMediaId: POST_MEDIA_ID })).until();
 
     expect(call).toMatchObject({ postId: POST_ID, postMediaId: POST_MEDIA_ID, transcription: { text: 'Bonjour à tous' } });
   });
 
+  it.each([
+    ['le post nommé n’est pas celui du média', { postId: OTHER_POST_ID, postMediaId: POST_MEDIA_ID }],
+    ['l’événement ne nomme que postId', { postId: POST_ID }],
+    ['l’événement ne nomme que postMediaId', { postMediaId: POST_MEDIA_ID }],
+  ])('#19841 — jamais quand %s, sans repli par la voie message', async (_case, reference) => {
+    const { received } = await routedToPost(reference);
+    await settle();
+
+    expect(received).toEqual([]);
+  });
+
   it('quand un ancien traducteur ne le nomme pas, par le PostMedia de l’attachmentId', async () => {
-    const call = await routedToPost({});
+    const call = await (await routedToPost({})).until();
 
     expect(call).toMatchObject({ postId: POST_ID, postMediaId: POST_MEDIA_ID, transcription: { text: 'Bonjour à tous' } });
   });

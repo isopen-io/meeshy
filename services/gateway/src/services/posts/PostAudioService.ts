@@ -20,6 +20,9 @@ import { postInclude, commentMediaInclude, NOT_DELETED } from './postIncludes';
 import { withMentions } from './postReferences';
 import { WIRE_BROADCAST } from './storyEffectsV3';
 import { mergeTranslationEntries } from '../message-translation/translatedTrackSave';
+import { supersededPostTrackUrls } from '../attachments/postTranslatedTrack';
+import { MediaService } from '../MediaService';
+import type { PostMediaByteRemover } from './reclaimPostMediaBytes';
 
 const log = enhancedLogger.child({ module: 'PostAudioService' });
 
@@ -79,10 +82,15 @@ export class PostAudioService {
   private constructor(
     private readonly prisma: PrismaClient,
     private readonly socialEvents: SocialEventsHandler,
+    private readonly trackRemover: PostMediaByteRemover,
   ) {}
 
-  static init(prisma: PrismaClient, socialEvents: SocialEventsHandler): PostAudioService {
-    PostAudioService._shared = new PostAudioService(prisma, socialEvents);
+  static init(
+    prisma: PrismaClient,
+    socialEvents: SocialEventsHandler,
+    trackRemover: PostMediaByteRemover = new MediaService(),
+  ): PostAudioService {
+    PostAudioService._shared = new PostAudioService(prisma, socialEvents, trackRemover);
     return PostAudioService._shared;
   }
 
@@ -251,12 +259,30 @@ export class PostAudioService {
         select: { commentId: true },
       });
 
+      await this.removeSupersededTracks(existing, merged, Object.keys(translations));
+
       log.info('Translations persisted — broadcasting media owner update', { postId, postMediaId, langCount });
 
       await this.broadcastMediaOwnerUpdate(postId, updated.commentId);
     } catch (err: unknown) {
       log.error('handleAudioTranslationsReady failed', err, { postId, postMediaId });
     }
+  }
+
+  /**
+   * #19841 — chaque écriture d'une piste de post prend une clé neuve : la piste
+   * qu'elle remplace, une fois la nouvelle inscrite, s'efface. Un effacement en
+   * échec est journalisé, jamais propagé.
+   */
+  private async removeSupersededTracks(
+    existing: HandleAudioTranslationsReadyParams['translations'],
+    inscribed: HandleAudioTranslationsReadyParams['translations'],
+    languages: readonly string[],
+  ): Promise<void> {
+    const superseded = supersededPostTrackUrls(existing, inscribed, languages);
+    const outcomes = await Promise.allSettled(superseded.map((url) => this.trackRemover.delete(url)));
+    const failed = outcomes.filter((outcome) => outcome.status === 'rejected').length;
+    if (failed > 0) log.warn('superseded post tracks: some files resisted removal', { failed });
   }
 
   /**

@@ -31,7 +31,9 @@
  * média de post, son, sticker, export filigrané — et garde son régime
  * d'avant : ce module ne décide que pour ce qui lui appartient. Exception :
  * une clé à la FORME d'une piste traduite appartient à ce module même sans
- * ligne, et se refuse (#9588).
+ * ligne, et se refuse (#9588). De même, une clé sous `translated/post/` qui
+ * n'a pas la forme à jeton d'une piste de post (#19841, l'ancienne forme
+ * devinable comprise) se refuse comme un fichier absent.
  *
  * ─── PLUSIEURS LIGNES, UN FICHIER ───────────────────────────────────────────
  *
@@ -51,6 +53,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CARRIER_LIFECYCLE_SELECT, carrierMessageStillServesBytes } from './carrierMessageLifecycle';
 import { attachmentIsReaderBound } from './signedAttachmentUrls';
 import { prefixRange } from '../../utils/prefix-range';
+import { isRefusedPostTrackKey } from './postTranslatedTrack';
 
 /**
  * `readerBound` (#9600) : TOUS les porteurs vivants de ce fichier sont des
@@ -128,6 +131,7 @@ export async function resolveFileRouteVerdict(
   prisma: FileRouteVerdictPrisma,
   now: Date
 ): Promise<FileRouteVerdict> {
+  if (isRefusedPostTrackKey(storageKey)) return { kind: 'gone' };
   const owners = await ownerRowsOf(storageKey, prisma);
   if (owners.length > 0) return verdictFor(owners, prisma, now);
   return TRANSLATED_TRACK.test(storageKey) ? { kind: 'gone' } : { kind: 'not-an-attachment' };
