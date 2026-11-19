@@ -1680,9 +1680,16 @@ socket jusqu'au client.
   - **R3** → #19770 : le témoin de branchement ne lit que le texte de `server.ts`.
   - **R5** → #19771 : `storageKeyFromMediaUrl` accepte un hôte étranger. Le défaut est antérieur au lot.
 
+- **Intégration** : PR #19772. La CI des PR est gelée (jobs `pull_request` sautés), donc la preuve passe par `workflow_dispatch` de `ci.yml`. Elle a révélé quatre rouges, dont aucun ne vient du lot, et tous sont corrigés dans la PR :
+  - **`Tests · web`**, rouge sur `dev` (run 44436083641). La garde `capability-guard.test.ts` relevait `lib/calls/call-network-recovery.ts`, qui écoute `navigator.connection` pour relancer ICE. Il est ajouté comme exception motivée (`257939d13f`).
+  - **Budget de taille**, rouge sur `dev`. #19778 avait fait passer `calls-routes.test.ts` de 2154 à 2175 lignes. La suite est scindée par responsabilité (join, retrait, harnais partagé), avec 93 témoins avant comme après. La dette est enregistrée en baisse, de 2154 à 1198 (`a16deb08fc`).
+  - **Installation apt de la CI**. Le `timeout 300` tuait apt pendant les déclencheurs de dpkg, et chaque reprise retombait sur « dpkg was interrupted ». La boucle lance désormais `dpkg --configure -a` avant de retenter, aux deux sites de `ci.yml` (`3b6b506468`).
+  - **Cliquet des bouchons de schéma (#4649)**. La scission avait recopié le bouchon `api-schemas` dans les deux nouvelles suites. Elles chargent maintenant les vrais schémas (`5c21bbd856`, 5 suites et 105 tests verts).
+  - Le run 44467825525 sur `5c21bbd856` a été **annulé de l'extérieur** à 06:43 UTC, sans consigne publiée. La PR n'est donc pas fusionnée à la clôture.
+
 ### Cycle suivant : par où reprendre
 
-0. Si la PR du cycle 49 n'est pas fusionnée, la reprendre d'abord (fusionner `origin/dev` dans la branche, rejouer les gardes, suivre la CI).
+0. **PR #19772 ouverte, non fusionnée.** Lire le dernier run `workflow_dispatch` de la branche. S'il est vert, fusionner (`merge`, `expectedHeadSha`), puis relancer `prismaServedResults` et `reclaimPostMediaBytes` sur `dev`, fermer #19750 avec sa preuve et commenter. Sinon, si la PR du cycle 49 n'est pas fusionnée, la reprendre d'abord (fusionner `origin/dev` dans la branche, rejouer les gardes, suivre la CI).
 1. **#19749** avec les exigences R1 et R4. C'est elle qui rend #19750 effective : relais `postId`/`postMediaId` rétrocompatible, persistance par `saveTranslatedTrack`, témoin de bout en bout. Puis #19769 dans le même mouvement, si la projection doit migrer vers un sérialiseur.
 2. #19702, #19673, #19735, #19751, #19770, #19771.
 3. #19520, second critère : constat sur le serveur avec `sre-infra`, dans la même séance que la mesure des journaux d'accès pour #19471.
