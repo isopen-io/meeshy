@@ -7,9 +7,10 @@
  * avec l'émetteur, la SyncPill — puis `phone-call:ended`. AUCUN push : être en appel n'est pas une
  * alerte, et un Sang n'a pas à être dérangé à chaque appel de l'autre.
  *
- * Les envois partent HORS verrou : chacun relit l'état avant de partir et efface après si un autre
- * rapport l'a périmé entre-temps (leçon des deux audits de #18738). Rien ne part vers un lecteur que
- * la loi refuse, pas même un effacement. JAMAIS un message de conversation.
+ * Les envois partent HORS verrou : chacun relit l'état et ses lecteurs avant de partir, et efface
+ * après chez qui en est sorti entre-temps (leçon des audits de #18738 et de #18753). L'ÉTAT ne part
+ * que vers un lecteur que la loi autorise ; l'EFFACEMENT part aussi vers qui le voyait et ne le voit
+ * plus, sans annonce, pour retirer ce qu'il a à l'écran. JAMAIS un message de conversation.
  */
 import { BATTERY_CONFIG } from '@meeshy/shared/types/battery';
 import type { PhoneCallAnnouncement, PhoneCallSnapshot, PhoneCallState } from '@meeshy/shared/types/phone-call';
@@ -74,22 +75,39 @@ async function inConversation(deps: PhoneCallRelayDeps, emitterId: string, reade
   }));
 }
 
-/** L'état vers chaque lecteur, s'il est encore celui rangé ; s'il a été périmé PENDANT l'envoi, l'effacement suit. */
-async function fanOutStarted(deps: PhoneCallRelayDeps, emitterId: string, stored: StoredPhoneCall, announcement?: PhoneCallAnnouncement): Promise<void> {
-  const current = (record: StoredPhoneCall | null): boolean => record !== null && record.reportedAt === stored.reportedAt;
-  const conversing = announcement ? await inConversation(deps, emitterId, stored.servedTo) : new Set<string>();
-  const state = servedNow(deps, emitterId, stored);
-  if (!state || !current(await readPhoneCall(deps.cache, emitterId))) return;
-  stored.servedTo.forEach((readerId) => emitStarted(deps, readerId, state, conversing.has(readerId) ? announcement : undefined));
-  if (!current(await readPhoneCall(deps.cache, emitterId))) {
-    const after = await readPhoneCall(deps.cache, emitterId);
-    if (after === null) stored.servedTo.forEach((readerId) => emitEnded(deps, readerId, emitterId));
-  }
+/** Les lecteurs à qui l'état RANGÉ MAINTENANT est servi : un retrait ou un nouveau rapport le change. */
+const stillServed = (record: StoredPhoneCall | null, since: string): ReadonlySet<string> =>
+  record !== null && record.since === since ? new Set(record.servedTo) : new Set();
+
+/**
+ * L'état vers chaque lecteur de `readers`, hors verrou : chacun n'est servi que s'il figure encore
+ * dans l'état rangé (relu juste avant), et qui en est sorti PENDANT l'envoi — retrait, coupure, fin —
+ * reçoit l'effacement juste après. Aucun envoi en retard ne ressuscite l'état chez un lecteur retiré.
+ */
+async function fanOutStarted(deps: PhoneCallRelayDeps, emitterId: string, stored: StoredPhoneCall, readers: readonly string[], announcement?: PhoneCallAnnouncement): Promise<void> {
+  const conversing = announcement ? await inConversation(deps, emitterId, readers) : new Set<string>();
+  const before = await readPhoneCall(deps.cache, emitterId);
+  const state = servedNow(deps, emitterId, before);
+  if (!state || before?.since !== stored.since) return;
+  const served = stillServed(before, stored.since);
+  const sent = readers.filter((readerId) => served.has(readerId));
+  sent.forEach((readerId) => emitStarted(deps, readerId, state, conversing.has(readerId) ? announcement : undefined));
+  const after = stillServed(await readPhoneCall(deps.cache, emitterId), stored.since);
+  sent.filter((readerId) => !after.has(readerId)).forEach((readerId) => emitEnded(deps, readerId, emitterId));
 }
 
+/**
+ * La fin vers qui voyait l'appel. Un NOUVEL appel rangé entre-temps garde ses lecteurs : la fin en
+ * retard ne l'efface pas chez eux. Qui voyait l'appel et ne le voit plus reçoit l'effacement sans
+ * annonce — il faut retirer l'état de son écran, rien de plus ne lui est dit.
+ */
 async function fanOutEnded(deps: PhoneCallRelayDeps, emitterId: string, servedTo: readonly string[], announcement: PhoneCallAnnouncement): Promise<void> {
   const [audience, conversing] = await Promise.all([audienceOf(deps, emitterId), inConversation(deps, emitterId, servedTo)]);
-  servedTo.forEach((readerId) => emitEnded(deps, readerId, emitterId, audience.has(readerId) && conversing.has(readerId) ? announcement : undefined));
+  const fresh = await readPhoneCall(deps.cache, emitterId);
+  const renewed = new Set(fresh && servedNow(deps, emitterId, fresh) ? fresh.servedTo : []);
+  servedTo
+    .filter((readerId) => !renewed.has(readerId))
+    .forEach((readerId) => emitEnded(deps, readerId, emitterId, audience.has(readerId) && conversing.has(readerId) ? announcement : undefined));
 }
 
 const hasReaders = (stored: StoredPhoneCall): boolean => stored.servedTo.length > 0;
@@ -126,7 +144,7 @@ export async function reportPhoneCall(deps: PhoneCallRelayDeps, params: { readon
   if (outcome?.ended) await fanOutEnded(deps, params.userId, outcome.ended.servedTo, outcome.ended.announcement);
   if (outcome?.started) {
     outcome.started.departed.forEach((readerId) => emitEnded(deps, readerId, params.userId));
-    if (hasReaders(outcome.started.stored)) await fanOutStarted(deps, params.userId, outcome.started.stored, outcome.started.announcement);
+    if (hasReaders(outcome.started.stored)) await fanOutStarted(deps, params.userId, outcome.started.stored, outcome.started.stored.servedTo, outcome.started.announcement);
   }
   return true;
 }
@@ -146,9 +164,9 @@ const directions = (userA: string, userB: string) => [[userA, userB], [userB, us
 /** Rejoue une paire dans les DEUX sens après un changement de lien, de consentement ou de blocage. */
 export async function refreshPhoneCallBetween(deps: PhoneCallRelayDeps, params: { readonly userA: string; readonly userB: string }): Promise<void> {
   for (const [emitterId, readerId] of directions(params.userA, params.userB)) {
-    const after = await sees(deps, emitterId, readerId);
     const change = await withPhoneCallLock(deps.cache, emitterId, async () => {
       const stored = await readPhoneCall(deps.cache, emitterId);
+      const after = stored !== null && (await sees(deps, emitterId, readerId));
       if (!stored || !servedNow(deps, emitterId, stored)) return null;
       const before = stored.servedTo.includes(readerId);
       if (after === before) return null;
@@ -157,7 +175,7 @@ export async function refreshPhoneCallBetween(deps: PhoneCallRelayDeps, params: 
       return { gained: after, stored: next };
     });
     if (change && !change.gained) emitEnded(deps, readerId, emitterId);
-    if (change?.gained) await fanOutStarted(deps, emitterId, { ...change.stored, servedTo: [readerId] });
+    if (change?.gained) await fanOutStarted(deps, emitterId, change.stored, [readerId]);
   }
 }
 

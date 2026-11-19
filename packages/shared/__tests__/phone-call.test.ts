@@ -65,7 +65,7 @@ describe('phoneCallStep — le téléphone dit s\'il est en appel', () => {
   it('le premier « en appel » ouvre l\'état et s\'annonce', () => {
     const step = report(null, true, 2, 13);
     expect(step.state).toEqual({ since: at(2, 13), reportedAt: at(2, 13) });
-    expect(step.announcement).toEqual({ kind: 'started', at: at(2, 13) });
+    expect(step.announcement).toEqual({ kind: 'started', at: at(0) });
   });
 
   it('un rappel pendant l\'appel garde le début et ne s\'annonce pas', () => {
@@ -78,6 +78,7 @@ describe('phoneCallStep — le téléphone dit s\'il est en appel', () => {
     const ended = report(report(null, true, 2).state, false, 30);
     expect(ended.state).toBeNull();
     expect(ended.announcement).toEqual({ kind: 'ended', at: at(30) });
+    expect(report(report(null, true, 2).state, false, 31, 59).announcement).toEqual({ kind: 'ended', at: at(30) });
     expect(report(null, false, 30)).toEqual({ state: null });
   });
 
@@ -101,6 +102,11 @@ describe('servedPhoneCall — ce qu\'un Sang lit', () => {
       since: at(0),
       expiresAt: at(20 + PHONE_CALL_CONFIG.reportTtlMinutes),
     });
+  });
+
+  it('l\'expiration ne rend pas l\'heure exacte du rapport : arrondie au pas supérieur (audit #18753)', () => {
+    expect(servedPhoneCall(USER, { since: at(2, 13), reportedAt: at(2, 13) })?.expiresAt).toBe(at(5 + PHONE_CALL_CONFIG.reportTtlMinutes));
+    expect(servedPhoneCall(USER, { since: at(2), reportedAt: at(2, 13) })?.expiresAt).toBe(servedPhoneCall(USER, { since: at(4, 59), reportedAt: at(4, 59) })?.expiresAt);
   });
 
   it('rien d\'autre : jamais d\'interlocuteur', () => {

@@ -83,7 +83,7 @@ describe('le rattrapage', () => {
     await enAppel();
     const tous = await app.call('GET', '/api/v1/relations/phone-calls', undefined, AUTRE);
     await app.close();
-    expect(tous.body.data).toEqual({ items: [{ userId: MOI, since: arrondi(DEBUT), expiresAt: new Date(NOW.getTime() + 180 * 60_000).toISOString() }] });
+    expect(tous.body.data).toEqual({ items: [{ userId: MOI, since: arrondi(DEBUT), expiresAt: new Date(Math.ceil(NOW.getTime() / 300_000) * 300_000 + 180 * 60_000).toISOString() }] });
   });
 
   it('un Proche ne lit rien', async () => {

@@ -91,20 +91,20 @@ function monde(options: { readonly role?: string; readonly coupee?: boolean; rea
 }
 
 describe('le téléphone en appel', () => {
-  it('le Sang reçoit l\'état : début arrondi à 5 min, expiration, rien d\'autre ; sans annonce hors conversation', async () => {
+  it('le Sang reçoit l\'état : début et expiration arrondis à 5 min, rien d\'autre ; sans annonce hors conversation', async () => {
     const m = monde();
     expect(await m.rapporter(true)).toBe(true);
     expect(m.vers(SANG)).toEqual([{
       room: ROOMS.user(SANG),
       event: SERVER_EVENTS.PHONE_CALL_STARTED,
-      data: { userId: PERSONNE, state: { userId: PERSONNE, since: '2026-11-19T14:00:00.000Z', expiresAt: new Date(T0 + 180 * MIN).toISOString() } },
+      data: { userId: PERSONNE, state: { userId: PERSONNE, since: '2026-11-19T14:00:00.000Z', expiresAt: '2026-11-19T17:05:00.000Z' } },
     }]);
   });
 
   it('en conversation avec l\'émetteur : l\'annonce part (SyncPill)', async () => {
     const m = monde({ enConversation: [SANG] });
     await m.rapporter(true);
-    expect(m.vers(SANG)[0]?.data.announcement).toEqual({ kind: 'started', at: new Date(T0).toISOString() });
+    expect(m.vers(SANG)[0]?.data.announcement).toEqual({ kind: 'started', at: '2026-11-19T14:00:00.000Z' });
   });
 
   it('Sang sans réglage oui ; Proche (même consenti), Sang retiré, bloqué, équipe face à un utilisateur : rien', async () => {
@@ -141,7 +141,7 @@ describe('le téléphone en appel', () => {
     await m.rapporter(true);
     const last = m.vers(SANG).at(-1);
     expect(last?.data.announcement).toBeUndefined();
-    expect(last?.data.state).toEqual({ userId: PERSONNE, since: '2026-11-19T14:00:00.000Z', expiresAt: new Date(T0 + 200 * MIN).toISOString() });
+    expect(last?.data.state).toEqual({ userId: PERSONNE, since: '2026-11-19T14:00:00.000Z', expiresAt: '2026-11-19T17:25:00.000Z' });
   });
 
   it('la fin efface l\'état chez le Sang ; en conversation, elle s\'annonce', async () => {
@@ -152,7 +152,7 @@ describe('le téléphone en appel', () => {
     expect(m.vers(SANG).at(-1)).toEqual({
       room: ROOMS.user(SANG),
       event: SERVER_EVENTS.PHONE_CALL_ENDED,
-      data: { userId: PERSONNE, announcement: { kind: 'ended', at: new Date(T0 + 12 * MIN).toISOString() } },
+      data: { userId: PERSONNE, announcement: { kind: 'ended', at: '2026-11-19T14:10:00.000Z' } },
     });
     expect((await phoneCallSnapshotFor(m.deps, SANG)).items).toEqual([]);
   });
@@ -167,10 +167,12 @@ describe('le rattrapage et la perte d\'accès', () => {
     expect((await phoneCallSnapshotFor(m.deps, ADMIN)).items).toEqual([]);
   });
 
-  it('un état resté sans rappel au-delà de 3 h n\'est plus servi', async () => {
+  it('un état resté sans rappel au-delà de 3 h (arrondies aux 5 min supérieures) n\'est plus servi', async () => {
     const m = monde();
     await m.rapporter(true);
-    m.avancer(181 * MIN);
+    m.avancer(178 * MIN);
+    expect((await phoneCallSnapshotFor(m.deps, SANG)).items).toHaveLength(1);
+    m.avancer(5 * MIN);
     expect((await phoneCallSnapshotFor(m.deps, SANG)).items).toEqual([]);
   });
 
