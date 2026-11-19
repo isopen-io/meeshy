@@ -34,6 +34,8 @@ import me.meeshy.sdk.model.conversationinfo.ConversationInfoHero
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.battery.BatteryPersonSection
 import me.meeshy.ui.component.battery.BatteryPersonSurface
+import me.meeshy.ui.component.fall.FallPersonSection
+import me.meeshy.ui.component.fall.FallPersonSurface
 import me.meeshy.ui.component.inactivity.InactivityPersonSection
 import me.meeshy.ui.component.inactivity.InactivityPersonSurface
 import me.meeshy.ui.component.phonecall.PhoneCallPersonSection
@@ -147,6 +149,13 @@ internal fun ConversationInfoSheet(
                         userId = peer,
                         name = title,
                         surface = PhoneReachabilityPersonSurface.CONVERSATION_INFO,
+                        modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+                    )
+                    // Sa chute détectée (#18748) : l'heure, la batterie et la position seulement si servies.
+                    FallPersonSection(
+                        userId = peer,
+                        name = title,
+                        surface = FallPersonSurface.CONVERSATION_INFO,
                         modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
                     )
                     // Son alerte d'inactivité (#18738) : depuis quand, la batterie et la position seulement si servies.

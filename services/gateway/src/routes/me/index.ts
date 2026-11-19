@@ -22,6 +22,7 @@ import deviceBatteryMeRoutes from './device-battery';
 import deviceReachabilityMeRoutes from './device-reachability';
 import wellnessMeRoutes from './wellness';
 import deviceCallMeRoutes from './device-call';
+import healthFallMeRoutes from './health-fall';
 import liveActivityTokensMeRoutes from './live-activity-tokens';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { handleGetMe, meRouteSharedOptions } from './get-me';
@@ -46,6 +47,8 @@ export default async function meRoutes(fastify: FastifyInstance) {
   await fastify.register(deviceReachabilityMeRoutes);
   await fastify.register(wellnessMeRoutes);
   await fastify.register(deviceCallMeRoutes);
+  // #18748 : la chute détectée par la montre, sous l'accord explicite de la personne.
+  await fastify.register(healthFallMeRoutes);
   // #19463 : le jeton d'Activité en direct d'un partage de position, clos par la passerelle à sa fin.
   await fastify.register(liveActivityTokensMeRoutes);
 
