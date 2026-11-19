@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.game.GameActAdvanceWatch
 import me.meeshy.sdk.model.game.GameMission
 import me.meeshy.sdk.model.game.GameMissions
 import me.meeshy.sdk.model.game.MissionDifficulty
+import me.meeshy.ui.component.bubble.BubbleContent
 import org.junit.Test
 
 /** L'acte du Rêve qui avance se voit à l'envoi, puis s'efface (#17367, tranche Android #19717). */
