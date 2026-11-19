@@ -163,3 +163,46 @@ Trois d'entre elles ont la même forme que les lots livrés : **un site juste et
 son jumeau qui ne l'est pas.** C'est le motif le plus productif de ce relevé, et
 il mérite d'être dit : chercher la MOITIÉ d'une loi rend plus que chercher la
 loi.
+
+
+---
+
+## Incident d'historique, à lire avant de bisecter cette branche
+
+L'audit adversarial du lot a été lancé **dans le worktree principal**, pendant
+que la session continuait à committer. Sa méthode mute la production pour
+mesurer les témoins, puis restaure — et un `git add -A` a ramassé une mutation
+entre les deux.
+
+| commit | ce qu'il porte en plus de son lot |
+|---|---|
+| `0f4a5df9ca` (#19938) | `const permanent = true;` — **neutralise #19827** |
+| `581ef0679c` (journal) | la restauration de cette ligne, sans un mot |
+
+**L'état de la branche est correct** : la tête porte la bonne ligne, et le lot
+de correction (`8f16efd1ca`) la rejoue explicitement. Mais ces deux commits ne
+doivent **jamais être cherry-pickés seuls**, et un `git bisect` qui s'arrête sur
+`0f4a5df9ca` mesure un arbre où #19827 est désactivé. Le remède propre — un
+squash — a été tenté et refusé par la politique de la session (réécriture
+d'historique poussé) ; la trace explicite en tient lieu.
+
+Leçon : `tasks/lessons/2026-11-19-un-auditeur-qui-mute-l-arbre-vivant-se-fait-commiter-par-la-session.md`.
+
+## Ce que l'audit adversarial a corrigé dans le lot lui-même
+
+- **le motif était SURÉVALUÉ** — la destruction coûtait le REJEU, pas le
+  message, et le lot avait supprimé la phrase de #12822 qui le disait ;
+- **la seule porte du clair vers le disque** (`restoreForRetry`) n'était gardée
+  que par une propriété d'`openedForReplay`, sans témoin : il y en a un
+  désormais, et il tombe sur la dérive exacte qu'il existe pour attraper ;
+- **un témoin dont le titre dépassait ce qu'il prouvait** (« et la fenêtre de
+  rétention » sans appeler `cleanup()`) ;
+- **cinq doc-comments rendus faux** par le lot et non relus.
+
+## Les suivis ouverts par l'audit adversarial
+
+| constat | issue |
+|---|---|
+| aucun compteur ni coupe-circuit sur `disposition: kept-in-memory` — une cause SYSTÉMATIQUE retiendrait jusqu'à 50 000 charges en clair 48 h | **#19945** |
+| le tas partage un budget entre « repli de panne Redis » et « gardé faute de sceau », et son éviction globale ne passe pas par `noteBoundEviction` (seul des cinq chemins) | **#19946** |
+| `heapOnly` installe un état de livraison PAR PROCESSUS — incompatible avec « passerelle sans état » (#9232), et perdu à chaque redémarrage | **#19947** |
