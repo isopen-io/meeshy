@@ -605,3 +605,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - `dev` (`fbfaa617b`, 20 fichiers : position partagée, rang de liste, carte iOS ; aucun chemin du lot) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 216 tests verts ; web `tsc --noEmit` vert, suites du lot (6 fichiers, 41 tests) vertes, `check-ts-catalog-dead-entries` 269 = référence.
 - 15:29 : `ci.yml` (`workflow_dispatch`) VERT sur `2d4149e7c`. `dev` ayant reçu 21 commits (appels web, position partagée, relations ; aucun chemin du lot), `dev` `07609bfa9` refusionnée sans conflit ; rejoués : shared `__tests__/ci/` 216 verts, web `tsc --noEmit` vert, suites communautés + appels (182 fichiers, 2 632 tests) vertes, catalogue 269 = référence.
 - Prochain lot recommandé : iOS #19877 (les intendants tranchent les demandes), puis #19869 / #19879.
+
+## 2026-11-19 — réveil 17:38 UTC
+
+- Début du run : #19903 (#19869, iOS « Demande envoyée ») ouverte, poussée à 16:55 par une autre session, ses `workflow_dispatch` en file : vivante, cédée.
+- Lot : #19872 (passerelle) — une demande d'entrée se clôt quand la personne entre par une autre porte, et n'attend jamais indéfiniment.
