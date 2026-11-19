@@ -1496,3 +1496,13 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   couleurs d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
 - Prochain lot recommandé : fusion de #19768 au dégel, puis #19767, plafond `untilStopped` de `listOnlyState`,
   #19682 une fois décidée.
+
+## 2026-11-19 — réveil de 9 h : #19768 recalée sur dev (a6b7eada5)
+
+- Reprise : #19768 toujours ouverte, tête 072cc35df intacte ; la CI des PR reste gelée (35 vérifications « skipped »).
+  #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (a6b7eada5 : tests SDK iOS, appels, profil) fusionnée à la main, sans conflit et sans fichier commun
+  avec le lot.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 046) rc=0,
+  couleurs d'accent rc=0.
+- Prochain lot recommandé : inchangé (fusion de #19768 au dégel, puis #19767, plafond `untilStopped`, #19682 décidée).
