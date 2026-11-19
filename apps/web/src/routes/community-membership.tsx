@@ -19,13 +19,19 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * La pièce est PURE (l'état de la confirmation mis à part) : `pending` grise le
  * geste le temps de la réponse, `failure` dit un refus sous le bouton, dans
  * la langue. Hors ligne, le geste reste visible mais inerte, et dit pourquoi.
+ *
+ * Une communauté qui valide chaque entrée (#19868) offre « Demander à
+ * rejoindre » (`request`, même bouton de marque), puis « Demande envoyée »
+ * (`requested`) : un état INERTE, annoncé comme statut, qui dit qui doit
+ * l'accepter — jamais un second envoi, jamais un faux « Quitter ».
  */
 
-export type MembershipFailure = 'join' | 'refused' | 'leave' | 'offline';
+export type MembershipFailure = 'join' | 'refused' | 'cooldown' | 'leave' | 'offline';
 
 const FAILURE_KEY = {
   join: 'community.membership.error',
   refused: 'community.membership.error.refused',
+  cooldown: 'community.membership.error.cooldown',
   leave: 'community.membership.error',
   offline: 'community.membership.offline',
 } as const satisfies Readonly<Record<MembershipFailure, CommunityMembershipCatalogKey>>;
@@ -35,6 +41,12 @@ const ERROR_INK = 'var(--color-error)';
 const JOIN_STYLE = {
   backgroundColor: 'var(--ios-indigo-600)',
   color: 'var(--color-ios-on-brand)',
+  minHeight: 48,
+} as const;
+
+const REQUESTED_STYLE = {
+  color: 'var(--color-ios-ink-2)',
+  backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 14%, transparent)',
   minHeight: 48,
 } as const;
 
@@ -68,7 +80,7 @@ export function CommunityMembershipAction({
 
   return (
     <div className="grid gap-2" data-community-membership={action}>
-      {action === 'join' ? (
+      {action === 'join' || action === 'request' ? (
         <button
           type="button"
           data-community-join
@@ -80,8 +92,25 @@ export function CommunityMembershipAction({
           style={{ ...JOIN_STYLE, opacity: inert ? 0.55 : 1 }}
         >
           <GlyphSvg glyph={COMMUNITIES_GLYPHS.plusCircle} size={18} />
-          {translateMembership(language, 'community.membership.join')}
+          {translateMembership(language, action === 'join' ? 'community.membership.join' : 'community.membership.request')}
         </button>
+      ) : action === 'requested' ? (
+        <div role="status" className="grid gap-1">
+          <button
+            type="button"
+            data-community-join-requested
+            disabled
+            aria-disabled
+            className="flex w-full items-center justify-center gap-2 rounded-card text-body font-semibold"
+            style={REQUESTED_STYLE}
+          >
+            <GlyphSvg glyph={COMMUNITIES_GLYPHS.clock} size={18} />
+            {translateMembership(language, 'community.membership.requested')}
+          </button>
+          <p className="text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+            {translateMembership(language, 'community.membership.requested.hint')}
+          </p>
+        </div>
       ) : (
         <button
           type="button"
