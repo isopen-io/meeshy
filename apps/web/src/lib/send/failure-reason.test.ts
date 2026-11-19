@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 
 import type { ApiFailure } from '@/lib/api/http';
 import { isPermanentFailure } from '@/lib/api/outcome';
-import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
 import { sendFailureReason as sendFailureReasonIn } from './failure-reason';
@@ -56,6 +56,32 @@ describe('sendFailureReason', () => {
    * que CE TYPE de pièce jointe ne passe pas encore ici, et l'échec reste
    * PERMANENT (aucun rejeu).
    */
+  /**
+   * LA PIÈCE BALAYÉE (#19865) — son JUMEAU par la forme est le refus de DROIT
+   * ci-dessous, et leurs phrases sont OPPOSÉES : celle-ci promet que réessayer
+   * suffit, parce que `perform-send.ts` a oublié les ids et que la reprise
+   * re-téléverse le fichier conservé. Le refus générique du 4xx (« envoi
+   * refusé ») disait au même utilisateur le contraire.
+   */
+  test('404 ATTACHMENT_NOT_FOUND ⇒ la pièce n’était plus disponible, et réessayer suffit', () => {
+    const refused = failure(404, { code: 'ATTACHMENT_NOT_FOUND' });
+    expect(sendFailureReason(refused)).toBe(translate('fr', 'send.failure.attachmentExpired'));
+    expect(sendFailureReason(refused)).not.toBe(translate('fr', 'send.failure.rejected'));
+    /* Elle se dit dans la langue d'interface, comme ses voisines (#7740). */
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      const served = sendFailureReasonIn(refused, language);
+      expect(served).toBe(translate(language, 'send.failure.attachmentExpired'));
+      /* La LONGUEUR, et pas seulement l'égalité : une clé absente d'une langue
+         rend `undefined` des DEUX côtés de la comparaison, et un témoin qui ne
+         peut pas tomber n'est pas un témoin. La parité des sept catalogues est
+         gardée chez elle (`satisfies`, `i18n-catalog.test.ts`) ; ici on garde
+         seulement qu'une phrase est bien SERVIE. */
+      expect(served ?? '').not.toHaveLength(0);
+    }
+    /* Et c'est le SEUL 4xx que la bande d'envoi propose de rejouer. */
+    expect(isPermanentFailure(refused)).toBe(false);
+  });
+
   test('403 ATTACHMENT_RIGHT_NOT_PERMITTED ⇒ ce type de pièce jointe ne passe pas encore ici, sans rejeu', () => {
     const refused = failure(403, { code: 'ATTACHMENT_RIGHT_NOT_PERMITTED' });
     expect(sendFailureReason(refused)).toBe('vous ne pouvez pas encore envoyer ce type de pièce jointe dans cette conversation');

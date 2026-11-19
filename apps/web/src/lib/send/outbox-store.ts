@@ -72,6 +72,22 @@ export type OutboxState = {
    * `upload` (un envoi sans pièce jointe n'appelle jamais ce geste).
    */
   markUploaded(conversationId: string, clientMessageId: string, attachmentIds: readonly string[]): void;
+  /**
+   * LES IDS MÉMORISÉS NE DÉSIGNENT PLUS RIEN (#19865) — la passerelle a refusé
+   * l'envoi par `ATTACHMENT_NOT_FOUND` : la ligne et les octets ont été
+   * balayés faute d'avoir rejoint un message en 24 h. Le geste INVERSE de
+   * `markUploaded`, et le seul moyen de sortir de l'impasse que la règle
+   * « aucune régénération au renvoi » installe sinon : tant que
+   * `upload.attachmentIds` est posé, toute reprise redemande la pièce
+   * supprimée, et l'entrée ne peut plus JAMAIS aboutir alors que
+   * `upload.files` porte encore le fichier (IndexedDB garde les `File`).
+   *
+   * Il efface le LOT ENTIER, jamais le seul id nommé par le refus : la
+   * passerelle refuse l'envoi en bloc (`admitMessageAttachments` s'arrête au
+   * premier fautif), donc rien n'a été attaché et les pièces survivantes du
+   * lot n'ont plus de porteur — elles partiront au balayage comme les autres.
+   */
+  forgetUploadedIds(conversationId: string, clientMessageId: string): void;
   /** LE GESTE DE LA CONFIRMATION — appelé par `perform-send.ts` sur un 2xx,
    * et de nulle part ailleurs : il incrémente `confirmed`. */
   remove(conversationId: string, clientMessageId: string): void;
@@ -164,6 +180,24 @@ export function createOutboxStore(): StoreApi<OutboxState> {
             [conversationId]: replaceEntry(current, clientMessageId, (entry) =>
               entry.upload === undefined ? entry : { ...entry, upload: { ...entry.upload, attachmentIds } },
             ),
+          },
+        };
+      }),
+    forgetUploadedIds: (conversationId, clientMessageId) =>
+      set((state) => {
+        const current = state.entries[conversationId];
+        if (current === undefined) return state;
+        return {
+          entries: {
+            ...state.entries,
+            [conversationId]: replaceEntry(current, clientMessageId, (entry) => {
+              if (entry.upload === undefined || entry.upload.attachmentIds === undefined) return entry;
+              /* La clé est RETIRÉE, jamais posée à `undefined` : c'est elle que
+                 `uploadPhase` interroge (`!== undefined`), et c'est la forme
+                 que la file durable réécrit sur l'appareil. */
+              const { attachmentIds: _forgotten, ...upload } = entry.upload;
+              return { ...entry, upload };
+            }),
           },
         };
       }),
