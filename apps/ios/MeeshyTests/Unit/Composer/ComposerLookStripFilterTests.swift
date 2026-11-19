@@ -90,7 +90,7 @@ final class ComposerLookStripFilterTests: XCTestCase {
 
     func test_items_mood_intersectsWithTheType() {
         let jovialVisage = ComposerLookStripFilter(type: .faceEffects, mood: .jovial)
-        XCTAssertEqual(ComposerLookStripFilterRule.items(jovialVisage), [.effect(.none), .effect(.toad)])
+        XCTAssertEqual(ComposerLookStripFilterRule.items(jovialVisage), [.effect(.none), .effect(.toad), .effect(.baby)])
         let jovial = ComposerLookStripFilterRule.items(ComposerLookStripFilter(type: .all, mood: .jovial))
         XCTAssertEqual(jovial.first, .untouched)
         XCTAssertTrue(jovial.contains(.effect(.toad)))
