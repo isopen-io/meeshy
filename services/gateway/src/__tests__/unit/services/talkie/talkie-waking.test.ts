@@ -507,9 +507,17 @@ describe('#17142 (audit) — ce qui borne le rattrapage et la copie', () => {
       conversation: { findFirst },
     };
     await mostRecentSharedConversation(prisma as never, FROM, TO);
-    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({ type: { in: ['direct', 'group'] }, NOT: expect.objectContaining({ AND: expect.any(Array) }) }),
-    }));
+    // #19905 — la borne de régime est POSITIVE depuis ce lot : elle l'était par
+    // `NOT: SERVER_BLIND_REGIME_FILTER`, dont la négation écartait aussi la
+    // conversation SANS la clé `encryptionMode`, c'est-à-dire la population.
+    // L'assertion vise donc la forme lue, et elle est plus forte qu'avant : elle
+    // nomme les trois branches du filtre lisible au lieu de constater un `NOT`.
+    const where = (findFirst.mock.calls[0][0] as { where: Record<string, unknown> }).where;
+    expect(where).toMatchObject({ type: { in: ['direct', 'group'] } });
+    expect(where.AND).toEqual(expect.arrayContaining([
+      { OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] },
+      { OR: [{ encryptionMode: { isSet: false } }, { encryptionMode: null }, { encryptionMode: { in: ['server', 'hybrid'] } }] },
+    ]));
   });
 });
 
