@@ -1684,3 +1684,13 @@ socket jusqu'au client.
 2. #19702, #19673, #19735, #19751.
 3. #19520 (second critère, avec `sre-infra`) et #19471.
 4. **Recentrer sur les appels** dès #19749 soldée : latence `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
+
+## Cycle 49 bis — 2026-11-19 (session parallèle, PR #19772)
+
+- **Collision** : cette session et la session de la PR qui a fermé #19750 (`8a97db9b90`) ont livré le même lot en parallèle. La version de `dev` est gardée, parce qu'elle projette `path` à la sérialisation (`servedPostMedia.ts`) et non dans le client Prisma. Elle évite ainsi la réserve R2 de cette session : le miroir du seau et les relectures-réécritures restaient aveugles au `path`. Les deux commits de lot de cette session sont annulés (`git revert`) dans la PR, et #19769 et #19770 sont à requalifier, puisqu'elles visaient l'extension Prisma retirée.
+- **Ce que la PR #19772 apporte encore à `dev`** : quatre rouges de `dev` révélés par la preuve CI.
+  - **`Tests · web`** : la garde `capability-guard.test.ts` relevait `lib/calls/call-network-recovery.ts`, qui écoute `navigator.connection` pour relancer ICE. C'est une exception motivée.
+  - **Budget de taille** : `calls-routes.test.ts` passait de 2154 à 2175 lignes (#19778). La suite est scindée en join, retrait et harnais partagé, avec 93 témoins avant comme après. La dette est enregistrée en baisse, de 2154 à 1198.
+  - **`ci.yml`** : une reprise d'apt lance `dpkg --configure -a`. Jusqu'ici, le `timeout 300` laissait dpkg interrompu et toutes les reprises échouaient.
+  - **Cliquet #4649** : les suites scindées chargent les vrais schémas de réponse.
+- **Leçon** : deux sessions de la routine ont tourné en même temps sur le même lot. Le relevé du démarrage (§ 1.1) doit aussi lister les PR ouvertes ou fusionnées dans l'heure qui citent l'issue visée, et pas seulement les branches qui touchent les fichiers.
