@@ -25,15 +25,31 @@ public nonisolated enum ProfileHeroPlan {
     /// L'avancée du repli : le décalage signé du défilement (négatif quand on descend) ramené à K28. Tirée vers le
     /// bas, elle est négative et seule la bannière s'étire.
     public static func progress(scrollOffset: Double) -> Double {
+        progress(scrollOffset: scrollOffset, topInset: topInset)
+    }
+
+    /// Le même repli, la barre repliée mesurée depuis `topInset` (#19854).
+    public static func progress(scrollOffset: Double, topInset: Double) -> Double {
         guard scrollOffset.isFinite else { return 0 }
         return MeeshyCollapsingHeroRecipe.progress(offset: -scrollOffset, expandedHeight: expandedHeight,
-                                                   collapsedHeight: collapsedHeight)
+                                                   collapsedHeight: collapsedHeight(topInset: topInset))
+    }
+
+    /// Le haut des commandes (#19854) : une feuille n'a pas de barre d'état au-dessus d'elle (`topInset`) ; en plein
+    /// écran, la barre système l'est — les commandes se posent sous elle, jamais dedans.
+    public static func topInset(statusBar: Double) -> Double {
+        statusBar.isFinite && statusBar > 0 ? statusBar + 4 : topInset
+    }
+
+    /// La barre repliée tient les commandes posées à `topInset`, et une marge dessous.
+    public static func collapsedHeight(topInset: Double) -> Double {
+        topInset + MeeshyCollapsingHeroRecipe.controlTarget + 12
     }
 
     /// La pilule de relation rejoint la barre quand la barre porte l'identité, jamais avant (une seule identité).
-    public static func barShowsRelation(progress: Double) -> Bool {
+    public static func barShowsRelation(progress: Double, topInset: Double = topInset) -> Bool {
         MeeshyCollapsingHeroRecipe.resolve(progress: progress, expandedHeight: expandedHeight,
-                                           collapsedHeight: collapsedHeight).barOwnsIdentity
+                                           collapsedHeight: collapsedHeight(topInset: topInset)).barOwnsIdentity
     }
 
     public static func banner(_ paint: ProfileBannerPaint, isBlockedByTarget: Bool) -> ProfileHeroBanner {
@@ -58,6 +74,19 @@ public nonisolated enum ProfileHeroPlan {
     /// La présence peinte sur l'avatar : aucune sur une identité grisée.
     public static func presence(_ state: PresenceState, isMuted: Bool) -> PresenceState? {
         isMuted ? nil : state
+    }
+
+    /// Ce que dit le texte de présence de la fiche (#19853) : le même état que le point de l'avatar. Vert ⇒ « En ligne »,
+    /// quelle que soit la date d'activité servie ; sinon la date, teintée de cet état ; rien sans état ni date.
+    public enum PresenceLine: Equatable, Sendable {
+        case online
+        case seen(Date, PresenceState)
+    }
+
+    public static func presenceLine(state: PresenceState?, lastActiveAt: Date?) -> PresenceLine? {
+        guard let state else { return nil }
+        if state == .online { return .online }
+        return lastActiveAt.map { .seen($0, state) }
     }
 
     public static func storyRing(_ state: StoryRingState, avatarSize: Double) -> StoryRingState {

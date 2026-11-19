@@ -86,7 +86,7 @@ jest.mock('fs', () => ({
     mkdir: jest.fn().mockResolvedValue(undefined),
     writeFile: jest.fn().mockResolvedValue(undefined),
     readFile: jest.fn().mockResolvedValue(Buffer.from('mock-audio')),
-    unlink: jest.fn().mockResolvedValue(undefined),
+    ...Object.fromEntries(['unlink', 'rename', 'chmod'].map((name) => [name, jest.fn().mockResolvedValue(undefined)])),
     stat: jest.fn().mockResolvedValue({ size: 1024 })
   },
   existsSync: jest.fn().mockReturnValue(true),
@@ -1055,7 +1055,7 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
         postMediaId: POST_MEDIA_FIXTURE_ID,
         translatedAudios: [
           makeTranslatedAudio({ targetLanguage: 'de', translatedText: 'Hallo', audioUrl: null, audioPath: '', durationMs: 0, textOnly: true }),
-          makeTranslatedAudio({ targetLanguage: 'fr', audioUrl: '/outputs/audio/translated/fr.mp3', audioPath: '/app/outputs/fr.mp3' }),
+          makeTranslatedAudio({ targetLanguage: 'fr', audioUrl: '/outputs/audio/translated/fr.mp3', audioPath: '/app/outputs/fr.mp3', _audioBinary: Buffer.from('voix-fr') }),
         ]
       };
 
@@ -1066,8 +1066,8 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       expect(translations.de.transcription).toBe('Hallo');
       expect(translations.de).not.toHaveProperty('url');
       expect(translations.de).not.toHaveProperty('path');
-      expect(translations.fr.url).toBe(`/api/v1/attachments/file/translated/post/${POST_MEDIA_FIXTURE_ID}_fr.mp3`);
-      expect(translations.fr.path).toMatch(new RegExp(`/translated/post/${POST_MEDIA_FIXTURE_ID}_fr\\.mp3$`));
+      expect(translations.fr.url).toMatch(new RegExp(`^/api/v1/attachments/file/translated/post/${POST_MEDIA_FIXTURE_ID}_fr_[0-9a-f]{32}\\.mp3$`));
+      expect(translations.fr.path).toMatch(new RegExp(`/translated/post/${POST_MEDIA_FIXTURE_ID}_fr_[0-9a-f]{32}\\.mp3$`));
     });
 
     it('persists an empty audioUrl from a translator of the previous version (#19648) with neither url nor path', async () => {

@@ -33,7 +33,7 @@ extension UserProfileSheet {
             }
             .overlay(alignment: .top) {
                 ScrollOffsetReader(relay: scrollRelay) { offset in
-                    profileHero(progress: ProfileHeroPlan.progress(scrollOffset: Double(offset)))
+                    profileHero(progress: ProfileHeroPlan.progress(scrollOffset: Double(offset), topInset: heroTopInset))
                         .offset(y: -offset)
                 }
             }
@@ -43,6 +43,21 @@ extension UserProfileSheet {
         .trackScrollContentOffset { scrollRelay.offset = -$0 }
         .background(theme.backgroundPrimary)
         .ignoresSafeArea(edges: .top)
+        .background { statusBarReader }
+    }
+
+    /// Le haut des commandes du héros (#19854) : en plein écran, sous la barre système ; en feuille, `topInset`.
+    var heroTopInset: Double {
+        ProfileHeroPlan.topInset(statusBar: presentationStyle == .cover ? heroStatusBar : 0)
+    }
+
+    /// Lit la barre système sous la fiche, hors du défilement qui l'ignore.
+    private var statusBarReader: some View {
+        GeometryReader { proxy in
+            Color.clear.adaptiveOnChange(of: Double(proxy.safeAreaInsets.top), initial: true) { _, top in
+                heroStatusBar = top
+            }
+        }
     }
 
     // MARK: - Le héros (K28)
@@ -54,8 +69,8 @@ extension UserProfileSheet {
             subtitle: "@\(displayUser.username)",
             alignment: .leading,
             expandedHeight: ProfileHeroPlan.expandedHeight,
-            collapsedHeight: ProfileHeroPlan.collapsedHeight,
-            topInset: ProfileHeroPlan.topInset,
+            collapsedHeight: ProfileHeroPlan.collapsedHeight(topInset: heroTopInset),
+            topInset: heroTopInset,
             isLoading: phase == .skeleton,
             keepsBannerInBar: true,
             banner: { heroBanner(progress: progress) },
@@ -87,7 +102,7 @@ extension UserProfileSheet {
             MeeshyBadge(.label(ProfileStatesCopy.blockedChip), leading: .systemImage("nosign"), surface: .glass,
                         kind: .err, size: .s28)
                 .accessibilityIdentifier("profile.header.blocked")
-        } else if ProfileHeroPlan.barShowsRelation(progress: progress) {
+        } else if ProfileHeroPlan.barShowsRelation(progress: progress, topInset: heroTopInset) {
             relationPillSlot
         }
     }
@@ -193,7 +208,9 @@ extension UserProfileSheet {
     /// Grisée (bloqué), l'identité ne dit ni sa ville ni sa présence datée.
     @ViewBuilder
     var heroStatusLine: some View {
-        if !isIdentityMuted, displayUser.city != nil || displayUser.lastActiveAt != nil {
+        let presence = ProfileHeroPlan.presenceLine(state: ProfileHeroPlan.presence(resolvedPresence, isMuted: isIdentityMuted),
+                                                    lastActiveAt: displayUser.lastActiveAt)
+        if !isIdentityMuted, displayUser.city != nil || presence != nil {
             HStack(spacing: MeeshySpacing.xs) {
                 if let city = displayUser.city {
                     Image(systemName: "mappin")
@@ -204,14 +221,12 @@ extension UserProfileSheet {
                         .lineLimit(1)
                         .accessibilityIdentifier("profile.header.city")
                 }
-                // Présence datée — rendue seulement si le serveur l'a jugée montrable (lastActiveAt non nil pour cet
-                // observateur : rien sous Ami).
-                if let lastActive = displayUser.lastActiveAt {
+                // La présence dit le MÊME état que le point de l'avatar (#19853) : rien de ce que le serveur n'a pas servi.
+                if let presence {
                     if displayUser.city != nil {
                         Text(verbatim: "·").foregroundStyle(theme.textSecondary).accessibilityHidden(true)
                     }
-                    Text(RelativeTimeFormatter.lastSeenString(for: lastActive))
-                        .foregroundStyle(presenceColor(for: lastActive))
+                    presenceText(presence)
                 }
             }
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
@@ -316,13 +331,17 @@ extension UserProfileSheet {
         ).state
     }
 
-    /// Couleur du libellé de présence — dérive l'état via la règle canonique
-    /// (`UserPresence.state`) puis le mapping couleur central (PresenceStyle) :
-    /// vert actif (<= 5 min), orange away (5-30 min), gris texte au-delà.
-    /// Miroir de `presenceColorClass` (web).
-    func presenceColor(for date: Date, now: Date = Date()) -> Color {
-        let state = UserPresence(isOnline: false, lastActiveAt: date).state(now: now)
-        if state == .offline { return theme.textSecondary }
-        return state.dotColor
+    /// Le texte et sa teinte viennent de l'état du point : vert « En ligne », sinon la date dans la couleur de l'état,
+    /// gris texte hors ligne. Miroir de `presenceColorClass` (web).
+    @ViewBuilder
+    func presenceText(_ line: ProfileHeroPlan.PresenceLine) -> some View {
+        switch line {
+        case .online:
+            Text(RelativeTimeFormatter.lastSeenString(for: Date()))
+                .foregroundStyle(PresenceState.online.dotColor)
+        case let .seen(date, state):
+            Text(RelativeTimeFormatter.lastSeenString(for: date))
+                .foregroundStyle(state == .offline ? theme.textSecondary : state.dotColor)
+        }
     }
 }
