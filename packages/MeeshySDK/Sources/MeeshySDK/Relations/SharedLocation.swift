@@ -37,9 +37,13 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
     /// `circle` (#17966), ADDITIF : le cercle d'où vient l'émetteur POUR MOI (Ami, Proche, Sang). Un serveur antérieur
     /// ne le sert pas, une valeur hors des trois cercles se lit comme absente : la carte dessine alors un marqueur neutre.
     public let circle: RelationLevel?
+    /// `motion` (#19887), ADDITIF : servi au seul lecteur à la précision exacte. Absent, inconnu ou illisible : `nil`,
+    /// et la position se lit quand même.
+    public let motion: SharedLocationMotion?
 
     public init(userId: String, latitude: Double, longitude: Double, precision: SharedLocationPrecision,
-                radiusMeters: Double, updatedAt: Date, expiresAt: Date, circle: RelationLevel? = nil) {
+                radiusMeters: Double, updatedAt: Date, expiresAt: Date, circle: RelationLevel? = nil,
+                motion: SharedLocationMotion? = nil) {
         self.userId = userId
         self.latitude = latitude
         self.longitude = longitude
@@ -48,6 +52,7 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
         self.updatedAt = updatedAt
         self.expiresAt = expiresAt
         self.circle = circle.flatMap { SharedLocationCircle.served.contains($0) ? $0 : nil }
+        self.motion = motion
     }
 
     /// La durée de vie servie, bornée par le contrat : une échéance absurde ne garde jamais une position affichée.
@@ -55,7 +60,7 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
         min(SharedLocationContract.maxLifetime, max(0, expiresAt.timeIntervalSince(updatedAt)))
     }
 
-    private enum CodingKeys: String, CodingKey { case userId, latitude, longitude, precision, radiusMeters, updatedAt, expiresAt, circle }
+    private enum CodingKeys: String, CodingKey { case userId, latitude, longitude, precision, radiusMeters, updatedAt, expiresAt, circle, motion }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -83,8 +88,9 @@ public struct SharedLocationChanged: Decodable, Sendable, Equatable {
             throw DecodingError.dataCorruptedError(forKey: .updatedAt, in: c, debugDescription: "instant illisible")
         }
         let circle = ((try? c.decodeIfPresent(String.self, forKey: .circle)) ?? nil).flatMap(RelationLevel.init(rawValue:))
+        let motion = ((try? c.decodeIfPresent(String.self, forKey: .motion)) ?? nil).flatMap(SharedLocationMotion.init(rawValue:))
         self.init(userId: userId, latitude: latitude, longitude: longitude, precision: precision,
-                  radiusMeters: radius, updatedAt: updatedAt, expiresAt: expiresAt, circle: circle)
+                  radiusMeters: radius, updatedAt: updatedAt, expiresAt: expiresAt, circle: circle, motion: motion)
     }
 }
 

@@ -1798,3 +1798,44 @@ socket jusqu'au client.
 1. Sur staging, un appel web↔web ou web↔iOS, puis `GET /admin/analytics/calls` : `quality.reportingCalls` > 0. C'est le critère qui ferme #19876.
 2. Android, moitié restante de #11932 (même MOS, dont la source unique reste `CallMOS.swift` / `call-mos.ts`).
 3. #12236 (ancrage de la négociation de l'appelant sur la réponse, iOS et web), puis #16933 (export Prometheus du débordement de la voie rapide des sous-titres).
+
+## Cycle 53 — 2026-11-19
+
+- **Base** : `origin/dev` @ `ebb68519d`, puis `dev` @ `07609bfa9` fusionnée dans la branche (9 commits, aucun sur les chemins du lot).
+- **Branche** : `claude/determined-volta-5pzxw0`. **PR** : #19898.
+- **Objectif** : #19895, moitié Android de #11932. Android rapporte dans `call:analytics` les gels, la limitation, le MOS et le relais de chaque appel.
+- **Livré** (Android seul) :
+  - **MOS** : `core/model/.../call/CallMos.kt`, miroir de `CallMOS.swift` et de `call-mos.ts`, qui sont désormais trois copies d'une même formule. Le témoin reprend les six cas iOS.
+  - **Lecture des stats** : `CallStatsCollector` projette sept compteurs de plus et deux textes, `relayProtocol` et `qualityLimitationReason`. La projection reste en liste blanche : ni adresse, ni port, ni ufrag, ni URL.
+  - **Lecture média** : `CallMediaQuality.read` reprend `readMediaQuality` du web.
+    - Chaque somme ne compte que les flux qui portent la mesure. Une mesure absente vaut `null`, jamais 0.
+    - Le tampon de gigue ne lit que l'audio dont le compte émis est positif.
+    - Du candidat local de la paire élue, seul le type part, et `relayProtocol` seulement s'il est `relay`.
+  - **Repli sur la paire nominée** : libwebrtc rend `nominated` en booléen, maintenant lu comme 1/0. Ce repli n'avait jamais fonctionné ; `relayed` en profite aussi.
+  - **Ce que l'appel retient** : `CallMediaTally` garde le dernier relevé, la somme des gigues et le décompte des causes de limitation.
+    - Chaque champ ne part que s'il est mesuré et fini.
+    - Les compteurs sont bornés à 2^53−1, car zod 4 refuse au-delà, vérifié à l'exécution.
+    - La cause dominante l'emporte ; à égalité, l'ordre alphabétique tranche.
+    - Le MOS est calculé sur les moyennes de l'appel, perte convertie en pourcentage.
+  - **Rétrocompatibilité** : aucun champ existant n'a changé, et le schéma serveur non plus.
+- **Tests** :
+  - Ajoutés : `CallMosTest`, `CallMediaQualityTest` (9), `CallAnalyticsMediaTest` (9), plus un test sur l'échantillonneur et un sur le collecteur. Ils étaient rouges à la compilation avant le code.
+  - **Preuve** : `workflow_dispatch` d'`android.yml`, run 44546671378 sur `1c04ffae7`, **success**. `assembleDebug`, `testDebugUnitTest`, kit, Room et gardes sont tous verts.
+  - Gradle ne tourne pas dans le conteneur : le plugin AGP est introuvable hors ligne, et `build-artifacts.signal.org` répond 403.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - Le schéma, la vie privée et les appelants (aucun `distinctUntilChanged` touché) ont été vérifiés.
+  - Réserves 2 et 3 → #19899 : `averageRtt`, `averagePacketLoss` et `maxPacketLoss` ne sont pas bornés (préexistant, inatteignable aujourd'hui), et le RTT n'est pas lu sur la paire élue.
+- **Suivis ouverts** :
+  - #19896 : la perte est en fraction sur Android, en pourcentage sur iOS et le web.
+  - #19897 : le web ne borne pas les compteurs démesurés.
+  - #19899.
+- **Limites** :
+  - Je n'ai pas vérifié sur un appareil la présence de `freezeCount`, `qualityLimitationReason` et `relayProtocol` dans le libwebrtc embarqué.
+  - Il n'y a pas encore de recette staging web↔Android (`reportingCalls` > 0).
+
+### Cycle suivant : par où reprendre
+
+0. Si #19898 n'est pas fusionnée, la reprendre : fusionner `dev`, puis `workflow_dispatch` d'`android.yml`, puis fusionner.
+1. #19899 et #19896 (Android, petits), puis #19897 (web).
+2. Recette staging de #11932 (`GET /admin/analytics/calls`, `quality.reportingCalls` > 0) : c'est le critère qui ferme #11932.
+3. #12236 (ancrage de la négociation de l'appelant), puis #16933 (alerte sur le débordement de la voie rapide des sous-titres).

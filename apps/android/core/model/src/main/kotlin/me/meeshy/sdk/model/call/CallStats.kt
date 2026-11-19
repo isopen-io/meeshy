@@ -50,6 +50,8 @@ public data class CallStats(
     val inboundVideoBytes: Int = 0,
     /** `true` when the selected ICE pair rides a TURN relay, `false` when direct, `null` while unknown. */
     val relayed: Boolean? = null,
+    /** Gels, limitation, tampon de gigue et route de cette lecture (#19895) ; tout `null` = rien de mesuré. */
+    val media: CallMediaQuality = CallMediaQuality(),
 ) {
     /**
      * The interval [CallQualitySample] this snapshot yields against the [previous]
@@ -123,17 +125,22 @@ public data class CallStats(
          */
         public fun relayedRoute(entries: List<RawEntry>): Boolean? {
             val byId = entries.associateBy { it.id }
-            val selectedId = entries.firstOrNull { it.type == "transport" }?.strings?.get("selectedCandidatePairId")
-            val nominated = entries.firstOrNull {
-                it.type == "candidate-pair" && it.strings["state"] == "succeeded" &&
-                    (it.values["nominated"] ?: 0.0) > 0.0
-            }
-            val pair = selectedId?.let { byId[it] } ?: nominated ?: return null
+            val pair = selectedCandidatePair(entries) ?: return null
             val types = listOf("localCandidateId", "remoteCandidateId")
                 .mapNotNull { pair.strings[it] }
                 .mapNotNull { byId[it]?.strings?.get("candidateType") }
             if (types.isEmpty()) return null
             return types.contains("relay")
+        }
+
+        /** The SELECTED ICE pair: the transport's `selectedCandidatePairId`, else the nominated succeeded pair. */
+        public fun selectedCandidatePair(entries: List<RawEntry>): RawEntry? {
+            val selectedId = entries.firstOrNull { it.type == "transport" }?.strings?.get("selectedCandidatePairId")
+            val nominated = entries.firstOrNull {
+                it.type == "candidate-pair" && it.strings["state"] == "succeeded" &&
+                    (it.values["nominated"] ?: 0.0) > 0.0
+            }
+            return selectedId?.let { id -> entries.lastOrNull { it.id == id } } ?: nominated
         }
 
         public fun reduce(entries: List<RawEntry>): CallStats {
@@ -214,6 +221,7 @@ public data class CallStats(
                 inboundAudioBytes = inboundAudioBytes,
                 inboundVideoBytes = inboundVideoBytes,
                 relayed = relayedRoute(entries),
+                media = CallMediaQuality.read(entries),
             )
         }
     }

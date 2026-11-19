@@ -71,6 +71,16 @@ const arCommunityMembership = {
   'community.posts.error.offline': "غير متصل: ستظهر المنشورات عند عودة الشبكة.",
   'community.posts.retry': "إعادة المحاولة",
   'community.posts.loadingMore': "جارٍ تحميل المزيد",
+  'community.members.requests.section': "طلبات قيد الانتظار",
+  'community.members.requests.asked': "طُلب في {date}",
+  'community.members.requests.accept': "قبول",
+  'community.members.requests.reject': "رفض",
+  'community.members.requests.acceptLabel': "قبول طلب {name}",
+  'community.members.requests.rejectLabel': "رفض طلب {name}",
+  'community.members.requests.reject.confirm.body': "لن يتمكن {name} من الطلب مجددًا قبل سبعة أيام.",
+  'community.members.requests.gone': "تمت معالجة هذا الطلب بالفعل.",
+  'community.members.requests.accepted': "أصبح {name} عضوًا في المجتمع.",
+  'community.members.requests.more': "عرض المزيد من الطلبات",
 } as const satisfies CommunityMembershipCatalog;
 
 export default arCommunityMembership;

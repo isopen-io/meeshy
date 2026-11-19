@@ -49,6 +49,7 @@ const EXEMPTIONS: readonly Exemption[] = [
     pourquoi: 'qui écrit est EN LIGNE par définition (frappe = preuve d’activité) : les deux avatars de la cellule de frappe portent l’anneau seul, sans pastille ni point « ici » (#16114)',
   },
   { fichier: 'components/conversation-settings-section.tsx', combien: 1, pourquoi: 'la photo de la CONVERSATION, qu’on modifie — pas une personne' },
+  { fichier: 'routes/community-join-requests-parts.tsx', combien: 1, pourquoi: 'un DEMANDEUR d’entrée dans une communauté : la passerelle ne sert pas sa présence et la demande n’en ouvre aucune (#19871)' },
   { fichier: 'routes/communities-parts.tsx', combien: 2, pourquoi: 'une communauté et ses conversations — pas des personnes' },
   { fichier: 'routes/share-link-form.tsx', combien: 2, pourquoi: 'les conversations à partager par lien — jamais un direct (`canCreateShareLink`)' },
   {
