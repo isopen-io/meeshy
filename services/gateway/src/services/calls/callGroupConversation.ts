@@ -5,6 +5,20 @@ import { isEndToEndMode } from '../conversations/encryptionRegime';
 import { implicitConversationRegime } from '../conversations/creationRegime';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../participantRights';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { RANK_SELECT, highestRankedConversations } from '../conversations/highestRanked';
+
+/**
+ * La fenêtre de chaque flux du rang. **C'est une TRONCATURE héritée, pas une borne
+ * que la preuve du top-K démontre** (relevé par l'audit adversarial de #19835) :
+ * `take: 20` était déjà là avant que le rang n'arrive, et le filtre d'exactitude
+ * des membres s'applique APRÈS elle — un groupe appariant exactement mais hors
+ * des vingt premiers reste invisible, et l'appel en crée alors un neuf
+ * (`reserveTarget`, `callConversationRebranch.ts`). Ce que la preuve EXIGE, c'est
+ * que les deux flux lisent la MÊME fenêtre, quelle qu'elle soit ; ce que 20 vaut
+ * se mesure en production (combien de groupes partagent un même ensemble de
+ * membres ?) et n'est mesuré par rien.
+ */
+const CALL_GROUP_WINDOW = 20;
 
 /**
  * LE GROUPE D'UN APPEL (#19650) — à la première invitation d'un appel lancé en
@@ -31,6 +45,7 @@ export function exactMembers(presentUserIds: readonly string[], inviteeUserId: s
 
 type GroupRow = {
   readonly id: string;
+  readonly lastActivityAt?: Date | null;
   readonly title?: string | null;
   readonly isActive?: boolean | null;
   readonly closedAt?: Date | null;
@@ -66,33 +81,45 @@ const sameSet = (keys: readonly string[], target: ReadonlySet<string>): boolean 
  * Les groupes candidats, du plus récemment actif au plus ancien. Un groupe dont
  * la réservation d'appel est tenue par un AUTRE appel vivant est écarté ; une
  * réservation tenue par un appel fini se reprend (`ActiveCallClaim.claim`).
+ *
+ * **« Récemment actif » est le RANG** — max(`lastMessageAt`, `lastActivityAt`),
+ * #9026 — et non le dernier message (#19835). Un groupe où l'on vient de
+ * s'appeler, de réagir ou d'épingler est le plus actif des candidats même si
+ * personne n'y a écrit depuis des semaines ; c'est exactement celui où l'appel
+ * doit se tenir. L'ordre vient de `highestRankedConversations`, qui lit les deux
+ * flux du rang sur la MÊME fenêtre — aucun second tri ne le réécrit ici, un
+ * ordre qui se redéclare est un ordre qui divergera.
  */
 export async function findExactCallGroups(
   prisma: Pick<PrismaClient, 'conversation' | 'callSession'>,
   input: { readonly callId: string; readonly memberUserIds: readonly string[] }
 ): Promise<CallGroupCandidate[]> {
   const target = new Set(input.memberUserIds);
-  const rows: readonly GroupRow[] = await prisma.conversation.findMany({
-    where: {
-      type: 'group',
-      AND: input.memberUserIds.map((userId) => ({ participants: { some: { userId, isActive: true } } })),
-    },
-    select: {
-      id: true,
-      title: true,
-      isActive: true,
-      closedAt: true,
-      deletedAt: true,
-      communityId: true,
-      isAnnouncementChannel: true,
-      encryptionMode: true,
-      activeCallId: true,
-      lastMessageAt: true,
-      participants: { where: { isActive: true }, select: { userId: true } },
-    },
-    orderBy: { lastMessageAt: 'desc' },
-    take: 20,
-  });
+  const where = {
+    type: 'group',
+    AND: input.memberUserIds.map((userId) => ({ participants: { some: { userId, isActive: true } } })),
+  };
+  const select = {
+    ...RANK_SELECT,
+    title: true,
+    isActive: true,
+    closedAt: true,
+    deletedAt: true,
+    communityId: true,
+    isAnnouncementChannel: true,
+    encryptionMode: true,
+    activeCallId: true,
+    participants: { where: { isActive: true }, select: { userId: true } },
+  };
+  const rows: readonly GroupRow[] = await highestRankedConversations(
+    (stream) => prisma.conversation.findMany({
+      where: { ...where, ...stream.where },
+      select,
+      orderBy: stream.orderBy,
+      take: CALL_GROUP_WINDOW,
+    }),
+    CALL_GROUP_WINDOW,
+  );
   const exact = rows.filter((row) => isPlainLiveGroup(row) && sameSet(activeKeys(row), target));
 
   const holders = [...new Set(exact.flatMap((row) => (row.activeCallId && row.activeCallId !== input.callId ? [row.activeCallId] : [])))];
@@ -104,9 +131,8 @@ export async function findExactCallGroups(
           .map((call) => call.id)
       );
 
-  return [...exact]
+  return exact
     .filter((row) => !(row.activeCallId && live.has(row.activeCallId)))
-    .sort((a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0))
     .map((row) => ({ id: row.id, title: row.title ?? null, memberUserIds: [...input.memberUserIds] }));
 }
 
