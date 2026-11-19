@@ -128,7 +128,7 @@ describe('seulement ce qui a du sens (#9536)', () => {
 describe('ce que lit le lecteur d’écran — une phrase complète', () => {
   test('fr : le nouveau joueur, son niveau, son palier et sa marche vers le suivant', () => {
     const model = shown(NEWCOMER);
-    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, Étincelle, \d+ % vers le \d+$/);
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^Ta lumière au niveau \d+, Étincelle, \d+ % vers le \d+$/);
   });
 
   test('fr : au niveau 1, le total de points est dit — il n’y a pas de niveau à lire', () => {
@@ -138,7 +138,7 @@ describe('ce que lit le lecteur d’écran — une phrase complète', () => {
 
   test('fr : tout ce qui existe, dans l’ordre de la rangée compacte — le rang en tête, puis l’anneau et le milieu (#19705, #17394)', () => {
     const model = shownExtras({ balance: 12, streak: 23, glory: 620 });
-    expect(playerBannerLabel(model, 'fr')).toMatch(/^Murmure IV, gloire 620, [\d\s\u202f]+ de gloire jusqu’à Murmure III, Niveau \d+, \p{L}+, \d+ % vers le \d+, Flamme 23 jours, 12 Meeshes, Rêve : \d+ sur \d+, Héritage : Escarcelle, joute de Jade · \d+(re|e)$/u);
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^Murmure IV, gloire 620, [\d\s\u202f]+ de gloire jusqu’à Murmure III, Ta lumière au niveau \d+, \p{L}+, \d+ % vers le \d+, Flamme 23 jours, 12 Meeshes, Rêve : \d+ sur \d+, Héritage : Escarcelle, joute de Jade · \d+(re|e)$/u);
   });
 
   test('fr : trophées et saison ne sont dits que dans la disposition grand texte, où ils restent (#11125)', () => {
@@ -273,9 +273,9 @@ describe('un nom accessible par pièce', () => {
     expect(bare.trophies).toBeNull();
   });
 
-  test('les noms disent la pièce : le niveau et son palier, les étincelles et la marche vers le suivant', () => {
+  test('les noms disent la pièce : ta lumière, son niveau et son palier (#17394, #19892), les étincelles et la marche vers le suivant', () => {
     const labels = playerBannerPieceLabels(playerBannerModel(gameBlockFixture(NEWCOMER))!, 'fr');
-    expect(labels.level).toMatch(/^Niveau \d+, /);
+    expect(labels.level).toMatch(/^Ta lumière au niveau \d+, /);
     expect(labels.sparks).toContain('Étincelles');
     expect(labels.sparks).toMatch(/vers le/);
   });
