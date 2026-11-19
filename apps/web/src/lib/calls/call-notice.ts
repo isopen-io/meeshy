@@ -1,5 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 
+import type { ConversationActiveCall } from '@/lib/api/call-sessions';
 import type { Attachment, Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -85,6 +86,27 @@ export function callNoticeTarget(message: CallNoticeSource, viewerId = ''): Call
     participants: decodeCallParticipants(metadata.participants),
     viewerId,
   };
+}
+
+export type CallNoticeGesture = 'join' | 'call-back';
+
+/**
+ * **« REJOINDRE » SE CONFIRME AUPRÈS DE LA PASSERELLE** (#19778) — la copie du
+ * message (`call-live`) peut survivre à l'appel (édition terminale manquée, fil
+ * relu du cache) : seule la réponse du sondage (`GET …/active-call`) qui nomme
+ * CE `callId` ouvre « Rejoindre ». Avant elle (ou pendant qu'elle reconfirme une
+ * réponse qui ne le nomme pas) la carte reste NEUTRE — un « Rejoindre » optimiste
+ * qui répond « appel terminé » est exactement le défaut. Une réponse qui ne le
+ * nomme pas dit un appel fini : « Rappeler ».
+ */
+export function callNoticeGesture(
+  target: CallNoticeTarget,
+  probe: { readonly served: ConversationActiveCall | null | undefined; readonly confirming: boolean },
+): CallNoticeGesture | null {
+  if (!target.live) return 'call-back';
+  if (target.callId !== null && probe.served?.callId === target.callId) return 'join';
+  if (probe.served === undefined || (probe.confirming && target.callId !== null)) return null;
+  return 'call-back';
 }
 
 export type CallIdentity = { readonly title: string; readonly avatar: string | null; readonly isGroup: boolean };

@@ -7,22 +7,23 @@ import org.junit.Test
 class CallFaceEffectTest {
 
     @Test
-    fun `les six effets suivent l ordre du carrousel et leurs identifiants analytiques ne bougent pas`() {
+    fun `les sept effets suivent l ordre du carrousel et leurs identifiants analytiques ne bougent pas`() {
         assertThat(CallFaceEffect.entries.map { it.id })
-            .containsExactly("none", "smoothing", "toad", "angel", "demon", "volcano").inOrder()
+            .containsExactly("none", "smoothing", "toad", "angel", "demon", "volcano", "baby").inOrder()
     }
 
     @Test
     fun `seuls les effets ludiques sont stylises`() {
         assertThat(CallFaceEffect.entries.filter { it.isStylized })
-            .containsExactly(CallFaceEffect.Toad, CallFaceEffect.Angel, CallFaceEffect.Demon, CallFaceEffect.Volcano)
+            .containsExactly(CallFaceEffect.Toad, CallFaceEffect.Angel, CallFaceEffect.Demon, CallFaceEffect.Volcano, CallFaceEffect.Baby)
     }
 
     @Test
     fun `le volcan et aucun effet se passent de visage, les autres en demandent un`() {
         assertThat(CallFaceEffect.Volcano.needsFace).isFalse()
         assertThat(CallFaceEffect.None.needsFace).isFalse()
-        assertThat(listOf(CallFaceEffect.Smoothing, CallFaceEffect.Toad, CallFaceEffect.Angel, CallFaceEffect.Demon).all { it.needsFace }).isTrue()
+        assertThat(listOf(CallFaceEffect.Smoothing, CallFaceEffect.Toad, CallFaceEffect.Angel, CallFaceEffect.Demon, CallFaceEffect.Baby).all { it.needsFace }).isTrue()
+        assertThat(CallFaceEffect.Baby.analyticsName).isEqualTo("face:baby")
     }
 
     @Test

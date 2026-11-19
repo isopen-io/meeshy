@@ -3,6 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import { FACE_EFFECTS, NO_EFFECTS, type FaceEffect } from './video-effects';
 import { createFaceLayer, FACE_COST_SAMPLE_EVERY, type SpriteSurface } from './face-effects-draw';
 import type { FaceTarget } from './video-effects-pipeline';
+import { eyesOf, heuristicFaceBox, smoothFaceBox, type Circle, type FacePose } from './face-effects';
+import type { FaceRig } from './face-rig-port';
 
 /**
  * LE CALQUE DES EFFETS DE VISAGE (#8551) — chaque effet trace quelque chose
@@ -41,7 +43,7 @@ describe('chaque effet de visage', () => {
     expect(calls).toEqual([]);
   });
 
-  FACE_EFFECTS.filter((effect): effect is Exclude<FaceEffect, 'none'> => effect !== 'none').forEach((effect) =>
+  FACE_EFFECTS.filter((effect): effect is Exclude<FaceEffect, 'none' | 'baby'> => effect !== 'none' && effect !== 'baby').forEach((effect) =>
     test(`${effect} trace sur l’image, sans laisser l’état du canevas changé`, () => {
       const { calls, context } = recordingContext();
       createFaceLayer(null)(targetOf(context), {
@@ -202,5 +204,115 @@ describe('le coût d’une image (#9100)', () => {
     expect(flushes).toHaveLength(12);
     expect(counts[0]).toBeGreaterThan(10);
     expect(counts.at(-1)).toBe(0);
+  });
+});
+
+/**
+ * LE BÉBÉ, ET LES ORNEMENTS QUI SUIVENT LE VISAGE (#19779) — le bébé ne se
+ * pose que sur un visage VU (jamais sur la boîte supposée) : peau lissée, yeux
+ * grossis par la loupe du gréement, joues roses. Quand le gréement connaît la
+ * POSE (478 repères), le halo et les cornes tournent avec la tête et les yeux
+ * du démon brillent sur les vrais yeux ; sans pose, le dessin d'avant.
+ */
+
+const BOX = { x: 220, y: 90, width: 200, height: 260 };
+
+const seen = { detect: async () => [{ boundingBox: BOX }] };
+
+const flushed = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+const rigOf = (pose: FacePose | null) => {
+  const magnified: (readonly Circle[])[] = [];
+  const rig: FaceRig = { detector: seen, pose: () => pose, magnify: (_target, eyes) => void magnified.push(eyes), close: () => undefined };
+  return { rig, magnified };
+};
+
+/** Un calque dont le visage a été VU : la première image demande, la seconde dessine sur la boîte rendue. */
+const seenLayer = async (rig: FaceRig) => {
+  const layer = createFaceLayer(null, { rig, surface: () => null });
+  layer(targetOf(recordingContext().context), effectsOf('baby'));
+  await flushed();
+  return layer;
+};
+
+const TILTED: FacePose = {
+  face: { x: 220, y: 90, width: 200, height: 260 },
+  roll: 0.3,
+  eyes: [
+    { cx: 280, cy: 190, r: 18 },
+    { cx: 360, cy: 215, r: 18 },
+  ],
+};
+
+describe('le bébé (#19779)', () => {
+  test('sur la boîte SUPPOSÉE, rien : ni lissage, ni loupe, ni joues', async () => {
+    const { rig, magnified } = rigOf(TILTED);
+    const traced = tracingContext();
+    const blind = createFaceLayer(null, { rig: { ...rig, detector: { detect: async () => [] } } });
+    const bare = createFaceLayer(null);
+    [blind, bare].forEach((layer) => layer(targetOf(traced.context), effectsOf('baby')));
+    await flushed();
+    [blind, bare].forEach((layer) => layer(targetOf(traced.context), effectsOf('baby')));
+    expect(traced.calls).toEqual([]);
+    expect(magnified).toEqual([]);
+  });
+
+  test('sur un visage vu, sans repères : la peau lissée, la loupe sur les yeux estimés dans la boîte, deux joues roses', async () => {
+    const { rig, magnified } = rigOf(null);
+    const layer = await seenLayer(rig);
+    const traced = tracingContext();
+    layer(targetOf(traced.context), effectsOf('baby'));
+    expect(traced.calls.filter((call) => call.key === 'clip')).toHaveLength(1);
+    expect(magnified).toHaveLength(1);
+    expect(magnified[0]).toEqual(eyesOf(smoothFaceBox(heuristicFaceBox({ width: 640, height: 480 }), BOX)));
+    expect(traced.calls.filter((call) => call.key === 'fillRect' || call.key === 'drawImage').length).toBeGreaterThanOrEqual(3);
+    expect(traced.calls.filter((call) => call.key === 'save')).toHaveLength(traced.calls.filter((call) => call.key === 'restore').length);
+  });
+
+  test('avec la pose, la loupe va sur les VRAIS yeux', async () => {
+    const { rig, magnified } = rigOf(TILTED);
+    const layer = await seenLayer(rig);
+    layer(targetOf(recordingContext().context), effectsOf('baby'));
+    expect(magnified.at(-1)).toEqual(TILTED.eyes);
+  });
+});
+
+describe('l’ange et le démon suivent le visage (#19779)', () => {
+  const drawnWith = async (pose: FacePose | null, effect: FaceEffect) => {
+    const { rig } = rigOf(pose);
+    const layer = createFaceLayer(null, { rig, surface: () => null });
+    layer(targetOf(tracingContext().context), effectsOf(effect));
+    await flushed();
+    const traced = tracingContext();
+    layer(targetOf(traced.context), effectsOf(effect));
+    return traced.calls;
+  };
+
+  test('la tête penche : le halo tourne avec elle, autour du centre du visage', async () => {
+    const calls = await drawnWith(TILTED, 'angel');
+    expect(calls.find((call) => call.key === 'rotate')?.args).toEqual([0.3]);
+    expect(calls.find((call) => call.key === 'translate')?.args).toEqual([320, 220]);
+    expect(calls.filter((call) => call.key === 'save')).toHaveLength(calls.filter((call) => call.key === 'restore').length);
+  });
+
+  test('les cornes du démon tournent avec la tête ; sa teinte couvre toujours toute l’image, droite', async () => {
+    const calls = await drawnWith(TILTED, 'demon');
+    const rotate = calls.findIndex((call) => call.key === 'rotate');
+    const tint = calls.findIndex((call) => call.key === 'fillRect' && call.args[2] === 640);
+    expect(rotate).toBeGreaterThan(-1);
+    expect(tint).toBeGreaterThan(-1);
+    expect(tint).toBeLessThan(rotate);
+  });
+
+  test('les yeux du démon brillent sur les vrais yeux', async () => {
+    const calls = await drawnWith(TILTED, 'demon');
+    const arcs = calls.filter((call) => call.key === 'arc').map((call) => [call.args[0], call.args[1]]);
+    expect(arcs).toContainEqual([280, 190]);
+    expect(arcs).toContainEqual([360, 215]);
+  });
+
+  test('sans pose (une boîte seule), aucune rotation : le dessin d’avant', async () => {
+    expect((await drawnWith(null, 'angel')).some((call) => call.key === 'rotate')).toBe(false);
+    expect((await drawnWith(null, 'demon')).some((call) => call.key === 'rotate')).toBe(false);
   });
 });

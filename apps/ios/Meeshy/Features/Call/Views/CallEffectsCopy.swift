@@ -62,6 +62,7 @@ enum CallEffectsCopy {
         case .angel: return String(localized: "call.effects.face.angel", defaultValue: "Ange", bundle: .main)
         case .demon: return String(localized: "call.effects.face.demon", defaultValue: "Démon", bundle: .main)
         case .volcano: return String(localized: "call.effects.face.volcano", defaultValue: "Éruption", bundle: .main)
+        case .baby: return String(localized: "call.effects.face.baby", defaultValue: "Bébé", bundle: .main)
         }
     }
 
@@ -73,6 +74,7 @@ enum CallEffectsCopy {
         case .angel: return .emoji("😇")
         case .demon: return .emoji("😈")
         case .volcano: return .emoji("🌋")
+        case .baby: return .emoji("👶")
         }
     }
 

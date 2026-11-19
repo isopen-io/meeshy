@@ -267,6 +267,7 @@ struct ProfileView: View {
             expandedHeight: ProfileOwnHeroPlan.expandedHeight,
             collapsedHeight: ProfileOwnHeroPlan.collapsedHeight,
             isLoading: user == nil,
+            keepsBannerInBar: true,
             banner: { heroBanner(progress: progress) },
             leading: { heroControls(ProfileOwnHeroPlan.leading(isEditing: isEditing)) },
             trailing: { heroControls(ProfileOwnHeroPlan.trailing(isEditing: isEditing, progress: progress)) },

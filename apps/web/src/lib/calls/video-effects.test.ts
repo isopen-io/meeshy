@@ -50,8 +50,8 @@ describe('les préréglages', () => {
 });
 
 describe('les effets de visage (#8551)', () => {
-  test('six choix, dans l’ordre partagé avec iOS : aucun, lissage, crapaud, ange, démon, éruption', () => {
-    expect(FACE_EFFECTS).toEqual(['none', 'smoothing', 'toad', 'angel', 'demon', 'volcano']);
+  test('sept choix, dans l’ordre partagé avec iOS et Android : aucun, lissage, crapaud, ange, démon, éruption, bébé (#19779)', () => {
+    expect(FACE_EFFECTS).toEqual(['none', 'smoothing', 'toad', 'angel', 'demon', 'volcano', 'baby']);
     expect(NO_EFFECTS.faceEffect).toBe('none');
   });
 

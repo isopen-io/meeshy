@@ -55,6 +55,24 @@ internal object RetouchFaceEffectStyles {
         return skin
     }
 
+    /**
+     * #19779 — miroir de `baby` (iOS) : un étalonnage doux sur toute la prise ; sur un visage VU seulement, la peau
+     * lissée, le bas du visage resserré (un pincement : une bosse de gain négatif), les yeux agrandis, deux joues roses.
+     */
+    fun baby(image: Bitmap, face: CallFaceLandmarks?): Bitmap {
+        val soft = graded(image, colorControls(brightness = 0.03f, saturation = 1.1f))
+        face ?: return soft
+        val bounds = face.bounds
+        val smoothed = blendedInEllipse(soft, blurred(soft, 0.12f), bounds, SMOOTHING_INTENSITY * 1.5f)
+        val chin = CallFaceEffectGeometry.babyChinPinch(bounds)
+        val bumps = listOf(Bump(chin.center, chin.radius, -chin.scale)) +
+            CallFaceEffectGeometry.babyEyeBumps(face).map { Bump(it.center, it.radius, it.scale) }
+        val reshaped = bulged(smoothed, bumps)
+        val canvas = Canvas(reshaped)
+        CallFaceEffectGeometry.cheekCenters(bounds).forEach { spot(canvas, it, bounds.width * 0.16f, rgba(1f, 0.55f, 0.62f, 0.32f)) }
+        return reshaped
+    }
+
     fun angel(image: Bitmap, face: CallFaceLandmarks?): Bitmap {
         val out = mutableCopy(image)
         val canvas = Canvas(out)

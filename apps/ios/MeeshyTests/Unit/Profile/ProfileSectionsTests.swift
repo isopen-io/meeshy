@@ -484,22 +484,15 @@ final class ProfileSectionsTests: XCTestCase {
         XCTAssertNil(ProfileActionsCopy.handle(of: nil))
     }
 
-    func test_actionsFace_opensWithMyAvatar_theActionsTitle_andMyHandle() throws {
-        let face = try code("Meeshy/Features/Profile/Faces/ProfileActionsFace.swift")
-        let header = try code("Meeshy/Features/Profile/Faces/ProfileFaceHeader.swift")
-        XCTAssertTrue(face.contains("ProfileFaceHeader(user: user, title: ProfileActionsCopy.title"),
-                      "l'en-tête commun des faces, titré « Actions »")
-        XCTAssertTrue(header.contains("MeeshyAvatar(name:"), "l'avatar de la planche, celui du kit")
-        XCTAssertTrue(header.contains("ProfileActionsCopy.handle(of: user)"))
-        XCTAssertTrue(header.contains(".accessibilityAddTraits(.isHeader)"), "le nom de la face est son titre pour VoiceOver")
-    }
-
-    func test_actionsHeader_sitsOnTheLivingBannerOfTheKit_asAVeilOfThePlancheHeight() throws {
-        let header = try code("Meeshy/Features/Profile/Faces/ProfileFaceHeader.swift")
-        XCTAssertTrue(header.contains("MeeshyLivingBanner(tint: Color(hex: accentColor), mode: .veil, height: Self.height)"),
-                      "le dégradé et les orbes de la planche sont la bannière K27, jamais redessinés (loi 12)")
-        XCTAssertFalse(header.contains("LinearGradient("), "aucun dégradé redessiné sur place")
-        XCTAssertEqual(ProfileFaceHeader<EmptyView>.height, 150, "la hauteur de l'en-tête de Moi-Actions et Moi-Liens")
+    /// #19782 — les faces Liens et Actions de ma fiche n'ont plus de bloc d'en-tête (avatar, nom de la face en grand,
+    /// pseudo) : la fiche les porte déjà au-dessus. Le bloc commun a quitté le dépôt.
+    func test_myFaces_carryNoTitleHeaderBlock() throws {
+        for path in ["Meeshy/Features/Profile/Faces/ProfileActionsFace.swift",
+                     "Meeshy/Features/Profile/Faces/ProfileLinksFace.swift"] {
+            let face = try code(path)
+            XCTAssertFalse(face.contains("ProfileFaceHeader("), "\(path) : plus de bloc d'en-tête titré")
+            XCTAssertFalse(face.contains("header.meeshyCascade"), "\(path)")
+        }
     }
 
     func test_actionsFace_offersMyStatus_whichOpensTheMoodComposerDoor_onlyWhereTheStatusModelIsServed() throws {
@@ -900,7 +893,7 @@ final class ProfileLinksFaceTests: XCTestCase {
     func test_linksHub_isTheLinksFace_inAPushedPage() throws {
         let hub = try code("Meeshy/Features/Links/Views/LinksHubView.swift")
         XCTAssertTrue(hub.contains("ProfileLinksFace(user: authManager.currentUser"))
-        XCTAssertTrue(hub.contains("showsHeader: false"), "la page poussée a déjà son en-tête")
+        XCTAssertTrue(hub.contains("LinksPage("), "la page poussée a son propre en-tête")
     }
 
     func test_profileCard_sendsTheProfileAsACardAndShowsOnlyThePublicAddress() {

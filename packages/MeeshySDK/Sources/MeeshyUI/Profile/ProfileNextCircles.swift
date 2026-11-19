@@ -75,7 +75,8 @@ public struct ProfileNextCircles: View {
     }
 }
 
-/// Un cran de l'échelle : le médaillon du cercle relié au suivant par un fil, son nom, le chemin, ce qu'il ouvre.
+/// Un cran de l'échelle : le médaillon du cercle — la forme organique de la planche, qui ondule en continu
+/// (`motion.morph`, #19785) — relié au suivant par un fil, son nom, le chemin, ce qu'il ouvre.
 private struct ProfileNextCircleRow: View {
     let step: ProfileNextCircleStep
     let name: String
@@ -87,9 +88,10 @@ private struct ProfileNextCircleRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: MeeshySpacing.md) {
-            MeeshyMedallion(systemImage: ProfileInCommonCopy.circleGlyph(step.level), tint: tint,
-                            fill: step.isNext ? .solid : .soft, decor: step.isNext ? .halo : .none, size: .s36,
-                            state: step.isNext ? .current : .normal)
+            MeeshyMedallion(systemImage: ProfileInCommonCopy.circleGlyph(step.level), tint: tint, shape: .blob,
+                            fill: step.isNext ? .solid : .soft, decor: step.isNext ? .halo : .none,
+                            size: step.isNext ? .s44 : .s36, state: step.isNext ? .current : .normal)
+                .frame(width: Self.column)
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(ProfileNextCirclesCopy.title(of: step.level))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
@@ -122,8 +124,10 @@ private struct ProfileNextCircleRow: View {
 }
 
 private extension ProfileNextCircleRow {
-    /// Le diamètre du médaillon (`.s36`), d'où le fil part vers le cran suivant.
-    static let medallion = CGFloat(MeeshyMedallionSize.s36.rawValue)
+    /// Le diamètre du médaillon (`.s36`, `.s44` pour le prochain cran), d'où le fil part vers le cran suivant.
+    var medallion: CGFloat { CGFloat((step.isNext ? MeeshyMedallionSize.s44 : .s36).rawValue) }
+    /// La colonne des médaillons : celle du plus grand, pour que le fil relie leurs centres.
+    static let column = CGFloat(MeeshyMedallionSize.s44.rawValue)
 
     /// Le fil qui relie ce cran au suivant : il descend du bas du médaillon jusqu'au bas de la rangée.
     @ViewBuilder
@@ -132,8 +136,8 @@ private extension ProfileNextCircleRow {
             Capsule()
                 .fill(tint.opacity(MeeshyOpacity.medium))
                 .frame(width: MeeshyBorder.emphasis)
-                .padding(.top, MeeshySpacing.sm + Self.medallion + MeeshySpacing.xs)
-                .padding(.leading, MeeshySpacing.lg + (Self.medallion - MeeshyBorder.emphasis) / 2)
+                .padding(.top, MeeshySpacing.sm + medallion + MeeshySpacing.xs)
+                .padding(.leading, MeeshySpacing.lg + (Self.column - MeeshyBorder.emphasis) / 2)
                 .accessibilityHidden(true)
         }
     }
