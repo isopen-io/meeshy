@@ -1,8 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
-import { analyticsPayload, createTelemetry, deviceLabel, markCaptions, markConnected, markNegotiating, markNetworkChange, markReconnecting, withCodec, withSample } from './call-analytics';
+import { estimateCallMos } from '@meeshy/shared/utils/call-mos';
 
-const context = { callId: 'c1', isVideo: true, endReason: 'local', platform: 'web', deviceModel: 'Chrome · Linux' } as const;
+import { socketCallAnalyticsSchema } from '../../../../../services/gateway/src/validation/call-schemas';
+import { analyticsPayload, createTelemetry, deviceLabel, markCaptions, markConnected, markNegotiating, markNetworkChange, markReconnecting, withCodec, withMedia, withSample } from './call-analytics';
+import type { MediaQuality } from './call-analytics-stats';
+
+const context = { callId: '507f1f77bcf86cd799439099', isVideo: true, endReason: 'local', platform: 'web', deviceModel: 'Chrome · Linux' } as const;
 
 describe('le rapport de fin d’appel `call:analytics` (#8047)', () => {
   test('un appel connecté rapporte son établissement, sa négociation, sa durée et ses reprises', () => {
@@ -70,5 +74,81 @@ describe('le rapport de fin d’appel `call:analytics` (#8047)', () => {
   test('la mémoire reste bornée : un appel de cent heures ne garde aucun historique', () => {
     const long = Array.from({ length: 10_000 }, () => ({ level: 'good' as const, rtt: 100, packetLoss: 1 })).reduce(withSample, createTelemetry(0));
     expect(JSON.stringify(long).length).toBeLessThan(400);
+  });
+});
+
+const QUALITY_FIELDS = ['freezeCount', 'totalFreezesDuration', 'qualityLimitationReason', 'jitterBufferDelay', 'concealedSamples', 'nackCount', 'pliCount', 'mos', 'candidateType', 'relayProtocol'] as const;
+
+const NOTHING_MEASURED: MediaQuality = { freezeCount: null, totalFreezesDuration: null, jitterBufferDelay: null, jitterBufferEmittedCount: null, concealedSamples: null, nackCount: null, pliCount: null, qualityLimitationReason: null, candidateType: null, relayProtocol: null };
+
+const media = (overrides: Partial<MediaQuality> = {}): MediaQuality => ({ ...NOTHING_MEASURED, ...overrides });
+
+const chrome = media({ freezeCount: 2, totalFreezesDuration: 0.9, jitterBufferDelay: 4.8, jitterBufferEmittedCount: 96, concealedSamples: 480, nackCount: 12, pliCount: 3, qualityLimitationReason: 'bandwidth', candidateType: 'relay', relayProtocol: 'udp' });
+
+const sampled = (steps: ReadonlyArray<readonly [MediaQuality, number]>) =>
+  steps.reduce((t, [peer, jitter]) => withMedia(withSample(t, { level: 'good', rtt: 200, packetLoss: 2 }), [peer], jitter), createTelemetry(0));
+
+describe('le rapport de fin d’appel porte les gels, la limitation, le MOS et le relais (#19876)', () => {
+  test('les compteurs cumulés du DERNIER relevé, le tampon de gigue en millisecondes moyennes, la route élue', () => {
+    const early = media({ ...chrome, freezeCount: 1, nackCount: 4 });
+    const payload = analyticsPayload(sampled([[early, 20], [chrome, 20]]), { ...context, now: 1 });
+    expect(payload.freezeCount).toBe(2);
+    expect(payload.totalFreezesDuration).toBe(0.9);
+    expect(payload.jitterBufferDelay).toBe(50);
+    expect(payload.concealedSamples).toBe(480);
+    expect(payload.nackCount).toBe(12);
+    expect(payload.pliCount).toBe(3);
+    expect(payload.candidateType).toBe('relay');
+    expect(payload.relayProtocol).toBe('udp');
+  });
+
+  test('la limitation rapportée est la cause DOMINANTE sur l’appel, pas la dernière', () => {
+    const at = (qualityLimitationReason: string) => [media({ ...chrome, qualityLimitationReason }), 10] as const;
+    expect(analyticsPayload(sampled([at('bandwidth'), at('cpu'), at('bandwidth'), at('none')]), { ...context, now: 1 }).qualityLimitationReason).toBe('bandwidth');
+    expect(analyticsPayload(sampled([at('none'), at('cpu')]), { ...context, now: 1 }).qualityLimitationReason).toBe('cpu');
+  });
+
+  test('le MOS suit la loi partagée, sur la latence, la gigue et la perte MOYENNES de l’appel', () => {
+    const payload = analyticsPayload(sampled([[chrome, 10], [chrome, 30]]), { ...context, now: 1 });
+    expect(payload.mos).toBe(Math.round(estimateCallMos({ roundTripTimeMs: 200, jitterMs: 20, packetLossPercent: 2 }) * 100) / 100);
+    expect(payload.mos).toBeCloseTo(3.76, 1);
+  });
+
+  test('une mesure absente reste ABSENTE : ni 0, ni clé vide', () => {
+    const firefox = analyticsPayload(sampled([[media({ nackCount: 4, pliCount: 1, concealedSamples: 7 }), 10]]), { ...context, now: 1 });
+    expect(Object.keys(firefox)).not.toContain('freezeCount');
+    expect(Object.keys(firefox)).not.toContain('totalFreezesDuration');
+    expect(Object.keys(firefox)).not.toContain('jitterBufferDelay');
+    expect(Object.keys(firefox)).not.toContain('qualityLimitationReason');
+    expect(Object.keys(firefox)).not.toContain('candidateType');
+    expect(Object.keys(firefox)).not.toContain('relayProtocol');
+    expect(firefox.nackCount).toBe(4);
+    const direct = analyticsPayload(sampled([[media({ candidateType: 'host' }), 10]]), { ...context, now: 1 });
+    expect(direct.candidateType).toBe('host');
+    expect(Object.keys(direct)).not.toContain('relayProtocol');
+  });
+
+  test('sans aucun relevé média, aucun champ de qualité ne part — pas même le MOS', () => {
+    const silent = analyticsPayload(withSample(createTelemetry(0), { level: 'good', rtt: 200, packetLoss: 2 }), { ...context, now: 1 });
+    QUALITY_FIELDS.forEach((field) => expect(Object.keys(silent)).not.toContain(field));
+    expect(withMedia(createTelemetry(0), [], 10)).toEqual(createTelemetry(0));
+  });
+
+  test('plusieurs pairs : les compteurs s’additionnent et chaque pair compte sa cause de limitation', () => {
+    const telemetry = withMedia(createTelemetry(0), [media({ ...chrome, qualityLimitationReason: 'cpu' }), media({ freezeCount: 1, qualityLimitationReason: 'cpu' }), chrome], 10);
+    const payload = analyticsPayload(telemetry, { ...context, now: 1 });
+    expect(payload.freezeCount).toBe(5);
+    expect(payload.qualityLimitationReason).toBe('cpu');
+  });
+
+  test('le rapport produit passe le schéma de la passerelle, avec ou sans qualité', () => {
+    expect(() => socketCallAnalyticsSchema.parse(analyticsPayload(sampled([[chrome, 20]]), { ...context, now: 1 }))).not.toThrow();
+    expect(() => socketCallAnalyticsSchema.parse(analyticsPayload(sampled([[media({ nackCount: 1 }), 20]]), { ...context, now: 1 }))).not.toThrow();
+    expect(() => socketCallAnalyticsSchema.parse(analyticsPayload(createTelemetry(0), { ...context, now: 1 }))).not.toThrow();
+  });
+
+  test('la mémoire reste bornée avec les relevés média : aucun historique', () => {
+    const long = Array.from({ length: 10_000 }, (_, index) => media({ ...chrome, qualityLimitationReason: ['none', 'cpu', 'bandwidth', 'other'][index % 4] ?? null })).reduce((t, peer) => withMedia(t, [peer], 12), createTelemetry(0));
+    expect(JSON.stringify(long).length).toBeLessThan(900);
   });
 });

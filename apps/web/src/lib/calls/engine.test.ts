@@ -748,6 +748,14 @@ describe('la qualité d’un appel se mesure, s’adapte et se voit (#8047)', ()
     });
   });
 
+  test('au raccroché, la qualité médiatique part du DERNIER relevé, sans relire `getStats` sur des liens fermés (#19876)', async () => {
+    const peer = { freezeCount: 2, totalFreezesDuration: 0.9, jitterBufferDelay: 4.8, jitterBufferEmittedCount: 96, concealedSamples: 480, nackCount: 12, pliCount: 3, qualityLimitationReason: 'bandwidth', candidateType: 'relay', relayProtocol: 'udp' };
+    const h = await connected([{ total: total({ rtt: 200, packetLoss: 2, jitter: 20 }), stage: 'sending', codec: 'VP8', profile: 'wifi', audioBitrate: 32_000, path: 'relay', media: [peer] }]);
+    await h.sampleQuality();
+    h.engine.hangup();
+    expect(h.emitted.find(([event]) => event === CLIENT_EVENTS.CALL_ANALYTICS)?.[1]).toMatchObject({ freezeCount: 2, totalFreezesDuration: 0.9, jitterBufferDelay: 50, concealedSamples: 480, nackCount: 12, pliCount: 3, qualityLimitationReason: 'bandwidth', mos: 3.76, candidateType: 'relay', relayProtocol: 'udp' });
+  });
+
   test('des sous-titres AFFICHÉS comptent dans le rapport ; reçus mais masqués, non', async () => {
     const segment = { callId: 'call-1', segment: { id: 's1', speakerId: PEER, text: 'hello', translatedText: 'bonjour', startMs: 0, endMs: 1, isFinal: true, sourceLanguage: 'en', targetLanguage: 'fr' } };
     const hidden = await connected();
