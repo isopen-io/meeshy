@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { combineMediaQuality, readMediaQuality } from './call-analytics-stats';
+import { readMediaQuality } from './call-analytics-read';
+import { combineMediaQuality } from './call-analytics-stats';
 
 type Entry = Readonly<Record<string, unknown>>;
 

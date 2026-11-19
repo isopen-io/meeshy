@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { socketCallAnalyticsSchema } from '../../../../../services/gateway/src/validation/call-schemas';
 import { analyticsPayload, createTelemetry, withMedia, withSample } from './call-analytics';
-import { readMediaQuality } from './call-analytics-stats';
+import { readMediaQuality } from './call-analytics-read';
 
 type Entry = Readonly<Record<string, unknown>>;
 

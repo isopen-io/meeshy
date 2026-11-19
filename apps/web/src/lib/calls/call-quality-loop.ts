@@ -1,4 +1,5 @@
-import { readMediaQuality, type MediaQuality } from './call-analytics-stats';
+import { readMediaQuality } from './call-analytics-read';
+import type { MediaQuality } from './call-analytics-stats';
 import { audioBitrateFor, DATA_PROFILES, profiledEncoding, type DataProfile } from './call-data-profile';
 import { aggregateQuality, initialTierState, linkTier, peerRate, readStats, sentTier, stepTier, TIER_ENCODING, type MediaPath, type PeerQuality, type StatsRead, type TierEncoding, type TierState, type VideoTier } from './call-quality';
 import { initialSurvival, stepSurvival, type SurvivalStage, type SurvivalState } from './call-survival';
