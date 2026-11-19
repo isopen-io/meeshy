@@ -279,7 +279,7 @@ enum ProfileTalkieWording {
 
     /// « Encore 10 secondes » : la durée se dit dans la langue de l'appareil, accord compris.
     static func remaining(seconds: Int) -> String {
-        let duration = Duration.seconds(seconds).formatted(.units(allowed: [.seconds], width: .wide))
+        let duration = MediaFormat.duration(seconds, style: .spoken)
         return String(format: String(localized: "talkie.card.remaining", defaultValue: "Encore %@", bundle: .main), duration)
     }
 

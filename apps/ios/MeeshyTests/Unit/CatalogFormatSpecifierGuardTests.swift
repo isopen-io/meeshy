@@ -154,7 +154,7 @@ final class CatalogFormatSpecifierGuardTests: XCTestCase {
     }
 
     /// Les `%` d'une traduction, comptés comme le formateur les lit : un spécificateur (`%@`, `%1$@`, `%lld`,
-    /// `%.1f`…) ou une substitution du catalogue (`%#@count@`, ses variations plurielles) est un ARGUMENT,
+    /// `%.1f`, `%02lld`…) ou une substitution du catalogue (`%#@count@`, ses variations plurielles) est un ARGUMENT,
     /// `%%` un pourcentage littéral, tout autre `%` est NU.
     static func pourcents(dans texte: String) -> (arguments: Int, nus: Int) {
         let conversions: Set<Character> = ["@", "d", "D", "i", "u", "U", "x", "X", "f", "F", "e", "E", "g", "G", "c", "s", "S"]
@@ -184,6 +184,7 @@ final class CatalogFormatSpecifierGuardTests: XCTestCase {
                 index = fin
                 continue
             }
+            while curseur < caracteres.count, caracteres[curseur].isASCII, caracteres[curseur].isNumber { curseur += 1 }
             if curseur < caracteres.count, caracteres[curseur] == "." {
                 curseur += 1
                 while curseur < caracteres.count, caracteres[curseur].isASCII, caracteres[curseur].isNumber { curseur += 1 }
@@ -242,6 +243,7 @@ final class CatalogFormatSpecifierGuardTests: XCTestCase {
         XCTAssertFalse(Self.porteUnPourcentNu("%1$@%% to %2$@"))
         XCTAssertFalse(Self.porteUnPourcentNu("entre 30% et 50%"), "sans argument, rien n'est formaté")
         XCTAssertFalse(Self.porteUnPourcentNu("%lld jours, %.1f km"))
+        XCTAssertFalse(Self.porteUnPourcentNu("%1$lld h %2$02lld"), "une largeur complétée de zéros (« 7 h 05 ») est un argument")
         XCTAssertFalse(Self.porteUnPourcentNu("%1$@, %#@count@"), "une substitution plurielle du catalogue est un argument")
         XCTAssertTrue(Self.porteUnPourcentNu("%#@count@ % de plus"))
         XCTAssertTrue(Self.porteUnPourcentNu("%1$@ %#@"), "une substitution sans nom n'en est pas une")

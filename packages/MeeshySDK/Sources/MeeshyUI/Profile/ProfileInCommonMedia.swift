@@ -122,7 +122,6 @@ struct ProfileInCommonMedia: View {
 
     /// « 0:38 » depuis une durée en millisecondes.
     nonisolated static func clock(_ milliseconds: Double) -> String {
-        let seconds = max(Int((milliseconds / 1000).rounded()), 0)
-        return "\(seconds / 60):" + String(format: "%02d", seconds % 60)
+        MediaFormat.duration(milliseconds / 1000, rounding: .toNearestOrAwayFromZero)
     }
 }

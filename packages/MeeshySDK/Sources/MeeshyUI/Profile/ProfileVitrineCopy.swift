@@ -179,7 +179,7 @@ enum ProfileVitrineCopy {
     // MARK: La voix, les chiffres
 
     static var voiceTitle: String {
-        String(localized: "profile.vitrine.voice.title", defaultValue: "Sa voix", bundle: .module)
+        String(localized: "profile.vitrine.theirVoice.title", defaultValue: "Sa voix", bundle: .module)
     }
 
     static var voiceSample: String {

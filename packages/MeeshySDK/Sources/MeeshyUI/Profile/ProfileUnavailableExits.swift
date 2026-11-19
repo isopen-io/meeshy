@@ -13,7 +13,7 @@ public struct ProfileUnavailableExits {
 
     /// La recherche de personnes que l'app sait faire, pour « Tu cherchais peut-être » : elle ne rend que ce que le
     /// serveur me laisse voir.
-    public typealias Suggest = @Sendable (_ query: String) async -> [UserSearchResult]
+    public typealias Suggest = @concurrent @Sendable (_ query: String) async -> [UserSearchResult]
 
     public let search: (() -> Void)?
     public let scanner: Scanner?

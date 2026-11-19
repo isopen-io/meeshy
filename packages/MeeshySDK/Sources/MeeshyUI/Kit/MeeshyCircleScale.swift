@@ -278,9 +278,9 @@ extension MeeshyCircleScale {
     fileprivate func ladder(recipe: MeeshyCircleScaleRecipe) -> some View {
         let rowHeight = onSelect == nil ? MeeshyCircleScaleRecipe.ladderNodeDiameter : Double(MeeshyControlSize.tapTarget)
         let group = VStack(alignment: .leading, spacing: CGFloat(MeeshyCircleScaleRecipe.ladderRowGap)) {
-            ForEach(MeeshyCircleScaleRecipe.ladderOrder(count: levels.count), id: \.self) { index in
-                ladderRow(index: index, recipe: recipe, rowHeight: rowHeight)
-            }
+            ForEach(MeeshyCircleScaleRecipe.ladderOrder(count: levels.count).map {
+                AsyncRenderRow(id: $0, content: ladderRow(index: $0, recipe: recipe, rowHeight: rowHeight))
+            }, content: asyncRenderRowContent)
         }
         .background(alignment: .leading) {
             Rectangle()

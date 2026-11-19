@@ -11,6 +11,8 @@ public struct ProfileLinkCard: Decodable, Sendable, Equatable {
     public let name: String
     public let avatarURL: String?
     public let avatarThumbHash: String?
+    /// Le contour d'avatar équipé, servi avec la personne (#10945) ; `nil` ⇒ aucun contour.
+    public let avatarRing: ServedProfileDecorItem?
     public let bio: String?
     /// La teinte CHOISIE de la vitrine (#19201), déjà validée contre `ProfileAccent.tones` ; `nil` = calculée.
     public let profileAccentColor: String?
@@ -32,7 +34,8 @@ public struct ProfileLinkCard: Decodable, Sendable, Equatable {
             userId: user.id, username: user.username,
             name: Self.name(displayName: user.displayName, firstName: user.firstName, lastName: user.lastName,
                             username: user.username),
-            avatarURL: user.avatar, avatarThumbHash: user.avatarThumbHash, bio: user.bio,
+            avatarURL: user.avatar, avatarThumbHash: user.avatarThumbHash,
+            avatarRing: user.profileDecor?.avatarRing, bio: user.bio,
             profileAccentColor: ProfileAccent.tone(wire: user.profileAccentColor)?.wire,
             isOnline: user.isOnline,
             isSelf: (try? container.decodeIfPresent(Bool.self, forKey: .isSelf)) ?? false,
@@ -42,7 +45,8 @@ public struct ProfileLinkCard: Decodable, Sendable, Equatable {
     }
 
     public init(userId: String, username: String, name: String, avatarURL: String? = nil,
-                avatarThumbHash: String? = nil, bio: String? = nil, profileAccentColor: String? = nil,
+                avatarThumbHash: String? = nil, avatarRing: ServedProfileDecorItem? = nil, bio: String? = nil,
+                profileAccentColor: String? = nil,
                 isOnline: Bool? = nil, isSelf: Bool = false, bioOriginalLanguage: String? = nil,
                 bioTranslations: [String: String] = [:]) {
         self.userId = userId
@@ -50,6 +54,7 @@ public struct ProfileLinkCard: Decodable, Sendable, Equatable {
         self.name = name
         self.avatarURL = avatarURL
         self.avatarThumbHash = avatarThumbHash
+        self.avatarRing = avatarRing
         self.bio = bio
         self.profileAccentColor = profileAccentColor
         self.isOnline = isOnline

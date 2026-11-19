@@ -34,9 +34,9 @@ struct ProfileLinksSnapshot: Sendable {
 
 /// D'où la face Liens lit mes liens créés : le cache, puis le réseau. Injecté pour les témoins.
 struct ProfileLinksSources {
-    let cached: () async -> ProfileLinksSnapshot
-    let fetch: () async -> ProfileLinksSnapshot
-    let save: (ProfileLinksSnapshot) async -> Void
+    let cached: @MainActor () async -> ProfileLinksSnapshot
+    let fetch: @MainActor () async -> ProfileLinksSnapshot
+    let save: @MainActor (ProfileLinksSnapshot) async -> Void
 
     @MainActor static let live = ProfileLinksSources(
         cached: { await ProfileLinksLiveSources.cached() },
@@ -47,8 +47,8 @@ struct ProfileLinksSources {
 
 /// Où partent les interrupteurs posés depuis les billets : le même service que le détail de chaque famille.
 struct ProfileLinksSwitches {
-    let share: @Sendable (_ linkId: String, _ isActive: Bool) async throws -> Void
-    let tracking: @Sendable (_ token: String, _ isActive: Bool) async throws -> Void
+    let share: @concurrent @Sendable (_ linkId: String, _ isActive: Bool) async throws -> Void
+    let tracking: @concurrent @Sendable (_ token: String, _ isActive: Bool) async throws -> Void
 
     @MainActor static let live = ProfileLinksSwitches(
         share: { linkId, isActive in try await ShareLinkService.shared.toggleLink(linkId: linkId, isActive: isActive) },

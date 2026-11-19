@@ -269,7 +269,6 @@
     <string name="call_start_audio">مكالمة صوتية</string>
     <string name="call_start_video">مكالمة فيديو</string>
     <string name="call_starter_busy">هناك مكالمة جارية بالفعل</string>
-    <string name="call_status_connected">متصلون</string>
     <string name="call_status_connecting">جارٍ الاتصال…</string>
     <string name="call_status_incoming">مكالمة واردة…</string>
     <string name="call_status_ringing">يرن…</string>

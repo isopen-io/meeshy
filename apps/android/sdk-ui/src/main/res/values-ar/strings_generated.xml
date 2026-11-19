@@ -563,7 +563,6 @@
     <string name="talkie_send_rate_limited">مداخلات كثيرة جدًا: أعد المحاولة بعد لحظة.</string>
     <string name="talkie_send_recording_copy">جارٍ تسجيل رسالة صوتية…</string>
     <string name="talkie_send_talking">أنت تتحدث إلى %1$s…</string>
-    <string name="talkie_send_voice">لا يمكن إيصال جهاز اللاسلكي الآن: أرسل رسالة صوتية بدلًا من ذلك.</string>
     <string name="talkie_send_waking">جارٍ إيقاظ %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">شوهد أول أمس في %1$s</string>
     <string name="time_lastSeen_dateAt">شوهد في %1$s الساعة %2$s</string>

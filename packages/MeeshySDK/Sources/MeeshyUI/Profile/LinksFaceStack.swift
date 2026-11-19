@@ -32,7 +32,7 @@ public struct LinksFaceStack: View {
                 HStack(spacing: MeeshySpacing.sm) {
                     group
                     Spacer(minLength: MeeshySpacing.sm)
-                    Image(systemName: "chevron.right")
+                    Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                         .foregroundStyle(.secondary)
                 }
