@@ -1,4 +1,4 @@
-## Un filtre faux CACHE le coût de la requête qu'il porte — et une limite écrite protège le site qu'elle cache
+## Un filtre faux CACHE le coût de la requête qu’il porte — et une limite écrite protège le site qu’elle cache (cycle 181, #19755)
 
 *2026-11-19, cycle 181 (#19755). Coffre de clés serveur : `ServerKeyVault.initialize()`
 chargeait la carte `conversationId → keyId` sous `expiresAt: { equals: null }`, une
