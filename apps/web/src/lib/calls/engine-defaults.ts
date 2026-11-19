@@ -18,6 +18,7 @@ import { acquireCallMedia, acquireCamera, acquireChosenInput, acquireDisplay } f
 import { createJournalRecorder, type JournalRecorder } from './call-network-journal-recorder';
 import { createCallJournalStore } from './call-network-journal-store';
 import { shapeOpusSdp } from './call-opus-sdp';
+import { shapeVideoSdp, videoShapeFor } from './call-video-sdp';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
 import { callStore } from './call-store';
 import { playCue, primeTones, startTone, stopTone } from './call-tones';
@@ -122,10 +123,10 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     fetchActiveCallId: (conversationId) => fetchActiveCallId(apiDeps, conversationId),
     acquireMedia: (options) => acquireCallMedia({ ...options, ...preferredInputs(), profile: currentProfile() }),
     acquireCamera: (facing) => (facing === 'environment' ? acquireRearCamera({ profile: currentProfile() }) : acquireCamera({ facing, cameraId: preferredInputs().cameraId, profile: currentProfile() })),
-    acquireCameraDevice: (deviceId) => acquireChosenInput({ kind: 'camera', deviceId }),
+    acquireCameraDevice: (deviceId) => acquireChosenInput({ kind: 'camera', deviceId, profile: currentProfile() }),
     rememberCamera: (deviceId) => void writeDevicePreference(browserPreferenceStorage(), 'camera', deviceId),
     acquireDisplay: () => acquireDisplay(),
-    createLink: (link) => createPeerLink({ ...link, shapeSdp: (sdp) => shapeOpusSdp(sdp, opusShapeFor(currentProfile())) }),
+    createLink: (link) => createPeerLink({ ...link, shapeSdp: (sdp) => shapeVideoSdp(shapeOpusSdp(sdp, opusShapeFor(currentProfile())), videoShapeFor(currentProfile())) }),
     cameraEffects,
     createStream: defaultCreateStream,
     now: Date.now,

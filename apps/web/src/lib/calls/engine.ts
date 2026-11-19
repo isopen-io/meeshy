@@ -455,6 +455,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     session.loop = deps.createQualityLoop({
       links: () => [...session.links.entries()].map(([userId, link]) => [userId, link.connection()] as const),
       wantsVideo: () => (localStream?.getVideoTracks().length ?? 0) > 0,
+      sharingScreen: () => read()?.screenSharing === true,
       now: deps.now,
     });
     session.unwatchNetwork = deps.watchNetwork(() => void (session.telemetry = markNetworkChange(session.telemetry)));

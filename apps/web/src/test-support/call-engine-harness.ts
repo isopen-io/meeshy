@@ -6,7 +6,7 @@ import { createCallNoticeStore, createCallReactionStore } from '@/lib/calls/call
 import { mediaFailureOf } from '@/lib/calls/call-media';
 import { createCallStore, type CallStoreApi } from '@/lib/calls/call-store';
 import { bindCallTransport, resetCallTransportForTests, type CallTransport } from '@/lib/calls/call-transport';
-import type { QualityTick } from '@/lib/calls/call-quality-loop';
+import type { QualityLoopDeps, QualityTick } from '@/lib/calls/call-quality-loop';
 import { createCallEngine, QUALITY_INTERVAL_MS, type CallEngineDeps, type StartCallRequest } from '@/lib/calls/engine';
 import type { LinkState, PeerLink, PeerLinkDeps } from '@/lib/calls/peer-link';
 
@@ -44,6 +44,7 @@ export type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number;
 
 export function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly videoRefused?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort; readonly acquireCamera?: CallEngineDeps['acquireCamera']; readonly acquireCameraDevice?: CallEngineDeps['acquireCameraDevice'] } = {}) {
   resetCallTransportForTests();
+  let qualityDeps: QualityLoopDeps | null = null;
   const store: CallStoreApi = createCallStore();
   const emitted: Array<readonly [string, unknown]> = [];
   const requested: Array<readonly [string, unknown]> = [];
@@ -137,7 +138,10 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
       const entry = repeats[handle as number];
       if (entry !== undefined) entry.stopped = true;
     },
-    createQualityLoop: () => ({ tick: async () => options.quality?.() ?? null }),
+    createQualityLoop: (deps) => {
+      qualityDeps = deps;
+      return { tick: async () => options.quality?.() ?? null };
+    },
     watchNetwork: (onChange) => {
       networkListeners.push(onChange);
       return () => void networkListeners.splice(networkListeners.indexOf(onChange), 1);
@@ -170,7 +174,7 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
   };
   const networkChanged = (): void => networkListeners.forEach((listener) => listener());
 
-  return { engine, store, emitted, requested, links, tones, displays, cameras, remembered, notices, advance, call, names, linkState, binding, sampleQuality, networkChanged };
+  return { engine, store, emitted, requested, links, tones, displays, cameras, remembered, notices, advance, call, names, linkState, binding, sampleQuality, networkChanged, qualityDeps: () => qualityDeps };
 }
 
 export const DIRECT: StartCallRequest = { conversationId: 'c-1', media: 'audio', title: 'Amina', avatar: null, isGroup: false };
