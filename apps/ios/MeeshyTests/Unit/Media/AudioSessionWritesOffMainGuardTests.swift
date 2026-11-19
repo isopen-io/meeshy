@@ -41,6 +41,10 @@ final class AudioSessionWritesOffMainGuardTests: XCTestCase {
     private static let allowed: [String: String] = [
         "packages/MeeshySDK/Sources/MeeshySDK/Media/MediaSessionCoordinator.swift":
             "les écritures s'exécutent sur sessionQueue (perform…, onSessionQueue)",
+        "packages/MeeshySDK/Sources/MeeshySDK/Media/MediaSessionCoordinator+ContentPlayback.swift":
+            "les écritures s'exécutent sur sessionQueue (performContentPlayback, onSessionQueue)",
+        "packages/MeeshySDK/Sources/MeeshySDK/Media/MediaSessionCoordinator+OrderedQueue.swift":
+            "les écritures s'exécutent sur sessionQueue (onSessionQueue, via sessionSettled)",
         "packages/MeeshySDK/Sources/MeeshySDK/Media/MediaSessionCoordinator+InterruptingVoice.swift":
             "les écritures s'exécutent sur sessionQueue (onSessionQueue ; le réveil PushToTalk, hors fil principal, l'attend)",
         "packages/MeeshySDK/Sources/MeeshySDK/Media/AudioSessionProviding.swift":
@@ -70,6 +74,20 @@ final class AudioSessionWritesOffMainGuardTests: XCTestCase {
 
     private static func code(_ relativePath: String) throws -> String {
         try code(at: repositoryRoot.appendingPathComponent(relativePath))
+    }
+
+    /// Le coordinateur et les extensions qui portent ses écritures de session
+    /// (lecture de contenu, file ordonnée, observateurs système), déplacées hors du fichier principal.
+    private static func coordinatorUnitCode() throws -> String {
+        let folder = "packages/MeeshySDK/Sources/MeeshySDK/Media"
+        return try [
+            "MediaSessionCoordinator.swift",
+            "MediaSessionCoordinator+ContentPlayback.swift",
+            "MediaSessionCoordinator+OrderedQueue.swift",
+            "MediaSessionCoordinator+SystemObservers.swift",
+        ]
+            .map { try code("\(folder)/\($0)") }
+            .joined(separator: "\n")
     }
 
     private static func swiftFiles(under relativeRoot: String) -> [String] {
@@ -108,7 +126,7 @@ final class AudioSessionWritesOffMainGuardTests: XCTestCase {
     /// Les points d'entrée du coordinateur rendent la main tout de suite : ils
     /// mettent l'écriture en file, ils ne la font pas.
     func test_theCoordinatorEntryPoints_onlyEnqueueTheWrite() throws {
-        let code = try Self.code("packages/MeeshySDK/Sources/MeeshySDK/Media/MediaSessionCoordinator.swift")
+        let code = try Self.coordinatorUnitCode()
         XCTAssertFalse(code.contains("AVAudioSession.sharedInstance()"),
                        "le coordinateur écrit la session injectée, sur sa file")
         for signature in [
