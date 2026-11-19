@@ -47,7 +47,8 @@ struct NearbyMapScreen: View {
                 }
             } else {
                 mapStage.meeshyAnchoredSheet(
-                    isPresented: .constant(true), height: .detents([0.42, 0.85], initial: 0), isDragDismissEnabled: false,
+                    isPresented: .constant(true), accessibilityLabel: LocationMapCopy.nearbyTitle,
+                    height: .detents([0.42, 0.85], initial: 0), isDragDismissEnabled: false,
                     closeLabel: nil, surface: .dark, outside: .passesThrough
                 ) { ScrollView { sheetContent } }
             }
