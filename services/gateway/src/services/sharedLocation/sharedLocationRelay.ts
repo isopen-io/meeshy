@@ -196,7 +196,7 @@ export function projectSharedLocation(
   const startedAt = state.startedAt === undefined ? {} : { startedAt: state.startedAt };
   if (access.precision === 'exact') {
     const radiusMeters = Math.max(SHARED_LOCATION_EXACT_MIN_RADIUS_METERS, Math.round(state.position.accuracy ?? 0));
-    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, ...circle, updatedAt: state.updatedAt, expiresAt: deadlineOf(state, readerId), ...startedAt };
+    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, ...circle, updatedAt: state.updatedAt, expiresAt: deadlineOf(state, readerId), ...startedAt, ...(state.position.motion ? { motion: state.position.motion } : {}) };
   }
   const held = readerId === undefined ? undefined : recipientOf(state, readerId)?.cell;
   const cell = held ?? cellOf(state.position, SHARED_LOCATION_GRID_DEGREES[access.precision]);
@@ -294,7 +294,8 @@ const sameServed = (a: SharedLocationChangedEventData | null, b: SharedLocationC
   a.longitude === b.longitude &&
   a.precision === b.precision &&
   a.radiusMeters === b.radiusMeters &&
-  a.circle === b.circle;
+  a.circle === b.circle &&
+  a.motion === b.motion;
 
 /**
  * Sert la projection de `state` à chaque destinataire ouvert ; rend l'accès de chacun et

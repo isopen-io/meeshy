@@ -76,6 +76,9 @@ struct LocationMapPinsLayer: View {
     var onSelect: ((String) -> Void)?
     /// Un appui long sur l'avatar d'un Proche ou d'un Sang lui parle par talkie (#19885) ; `nil` : la carte n'en propose pas.
     var talkie: TalkieSender?
+    /// La fin du dernier appui long (`.distantFuture` pendant qu'il dure) : le relâchement qui le termine n'ouvre pas la
+    /// personne.
+    @State private var heldAt: Date?
 
     var body: some View {
         if let viewport {
@@ -108,7 +111,7 @@ struct LocationMapPinsLayer: View {
         let precision = Self.precision(of: pin, viewport: viewport)
         let lift = precision.radius == 0 ? (MeeshyMapPinRecipe.defaultDiameter + MeeshyMapPinRecipe.tipSide) / 2 : 0
         let freshness = Self.freshness(of: pin, isOffline: isOffline)
-        let label = LocationMapCopy.pinLabel(name: pin.name, precision: pin.precision)
+        let label = Self.label(of: pin)
         return MeeshyMapPin(
             label: freshness == .lastKnown ? "\(label), \(LocationMapCopy.lastKnownPosition)" : label,
             tint: LocationMapTint.color(for: pin.circle),
@@ -116,14 +119,17 @@ struct LocationMapPinsLayer: View {
             isLive: freshness == .live,
             isSelected: pin.id == selectedId,
             isStale: freshness == .lastKnown,
-            onPress: onSelect.map { select in { select(pin.id) } },
+            onPress: onSelect.map { select in {
+                guard !TalkieLongHold.justEnded(at: heldAt, now: Date()) else { return }
+                select(pin.id)
+            } },
             content: { LocationMapPinAvatar(pin: pin, travels: pin.id == travellingId, size: Self.diameter(pin.id == selectedId),
                                             showsLife: false) },
             badge: { pinLife(pin) },
             above: { EmptyView() },
             below: { EmptyView() }
         )
-        .modifier(PinTalkie(sender: talkie, pin: pin))
+        .modifier(PinTalkie(sender: talkie, pin: pin, onHold: { holding in heldAt = holding ? .distantFuture : Date() }))
         .position(x: point.x, y: point.y - CGFloat(lift))
     }
 
@@ -134,6 +140,9 @@ struct LocationMapPinsLayer: View {
         return Color.clear
             .frame(width: diameter, height: diameter)
             .overlay(alignment: .bottomTrailing) { MeeshyMapPinPresenceDot(color: pin.presence?.dotColor) }
+            .overlay(alignment: .bottomLeading) {
+                if let motion = LocationMotionGlyph.drawn(pin.shownMotion()) { LocationMotionBadge(motion: motion) }
+            }
             .modifier(PeerLiveOverlays(userId: pin.id, avatarSize: diameter))
             .offset(x: -2, y: -2)
             .allowsHitTesting(false)
@@ -143,6 +152,13 @@ struct LocationMapPinsLayer: View {
         MeeshyMapPin(label: LocationMapCopy.myPosition(meShare, name: focusedName), kind: .own) {
             MeeshyMapPinOwnContent()
         }
+    }
+
+    /// Le nom et la précision, puis ce que fait la personne quand son mouvement est frais et dessiné (#19887).
+    static func label(of pin: SharedLocationPin, now: Date = Date()) -> String {
+        let base = LocationMapCopy.pinLabel(name: pin.name, precision: pin.precision)
+        guard let motion = LocationMotionGlyph.drawn(pin.shownMotion(now: now)) else { return base }
+        return "\(base), \(LocationMotionGlyph.label(for: motion))"
     }
 
     /// Le flou à l'échelle de la carte : sous 32 points, l'épingle porte une pointe au lieu d'un disque.
@@ -200,11 +216,12 @@ struct LocationMapPinAvatar: View {
 private struct PinTalkie: ViewModifier {
     let sender: TalkieSender?
     let pin: SharedLocationPin
+    let onHold: (Bool) -> Void
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if let sender, TalkieLongHold.offers(circle: pin.circle) {
-            content.modifier(TalkieLongHoldModifier(sender: sender, userId: pin.id, displayName: pin.name))
+            content.modifier(TalkieLongHoldModifier(sender: sender, userId: pin.id, displayName: pin.name, onHold: onHold))
         } else {
             content
         }

@@ -474,6 +474,54 @@
         }
       }
     },
+    "NSMotionUsageDescription" : {
+      "comment" : "Privacy - Motion Usage Description",
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يستخدم Meeshy نشاط هاتفك (المشي، الدراجة، السيارة) ليُظهر للأشخاص الذين تشاركهم موقعك الدقيق كيف تتنقّل، ومعهم فقط."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy nutzt die Aktivität deines Telefons (zu Fuß, Rad, Auto), um den Personen, mit denen du deinen genauen Standort teilst, zu zeigen, wie du unterwegs bist – und nur ihnen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy uses your phone's activity (walking, cycling, driving) to show the people you share your exact location with how you are moving, and only them."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy usa la actividad de tu teléfono (a pie, en bici, en coche) para mostrar cómo te desplazas a las personas con quienes compartes tu ubicación exacta, y solo a ellas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy utilise l’activité de votre téléphone (à pied, à vélo, en voiture) pour montrer comment vous vous déplacez aux personnes à qui vous partagez votre position exacte, et seulement à elles."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy usa l’attività del telefono (a piedi, in bici, in auto) per mostrare come ti sposti alle persone con cui condividi la tua posizione esatta, e solo a loro."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Meeshy usa a atividade do seu celular (a pé, de bicicleta, de carro) para mostrar como você se desloca às pessoas com quem compartilha sua localização exata, e só a elas."
+          }
+        }
+      }
+    },
     "NSPhotoLibraryAddUsageDescription" : {
       "comment" : "Privacy - Photo Library Additions Usage Description",
       "localizations" : {

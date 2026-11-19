@@ -18,6 +18,7 @@ import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { deferAfterResponse } from '../utils/after-response.js';
 import { broadcastToUser } from '../utils/socket-broadcast';
 import { getBlockRelatedUserIds } from '../utils/blocking.js';
+import { liveJoinRequestWhere } from './community-join-request-lifecycle';
 
 const logger = enhancedLogger.child({ module: 'CommunityJoinRequestBroadcast' });
 
@@ -52,18 +53,19 @@ export async function broadcastCommunityJoinRequested(
     select: { createdBy: true },
   });
   if (!community) return 0;
+  const now = (deps.now ?? (() => new Date()))();
   const [stewards, pendingCount, blocked] = await Promise.all([
     deps.prisma.communityMember.findMany({
       where: { communityId: change.communityId, isActive: true, role: { in: ['admin', 'moderator'] } },
       select: { userId: true, role: true },
     }),
-    deps.prisma.communityJoinRequest.count({ where: { communityId: change.communityId, status: 'pending' } }),
+    deps.prisma.communityJoinRequest.count({ where: { communityId: change.communityId, ...liveJoinRequestWhere(now) } }),
     getBlockRelatedUserIds(deps.prisma, change.userId),
   ]);
   const payload: CommunityJoinRequestedEventData = {
     ...change,
     pendingCount,
-    at: (deps.now ?? (() => new Date()))().toISOString(),
+    at: now.toISOString(),
   };
   const audience = [...joinRequestedAudience({ createdBy: community.createdBy, stewards })].filter(
     (userId) => userId !== change.userId && !blocked.has(userId),
