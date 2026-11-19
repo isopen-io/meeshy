@@ -108,7 +108,8 @@ struct ProfileFaceSelector: View {
                 tone: .theme
             )
             .padding(MeeshySpacing.xs)
-            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl + MeeshySpacing.xs), density: .dense)
+            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl + MeeshySpacing.xs), tone: .theme,
+                         density: .dense)
             if let accessory {
                 MeeshyGlassButton(
                     systemImage: accessory.systemImage,

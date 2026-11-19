@@ -29,6 +29,8 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     private let onCollapsedTap: (() -> Void)?
     /// La bannière reste DANS la barre repliée, floutée par son verre, au lieu de s'effacer (fiche de profil, #19780).
     private let keepsBannerInBar: Bool
+    /// Ce que le cadre illustré de l'avatar peint sous son bord : le nom descend d'autant (#19925).
+    private let avatarSpill: Double
     private let banner: Banner
     private let leading: Leading
     private let trailing: Trailing
@@ -50,6 +52,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
                 collapsedTapLabel: String? = nil,
                 onCollapsedTap: (() -> Void)? = nil,
                 keepsBannerInBar: Bool = false,
+                avatarSpill: Double = 0,
                 @ViewBuilder banner: () -> Banner,
                 @ViewBuilder leading: () -> Leading,
                 @ViewBuilder trailing: () -> Trailing,
@@ -66,6 +69,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
         self.collapsedTapLabel = collapsedTapLabel
         self.onCollapsedTap = onCollapsedTap
         self.keepsBannerInBar = keepsBannerInBar
+        self.avatarSpill = avatarSpill
         self.banner = banner()
         self.leading = leading()
         self.trailing = trailing()
@@ -115,8 +119,8 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
 
     private func barLayer(recipe: MeeshyCollapsingHeroRecipe) -> some View {
         Color.clear
-            .meeshyGlass(in: MeeshyCollapsingHeroBarShape(cornerRadius: CGFloat(MeeshyCollapsingHeroRecipe.barCornerRadius)),
-                         tone: tone)
+            .meeshyGlass(in: MeeshyCollapsingHeroBarShape(cornerRadius: CGFloat(
+                MeeshyCollapsingHeroRecipe.glassCornerRadius(keepsBannerInBar: keepsBannerInBar))), tone: tone)
             .opacity(recipe.glassOpacity)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
@@ -126,13 +130,15 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
         let travel = recipe.identityTravel
         let avatarSize = recipe.avatarSize
         let centered = alignment == .center
-        let expandedX = centered ? (width - MeeshyCollapsingHeroRecipe.avatarExpanded) / 2 : 20
+        let expandedX = centered ? (width - MeeshyCollapsingHeroRecipe.avatarExpanded) / 2
+            : MeeshyCollapsingHeroRecipe.avatarInset(avatarSpill: avatarSpill)
         let collapsedX = MeeshyCollapsingHeroRecipe.controlInsetCollapsed + MeeshyCollapsingHeroRecipe.controlTarget + 12
         let x = expandedX + (collapsedX - expandedX) * travel
         let expandedY = expandedHeight - 86
         let collapsedY = top + MeeshyCollapsingHeroRecipe.controlTarget / 2 - MeeshyCollapsingHeroRecipe.avatarCollapsed / 2
         let y = expandedY + (collapsedY - expandedY) * travel
-        let textExpandedY = expandedHeight - 86 + MeeshyCollapsingHeroRecipe.avatarExpanded + 10
+        let textExpandedY = expandedHeight - 86 + MeeshyCollapsingHeroRecipe.avatarExpanded
+            + MeeshyCollapsingHeroRecipe.titleGap(avatarSpill: avatarSpill)
         let textCollapsedY = top + 6
         let textY = textExpandedY + (textCollapsedY - textExpandedY) * travel
         let textExpandedX: Double = centered ? 0 : 20
@@ -225,7 +231,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     }
 }
 
-/// La barre repliée : un rectangle aux coins bas arrondis de 28.
+/// La barre repliée : un rectangle aux coins bas arrondis de `cornerRadius` (droits à 0).
 nonisolated struct MeeshyCollapsingHeroBarShape: Shape {
     let cornerRadius: CGFloat
 
