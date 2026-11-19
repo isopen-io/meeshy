@@ -7,6 +7,21 @@
  * participant par `conversation:updated`. Best-effort : l'action est déjà
  * commise, une panne se journalise et ne lève jamais.
  *
+ * ─── Pourquoi le double ÉVALUE le `where` contre des documents (#19800) ──────
+ *
+ * Le double de ce fichier appliquait le `where` À LA MAIN, et son type de ligne
+ * — `{ lastActivityAt: Date | null }` — ne savait pas REPRÉSENTER l'état
+ * nominal : une conversation dont la colonne est ABSENTE, ce que les dix-neuf
+ * chemins de création produisent tous, aucun n'écrivant `lastActivityAt`. Sa
+ * branche `filter === null ⇒ current === null` tenait donc l'absence pour une
+ * égalité, ce que MongoDB ne fait pas, et les cinq alimenteurs de l'axe
+ * « activité » ont été inertes POUR TOUTES LES CONVERSATIONS avec six témoins
+ * verts au-dessus.
+ *
+ * Les lignes sont désormais des documents nus et le `where` est évalué par
+ * `matchesMongoWhere`, le double qui honore la seule règle qui compte ici : une
+ * clé absente de l'objet est absente du document.
+ *
  * @jest-environment node
  */
 
@@ -20,6 +35,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { announceConversationActivity, recordConversationActivity } from '../conversationActivity';
+import { matchesMongoWhere, type MongoDocument } from '../../../__tests__/helpers/mongo-where';
 
 const CONVERSATION_ID = '507f1f77bcf86cd799439011';
 const AT = new Date('2026-10-01T10:00:00.000Z');
@@ -27,19 +43,25 @@ const LAST_MESSAGE_AT = new Date('2026-10-01T09:00:00.000Z');
 
 type Emitted = { room: string; event: string; payload: Record<string, unknown> };
 
-type Row = { lastActivityAt: Date | null };
+/**
+ * Le document d'une conversation, tel que la base le porte. La forme NOMINALE
+ * — celle que produisent les dix-neuf chemins de création — n'a PAS de clé
+ * `lastActivityAt` : `absente()` la rend, `nulle()` rend l'autre « pas encore »,
+ * celui qu'un chemin a explicitement remis à zéro.
+ */
+type Row = MongoDocument & { lastActivityAt?: Date | null };
 
-/** Un Prisma qui APPLIQUE le `where` monotone sur une ligne en mémoire. */
+const absente = (): Row => ({ id: CONVERSATION_ID, lastMessageAt: LAST_MESSAGE_AT });
+const nulle = (): Row => ({ id: CONVERSATION_ID, lastMessageAt: LAST_MESSAGE_AT, lastActivityAt: null });
+const datee = (at: Date): Row => ({ id: CONVERSATION_ID, lastMessageAt: LAST_MESSAGE_AT, lastActivityAt: at });
+
+const lue = (row: Row): Date | null => (row.lastActivityAt ?? null);
+
+/** Un Prisma qui ÉVALUE le `where` monotone contre le document en mémoire. */
 function makePrisma(row: Row) {
-  const updateMany = jest.fn(async (args: { where: { id: string; OR: Array<Record<string, unknown>> }; data: Row }) => {
-    const current = row.lastActivityAt;
-    const admitted = args.where.OR.some((clause) => {
-      const filter = clause.lastActivityAt as null | { lt: Date };
-      if (filter === null) return current === null;
-      return current !== null && current.getTime() < filter.lt.getTime();
-    });
-    if (!admitted) return { count: 0 };
-    row.lastActivityAt = args.data.lastActivityAt;
+  const updateMany = jest.fn(async (args: { where: MongoDocument; data: MongoDocument }) => {
+    if (!matchesMongoWhere(row, args.where)) return { count: 0 };
+    Object.assign(row, args.data);
     return { count: 1 };
   });
   return {
@@ -49,7 +71,7 @@ function makePrisma(row: Row) {
         lastReactionId: null,
         activeCallId: null,
         lastMessageAt: LAST_MESSAGE_AT,
-        lastActivityAt: row.lastActivityAt,
+        lastActivityAt: lue(row),
       })),
     },
     message: { findUnique: jest.fn(async () => null) },
@@ -74,38 +96,70 @@ const makeIo = (sink: Emitted[]) => ({
 });
 
 describe('recordConversationActivity — écriture monotone', () => {
-  it('pose lastActivityAt sur une conversation qui n’en avait pas', async () => {
-    const row: Row = { lastActivityAt: null };
+  /**
+   * LE témoin du lot #19800, et le seul des deux qui pouvait tomber : la
+   * conversation à la forme NOMINALE, dont aucun chemin de création n'a écrit la
+   * colonne. Avant la troisième branche du `where`, `updateMany` n'appariait
+   * RIEN ici — donc la première écriture ne pouvait jamais avoir lieu, donc la
+   * colonne restait absente pour toujours, sur toutes les conversations.
+   */
+  it('pose lastActivityAt sur une conversation dont la colonne est ABSENTE (la forme que la création produit)', async () => {
+    const row = absente();
     const prisma = makePrisma(row);
 
     await recordConversationActivity({ prisma: prisma as never, conversationId: CONVERSATION_ID, at: AT });
 
-    expect(row.lastActivityAt).toEqual(AT);
-    expect(prisma.conversation.updateMany).toHaveBeenCalledWith({
-      where: { id: CONVERSATION_ID, OR: [{ lastActivityAt: null }, { lastActivityAt: { lt: AT } }] },
-      data: { lastActivityAt: AT },
-    });
+    expect(lue(row)).toEqual(AT);
   });
 
-  it('fait avancer une activité plus ancienne', async () => {
-    const row: Row = { lastActivityAt: new Date('2026-10-01T08:00:00.000Z') };
+  /**
+   * Sa JUMELLE, gardée côte à côte pour qu'elle ne se relise jamais comme une
+   * garde : une fixture qui pose `lastActivityAt: null` explicitement passait
+   * DÉJÀ avant le correctif — l'égalité nue apparie ce document-là. C'est
+   * exactement la paire du cycle 181 (#19755), sur une autre colonne.
+   */
+  it('pose lastActivityAt sur une conversation dont la colonne est NULLE (le témoin qui ne pouvait pas tomber)', async () => {
+    const row = nulle();
 
     await recordConversationActivity({ prisma: makePrisma(row) as never, conversationId: CONVERSATION_ID, at: AT });
 
-    expect(row.lastActivityAt).toEqual(AT);
+    expect(lue(row)).toEqual(AT);
+  });
+
+  it('fait avancer une activité plus ancienne', async () => {
+    const row = datee(new Date('2026-10-01T08:00:00.000Z'));
+
+    await recordConversationActivity({ prisma: makePrisma(row) as never, conversationId: CONVERSATION_ID, at: AT });
+
+    expect(lue(row)).toEqual(AT);
   });
 
   it('ne recule JAMAIS une activité plus récente (arrivée en retard)', async () => {
     const later = new Date('2026-10-01T11:00:00.000Z');
-    const row: Row = { lastActivityAt: later };
+    const row = datee(later);
 
     await recordConversationActivity({ prisma: makePrisma(row) as never, conversationId: CONVERSATION_ID, at: AT });
 
-    expect(row.lastActivityAt).toEqual(later);
+    expect(lue(row)).toEqual(later);
+  });
+
+  /**
+   * L'activité du MÊME instant ne réécrit rien, et c'est la propriété qui rend
+   * deux activités concurrentes convergentes : `lt` est STRICT, donc le second
+   * appel d'une même milliseconde est un no-op, jamais une écriture qui écrase.
+   */
+  it('n’écrit pas deux fois le MÊME instant (le `lt` est strict)', async () => {
+    const row = datee(AT);
+    const prisma = makePrisma(row);
+
+    await recordConversationActivity({ prisma: prisma as never, conversationId: CONVERSATION_ID, at: AT });
+
+    expect(await prisma.conversation.updateMany.mock.results[0].value).toEqual({ count: 0 });
+    expect(lue(row)).toEqual(AT);
   });
 
   it('ne lève jamais : une panne de base est avalée', async () => {
-    const prisma = makePrisma({ lastActivityAt: null });
+    const prisma = makePrisma(absente());
     prisma.conversation.updateMany.mockRejectedValueOnce(new Error('down') as never);
 
     await expect(
@@ -116,7 +170,7 @@ describe('recordConversationActivity — écriture monotone', () => {
 
 describe('announceConversationActivity — le rang servi à chaque participant', () => {
   it('écrit l’activité puis pousse listRankAt dans la room personnelle de CHAQUE participant (invité compris)', async () => {
-    const row: Row = { lastActivityAt: null };
+    const row = absente();
     const emitted: Emitted[] = [];
 
     await announceConversationActivity({
@@ -127,7 +181,7 @@ describe('announceConversationActivity — le rang servi à chaque participant',
       updatedByUserId: 'u-alice',
     });
 
-    expect(row.lastActivityAt).toEqual(AT);
+    expect(lue(row)).toEqual(AT);
     expect(emitted.map((e) => e.room).sort()).toEqual(['user:p-guest', 'user:u-bob']);
     for (const { event, payload } of emitted) {
       expect(event).toBe(SERVER_EVENTS.CONVERSATION_UPDATED);
@@ -136,7 +190,7 @@ describe('announceConversationActivity — le rang servi à chaque participant',
   });
 
   it('écrit l’activité même sans io (la remontée survit au rechargement)', async () => {
-    const row: Row = { lastActivityAt: null };
+    const row = absente();
 
     await announceConversationActivity({
       prisma: makePrisma(row) as never,
@@ -146,6 +200,6 @@ describe('announceConversationActivity — le rang servi à chaque participant',
       updatedByUserId: 'u-alice',
     });
 
-    expect(row.lastActivityAt).toEqual(AT);
+    expect(lue(row)).toEqual(AT);
   });
 });
