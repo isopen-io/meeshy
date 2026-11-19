@@ -1506,3 +1506,17 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 046) rc=0,
   couleurs d'accent rc=0.
 - Prochain lot recommandé : inchangé (fusion de #19768 au dégel, puis #19767, plafond `untilStopped`, #19682 décidée).
+
+## 2026-11-19 — réveil de 11 h : aucune position avant la relecture du partage servi (#19767)
+
+- Reprise : #19768 fusionnée dans `dev` (f3be4322a), #19681 fermée. #19682 attend toujours la décision du porteur.
+- Lot : #19767. iOS et Android suivent l'appareil au relancement mais n'envoient aucun relevé avant la première
+  relecture du partage servi (`awaitsServedTruth`) ; une relecture qui échoue, ou un « Partager » d'ici, lève l'attente.
+  iOS : la liste porte l'identifiant d'installation (`PushDeviceIdentity`, trousseau `ThisDeviceOnly`) de l'appareil
+  qui l'a écrite ; restaurée depuis la sauvegarde iCloud d'un AUTRE appareil, elle est reçue et sans démarrage gardé.
+  Une liste d'avant la marque est adoptée telle quelle puis marquée. Android épargné (`allowBackup="false"`).
+- Témoins : iOS `SharedLocationSharingSyncTests` (relevé avant relecture, relecture confirmée, relecture en échec,
+  « Partager » avant relecture, sauvegarde restaurée ailleurs, même appareil, liste d'avant la marque) ; Android
+  `SharedLocationSharingSyncTest` (trois cas). Swift et `sdk-core` se prouvent par la CI.
+- Gardes iOS : règles maison (42) rc=0, cohésion rc=0, couleurs d'accent rc=0 ; inscription des tests rc=1, rouge
+  HÉRITÉ de `dev` (cd0157b87 : `AnchoredSheetNamingGuardTests.swift` absent du pbxproj), étranger au lot.
