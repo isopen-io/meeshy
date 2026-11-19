@@ -9,6 +9,12 @@ import type { NotificationContentCategory } from '@meeshy/shared/types/notificat
 
 export { pushThreadFields } from './push-thread';
 
+/**
+ * La catégorie iOS de l'alerte de CHUTE (#18748) et de sa réponse : un push SEUL, sans ligne
+ * `Notification`, que `pushCategoryForNotificationType` ne voit donc jamais passer.
+ */
+export const FALL_ALERT_PUSH_CATEGORY = 'MEESHY_FALL_ALERT';
+
 /** Les bannières qui annoncent le CONTENU d'un message — les seules qu'une catégorie de contenu concerne. */
 const CONTENT_BEARING_TYPES: ReadonlySet<NotificationType> = new Set<NotificationType>([
   'new_message', 'message_reply', 'reply', 'user_mentioned', 'mention',

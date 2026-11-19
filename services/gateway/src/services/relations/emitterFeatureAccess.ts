@@ -1,6 +1,6 @@
 /**
- * QUI REÇOIT un état d'appareil de qui — la loi commune du téléphone injoignable (#18737) et de
- * l'alerte d'inactivité (#18738), sur le modèle de la batterie (`battery/batteryAccess.ts`) :
+ * QUI REÇOIT un état d'appareil de qui — la loi commune du téléphone injoignable (#18737), de
+ * l'alerte d'inactivité (#18738), d'« en appel » (#18753) et de la chute détectée (#18748), sur le modèle de la batterie (`battery/batteryAccess.ts`) :
  * la loi par `pairAccessAmong` (niveau, blocage, équipe #16623), le consentement tri-état de
  * l'émetteur résolu par `resolveEmitterConsent`, sa coupure globale, et un compte désactivé ou
  * supprimé qui n'émet ni ne reçoit.
@@ -14,11 +14,23 @@ import { isUsableAccount, ACCOUNT_STATE_SELECT, type AccountState } from './usab
 
 export type EmitterFeatureDb = BatteryDb;
 
-/** Une feature à consentement stocké, et la colonne `User` de la coupure globale de son émetteur. */
+/**
+ * Une feature à consentement stocké, et la colonne `User` de l'interrupteur global de son émetteur :
+ * une COUPURE (`disabledColumn`, non nulle = coupé pour tous) pour les états actifs par défaut, ou un
+ * ACCORD (`consentColumn`, nul = coupé pour tous) pour la chute (#18748), jamais active par défaut.
+ */
 export type EmitterFeature =
   | { readonly feature: 'device.unreachable'; readonly disabledColumn: 'unreachableSharingDisabledAt' }
   | { readonly feature: 'safety.inactivity'; readonly disabledColumn: 'inactivityCheckDisabledAt' }
-  | { readonly feature: 'device.call'; readonly disabledColumn: 'callSharingDisabledAt' };
+  | { readonly feature: 'device.call'; readonly disabledColumn: 'callSharingDisabledAt' }
+  | { readonly feature: 'health.fall'; readonly consentColumn: 'fallAlertConsentedAt' };
+
+type GlobalSwitch = { readonly column: string; readonly off: (value: Date | null) => boolean };
+
+const globalSwitchOf = (spec: EmitterFeature): GlobalSwitch =>
+  'consentColumn' in spec
+    ? { column: spec.consentColumn, off: (value) => value === null }
+    : { column: spec.disabledColumn, off: (value) => value !== null };
 
 export type EmitterFeatureParams = {
   readonly subjectId: string;
@@ -28,14 +40,14 @@ export type EmitterFeatureParams = {
   readonly now: Date;
 };
 
-type Account = AccountState & { readonly id: string; readonly disabledAt: Date | null };
+type Account = AccountState & { readonly id: string; readonly switchedAt: Date | null };
 
-async function accountsOf(prisma: EmitterFeatureDb, ids: readonly string[], column: EmitterFeature['disabledColumn']): Promise<ReadonlyMap<string, Account>> {
+async function accountsOf(prisma: EmitterFeatureDb, ids: readonly string[], column: string): Promise<ReadonlyMap<string, Account>> {
   const rows = (await prisma.user.findMany({
     where: { id: { in: [...new Set(ids)] } },
     select: { id: true, [column]: true, ...ACCOUNT_STATE_SELECT },
   })) as unknown as ReadonlyArray<AccountState & { readonly id: string } & Record<string, unknown>>;
-  return new Map(rows.map((row) => [row.id, { ...row, disabledAt: (row[column] as Date | null | undefined) ?? null }]));
+  return new Map(rows.map((row) => [row.id, { ...row, switchedAt: (row[column] as Date | null | undefined) ?? null }]));
 }
 
 /** Les personnes parmi `otherIds` à qui la loi ET l'émetteur ouvrent la feature. */
@@ -45,8 +57,9 @@ export async function emitterFeatureAllowedAmong(prisma: EmitterFeatureDb, spec:
   const emitterOf = (otherId: string): string => (params.subjectIs === 'target' ? params.subjectId : otherId);
   const readerOf = (otherId: string): string => (params.subjectIs === 'target' ? otherId : params.subjectId);
   const { feature } = spec;
+  const globalSwitch = globalSwitchOf(spec);
   const [accounts, stored, probe] = await Promise.all([
-    accountsOf(prisma, [params.subjectId, ...otherIds], spec.disabledColumn),
+    accountsOf(prisma, [params.subjectId, ...otherIds], globalSwitch.column),
     params.subjectIs === 'target'
       ? relationStoredConsentAmong(prisma, { ownerId: params.subjectId, otherIds, feature })
       : relationStoredConsentBy(prisma, { ownerIds: otherIds, otherId: params.subjectId, feature }),
@@ -64,7 +77,7 @@ export async function emitterFeatureAllowedAmong(prisma: EmitterFeatureDb, spec:
         feature,
         stored: stored.get(id),
         effectiveLevel: levelOf(id),
-        globallyDisabled: Boolean(accounts.get(emitterOf(id))?.disabledAt),
+        globallyDisabled: globalSwitch.off(accounts.get(emitterOf(id))?.switchedAt ?? null),
       }),
   });
   return new Set(
