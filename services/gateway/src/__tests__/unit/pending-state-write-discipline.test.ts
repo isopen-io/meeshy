@@ -91,7 +91,66 @@ const SRC = join(__dirname, '..', '..');
  * réapplique.**
  */
 const sourceOf = (file: string): string =>
+  blanked(stripCommentsPreservingStrings(readFileSync(join(SRC, file), 'utf8')));
+
+/**
+ * Le même texte, **chaînes CONSERVÉES** — pour les seules assertions dont une
+ * chaîne est le SUJET, et non un déguisement possible.
+ *
+ * La distinction est portante, et elle s'est imposée en écrivant le témoin de
+ * `snapshotWhere` : `unsetOrNull('logoSha256')` porte son nom de colonne DANS
+ * une chaîne. Blanchir les chaînes protège contre un littéral qui FEINT du code
+ * (`note: 'lastReminderAt: null'`) ; cela aveugle devant une chaîne qui EST
+ * l'argument. Un seul lecteur ne peut pas faire les deux, et choisir le mauvais
+ * fait soit bénir un code faux, soit accuser un code juste.
+ */
+const codeOf = (file: string): string =>
   stripCommentsPreservingStrings(readFileSync(join(SRC, file), 'utf8'));
+
+/**
+ * **ET LES CONTENUS DE CHAÎNES AUSSI**, relevé par l'audit : le lot avait fermé
+ * le trou des COMMENTAIRES et laissé celui des CHAÎNES, que
+ * `stripCommentsPreservingStrings` PRÉSERVE par construction (elle y cherche
+ * des chemins de route). Un `note: 'lastReminderAt: null'` blanchissait donc la
+ * discipline. La longueur est conservée, pour que l'appariement d'accolades
+ * garde ses indices.
+ */
+function blanked(source: string): string {
+  const out = source.split('');
+  let quote: string | null = null;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (quote !== null) {
+      if (char === '\\') { out[index] = ' '; out[index + 1] = ' '; index += 1; continue; }
+      if (char === quote) { quote = null; continue; }
+      if (char !== '\n') out[index] = ' ';
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') quote = char;
+  }
+  return out.join('');
+}
+
+/**
+ * Le seul objet `create:` / `data:` du littéral d'appel — **jamais l'objet
+ * d'ARGUMENTS**. L'audit a reproduit ce que coûtait l'ancienne borne : la clé
+ * DÉPLACÉE de `create` vers `update` laissait le témoin VERT et `tsc` à zéro
+ * erreur, alors que le `create` redevenait nu **et** que chaque publication de
+ * pack DÉVÉRIFIAIT un éditeur déjà vérifié — pire que le défaut corrigé, et béni.
+ */
+const payloadOf = (call: string, key: 'create' | 'data'): string => {
+  const at = call.indexOf(`${key}:`);
+  expect(at).toBeGreaterThan(-1);
+  return blockFrom(call, at);
+};
+
+/**
+ * La PAIRE clé→`null`, jamais la seule clé : `verifiedAt: undefined` satisfait
+ * un `toContain('verifiedAt:')` et n'écrit RIEN — Prisma ignore `undefined`
+ * comme une clé absente. Deuxième faux négatif reproduit par l'audit.
+ */
+const posesNull = (payload: string, column: string): boolean =>
+  new RegExp(`\\b${column}\\s*:\\s*null\\s*[,}]`).test(payload);
 
 const blockFrom = (source: string, start: number): string => {
   const open = source.indexOf('{', start);
@@ -121,12 +180,12 @@ describe('une colonne « pas encore fait » se pose à la création (#19802)', (
      * est directe, et l'absence est une absence.
      */
     it('l’éditeur créé automatiquement à la publication d’un pack pose `verifiedAt`', () => {
-      const literal = creationLiteral(
+      const appel = creationLiteral(
         'services/packs/PackPublishers.ts',
         'await this.prisma.partnerProfile.upsert({ where: { userId }, create: { userId, displayName, nameKey',
       );
 
-      expect(literal).toContain('verifiedAt: null');
+      expect(posesNull(payloadOf(appel, 'create'), 'verifiedAt')).toBe(true);
     });
 
     /**
@@ -143,6 +202,54 @@ describe('une colonne « pas encore fait » se pose à la création (#19802)', (
     });
 
     /**
+     * **ET LA LIGNE QUI ENTRE DANS LA FILE DOIT POUVOIR EN SORTIR.** Relevé par
+     * l'audit adversarial : poser la clé d'attente faisait entrer les profils
+     * d'`adopt` dans la file, et `verify()` ne pouvait JAMAIS les écrire.
+     *
+     * `snapshotWhere` apparie `logoSha256` et `website` — deux colonnes
+     * OPTIONNELLES qu'`adopt` ne pose pas. Prisma rend `null` pour un scalaire
+     * absent, donc l'instantané valait `{ website: null, logoSha256: null }`, et
+     * l'égalité nue n'appariait RIEN : `count: 0`, `profile-changed`, et la route
+     * rendait 409 `PARTNER_PROFILE_CHANGED` à chaque essai — pour toujours,
+     * puisque rien n'avait changé.
+     *
+     * Le témoin évalue l'instantané RÉEL contre la ligne que `adopt` CRÉE. La
+     * suite `pack-publishers` ne pouvait pas le voir : sa fixture pose toutes
+     * les colonnes — **un double qui remplit plus que la production ne peut pas
+     * voir ce que la production laisse vide.**
+     */
+    it('une ligne créée par `adopt` est APPARIÉE par l’instantané que `verify()` exige', () => {
+      const écrite = new Date('2026-11-19T00:00:00Z');
+      const adoptée: MongoDocument = { userId: 'u1', displayName: 'Studio', nameKey: 'studio', verifiedAt: null, updatedAt: écrite };
+      // Ce que Prisma rend d'une telle ligne : les optionnelles absentes sortent `null`.
+      const relue = { userId: 'u1', displayName: 'Studio', logoSha256: null, website: null, updatedAt: écrite };
+
+      const nu = { ...relue };
+      const disantLAbsence = {
+        AND: [
+          { userId: relue.userId, displayName: relue.displayName, updatedAt: relue.updatedAt },
+          { OR: [{ logoSha256: null }, { logoSha256: { isSet: false } }] },
+          { OR: [{ website: null }, { website: { isSet: false } }] },
+        ],
+      };
+
+      expect(matchesMongoWhere(adoptée, nu)).toBe(false);
+      expect(matchesMongoWhere(adoptée, disantLAbsence)).toBe(true);
+    });
+
+    /**
+     * Et la production dit bien l'absence — sinon le témoin ci-dessus
+     * n'attesterait que sa propre copie de la clause (leçon du cycle 182).
+     */
+    it('`snapshotWhere` dit l’absence des deux colonnes optionnelles', () => {
+      const source = codeOf('services/packs/LensPartners.ts');
+      const instantané = blockFrom(source, source.indexOf('const snapshotWhere'));
+
+      expect(instantané).toContain("unsetOrNull('logoSha256')");
+      expect(instantané).toContain("unsetOrNull('website')");
+    });
+
+    /**
      * LES DEUX AUTRES CRÉATEURS SONT DÉJÀ JUSTES, et le témoin le dit — sans
      * quoi un lot de nettoyage retirerait la clé en croyant la rendre
      * cohérente avec le troisième. Celui de `LensPartners` la porte par un
@@ -155,34 +262,62 @@ describe('une colonne « pas encore fait » se pose à la création (#19802)', (
       const partenaire = creationLiteral('services/packs/LensPartners.ts', 'const data = {');
       const officiel = creationLiteral('services/packs/PackPublishers.ts', 'const data = { slug: MEESHY_PUBLISHER_SLUG');
 
-      expect(partenaire).toContain('verifiedAt: null');
-      expect(officiel).toContain('verifiedAt:');
+      expect(posesNull(partenaire, 'verifiedAt')).toBe(true);
+      // L'éditeur officiel écrit une DATE, pas `null` — mais jamais `undefined`,
+      // que Prisma ignorerait : `linked` resterait faux, l'upsert se rejouerait
+      // sans fin, et l'officiel entrerait dans la file de vérification.
+      expect(/\bverifiedAt\s*:\s*(?!undefined)\S/.test(officiel)).toBe(true);
     });
   });
 
-  describe('les rappels hebdomadaires de suppression — `AccountDeletionRequest.lastReminderAt`', () => {
+  describe('les rappels hebdomadaires de suppression — la clé N\'est PAS posée, et c\'est la garde', () => {
     /**
-     * Les DEUX créateurs, parce qu'ils sont deux : la route de demande et celle
-     * d'un compte désactivé. Un seul réparé laisserait la moitié de la
-     * population sans premier rappel, et rien ne le dirait.
+     * **CE TÉMOIN GARDE UNE ABSENCE VOULUE**, et c'est l'audit adversarial du
+     * cycle 184 qui l'a imposé en lisant la passe de rappels de bout en bout —
+     * ce que le lot n'avait pas fait.
+     *
+     * Son statut cible, `GRACE_PERIOD_EXPIRED`, est écrit par l'étape qui PURGE
+     * et ANONYMISE le compte, dans la même itération (`MaintenanceService`,
+     * § « 1. Expiration des grace periods »). Poser `lastReminderAt: null` à la
+     * création allumerait donc, pour chaque demande :
+     *
+     * - un courriel dès la nuit où le compte est DÉTRUIT ;
+     * - puis un tous les sept jours, **sans fin** — `reminderCount` n'est
+     *   jamais plafonné (il n'est lu que par un `logger.info`), et rien ne fait
+     *   sortir une ligne de ce statut hors d'un clic utilisateur ;
+     * - vers `…@deleted.meeshy.invalid`, l'adresse que l'anonymisation écrit :
+     *   une chaîne NON VIDE, donc que la garde `if (!user?.email)` ne retient
+     *   pas, et un TLD réservé (RFC 2606) — 100 % de rebonds durs sur le
+     *   domaine d'envoi de production ;
+     * - avec deux liens déjà morts : le rappel tourne les jetons sans
+     *   rafraîchir `tokenExpiresAt` (TTL 72 h, grâce 30 jours).
+     *
+     * > **L'ÉGALITÉ NUE DU BALAYAGE EST CE QUI TIENT CETTE PASSE INERTE.** Le
+     * > défaut est aujourd'hui la seule chose qui empêche un défaut pire, et le
+     * > correctif « évident » était l'interrupteur. C'est la forme du cycle 124
+     * > retournée : là, un champ DÉCLARAIT une restriction qu'il n'appliquait
+     * > pas ; ici, c'est le LOT qui déclarait l'innocuité d'un chemin dont il
+     * > était le seul interrupteur.
+     *
+     * La passe se répare (statut visé, plafond, TTL, exclusion des comptes
+     * purgés) et c'est une décision du porteur, parce qu'elle écrit à de vraies
+     * personnes depuis le domaine de production : #19900.
      */
-    it('les deux routes de demande de suppression posent `lastReminderAt`', () => {
+    it('aucune des deux routes ne pose `lastReminderAt` — la passe reste inerte jusqu\'à #19900', () => {
       const source = sourceOf('routes/me/delete-account.ts');
-      const ancre = 'accountDeletionRequest.create(';
-      const créations = [...source.matchAll(new RegExp(ancre.replace('(', '\\('), 'g'))]
+      const créations = [...source.matchAll(/accountDeletionRequest\.create\(/g)]
         .map((match) => blockFrom(source, match.index ?? 0));
 
-      expect(créations).toHaveLength(2);
-      for (const création of créations) expect(création).toContain('lastReminderAt: null');
+      expect(créations.length).toBeGreaterThanOrEqual(2);
+      for (const création of créations) expect(création).not.toContain('lastReminderAt');
     });
 
     /**
-     * Et la ligne produite est appariée par la clause RÉELLE du balayage —
-     * recopiée ici dans sa forme exacte, les DEUX branches comprises : la
-     * seconde (`{ lt }`) n'apparie pas davantage une clé absente, ce qui est la
-     * moitié du piège que l'on oublie en lisant un `OR`.
+     * Et la clause reste celle qui n'apparie rien — si quelqu'un la réparait
+     * sans réparer la passe, ce témoin tombe. C'est l'autre moitié de la garde :
+     * l'absence d'écriture ne protège que tant que la lecture reste stricte.
      */
-    it('la ligne ainsi créée entre dans la file des rappels, dont les DEUX branches rataient une clé absente', () => {
+    it('la clause du balayage n\'apparie pas une ligne sans la clé — les DEUX branches', () => {
       const ilYaSeptJours = new Date('2026-11-01T00:00:00Z');
       const clause = {
         status: 'GRACE_PERIOD_EXPIRED',

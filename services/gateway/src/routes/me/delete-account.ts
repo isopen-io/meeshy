@@ -116,14 +116,24 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
             // Un lien de courriel MEURT. Sans cette date, le jeton reçu il y a
             // six mois ouvrait encore la suppression du compte (#4183).
             tokenExpiresAt: new Date(Date.now() + TOKEN_TTL_MS),
-            // #19802 — « aucun rappel encore envoyé » se POSE. La passe
-            // journalière cherche les demandes à relancer par
-            // `OR: [{ lastReminderAt: null }, { lastReminderAt: { lt: … } }]`,
-            // et sous MongoDB AUCUNE des deux branches n'apparie une clé
-            // ABSENTE (`utils/prisma-unset.ts`) : sans cette ligne, le PREMIER
-            // rappel ne partait jamais — donc la colonne n'était jamais écrite,
-            // donc aucun rappel ne partait jamais. Le défaut s'auto-entretenait.
-            lastReminderAt: null,
+            // #19802 / #19900 — `lastReminderAt` N'EST PAS POSÉE, ET C'EST
+            // DÉLIBÉRÉ. L'audit adversarial du cycle 184 a lu la passe de
+            // rappels de bout en bout : son statut cible, `GRACE_PERIOD_EXPIRED`,
+            // est écrit par l'étape qui PURGE et ANONYMISE le compte, dans la
+            // même itération. Poser la clé ici allumerait donc, pour chaque
+            // demande, un courriel hebdomadaire PERPÉTUEL (aucun plafond sur
+            // `reminderCount`, et rien ne fait sortir une ligne de ce statut),
+            // adressé à `…@deleted.meeshy.invalid` — l'adresse que
+            // l'anonymisation écrit, non vide, donc que la garde `if (!user?.email)`
+            // ne retient pas — avec deux liens déjà expirés (le rappel tourne
+            // les jetons sans rafraîchir `tokenExpiresAt`, et la grâce dure
+            // 30 jours pour un TTL de 72 h).
+            //
+            // L'ÉGALITÉ NUE DU BALAYAGE EST DONC CE QUI TIENT CETTE PASSE
+            // INERTE, et elle doit le rester jusqu'à ce que la passe soit
+            // revue (statut visé, plafond, TTL, exclusion des comptes purgés).
+            // C'est une décision du porteur : elle écrit à de vraies personnes
+            // depuis le domaine d'envoi de production (#19900).
           }
         });
 
@@ -320,12 +330,10 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
             confirmTokenHash: hashToken(confirmToken),
             cancelTokenHash: hashToken(cancelToken),
             tokenExpiresAt,
-            // #19802 — même discipline que la route sœur ci-dessus : la clé se
-            // pose, sans quoi cette demande n'entre dans aucune file de rappel.
-            // Les deux routes créent la MÊME ligne ; n'en réparer qu'une
-            // laisserait la moitié de la population sans premier rappel, et
-            // rien ne le dirait.
-            lastReminderAt: null,
+            // #19802 / #19900 — `lastReminderAt` n'est pas posée ici non plus,
+            // pour la raison écrite à la route sœur ci-dessus : la poser
+            // allumerait une passe dont le premier envoi part la nuit où le
+            // compte est détruit.
           },
         });
 

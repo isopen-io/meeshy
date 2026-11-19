@@ -614,6 +614,12 @@ export class PackPublishers {
       // n'entrait dans aucune file, et rien ne le disait. Les deux autres
       // créateurs de `PartnerProfile` l'écrivent déjà — `LensPartners` par le
       // spread de son `data`, l'éditeur officiel avec une date réelle.
+      // Cette ligne ne porte NI `website` NI les colonnes de logo, et c'est
+      // assumé : un éditeur adopté n'a rien déclaré. C'est l'INSTANTANÉ de
+      // vérification qui doit dire cette absence — `snapshotWhere`
+      // (`LensPartners.ts:144`) l'apparie désormais par `unsetOrNull`, sans
+      // quoi la ligne entrait dans la file de vérification sans que `verify()`
+      // puisse jamais l'écrire (409 `PARTNER_PROFILE_CHANGED` perpétuel).
       await this.prisma.partnerProfile.upsert({ where: { userId }, create: { userId, displayName, nameKey, verifiedAt: null, createdAt: now, updatedAt: now }, update: {} });
     } catch (error) {
       if (isNameKeyViolation(error)) return 'name-taken';
