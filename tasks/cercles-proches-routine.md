@@ -1547,3 +1547,16 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 055) rc=0,
   couleurs d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
 - Prochain lot recommandé : fusion de #19864 au dégel, puis plafond `untilStopped` de `listOnlyState`, #19682 décidée.
+
+## 2026-11-19 — réveil de 15 h : #19864 (relevé avant relecture) recalée sur dev (07609bfa9)
+
+- Reprise : #19864 toujours ouverte, tête 4228a2fcc intacte ; la CI des PR reste gelée (35 vérifications « skipped »,
+  `dev` lui-même sans vérification jouée). #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (07609bfa9 : mouvement sur l'épingle, pièces jointes reprenables, qualité d'appel web) fusionnée à la
+  main, sans conflit. `dev` a touché `SharedLocationSharingHolder` (l'émetteur est désormais enveloppé par
+  `SharedLocationMotionTaggingEmitter`) : la ligne du magasin marqué par l'identifiant d'installation est gardée,
+  et `didMove` garde sa retenue `awaitsServedTruth` avant tout envoi, mouvement compris. Android non touché par `dev`.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 056) rc=0,
+  couleurs d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
+- Prochain lot recommandé : inchangé (fusion de #19864 au dégel, plafond `untilStopped` de `listOnlyState`, #19682
+  décidée).
