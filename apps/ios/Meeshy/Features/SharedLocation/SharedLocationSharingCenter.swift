@@ -403,7 +403,8 @@ final class SharedLocationSharingCenter: ObservableObject {
     /// liste seule (`INVALID`) : la liste repart avec une position, la dernière envoyée, sinon celle de l'appareil ;
     /// sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête : retirer une personne ne dépend jamais
     /// de la localisation. Un point choisi se republie lui-même, jamais un relevé (#19558) ; perdu avec un lancement,
-    /// on arrête.
+    /// on arrête. Relancé et pas encore relu (#19767), l'appareil ne republie pas SA position à la place de la liste :
+    /// le retrait reste en attente et se rejoue après la relecture.
     private func republish(_ wanted: SharedLocationRoster) async -> SharedLocationShareProblem? {
         let next = wanted.settled
         guard next.hasRecipients else { return await stopAll() }
@@ -418,6 +419,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             return await publish(next, fix: pinnedFix, previous: roster)
         }
         if let last = freshLastFix { return await publish(next, fix: last, previous: roster) }
+        guard !awaitsServedTruth else { return .refused(.unconfirmed) }
         guard let fix = await fixes.silentFix() else { return await stopAll() }
         guard isLive else { return .refused(.failed) }
         return await publish(next, fix: fix, previous: roster)
@@ -673,14 +675,18 @@ final class UserDefaultsSharedLocationRosterStore: SharedLocationRosterStoring {
 
     private let key: String
     private let defaults: UserDefaults
-    private let writtenElsewhere: Bool
 
+    /// La liste écrite ailleurs devient REÇUE et perd son démarrage dans les réglages AVANT que la marque passe à cet
+    /// appareil : déduite sans être écrite, la cession ne tiendrait qu'un lancement.
     init(userId: String, deviceId: String?, defaults: UserDefaults = .standard) {
         self.key = "sharedLocation.roster." + userId
         self.defaults = defaults
         let marker = key + ".device"
         let stamped = defaults.string(forKey: marker)
-        writtenElsewhere = Self.isWrittenElsewhere(stamped: stamped, device: deviceId)
+        if Self.isWrittenElsewhere(stamped: stamped, device: deviceId) {
+            if load()?.hasRecipients == true { saveReceived(true) }
+            savePublishedStart(nil)
+        }
         if let deviceId, !deviceId.isEmpty, stamped != deviceId { defaults.set(deviceId, forKey: marker) }
     }
 
@@ -701,17 +707,13 @@ final class UserDefaultsSharedLocationRosterStore: SharedLocationRosterStoring {
         defaults.set(data, forKey: key)
     }
 
-    func loadReceived() -> Bool {
-        defaults.bool(forKey: key + ".received") || (writtenElsewhere && load()?.hasRecipients == true)
-    }
+    func loadReceived() -> Bool { defaults.bool(forKey: key + ".received") }
 
     func saveReceived(_ received: Bool) {
         if received { defaults.set(true, forKey: key + ".received") } else { defaults.removeObject(forKey: key + ".received") }
     }
 
-    func loadPublishedStart() -> String? {
-        writtenElsewhere ? nil : defaults.string(forKey: key + ".publishedStart")
-    }
+    func loadPublishedStart() -> String? { defaults.string(forKey: key + ".publishedStart") }
 
     func savePublishedStart(_ startedAt: String?) {
         if let startedAt { defaults.set(startedAt, forKey: key + ".publishedStart") } else { defaults.removeObject(forKey: key + ".publishedStart") }

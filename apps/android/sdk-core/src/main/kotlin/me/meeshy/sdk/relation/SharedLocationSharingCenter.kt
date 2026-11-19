@@ -387,7 +387,8 @@ class SharedLocationSharingCenter internal constructor(
      * n'avoir fait que recevoir la liste d'un autre appareil (#18580). « Pas de partage » : la passerelle dit ce qui court
      * ([settleNotSharing]). Une passerelle d'avant refuse la liste seule (`INVALID`) : la liste repart avec une position,
      * la dernière envoyée, sinon l'appareil ; sans l'une ni l'autre (permission retirée, aucun relevé), TOUT s'arrête :
-     * retirer une personne ne dépend jamais de la localisation.
+     * retirer une personne ne dépend jamais de la localisation. Relancé et pas encore relu (#19767), l'appareil ne
+     * republie pas SA position : le retrait reste en attente et se rejoue après la relecture.
      */
     private suspend fun republish(ticket: Ticket, wanted: SharedLocationRoster): SharedLocationShareProblem? {
         val next = wanted.settled()
@@ -398,7 +399,9 @@ class SharedLocationSharingCenter internal constructor(
             else -> return listOnly
         }
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
-        val fix = freshLastFix() ?: deviceFix() ?: return stopAll(ticket)
+        freshLastFix()?.let { return publish(ticket, next, it, previous = _roster.value) }
+        if (awaitsServedTruth) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
+        val fix = deviceFix() ?: return stopAll(ticket)
         return publish(ticket, next, fix, previous = _roster.value)
     }
 

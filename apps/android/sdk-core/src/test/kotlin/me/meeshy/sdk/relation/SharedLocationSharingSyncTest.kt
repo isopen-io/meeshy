@@ -622,6 +622,25 @@ class SharedLocationSharingSyncTest {
     }
 
     @Test
+    fun `relance, une passerelle d'avant la liste seule ne recoit jamais la position d'ici avant la relecture`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.center.share(bob, SharedLocationPrecision.CITY, SharedLocationShareDuration.ONE_HOUR)
+        runCurrent()
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        relaunched.queuedStartVerdicts += SharedLocationStartVerdict.Refused(SharedLocationSendOutcome.INVALID)
+
+        val problem = relaunched.center.stopSharing(bob)
+        runCurrent()
+
+        assertThat(problem).isEqualTo(SharedLocationShareProblem.WithdrawalPending)
+        assertThat(relaunched.starts.all { it.isListOnly }).isTrue()
+        assertThat(relaunched.fixAsks).isEqualTo(0)
+    }
+
+    @Test
     fun `un partage arrete ailleurs oublie le demarrage garde`() = runTest {
         val device = Device(this)
         publishing(device)

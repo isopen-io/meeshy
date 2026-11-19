@@ -666,6 +666,21 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertEqual(parts.emitter.updates.count, 1)
     }
 
+    func test_aRelaunch_aGatewayBeforeTheListAlone_neverGetsThisDevicesPositionBeforeTheRead() async {
+        let store = FakeSharedLocationRosterStore()
+        let sut = await publishingSUT(store: store)
+        sut.emitter.startVerdict = .started(expiresAt: t0.addingTimeInterval(3600), startedAt: mine)
+        _ = await sut.center.share(with: bob, precision: .city, duration: .oneHour)
+        let relaunched = makeSUT(store: store)
+        relaunched.emitter.queuedStartVerdicts = [.refused(.invalid)]
+
+        let problem = await relaunched.center.stopSharing(with: bob)
+
+        XCTAssertEqual(problem, .withdrawalPending)
+        XCTAssertTrue(relaunched.emitter.starts.allSatisfy(\.isListOnly))
+        XCTAssertTrue(relaunched.emitter.updates.isEmpty)
+    }
+
     // MARK: - Une sauvegarde restaurée sur un autre appareil (#19767)
 
     private func isolatedDefaults() -> UserDefaults {
@@ -706,6 +721,17 @@ final class SharedLocationSharingSyncTests: XCTestCase {
 
         XCTAssertNotNil(center.entry(for: alice))
         XCTAssertFalse(relaunched.fixes.isFollowing)
+    }
+
+    func test_aRestoredBackup_staysReceived_onTheSecondLaunch() {
+        let defaults = isolatedDefaults()
+        writtenByThisDevice(defaults, device: "device-A")
+        _ = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-B", defaults: defaults)
+
+        let second = UserDefaultsSharedLocationRosterStore(userId: me, deviceId: "device-B", defaults: defaults)
+
+        XCTAssertTrue(second.loadReceived())
+        XCTAssertNil(second.loadPublishedStart())
     }
 
     func test_theSameDevice_keepsItsListAndItsStart() {
