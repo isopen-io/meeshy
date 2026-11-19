@@ -1657,41 +1657,40 @@ socket jusqu'au client.
 4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
 5. **Recentrer sur les appels eux-mêmes** dès que la dette d'effacement est soldée : latence de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
 
-## Cycle 49 — 2026-11-18
+## Cycle 49 — 2026-11-19
 
-- **Base** : `origin/dev` @ `6fde25b36`. #19753 (cycle 48) était fusionnée. La CI principale (`ci.yml`, `android.yml`, `ios.yml`, `sdk-tests.yml`) est réactivée ; les 21 autres workflows restent désactivés.
-- **Branche** : `claude/determined-volta-98am8h`.
-- **Objectif** : #19750. Les pistes traduites d'un `PostMedia` s'effacent avec leur média, et les réponses de post ne servent plus `translations.<lang>.path`.
+- **Base** : `origin/dev` @ `d88c406d7`. #19753 (cycle 48) est fusionnée, #19734 fermée. La CI de `dev` tourne de nouveau sur push ; celle des PR reste « skipped », la preuve passe par `workflow_dispatch`.
+- **Branche** : `claude/determined-volta-qasy8w`.
+- **Objectif** : #19750. Les pistes traduites d'un `PostMedia` s'effacent avec lui, et aucune réponse de post ne sert leur chemin disque (`translations.<lang>.path`).
 - **Livré** (passerelle seule) :
-  - `translationTrackKeys()` (`derivedAttachmentFiles.ts`) rend la clé de stockage de chaque piste, lue sur son `url` seulement. Une clé qui contient `..` ou commence par `/`, même après décodage, n'est jamais rendue. Le `path` n'est pas lu : `MediaService.delete` ne sait pas effacer un chemin absolu.
-  - `POST_MEDIA_FILE_COLUMNS` et `PostMediaFileRow` incluent `translations`. `reclaimMediaRowBytes` efface ces clés sous la même garde `Sound`. Cela vaut pour l'expiration des stories, l'édition d'un post, le balayage des médias en attente et la purge de compte.
-  - `PRISMA_SERVED_RESULTS` (`utils/prismaServedResults.ts`, nouveau) regroupe les extensions de résultat du client Prisma du serveur. On y trouve celles qui étaient déjà dans `server.ts` (avatar, bannière, avatar de conversation), et une nouvelle : `postMedia.translations` passe par `servedAttachmentTranslations`. Un seul site couvre donc REST, le socket et l'administration, relations imbriquées comprises. `server.ts` perd 10 lignes.
+  - **Effacement** : `POST_MEDIA_FILE_COLUMNS` et `PostMediaFileRow` portent `translations`. `reclaimMediaRowBytes` efface les `url` rendues par `translationTrackUrls` (`derivedAttachmentFiles.ts` : seulement une adresse de notre stockage, jamais une clé avec `..`, jamais `path`). La garde `Sound` s'applique. Tous les lecteurs répandent les colonnes : expiration des stories, édition, purge de compte, balayage, `DELETE` d'un média.
+  - **Sortie** : `servedPostMedia.ts` (`withServedPostMedia`, `withServedCarrierMedia`, `servedMediaRow`) réutilise `servedAttachmentTranslations` (#19672) sur `media[]`, `repostOf`, `comments[]` et `quotedMedia`. Appliqué à `withMentions` (tout le REST des posts), `emitPostToAudience` et `comment:*` (socket), `hoistCommentCarriers` (extrait de `comments.ts`, qui reste sous 1000 lignes), `serveCitedPostMedia` et `GET /admin/posts/:postId`.
+  - La persistance n'a pas changé : `path` reste en base.
 - **Tests** :
-  - **Rouge** (implémenteur) : effacement `2 failed, 22 passed` ; projection `3 failed, 3 passed`, avec `"path":"/app/uploads/translated/media-1_fr.mp3"` servi.
-  - **Vert**, relancé par moi : `prismaServedResults` + `reclaimPostMediaBytes` donnent `2 suites, 23 passed`.
-  - **QA** :
-    - suites du lot `45 passed` ; `tsc --noEmit` à 0 ;
-    - suites voisines `4 failed, 417 passed` (`14 failed, 5766 passed`). Les 4 suites rouges (ExifStrip, HEIF, AVIF) échouent aussi sur le parent (`heif-convert ENOENT`, outillage natif).
-  - **Mutations** : M1 à M4 et M6 sont tuées. M7 (retirer `.$extends` en gardant la chaîne en commentaire) survit, voir #19770.
-- **Rétrocompatibilité** : seule `path` disparaît de la forme servie. Aucun client ne la lit (iOS `APIAttachmentTranslation`, Android `ApiAttachmentTranslation`, web). Aucune migration.
-- **QA** (`auditeur-adversarial`) : favorable avec réserves.
-  - **R1, élevée** : l'effacement est **sans effet en production** tant que #19749 n'est pas fait. La branche post écrit l'URL locale du traducteur (`/outputs/audio/…`), que `storageKeyFromMediaUrl` ne lit pas, et elle n'est de toute façon jamais atteinte. Les exigences sont reportées sur #19749 : persistance par `saveTranslatedTrack`, clé par `postMediaId` (R4), témoin depuis le vrai producteur.
-  - **R2** → #19769 : la projection au niveau du client rend aveugles le miroir du seau et les relectures-réécritures (`PostAudioService`).
-  - **R3** → #19770 : le témoin de branchement ne lit que le texte de `server.ts`.
-  - **R5** → #19771 : `storageKeyFromMediaUrl` accepte un hôte étranger. Le défaut est antérieur au lot.
-
-- **Intégration** : PR #19772. La CI des PR est gelée (jobs `pull_request` sautés), donc la preuve passe par `workflow_dispatch` de `ci.yml`. Elle a révélé quatre rouges, dont aucun ne vient du lot, et tous sont corrigés dans la PR :
-  - **`Tests · web`**, rouge sur `dev` (run 44436083641). La garde `capability-guard.test.ts` relevait `lib/calls/call-network-recovery.ts`, qui écoute `navigator.connection` pour relancer ICE. Il est ajouté comme exception motivée (`257939d13f`).
-  - **Budget de taille**, rouge sur `dev`. #19778 avait fait passer `calls-routes.test.ts` de 2154 à 2175 lignes. La suite est scindée par responsabilité (join, retrait, harnais partagé), avec 93 témoins avant comme après. La dette est enregistrée en baisse, de 2154 à 1198 (`a16deb08fc`).
-  - **Installation apt de la CI**. Le `timeout 300` tuait apt pendant les déclencheurs de dpkg, et chaque reprise retombait sur « dpkg was interrupted ». La boucle lance désormais `dpkg --configure -a` avant de retenter, aux deux sites de `ci.yml` (`3b6b506468`).
-  - **Cliquet des bouchons de schéma (#4649)**. La scission avait recopié le bouchon `api-schemas` dans les deux nouvelles suites. Elles chargent maintenant les vrais schémas (`5c21bbd856`, 5 suites et 105 tests verts).
-  - Le run 44467825525 sur `5c21bbd856` a été **annulé de l'extérieur** à 06:43 UTC, sans consigne publiée. La PR n'est donc pas fusionnée à la clôture.
+  - Rouge : reclaim `2 failed, 14 passed` ; expiration des stories `1 failed, 15 passed` ; routes + socket `10 failed, 1 passed` ; fiche admin `1 failed, 4 passed` ; `quotedMedia` (réserve R1 de la QA) `5 failed, 8 passed`.
+  - Vert, relancé par moi : reclaim + routes + socket `3 suites, 27 passed`, puis après R1 `2 suites, 13 passed`.
+  - Spécialiste : `333 suites, 5384 passed` (posts, routes/posts, socketio, lot), `tsc --noEmit` à 0. Échec préexistant sans lien : `gateway-test-file-size-budget` (`calls-routes.test.ts` 2154 → 2175, déjà rouge sur `dev`).
+- **Rétrocompatibilité** : aucun client ne lit `path` (iOS `APIAttachmentTranslation`, Android `ApiAttachmentTranslation`, web : aucune lecture). Seule la clé `path` disparaît ; une carte d'une autre forme traverse inchangée.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves. Mutations M1 à M14 toutes tuées.
+  - R1 (`quotedMedia` fuyait) : corrigée dans le lot (`514e28764`).
+  - R2 : l'effacement ne libère encore aucun octet en production, car la voie post enregistre l'`audioUrl` du traducteur (`/outputs/…`) sans écrire de fichier passerelle. Rattachée à #19749.
+  - R3 : #19825 (ne viser que les clés sous `translated/`).
+  - Non couvert : `Sound.translations` n'a aucun écrivain aujourd'hui.
 
 ### Cycle suivant : par où reprendre
 
-0. **PR #19772 ouverte, non fusionnée.** Lire le dernier run `workflow_dispatch` de la branche. S'il est vert, fusionner (`merge`, `expectedHeadSha`), puis relancer `prismaServedResults` et `reclaimPostMediaBytes` sur `dev`, fermer #19750 avec sa preuve et commenter. Sinon, si la PR du cycle 49 n'est pas fusionnée, la reprendre d'abord (fusionner `origin/dev` dans la branche, rejouer les gardes, suivre la CI).
-1. **#19749** avec les exigences R1 et R4. C'est elle qui rend #19750 effective : relais `postId`/`postMediaId` rétrocompatible, persistance par `saveTranslatedTrack`, témoin de bout en bout. Puis #19769 dans le même mouvement, si la projection doit migrer vers un sérialiseur.
-2. #19702, #19673, #19735, #19751, #19770, #19771.
-3. #19520, second critère : constat sur le serveur avec `sre-infra`, dans la même séance que la mesure des journaux d'accès pour #19471.
-4. #19597, #19736, puis #19473, #18668, #18692, #19381, #19253, #19294, #19295, #19255 ; #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
-5. **Recentrer sur les appels eux-mêmes** dès que la dette d'effacement est soldée : latence de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre (preuve par `workflow_dispatch` de `ci.yml` sur la branche, puis fusion).
+1. **#19749** (le résultat ZMQ atteint le post, et la piste s'écrit par `saveTranslatedTrack`) : sans lui, l'effacement de #19750 reste sans effet. Puis #19825.
+2. #19702, #19673, #19735, #19751.
+3. #19520 (second critère, avec `sre-infra`) et #19471.
+4. **Recentrer sur les appels** dès #19749 soldée : latence `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
+
+## Cycle 49 bis — 2026-11-19 (session parallèle, PR #19772)
+
+- **Collision** : cette session et la session de la PR qui a fermé #19750 (`8a97db9b90`) ont livré le même lot en parallèle. La version de `dev` est gardée, parce qu'elle projette `path` à la sérialisation (`servedPostMedia.ts`) et non dans le client Prisma. Elle évite ainsi la réserve R2 de cette session : le miroir du seau et les relectures-réécritures restaient aveugles au `path`. Les deux commits de lot de cette session sont annulés (`git revert`) dans la PR, et #19769 et #19770 sont à requalifier, puisqu'elles visaient l'extension Prisma retirée.
+- **Ce que la PR #19772 apporte encore à `dev`** : quatre rouges de `dev` révélés par la preuve CI.
+  - **`Tests · web`** : la garde `capability-guard.test.ts` relevait `lib/calls/call-network-recovery.ts`, qui écoute `navigator.connection` pour relancer ICE. C'est une exception motivée.
+  - **Budget de taille** : `calls-routes.test.ts` passait de 2154 à 2175 lignes (#19778). La suite est scindée en join, retrait et harnais partagé, avec 93 témoins avant comme après. La dette est enregistrée en baisse, de 2154 à 1198.
+  - **`ci.yml`** : une reprise d'apt lance `dpkg --configure -a`. Jusqu'ici, le `timeout 300` laissait dpkg interrompu et toutes les reprises échouaient.
+  - **Cliquet #4649** : les suites scindées chargent les vrais schémas de réponse.
+- **Leçon** : deux sessions de la routine ont tourné en même temps sur le même lot. Le relevé du démarrage (§ 1.1) doit aussi lister les PR ouvertes ou fusionnées dans l'heure qui citent l'issue visée, et pas seulement les branches qui touchent les fichiers.
