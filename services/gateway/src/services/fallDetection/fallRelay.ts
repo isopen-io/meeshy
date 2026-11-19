@@ -2,35 +2,54 @@
  * LE RELAIS DE LA CHUTE DÉTECTÉE (#18748, SAN-01) — sur le modèle de l'alerte d'inactivité
  * (`inactivityCheck/inactivityRelay.ts`), dont il reprend l'éventail hors verrou.
  *
- * 1. L'iPhone rapporte une chute (`POST /me/health/fall`). Sans l'ACCORD EXPLICITE de la personne
- *    (`fallConsentGiven`), rien n'est rangé : la collecte elle-même est fermée.
+ * 1. L'iPhone rapporte une chute (`POST /me/health/fall`). Sans l'ACCORD EXPLICITE de la personne,
+ *    donné sur la version courante du texte et hors mineur déclaré (`fallConsentGiven`), rien n'est
+ *    rangé : la collecte elle-même est fermée, et un épisode résiduel s'efface.
  * 2. Une chute neuve ouvre l'épisode (`fallStep`, partagé) et part TOUT DE SUITE vers chaque Sang
- *    autorisé (`fallAccess.ts`) : `fall:detected` dans `user:<Sang>` et le push générique. La
- *    dernière position et la dernière batterie ne sont servies qu'au Sang qui les reçoit DÉJÀ.
+ *    autorisé (`fallAccess.ts`) : `fall:detected` dans `user:<Sang>` et le push générique, qui perce
+ *    au plus trois fois par 24 h (`fallUrgencyStep`). La dernière position et la dernière batterie ne
+ *    sont servies qu'au Sang qui les reçoit DÉJÀ.
  * 3. « Je vais bien » (`POST /me/health/fall/ok`) clôt l'épisode : `fall:cleared` (`responded`) et
  *    le push « a répondu » à qui a reçu l'alerte. L'expiration est silencieuse. Le retrait de
- *    l'accord ou de l'accès efface (`withdrawn`), sans push.
+ *    l'accord ou de l'accès efface (`withdrawn`), et la bannière déjà livrée est REMPLACÉE par une
+ *    levée neutre (`lifted`, même fil). Un épisode clos laisse une pierre tombale : le même rapport,
+ *    rejoué, ne le rouvre pas.
  *
- * Les envois partent HORS verrou : chacun relit l'épisode et ses lecteurs avant de partir, et le
- * dernier mot est corrigé après coup chez qui a été atteint pendant qu'il se périmait (leçons des
- * audits de #18738 et #18753). Rien ne part vers un lecteur que la loi refuse. Aucun journal ne
- * porte l'instant d'une chute. JAMAIS un message de conversation.
+ * Les envois partent HORS verrou, un lecteur après l'autre : chacun relit l'épisode, ses lecteurs ET
+ * la loi juste avant de partir, et le dernier mot est corrigé après coup chez qui a été atteint
+ * pendant qu'il se périmait (leçons des audits de #18738 et #18753). Rien ne part vers un lecteur que
+ * la loi refuse. Aucun journal ne porte l'instant d'une chute. JAMAIS un message de conversation.
  */
 import type { FallAnnouncement, FallClearedReason, FallSnapshot, FallState } from '@meeshy/shared/types/fall-detection';
 import type { InactivityLastBattery, InactivityLastPosition } from '@meeshy/shared/types/inactivity-check';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import { fallAnnouncementOf, fallReportVerdict, fallStep, isFallLive, servedFall } from '@meeshy/shared/utils/fall-detection';
+import { fallAnnouncementOf, fallReportVerdict, fallStep, fallTombstoneCovers, fallUrgencyStep, isFallLive, servedFall } from '@meeshy/shared/utils/fall-detection';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { batteryCandidatesOf } from '../battery/batteryAccess';
+import { teamAccountIds } from '../relations/teamPeers';
 import { fallAllowedAmong, fallConsentGiven, type FallDb } from './fallAccess';
-import { clearFall, readFall, storeFall, withFallLock, type FallCache, type StoredFall } from './fallStore';
+import {
+  clearFall,
+  readFall,
+  readFallOpenings,
+  readFallTombstone,
+  storeFall,
+  storeFallOpenings,
+  storeFallTombstone,
+  withFallLock,
+  type FallCache,
+  type StoredFall,
+} from './fallStore';
 
 export type FallPush = {
   readonly readerId: string;
   readonly emitterId: string;
-  readonly kind: 'detected' | 'responded';
+  /** L'alerte, la réponse, ou la LEVÉE neutre chez qui perd l'accès (elle remplace la bannière). */
+  readonly kind: 'detected' | 'responded' | 'lifted';
   /** L'heure annoncée, tronquée à la minute : la chute, ou la réponse. */
   readonly at: string;
+  /** Une alerte qui PERCE (time-sensitive, Ne pas déranger traversé) ; `false` au-delà du plafond quotidien. */
+  readonly urgent?: boolean;
 };
 
 export type FallRelayDeps = {
@@ -48,6 +67,9 @@ export type FallRelayDeps = {
 
 export type FallReportOutcome = { readonly kind: 'too-old' | 'in-future' | 'consent-required' | 'deduplicated' | 'recorded' };
 
+/** Un lecteur qui sort de l'épisode, et s'il en avait reçu la bannière. */
+type Departure = { readonly readerId: string; readonly delivered: boolean };
+
 const MINUTE_MS = 60_000;
 
 const safely = (send: () => void): void => {
@@ -60,6 +82,7 @@ const safely = (send: () => void): void => {
 
 const iso = (deps: FallRelayDeps): string => new Date(deps.now()).toISOString();
 const minuteOf = (deps: FallRelayDeps): string => new Date(Math.floor(deps.now() / MINUTE_MS) * MINUTE_MS).toISOString();
+const nowDate = (deps: FallRelayDeps): Date => new Date(deps.now());
 
 const emitDetected = (deps: FallRelayDeps, readerId: string, state: FallState, announcement?: FallAnnouncement): void =>
   safely(() => deps.io?.to(ROOMS.user(readerId)).emit(SERVER_EVENTS.FALL_DETECTED, { userId: state.userId, state, ...(announcement ? { announcement } : {}) }));
@@ -71,14 +94,24 @@ const liveOrNull = (deps: FallRelayDeps, stored: StoredFall | null): StoredFall 
 
 const sameEpisode = (a: StoredFall | null, b: StoredFall): boolean => a !== null && a.detectedAt === b.detectedAt && a.openedAt === b.openedAt;
 
+const departuresOf = (stored: StoredFall | null, leaving: (readerId: string) => boolean): readonly Departure[] =>
+  (stored?.servedTo ?? []).filter(leaving).map((readerId) => ({ readerId, delivered: stored?.deliveredTo.includes(readerId) ?? false }));
+
 async function audienceOf(deps: FallRelayDeps, emitterId: string): Promise<ReadonlySet<string>> {
   const candidates = await batteryCandidatesOf(deps.prisma, emitterId);
   if (candidates.length === 0) return new Set();
-  return fallAllowedAmong(deps.prisma, { subjectId: emitterId, otherIds: candidates, subjectIs: 'target', now: new Date(deps.now()) });
+  return fallAllowedAmong(deps.prisma, { subjectId: emitterId, otherIds: candidates, subjectIs: 'target', now: nowDate(deps) });
 }
 
 async function sees(deps: FallRelayDeps, emitterId: string, readerId: string): Promise<boolean> {
-  return (await fallAllowedAmong(deps.prisma, { subjectId: emitterId, otherIds: [readerId], subjectIs: 'target', now: new Date(deps.now()) })).has(readerId);
+  return (await fallAllowedAmong(deps.prisma, { subjectId: emitterId, otherIds: [readerId], subjectIs: 'target', now: nowDate(deps) })).has(readerId);
+}
+
+/** L'épisode est-il ENCORE le même, ce lecteur encore servi, et la loi le laisse-t-elle encore voir ? */
+async function stillServed(deps: FallRelayDeps, emitterId: string, readerId: string, stored: StoredFall): Promise<boolean> {
+  const current = liveOrNull(deps, await readFall(deps.cache, emitterId));
+  if (!sameEpisode(current, stored) || !current?.servedTo.includes(readerId)) return false;
+  return sees(deps, emitterId, readerId);
 }
 
 /** L'état servi à UN lecteur : ce que sa loi de position et sa loi de batterie lui ouvrent déjà. */
@@ -92,50 +125,75 @@ async function servedStateFor(deps: FallRelayDeps, emitterId: string, readerId: 
 
 const pushSafely = (deps: FallRelayDeps, push: FallPush): Promise<boolean> => deps.push(push).catch(() => false);
 
+/** Qui sort de l'épisode : l'effacement `withdrawn`, et la levée neutre là où une bannière a été livrée. */
+async function sendDepartures(deps: FallRelayDeps, emitterId: string, departures: readonly Departure[]): Promise<void> {
+  const at = minuteOf(deps);
+  for (const { readerId, delivered } of departures) {
+    emitCleared(deps, readerId, emitterId, 'withdrawn');
+    if (delivered) await pushSafely(deps, { readerId, emitterId, kind: 'lifted', at });
+  }
+}
+
+/** Ferme l'épisode en cours sous le verrou : purgé, et sa pierre tombale rangée. Rend ce qui était servi. */
+async function closeEpisodeLocked(deps: FallRelayDeps, userId: string): Promise<StoredFall | null> {
+  const stored = liveOrNull(deps, await readFall(deps.cache, userId));
+  await clearFall(deps.cache, userId);
+  if (stored) await storeFallTombstone(deps.cache, userId, stored, deps.now());
+  return stored;
+}
+
+type ReportStep =
+  | { readonly kind: 'consent-required'; readonly departed: readonly Departure[] }
+  | { readonly kind: 'deduplicated' }
+  | { readonly kind: 'recorded'; readonly stored: StoredFall; readonly urgent: boolean; readonly departed: readonly Departure[] };
+
 /**
  * Une chute rapportée. Refusée trop vieille ou dans le futur avant toute lecture ; refusée sans
- * accord, sans rien ranger. Une chute de l'épisode en cours ne repousse rien. LÈVE si l'épisode ne
- * se range pas.
+ * accord valide, sans rien ranger (un épisode résiduel s'efface). Une chute de l'épisode en cours, ou
+ * d'un épisode clos encore marqué par sa pierre tombale, ne repousse rien. LÈVE si l'épisode ne se range pas.
  */
 export async function reportFall(deps: FallRelayDeps, params: { readonly userId: string; readonly detectedAt: string }): Promise<FallReportOutcome> {
   const at = iso(deps);
   const verdict = fallReportVerdict(params.detectedAt, at);
   if (verdict !== 'accepted') return { kind: verdict };
-  const outcome = await withFallLock(deps.cache, params.userId, async () => {
-    if (!(await fallConsentGiven(deps.prisma, params.userId))) {
-      await clearFall(deps.cache, params.userId);
-      return { kind: 'consent-required' as const };
+  const outcome = await withFallLock<ReportStep>(deps.cache, params.userId, async () => {
+    if (!(await fallConsentGiven(deps.prisma, params.userId, nowDate(deps)))) {
+      const residual = await closeEpisodeLocked(deps, params.userId);
+      return { kind: 'consent-required', departed: departuresOf(residual, () => true) };
     }
+    if (fallTombstoneCovers(await readFallTombstone(deps.cache, params.userId), params.detectedAt)) return { kind: 'deduplicated' };
     const previous = liveOrNull(deps, await readFall(deps.cache, params.userId));
     const step = fallStep(previous, { detectedAt: params.detectedAt, at });
-    if (!step.opened) return { kind: 'deduplicated' as const };
+    if (!step.opened) return { kind: 'deduplicated' };
     const audience = await audienceOf(deps, params.userId);
     const stored: StoredFall = { ...step.state, servedTo: [...audience], deliveredTo: [] };
     await storeFall(deps.cache, params.userId, stored, deps.now());
-    return { kind: 'recorded' as const, stored, departed: (previous?.servedTo ?? []).filter((id) => !audience.has(id)) };
+    const urgency = fallUrgencyStep(await readFallOpenings(deps.cache, params.userId), at);
+    await storeFallOpenings(deps.cache, params.userId, urgency.openings);
+    return { kind: 'recorded', stored, urgent: urgency.urgent, departed: departuresOf(previous, (id) => !audience.has(id)) };
   });
-  if (outcome.kind !== 'recorded') return { kind: outcome.kind };
-  outcome.departed.forEach((readerId) => emitCleared(deps, readerId, params.userId, 'withdrawn'));
-  if (outcome.stored.servedTo.length > 0) await fanOutDetected(deps, params.userId, outcome.stored);
+  if (outcome.kind === 'deduplicated') return { kind: 'deduplicated' };
+  await sendDepartures(deps, params.userId, outcome.departed);
+  if (outcome.kind === 'consent-required') return { kind: 'consent-required' };
+  if (outcome.stored.servedTo.length > 0) await fanOutDetected(deps, params.userId, outcome.stored, outcome.urgent);
   return { kind: 'recorded' };
 }
 
 /**
- * L'éventail de l'alerte, HORS verrou (il lit la position et la batterie de chaque Sang). Il ne part
- * que si l'épisode est encore le sien ; et si une réponse, un retrait ou une perte d'accès est arrivé
- * PENDANT, le dernier mot chez chaque Sang atteint est corrigé (`correctAfterDetected`).
+ * L'éventail de l'alerte, HORS verrou et un lecteur après l'autre : juste avant chaque envoi,
+ * l'épisode, ses lecteurs et la loi sont relus (`stillServed`). Si une réponse, un retrait ou une
+ * perte d'accès est arrivé PENDANT, le dernier mot chez chaque Sang atteint est corrigé.
  */
-async function fanOutDetected(deps: FallRelayDeps, userId: string, stored: StoredFall): Promise<void> {
+async function fanOutDetected(deps: FallRelayDeps, userId: string, stored: StoredFall, urgent: boolean): Promise<void> {
   const announcement = fallAnnouncementOf(stored);
-  const served = await Promise.all(stored.servedTo.map(async (readerId) => [readerId, await servedStateFor(deps, userId, readerId, stored)] as const));
-  const before = await readFall(deps.cache, userId);
-  if (!sameEpisode(before, stored)) return;
-  const delivered = (await Promise.all(served.map(async ([readerId, state]) => {
-    if (!before?.servedTo.includes(readerId)) return null;
+  const delivered: string[] = [];
+  for (const readerId of stored.servedTo) {
+    const state = await servedStateFor(deps, userId, readerId, stored);
+    if (!(await stillServed(deps, userId, readerId, stored))) continue;
     emitDetected(deps, readerId, state, announcement);
-    await pushSafely(deps, { readerId, emitterId: userId, kind: 'detected', at: announcement.at });
-    return readerId;
-  }))).filter((id): id is string => id !== null);
+    await pushSafely(deps, { readerId, emitterId: userId, kind: 'detected', at: announcement.at, urgent });
+    delivered.push(readerId);
+  }
   if (delivered.length === 0) return;
   const after = await withFallLock(deps.cache, userId, async () => {
     const current = await readFall(deps.cache, userId);
@@ -145,7 +203,7 @@ async function fanOutDetected(deps: FallRelayDeps, userId: string, stored: Store
     return { current, departed: delivered.filter((id) => !current.servedTo.includes(id)) };
   });
   if (after.current && sameEpisode(after.current, stored)) {
-    after.departed.forEach((readerId) => emitCleared(deps, readerId, userId, 'withdrawn'));
+    await sendDepartures(deps, userId, after.departed.map((readerId) => ({ readerId, delivered: true })));
     return;
   }
   await correctAfterDetected(deps, userId, stored, delivered, after.current);
@@ -154,51 +212,69 @@ async function fanOutDetected(deps: FallRelayDeps, userId: string, stored: Store
 /**
  * L'alerte est partie, mais l'épisode s'est périmé PENDANT l'envoi — et ces Sangs n'étaient pas encore
  * dans `deliveredTo`, donc la clôture ne les a pas comptés. La raison se déduit de ce qui reste :
- * plus d'accord ou plus d'accès ⇒ `withdrawn` ; épisode passé ⇒ `expired` ; sinon la personne a
- * répondu ⇒ `responded` et son push. Un épisode NEUF rangé entre-temps garde ses lecteurs.
+ * plus d'accord ou plus d'accès ⇒ `withdrawn` et la levée ; épisode passé ⇒ `expired` ; sinon la
+ * personne a répondu ⇒ `responded` et son push. Un épisode NEUF rangé entre-temps garde ses lecteurs.
  */
 async function correctAfterDetected(deps: FallRelayDeps, userId: string, stored: StoredFall, delivered: readonly string[], current: StoredFall | null): Promise<void> {
   const renewed = new Set(liveOrNull(deps, current)?.servedTo ?? []);
   const readers = delivered.filter((id) => !renewed.has(id));
   if (readers.length === 0) return;
-  const [consented, audience] = await Promise.all([fallConsentGiven(deps.prisma, userId).catch(() => false), audienceOf(deps, userId).catch(() => new Set<string>())]);
+  const [consented, audience] = await Promise.all([
+    fallConsentGiven(deps.prisma, userId, nowDate(deps)).catch(() => false),
+    audienceOf(deps, userId).catch(() => new Set<string>()),
+  ]);
   const expired = !isFallLive(stored, iso(deps));
-  await Promise.all(readers.map(async (readerId) => {
-    if (!consented || !audience.has(readerId)) return emitCleared(deps, readerId, userId, 'withdrawn');
-    if (expired) return emitCleared(deps, readerId, userId, 'expired');
+  const lost = readers.filter((id) => !consented || !audience.has(id));
+  await sendDepartures(deps, userId, lost.map((readerId) => ({ readerId, delivered: true })));
+  for (const readerId of readers.filter((id) => !lost.includes(id))) {
+    if (expired) {
+      emitCleared(deps, readerId, userId, 'expired');
+      continue;
+    }
     emitCleared(deps, readerId, userId, 'responded');
     await pushSafely(deps, { readerId, emitterId: userId, kind: 'responded', at: minuteOf(deps) });
-  }));
+  }
 }
 
 /**
- * « Je vais bien » : l'épisode est oublié ; « a répondu » (événement + push) à qui a REÇU l'alerte
- * et la voit encore ; un effacement sans push aux autres lecteurs servis. Rend `false` quand aucun
- * épisode n'était en cours.
+ * « Je vais bien » : l'épisode est oublié (sa pierre tombale reste) ; « a répondu » (événement +
+ * push) à qui a REÇU l'alerte et la voit encore ; un effacement sans push aux autres lecteurs servis ;
+ * à qui a perdu l'accès, `withdrawn` et la levée. Rend `false` quand aucun épisode n'était en cours.
  */
 export async function respondFall(deps: FallRelayDeps, userId: string): Promise<boolean> {
-  const previous = await withFallLock(deps.cache, userId, async () => {
-    const stored = liveOrNull(deps, await readFall(deps.cache, userId));
-    await clearFall(deps.cache, userId);
-    return stored;
-  });
+  const previous = await withFallLock(deps.cache, userId, () => closeEpisodeLocked(deps, userId));
   if (!previous) return false;
   const audience = await audienceOf(deps, userId).catch(() => new Set<string>());
+  await sendDepartures(deps, userId, departuresOf(previous, (id) => !audience.has(id)));
   const delivered = new Set(previous.deliveredTo);
   const at = minuteOf(deps);
-  await Promise.all(previous.servedTo.map(async (readerId) => {
-    if (!audience.has(readerId)) return emitCleared(deps, readerId, userId, 'withdrawn');
+  for (const readerId of previous.servedTo.filter((id) => audience.has(id))) {
     emitCleared(deps, readerId, userId, 'responded');
     if (delivered.has(readerId)) await pushSafely(deps, { readerId, emitterId: userId, kind: 'responded', at });
-  }));
+  }
   return true;
+}
+
+/**
+ * Le RETRAIT de l'accord : sous le verrou, l'épisode est d'abord purgé (et marqué d'une pierre
+ * tombale), PUIS l'accord est effacé (`write`) — un ré-accord rapide ne retrouve rien à servir. Hors
+ * verrou, chaque lecteur servi reçoit `withdrawn` et la levée de sa bannière. Verrou resté pris :
+ * LÈVE sans rien écrire (`isFallLockBusy`), et la route répond une erreur plutôt qu'un succès menteur.
+ */
+export async function withdrawFallConsent(deps: FallRelayDeps, emitterId: string, write: () => Promise<void>): Promise<void> {
+  const previous = await withFallLock(deps.cache, emitterId, async () => {
+    const stored = await closeEpisodeLocked(deps, emitterId);
+    await write();
+    return stored;
+  });
+  await sendDepartures(deps, emitterId, departuresOf(previous, () => true));
 }
 
 /** Ce que `readerId` voit, à la connexion. La loi est jugée sur TOUS les candidats avant toute lecture d'épisode. */
 export async function fallSnapshotFor(deps: FallRelayDeps, readerId: string): Promise<FallSnapshot> {
   const candidates = await batteryCandidatesOf(deps.prisma, readerId);
   if (candidates.length === 0) return { items: [] };
-  const allowed = await fallAllowedAmong(deps.prisma, { subjectId: readerId, otherIds: candidates, subjectIs: 'viewer', now: new Date(deps.now()) });
+  const allowed = await fallAllowedAmong(deps.prisma, { subjectId: readerId, otherIds: candidates, subjectIs: 'viewer', now: nowDate(deps) });
   const states = await Promise.all([...allowed].map(async (id) => {
     const stored = liveOrNull(deps, await readFall(deps.cache, id));
     return stored ? servedStateFor(deps, id, readerId, stored) : null;
@@ -206,91 +282,93 @@ export async function fallSnapshotFor(deps: FallRelayDeps, readerId: string): Pr
   return { items: states.filter((state): state is FallState => state !== null) };
 }
 
+async function dropReaders(deps: FallRelayDeps, emitterId: string, readerIds: readonly string[]): Promise<readonly Departure[]> {
+  return withFallLock(deps.cache, emitterId, async () => {
+    const stored = liveOrNull(deps, await readFall(deps.cache, emitterId));
+    if (!stored) return [];
+    const departed = departuresOf(stored, (id) => readerIds.includes(id));
+    const kept = (id: string): boolean => !readerIds.includes(id);
+    if (departed.length > 0) await storeFall(deps.cache, emitterId, { ...stored, servedTo: stored.servedTo.filter(kept), deliveredTo: stored.deliveredTo.filter(kept) }, deps.now());
+    return departed;
+  });
+}
+
 /**
- * Un ÉTAT (sans annonce) vers un Sang, hors verrou : il ne part que si l'épisode est encore le même
- * et que ce Sang le voit encore ; périmé PENDANT l'envoi, l'effacement le suit.
+ * Un ÉTAT (sans annonce) vers un Sang, hors verrou : il ne part que si l'épisode est encore le même,
+ * que ce Sang y est servi ET que la loi le laisse encore voir — jugée de nouveau ici, pas héritée de
+ * l'appelant ; refusé, le lecteur sort de l'épisode. Périmé PENDANT l'envoi, l'effacement le suit.
  */
 async function emitStateIfStillServed(deps: FallRelayDeps, userId: string, readerId: string, stored: StoredFall, state: FallState): Promise<void> {
-  const fresh = (record: StoredFall | null): boolean => sameEpisode(liveOrNull(deps, record), stored) && Boolean(record?.servedTo.includes(readerId));
-  if (!fresh(await readFall(deps.cache, userId))) return;
+  if (!(await stillServed(deps, userId, readerId, stored))) {
+    await sendDepartures(deps, userId, await dropReaders(deps, userId, [readerId]));
+    return;
+  }
   emitDetected(deps, readerId, state);
-  if (!fresh(await readFall(deps.cache, userId))) emitCleared(deps, readerId, userId, 'withdrawn');
+  if (await stillServed(deps, userId, readerId, stored)) return;
+  emitCleared(deps, readerId, userId, 'withdrawn');
+  await sendDepartures(deps, userId, await dropReaders(deps, userId, [readerId]));
 }
 
 const directions = (userA: string, userB: string) => [[userA, userB], [userB, userA]] as const;
 
-/** Rejoue une paire dans les DEUX sens après un changement de lien, de consentement ou de blocage. */
+type PairChange = { readonly kind: 'gained'; readonly stored: StoredFall } | { readonly kind: 'lost'; readonly departure: Departure };
+
+/** Rejoue une paire dans les DEUX sens après un changement de lien, de consentement ou de blocage. La loi est jugée DANS le verrou. */
 export async function refreshFallBetween(deps: FallRelayDeps, params: { readonly userA: string; readonly userB: string }): Promise<void> {
   for (const [emitterId, readerId] of directions(params.userA, params.userB)) {
-    const after = await sees(deps, emitterId, readerId);
-    const gained = await withFallLock(deps.cache, emitterId, async () => {
+    const change = await withFallLock<PairChange | null>(deps.cache, emitterId, async () => {
       const stored = liveOrNull(deps, await readFall(deps.cache, emitterId));
       if (!stored) return null;
+      const after = await sees(deps, emitterId, readerId);
       const before = stored.servedTo.includes(readerId);
       if (after && !before) {
         const next: StoredFall = { ...stored, servedTo: [...stored.servedTo, readerId] };
         await storeFall(deps.cache, emitterId, next, deps.now());
-        return next;
+        return { kind: 'gained', stored: next };
       }
       if (!after && before) {
-        emitCleared(deps, readerId, emitterId, 'withdrawn');
         await storeFall(deps.cache, emitterId, { ...stored, servedTo: stored.servedTo.filter((id) => id !== readerId), deliveredTo: stored.deliveredTo.filter((id) => id !== readerId) }, deps.now());
+        return { kind: 'lost', departure: { readerId, delivered: stored.deliveredTo.includes(readerId) } };
       }
       return null;
     });
-    if (gained) await emitStateIfStillServed(deps, emitterId, readerId, gained, await servedStateFor(deps, emitterId, readerId, gained));
+    if (change?.kind === 'lost') await sendDepartures(deps, emitterId, [change.departure]);
+    if (change?.kind === 'gained') await emitStateIfStillServed(deps, emitterId, readerId, change.stored, await servedStateFor(deps, emitterId, readerId, change.stored));
   }
 }
 
 /**
  * Ce qui accompagne l'alerte a changé (position ou batterie retirée, fantôme de position, historique
- * effacé) : chaque Sang servi reçoit l'état re-jugé, sans nouvelle annonce.
+ * effacé) : chaque Sang servi reçoit l'état re-jugé, sans nouvelle annonce ; qui n'est plus dans
+ * l'audience sort de l'épisode.
  */
 export async function refreshFallServedOf(deps: FallRelayDeps, emitterId: string): Promise<void> {
   const stored = liveOrNull(deps, await readFall(deps.cache, emitterId));
   if (!stored || stored.servedTo.length === 0) return;
   const audience = await audienceOf(deps, emitterId);
-  await Promise.all(stored.servedTo.filter((id) => audience.has(id)).map(async (readerId) =>
-    emitStateIfStillServed(deps, emitterId, readerId, stored, await servedStateFor(deps, emitterId, readerId, stored))));
+  const outside = stored.servedTo.filter((id) => !audience.has(id));
+  if (outside.length > 0) await sendDepartures(deps, emitterId, await dropReaders(deps, emitterId, outside));
+  for (const readerId of stored.servedTo.filter((id) => audience.has(id))) {
+    await emitStateIfStillServed(deps, emitterId, readerId, stored, await servedStateFor(deps, emitterId, readerId, stored));
+  }
 }
 
 /**
- * Après le RETRAIT de l'accord : l'épisode est purgé et s'efface chez tous ceux qui le voyaient
- * (`withdrawn`), sans push. Accord présent : rien à rejouer.
+ * Un compte a perdu des accès HORS des routes de lien (rôle d'équipe retiré, compte désactivé), dans
+ * les deux rôles. Comme LECTEUR, ses émetteurs possibles comptent les comptes de l'équipe même quand
+ * il n'en est plus : c'est justement le rôle perdu qui les retire de ses candidats.
  */
-export async function refreshFallAudience(deps: FallRelayDeps, emitterId: string): Promise<void> {
-  if (await fallConsentGiven(deps.prisma, emitterId)) return;
-  const servedTo = await withFallLock(deps.cache, emitterId, async () => {
-    const stored = await readFall(deps.cache, emitterId);
-    await clearFall(deps.cache, emitterId);
-    return liveOrNull(deps, stored)?.servedTo ?? [];
-  });
-  servedTo.forEach((readerId) => emitCleared(deps, readerId, emitterId, 'withdrawn'));
-}
-
-async function dropReaders(deps: FallRelayDeps, emitterId: string, readerIds: readonly string[]): Promise<readonly string[]> {
-  return withFallLock(deps.cache, emitterId, async () => {
-    const stored = liveOrNull(deps, await readFall(deps.cache, emitterId));
-    if (!stored) return [];
-    const removed = stored.servedTo.filter((id) => readerIds.includes(id));
-    const kept = (id: string): boolean => !readerIds.includes(id);
-    if (removed.length > 0) await storeFall(deps.cache, emitterId, { ...stored, servedTo: stored.servedTo.filter(kept), deliveredTo: stored.deliveredTo.filter(kept) }, deps.now());
-    return removed;
-  });
-}
-
-/** Un compte a perdu des accès HORS des routes de lien (rôle d'équipe retiré, compte désactivé), dans les deux rôles. */
 export async function reconcileFallOfAccount(deps: FallRelayDeps, userId: string): Promise<void> {
   const own = liveOrNull(deps, await readFall(deps.cache, userId));
   if (own && own.servedTo.length > 0) {
     const audience = await audienceOf(deps, userId);
-    const departed = await dropReaders(deps, userId, own.servedTo.filter((id) => !audience.has(id)));
-    departed.forEach((readerId) => emitCleared(deps, readerId, userId, 'withdrawn'));
+    await sendDepartures(deps, userId, await dropReaders(deps, userId, own.servedTo.filter((id) => !audience.has(id))));
   }
-  const emitters = await batteryCandidatesOf(deps.prisma, userId);
+  const [linked, team] = await Promise.all([batteryCandidatesOf(deps.prisma, userId), teamAccountIds(deps.prisma)]);
+  const emitters = [...new Set([...linked, ...team])].filter((id) => id !== userId);
   if (emitters.length === 0) return;
-  const allowed = await fallAllowedAmong(deps.prisma, { subjectId: userId, otherIds: emitters, subjectIs: 'viewer', now: new Date(deps.now()) });
+  const allowed = await fallAllowedAmong(deps.prisma, { subjectId: userId, otherIds: emitters, subjectIs: 'viewer', now: nowDate(deps) });
   for (const emitterId of emitters.filter((id) => !allowed.has(id))) {
-    if ((await dropReaders(deps, emitterId, [userId])).length > 0) emitCleared(deps, userId, emitterId, 'withdrawn');
+    await sendDepartures(deps, emitterId, await dropReaders(deps, emitterId, [userId]));
   }
 }

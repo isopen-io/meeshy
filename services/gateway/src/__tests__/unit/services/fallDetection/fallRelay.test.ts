@@ -8,118 +8,9 @@
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import {
-  fallSnapshotFor,
-  reconcileFallOfAccount,
-  refreshFallAudience,
-  refreshFallBetween,
-  refreshFallServedOf,
-  reportFall,
-  respondFall,
-  type FallPush,
-  type FallRelayDeps,
-} from '../../../../services/fallDetection/fallRelay';
-import { ADULT_BIRTH, messagingWorld, table, type CircleLink } from '../../../helpers/messaging-circle-world';
-import { batteryCacheInMemory } from '../battery/batteryWorld';
-
-const PERSONNE = '6400000000000000000000e1';
-const SANG = '6400000000000000000000b1';
-const SANG_REFUSE = '6400000000000000000000b2';
-const PROCHE = '6400000000000000000000c1';
-const BLOQUEUR = '6400000000000000000000d1';
-const ANALYSTE = '6400000000000000000000a1';
-const ADMIN = '6400000000000000000000a2';
-
-const T0 = Date.parse('2026-11-19T16:43:00.000Z');
-const CHUTE = '2026-11-19T16:42:13.000Z';
-const MIN = 60_000;
-
-type Emission = { readonly room: string; readonly event: string; readonly data: Record<string, unknown> };
-
-const LIENS: readonly CircleLink[] = [
-  [PERSONNE, SANG, 'BLOOD'],
-  [PERSONNE, SANG_REFUSE, 'BLOOD'],
-  [PERSONNE, PROCHE, 'CLOSE'],
-  [PERSONNE, BLOQUEUR, 'BLOOD'],
-];
-const ROLE: Readonly<Record<string, string>> = { [ANALYSTE]: 'ANALYST', [ADMIN]: 'ADMIN' };
-const ACCORD = new Date('2026-11-19T09:00:00.000Z');
-
-function monde(options: { readonly role?: string; readonly consenti?: boolean } = {}) {
-  const world = messagingWorld({
-    links: LIENS,
-    users: [PERSONNE, SANG, SANG_REFUSE, PROCHE, BLOQUEUR, ANALYSTE, ADMIN].map((id) => ({
-      id,
-      birthDate: ADULT_BIRTH,
-      role: id === PERSONNE ? (options.role ?? 'USER') : (ROLE[id] ?? 'USER'),
-      ...(id === BLOQUEUR ? { blockedUserIds: [PERSONNE] } : {}),
-      ...(id === PERSONNE && options.consenti !== false ? { fallAlertConsentedAt: ACCORD, fallAlertConsentVersion: '2026-11-19' } : {}),
-    })),
-  });
-  const settings = table([{ ownerId: PERSONNE, otherId: SANG_REFUSE, fallShared: false }, { ownerId: PERSONNE, otherId: PROCHE, fallShared: true }]);
-  const emissions: Emission[] = [];
-  const pushes: FallPush[] = [];
-  let now = T0;
-  let pendantLePush: (() => Promise<unknown>) | null = null;
-  let positionServie = true;
-  const deps: FallRelayDeps = {
-    prisma: { ...world.prisma, relationFeatureSetting: settings } as unknown as PrismaClient,
-    cache: batteryCacheInMemory(),
-    io: { to: (room: string) => ({ emit: (event: string, data: Record<string, unknown>) => emissions.push({ room, event, data }) }) } as unknown as FallRelayDeps['io'],
-    now: () => now,
-    push: async (push) => {
-      pushes.push(push);
-      const during = pendantLePush;
-      pendantLePush = null;
-      await during?.();
-      return true;
-    },
-    lastPositionFor: async (_emitterId, readerId) => (readerId === SANG && positionServie ? { latitude: 48.85, longitude: 2.35, recordedAt: new Date(T0 - 5 * MIN).toISOString() } : null),
-    lastBatteryFor: async (_emitterId, readerId) => (readerId === SANG ? { level: 41, measuredAt: new Date(T0 - 2 * MIN).toISOString() } : null),
-  };
-  const personne = () => world.users.rows.find((r) => r.id === PERSONNE)!;
-  return {
-    deps,
-    emissions,
-    pushes,
-    settings,
-    rapporter: (detectedAt = CHUTE) => reportFall(deps, { userId: PERSONNE, detectedAt }),
-    repondre: () => respondFall(deps, PERSONNE),
-    avancer: (ms: number) => {
-      now += ms;
-    },
-    pendantLePush: (run: () => Promise<unknown>) => {
-      pendantLePush = run;
-    },
-    sansPosition: () => {
-      positionServie = false;
-    },
-    retirerAccord: () => {
-      personne().fallAlertConsentedAt = null;
-      personne().fallAlertConsentVersion = null;
-    },
-    retirerA: (otherId: string) => {
-      const row = settings.rows.find((r) => r.ownerId === PERSONNE && r.otherId === otherId);
-      if (row) row.fallShared = false;
-      else settings.rows.push({ ownerId: PERSONNE, otherId, fallShared: false });
-    },
-    desactiver: (userId: string) => {
-      const row = world.users.rows.find((r) => r.id === userId);
-      if (row) row.deactivatedAt = new Date(now);
-    },
-    vers: (userId: string) => emissions.filter((e) => e.room === ROOMS.user(userId)),
-  };
-}
-
-const ETAT_SANG = {
-  userId: PERSONNE,
-  detectedAt: '2026-11-19T16:42:00.000Z',
-  expiresAt: '2026-11-19T22:42:00.000Z',
-  lastPosition: { latitude: 48.85, longitude: 2.35, recordedAt: new Date(T0 - 5 * MIN).toISOString() },
-  lastBattery: { level: 41, measuredAt: new Date(T0 - 2 * MIN).toISOString() },
-};
+import { fallSnapshotFor, reconcileFallOfAccount, refreshFallBetween, refreshFallServedOf } from '../../../../services/fallDetection/fallRelay';
+import { ADMIN, ANALYSTE, BLOQUEUR, ETAT_SANG, MIN, PERSONNE, PROCHE, SANG, SANG_REFUSE, T0, monde } from './fallWorld';
 
 describe('sans accord explicite, rien', () => {
   it('une chute rapportée sans accord est refusée, rien n\'est rangé ni servi', async () => {
@@ -147,7 +38,7 @@ describe('la chute prévient les Sangs tout de suite', () => {
       event: SERVER_EVENTS.FALL_DETECTED,
       data: { userId: PERSONNE, state: ETAT_SANG, announcement: { kind: 'detected', at: '2026-11-19T16:42:00.000Z' } },
     }]);
-    expect(m.pushes).toEqual([{ readerId: SANG, emitterId: PERSONNE, kind: 'detected', at: '2026-11-19T16:42:00.000Z' }]);
+    expect(m.pushes).toEqual([{ readerId: SANG, emitterId: PERSONNE, kind: 'detected', at: '2026-11-19T16:42:00.000Z', urgent: true }]);
   });
 
   it('Proche (même consenti), Sang retiré, bloqué, équipe face à un utilisateur : rien, pas même le push', async () => {
@@ -217,25 +108,23 @@ describe('« Je vais bien » et le retrait', () => {
     expect(m.pushes.map((p) => p.kind)).toEqual(['detected', 'responded']);
   });
 
-  it('le retrait de l\'accord purge l\'épisode et efface chez le Sang (withdrawn), sans push', async () => {
+  it('le retrait de l\'accord purge l\'épisode, efface chez le Sang (withdrawn) et remplace sa bannière (lifted)', async () => {
     const m = monde();
     await m.rapporter();
-    m.retirerAccord();
-    await refreshFallAudience(m.deps, PERSONNE);
+    await m.retirerEtPurger();
     expect(m.vers(SANG).at(-1)?.data).toEqual({ userId: PERSONNE, reason: 'withdrawn' });
-    expect(m.pushes).toHaveLength(1);
+    expect(m.poussesA(SANG)).toEqual(['detected', 'lifted']);
     expect(await fallSnapshotFor(m.deps, SANG)).toEqual({ items: [] });
   });
 
   it('le retrait de l\'accord PENDANT l\'éventail : le Sang atteint reçoit l\'effacement withdrawn', async () => {
     const m = monde();
     m.pendantLePush(async () => {
-      m.retirerAccord();
-      await refreshFallAudience(m.deps, PERSONNE);
+      await m.retirerEtPurger();
     });
     await m.rapporter();
     expect(m.vers(SANG).at(-1)?.data).toEqual({ userId: PERSONNE, reason: 'withdrawn' });
-    expect(m.pushes.map((p) => p.kind)).toEqual(['detected']);
+    expect(m.pushes.map((p) => p.kind)).toEqual(['detected', 'lifted']);
   });
 
   it('un retrait par personne efface chez ce Sang seul (withdrawn)', async () => {
