@@ -52,4 +52,20 @@ describe('une stat malformée ne casse ni la boucle ni le rapport (#19876, QA)',
     expect(payload.candidateType).toBe('relay');
     expect(payload.relayProtocol).toBe('tcp');
   });
+
+  test('un compteur démesuré est omis, pas transmis : le reste du rapport passe le schéma (#19897)', () => {
+    const huge: readonly Entry[] = [
+      { type: 'inbound-rtp', kind: 'video', freezeCount: 1e30, totalFreezesDuration: 1e308, nackCount: 2 ** 53, pliCount: Number.MAX_SAFE_INTEGER },
+      { type: 'inbound-rtp', kind: 'video', totalFreezesDuration: 1e308 },
+      { type: 'inbound-rtp', kind: 'audio', concealedSamples: Number.MAX_SAFE_INTEGER + 0.4, jitterBufferDelay: 1e306, jitterBufferEmittedCount: 1 },
+    ];
+    const telemetry = withMedia(withSample(createTelemetry(0), { level: 'good', rtt: 120, packetLoss: 1 }), { peer: readMediaQuality(report(huge)) }, 10);
+    const payload = analyticsPayload(telemetry, context);
+    expect(socketCallAnalyticsSchema.safeParse(payload).success).toBe(true);
+    const keys = Object.keys(payload);
+    ['freezeCount', 'nackCount', 'totalFreezesDuration', 'jitterBufferDelay'].forEach((key) => expect(keys).not.toContain(key));
+    expect(payload.pliCount).toBe(Number.MAX_SAFE_INTEGER);
+    expect(payload.concealedSamples).toBe(Number.MAX_SAFE_INTEGER);
+    expect(payload.mos).toBeGreaterThanOrEqual(1);
+  });
 });
