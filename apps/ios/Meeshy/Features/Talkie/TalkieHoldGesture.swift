@@ -84,6 +84,14 @@ struct TalkieHoldModifier: ViewModifier {
 nonisolated enum TalkieLongHold {
     /// L'attente avant que la voix s'ouvre : au-delà d'un toucher, en deçà d'une hésitation.
     static let minimumDuration: TimeInterval = 0.35
+    /// Le relâchement qui termine un appui long arrive à l'hôte dans cette fenêtre : il ne compte pas comme un toucher.
+    static let releaseWindow: TimeInterval = 0.6
+
+    /// `heldAt` : la fin du dernier appui long, ou `.distantFuture` pendant qu'il dure.
+    static func justEnded(at heldAt: Date?, now: Date) -> Bool {
+        guard let heldAt else { return false }
+        return now.timeIntervalSince(heldAt) < releaseWindow
+    }
 
     /// Le talkie ne se propose qu'à partir de Proche (`TalkieOfferRule`) : sous ce cercle, l'appui long ne fait rien.
     static func offers(circle: RelationLevel?) -> Bool {
@@ -96,6 +104,9 @@ struct TalkieLongHoldModifier: ViewModifier {
     @ObservedObject var sender: TalkieSender
     let userId: String
     let displayName: String
+    /// Prévient l'hôte qu'un appui long commence (`true`) puis finit (`false`) : son `Button`, qui reçoit aussi ce
+    /// relâchement, l'ignore (#19885). Un appui long PRIORITAIRE bloquait son toucher simple.
+    var onHold: ((Bool) -> Void)? = nil
     @State private var pressed = false
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
@@ -108,26 +119,27 @@ struct TalkieLongHoldModifier: ViewModifier {
         content
             .scaleEffect(pressed && !reduceMotion ? 1.12 : 1)
             .animation(reduceMotion ? nil : MeeshyAnimation.springFast, value: pressed)
-            // Prioritaire : reconnu, l'appui long prend le geste et le toucher de l'hôte ne part pas au relâchement ;
-            // un toucher le fait échouer avant son seuil, et l'hôte le reçoit.
-            .highPriorityGesture(
-                LongPressGesture(minimumDuration: TalkieLongHold.minimumDuration)
-                    .sequenced(before: DragGesture(minimumDistance: 0))
-                    .onChanged { value in
-                        guard case .second(true, _) = value else { return }
-                        begin()
-                    }
-                    .onEnded { _ in end() }
-            )
+            .simultaneousGesture(hold)
             .onDisappear { end() }
             .accessibilityAction(named: Text(ProfileTalkieWording.holdA11y(name: displayName))) {
                 FeedbackToastManager.shared.showNotice(ProfileTalkieWording.hold)
             }
     }
 
+    private var hold: some Gesture {
+        LongPressGesture(minimumDuration: TalkieLongHold.minimumDuration)
+            .sequenced(before: DragGesture(minimumDistance: 0))
+            .onChanged { value in
+                guard case .second(true, _) = value else { return }
+                begin()
+            }
+            .onEnded { _ in end() }
+    }
+
     private func begin() {
         guard !pressed else { return }
         pressed = true
+        onHold?(true)
         HapticFeedback.medium()
         sender.press(toUserId: userId)
         Task { await TalkiePushToTalkChannel.shared.activate() }
@@ -136,6 +148,7 @@ struct TalkieLongHoldModifier: ViewModifier {
     private func end() {
         guard pressed else { return }
         pressed = false
+        onHold?(false)
         Task { await sender.release() }
     }
 }
