@@ -223,9 +223,9 @@ struct NearbyMapScreen: View {
                         outfit: .muted,
                         showsDivider: person.id != ended.last?.id || !ghosts.isEmpty,
                         avatar: {
-                            MeeshyAvatar(name: person.name, context: .custom(44),
+                            LivePresence { MeeshyAvatar(name: person.name, context: .custom(44),
                                          accentColor: DynamicColorGenerator.colorForName(person.name), avatarURL: person.avatarURL,
-                                         presenceState: PresenceManager.shared.knownPresenceState(for: person.id))
+                                         presenceState: PresenceManager.shared.knownPresenceState(for: person.id)) }
                         },
                         trailing: { reaskButton(person) }
                     )
