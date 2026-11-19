@@ -59,14 +59,14 @@ export async function saveTranslatedTrack(
   const localPath = path.resolve(track.translatedDir, track.filename);
   const location = { path: localPath, url: `/api/v1/attachments/file/translated/${track.filename}` };
   if (!track.binary && !track.base64) {
-    logger.warn(`   ⚠️ Aucun binaire disponible pour ${track.language}, url=${location.url}`);
+    logger.warn(`   ⚠️ Aucun binaire disponible pour ${track.attachmentId} (${track.language})`);
     return location;
   }
   try {
     await fs.mkdir(track.translatedDir, { recursive: true });
     const bytes = track.binary || Buffer.from(track.base64 as string, 'base64');
     await writeTranslatedTrack(prisma, { absolutePath: localPath, bytes, attachmentId: track.attachmentId, language: track.language });
-    logger.info(`   📁 Audio sauvegardé (${track.binary ? 'multipart' : 'base64'}): ${track.filename} (${(bytes.length / 1024).toFixed(1)}KB)`);
+    logger.info(`   📁 Audio sauvegardé (${track.binary ? 'multipart' : 'base64'}): ${track.attachmentId} (${track.language}, ${(bytes.length / 1024).toFixed(1)}KB)`);
     return location;
   } catch (error) {
     // Une ligne COMPTABLE par piste perdue (le rejeu automatique est à venir).

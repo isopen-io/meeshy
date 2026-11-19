@@ -107,4 +107,17 @@ describe('membershipActionOf — miroir `CommunityDetailView.actionsSection` (#6
   test('sans lecteur identifié, rien', () => {
     expect(membershipActionOf(summary({ viewerRole: null, createdBy: 'u-owner' }), null)).toBe('none');
   });
+  test('une communauté qui valide chaque entrée se DEMANDE (#19868)', () => {
+    expect(membershipActionOf(summary({ viewerRole: null, createdBy: 'u-owner', requiresJoinApproval: true }), 'u-me')).toBe('request');
+  });
+
+  test('une demande déjà en attente se lit « Demande envoyée », jamais un second envoi (#19868)', () => {
+    expect(
+      membershipActionOf(summary({ viewerRole: null, createdBy: 'u-owner', requiresJoinApproval: true, viewerJoinRequest: 'pending' }), 'u-me'),
+    ).toBe('requested');
+  });
+
+  test('un membre d’une communauté qui valide chaque entrée la QUITTE (#19868)', () => {
+    expect(membershipActionOf(summary({ viewerRole: 'member', createdBy: 'u-owner', requiresJoinApproval: true }), 'u-me')).toBe('leave');
+  });
 });

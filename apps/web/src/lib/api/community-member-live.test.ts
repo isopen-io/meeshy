@@ -93,6 +93,16 @@ describe('applyCommunityMemberEvent', () => {
     expect(detail(client)?.viewerRole).toBe('member');
   });
 
+  test("sa demande ACCEPTÉE fait du lecteur un membre, et la demande s'efface — un départ ultérieur ne la ressuscite pas (#19868)", () => {
+    const client = new QueryClient();
+    client.setQueryData(communityQueryKey(CLUB), summary(CLUB, { viewerRole: null, requiresJoinApproval: true, viewerJoinRequest: 'pending' }));
+    applyCommunityMemberEvent(client, SERVER_EVENTS.COMMUNITY_MEMBER_JOINED, joined({ userId: ME }), ME);
+    expect([detail(client)?.viewerRole, detail(client)?.viewerJoinRequest]).toEqual(['member', null]);
+
+    applyCommunityMemberEvent(client, SERVER_EVENTS.COMMUNITY_MEMBER_LEFT, left({ userId: ME }), ME);
+    expect([detail(client)?.viewerRole, detail(client)?.viewerJoinRequest]).toEqual([null, null]);
+  });
+
   test("le lecteur retiré n'a plus de rôle, et ce qu'il voyait de la communauté se relit (une privée cesse d'être servie)", () => {
     const client = seeded();
     applyCommunityMemberEvent(client, SERVER_EVENTS.COMMUNITY_MEMBER_LEFT, left({ userId: ME, reason: 'removed' }), ME);
