@@ -258,6 +258,8 @@ export interface AudioProcessCompletedEvent {
   voiceModelQuality: number;
   processingTimeMs: number;
   timestamp: number;
+  postId?: string;
+  postMediaId?: string;
 }
 
 export interface AudioProcessErrorEvent {
