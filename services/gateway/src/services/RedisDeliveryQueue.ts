@@ -490,7 +490,7 @@ export class RedisDeliveryQueue {
    */
   private async sealedForStorage(userId: string, entry: QueuedMessagePayload): Promise<SealVerdict> {
     const refuse = (reason: string, error?: unknown): SealVerdict => {
-      const permanent = true;
+      const permanent = error === undefined || isPermanentlyUnsealable(error);
       logger.error(permanent
         ? 'Offline entry of an at-rest conversation DROPPED: it can never be sealed'
         : 'Offline entry of an at-rest conversation kept unsealed in memory: it cannot be sealed right now', {
