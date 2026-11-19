@@ -148,7 +148,7 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   '__tests__/unit/routes/calls-routes.test.ts': 1198,
   '__tests__/unit/routes/admin/admin-routes-group2.test.ts': 2153,
   '__tests__/unit/services/MessageTranslationService.test.ts': 2085,
-  '__tests__/unit/services/MentionService.test.ts': 2063,
+  '__tests__/unit/services/MentionService.test.ts': 1945,
   '__tests__/unit/services/VoiceProfileService.test.ts': 1911,
   '__tests__/unit/services/PasswordResetService.test.ts': 1823,
   '__tests__/unit/services/RedisDeliveryQueue.test.ts': 1723,

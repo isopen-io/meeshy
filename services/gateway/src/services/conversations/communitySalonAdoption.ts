@@ -5,6 +5,7 @@ import { participationEstVivante } from '../../routes/conversations/utils/access
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { scheduleCommunityAddedAnnouncement } from '../notifications/community-added';
 import type { CommunityMemberAnnounce } from '../community-member-broadcast';
+import { USABLE_ACCOUNT_WHERE } from '../relations/usableAccount';
 
 const logger = enhancedLogger.child({ module: 'CommunitySalonAdoption' });
 
@@ -105,7 +106,7 @@ async function addableUnderCreator(
 ): Promise<ReadonlySet<string>> {
   const ids = [...userIds];
   const living = await prisma.user.findMany({
-    where: { id: { in: ids }, isActive: true, deactivatedAt: null, deletedAt: null },
+    where: { id: { in: ids }, ...USABLE_ACCOUNT_WHERE },
     select: { id: true },
     take: ids.length,
   });
