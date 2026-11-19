@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { FALL_CLEARED_REASONS } from '@meeshy/shared/types/fall-detection';
 
-import { FALL_CLEARED_REASONS_WEB, decodeFallCleared, decodeFallDetected, decodeFallState, loadFallPersonSettings, loadFallSnapshot, saveFallPersonSettings } from './fall';
+import { FALL_CLEARED_REASONS_WEB, decodeFallCleared, decodeFallDetected, decodeFallState, fallPersonSettingsQueryKey, loadFallPersonSettings, loadFallSnapshot, saveFallPersonSettings } from './fall';
+import { persistableQuery } from './query-client';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
 
 /**
@@ -30,6 +31,12 @@ function transport(reply: ApiResult<unknown>) {
   } as unknown as HttpTransport;
   return { deps: { source: 'gateway' as const, transport: port }, calls };
 }
+
+describe('mon réglage de chute par personne ne se range jamais sur le disque', () => {
+  test('sa clé est sous le préfixe hors disque : elle dit qui je préviens d’une donnée de santé', () => {
+    expect(persistableQuery({ state: { status: 'success' }, queryKey: fallPersonSettingsQueryKey(EMITTER) })).toBe(false);
+  });
+});
 
 describe('les valeurs écrites en littéral sont celles du contrat', () => {
   test('les raisons de `fall:cleared`', () => {

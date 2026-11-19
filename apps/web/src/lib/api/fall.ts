@@ -4,6 +4,7 @@ import type { FallAnnouncement, FallClearedEventData, FallClearedReason, FallDet
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 import { decodeLastBattery, decodeLastPosition } from './inactivity';
+import { HORS_DISQUE_PREFIXE } from './souverain';
 
 /**
  * **LA CHUTE DÉTECTÉE DE MES SANGS, TELLE QUE LA PASSERELLE LA SERT** (#18748, SAN-01 ; contrat
@@ -83,7 +84,8 @@ export type FallPersonShare = { readonly shared: boolean };
 
 const decodePersonSettings = (raw: unknown): FallPersonShare => ({ shared: objectOf(raw)?.shared === true });
 
-export const fallPersonSettingsQueryKey = (userId: string) => ['relations', 'fall-settings', userId] as const;
+/** Hors disque (#16984) : ce réglage dit à qui part une donnée de santé — il ne survit pas à la session dans `localStorage`. */
+export const fallPersonSettingsQueryKey = (userId: string) => [HORS_DISQUE_PREFIXE, 'relations', 'fall-settings', userId] as const;
 
 export async function loadFallPersonSettings(deps: FallDeps, userId: string, signal?: AbortSignal): Promise<ApiResult<FallPersonShare>> {
   if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: { shared: false } };
