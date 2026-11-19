@@ -6,7 +6,7 @@
  * réaction, un appel, une épingle remontent la ligne pour tout le monde
  * (`listRankFromColumns`, `packages/shared/utils/conversation-list-rank.ts`).
  * Un `max` de deux colonnes ne s'écrit pas en `orderBy` Prisma, et c'est ce qui
- * a laissé cinq surfaces trier sur `lastMessageAt` alors que leur propre
+ * a laissé QUATRE surfaces trier sur `lastMessageAt` alors que leur propre
  * commentaire disait « la plus récemment active » : la divergence était INERTE
  * tant que `lastActivityAt` n'était jamais écrite (jusqu'à #19800).
  *

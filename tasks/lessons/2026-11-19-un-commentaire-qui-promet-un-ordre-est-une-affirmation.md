@@ -1,10 +1,10 @@
-# Un commentaire qui promet un ORDRE est une affirmation — et il survit au jour où le mot change de sens
+## Un commentaire qui promet un ORDRE est une affirmation — et il survit au jour où le mot change de sens
 
 *2026-11-19, cycle 185 (#19835, #19834). Famille : « un tri est une AFFIRMATION,
 et se vérifie comme telle » (cycle 86 bis), « un commentaire qui ÉNONCE une
 contrainte de schéma est une AFFIRMATION » (cycle 94).*
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 Quatre surfaces de la passerelle promettaient, **dans leur propre
 doc-comment**, « la plus récemment ACTIVE » — et toutes les quatre écrivaient
@@ -21,7 +21,7 @@ Puis #19800 a rendu la divergence atteignable (`lastActivityAt` n'était écrite
 par aucun chemin jusque-là). Entre les deux, la faute était en place et
 indétectable : les témoins ne pouvaient pas tomber.
 
-## La règle
+### La règle
 
 > **Quand une directive redéfinit un mot, les commentaires qui l'emploient
 > deviennent des affirmations à remesurer.** Un commentaire ne rougit jamais. Il
@@ -38,7 +38,7 @@ C'est la forme douce du cycle 107 bis (« un lot peut rendre un contournement
 INUTILE sans le faire disparaître ») : ici, un lot rend quatre commentaires FAUX
 sans les toucher.
 
-## Deux corollaires mesurés dans le même lot
+### Deux corollaires mesurés dans le même lot
 
 **Une énumération de sites porte deux affirmations, et la seconde se remesure.**
 #19835 nommait cinq sites plus « deux autres surfaces d'administration » ; le
@@ -54,7 +54,7 @@ question — seulement un serveur à aligner. Devant une telle étiquette, compt
 les sites et relire la directive AVANT de la renvoyer au porteur : poser une
 question dont la réponse est déjà écrite coûte un cycle.
 
-## Et le piège du correctif n'était pas l'ordre, c'était le `select`
+### Et le piège du correctif n'était pas l'ordre, c'était le `select`
 
 Trier sur le rang impose de lire DEUX colonnes. Une lecture qui en oublie une
 rend un rang réduit au dernier message — **le défaut qu'on vient de corriger,
