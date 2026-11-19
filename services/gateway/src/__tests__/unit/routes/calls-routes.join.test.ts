@@ -93,13 +93,6 @@ jest.mock('../../../utils/response', () => {
   };
 });
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  callSessionSchema: { type: 'object' },
-  callSessionMinimalSchema: { type: 'object' },
-  startCallRequestSchema: { type: 'object' },
-  errorResponseSchema: { type: 'object' },
-}));
-
 // ─── Import SUT after mocks ────────────────────────────────────────────────────
 
 // ─── Import SUT after mocks ────────────────────────────────────────────────────
