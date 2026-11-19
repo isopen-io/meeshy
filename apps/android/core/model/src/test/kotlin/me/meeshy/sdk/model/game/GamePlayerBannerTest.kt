@@ -45,6 +45,7 @@ class GamePlayerBannerTest {
     private fun banner(
         level: Int = 12,
         score: Long = 900,
+        progress: Double = 0.4,
         meeshes: Int? = null,
         rank: GamePlayerBanner.Rank? = null,
         league: GamePlayerBanner.League? = null,
@@ -55,7 +56,7 @@ class GamePlayerBannerTest {
         treasury: TreasuryTierKey? = null,
         attention: GameAttention = GameAttention.None,
     ) = GamePlayerBanner(
-        level = level, tier = served.level.tier, progress = 0.4, score = score, nextLevel = level + 1,
+        level = level, tier = served.level.tier, progress = progress, score = score, nextLevel = level + 1,
         pointsToNext = 200, meeshes = meeshes, rank = rank, league = league, flame = flame, trophies = trophies,
         dailyMission = dailyMission, season = season, treasury = treasury, attention = attention,
     )
@@ -220,8 +221,9 @@ class GamePlayerBannerTest {
 
     @Test
     fun `une jauge recoit toujours une valeur entre 0 et 1`() {
-        assertThat(banner().copy(progress = Double.NaN).boundedProgress).isEqualTo(0.0)
-        assertThat(GamePlayerBanner.Rank(rank = GloryRank.entries.first(), division = 5, progress = 4.0).progress)
+        assertThat(banner(progress = Double.NaN).boundedProgress).isEqualTo(0.0)
+        assertThat(banner(progress = 0.789).percent).isEqualTo(78)
+        assertThat(GamePlayerBanner.Rank(rank = GloryRank.entries.first(), division = 5, progress = 4.0).boundedProgress)
             .isEqualTo(1.0)
     }
 
