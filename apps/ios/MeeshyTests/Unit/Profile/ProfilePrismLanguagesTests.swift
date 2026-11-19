@@ -122,12 +122,15 @@ final class ProfilePrismLanguagesTests: XCTestCase {
     func test_vitrine_atRest_hasNoIdentityFormCard_andReadsIdentityBeforeCircles() throws {
         let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
         let face = try XCTUnwrap(profile.components(separatedBy: "private var vitrineFace: some View {").last)
-        let editing = try XCTUnwrap(face.range(of: "if isEditing {"))
-        let form = try XCTUnwrap(face.range(of: "ProfileIdentitySection("))
-        let rest = try XCTUnwrap(face.range(of: "restingIdentity.meeshyCascade(rank: 0)"))
+        let identity = try XCTUnwrap(profile.components(separatedBy: "private var identityBlock: some View {").last)
+        let editing = try XCTUnwrap(identity.range(of: "if isEditing {"))
+        let form = try XCTUnwrap(identity.range(of: "ProfileIdentitySection("))
+        let otherwise = try XCTUnwrap(identity.range(of: "} else {"))
+        let rest = try XCTUnwrap(identity.range(of: "restingIdentity"))
         XCTAssertLessThan(editing.lowerBound, form.lowerBound, "la carte Identité n'existe qu'en édition")
-        XCTAssertLessThan(form.lowerBound, rest.lowerBound, "et le repos rend l'identité en texte, sans elle")
-        let order = ["restingIdentity.meeshyCascade(rank: 0)", "ProfileCirclesSection(", "activitySection.meeshyCascade(rank: 2)",
+        XCTAssertLessThan(form.lowerBound, otherwise.lowerBound, "et le repos rend l'identité en texte, sans elle")
+        XCTAssertLessThan(otherwise.lowerBound, rest.lowerBound, "et le repos rend l'identité en texte, sans elle")
+        let order = ["identityBlock.meeshyCascade(rank: 0)", "ProfileCirclesSection(", "activitySection.meeshyCascade(rank: 2)",
                      "voiceBlock.meeshyCascade(rank: 3)", "ProfilePublicationsSection("]
         let positions = try order.map { try XCTUnwrap(face.range(of: $0), $0).lowerBound }
         XCTAssertEqual(positions, positions.sorted(), "identité, cercles, activité, voix, publications")

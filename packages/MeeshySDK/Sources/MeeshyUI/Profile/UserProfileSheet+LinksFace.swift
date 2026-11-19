@@ -18,8 +18,7 @@ extension RelationLinksFace {
             addresses: profile?.addresses?.items ?? [],
             communities: profile?.openCommunities?.items ?? [], tint: sheet.accentTint,
             sendRoute: ProfileSendRoute.of(sheet), sendSheet: sheet.sendSheet, onLeave: { sheet.dismiss() },
-            onCopy: { sheet.copyProfileLink($0) }, onShowVitrine: { sheet.face = .vitrine },
-            joinCommunity: { id in await RelationLinksFace.join(communityId: id) }
+            onCopy: { sheet.copyProfileLink($0) }, onShowVitrine: { sheet.face = .vitrine }
         )
     }
 }
@@ -54,7 +53,6 @@ struct RelationLinksFace: View {
     let onLeave: () -> Void
     let onCopy: (ProfileLink) -> Void
     let onShowVitrine: () -> Void
-    let joinCommunity: @MainActor (String) async -> Bool
 
     @Environment(\.openURL) private var openURL
     @Environment(\.profileCommunityDoor) private var communityDoor
@@ -81,7 +79,7 @@ struct RelationLinksFace: View {
             .meeshyCascade(rank: 0)
             if !addresses.isEmpty { addressesSection.meeshyCascade(rank: 1) }
             if !communities.isEmpty {
-                RelationOpenCommunitiesSection(communities: communities, tint: tint, join: joinCommunity,
+                RelationOpenCommunitiesSection(communities: communities, tint: tint, join: communityDoor?.join,
                                                onOpen: communityOpening)
                     .meeshyCascade(rank: 2)
             }
@@ -102,15 +100,6 @@ struct RelationLinksFace: View {
         return { id in
             onLeave()
             communityDoor.open(id)
-        }
-    }
-
-    static func join(communityId: String) async -> Bool {
-        do {
-            _ = try await CommunityService.shared.join(communityId: communityId)
-            return true
-        } catch {
-            return false
         }
     }
 

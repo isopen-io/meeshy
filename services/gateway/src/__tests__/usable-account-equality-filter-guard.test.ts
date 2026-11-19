@@ -137,23 +137,37 @@ describe('le balayage ne bénit que la branche CANONIQUE', () => {
 });
 
 /**
- * Les QUATRE formes que l'instrument ne voit pas, mesurées. Elles ne sont pas
- * théoriques : `services/community-online-count.ts` écrit exactement la première
- * (constante nommée, puis `user: { is: living }`) — **l'un des sites de la loi
- * est écrit sous une forme que ce cliquet ne relève pas.**
+ * Les TROIS formes que l'instrument ne voit pas, mesurées — et la quatrième, qu'il
+ * voit depuis #19755.
  *
- * « Inventaire VIDE » signifie donc « aucune égalité nue écrite EN LIGNE sous une
- * clé littérale `where:` », jamais « aucune égalité nue » : c'est la leçon 261,
- * et elle vaut de CET instrument.
+ * Le lot du coffre de clés (#19755, fusionné dans `dev` le même jour) a appris au
+ * balayage à résoudre une constante NOMMÉE puis répandue dans un `where`
+ * (`whereFragments` / `constantNameOf`), et il PUBLIE ce qu'il ne résout pas
+ * (`unresolvedFragments`) au lieu de s'en taire. Ce témoin-ci avait été écrit
+ * contre l'instrument d'AVANT, et il est tombé à la fusion : c'est le bon sens de
+ * l'échec — une limite mesurée par un témoin le reste jusqu'à ce que quelqu'un la
+ * lève, et alors le témoin le dit.
+ *
+ * Reste vrai, et mesuré ci-dessous : une constante sous une RELATION, une
+ * FABRIQUE, un TERNAIRE. La première n'est pas théorique —
+ * `services/community-online-count.ts` écrit `user: { is: living }`, et c'est
+ * l'un des sites de `USABLE_ACCOUNT_WHERE`.
+ *
+ * « Inventaire VIDE » signifie donc « aucune égalité nue que CET instrument sait
+ * voir », jamais « aucune égalité nue » : c'est la leçon 261, et elle vaut de
+ * l'instrument autant que du dépôt.
  */
 describe('ce que le balayage NE VOIT PAS — la limite est mesurée, pas affirmée', () => {
   const vus = (source: string) => equalityNullFiltersIn('fixture.ts', source, COLONNES).length;
 
-  it.each([
-    ['une constante NOMMÉE puis répandue', `
+  it('relève une constante NOMMÉE puis répandue — acquis de #19755', () => {
+    expect(vus(`
       const LIVING = { isActive: true, deactivatedAt: null };
       const rows = await prisma.user.findMany({ where: { id, ...LIVING } });
-    `],
+    `)).toBe(1);
+  });
+
+  it.each([
     ['une constante NOMMÉE sous une relation', `
       const living = { isActive: true, deactivatedAt: null };
       const rows = await prisma.communityMember.findMany({ where: { user: { is: living } } });
