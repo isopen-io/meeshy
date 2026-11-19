@@ -9,7 +9,7 @@ import me.meeshy.sdk.model.sync.OutboxUiIcon
 enum class SyncPillDotStyle { BRAND, WARNING, SUCCESS, ERROR }
 
 /** Le pictogramme de tête d'une rangée ; [NONE] laisse le point pulsant seul (le texte courant reste discret). */
-enum class SyncPillGlyph { NONE, WIFI_OFF, WIFI, MIC, PHOTO, PLAY, ATTACH, MOOD, BATTERY, PHONE_UNREACHABLE }
+enum class SyncPillGlyph { NONE, WIFI_OFF, WIFI, MIC, PHOTO, PLAY, ATTACH, MOOD, BATTERY, PHONE_UNREACHABLE, INACTIVITY }
 
 /** La taille de la capsule : compacte au repos, grande tant qu'un ami écrit. */
 enum class SyncPillSize { COMPACT, TYPING }

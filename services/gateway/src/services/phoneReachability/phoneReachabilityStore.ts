@@ -111,9 +111,8 @@ export class ReachabilityBusyError extends Error {
 
 const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Sérialise les pas d'UN émetteur à travers la flotte (verrou `SET NX` court). LÈVE quand il reste pris. */
-export async function withReachabilityLock<T>(cache: ReachabilityCache, emitterId: string, run: () => Promise<T>): Promise<T> {
-  const key = lockKey(emitterId);
+/** Sérialise un travail à travers la flotte sous la clé `key` (verrou `SET NX` court). LÈVE quand il reste pris. */
+export async function withCacheLock<T>(cache: ReachabilityCache, key: string, run: () => Promise<T>): Promise<T> {
   const token = `${process.pid}:${Date.now()}:${Math.random()}`;
   for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt += 1) {
     if (await cache.setnx(key, token, LOCK_SECONDS)) {
@@ -126,4 +125,9 @@ export async function withReachabilityLock<T>(cache: ReachabilityCache, emitterI
     await pause(LOCK_PAUSE_MS);
   }
   throw new ReachabilityBusyError();
+}
+
+/** Sérialise les pas d'UN émetteur à travers la flotte (verrou `SET NX` court). LÈVE quand il reste pris. */
+export function withReachabilityLock<T>(cache: ReachabilityCache, emitterId: string, run: () => Promise<T>): Promise<T> {
+  return withCacheLock(cache, lockKey(emitterId), run);
 }

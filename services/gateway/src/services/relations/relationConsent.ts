@@ -108,15 +108,16 @@ export async function relationConsentCounterpartsOf(
  * Les consentements TRI-ÉTAT (#14147) : la colonne garde ce que l'émetteur a DIT — `true`,
  * `false` — ou rien (`null`), et c'est `resolveEmitterConsent` (partagé) qui en tire le
  * défaut du niveau effectif. La batterie et son relevé à la demande lisent la même colonne ;
- * l'injoignabilité du téléphone (#18737) a la sienne.
+ * l'injoignabilité du téléphone (#18737) et l'alerte d'inactivité (#18738) ont chacune la leur.
  */
-export const STORED_CONSENT_FEATURES = ['device.battery', 'device.battery.pull', 'device.unreachable'] as const;
+export const STORED_CONSENT_FEATURES = ['device.battery', 'device.battery.pull', 'device.unreachable', 'safety.inactivity'] as const;
 export type StoredConsentFeature = (typeof STORED_CONSENT_FEATURES)[number];
 
 const STORED_COLUMN = {
   'device.battery': 'batteryShared',
   'device.battery.pull': 'batteryShared',
   'device.unreachable': 'unreachableShared',
+  'safety.inactivity': 'inactivityShared',
 } as const satisfies Record<StoredConsentFeature, string>;
 
 const storedValue = (value: unknown): boolean | null => (value === true || value === false ? value : null);

@@ -85,6 +85,7 @@ public enum VitrineLadder {
     public static let unannounced: Set<RelationFeature> = [
         .acquaintanceAuto, .relayCommentersOnMyPosts, .relayMyCommentsElsewhere, .notifyNewContent,
         .presenceDnd, .audienceClose, .audienceBlood, .deviceBatteryPull, .callRing,
+        .safetyInactivity,
     ]
 
     public static let steps: [Step] = RelationLevel.allCases.map { level in

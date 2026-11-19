@@ -192,3 +192,12 @@ describe('« Engagements » regroupe les paliers (#8960)', () => {
     expect(categoryHue('engagement')).toBe('var(--ios-warning)');
   });
 });
+
+describe('la vérification d’inactivité trouve sa famille (#18738)', () => {
+  test('l’alerte d’un Sang se range dans « Contacts », la question « Tout va bien ? » dans « Système », et ni l’une ni l’autre ne quitte la cloche une fois lue', () => {
+    expect(categoryQuery('contacts').types?.split(',')).toContain('inactivity_alert');
+    expect(categoryQuery('system').types?.split(',')).toContain('wellness_check');
+    expect(notificationFamily('inactivity_alert')).toBe('contacts');
+    expect(categoryAccepts('all', { type: 'inactivity_alert', state: { isRead: true } })).toBe(true);
+  });
+});

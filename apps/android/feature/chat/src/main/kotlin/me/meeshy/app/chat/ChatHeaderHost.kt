@@ -31,6 +31,7 @@ import me.meeshy.sdk.model.engagement.HeaderFlameLaw
 import me.meeshy.sdk.model.profile.ProfileSheetUser
 import me.meeshy.sdk.model.relation.TalkieOfferRule
 import me.meeshy.ui.component.battery.BatteryIndicator
+import me.meeshy.ui.component.inactivity.InactivityIndicator
 import me.meeshy.ui.component.phonereachability.PhoneReachabilityIndicator
 import me.meeshy.ui.component.talkie.TalkieHeaderLive
 import me.meeshy.ui.component.talkie.TalkieHeaderLiveBar
@@ -191,6 +192,8 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                             BatteryIndicator(userId = batteryPeer, name = header.peerDisplayName ?: title)
                             // Son téléphone injoignable (#18737) : rien quand il répond.
                             PhoneReachabilityIndicator(userId = batteryPeer, name = header.peerDisplayName ?: title)
+                            // Son alerte d'inactivité (#18738) : rien hors alerte.
+                            InactivityIndicator(userId = batteryPeer, name = header.peerDisplayName ?: title)
                         }
                     },
                     avatar = { headerAvatar(AvatarContext.ConversationHeaderExpanded) },
@@ -207,6 +210,7 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                     callSlot = {
                         BatteryIndicator(userId = batteryPeer, name = header.peerDisplayName ?: title)
                         PhoneReachabilityIndicator(userId = batteryPeer, name = header.peerDisplayName ?: title)
+                        InactivityIndicator(userId = batteryPeer, name = header.peerDisplayName ?: title)
                         // Le Bring (#17442) : tout direct ouvert, dès Ami — la passerelle décide, même chiffré.
                         state.directPeerUserId?.takeIf { !state.isGroup }?.let { peer ->
                             ChatHeaderBringButton(peerUserId = peer, peerName = header.peerDisplayName ?: title)

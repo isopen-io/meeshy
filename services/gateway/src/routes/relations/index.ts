@@ -9,6 +9,7 @@ import { registerRelationLocationRequest } from './locationRequest';
 import { registerRelationBloodLocation } from './bloodLocation';
 import { registerRelationBattery } from './battery';
 import { registerRelationPhoneReachability } from './phone-reachability';
+import { registerRelationInactivity } from './inactivity';
 
 /**
  * `/relations` — les CERCLES (#13933) : lire ses liens, baisser ou sortir, et le rituel du
@@ -22,6 +23,7 @@ export async function relationsRoutes(fastify: FastifyInstance): Promise<void> {
   registerRelationBloodLocation(fastify);
   registerRelationBattery(fastify);
   registerRelationPhoneReachability(fastify);
+  registerRelationInactivity(fastify);
   registerRelationReads(fastify);
   registerRelationLower(fastify);
   registerRelationRitual(fastify);

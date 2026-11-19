@@ -135,6 +135,16 @@ class NotificationTypeCatalogTest {
     }
 
     @Test
+    fun safetySignals_areDeclaredUntoggleableAndNeverGetARow() {
+        assertThat(NotificationTypeCatalog.untoggleableWireTypes).containsExactly("wellness_check", "inactivity_alert")
+        val shownNames = NotificationType.entries.map { it.name.lowercase() }
+        NotificationTypeCatalog.untoggleableWireTypes.forEach { wire ->
+            assertThat(shownNames).doesNotContain(wire)
+            assertThat(NotificationTypeToggle.isEnabled(wire, UserNotificationPreferences(systemEnabled = false))).isTrue()
+        }
+    }
+
+    @Test
     fun toggle_deviceUnreachableLensReadsAndWritesItsOwnField() {
         val off = NotificationTypeCatalog.toggle(UserNotificationPreferences(), NotificationType.DEVICE_UNREACHABLE, enabled = false)
         assertThat(off.deviceUnreachableEnabled).isFalse()

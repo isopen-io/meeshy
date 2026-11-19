@@ -70,6 +70,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     case deviceBattery = "device.battery"
     case deviceBatteryPull = "device.battery.pull"
     case deviceUnreachable = "device.unreachable"
+    case safetyInactivity = "safety.inactivity"
     case acquaintanceAuto = "acquaintance.auto"
 
     /// `isRelationFeature` : une feature qu'un serveur plus récent ajoute n'est
@@ -89,7 +90,8 @@ public enum RelationFeature: String, CaseIterable, Sendable {
              .audienceClose, .listeningCategory, .talkie, .together, .deviceBattery,
              .deviceUnreachable: return .close
         case .relayMyCommentsElsewhere, .audienceBlood, .listeningTitle,
-             .locationLive, .locationHistory, .locationProximity, .deviceBatteryPull: return .blood
+             .locationLive, .locationHistory, .locationProximity, .deviceBatteryPull,
+             .safetyInactivity: return .blood
         case .dmDirect, .dmReadReceipts, .dmTyping, .presenceDnd, .audienceAcquaintances: return .acquaintance
         case .acquaintanceAuto, .dmRequest, .callRing: return .public
         case .viewsIdentity: return .community
@@ -102,7 +104,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
         switch self {
         case .bring, .talkie, .listeningCategory, .listeningTitle,
              .locationLive, .locationTemporary, .locationHistory, .locationProximity,
-             .deviceBattery, .deviceBatteryPull, .deviceUnreachable: return true
+             .deviceBattery, .deviceBatteryPull, .deviceUnreachable, .safetyInactivity: return true
         default: return false
         }
     }
@@ -122,7 +124,7 @@ public enum RelationFeature: String, CaseIterable, Sendable {
     /// stocké ouvre. Le serveur résout ; le miroir sert à ne pas proposer ce qu'il refusera.
     public var emitterConsentDefaultLevel: RelationLevel? {
         switch self {
-        case .deviceBattery, .deviceBatteryPull, .deviceUnreachable: return .blood
+        case .deviceBattery, .deviceBatteryPull, .deviceUnreachable, .safetyInactivity: return .blood
         default: return nil
         }
     }

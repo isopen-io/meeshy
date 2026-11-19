@@ -306,11 +306,8 @@ class NotificationService: UNNotificationServiceExtension {
              "reply",
              "message_forwarded",
              "message_reaction",
-             // First-message notification for a freshly created conversation
-             // (direct or group) — same actions as a new message: tap opens
-             // the conversation, quick reply + mark-as-read are useful from
-             // the lock screen. The gateway emits these from
-             // `NotificationService.createConversationInviteNotification`.
+             // First message of a fresh conversation (direct or group, `createConversationInviteNotification`):
+             // same actions as a new message — tap opens it, reply + mark-as-read from the lock screen.
              "new_conversation",
              "new_conversation_direct",
              "new_conversation_group",
@@ -324,6 +321,8 @@ class NotificationService: UNNotificationServiceExtension {
         // Social graph — accept / decline
         case "friend_request", "contact_request":
             category = "MEESHY_FRIEND_REQUEST"
+        case "wellness_check": // « Tout va bien ? » (#18738) : « Je vais bien » répond sans ouvrir l'app
+            category = "MEESHY_WELLNESS_CHECK"
 
         // Social feed — view + mark as read ; commentable types WITH a postId
         // additionally expose the inline « Commenter » text action (R3).
