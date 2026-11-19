@@ -1,4 +1,4 @@
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, type Prisma } from '@meeshy/shared/prisma/client';
 import * as crypto from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { readMasterKey, ServerAtRestUnavailableError, type MasterKeyState } from './messaging/serverAtRest';
@@ -60,12 +60,19 @@ const MAX_CONVERSATION_KEY_CACHE = 2000;
  * absence éventuelle ÉCARTE la ligne, c'est-à-dire fait sceller sous une clé
  * neuve plutôt que sous une clé qu'un chemin a éteinte (`deleteKey`). Le sens de
  * l'erreur est celui qui ne réutilise jamais une clé retirée.
+ *
+ * Le type n'est pas décoratif : extraire un filtre dans une constante le met
+ * hors de portée du cliquet qui garde cette règle
+ * (`__tests__/soft-state-equality-filter-guard.test.ts`, qui cherche un cadre
+ * `where`), et l'annotation `Prisma.…WhereInput` est précisément ce qui le lui
+ * redéclare. Un lot qui répare une égalité nue en la DÉPLAÇANT sortirait sinon
+ * du champ de sa propre garde.
  */
-const WRITABLE_CONVERSATION_KEY = {
+const WRITABLE_CONVERSATION_KEY: Prisma.ServerEncryptionKeyWhereInput = {
   purpose: 'conversation',
   isActive: true,
   ...unsetOrNull('expiresAt'),
-} as const;
+};
 
 /**
  * Server Key Vault - Manages encryption keys with database persistence
@@ -135,21 +142,43 @@ export class ServerKeyVault {
     const cached = this.conversationKeyMap.get(conversationId);
     if (cached) return cached;
 
-    const rows = await this.prisma.serverEncryptionKey.findMany({
-      where: { conversationId, ...WRITABLE_CONVERSATION_KEY },
-      select: { id: true },
-      orderBy: { createdAt: 'desc' },
-      take: 1,
-    }).catch((error: unknown) => {
-      logger.warn('lecture de la clé de conversation impossible pour le moment', {
-        conversationId, error: error instanceof Error ? error.message : 'unknown',
-      });
-      return [] as { id: string }[];
-    });
-
-    const keyId = rows[0]?.id;
+    const keyId = await this.readConversationKeyId(conversationId);
     if (keyId) this.rememberConversationKey(conversationId, keyId);
     return keyId;
+  }
+
+  /**
+   * La lecture elle-même, fail-OUVERT : une base injoignable rend `undefined`,
+   * donc l'appelant forge une clé neuve — exactement ce que faisait le chemin
+   * d'avant, dont la carte était vide à CHAQUE fois.
+   *
+   * Fermer ici REFUSERAIT un message que la production accepte aujourd'hui
+   * (`SERVER_AT_REST_UNAVAILABLE`), et le coût de l'ouverture est borné à une
+   * clé de plus : un chiffré voyage avec son `keyId` et s'ouvre par sa ligne
+   * (`loadKey`, `getKeyFor`), donc rien ne devient illisible. C'est l'arbitrage
+   * du cycle 127 — fail-CLOSED sur une preuve, fail-OUVERT sur une absence de
+   * preuve, ici une LIVRAISON et non un secret.
+   *
+   * `try`/`catch` et non `.catch` : un client qui n'expose pas la méthode jette
+   * SYNCHRONEMENT, et une promesse jamais construite ne porte pas de `.catch`.
+   * Les deux gardes sont disjointes, et c'est la décision ci-dessus qui exige
+   * de couvrir les deux formes d'échec.
+   */
+  private async readConversationKeyId(conversationId: string): Promise<string | undefined> {
+    try {
+      const rows = await this.prisma.serverEncryptionKey.findMany({
+        where: { conversationId, ...WRITABLE_CONVERSATION_KEY },
+        select: { id: true },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      });
+      return rows[0]?.id;
+    } catch (error) {
+      logger.warn('lecture de la clé de conversation impossible pour le moment : une clé neuve sera scellée', {
+        conversationId, error: error instanceof Error ? error.message : 'unknown',
+      });
+      return undefined;
+    }
   }
 
   /**

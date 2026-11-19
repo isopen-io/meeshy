@@ -24,6 +24,16 @@
  * cherche que la première mesure une graphie, pas une propriété (règle du
  * cycle 105).
  *
+ * **Un `where` NOMMÉ est un `where`.** Le discriminant d'origine exigeait un
+ * cadre objet portant la clé littérale `where` — il ne voyait donc AUCUN
+ * fragment construit ailleurs puis répandu, et c'était écrit comme une limite
+ * assumée. Elle a coûté un site vivant : `visibleNotificationsWhere`, le
+ * prédicat partagé des SEPT lectures de notifications, rend un
+ * `Prisma.NotificationWhereInput` dont l'`OR` ne dit pas l'absence. Une
+ * ANNOTATION `Prisma.<Modèle>WhereInput` — type de retour d'une fonction, ou
+ * type d'une constante — déclare un `where` aussi sûrement que la clé, et
+ * ouvre donc un cadre de lecture.
+ *
  * **SŒURS d'un même `OR`, et pas « quelque part dans le bloc ».** La forme JUSTE
  * est une ALTERNATIVE : `OR: [{ champ: null }, { champ: { isSet: false } }]`.
  * La première version de ce balayage cherchait `isSet: false` n'importe où dans
@@ -67,6 +77,19 @@ type Frame = { readonly kind: '{' | '['; readonly key: string; readonly start: n
 const keyBefore = (source: string, index: number): string =>
   source.slice(Math.max(0, index - 80), index).match(/([\w$]+)\s*:\s*$/)?.[1] ?? '';
 
+/**
+ * Le cadre ouvre-t-il un `where` NOMMÉ ? Une annotation
+ * `Prisma.<Modèle>WhereInput` qui précède immédiatement l'accolade — type de
+ * retour (`): Prisma.XWhereInput {` puis `return {`) ou type de constante
+ * (`const x: Prisma.XWhereInput = {`) — le déclare. La fenêtre est volontairement
+ * courte : ce qui est annoté plus haut dans la fonction ne gouverne pas ce
+ * littéral-ci.
+ */
+const WHERE_INPUT_ANNOTATION = /Prisma\.\w*WhereInput(?:\s*\[\s*\])?\s*(?:\{|=\s*$|>\s*$|\)[^)]*\{\s*(?:\/\/[^\n]*)?\s*(?:return\s*)?$|\s*\{?\s*(?:\/\/[^\n]*\n)?\s*return\s*$)/;
+
+const opensNamedWhere = (source: string, index: number): boolean =>
+  WHERE_INPUT_ANNOTATION.test(source.slice(Math.max(0, index - 400), index));
+
 const blockEndOf = (source: string, start: number, open: '{' | '[', close: '}' | ']'): number => {
   let depth = 0;
   for (let i = start; i < source.length; i += 1) {
@@ -100,7 +123,8 @@ export function equalityNullFiltersIn(file: string, source: string, fields: Read
   for (let i = 0; i < text.length; i += 1) {
     const char = text[i];
     if (char === '{' || char === '[') {
-      stack.push({ kind: char, key: keyBefore(text, i), start: i });
+      const key = keyBefore(text, i);
+      stack.push({ kind: char, key: key === '' && char === '{' && opensNamedWhere(text, i) ? 'where' : key, start: i });
       continue;
     }
     if (char === '}' || char === ']') {

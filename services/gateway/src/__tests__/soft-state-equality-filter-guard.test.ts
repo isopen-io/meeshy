@@ -1,6 +1,7 @@
 /**
- * Aucun filtre de la passerelle ne décide d'une PARTICIPATION sur `leftAt: null`
- * ou `bannedAt: null` NUS (#19690).
+ * Aucun filtre de la passerelle ne décide d'un SOFT-STATE sur une égalité nue —
+ * ni `leftAt: null` / `bannedAt: null` pour une PARTICIPATION (#19690), ni
+ * `expiresAt: null` / `{ equals: null }` pour une ÉCHÉANCE (#19755).
  *
  * Sous MongoDB `{ champ: null }` est une égalité : elle ne retient pas le
  * document dont la clé est ABSENTE. Et **aucun chemin de création de
@@ -31,9 +32,19 @@
  * relève (fixture `FIXTURE_CONJONCTION_IMPOSSIBLE`) ; sa première version la
  * BÉNISSAIT, parce qu'elle cherchait `isSet: false` n'importe où dans le bloc.
  *
+ * ─── `expiresAt`, et ce que son TRI colonne par colonne a rendu (#19748) ─────
+ *
+ * Mesuré le 2026-11-19 : **7 sites**, dont **un seul** nu — celui du coffre de
+ * clés (#19755), qui chargeait ZÉRO clé de conversation à chaque démarrage parce
+ * qu'aucun de ses deux créateurs n'écrit la colonne. Cinq autres disaient déjà
+ * l'absence à côté. Le septième est GELÉ, avec sa discipline d'écriture MESURÉE
+ * (`DISCIPLINE_D_ECRITURE` ci-dessous) : c'est ce que « le tri est une question
+ * PAR COLONNE » veut dire — une égalité nue est exacte quand la colonne est
+ * écrite à CHAQUE création, et cela se mesure, jamais ne se suppose.
+ *
  * ─── CE QUE CE CLIQUET NE GARDE PAS, et sa TAILLE ────────────────────────────
  *
- * Il ne tient que les DEUX colonnes de la participation, et il ne lit que
+ * Il ne tient que TROIS colonnes, et il ne lit que
  * `services/gateway/src` — `packages/shared`, `scripts/` et les migrations sont
  * hors champ. Le même balayage sur TOUTES les colonnes optionnelles rend un
  * ordre de grandeur de **120 sites** (2026-11-18), dominés par
@@ -47,10 +58,20 @@
  * **Ce compte est une borne INFÉRIEURE d'une population mal définie**, et c'est
  * une propriété de l'INSTRUMENT, pas du dépôt : il dépend de la graphie cherchée
  * (sa première version était aveugle à `{ equals: null }`, dont
- * `ServerKeyVault.initialize` porte un exemplaire VIVANT qui charge zéro clé de
- * conversation à chaque démarrage — #19755) et il ne voit pas les fragments de
- * `where` nommés ailleurs puis répandus, ni `packages/shared`, ni `scripts/`.
- * « Zéro trouvé » n'est pas « zéro existe » (leçon 261).
+ * `ServerKeyVault.initialize` portait un exemplaire VIVANT — #19755) et il ne
+ * voit ni `packages/shared`, ni `scripts/`.
+ *
+ * **La limite « il ne voit pas les fragments de `where` nommés ailleurs » est
+ * LEVÉE** (#19755), et elle a coûté deux sites : une annotation
+ * `Prisma.<Modèle>WhereInput` déclare un `where` aussi sûrement que la clé, et
+ * le premier site qu'elle a rendu est le prédicat partagé des SEPT lectures de
+ * notifications. **Une limite qu'on écrit au lieu de la mesurer protège le site
+ * qu'elle cache** : celle-ci était documentée depuis le cycle 180, donc
+ * incapable de rougir. Corollaire pour qui EXTRAIT un filtre dans une constante
+ * — ce que le correctif de #19755 a fait : sans annotation, l'extraction met le
+ * filtre hors de portée du cliquet qui le garde, et le lot qui répare sort du
+ * champ de sa propre garde. « Zéro trouvé » n'est pas « zéro existe »
+ * (leçon 261).
  *
  * @jest-environment node
  */
@@ -60,8 +81,33 @@ import { equalityNullFiltersIn, sweepEqualityNullFilters } from './helpers/where
 
 const SRC_DIR = join(__dirname, '..');
 
-/** Les colonnes de soft-state de la participation — `Participant` et `CallParticipant`. */
-const COLONNES = new Set(['leftAt', 'bannedAt']);
+/**
+ * Les colonnes de soft-state triées (#19748) : les deux de la participation
+ * (`Participant`, `CallParticipant`) et l'échéance (`ServerEncryptionKey`,
+ * `Notification`, `Post`, `ShareLink`, `UserDevice`, `Sound`).
+ */
+const COLONNES = new Set(['leftAt', 'bannedAt', 'expiresAt']);
+
+/**
+ * Les égalités nues GELÉES — et une ligne n'y entre QU'AVEC la discipline
+ * d'ÉCRITURE qui la rend exacte, prouvée à CHAQUE site de création. C'est la
+ * seule absolution que #19748 autorise, et elle se MESURE : « cette colonne
+ * porte sans doute une discipline » est exactement l'affirmation du côté qui
+ * absout, que le cycle 179 a payée.
+ */
+const DISCIPLINE_D_ECRITURE: Readonly<Record<string, string>> = {
+  'services/notifications/visibleNotificationsWhere.ts#expiresAt':
+    'Notification.expiresAt a UN créateur (NotificationService, l’unique '
+    + '`prisma.notification.create` du dépôt) et il écrit TOUJOURS la colonne '
+    + '(`expiresAt: params.expiresAt || null`) : l’égalité est exacte pour toute '
+    + 'ligne qu’il a produite, et aucun script ni migration n’en crée. La forme à '
+    + 'DEUX branches est de plus MESURÉE — `scripts/migrations/mongodb/010_notification_expiry_index.js` '
+    + 'et `@@index([userId, isRead, expiresAt])` existent pour que ses deux branches '
+    + 'soient des intervalles d’index, `emitCountsUpdate` tournant à CHAQUE '
+    + 'notification créée. Y ajouter une troisième branche d’absence toucherait un '
+    + 'chemin chaud pour couvrir les seules lignes ANTÉRIEURES à la colonne, '
+    + 'qu’aucun chemin vivant ne crée : la forme ATTESTÉE gagne (cycle 180, constat I).',
+};
 
 const FIXTURE_FILTRE_NU = `
   const rows = await prisma.participant.findMany({
@@ -109,6 +155,37 @@ const FIXTURE_EQUALS = `
   });
 `;
 
+/**
+ * Un `where` NOMMÉ : le fragment qu'une fonction REND, et qu'un appelant
+ * répandra. Sa seule déclaration est son type de retour — et c'est cette forme
+ * que le balayage ne voyait pas jusqu'à #19755, en le disant dans un
+ * doc-comment incapable de rougir.
+ */
+const FIXTURE_WHERE_NOMME_RETOURNE = `
+  export function visibleScope(userId: string): Prisma.NotificationWhereInput {
+    const now = new Date();
+    return {
+      userId,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    };
+  }
+`;
+
+/** Le même, en CONSTANTE annotée — la forme qu'une EXTRACTION produit. */
+const FIXTURE_WHERE_NOMME_CONSTANTE = `
+  const VIVANT: Prisma.ParticipantWhereInput = { isActive: true, leftAt: null };
+`;
+
+/**
+ * Et une ÉCRITURE nommée reste une écriture : c'est l'ANNOTATION qui décide,
+ * pas la position dans le fichier.
+ */
+const FIXTURE_ECRITURE_NOMMEE = `
+  function payload(): Prisma.ParticipantUpdateInput {
+    return { leftAt: null, bannedAt: null };
+  }
+`;
+
 const FIXTURE_EN_COMMENTAIRE = `
   // Audit C5 — \`{leftAt: null}\` seul manque les documents Mongo sans la clé.
   /** Et \`where: { bannedAt: null }\` dans un doc-comment non plus. */
@@ -146,6 +223,19 @@ describe('le balayage lui-même — un scanner qui cherche une GRAPHIE doit prou
   it('voit la graphie `{ equals: null }` — la même égalité sous un autre nom', () => {
     expect(sites(FIXTURE_EQUALS)).toEqual(['bannedAt:false']);
   });
+
+  it('voit un `where` NOMMÉ rendu par une fonction — son type de retour le déclare', () => {
+    expect(equalityNullFiltersIn('fixture.ts', FIXTURE_WHERE_NOMME_RETOURNE, new Set(['expiresAt'])))
+      .toEqual([expect.objectContaining({ field: 'expiresAt', absenceSaidInSameOr: false })]);
+  });
+
+  it('voit un `where` NOMMÉ porté par une constante annotée — sinon une EXTRACTION échappe au cliquet', () => {
+    expect(sites(FIXTURE_WHERE_NOMME_CONSTANTE)).toEqual(['leftAt:false']);
+  });
+
+  it('ne prend pas une ÉCRITURE nommée pour un `where` — c’est l’annotation qui décide', () => {
+    expect(sites(FIXTURE_ECRITURE_NOMMEE)).toEqual([]);
+  });
 });
 
 describe('aucun filtre de participation ne décide sur une égalité nue (#19690)', () => {
@@ -168,11 +258,26 @@ describe('aucun filtre de participation ne décide sur une égalité nue (#19690
     expect(balayage().filesScanned).toBeGreaterThan(900);
   });
 
-  it('chacun dit l’absence dans le MÊME `OR` — l’inventaire est VIDE, et la réparation est le prédicat, jamais une ligne ici', () => {
+  it('chacun dit l’absence dans le MÊME `OR`, sauf ceux dont la discipline d’ÉCRITURE est mesurée', () => {
     const nus = balayage().sites
       .filter((site) => !site.absenceSaidInSameOr)
+      .filter((site) => DISCIPLINE_D_ECRITURE[`${site.file}#${site.field}`] === undefined)
       .map((site) => `${site.file}:${site.line}#${site.field} (${site.spelling})`);
 
     expect(nus).toEqual([]);
+  });
+
+  /**
+   * Une absolution qui ne décrit plus rien est pire qu'une absence
+   * d'absolution : elle couvre le site SUIVANT. Chaque ligne gelée doit
+   * correspondre à un site réellement nu — sinon elle est à retirer, et son
+   * retrait fait partie du correctif qui l'a rendue inutile.
+   */
+  it('aucune discipline gelée ne couvre un site qui n’existe plus — une absolution périmée absout le suivant', () => {
+    const nus = new Set(
+      balayage().sites.filter((site) => !site.absenceSaidInSameOr).map((site) => `${site.file}#${site.field}`)
+    );
+
+    expect(Object.keys(DISCIPLINE_D_ECRITURE).filter((cle) => !nus.has(cle))).toEqual([]);
   });
 });

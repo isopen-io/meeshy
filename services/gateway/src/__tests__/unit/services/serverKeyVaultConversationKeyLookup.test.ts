@@ -190,6 +190,34 @@ describe('#19755 — la clé de conversation que la base porte est RETROUVÉE', 
     expect(calls).toHaveLength(1);
   });
 
+  /**
+   * Les deux formes d'échec d'une lecture, et elles sont DISJOINTES : un client
+   * injoignable REJETTE, un client qui n'expose pas la méthode jette
+   * SYNCHRONEMENT — et une promesse jamais construite ne porte aucun `.catch`.
+   * Le second n'est pas hypothétique : un double PARTIEL de la table des clés
+   * l'a produit dès le premier passage de la suite complète.
+   *
+   * Les deux échouent OUVERT : la clé neuve est scellée, le message part. Fermer
+   * refuserait un envoi que la production accepte aujourd'hui, et l'ouverture ne
+   * coûte qu'une clé de plus — un chiffré s'ouvre par sa ligne, jamais par cette
+   * carte.
+   */
+  it.each([
+    ['une base qui REJETTE', () => Promise.reject(new Error('mongo down'))],
+    ['un client qui JETTE synchronement', () => { throw new TypeError('findMany is not a function'); }],
+  ])('échoue OUVERT sur %s — le message est scellé sous une clé neuve', async (_cas, findMany) => {
+    process.env.ENCRYPTION_MASTER_KEY = MASTER;
+    const { prisma, created } = world([nominalKey('key-invisible')]);
+    (prisma as unknown as { serverEncryptionKey: { findMany: unknown } }).serverEncryptionKey.findMany = findMany;
+    const service = new EncryptionService(prisma);
+    await service.initialize();
+
+    await expect(service.getOrCreateConversationKey(CONV)).resolves.toEqual(expect.any(String));
+    expect(created).toHaveLength(1);
+
+    await service.shutdown();
+  });
+
   it('la carte est BORNÉE — réparer la lecture ne doit pas rendre la rétention proportionnelle au nombre de conversations', async () => {
     process.env.ENCRYPTION_MASTER_KEY = MASTER;
     const { prisma } = world([]);

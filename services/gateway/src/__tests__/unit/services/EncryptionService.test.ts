@@ -16,6 +16,7 @@ import {
   shutdownEncryptionService,
   encryptionService as encryptionServiceProxy,
 } from '../../../services/EncryptionService';
+import { findManyIn } from '../../helpers/mongo-where';
 
 // In-memory key storage for tests
 const keyStorage = new Map<string, {
@@ -57,15 +58,12 @@ const mockPrisma = {
       const key = keyStorage.get(args.where.id);
       return Promise.resolve(key || null);
     }),
-    findMany: jest.fn((args: any) => {
-      const results: any[] = [];
-      keyStorage.forEach((value) => {
-        if (!args?.where?.purpose || args.where.purpose === value.purpose) {
-          results.push(value);
-        }
-      });
-      return Promise.resolve(results);
-    }),
+    // #19755 — le `where` est ÉVALUÉ contre les documents (`matchesMongoWhere`,
+    // qui distingue une clé ABSENTE d'une clé nulle). Ce double n'appariait que
+    // `purpose`, donc il rendait ses lignes quel que soit le filtre : il ne
+    // pouvait pas voir que la lecture du coffre n'en retenait aucune, et il
+    // servait la clé d'une AUTRE conversation sans broncher.
+    findMany: jest.fn((args: any) => findManyIn([...keyStorage.values()] as any).findMany(args)),
     update: jest.fn((args: any) => {
       const key = keyStorage.get(args.where.id);
       if (key) {
@@ -477,7 +475,18 @@ describe('EncryptionService - Extended Coverage', () => {
       await service.shutdown();
     });
 
-    it('should load existing conversation key mappings from DB', async () => {
+    /**
+     * #19755 — la carte `conversationId → keyId` n'est plus CHARGÉE au
+     * démarrage, elle est relue À LA DEMANDE. La garantie qui compte n'a pas
+     * changé de valeur, elle a changé de moment : une conversation dont la base
+     * porte déjà une clé ne s'en voit jamais forger une seconde.
+     *
+     * La ligne est posée dans sa forme NOMINALE de production — `isActive` que
+     * Prisma écrit depuis son `@default(true)`, et AUCUNE colonne `expiresAt`,
+     * qu'aucun créateur n'écrit. C'est cette absence que la lecture d'avant ne
+     * voyait pas.
+     */
+    it('retrouve À LA DEMANDE la clé que la base porte, sans en forger une seconde', async () => {
       const keyId = 'preloaded-key-id';
       const convId = 'conv-preloaded';
       keyStorage.set(keyId, {
@@ -490,18 +499,29 @@ describe('EncryptionService - Extended Coverage', () => {
         conversationId: convId,
         createdAt: new Date(),
         lastAccessedAt: null,
-      });
+        isActive: true,
+      } as never);
 
       const service = new EncryptionService(mockPrisma);
       await service.initialize();
 
+      await expect(service.getOrCreateConversationKey(convId)).resolves.toBe(keyId);
+
       const vault = (service as any).keyVault;
-      expect(vault.conversationKeyMap.has(convId)).toBe(true);
       expect(vault.conversationKeyMap.get(convId)).toBe(keyId);
       await service.shutdown();
     });
 
-    it('should throw when keyVault initialize fails', async () => {
+    /**
+     * #19755 — le démarrage ne lit plus rien, donc il ne peut plus échouer pour
+     * une base injoignable. La lecture à la demande échoue OUVERT par décision :
+     * elle journalise et laisse forger une clé neuve — exactement ce que faisait
+     * le chemin d'avant, dont la carte était vide à chaque fois. Fermer ici
+     * REFUSERAIT un message que la production accepte aujourd'hui, et le coût de
+     * l'ouverture est borné à une clé de plus : un chiffré voyage avec son
+     * `keyId` et s'ouvre par sa ligne, donc rien ne devient illisible.
+     */
+    it('un démarrage ne lit plus la base, et une lecture de clé en échec n’empêche pas de sceller', async () => {
       const failPrisma = {
         ...mockPrisma,
         serverEncryptionKey: {
@@ -511,7 +531,10 @@ describe('EncryptionService - Extended Coverage', () => {
       } as any;
 
       const service = new EncryptionService(failPrisma);
-      await expect(service.initialize()).rejects.toThrow('DB connection error');
+      await expect(service.initialize()).resolves.toBeUndefined();
+      await expect(service.getOrCreateConversationKey('conv-db-down')).resolves.toEqual(expect.any(String));
+      expect(failPrisma.serverEncryptionKey.findMany).toHaveBeenCalledTimes(1);
+      await service.shutdown();
     });
   });
 
@@ -991,12 +1014,12 @@ describe('EncryptionService - Extended Coverage', () => {
       const vault = (service as any).keyVault;
       const convId = 'conv-double-check-real';
 
-      let callCount = 0;
-      jest.spyOn(vault, 'getConversationKeyId').mockImplementation(() => {
-        callCount++;
-        if (callCount === 1) return undefined;
-        return 'existing-key-after-lock';
-      });
+      // #19755 — les deux étages lisent DEUX choses : le chemin rapide relit la
+      // base (`conversationKeyId`, read-through), le double-contrôle sous verrou
+      // ne lit que la CARTE (`getConversationKeyId`) — ce qu'un appelant
+      // concurrent du même processus vient d'y poser.
+      jest.spyOn(vault, 'conversationKeyId').mockImplementation(() => Promise.resolve(undefined));
+      jest.spyOn(vault, 'getConversationKeyId').mockImplementation(() => 'existing-key-after-lock');
 
       const result = await service.getOrCreateConversationKey(convId);
       expect(result).toBe('existing-key-after-lock');
