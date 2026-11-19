@@ -33,6 +33,14 @@ function postTrackUrl(url: string | undefined): string | null {
   return key !== null && key.startsWith(POST_TRACK_DIRECTORY) && !key.split('/').includes('..') ? (url ?? null) : null;
 }
 
+/** Les adresses de pistes de post qu'une carte `translations` référence. */
+export function postTrackUrls(translations: Readonly<Record<string, TrackReference>> | null | undefined): readonly string[] {
+  return Object.values(translations ?? {}).flatMap((track) => {
+    const url = postTrackUrl(track?.url);
+    return url === null ? [] : [url];
+  });
+}
+
 /**
  * Les pistes de post que l'inscription vient de remplacer, langue par langue :
  * l'ancienne adresse quand la nouvelle en diffère. Une entrée dont la piste

@@ -25,10 +25,16 @@ const entry = (url?: string): Entry => ({
   ttsModel: 'chatterbox',
 });
 
-const inscribe = async (existing: Record<string, Entry>, incoming: Record<string, Entry>, update = jest.fn<() => Promise<{ commentId: null }>>().mockResolvedValue({ commentId: null })) => {
+const inscribe = async (existing: Record<string, Entry>, incoming: Record<string, Entry>, updateFails = false) => {
   const removed: string[] = [];
+  const row = { translations: existing as unknown };
+  const update = async (args: { data: { translations: unknown } }) => {
+    if (updateFails) throw new Error('down');
+    row.translations = args.data.translations;
+    return { commentId: null };
+  };
   const prisma = {
-    postMedia: { findUnique: jest.fn<() => Promise<{ translations: unknown }>>().mockResolvedValue({ translations: existing }), update },
+    postMedia: { findUnique: async () => ({ translations: row.translations }), update },
     post: { findFirst: jest.fn<() => Promise<null>>().mockResolvedValue(null) },
   };
   const remover = { delete: async (url: string) => { removed.push(url); } };
@@ -59,9 +65,16 @@ describe('PostAudioService — la piste remplacée s’efface (#19841)', () => {
     expect(removed).toEqual([]);
   });
 
-  it('n’efface rien quand l’inscription en base échoue', async () => {
-    const removed = await inscribe({ en: entry(POST_TRACK('en', 'a')) }, { en: entry(POST_TRACK('en', 'c')) }, jest.fn<() => Promise<{ commentId: null }>>().mockRejectedValue(new Error('down')));
+  it('n’efface jamais une adresse de post qui remonte l’arborescence', async () => {
+    const climbing = '/api/v1/attachments/file/translated/post/../../2026/11/u/voice.m4a';
+    const removed = await inscribe({ en: entry(climbing) }, { en: entry(POST_TRACK('en', 'c')) });
 
     expect(removed).toEqual([]);
+  });
+
+  it('quand l’inscription en base échoue, efface la piste neuve et garde la précédente', async () => {
+    const removed = await inscribe({ en: entry(POST_TRACK('en', 'a')) }, { en: entry(POST_TRACK('en', 'c')) }, true);
+
+    expect(removed).toEqual([POST_TRACK('en', 'c')]);
   });
 });

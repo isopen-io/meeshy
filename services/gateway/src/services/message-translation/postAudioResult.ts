@@ -98,8 +98,9 @@ export async function persistPostAudioTranslations(
   target: PostAudioTarget | null,
   translatedAudios: ReadonlyArray<PostTranslatedAudio>
 ): Promise<void> {
-  const admitted = translatedAudios.filter((audio) => TRACK_LANGUAGE.test(audio.targetLanguage));
-  if (admitted.length < translatedAudios.length) logger.warn('piste de post refusée : langue hors liste');
+  const named = translatedAudios.filter((audio) => TRACK_LANGUAGE.test(audio.targetLanguage));
+  if (named.length < translatedAudios.length) logger.warn('piste de post refusée : langue hors liste');
+  const admitted = [...new Map(named.map((audio) => [audio.targetLanguage, audio])).values()];
   if (!target || admitted.length === 0) return;
   const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
   const entries = await Promise.all(admitted.map(async (audio) => {

@@ -119,6 +119,11 @@ const audioProcessCompletedFrames = (postReference: Record<string, string>, audi
   ];
 };
 
+const withoutBinary = ([metadata]: Buffer[]): Buffer[] => {
+  const { binaryFrames: _dropped, ...event } = JSON.parse(metadata.toString()) as Record<string, unknown>;
+  return [Buffer.from(JSON.stringify(event))];
+};
+
 const until = async <T>(read: () => T | undefined, timeoutMs = 3000): Promise<T> => {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -346,6 +351,64 @@ describe('#19749 — la piste vocale traduite d’un post arrive dans PostMedia.
     expect(english).not.toHaveProperty('url');
     expect(english).not.toHaveProperty('path');
     expect(await listFiles(uploadRoot)).toEqual([]);
+  });
+
+  it('#19841 — une piste sans binaire n’annonce rien et garde la précédente, sur le disque comme en base', async () => {
+    const { uploadRoot, updates, handler } = await gatewayOn(postMedia);
+    await handler.handleMessage(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID }));
+    const first = await englishEntry(updates, 0);
+
+    await handler.handleMessage(withoutBinary(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID })));
+    const second = await englishEntry(updates, 1);
+    await settle();
+
+    expect(second.url).toBe(first.url);
+    expect(await listFiles(uploadRoot)).toEqual([path.join(uploadRoot, keyOf(first))]);
+  });
+
+  it('#19841 — une traduction sans audioUrl n’écrit aucune piste, même avec un binaire', async () => {
+    const { uploadRoot, updates, handler } = await gatewayOn(postMedia);
+
+    await handler.handleMessage(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID }, { audioUrl: null }));
+
+    const english = await englishEntry(updates);
+    expect(english.transcription).toBe('Hello everyone');
+    expect(english).not.toHaveProperty('url');
+    expect(await listFiles(uploadRoot)).toEqual([]);
+  });
+
+  it.each([
+    ['un jeton court', 'a'.repeat(31)],
+    ['un jeton long', 'a'.repeat(33)],
+    ['un jeton vide', ''],
+    ['un jeton non hexadécimal', 'g'.repeat(32)],
+    ['un jeton en majuscules', 'A'.repeat(32)],
+  ])('#19841 — la route refuse une piste de post à %s comme un fichier absent', async (_case, token) => {
+    const { uploadRoot, prisma } = await gatewayOn(postMedia);
+    const key = `translated/post/${POST_MEDIA_ID}_en_${token}.mp3`;
+    await fs.mkdir(path.join(uploadRoot, 'translated/post'), { recursive: true });
+    await fs.writeFile(path.join(uploadRoot, key), TRACK_BYTES);
+    const app = await routeOn(uploadRoot, prisma);
+    try {
+      expect((await app.inject({ method: 'GET', url: `/attachments/file/${key}` })).statusCode).toBe(404);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('#19841 — une piste .flac se sert en audio/flac', async () => {
+    const { uploadRoot, prisma, updates, handler } = await gatewayOn(postMedia);
+    await handler.handleMessage(audioProcessCompletedFrames({ postId: POST_ID, postMediaId: POST_MEDIA_ID }, { audioMimeType: 'audio/flac' }));
+    const english = await englishEntry(updates);
+    const app = await routeOn(uploadRoot, prisma);
+    try {
+      const track = await app.inject({ method: 'GET', url: `/attachments/file/${keyOf(english)}` });
+
+      expect(track.statusCode).toBe(200);
+      expect(track.headers['content-type']).toBe('audio/flac');
+    } finally {
+      await app.close();
+    }
   });
 
   it.each([
