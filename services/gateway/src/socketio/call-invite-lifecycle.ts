@@ -8,6 +8,7 @@ import type { NotificationService } from '../services/notifications/Notification
 import { buildCallSilentPush } from '../services/call-push-mirroring';
 import { logger } from '../utils/logger';
 import { guardedTimeout } from '../utils/guarded-timer';
+import { RANK_SELECT, highestRankedConversation } from '../services/conversations/highestRanked';
 
 /**
  * LA VIE D'UNE INVITATION D'APPEL (#8470, #8467) — une personne invitée dans un
@@ -105,20 +106,25 @@ export function createCallInvitationLifecycle(deps: CallInvitationLifecycleDeps)
    * porterait le titre. Elle est menée à sa conversation directe avec
    * l'inviteur — une amie acceptée, condition de l'invitation —, la plus
    * récemment active ; sans elle, la notification ne nomme aucune conversation.
+   *
+   * **« La plus récemment active » est le RANG** — max(`lastMessageAt`,
+   * `lastActivityAt`), #9026 — et non le dernier message (#19835). Une paire
+   * qui porte deux tête-à-tête (le chiffré et le lisible, #12966) ou des
+   * doublons historiques mène ainsi l'appel manqué là où il s'est passé quelque
+   * chose, jamais sur un fil mort qu'un message plus récent désignait seul.
    */
   const missedCallConversationId = async (invitation: PendingCallInvitation): Promise<string | null> => {
     if (await isMember(invitation)) return invitation.conversationId;
-    const direct = await deps.prisma.conversation.findFirst({
-      where: {
-        type: 'direct',
-        AND: [
-          { participants: { some: { userId: invitation.inviteeUserId, isActive: true } } },
-          { participants: { some: { userId: invitation.inviterUserId, isActive: true } } },
-        ],
-      },
-      orderBy: { lastMessageAt: 'desc' },
-      select: { id: true },
-    });
+    const where = {
+      type: 'direct',
+      AND: [
+        { participants: { some: { userId: invitation.inviteeUserId, isActive: true } } },
+        { participants: { some: { userId: invitation.inviterUserId, isActive: true } } },
+      ],
+    };
+    const direct = await highestRankedConversation((stream) =>
+      deps.prisma.conversation.findFirst({ where: { ...where, ...stream.where }, orderBy: stream.orderBy, select: RANK_SELECT })
+    );
     return direct?.id ?? null;
   };
 
