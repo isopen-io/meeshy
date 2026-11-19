@@ -170,7 +170,7 @@ nonisolated enum ComposerCaptureHaptic: Equatable {
                 HapticFeedback.light()
             }
         case .success: HapticFeedback.success()
-        case .selection: UISelectionFeedbackGenerator().selectionChanged()
+        case .selection: HapticFeedback.selection()
         case .none: break
         }
     }

@@ -152,18 +152,12 @@ private struct CallPressLabel<Content: View>: View {
     }
 }
 
-/// Un léger choc au doigt posé (iOS 17+) ; l'action garde son propre retour
-/// au relâchement.
+/// Le doigt posé ne joue plus de choc : l'app ne joue aucun retour haptique (#19783).
 private struct CallPressHaptic: ViewModifier {
     let isPressed: Bool
 
-    @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(iOS 17.0, *) {
-            content.sensoryFeedback(.impact(weight: .light), trigger: isPressed) { _, pressed in pressed }
-        } else {
-            content
-        }
+        content
     }
 }
 
