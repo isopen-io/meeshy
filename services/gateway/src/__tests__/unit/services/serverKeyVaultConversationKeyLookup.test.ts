@@ -39,6 +39,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ServerKeyVault } from '../../../services/ServerKeyVault';
 import { EncryptionService } from '../../../services/EncryptionService';
 import { findManyIn, findUniqueIn, type MongoDocument } from '../../helpers/mongo-where';
+import type { Prisma } from '@meeshy/shared/prisma/client';
+import { differsOrUnset, unsetOrNull } from '../../../utils/prisma-unset';
 
 const MASTER = Buffer.alloc(32, 7).toString('base64');
 const CONV = '507f1f77bcf86cd799439011';
@@ -101,6 +103,34 @@ const world = (rows: readonly MongoDocument[], designation: string | null = null
   } as unknown as PrismaClient;
   return { prisma, created, calls, table };
 };
+
+/**
+ * Le piège de ce lot — « `{ champ: null }` ne retient pas un document dont la clé
+ * est ABSENTE » — n'existe que sur une colonne OPTIONNELLE. Les deux colonnes du
+ * filtre ne sont donc pas de la même espèce, et la différence se MESURE au
+ * compilateur plutôt que se lire au schéma.
+ *
+ * L'audit adversarial du cycle 181 avait raison de refuser l'affirmation « Prisma
+ * écrit son `@default(true)` » : elle n'était pas mesurée, et la fixture la
+ * cuisait. Voici la mesure. Le jour où `isActive` passerait `Boolean?`,
+ * `@ts-expect-error` cesse d'avoir une erreur à attendre et CE témoin tombe — ce
+ * qui est exactement le moment où l'égalité nue deviendrait un défaut.
+ */
+describe('les deux colonnes du filtre ne sont pas de la même espèce, et le compilateur le dit', () => {
+  it('`expiresAt` est OPTIONNELLE : le prédicat d’absence compile, donc le piège existe sur elle', () => {
+    const predicat: Prisma.ServerEncryptionKeyWhereInput = unsetOrNull('expiresAt');
+
+    expect(predicat).toEqual({ OR: [{ expiresAt: null }, { expiresAt: { isSet: false } }] });
+  });
+
+  it('`isActive` est REQUISE : Prisma n’expose aucun `isSet` dessus, donc elle ne peut pas manquer', () => {
+    // @ts-expect-error `{ isSet: false }` n'est pas assignable à `boolean | BoolFilter` :
+    // la colonne est REQUISE au schéma, donc jamais absente du document.
+    const impossible: Prisma.ServerEncryptionKeyWhereInput = differsOrUnset('isActive', false);
+
+    expect(impossible).toBeDefined();
+  });
+});
 
 describe('#19755 — la clé de conversation que la base porte est RETROUVÉE', () => {
   it('rend la clé NOMINALE (aucune colonne `expiresAt`) plutôt que d’en forger une neuve', async () => {
@@ -214,6 +244,110 @@ describe('#19755 — la clé de conversation que la base porte est RETROUVÉE', 
 
     await expect(service.getOrCreateConversationKey(CONV)).resolves.toEqual(expect.any(String));
     expect(created).toHaveLength(1);
+
+    await service.shutdown();
+  });
+
+  /**
+   * Constat E de l'audit : la garde de FORME va AVANT l'appel. Un identifiant qui
+   * n'a pas la forme d'un ObjectId fait rendre au moteur `Malformed ObjectID`, que
+   * le `catch` fail-ouvert traduirait en « pas de clé » — donc une clé forgée à
+   * CHAQUE appel, avec pour seule trace un `warn` indistinct d'une panne de base.
+   * Un `catch` ne peut pas réparer ce qu'il ne peut pas ATTRIBUER : la base n'a
+   * pas répondu, ou nous ne lui avons jamais posé de question valide.
+   */
+  it('ne POSE PAS la question quand l’identifiant n’a pas la forme d’un ObjectId', async () => {
+    process.env.ENCRYPTION_MASTER_KEY = MASTER;
+    const { prisma, calls } = world([nominalKey('key-nominale')]);
+    const vault = new ServerKeyVault(prisma);
+
+    await expect(vault.conversationKeyId('ma-conversation-lisible')).resolves.toBeUndefined();
+    expect(calls).toEqual([]);
+  });
+
+  /**
+   * Constat G : `createdAt` seul n'a pas de départage, et l'égalité est le cas
+   * RÉALISTE — il n'existe aucun verrou inter-instances, donc deux instances qui
+   * forgent la première clé d'une conversation le font dans la même milliseconde.
+   * L'ordre total (`createdAt`, puis `id`) est ce qui les fait élire la même.
+   */
+  it('départage DEUX clés du même instant — sans quoi « deux instances s’accordent » est faux là où ça compte', async () => {
+    process.env.ENCRYPTION_MASTER_KEY = MASTER;
+    const instant = new Date('2026-03-01T00:00:00Z');
+    const rows = [nominalKey('key-aaa', { createdAt: instant }), nominalKey('key-zzz', { createdAt: instant })];
+    const premiere = new ServerKeyVault(world(rows).prisma);
+    const seconde = new ServerKeyVault(world([...rows].reverse()).prisma);
+
+    await expect(premiere.conversationKeyId(CONV)).resolves.toBe('key-zzz');
+    await expect(seconde.conversationKeyId(CONV)).resolves.toBe('key-zzz');
+  });
+
+  /**
+   * Constat H : le prédicat dit « AUCUNE échéance », pas « non expirée ». Le
+   * témoin d'origine portait une échéance PASSÉE, donc il n'attestait rien de
+   * l'intention — qui est délibérément plus stricte que le chemin de LECTURE
+   * jumeau : on peut OUVRIR un chiffré sous une clé qui expire bientôt, on ne
+   * doit pas en SCELLER un neuf dessous.
+   */
+  it('refuse aussi une clé dont l’échéance est à VENIR — un chemin d’écriture a le droit d’être plus strict', async () => {
+    process.env.ENCRYPTION_MASTER_KEY = MASTER;
+    const demain = new Date(Date.now() + 86_400_000);
+    const { prisma, created } = world([nominalKey('key-bientot-expiree', { expiresAt: demain })]);
+    const service = new EncryptionService(prisma);
+    await service.initialize();
+
+    await expect(service.getOrCreateConversationKey(CONV)).resolves.not.toBe('key-bientot-expiree');
+    expect(created).toHaveLength(1);
+
+    await service.shutdown();
+  });
+
+  /**
+   * Constat K1 : le lot déplace un `await` DEVANT le verrou de génération. La
+   * TOCTOU n'est pas rouverte — le check-and-set qui suit reste SYNCHRONE — mais
+   * rien ne l'attestait, et le symptôme d'une inversion serait une prolifération
+   * silencieuse, c'est-à-dire le défaut même que ce lot répare.
+   */
+  it('dix appels CONCURRENTS sur une base vide ne forgent qu’UNE clé — le verrou survit à l’`await` posé devant lui', async () => {
+    process.env.ENCRYPTION_MASTER_KEY = MASTER;
+    const { prisma, created } = world([]);
+    const lent = prisma.serverEncryptionKey.findMany;
+    (prisma as unknown as { serverEncryptionKey: { findMany: unknown } }).serverEncryptionKey.findMany =
+      async (args: never) => { for (let tick = 0; tick < 3; tick += 1) await Promise.resolve(); return lent(args); };
+    const service = new EncryptionService(prisma);
+    await service.initialize();
+
+    const ids = await Promise.all(Array.from({ length: 10 }, () => service.getOrCreateConversationKey(CONV)));
+
+    expect(new Set(ids).size).toBe(1);
+    expect(created).toHaveLength(1);
+
+    await service.shutdown();
+  });
+
+  /**
+   * Constat K2 : la surface vivante de cette lecture est « une conversation dont
+   * la DÉSIGNATION est nulle ». Quand la conversation en désigne une, les trois
+   * chemins d'écriture passent `preferredKeyId` et la carte n'est jamais
+   * consultée — c'est ce qui borne l'effet du lot, et aucun témoin ne le disait.
+   */
+  it('une conversation qui DÉSIGNE une clé scelle sous SA désignation, sans consulter la carte', async () => {
+    process.env.ENCRYPTION_MASTER_KEY = MASTER;
+    const { prisma, calls } = world([]);
+    const service = new EncryptionService(prisma);
+    await service.initialize();
+
+    // Une clé RÉELLE — enveloppée sous la clé maîtresse, donc qui s'ouvre. Une
+    // ligne de fixture aux octets inventés ferait refuser l'envoi
+    // (`unwrap-failed`, fail-closed), ce qui est le bon comportement et pas ce
+    // que ce témoin interroge.
+    const designee = await service.getOrCreateConversationKey(CONV);
+    const lecturesAvantLeScellement = calls.length;
+
+    const sealed = await service.sealAtRest({ plaintext: 'bonjour', conversationId: CONV, preferredKeyId: designee });
+
+    expect(sealed.metadata.keyId).toBe(designee);
+    expect(calls).toHaveLength(lecturesAvantLeScellement);
 
     await service.shutdown();
   });

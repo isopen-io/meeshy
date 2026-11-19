@@ -68,3 +68,31 @@ créateur unique, et sa forme à deux branches est servie par un index posé exp
 elle (migration mongodb 010). L'absolution est gelée AVEC sa mesure, et un témoin
 garde l'absolution elle-même : une discipline gelée qui ne décrit plus aucun site nu
 couvrirait le suivant.
+
+**Et le troisième exemplaire était dans le cliquet lui-même.** L'audit adversarial a rendu
+BLOQUANT non pas sur la production — jugée saine — mais sur la PREUVE : le cliquet bénissait
+`OR: [{ champ: null }, { NOT: { champ: { isSet: false } } }]`, dont la seconde branche dit « la
+clé EST posée », donc dont l'union exclut exactement les documents absents. Le défaut gardé,
+certifié correct par sa garde. Le cycle 180 avait déjà corrigé ce même cliquet pour la même
+raison et n'avait fait que RESSERRER la fenêtre de sa recherche textuelle.
+
+> **Un cliquet qui cherche la forme JUSTE par ses MOTS finit par bénir sa négation.** Le texte
+> cherché était le bon ; c'est la POLARITÉ qui change le sens, et aucune expression régulière ne
+> la voit. La correction n'est pas une regex plus fine — c'en était déjà une — c'est de chercher
+> une STRUCTURE. Et le corollaire de méthode : **un lot dont la preuve est un cliquet doit
+> auditer le cliquet comme il auditerait la production**, parce que `tsc` et les témoins sont
+> aveugles à l'instrument qui les juge.
+
+**Le quatrième : une justification juste peut reposer sur une affirmation fausse.** Le filtre
+posait `isActive: true` nu, justifié par « Prisma écrit son `@default(true)` à chaque création ».
+L'audit a refusé : non mesurée, et CUITE DANS LA FIXTURE, qui posait la colonne à la main — donc
+aucun témoin de la suite ne pouvait la falsifier. Le prédicat était juste ; sa raison ne l'était
+pas. La correction n'était pas de changer le prédicat mais **de trouver la mesure qui le fonde**,
+et le compilateur l'a rendue en une ligne : `differsOrUnset('isActive', false)` ne compile pas,
+parce que Prisma n'expose `isSet` que sur les colonnes OPTIONNELLES et que celle-ci est REQUISE.
+Le piège n'existe pas sur elle.
+
+> **Devant une prémisse qu'on ne peut pas mesurer, chercher qui la mesure déjà.** Ici c'était le
+> système de types, à une ligne de distance — et le témoin qui l'épingle (`@ts-expect-error`)
+> tombera le jour où la colonne deviendra optionnelle, c'est-à-dire exactement le jour où
+> l'égalité nue deviendra un défaut.

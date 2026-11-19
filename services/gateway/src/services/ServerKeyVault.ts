@@ -3,6 +3,7 @@ import * as crypto from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { readMasterKey, ServerAtRestUnavailableError, type MasterKeyState } from './messaging/serverAtRest';
 import { unsetOrNull } from '../utils/prisma-unset';
+import { isAddressableConversationId } from '../socketio/queuedEventContract';
 
 const logger = enhancedLogger.child({ module: 'EncryptionService' });
 
@@ -55,11 +56,36 @@ const MAX_CONVERSATION_KEY_CACHE = 2000;
  * chaque démarrage, et le chemin rapide de `getOrCreateConversationKey` forgeait
  * une clé neuve pour une conversation qui en avait déjà une.
  *
- * `isActive` reste une ÉGALITÉ, et c'est une décision : Prisma écrit son
- * `@default(true)` à chaque création, donc la clé est toujours présente — et son
- * absence éventuelle ÉCARTE la ligne, c'est-à-dire fait sceller sous une clé
- * neuve plutôt que sous une clé qu'un chemin a éteinte (`deleteKey`). Le sens de
- * l'erreur est celui qui ne réutilise jamais une clé retirée.
+ * Et ce prédicat dit « AUCUNE échéance », pas « non expirée » — il écarte donc
+ * aussi une clé dont l'échéance est à VENIR. C'est délibéré, et c'est l'écart
+ * assumé avec le chemin de LECTURE jumeau (`AttachmentEncryptionService`), qui ne
+ * refuse qu'une échéance PASSÉE : on peut ouvrir un chiffré avec une clé qui
+ * expire bientôt, on ne doit pas en SCELLER un neuf dessous. Un chemin
+ * d'écriture a le droit d'être plus strict que son chemin de lecture ; l'inverse
+ * serait un défaut.
+ *
+ * `isActive` reste une ÉGALITÉ NUE, et la raison n'est plus une affirmation : la
+ * colonne est **REQUISE** au schéma (`isActive Boolean @default(true)`, pas
+ * `Boolean?`), à la différence d'`expiresAt` et de `conversationId`. La
+ * distinction n'est pas une lecture du schéma mais une MESURE du compilateur :
+ * `differsOrUnset('isActive', false)` ne compile pas —
+ * `TS2322: Type '{ isSet: false }' is not assignable to type 'boolean | BoolFilter'` —
+ * parce que Prisma n'expose `isSet` que sur les colonnes OPTIONNELLES, celles
+ * qui peuvent manquer du document. Le piège que ce lot répare n'existe donc PAS
+ * sur cette colonne-là, et c'est le compilateur qui le dit.
+ *
+ * (La version d'abord livrée justifiait la même égalité par « Prisma écrit son
+ * `@default(true)` à chaque création » — vrai, mais AFFIRMÉ : aucune base ici, et
+ * la fixture CUISAIT la colonne en la posant à la main, donc aucun témoin ne
+ * pouvait la falsifier. L'audit adversarial du cycle 181 l'a relevé comme le
+ * défaut du lot reproduit sur la colonne voisine. La correction n'était pas de
+ * changer le prédicat mais de trouver la mesure qui le fonde.)
+ *
+ * Ce qu'elle achète est en revanche DORMANT, et il faut le dire : `isActive: false`
+ * n'est écrit que par `AttachmentKeyVault.deleteKey` et `cleanupExpiredKeys`,
+ * dont aucun appelant de production n'existe aujourd'hui (la purge, elle,
+ * SUPPRIME les lignes). Le filtre garde un chemin qui dort ; il ne garde rien
+ * qui s'écrive.
  *
  * Le type n'est pas décoratif : extraire un filtre dans une constante le met
  * hors de portée du cliquet qui garde cette règle
@@ -133,10 +159,18 @@ export class ServerKeyVault {
    *
    * La carte n'est pas une autorité de lecture — un chiffré voyage avec son
    * `keyId` et s'ouvre par sa ligne (`loadKey`, `getKeyFor`) : elle évite de
-   * forger une clé de plus là où la base en porte déjà une. L'ordre
-   * (`createdAt` décroissant) est DÉTERMINISTE pour que deux instances
-   * s'accordent sur la même clé quand la prolifération d'avant #19755 en a
-   * laissé plusieurs.
+   * forger une clé de plus là où la base en porte déjà une.
+   *
+   * L'ordre est un ordre TOTAL — `createdAt` décroissant, puis `id`, qui est un
+   * UUID donc unique. `createdAt` seul n'aurait pas de départage, et l'égalité y
+   * est le cas RÉALISTE : il n'existe aucun verrou inter-instances
+   * (`keyGenerationLocks` est par processus), donc deux instances qui forgent la
+   * première clé d'une conversation le font dans la même milliseconde. Ce que
+   * l'ordre garantit est que deux instances élisent la MÊME clé sur un défaut de
+   * cache ; il ne les rapproche pas une fois chacune servie par sa carte, qu'aucun
+   * chemin n'invalide — deux processus peuvent sceller sous deux clés différentes,
+   * ce qui ne perd rien (les deux lignes portent leur `conversationId`) mais n'est
+   * pas de la cohérence.
    */
   async conversationKeyId(conversationId: string): Promise<string | undefined> {
     const cached = this.conversationKeyMap.get(conversationId);
@@ -165,11 +199,25 @@ export class ServerKeyVault {
    * de couvrir les deux formes d'échec.
    */
   private async readConversationKeyId(conversationId: string): Promise<string | undefined> {
+    // La garde de FORME va AVANT l'appel : `ServerEncryptionKey.conversationId`
+    // est un `@db.ObjectId`, et un id qui n'en a pas la forme fait rendre au
+    // moteur `Malformed ObjectID` — que le `catch` ci-dessous traduirait en « pas
+    // de clé », donc en une clé forgée à CHAQUE appel, sans autre trace qu'un
+    // `warn` indistinct. Un `catch` fail-ouvert ne peut pas réparer ce qu'il ne
+    // peut pas ATTRIBUER (cf. `isAddressableConversationId`, #19690 / cycle 112) :
+    // les deux refus ne s'arbitrent pas pareil, donc ils se journalisent à part.
+    if (!isAddressableConversationId(conversationId)) {
+      logger.warn('clé de conversation non cherchée : cet identifiant n’a pas la forme d’un ObjectId', {
+        conversationId, reason: 'unaddressable-conversation-id',
+      });
+      return undefined;
+    }
+
     try {
       const rows = await this.prisma.serverEncryptionKey.findMany({
         where: { conversationId, ...WRITABLE_CONVERSATION_KEY },
         select: { id: true },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: 1,
       });
       return rows[0]?.id;

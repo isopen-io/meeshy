@@ -204,3 +204,201 @@ la mutation la NOMME (`services/ServerKeyVault.ts:50#expiresAt (equals)`).
 - **La prolifération déjà en base n'est pas nettoyée.** Ce lot l'arrête ; il ne
   purge rien. `obsolete-conversation-purge` ne retire les clés que d'une
   conversation obsolète.
+
+---
+
+## L'audit adversarial a rendu BLOQUANT, et il avait raison sur six points
+
+Le lot est passé par `auditeur-adversarial` avant fusion (#9226 : coffre de clés).
+Verdict **BLOQUANT** — et pas sur le changement de production, jugé sain, mais sur
+**le CLIQUET que le lot livrait comme sa preuve**. C'est la forme du cycle 180
+rejouée un niveau plus haut, et elle mérite d'être dite ainsi :
+
+> **Un lot dont la preuve est un cliquet doit auditer le cliquet comme il auditerait
+> la production.** Le mien bénissait une forme fausse et sa couverture du site
+> réparé tenait à une ligne d'annotation — deux défauts que le `tsc` et les
+> témoins laissaient passer, parce qu'ils sont dans l'INSTRUMENT.
+
+### Constat A — le cliquet bénissait l'absence NIÉE
+
+`OR: [{ champ: null }, { NOT: { champ: { isSet: false } } }]` rendait
+`absenceSaidInSameOr: true`. Or la seconde branche dit « la clé EST posée » :
+l'union « nulle OU posée » exclut exactement les documents absents — #19690
+réinstallé, **certifié correct par le cliquet censé l'interdire**.
+
+Le cycle 180 avait déjà corrigé ce cliquet pour la même raison (constat F : il
+cherchait `isSet: false` n'importe où dans le bloc, donc bénissait la conjonction
+impossible). Son correctif a remonté le test du bloc au seul tableau `OR` **sans
+changer sa nature** : c'était toujours une expression régulière sur du TEXTE.
+
+> **Un cliquet qui cherche la forme JUSTE par ses MOTS finit par bénir sa
+> négation.** Le texte était le bon ; c'est la POLARITÉ qui change le sens, et
+> aucune recherche textuelle ne la voit. La correction n'est pas une regex plus
+> fine — c'en était déjà une plus fine — c'est de chercher une STRUCTURE : une
+> BRANCHE de premier niveau du même tableau `OR` qui est EXACTEMENT le prédicat
+> d'absence. Toute enveloppe (`NOT`, une seconde condition dans la branche) n'est
+> plus l'alternative que `unsetOrNull` compose, et n'est plus reconnue.
+
+Deux fixtures le gardent : l'absence niée, et l'absence dite dans la MÊME branche.
+
+### Constat B — la protection du site réparé tenait à une ANNOTATION, et l'audit l'a mesuré de bout en bout
+
+Le lot avait annoté `WRITABLE_CONVERSATION_KEY` précisément pour rester dans le
+champ de son cliquet, et l'avait écrit en commentaire. L'audit a fait l'expérience
+complète : **annotation retirée ET égalité nue réinstallée** ⇒ `tsc --noEmit`
+**EXIT=0** (l'annotation n'est pas portante : le spread reste assignable) et
+cliquet **VERT**. Le défaut que ce lot répare revenait au prix d'une ligne
+d'annotation redondante supprimée — ce qu'un lot de nettoyage propose de lui-même.
+
+Trois formes ordinaires étaient de plus invisibles, chacune reproduite : type
+INFÉRÉ, ALIAS de type local, `satisfies`.
+
+> **Une règle qui dépend d'une annotation garde ce que personne n'a encore
+> simplifié.** Le balayage reconnaît donc un `where` par TROIS voies, et la
+> troisième ne demande rien au type : **une constante RÉPANDUE dans un `where`
+> EST un `where`**. C'est la propriété, là où l'annotation n'en était qu'un
+> indice.
+
+Mesure après correction, sur la même expérience : `tsc` toujours EXIT=0, et le
+cliquet **NOMME** `services/ServerKeyVault.ts:49#expiresAt (equals)`.
+
+**Et un fragment PARTAGÉ se résout sur le CORPUS, pas sur son fichier** : un
+`where` défini ici et répandu trois répertoires plus loin n'était gardé que chez
+celui qui le répand. Le balayage fait donc deux tours — relever les identifiants
+répandus sous un `where` partout, puis rejouer chaque fichier avec cet ensemble.
+Effet mesuré : **25 → 30 sites vus**, et l'angle mort publié tombe de **149 à 8**.
+Le prix assumé est une collision de noms, qui ne peut produire qu'un FAUX POSITIF
+— la direction sûre pour un cliquet, et l'inventaire des sites nus étant vide,
+aucune n'est vivante.
+
+### Constat C — l'absolution était par FICHIER, donc elle couvrait le site SUIVANT
+
+Reproduit : une SECONDE égalité nue ajoutée dans le fichier absous laissait le
+cliquet **vert**. Le témoin « aucune discipline gelée ne couvre un site qui
+n'existe plus » vérifie qu'elle couvre ENCORE un site ; il ne peut pas voir
+qu'elle en couvre désormais deux. Or la mesure qui la justifie décrit UNE lecture.
+
+L'absolution porte donc son **COMPTE** (`{ sites: 1, raison }`), et un témoin
+compare le compte mesuré au compte gelé. Un numéro de ligne dériverait à la
+première édition ; un compte, non.
+
+### Constat D — `isActive: true` nu : l'affirmation était juste et la justification fausse
+
+L'audit a refusé « Prisma écrit son `@default(true)` à chaque création » : non
+mesurée (aucune base ici), et **CUITE DANS LA FIXTURE** — `nominalKey()` posait la
+colonne à la main, donc aucun témoin de la suite ne pouvait la falsifier. C'était
+le défaut du lot reproduit sur la colonne voisine.
+
+La correction n'était pas de changer le prédicat mais de trouver **la mesure qui
+le fonde**, et elle est venue du compilateur en une ligne :
+`differsOrUnset('isActive', false)` **ne compile pas** —
+`TS2322: Type '{ isSet: false }' is not assignable to type 'boolean | BoolFilter'`.
+
+> **Prisma n'expose `isSet` que sur les colonnes OPTIONNELLES.** `isActive` est
+> `Boolean @default(true)`, REQUISE, à la différence d'`expiresAt` et de
+> `conversationId` : le piège que ce lot répare **n'existe pas** sur elle, et
+> c'est le compilateur qui le dit. Deux témoins l'épinglent — l'un prouve que le
+> prédicat d'absence compile sur `expiresAt` (donc le piège y est), l'autre qu'il
+> ne compile PAS sur `isActive` (`@ts-expect-error`). Le jour où la colonne
+> passerait `Boolean?`, le second témoin tombe — c'est-à-dire exactement le moment
+> où l'égalité nue deviendrait un défaut.
+
+Ce que le filtre achète est en revanche **DORMANT**, et le lot le dit maintenant :
+`isActive: false` n'est écrit que par `deleteKey` et `cleanupExpiredKeys`, dont
+**aucun appelant de production n'existe** (la purge, elle, supprime les lignes).
+
+### Constat E — le `catch` fail-ouvert absorbait aussi la question MAL POSÉE
+
+`ServerEncryptionKey.conversationId` est un `@db.ObjectId` : un identifiant qui
+n'en a pas la forme fait rendre `Malformed ObjectID`, que le `catch` traduisait en
+« pas de clé » — donc **une clé forgée et persistée à CHAQUE appel**, avec pour
+seule trace un `warn` indistinct d'une panne de base. Le dépôt porte déjà la règle
+(« un `catch` fail-open couvre aussi la question qu'on a mal posée », cycle 112)
+et l'outil (`isAddressableConversationId`). La garde va donc **AVANT** l'appel,
+avec sa propre raison journalisée : les deux refus ne s'arbitrent pas pareil, donc
+ils ne se journalisent pas ensemble.
+
+Mesuré : aucun appelant vivant ne passe autre chose que `conversation.id`. Piège
+armé, pas panne — mais c'est le piège dont ce lot est la sixième occurrence.
+
+### Constat G — « deux instances s'accordent » était surévalué
+
+`orderBy: { createdAt: 'desc' }` n'avait **pas de clé secondaire**, et
+`createdAt: new Date()` est à la milliseconde. Or l'égalité est le cas RÉALISTE :
+`keyGenerationLocks` est **par processus**, il n'existe aucun verrou
+inter-instances, donc deux instances qui forgent la première clé d'une
+conversation le font dans la même milliseconde. L'ordre est désormais TOTAL
+(`createdAt`, puis `id`, un UUID), avec son témoin sur deux clés du même instant.
+
+Et la phrase est bornée à ce qu'elle garde : l'accord vaut **sur un défaut de
+cache**. Une fois chaque instance servie par sa carte, qu'aucun chemin
+n'invalide, deux processus peuvent sceller sous deux clés différentes — ce qui ne
+perd rien (les deux lignes portent leur `conversationId`) mais n'est pas de la
+cohérence. C'est écrit au site, et c'est #19787.
+
+### Constat H — le prédicat dit « aucune échéance », pas « non expirée »
+
+`unsetOrNull('expiresAt')` écarte aussi une clé dont l'échéance est à VENIR. C'est
+délibéré — **un chemin d'ÉCRITURE a le droit d'être plus strict que son chemin de
+LECTURE** (on peut ouvrir un chiffré sous une clé qui expire bientôt, on ne doit
+pas en sceller un neuf dessous) — mais le témoin portait une échéance PASSÉE,
+donc il n'attestait rien de l'intention. Il en porte une FUTURE.
+
+### Les trois témoins qui manquaient (constat K)
+
+1. **La concurrence.** Le lot déplace un `await` DEVANT le verrou de génération.
+   La TOCTOU n'est pas rouverte (le check-and-set qui suit reste synchrone), et
+   l'audit l'a mesuré — mais rien ne l'attestait, et le symptôme d'une inversion
+   serait une prolifération silencieuse, c'est-à-dire le défaut même du lot. Dix
+   appels concurrents sur une base vide ⇒ **une** clé.
+2. **La désignation.** `world(rows, designation)` prenait un paramètre
+   qu'**aucun témoin ne passait** : la surface vivante de la lecture est pourtant
+   « une conversation dont la désignation est NULLE », et rien ne disait que la
+   carte n'est pas consultée quand elle en a une. Le témoin le dit, et il borne
+   l'effet du lot.
+3. **Le mode.** Le coffre n'a **aucune** garde de mode : il rend volontiers la clé
+   serveur d'une conversation passée en `e2ee`. Les chemins de scellement vivants
+   sont tous gardés par `sealsAtRest` (vérifié), donc rien ne ressuscite cette clé
+   aujourd'hui — mais c'est un piège armé à la frontière d'irréversibilité de
+   #12949, et c'est **#19788** (`décision-produit` : la garde va-t-elle au coffre
+   ou reste-t-elle chez les appelants ?).
+
+### Ce que l'audit a trouvé et que le lot n'absorbe pas
+
+| constat | sort |
+|---|---|
+| un appelant en attente du verrou PEND indéfiniment quand la génération échoue (reproduit : > 400 ms, jamais réglé) — préexistant, mais le fail-ouvert le rend nominal pendant un incident | **#19786** |
+| rien ne fait TOURNER une clé de conversation, et la carte n'est invalidée par aucune suppression (`keyCache` répond 30 min après une purge) ; ce que le lot ÉCHANGE : rayon d'explosion d'une clé porté de « la vie d'un processus » à « toute la conversation, pour toujours » | **#19787** |
+| le coffre n'a aucune garde de mode (e2ee) | **#19788** |
+| trois déchiffrements sans appelant de production, dont deux SANS contrôle d'appartenance — la surface que #11381 avait fermée ailleurs | **#19789** |
+
+### Ce que l'audit a vérifié SANS rien trouver, qui compte autant
+
+Les dix témoins tombent, mutation par mutation (huit mutations mesurées par
+l'audit, six par le lot). La borne FIFO est réelle (`Map.set` sur une clé
+existante ne réordonne pas) et le manque se relit. `writableConversationKey`
+refuse toujours `unwrap-failed` sans rien remplacer. La lecture est bornée par
+`conversationId` et `generateKey` écrit le propriétaire, donc réutiliser une clé
+existante n'ouvre aucun accès. Et `setConversationKey`, qui réécrirait
+`conversationId` sans condition, n'est jamais appelé qu'avec une clé fraîchement
+générée (noté dans #19789).
+
+### Ce que l'audit n'a pas pu vérifier, et qui ne doit pas se lire comme vert
+
+- **que Prisma persiste bien un `@default` dans le document MongoDB** : mesuré
+  autrement (la colonne est REQUISE, donc `isSet` n'existe pas dessus), mais pas
+  contre `mongo:8` ;
+- **que les `@@index` du modèle existent dans la base** — Prisma ne les crée que
+  par `db push`, et c'est `@@index([conversationId])` qui rend cette lecture peu
+  coûteuse ;
+- **la population réelle** : combien de lignes `ServerEncryptionKey`, combien de
+  conversations `server`/`hybrid` à désignation nulle (la seule surface vivante du
+  correctif), combien de lignes `Notification` antérieures à `expiresAt` ;
+- **la graphie `{ champ: { in: [null] } }`**, que le balayage ne voit pas et qui
+  n'est pas instruite.
+
+Et le rappel que l'agent pose lui-même : **ceci n'est pas un audit
+cryptographique tiers.** Avant toute promotion en production de cette famille de
+lots, une revue externe reste requise — clé maîtresse (dérivation, stockage,
+rotation : aucune), absence de confidentialité persistante au repos, et le modèle
+de menace du mode `hybrid`, où le serveur détient le clair par conception.

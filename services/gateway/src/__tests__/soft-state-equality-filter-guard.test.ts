@@ -95,8 +95,8 @@ const COLONNES = new Set(['leftAt', 'bannedAt', 'expiresAt']);
  * porte sans doute une discipline » est exactement l'affirmation du côté qui
  * absout, que le cycle 179 a payée.
  */
-const DISCIPLINE_D_ECRITURE: Readonly<Record<string, string>> = {
-  'services/notifications/visibleNotificationsWhere.ts#expiresAt':
+const DISCIPLINE_D_ECRITURE: Readonly<Record<string, { readonly sites: number; readonly raison: string }>> = {
+  'services/notifications/visibleNotificationsWhere.ts#expiresAt': { sites: 1, raison:
     'Notification.expiresAt a UN créateur (NotificationService, l’unique '
     + '`prisma.notification.create` du dépôt) et il écrit TOUJOURS la colonne '
     + '(`expiresAt: params.expiresAt || null`) : l’égalité est exacte pour toute '
@@ -106,8 +106,21 @@ const DISCIPLINE_D_ECRITURE: Readonly<Record<string, string>> = {
     + 'soient des intervalles d’index, `emitCountsUpdate` tournant à CHAQUE '
     + 'notification créée. Y ajouter une troisième branche d’absence toucherait un '
     + 'chemin chaud pour couvrir les seules lignes ANTÉRIEURES à la colonne, '
-    + 'qu’aucun chemin vivant ne crée : la forme ATTESTÉE gagne (cycle 180, constat I).',
+    + 'qu’aucun chemin vivant ne crée : la forme ATTESTÉE gagne (cycle 180, constat I).' },
 };
+
+/**
+ * Ce que l'instrument ne sait PAS suivre : un identifiant répandu sous un
+ * `where` qu'aucun fichier de production ne déclare. Les huit mesurés le
+ * 2026-11-19 sont des paramètres, des déstructurations et des constantes
+ * importées — aucun n'est un littéral de `where`. Gelé pour qu'un NEUVIÈME se
+ * fasse ouvrir : une limite publiée sans sa liste protège le site qu'elle cache,
+ * et c'est ce qui a coûté `visibleNotificationsWhere` au cycle 180.
+ */
+const HORS_DE_PORTEE: readonly string[] = [
+  'CALL_TERMINAL_STATUSES', 'PRIVILEGED_PLATFORM_ROLES', 'axes', 'directConversationIds',
+  'observedIds', 'ownerIds', 'readerParticipantIds', 'weekKeys',
+];
 
 const FIXTURE_FILTRE_NU = `
   const rows = await prisma.participant.findMany({
@@ -153,6 +166,62 @@ const FIXTURE_EQUALS = `
   const rows = await prisma.participant.findMany({
     where: { conversationId, bannedAt: { equals: null } },
   });
+`;
+
+/**
+ * L'absence NIÉE — la forme que la seconde version de ce balayage bénissait
+ * (audit du cycle 181, constat A). `NOT: { champ: { isSet: false } }` dit « la
+ * clé EST posée » : l'union « nulle OU posée » exclut exactement les documents
+ * absents, soit #19690 réinstallé et CERTIFIÉ correct par le cliquet censé
+ * l'interdire. Le texte cherché était pourtant le bon ; c'est la POLARITÉ qui
+ * change le sens, et une expression régulière sur le tableau ne la voit pas.
+ */
+const FIXTURE_ABSENCE_NIEE = `
+  const rows = await prisma.participant.findMany({
+    where: { conversationId, OR: [{ leftAt: null }, { NOT: { leftAt: { isSet: false } } }] },
+  });
+`;
+
+/**
+ * Et l'absence dite dans la MÊME branche n'est pas une alternative : une branche
+ * qui porte une seconde condition exige les deux, donc ne rattrape pas le
+ * document absent.
+ */
+const FIXTURE_ABSENCE_MEME_BRANCHE = `
+  const rows = await prisma.participant.findMany({
+    where: { OR: [{ leftAt: null, isActive: true }, { leftAt: { isSet: false }, isActive: true }] },
+  });
+`;
+
+/**
+ * Les trois formes de constante que l'annotation seule ne couvrait PAS, et que
+ * l'audit du cycle 181 (constat B) a reproduites une par une. La troisième règle
+ * — « répandue dans un `where` » — les prend toutes, sans rien demander au type.
+ */
+const FIXTURE_FRAGMENT_TYPE_INFERE = `
+  const VIVANT = { purpose: 'conversation', expiresAt: null };
+  const rows = await prisma.key.findMany({ where: { conversationId, ...VIVANT } });
+`;
+
+const FIXTURE_FRAGMENT_ALIAS = `
+  type KeyWhere = Prisma.ServerEncryptionKeyWhereInput;
+  const VIVANT: KeyWhere = { expiresAt: null };
+  const rows = await prisma.key.findMany({ where: { ...VIVANT } });
+`;
+
+const FIXTURE_FRAGMENT_SATISFIES = `
+  const VIVANT = { expiresAt: null } satisfies Prisma.ServerEncryptionKeyWhereInput;
+  const rows = await prisma.key.findMany({ where: { ...VIVANT } });
+`;
+
+/**
+ * La contrepartie, sans quoi la règle 3 relèverait toute charge d'écriture
+ * extraite : une constante que RIEN ne répand dans un `where` reste une
+ * écriture.
+ */
+const FIXTURE_FRAGMENT_ECRITURE = `
+  const PAYLOAD = { leftAt: null };
+  await prisma.participant.update({ where: { id }, data: { ...PAYLOAD } });
 `;
 
 /**
@@ -236,6 +305,27 @@ describe('le balayage lui-même — un scanner qui cherche une GRAPHIE doit prou
   it('ne prend pas une ÉCRITURE nommée pour un `where` — c’est l’annotation qui décide', () => {
     expect(sites(FIXTURE_ECRITURE_NOMMEE)).toEqual([]);
   });
+
+  it('REFUSE l’absence NIÉE — `NOT: { isSet: false }` dit l’inverse de ce que le texte suggère', () => {
+    expect(sites(FIXTURE_ABSENCE_NIEE)).toEqual(['leftAt:false']);
+  });
+
+  it('REFUSE l’absence dite dans la MÊME branche — une alternative a deux branches', () => {
+    expect(sites(FIXTURE_ABSENCE_MEME_BRANCHE)).toEqual(['leftAt:false']);
+  });
+
+  it.each([
+    ['au type INFÉRÉ', FIXTURE_FRAGMENT_TYPE_INFERE],
+    ['via un ALIAS de type', FIXTURE_FRAGMENT_ALIAS],
+    ['avec `satisfies`', FIXTURE_FRAGMENT_SATISFIES],
+  ])('voit un fragment RÉPANDU dans un `where` %s — sans rien demander à son type', (_forme, fixture) => {
+    expect(equalityNullFiltersIn('fixture.ts', fixture, new Set(['expiresAt'])))
+      .toEqual([expect.objectContaining({ field: 'expiresAt', absenceSaidInSameOr: false })]);
+  });
+
+  it('ne relève pas une constante d’ÉCRITURE que rien ne répand dans un `where`', () => {
+    expect(sites(FIXTURE_FRAGMENT_ECRITURE)).toEqual([]);
+  });
 });
 
 describe('aucun filtre de participation ne décide sur une égalité nue (#19690)', () => {
@@ -265,6 +355,39 @@ describe('aucun filtre de participation ne décide sur une égalité nue (#19690
       .map((site) => `${site.file}:${site.line}#${site.field} (${site.spelling})`);
 
     expect(nus).toEqual([]);
+  });
+
+  /**
+   * Une absolution porte son COMPTE, parce que sa clé est un FICHIER et que la
+   * mesure qui la justifie décrit UNE lecture. Sans ce témoin, une seconde
+   * égalité nue posée dans le même fichier entrerait sous une absolution écrite
+   * pour sa voisine — reproduit par l'audit du cycle 181 (constat C), cliquet
+   * resté vert. Un numéro de ligne dériverait à la première édition ; un compte,
+   * non.
+   */
+  it('une discipline gelée couvre le NOMBRE de sites qu’elle a mesuré, jamais un de plus', () => {
+    const comptes = balayage().sites
+      .filter((site) => !site.absenceSaidInSameOr)
+      .reduce<Record<string, number>>((tally, site) => {
+        const cle = `${site.file}#${site.field}`;
+        return { ...tally, [cle]: (tally[cle] ?? 0) + 1 };
+      }, {});
+
+    const ecarts = Object.entries(DISCIPLINE_D_ECRITURE)
+      .filter(([cle, gelee]) => (comptes[cle] ?? 0) !== gelee.sites)
+      .map(([cle, gelee]) => `${cle} : ${gelee.sites} mesuré(s), ${comptes[cle] ?? 0} trouvé(s)`);
+
+    expect(ecarts).toEqual([]);
+  });
+
+  /**
+   * L'angle mort de l'instrument, PUBLIÉ. Un fragment répandu sous un `where`
+   * qu'aucun fichier de production ne déclare sort de sa portée — et une limite
+   * publiée sans sa liste ne peut pas rougir : c'est elle qui a tenu
+   * `visibleNotificationsWhere` hors du balayage du cycle 180.
+   */
+  it('les fragments HORS DE PORTÉE sont ceux mesurés — un neuvième se fait ouvrir', () => {
+    expect([...balayage().unresolvedFragments]).toEqual([...HORS_DE_PORTEE]);
   });
 
   /**
