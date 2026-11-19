@@ -192,7 +192,14 @@ pire des raisons — c'est ce que le cliquet du budget de taille a payé (#4531)
   PRÉEXISTANT** — `tus-handler-heif-conversion` rend `415 Image format not
   supported` dans ce conteneur, où `sharp` n'a pas HEIF. Mesuré sur `dev` SANS
   mes changements : même rouge. Il est VERT en CI (le verdict de `4fc8cbdf4` ne
-  nomme que le budget de taille), donc propre au conteneur, pas une issue ;
+  nomme que le budget de taille), donc propre au conteneur, pas une issue.
+  **Son jumeau est `ExifStrip.gain-map`**, dont le seul témoin rouge dit
+  `heif-convert injoignable : spawnSync heif-convert ENOENT` : les deux rouges de
+  la suite complète ont la MÊME cause — l'outillage HEIF absent du conteneur — et
+  ni l'un ni l'autre ne touche la colonne de ce lot. **Deux rouges de même
+  famille se vérifient séparément quand même** : j'ai ouvert le second plutôt que
+  de le ranger sous le premier, et c'est ce qui a rendu son message, qui n'accuse
+  pas `sharp` mais un binaire manquant ;
 - les quatre suites de maintenance **60 verts** ; `gateway-file-size-budget`,
   `gateway-test-file-size-budget`, `soft-state-equality-filter-guard` **41 verts** ;
   `jest-ci-hidden-suites` + `tsc-never-loaded-tests-ratchet` **7 verts** ;
@@ -220,21 +227,29 @@ pire des raisons — c'est ce que le cliquet du budget de taille a payé (#4531)
   fait (le web borne à 50 Mo et passe par REST ; TUS sert les publications côté
   Android), mais la question n'est pas close côté iOS.
 
-## Le troisième rouge de `dev` n'est pas élucidé, et voici où il s'arrête
+## Le troisième rouge de `dev` : il PASSE sur la tête, et le premier rejeu était le mien
 
 « Gate contrôles d'appel » (`apps/web/scripts/check-calls-controls.mjs`,
-tranche 4) est rouge en CI sur `4fc8cbdf4`. Rejoué ici, il rend **8 invariants
-rompus sur 8**, tous sur le PREMIER sélecteur (`[data-row] a`, le lien d'une
-ligne de liste), sans aucune erreur de page — et `apps/web/dist` est VIDE dans ce
-conteneur : le gate sert un `dist` sans contenu, donc une page blanche. **Ce
-rouge-là est le mien, pas celui de la CI**, et il ne dit rien du sien.
+tranche 4) est rouge en CI sur `4fc8cbdf4`. Rejoué ici une première fois, il a
+rendu **8 invariants rompus sur 8**, tous sur le PREMIER sélecteur
+(`[data-row] a`, le lien d'une ligne de liste), sans aucune erreur de page.
+`apps/web/dist` était VIDE dans ce conteneur : le gate servait un `dist` sans
+contenu, donc une page blanche.
 
 > **Un gate qui échoue au même endroit sur tous ses cas n'a probablement pas
 > commencé.** Huit scénarios indépendants — clair, sombre, vidéo, doigt, quatre
 > tailles de vocal — qui tombent tous sur le premier sélecteur décrivent une
 > absence de page, pas huit défauts. Le compte « 8 sur 8 » est l'indice, et il se
-> lit avant d'ouvrir le premier message d'erreur.
+> lit avant d'ouvrir le premier message d'erreur. Publier ce rouge-là comme
+> « troisième rouge de `dev` confirmé » aurait été une mesure de MON conteneur
+> présentée comme une propriété du dépôt.
 
-Il reste donc à construire `apps/web` puis à rejouer le gate — hors du périmètre
-de ce lot, et sans issue ouverte pour l'instant : je ne sais pas encore s'il y a
-un défaut à nommer.
+`apps/web` construit (`bun run build`, EXIT=0), le gate rejoué rend **255
+invariants tenus, EXIT=0** sur la tête de `dev`. Aucun défaut à nommer, donc
+aucune issue ouverte. Le rouge de `4fc8cbdf4` est soit un accident de CI, soit
+déjà parti avec un lot fusionné depuis ; les runs de `dev` étant annulés les uns
+par les autres à chaque poussée (`4fc8cbdf4` et `2f949a701` sont tous deux
+`cancelled`), l'état de `dev` ne se lit pas sur un run isolé. **Si ce gate
+rougit de nouveau sur un run complet, c'est un intermittent, et c'est à ce
+moment-là qu'il mérite son issue** — pas avant, faute de quoi on ouvre une issue
+sur une absence de mesure.
