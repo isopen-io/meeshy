@@ -591,9 +591,9 @@ final class ConversationActAdvanceWatch: ObservableObject {
     @Published private(set) var shown: GameActAdvance?
 
     private let source: PlayerBannerSourcing
-    private let isHidden: () -> Bool
+    private let isHidden: @MainActor () -> Bool
     private let now: () -> Date
-    private let announce: (GameActAdvance) -> Void
+    private let announce: @MainActor (GameActAdvance) -> Void
     private var last: GameBlock.Missions?
     private var armedUntil: Date?
     private var fetching = false
@@ -603,9 +603,9 @@ final class ConversationActAdvanceWatch: ObservableObject {
     private var fading: Task<Void, Never>?
 
     init(source: PlayerBannerSourcing = EngagementPlayerBannerSource(),
-         isHidden: @escaping () -> Bool = { GameDevicePrefsStore.current().prefs.hidden },
+         isHidden: @escaping @MainActor () -> Bool = { GameDevicePrefsStore.current().prefs.hidden },
          now: @escaping () -> Date = Date.init,
-         announce: @escaping (GameActAdvance) -> Void = ConversationActAdvancePill.announce) {
+         announce: @escaping @MainActor (GameActAdvance) -> Void = ConversationActAdvancePill.announce) {
         self.source = source
         self.isHidden = isHidden
         self.now = now
