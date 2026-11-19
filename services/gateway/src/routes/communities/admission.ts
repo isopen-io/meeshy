@@ -35,7 +35,9 @@ const MEMBER_USER_SELECT = {
   username: true,
   displayName: true,
   avatar: true,
-  isOnline: true
+  isOnline: true,
+  // Lu pour la garde de présence de l'intendant (`gateCoMemberPresence`) ; jamais déclaré au schéma servi.
+  deactivatedAt: true
 } as const;
 
 type Engagement = Pick<EngagementService, 'recordActivity'>;

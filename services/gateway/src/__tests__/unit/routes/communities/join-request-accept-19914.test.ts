@@ -49,7 +49,7 @@ const memberRow = (data: Record<string, unknown> = {}) => ({
   role: 'member',
   isActive: true,
   joinedAt: new Date('2026-11-19T12:00:00Z'),
-  user: { id: ARRIVANT, username: 'n', displayName: 'N', avatar: null },
+  user: { id: ARRIVANT, username: 'n', displayName: 'N', avatar: null, isOnline: true, deactivatedAt: null },
   ...data,
 });
 
@@ -83,6 +83,8 @@ function makePrisma(options: Options = {}) {
       }),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
+    friendRequest: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
+    userRelation: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
     user: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
       findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
@@ -183,6 +185,39 @@ describe('POST /communities/:id/join-requests/:requestId/accept — une panne ap
     const res = await accept(app);
 
     expect(res.statusCode).toBe(500);
+    expect(reopenings(prisma)).toEqual([]);
+  });
+
+  it('l\'acceptation nominale ne sert pas la présence du nouveau membre à un intendant qui n\'est pas son ami', async () => {
+    const prisma = makePrisma();
+    const app = await build(prisma);
+
+    const res = await accept(app);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.user.isOnline).toBe(false);
+    expect(res.json().data.user).not.toHaveProperty('deactivatedAt');
+  });
+
+  it('le chemin `entered` (écriture engagée malgré l\'erreur) ne la sert pas non plus', async () => {
+    const prisma = makePrisma({ create: async () => { throw new Error('socket closed after commit'); }, activeAfter: true });
+    const app = await build(prisma);
+
+    const res = await accept(app);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.user.isOnline).toBe(false);
+  });
+
+  it('une panne des suites n\'interroge pas la base sur l\'entrée : la relecture ne sert qu\'à une écriture en échec', async () => {
+    (scheduleCommunityMemberBroadcastFrom as jest.Mock).mockImplementation(() => Promise.reject(new Error('async down')));
+    const prisma = makePrisma({ activeAfter: true });
+    const app = await build(prisma);
+
+    const res = await accept(app);
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.communityMember.findFirst).toHaveBeenCalledTimes(1);
     expect(reopenings(prisma)).toEqual([]);
   });
 });
