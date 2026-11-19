@@ -14,11 +14,11 @@ public enum FallDetectionContract {
     public static let episodeTtl: TimeInterval = 360 * 60
     /// `FALL_DETECTION_CONFIG.maxReportAgeMinutes` : une chute plus vieille est refusée (l'alerte serait trompeuse).
     public static let maxReportAge: TimeInterval = 30 * 60
-    /// `FALL_DETECTED_PUSH_TYPE` après l'audit : le push est générique, « alerte de sécurité ».
+    /// `SAFETY_ALERT_PUSH_TYPE` : le push est générique, « alerte de sécurité ».
     public static let safetyAlertPushType = "safety_alert"
     /// La levée de l'alerte, poussée sous le même `collapseId` : elle remplace l'alerte et retire l'état.
     public static let safetyAlertClearedPushType = "safety_alert_cleared"
-    /// La catégorie iOS du push (`FALL_ALERT_PUSH_CATEGORY` après l'audit).
+    /// La catégorie iOS du push (`SAFETY_ALERT_PUSH_CATEGORY`).
     public static let safetyAlertCategory = "MEESHY_SAFETY_ALERT"
 }
 
