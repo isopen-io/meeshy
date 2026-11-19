@@ -71,10 +71,9 @@ export function metricGrade(metric: GradedMetric, value: number): MetricGrade {
 
 const numberOf = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
-const milliseconds = (seconds: unknown): number => {
-  const value = numberOf(seconds) * 1000;
-  return Number.isFinite(value) && value > 0 ? value : 0;
-};
+const positive = (value: number): number => (Number.isFinite(value) && value > 0 ? value : 0);
+
+const milliseconds = (seconds: unknown): number => positive(numberOf(seconds) * 1000);
 
 /** La gigue de `CallStats.reduce` (iOS, #8209) : la moyenne des flux entrants non vidéo qui la rapportent, en ms. */
 const audioJitterMs = (inbound: readonly StatsEntry[]): number => {
@@ -91,7 +90,7 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
   const outbound = entries.filter((entry) => entry.type === 'outbound-rtp');
   const pair = entries.find((entry) => entry.type === 'candidate-pair' && entry.nominated === true && entry.state === 'succeeded' && typeof entry.currentRoundTripTime === 'number');
   const remote = entries.find((entry) => entry.type === 'remote-inbound-rtp' && typeof entry.roundTripTime === 'number');
-  const sum = (list: readonly StatsEntry[], field: string, kind?: string): number => list.filter((entry) => kind === undefined || entry.kind === kind).reduce((total, entry) => total + numberOf(entry[field]), 0);
+  const sum = (list: readonly StatsEntry[], field: string, kind?: string): number => positive(list.filter((entry) => kind === undefined || entry.kind === kind).reduce((total, entry) => total + numberOf(entry[field]), 0));
   const sending = (kind: string): StatsEntry | undefined => outbound.find((entry) => entry.kind === kind && numberOf(entry.bytesSent) > 0);
   const codecEntry = (sending('video') ?? sending('audio'))?.codecId;
   const codec = entries.find((entry) => entry.type === 'codec' && entry.id === codecEntry);
@@ -118,9 +117,9 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
 export function peerRate(current: StatsRead, previous: StatsRead | null): PeerQuality {
   const delta = (field: 'lost' | 'received' | 'audioBytes' | 'videoBytes'): number => Math.max(0, previous === null ? current[field] : current[field] - previous[field]);
   const packets = delta('lost') + delta('received');
-  const packetLoss = packets > 0 ? Math.min(100, (delta('lost') / packets) * 100) : 0;
+  const packetLoss = packets > 0 ? Math.min(100, positive((delta('lost') / packets) * 100)) : 0;
   const elapsed = previous === null ? 0 : current.at - previous.at;
-  const kbps = (field: 'audioBytes' | 'videoBytes'): number => (elapsed > 0 ? (delta(field) * 8) / elapsed : 0);
+  const kbps = (field: 'audioBytes' | 'videoBytes'): number => (elapsed > 0 ? positive((delta(field) * 8) / elapsed) : 0);
   return {
     level: qualityLevel({ packetLoss, rtt: current.rtt }),
     packetLoss,

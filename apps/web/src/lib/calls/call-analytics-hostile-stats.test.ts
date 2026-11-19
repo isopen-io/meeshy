@@ -151,4 +151,24 @@ describe('une perte, une latence ou un codec hors bornes ne font plus rejeter le
       expect(socketQualityReportSchema.safeParse(qualityReport('507f1f77bcf86cd799439099', rate, 0)).success).toBe(true);
     });
   });
+
+  test('une somme de pertes ou d’octets qui déborde ne rend ni NaN ni Infinity, au relevé suivant non plus', () => {
+    const overflowing = report([
+      { type: 'candidate-pair', id: 'p', state: 'succeeded', nominated: true, currentRoundTripTime: 0.05 },
+      { type: 'inbound-rtp', kind: 'audio', packetsLost: 1e308, packetsReceived: 10, bytesReceived: 1e308 },
+      { type: 'inbound-rtp', kind: 'audio', packetsLost: 1e308, packetsReceived: 10, bytesReceived: 1e308 },
+    ]);
+    const first = readStats(overflowing, 0);
+    const rates = [peerRate(first, null), peerRate(readStats(overflowing, 2000), first)];
+    rates.forEach((rate) => {
+      expect([rate.packetLoss, rate.audioKbps, rate.videoKbps].every((value) => Number.isFinite(value) && value >= 0)).toBe(true);
+      expect(socketQualityReportSchema.safeParse(qualityReport('507f1f77bcf86cd799439099', rate, 0)).success).toBe(true);
+    });
+    const payload = payloadOf(rates);
+    [payload.averagePacketLoss, payload.maxPacketLoss].forEach((value) => {
+      expect(Number.isFinite(value)).toBe(true);
+      expect(value).toBeGreaterThanOrEqual(0);
+    });
+    expect(socketCallAnalyticsSchema.safeParse(payload).success).toBe(true);
+  });
 });
