@@ -213,3 +213,142 @@ accuser.
 - **Ce que les clients font d'un rang qui bouge sans message** : la colonne devient
   vivante pour la première fois ; aucun client n'a jamais reçu un `listRankAt`
   supérieur à son `lastMessageAt` en production.
+
+---
+
+## L'audit adversarial a rendu NON BLOQUANT, et ses quatre constats visaient la PREUVE
+
+Le lot est passé par `auditeur-adversarial`. Verdict **NON BLOQUANT** pour `dev` —
+le correctif d'une ligne est jugé juste, et « le seul remède qui marche sous
+MongoDB ». Les quatre constats à solder ne portaient pas sur la production : ils
+portaient sur **le cliquet et les témoins que le lot livrait comme sa preuve**.
+
+> C'est la forme du cycle 181 rejouée à l'identique : **un lot dont la preuve est
+> un cliquet doit auditer le cliquet comme il auditerait la production.** Deux
+> cycles de suite, le défaut du lot était dans l'INSTRUMENT, là où ni le `tsc` ni
+> les témoins ne regardent.
+
+### Constat A — le cliquet était un PIÈGE ARMÉ, et la phrase qui l'absolvait était fausse
+
+Le balayage est indexé par **nom de colonne**, aveugle au modèle. J'ai ajouté
+`lastActivityAt` à ses colonnes et absous le risque de collision de nom par une
+phrase : « `lastActivityAt` vit aussi sur `UserSession`, où elle est REQUISE :
+aucun filtre ne peut y poser l'égalité nue que ce cliquet cherche ». La seconde
+moitié est vraie. **La première est fausse, et c'est elle qui portait
+l'absolution.** Reproduit dans les deux sens :
+
+```
+where: { lastActivityAt: null }              sur userSession  ⇒  tsc EXIT=0, cliquet ROUGE
+where: { lastActivityAt: { isSet: false } }  sur userSession  ⇒  TS2353 — NE COMPILE PAS
+```
+
+Un cliquet qui rougit là où **le seul remède qu'il nomme ne compile pas** ne
+laisse que deux issues, mauvaises toutes les deux : geler la ligne sous une
+absolution réservée à une discipline d'ÉCRITURE qu'elle n'a pas, ou retirer la
+colonne et perdre la garde sur `Conversation`.
+
+> **Une limite qu'on ÉCRIT au lieu de la mesurer protège le site qu'elle cache**,
+> et une ABSOLUTION est une limite comme une autre. Celle-ci était honnête,
+> motivée, sourcée — elle citait le cycle 181, constat D, c'est-à-dire **exactement
+> la leçon qu'elle violait**. Citer la leçon juste n'est pas l'appliquer : la
+> phrase disait « le nom est partagé, le piège ne l'est pas », ce qui est vrai du
+> PIÈGE et faux du CLIQUET, qui ne voit que le nom.
+
+Le balayage RÉSOUT donc le modèle — délégué de l'appel englobant
+(`prisma.conversation.updateMany({`), annotation `Prisma.<Modèle>WhereInput`,
+sinon `''` — et `MODELES_PAR_COLONNE` borne `lastActivityAt` à `conversation`.
+Deux décisions de forme, et chacune a sa raison :
+
+- **un modèle non résolu reste GARDÉ.** `''` n'est jamais une absolution : la
+  direction sûre d'un cliquet est le faux positif, qui fait regarder ;
+- **sur une colonne REQUISE, le remède n'est pas `isSet`, c'est de SUPPRIMER le
+  filtre** — il n'y a rien à apparier de plus. C'est écrit au cliquet, pour que
+  le prochain rouge ait une sortie.
+
+La portée par modèle ne s'applique QU'aux colonnes qui la déclarent : les trois
+colonnes triées avant ce lot restent gardées sur tout modèle, leur mesure ayant
+été prise ainsi. Un témoin le vérifie plutôt que de le supposer.
+
+### Constats B1 et B2 — les deux mesures qui PORTAIENT la preuve étaient fausses
+
+Tout l'argument du lot est « aucun chemin de création n'écrit la colonne ». La
+**conclusion tient** — l'audit l'a revérifiée sur les treize sites. Les deux
+mesures publiées, non :
+
+- **« dix-neuf chemins de création »** ne se reproduit dans aucune découpe : 11
+  sous `services/gateway/src`, 13 avec les deux seeds du dépôt, 36 avec les tests.
+  Je l'avais corrigé dans le fichier de PRODUCTION et laissé dans **quatre**
+  fichiers de témoins — ce qui est pire qu'une erreur uniforme : le lot disait
+  deux chiffres différents, et le plus visible était le faux ;
+- **« un seul `data: { lastActivityAt }` dans tout le dépôt »** est faux de
+  quatre. La phrase est vraie **sur `Conversation`** et muette sur le modèle.
+
+> **La seconde est le constat A dans la mesure qui prétendait prouver le lot.**
+> La même cécité au modèle, au même endroit du raisonnement, dans le même lot —
+> une fois dans l'instrument, une fois dans la preuve. Quand une cécité se
+> manifeste deux fois, ce n'est pas une inattention : c'est que la question
+> « sur quel MODÈLE ? » n'était pas dans ma liste.
+
+### Constat C — un titre qui promettait plus que son assertion
+
+`ReactionService.lastReaction` dit « lastActivityAt avance, **de façon
+monotone** ». Avant ce lot il comparait la clause entière par `toEqual`, ce qui
+ÉPINGLAIT `lt`. En la remplaçant par une évaluation d'EFFET sur un document à
+colonne ABSENTE, j'ai gagné la détection du défaut et **perdu l'épinglage de
+l'opérateur** : sur ce document, la branche d'absence apparie quel que soit
+l'opérateur de la troisième. `lt` → `gt` laissait le témoin VERT.
+
+> **Remplacer une assertion de FORME par une assertion d'EFFET n'est pas un gain
+> net** : la forme épinglait quelque chose que l'effet, sur CE document, ne peut
+> pas voir. La question à poser en convertissant un témoin est « que l'ancienne
+> forme gardait-elle que la nouvelle ne garde plus ? », et la réponse se trouve
+> en mutant ce que l'ancienne nommait.
+
+Il évalue désormais deux documents DATÉS de part et d'autre de l'instant, et il
+tombe sur `lt` → `gt` (mesuré).
+
+### Ce que l'audit a vérifié sans rien trouver, et qui compte autant
+
+- **L'attaque « date future épinglée pour toujours » n'existe pas** : les quatre
+  alimenteurs posent une horloge SERVEUR. *Reste, non mesurable ici* : plusieurs
+  instances à horloges décalées — même exposition que `lastMessageAt`, pas
+  introduite par ce lot.
+- **Rien ne fuit à côté** : un seul `select` charge la colonne, scopé par
+  l'appartenance ; aucun client ne la lit ; un seul `orderBy` dessus.
+- **Rétrocompatibilité #9223 satisfaite, mesurée** dans les deux sens.
+- **La jumelle structurelle est juste** : `services/auth/session-activity.ts:124-130`
+  est le sosie exact du site réparé, sur `UserSession`, où la colonne est requise.
+- **Pas de rattrapage à ouvrir** : le premier geste suffit, aucun lecteur ne
+  distingue absente de nulle.
+
+### Les cinq suivis ouverts
+
+| constat | issue |
+|---|---|
+| le rang ne redescend jamais au retrait d'une réaction, et le va-et-vient re-remonte sans borne | #19833 (`décision-produit`) |
+| la destination de la copie vocale du talkie diverge entre serveur et clients | #19834 |
+| sept surfaces trient encore sur `lastMessageAt` là où le produit dit « récemment active » | #19835 |
+| la preuve du top-K n'est gardée par aucun témoin (épuisement de FENÊTRE du flux B) | #19836 |
+| **avant toute promotion en production** : index absent des deux environnements, chemin de fusion non mesuré | #19837 |
+
+#19836 mérite d'être dit, parce que l'audit a trouvé une clause de production
+qu'**aucun témoin du dépôt n'exerce** — et que le témoin a RAISON de ne pas la
+voir : elle est logiquement redondante avec le filtre `isLifted` qui suit. Elle ne
+l'est pas pour la FENÊTRE, et c'est de cette clause que dépend la preuve écrite
+dans le doc-comment (« top-K par rang ⊆ top-K(A) ∪ top-K(B) »). **La preuve était
+écrite ; elle n'était pas gardée** — avec cinq lignes de fixture et `limit: 10`,
+aucun témoin ne peut saturer la fenêtre.
+
+### La tête avait bougé pendant l'audit, et il l'a dit
+
+Le brief désignait `d40fff5fc9` ; l'audit a travaillé sur `7ba571119e`, trois
+commits plus loin, et l'a relevé de lui-même : « c'est heureux, sans ce commit mon
+constat sur la pagination aurait été élevé ». Le témoin de pagination
+(`conversation-list-rank-populated-activity.test.ts`), écrit pendant que l'audit
+tournait, répondait à l'angle qu'il allait relever.
+
+> **Un brief d'audit nomme un SHA, et un lot vivant avance.** L'agent qui compare
+> ce qu'il lit à ce que son brief annonce rend un audit de l'arbre ; celui qui ne
+> compare pas rend un audit d'un arbre qui n'existe plus. C'est la même discipline
+> que « un compte se compte, il ne s'hérite pas », appliquée à un identifiant de
+> commit.
