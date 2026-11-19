@@ -572,3 +572,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Blocage inchangé : les deux rouges ÉTRANGERS de son verdict (`capability-guard` qui vise `lib/calls/call-network-recovery.ts`, et `calls-routes.test.ts` à 2 175 lignes pour une référence de 2 154) sont toujours sur `dev` (`89bece81d`). #19772, qui corrige les deux, est ouverte et poussée à 06:44 par une autre session : vivante, cédée.
 - `dev` (`89bece81d`, 3 commits iOS / Android / web uiux, aucun chemin sous `services/` ni `packages/shared`) fusionnée dans la branche sans conflit ; les gardes passerelle du réveil précédent restent valables pour cet arbre. Pas de dispatch : son verdict ne serait rouge que de ces deux étrangers, et la file en compte déjà plusieurs.
 - Prochain lot recommandé : dès que #19772 est sur `dev`, la refusionner, dispatcher `ci.yml`, fusionner #19763, fermer #18769 puis #16857.
+
+## 2026-11-19 — réveil 09:38 UTC
+
+- Début du run : #19763 (#18769) fusionnée (`1ff276909`) ; aucune PR de la routine ouverte.
+- Lot : #19868 — demander à rejoindre une communauté qui valide chaque entrée dit « Demande envoyée » (passerelle + web), jamais un faux membre.
