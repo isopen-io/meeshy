@@ -33,6 +33,9 @@ struct PersonLocationMapScreen: View {
     @State private var sharesMine = false
     @State private var showsHistory = false
     @State private var bloodHistoryOpen = false
+    /// La fiche de la personne se range d'un glissement pour libérer la carte, et revient par son bouton (#19885).
+    @State private var showsCard = true
+    @StateObject private var talkie = TalkieSender()
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -61,7 +64,7 @@ struct PersonLocationMapScreen: View {
                     }
                 } else {
                     mapStage.meeshyAnchoredSheet(
-                        isPresented: .constant(true), accessibilityLabel: displayName, height: .content, isDragDismissEnabled: false,
+                        isPresented: $showsCard, accessibilityLabel: displayName, height: .content, isDragDismissEnabled: true,
                         closeLabel: nil, surface: .glass, outside: .passesThrough
                     ) { sheetContent }
                 }
@@ -83,22 +86,37 @@ struct PersonLocationMapScreen: View {
 
     // MARK: - La carte
 
+    /// La carte s'étend sous la barre système ; les commandes restent dans la zone sûre de l'écran (#19885).
     private var mapStage: some View {
-        ZStack(alignment: .top) {
-            LocationMapCanvas(focus: focus, style: style, allowsRotation: true, northToken: northToken,
-                              animatesNorth: !reduceMotion, onViewport: { viewport = $0 },
-                              onRegionSettled: { model.regionChanged($0.bounds) })
+        Color.clear
+            .background {
+                ZStack(alignment: .top) {
+                    LocationMapCanvas(focus: focus, style: style, allowsRotation: true, northToken: northToken,
+                                      animatesNorth: !reduceMotion, onViewport: { viewport = $0 },
+                                      onRegionSettled: { model.regionChanged($0.bounds) })
+                    trace
+                    LocationMapPinsLayer(viewport: viewport, pins: model.pins, selectedId: userId, travellingId: userId,
+                                         hasArrived: hasArrived || reduceMotion, me: me, meShare: ownShare,
+                                         focusedName: displayName, isOffline: isOffline, talkie: talkie)
+                }
                 .ignoresSafeArea()
-            trace
-            LocationMapPinsLayer(viewport: viewport, pins: model.pins, selectedId: userId, travellingId: userId,
-                                 hasArrived: hasArrived || reduceMotion, me: me, meShare: ownShare,
-                                 focusedName: displayName, isOffline: isOffline)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-            if !hasArrived, !reduceMotion, let pin { heroAvatar(pin) }
-            chrome
-            if sizeClass == .regular { legend }
-        }
+            }
+            .overlay(alignment: .top) {
+                ZStack(alignment: .top) {
+                    if !hasArrived, !reduceMotion, let pin { heroAvatar(pin) }
+                    chrome
+                }
+                .meeshyGlassTone(.onLight)
+            }
+            .overlay(alignment: .bottomLeading) {
+                if sizeClass != .regular, !showsCard {
+                    MeeshyGlassButton(systemImage: "person.crop.circle", label: LocationMapCopy.showCard(name: displayName),
+                                      size: .s44, action: { showsCard = true })
+                        .padding(MeeshySpacing.lg)
+                        .accessibilityIdentifier("locationMap.person.showCard")
+                }
+            }
+            .overlay { if sizeClass == .regular { legend } }
     }
 
     // MARK: - Le clavier (K55, planche iPad-Split)

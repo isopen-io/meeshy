@@ -45,6 +45,11 @@ describe('la forme servie au rattrapage (#17966)', () => {
     expect(JSON.parse(serialize(servie))).toEqual(servie);
   });
 
+  it('#19887 : le mouvement traverse le sérialiseur', () => {
+    const exacte = { ...servie, precision: 'exact', radiusMeters: 10, motion: 'walking' };
+    expect(JSON.parse(serialize(exacte))).toEqual(exacte);
+  });
+
   it('rien de plus riche ne part à côté : un champ non déclaré est retiré', () => {
     expect(JSON.parse(serialize({ ...servie, accuracy: 4, recipients: ['x'] }))).toEqual(servie);
   });
