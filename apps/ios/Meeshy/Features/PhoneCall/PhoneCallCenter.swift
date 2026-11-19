@@ -185,6 +185,8 @@ protocol PhoneCallCacheOwnerStoring: AnyObject {
 final class UserDefaultsPhoneCallCacheOwner: PhoneCallCacheOwnerStoring {
     private let key = "me.meeshy.phoneCall.cacheOwner"
 
+    nonisolated deinit {}
+
     var owner: String? {
         get { UserDefaults.standard.string(forKey: key) }
         set { UserDefaults.standard.set(newValue, forKey: key) }
