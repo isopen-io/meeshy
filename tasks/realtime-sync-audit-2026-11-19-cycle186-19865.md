@@ -120,6 +120,17 @@ Rejouée sur l'arbre FUSIONNÉ avec `dev` (`839daad993`, sept commits du cycle
   PRÉEXISTE à ce lot — `src/test-support/act-leak-guard.test.ts`, vérifié en
   rejouant sur `dev` stashé (même échec, `3 attendus / 0 reçus` : ce témoin
   méta lance un `bun test` imbriqué, qui ne rend rien dans ce conteneur) ;
+- **CI verte sur `5496a0d329`** (run `44593512191`, 25 jobs, 0 échec) — les
+  quatre tranches de gardes navigateur (Playwright) comprises, celles que ce
+  conteneur ne peut pas jouer ;
+- `dev` refusionnée une seconde fois (`76169fde85`, fichiers DISJOINTS des
+  miens) et gardes rejouées : **34 757 verts / 1 rouge préexistant**, `tsc`
+  EXIT=0 sur les deux paquets. La première de ces relectures a rendu un rouge
+  NEUF sur un écran du Jeu — **faux** : `packages/shared/dist` datait d'avant la
+  fusion, et le worktree de contrôle, dont j'avais lié les dépendances du dépôt
+  principal, lisait le MÊME artefact périmé. `bun run build` dans
+  `packages/shared`, et les deux arbres passent au vert. Un contrôle qui partage
+  la cause suspecte avec le cas mesuré ne contrôle rien ;
 - gates statiques verts : `check-git-tracking` (qui a attrapé le nouveau
   fichier non suivi), `check-utilities`, `measure-weight`, `check-api-source`,
   `check-web-api-literals`. **Non mesurés dans ce conteneur** :

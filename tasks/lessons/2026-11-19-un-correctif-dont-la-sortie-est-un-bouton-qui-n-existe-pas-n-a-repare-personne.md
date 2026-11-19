@@ -118,3 +118,31 @@ LONGUEUR de la phrase servie, et tombe. La parité des sept catalogues reste gar
 elle (`satisfies InterfaceCatalog`, `i18n-catalog.test.ts`, qui tombe aussi sur la même
 mutation) : un témoin de lot ne la double pas, il garde seulement qu'une phrase est bien
 SERVIE.
+
+### Et un CONTRÔLE qui réutilise l'artefact suspect confirme n'importe quoi
+
+À la seconde fusion de `dev`, la suite web a rendu un rouge NEUF, dans un écran
+que ce lot ne touche pas (la première page du Jeu, `#19840`, fusionné dans `dev`
+une heure plus tôt). Pour savoir s'il venait de ma fusion, j'ai monté un
+worktree sur `origin/dev` seul et rejoué le témoin : **rouge là aussi**. J'allais
+rapporter « `dev` est rouge ».
+
+Le worktree n'avait pas de dépendances : je lui avais lié celles du dépôt
+principal. `@meeshy/shared` s'y résout par `dist/`, et ce `dist/` datait d'avant
+le lot du Jeu. **Les deux mesures partageaient le même artefact périmé** — mon
+contrôle ne contrôlait rien. `bun run build` dans `packages/shared`, et les deux
+arbres passent au vert.
+
+> **Un contrôle n'est un contrôle que s'il ne partage pas la cause suspecte avec
+> le cas mesuré.** Un `node_modules` lié, un cache, un `dist/` d'un paquet
+> d'espace de travail : tout ce qu'on « fait gagner du temps » en le partageant
+> est exactement ce qui rend les deux mesures DÉPENDANTES. Et le coût n'est pas
+> le temps perdu — c'est que j'allais accuser le travail de quelqu'un d'autre,
+> avec une mesure à l'appui.
+
+Corollaire sur les suites web de ce dépôt : `apps/web` lit `@meeshy/shared`
+par son `dist/`, jamais par ses sources. Une suite locale rejouée après une
+fusion qui touche `packages/shared` mesure l'ANCIEN paquet tant que
+`packages/shared && bun run build` n'a pas tourné — la CI, elle, le reconstruit
+à chaque job (`Build shared package (bun)`), et c'est pourquoi elle était verte
+pendant que le poste était rouge.
