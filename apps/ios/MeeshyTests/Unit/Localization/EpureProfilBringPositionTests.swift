@@ -176,8 +176,8 @@ final class ProfileShareLocationLineTests: XCTestCase {
         let section = try code("Features/Contacts/ProfileCircleSection.swift")
         XCTAssertTrue(section.contains("tint: tint"), "la section passe l'accent de la fiche à la rangée")
         let app = try code("MeeshyApp.swift")
-        XCTAssertTrue(app.contains("ProfileCircleSection(userId: userId, displayName: displayName, linked: $linked, tint: tint)"))
-        XCTAssertTrue(app.contains("ProfileSlot.view(.relation, userId: userId, displayName: displayName, linked: linked, tint: tint)"),
+        XCTAssertTrue(app.contains("ProfileCircleSection(userId: userId, displayName: displayName, standing: $standing, tint: tint)"))
+        XCTAssertTrue(app.contains("ProfileSlot.view(.relation, userId: userId, displayName: displayName, standing: standing, tint: tint)"),
                       "l'emplacement du cercle relaie l'accent que la fiche lui remet")
         XCTAssertFalse(app.contains("tint: Color = .clear"), "aucune teinte transparente ne passe pour l'accent de la fiche")
     }
@@ -224,13 +224,15 @@ final class LocationMapScreensKitTests: XCTestCase {
         for word in Self.handMade { XCTAssertFalse(header.contains(word), "en-tête : \(word) posé sur place") }
     }
 
-    func test_bloodHistory_isAK44Overline_andAK34Figure_withTheStopsAsUnit() throws {
+    func test_bloodHistory_isAK44Overline_overAK44SentenceHeading_withTheStopsAtItsEnd() throws {
         let history = try slice("Features/SharedLocation/Map/BloodLocationSheet.swift",
                                 from: "private var history: some View", to: "private var dayPoints")
         XCTAssertTrue(history.contains("MeeshySectionHeader(title: BloodLocationCopy.lastDays"), "« 30 derniers jours » est un en-tête K44")
         XCTAssertTrue(history.contains("form: .overline"), "en sur-titre")
-        XCTAssertTrue(history.contains("MeeshyFigure(value: BloodLocationCopy.summary("), "le chiffre du jour est K34")
-        XCTAssertTrue(history.contains("unit: BloodLocationCopy.stops(model.stops.count)"), "« 4 arrêts » est l'unité du chiffre")
+        XCTAssertTrue(history.contains("MeeshySectionHeader(title: BloodLocationCopy.summary("),
+                      "la phrase du jour est un titre K44 : en-tête VoiceOver, et elle suit Dynamic Type")
+        XCTAssertFalse(history.contains("MeeshyFigure("), "une phrase ne se loge pas dans le chiffre K34 (taille fixe, une ligne)")
+        XCTAssertTrue(history.contains("detail: BloodLocationCopy.stops(model.stops.count)"), "« 4 arrêts » est le détail de fin de l'en-tête")
         XCTAssertTrue(history.contains("MeeshyChart(kind: .strip"), "la frise des trente jours reste")
         for word in Self.handMade { XCTAssertFalse(history.contains(word), "historique : \(word) posé sur place") }
     }

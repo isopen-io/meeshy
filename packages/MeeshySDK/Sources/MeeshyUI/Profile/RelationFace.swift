@@ -59,11 +59,10 @@ public nonisolated enum RelationFace: String, CaseIterable, Hashable, Sendable {
         self == .vitrine && !isInteractionDisabled
     }
 
-    /// Sans lien servi ni connexion acceptée, le cercle commun est sous Connaissance : écrire part en demande de
-    /// message (`dm.request`), le premier message arrive dans ses demandes.
-    public static func writesARequest(linked: Bool, connection: ConnectionStatus) -> Bool {
-        guard !linked, connection != .connected else { return false }
-        return ProfileRelationAction.writesARequest(at: .public)
+    /// Sans lien servi ni connexion acceptée, sous le niveau d'outil servi : écrire part en demande de message
+    /// (`dm.request`), le premier message arrive dans ses demandes. Rien n'est dit tant que le niveau n'est pas lu.
+    public static func writesARequest(standing: ProfileRelationStanding, connection: ConnectionStatus) -> Bool {
+        standing.writesARequest(connection: connection)
     }
 }
 

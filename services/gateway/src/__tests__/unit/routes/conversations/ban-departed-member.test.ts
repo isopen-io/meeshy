@@ -176,7 +176,12 @@ describe('PATCH ban — la cible avait déjà quitté la conversation', () => {
 
     expect(res.statusCode).toBe(200);
     expect(prisma.updates).toHaveLength(1);
-    expect(Object.keys(prisma.updates[0].data)).toEqual(['bannedAt']);
+    // #19688 — l'écriture repose `isActive: false` (no-op sur une ligne
+    // inactive, recouvrement d'une rentrée qui aurait gagné la course), et ce
+    // que ce témoin garde est que `leftAt` n'y figure PAS : la date du départ
+    // d'origine survit, et `resolveUnbanWrite` la compare à `bannedAt`.
+    expect(Object.keys(prisma.updates[0].data).sort()).toEqual(['bannedAt', 'isActive']);
+    expect(prisma.updates[0].data).not.toHaveProperty('leftAt');
     await app.close();
   });
 

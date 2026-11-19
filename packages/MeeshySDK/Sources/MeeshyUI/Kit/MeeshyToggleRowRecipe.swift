@@ -15,6 +15,9 @@ public nonisolated enum MeeshyToggleRowAccessory: Sendable, Equatable {
     case check(isSelected: Bool)
     case checkbox(isChecked: Bool)
     case chevron
+    /// Une adresse qui quitte Meeshy (navigateur, autre app) : le glyphe de sortie, jamais le chevron d'une navigation
+    /// interne.
+    case external
     case value(String)
 }
 
@@ -117,13 +120,13 @@ public nonisolated struct MeeshyToggleRowRecipe: Sendable, Equatable {
         case .check(let isSelected): return isSelected
         case .checkbox(let isChecked): return isChecked
         case .toggle(let isOn): return isOn
-        case .none, .chevron, .value: return false
+        case .none, .chevron, .external, .value: return false
         }
     }
 
     public static func valueFor(accessory: MeeshyToggleRowAccessory) -> MeeshyToggleRowValue {
         switch accessory {
-        case .none, .chevron: return .none
+        case .none, .chevron, .external: return .none
         case .toggle(let isOn): return .toggle(isOn: isOn)
         case .check(let isSelected): return .selected(isSelected)
         case .checkbox(let isChecked): return .selected(isChecked)

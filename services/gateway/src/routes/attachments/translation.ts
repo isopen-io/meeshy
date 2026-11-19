@@ -11,6 +11,7 @@ import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services
 import { serverReadsAttachmentCarrier } from '../../services/attachments/attachmentCarrierServerReadable';
 import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { AttachmentParams, TranslateBody, TranscribeBody } from './types';
+import { voiceTranslatedAudioSchema } from '../voice/types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
@@ -322,7 +323,8 @@ export async function registerTranslationRoutes(
                   },
                   translatedAudios: {
                     type: 'array',
-                    description: 'Translated audio versions (if any)'
+                    description: 'Translated audio versions (if any)',
+                    items: voiceTranslatedAudioSchema
                   }
                 }
               }

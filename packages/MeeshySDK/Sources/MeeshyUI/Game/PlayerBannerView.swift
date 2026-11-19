@@ -4,11 +4,11 @@ import MeeshySDK
 // MARK: - La bannière du joueur (#9494, conception XIII.1)
 //
 // MIROIR de `apps/web/src/components/player-banner.tsx` : le bandeau du haut, quand ni un appel ni un audio ne
-// l'occupe, montre la progression du joueur en grand. Ordre FIXE, de gauche à droite : l'anneau de niveau (avec
-// l'emblème du palier et son chiffre romain, #9481), la jauge vers le niveau suivant, les Meeshes, le blason du
-// rang, la gemme de ligue et la place, la Flamme ; au milieu, sous la Flamme, le Rêve du jour puis le contenant de
-// l'Héritage (#17437). SEULEMENT ce qui existe (`GamePlayerBanner`) : un élément sans
-// donnée ne se dessine pas.
+// l'occupe, montre la progression du joueur en grand. Ordre FIXE, du début à la fin : EN TÊTE le blason du rang et
+// sa jauge de Gloire — devenir Légende est l'objet du jeu (#17394, #19705) —, puis l'anneau de niveau (avec l'emblème
+// du palier et son chiffre romain, #9481), la jauge vers le niveau suivant, les Meeshes, la gemme de ligue et la
+// place, la Flamme ; au milieu, sous la Flamme, le Rêve du jour puis le contenant de l'Héritage (#17437).
+// SEULEMENT ce qui existe (`GamePlayerBanner`) : un élément sans donnée ne se dessine pas.
 //
 // Décor : la Signature en filigrane, teintée par la couleur du palier ; aucune bulle. Le fond est un APLAT
 // (`Palette.surface`) : la bande du haut de l'app le reprend à l'identique, la couture ne peut pas dériver. Sur
@@ -21,8 +21,8 @@ import MeeshySDK
 // n'observe aucun singleton, ne navigue nulle part : l'hôte la pose dans un bouton qui ouvre Progression, lui
 // donne sa phrase de lecteur d'écran, et joue l'entrée, la sortie et le reflet (`sheen`).
 //
-// Accessibilité : UN seul élément (`accessibilityLabel`, la phrase localisée de l'hôte — « Niveau 34, Éclat, 78 %
-// vers le 35, 12 Meeshes, Conteur III, ligue Jade 4e, Flamme 23 jours ») ; ses dessins sont ignorés. Hauteur
+// Accessibilité : UN seul élément (`accessibilityLabel`, la phrase localisée de l'hôte — « Conteur III, Niveau 34,
+// Éclat, 78 % vers le 35, 12 Meeshes, ligue Jade 4e, Flamme 23 jours ») ; ses dessins sont ignorés. Hauteur
 // d'au moins 48 pt (#11125). Dynamic Type : au-delà de XXL, la jauge passe SOUS l'anneau et les pièces se rangent en grille.
 
 public struct PlayerBannerView: View {
@@ -196,10 +196,14 @@ public struct PlayerBannerView: View {
 
     // MARK: Le bandeau compact (#11125)
 
-    /// UNE rangée : à gauche l'anneau et la jauge des étincelles, au milieu la Flamme, les Meeshes, la mission et la
-    /// ligue, à droite le rang et sa jauge de Gloire. Aucune pièce ne passe sous les jauges.
+    /// UNE rangée : en tête le rang et sa jauge de Gloire (#19705), puis l'anneau et la jauge des étincelles, au milieu
+    /// la Flamme, les Meeshes, la mission et la ligue. Aucune pièce ne passe sous les jauges.
     private var compactRow: some View {
         HStack(spacing: 6) {
+            if let rank = model.rank {
+                select(.rank) { gloryGauge(rank) }
+                    .frame(minWidth: 56, maxWidth: .infinity, alignment: .leading)
+            }
             if model.showsLevel { select(.level) { ring(side: compactRingSide) } }
             if model.showsScore {
                 select(.sparks) { if model.showsLevel { gauge } else { scoreOnly } }
@@ -208,10 +212,6 @@ public struct PlayerBannerView: View {
                 Spacer(minLength: 0)
             }
             middle
-            if let rank = model.rank {
-                select(.rank) { gloryGauge(rank) }
-                    .frame(minWidth: 56, maxWidth: .infinity, alignment: .leading)
-            }
         }
     }
 
@@ -284,10 +284,13 @@ public struct PlayerBannerView: View {
 
     // MARK: Les pièces-boutons (#10846)
 
-    /// Au-delà de XXL : l'anneau et la jauge en haut — chacun son bouton —, puis les autres pièces qui passent à la
-    /// ligne ; aucune cible ne descend sous 44 pt, le bandeau prend la hauteur qu'il faut.
+    /// Au-delà de XXL : le rang en tête (#19705), puis l'anneau et la jauge — chacun son bouton —, puis les autres
+    /// pièces qui passent à la ligne ; aucune cible ne descend sous 44 pt, le bandeau prend la hauteur qu'il faut.
     private var selectableLayout: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if let rank = model.rank {
+                select(.rank) { gloryGauge(rank) }
+            }
             if model.showsLevel || model.showsScore {
                 HStack(spacing: 10) {
                     if model.showsLevel { select(.level) { ring(side: ringWidth) } }
@@ -296,7 +299,7 @@ public struct PlayerBannerView: View {
                     }
                 }
             }
-            let rest = model.pieces.filter { $0 != .level && $0 != .sparks }
+            let rest = model.pieces.filter { $0 != .rank && $0 != .level && $0 != .sparks }
             if !rest.isEmpty || texts.offeringReward != nil {
                 FlowLayout(itemSpacing: 0, lineSpacing: 8) {
                     ForEach(rest, id: \.self) { kind in
@@ -395,9 +398,11 @@ public struct PlayerBannerView: View {
 
     // MARK: Les deux dispositions
 
-    /// Sur une ligne : anneau, jauge qui prend la place restante, puis les pièces — chacun seulement s'il a du sens.
+    /// Sur une ligne : le blason du rang (#19705), l'anneau, la jauge qui prend la place restante, puis les pièces —
+    /// chacun seulement s'il a du sens.
     private var singleRow: some View {
         HStack(spacing: 10) {
+            rankBlason
             if model.showsLevel {
                 ring(side: ringWidth)
                 gauge
@@ -413,17 +418,23 @@ public struct PlayerBannerView: View {
         }
     }
 
-    /// Au-delà de XXL : l'anneau et les pièces en haut, la jauge SOUS l'anneau.
+    /// Au-delà de XXL : le blason du rang et l'anneau en haut (#19705), la jauge SOUS l'anneau, puis les pièces.
     private var stackedLayout: some View {
         VStack(alignment: .leading, spacing: 6) {
             if model.showsLevel {
                 HStack(alignment: .center, spacing: 10) {
+                    rankBlason
                     ring(side: ringWidth)
                     Spacer(minLength: 0)
                 }
                 gauge
             } else if model.showsScore {
-                scoreOnly
+                HStack(alignment: .center, spacing: 10) {
+                    rankBlason
+                    scoreOnly
+                }
+            } else {
+                rankBlason
             }
             if hasPieces {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 72), spacing: 10, alignment: .leading)], alignment: .leading, spacing: 6) {
@@ -485,7 +496,16 @@ public struct PlayerBannerView: View {
     // MARK: Les pièces — seulement ce qui existe
 
     private var hasPieces: Bool {
-        model.meeshes != nil || model.rank != nil || model.league != nil || model.flame != nil
+        model.meeshes != nil || model.league != nil || model.flame != nil
+    }
+
+    /// Le blason du rang, en tête des dispositions sans boutons (#19705) ; rien sans Gloire.
+    @ViewBuilder
+    private var rankBlason: some View {
+        if let rank = model.rank {
+            RankBlasonView(rank: rank.rank, division5: rank.division, mythic: rank.mythic, figures: nil)
+                .frame(width: 34)
+        }
     }
 
     private var pieces: some View {
@@ -496,10 +516,6 @@ public struct PlayerBannerView: View {
     private var pieceViews: some View {
         if model.meeshes != nil, let meeshes = texts.meeshes {
             piece(text: meeshes) { MeeshCoinView(face: .obverse, edition: .silver, figures: nil).frame(width: 22, height: 22) }
-        }
-        if let rank = model.rank {
-            RankBlasonView(rank: rank.rank, division5: rank.division, mythic: rank.mythic, figures: nil)
-                .frame(width: 34)
         }
         if let league = model.league {
             piece(text: texts.place) { LeagueGemView(league: league.league).frame(width: 22, height: 22) }

@@ -207,6 +207,7 @@ public class DeleteMessageHandler @Inject constructor(
             PlaintextRefusal.laneConversation(row.lane),
             row.targetId,
             refusedAsGone = SendFailureClassifier.refusedAsGone(row.lastError),
+            authorId = row.ownerId,
         )
     }
 }

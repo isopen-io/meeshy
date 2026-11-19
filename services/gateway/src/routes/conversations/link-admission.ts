@@ -34,6 +34,7 @@ import {
   REJOIN_PARTICIPANT_STATE,
   type ConversationEntryDecision,
 } from '../../services/conversations/conversationEntryAdmission';
+import { commitParticipantRejoin } from '../../services/conversations/rejoinParticipantWrite';
 import { extractUserAgent } from '../../services/GeoIPService';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import { claimLinkUse, LINK_EXHAUSTED_RACE } from './link-admission-claim';
@@ -50,6 +51,7 @@ import {
   loadSalonCommunity,
   planSalonEntry,
 } from '../../services/conversations/communityMembershipSync';
+import { communityMemberAnnouncerOverIO } from '../../services/community-member-broadcast';
 import { deferAfterResponse, type AfterResponse } from '../../utils/after-response';
 import {
   lookupArrivalCountry,
@@ -340,10 +342,25 @@ async function joinAsRegistered(
 
   let participant: ParticipantRow;
   if (entry.outcome === 'rejoin' && entry.participantId) {
-    participant = await prisma.participant.update({
-      where: { id: entry.participantId },
+    // #19688 — la garde est AUSSI dans le `where` de l'écriture : un
+    // bannissement commis entre la décision d'`admitLinkEntry` et cette ligne
+    // ne doit pas être rallumé. Le refus est celui que la loi du lien rend
+    // déjà en amont, mot pour mot — un banni n'entre par aucune porte, y
+    // compris quand il le devient dans la fenêtre.
+    const committed = await commitParticipantRejoin<ParticipantRow>({
+      prisma,
+      participantId: entry.participantId,
       data: { ...linkMemberFields, ...REJOIN_PARTICIPANT_STATE },
     });
+    if (committed.outcome === 'banned') {
+      return { kind: 'refused', refusal: { granted: false, status: 403, code: 'BANNED', message: 'Vous avez été banni de cette conversation' } };
+    }
+    if (committed.outcome === 'vanished') {
+      // Jumeau du refus d'« already-member » ci-dessus : la ligne désignée a
+      // disparu entre les deux lectures — fail-closed, pas de recréation.
+      return { kind: 'refused', refusal: { granted: false, status: 409, code: 'LINK_EXHAUSTED', message: 'État de participation introuvable' } };
+    }
+    participant = committed.participant;
     invalidateParticipantLookup(entry.participantId, shareLink.conversationId);
   } else {
     participant = await prisma.participant.create({
@@ -489,7 +506,7 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
   // l'IP après la réponse ; l'IP n'est écrite ni sur le participant ni dans
   // sa session anonyme (#9342).
   if (outcome.kind === 'joined' && outcome.outcome !== 'already-member') {
-    if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission);
+    if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission, communityMemberAnnouncerOverIO(prisma, params.arrivalIO));
     const participantId = outcome.participant.id;
     // #16837 — l'arrivée s'annonce aux autres membres. Un invité ne peut pas
     // en être le SUJET (contrat strict, #16838) ; il en reste DESTINATAIRE.

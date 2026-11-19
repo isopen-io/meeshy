@@ -123,7 +123,7 @@ final class OwnProfileSyncTests: XCTestCase {
         }
         let editing = user(displayName: "Bob", avatar: "https://cdn/a-bob.jpg")
         auth.currentUser = editing
-        auth.pendingOptimisticProfile = ProfileSnapshot(displayName: "Bob", bio: "Bonjour", avatarUrl: "https://cdn/a-bob.jpg")
+        auth.pendingOptimisticProfile = ProfileSnapshot(displayName: "Bob", bio: nil, avatarUrl: "https://cdn/a-bob.jpg")
 
         OwnProfileSync.apply(event(snapshot(displayName: "Robert")), to: auth)
 

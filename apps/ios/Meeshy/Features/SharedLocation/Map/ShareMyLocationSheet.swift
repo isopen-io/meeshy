@@ -27,8 +27,8 @@ struct ShareMyLocationSheet: View {
     @State private var notify = true
     @State private var battery: Bool
     /// La position m'est refusée par le téléphone (planche `Etat-Erreur` vue 5) : le bloc d'état remplace le formulaire
-    /// jusqu'au retour dans l'app, où le formulaire revient pour un nouvel essai.
-    @State private var locationDenied = false
+    /// jusqu'au retour dans l'app après l'avoir quittée (les Réglages), où le formulaire revient pour un nouvel essai.
+    @State private var denial = ShareMyLocationDenial()
     /// « Choisir sur la carte » (#19558) : la feuille partage le point que l'épingle désigne, jamais un relevé.
     @State private var choosingPoint = false
     @State private var pointViewport: LocationMapViewport?
@@ -54,7 +54,7 @@ struct ShareMyLocationSheet: View {
                 header
                 if let sharing = activeShare {
                     activeSection(sharing)
-                } else if locationDenied && !choosingPoint {
+                } else if denial.isDenied && !choosingPoint {
                     deniedState
                 } else {
                     if choosingPoint {
@@ -71,7 +71,7 @@ struct ShareMyLocationSheet: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .adaptiveOnChange(of: scenePhase) { _, phase in
-            if phase == .active { locationDenied = false }
+            denial = denial.next(phase)
         }
         .task { me = LocationMapOwnPosition.lastKnown() }
     }
@@ -290,7 +290,7 @@ struct ShareMyLocationSheet: View {
             if let problem = await center.share(with: target.userId, precision: precision, term: duration,
                                                 notify: offers && notify, battery: offers ? battery : nil) {
                 guard problem != .locationDenied else {
-                    locationDenied = true
+                    denial = ShareMyLocationDenial(isDenied: true)
                     return
                 }
                 FeedbackToastManager.shared.showError(ShareLocationWording.problem(problem))
@@ -507,12 +507,7 @@ struct ShareMyLocationPointCard: View {
                         .allowsHitTesting(false)
                 }
                 MeeshyMapPin(label: ShareMyLocationCopy.pointLabel, kind: .own) {
-                    ZStack {
-                        MeeshyColors.brandPrimary
-                        Image(systemName: "person.fill")
-                            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
-                            .foregroundStyle(Color.white)
-                    }
+                    MeeshyMapPinOwnContent()
                 }
                 .allowsHitTesting(false)
             }
@@ -534,5 +529,23 @@ struct ShareMyLocationPointCard: View {
     private func move(_ direction: ShareMyLocationPoint.Direction) {
         guard let viewport else { return }
         focus = LocationMapFocus(region: ShareMyLocationPoint.moved(viewport, direction), token: (focus?.token ?? 0) + 1)
+    }
+}
+
+/// Le refus de position se lève au RETOUR dans l'app, jamais à un simple passage par `.active` : la fermeture de
+/// l'alerte d'autorisation, du Centre de contrôle ou des notifications y repasse aussi, sans que rien n'ait changé.
+nonisolated struct ShareMyLocationDenial: Equatable {
+    var isDenied = false
+    var leftApp = false
+
+    func next(_ phase: ScenePhase) -> ShareMyLocationDenial {
+        switch phase {
+        case .background:
+            return ShareMyLocationDenial(isDenied: isDenied, leftApp: isDenied)
+        case .active where leftApp:
+            return ShareMyLocationDenial()
+        default:
+            return self
+        }
     }
 }

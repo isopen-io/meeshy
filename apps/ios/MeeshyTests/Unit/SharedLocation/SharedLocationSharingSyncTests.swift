@@ -1,4 +1,5 @@
 import Combine
+import SwiftUI
 import XCTest
 import MeeshySDK
 @testable import Meeshy
@@ -478,6 +479,96 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertEqual(Set(sut.emitter.starts.last?.recipients.map(\.userId) ?? []), [alice, bob])
     }
 
+    // MARK: - Un seul appareil publie (#18580, #18714)
+
+    private let mine = "2026-01-01T00:00:00.000Z"
+    private let elsewhere = "2026-01-01T00:00:05.000Z"
+
+    private func served(_ startedAt: String?, _ people: [(String, SharedLocationPrecision, TimeInterval)]) -> SharedLocationOwnSnapshot {
+        SharedLocationOwnSnapshot(recipients: snapshot(people).recipients, startedAt: startedAt)
+    }
+
+    private func publishingSUT(store: FakeSharedLocationRosterStore = FakeSharedLocationRosterStore()) async -> SUT {
+        let sut = makeSUT(store: store)
+        sut.emitter.startVerdict = .started(expiresAt: t0.addingTimeInterval(8 * 3600), startedAt: mine)
+        _ = await sut.center.share(with: alice, precision: .exact, duration: .eightHours)
+        XCTAssertTrue(sut.fixes.isFollowing)
+        return sut
+    }
+
+    func test_sync_anotherDevicesStartServed_makesThisDeviceYield_andNoFixLeavesAnymore() async {
+        let sut = await publishingSUT()
+        sut.served.snapshot = served(elsewhere, [(alice, .exact, TimeInterval(8 * 3600)), (bob, .city, 3600)])
+
+        await sut.center.sync()
+        sut.fixes.subject.send(SharedLocationFix(latitude: 45, longitude: 5)!)
+        await settle(until: { false })
+
+        XCTAssertNotNil(sut.center.entry(for: bob))
+        XCTAssertFalse(sut.fixes.isFollowing)
+        XCTAssertTrue(sut.emitter.updates.isEmpty)
+        XCTAssertTrue(sut.store.received)
+    }
+
+    func test_sync_theSamePersonSharedAgainElsewhere_identicalList_makesThisDeviceYield() async {
+        let sut = await publishingSUT()
+        sut.served.snapshot = served(elsewhere, [(alice, .exact, TimeInterval(8 * 3600))])
+
+        await sut.center.sync()
+
+        XCTAssertFalse(sut.fixes.isFollowing)
+    }
+
+    func test_sync_myOwnStartReadBack_withADeadlineTenMinutesOff_keepsThisDevicePublishing() async {
+        let sut = await publishingSUT()
+        sut.served.snapshot = served(mine, [(alice, .city, TimeInterval(8 * 3600 + 600))])
+
+        await sut.center.sync()
+
+        XCTAssertTrue(sut.fixes.isFollowing)
+        XCTAssertFalse(sut.store.received)
+    }
+
+    func test_sync_aLostAck_takesTheServedStartAsMine_thenYieldsToTheNextOne() async {
+        let sut = makeSUT()
+        sut.emitter.startVerdict = .refused(.unconfirmed)
+        _ = await sut.center.share(with: alice, precision: .exact, duration: .eightHours)
+        sut.served.snapshot = served(mine, [(alice, .exact, TimeInterval(8 * 3600))])
+        await sut.center.sync()
+        XCTAssertTrue(sut.fixes.isFollowing)
+
+        sut.served.snapshot = served(elsewhere, [(alice, .exact, TimeInterval(8 * 3600))])
+        await sut.center.sync()
+
+        XCTAssertFalse(sut.fixes.isFollowing)
+    }
+
+    func test_sync_aGatewayThatNamesNoStart_keepsThisDevicePublishing() async {
+        let sut = await publishingSUT()
+        sut.served.snapshot = served(nil, [(alice, .exact, TimeInterval(8 * 3600)), (bob, .city, 3600)])
+
+        await sut.center.sync()
+
+        XCTAssertTrue(sut.fixes.isFollowing)
+    }
+
+    func test_afterYielding_aRelaunchDoesNotFollow_andSharingFromHereFollowsAgain() async {
+        let store = FakeSharedLocationRosterStore()
+        let sut = await publishingSUT(store: store)
+        sut.served.snapshot = served(elsewhere, [(alice, .exact, TimeInterval(8 * 3600))])
+        await sut.center.sync()
+
+        XCTAssertFalse(makeSUT(store: store).fixes.isFollowing)
+
+        _ = await sut.center.share(with: me.replacingOccurrences(of: "c", with: "d"), precision: .city, duration: .oneHour)
+        XCTAssertTrue(sut.fixes.isFollowing)
+    }
+
+    func test_theOwnSnapshot_decodesTheStartTheGatewayNames() throws {
+        let raw = Data(#"{"recipients":[],"expiresAt":null,"startedAt":"2026-01-01T00:00:00.000Z"}"#.utf8)
+        XCTAssertEqual(try JSONDecoder().decode(SharedLocationOwnSnapshot.self, from: raw).startedAt, mine)
+    }
+
     /// Un « Partager » refusé (hors ligne, débit) sur un appareil qui n'a fait que RECEVOIR la liste ne le fait pas
     /// publier : ni maintenant, ni au prochain lancement.
     func test_aRefusedShare_onAReceivingDevice_keepsItSilent_evenAfterARelaunch() async {
@@ -732,5 +823,37 @@ final class SharedLocationUntilStoppedTests: XCTestCase {
         let said = ShareLocationWording.sharing(name: "Léo", precision: .city, until: SharedLocationShareTerm.openEndedDeadline)
 
         XCTAssertEqual(said, ShareLocationWording.sharingUntilStopped(name: "Léo", precision: .city))
+    }
+}
+
+/// Le refus de position (planche `Etat-Erreur` vue 5) ne se lève qu'au RETOUR dans l'app après l'avoir quittée (les
+/// Réglages) : la fermeture de l'alerte système, du Centre de contrôle ou des notifications repasse aussi par `.active`
+/// et ne doit pas effacer l'explication qu'on vient de donner.
+@MainActor
+final class ShareMyLocationDenialTests: XCTestCase {
+
+    func test_next_activeWithoutLeavingTheApp_keepsTheDenial() {
+        let denied = ShareMyLocationDenial(isDenied: true)
+
+        let afterAlert = denied.next(.inactive).next(.active)
+
+        XCTAssertTrue(afterAlert.isDenied)
+    }
+
+    func test_next_backFromTheBackground_liftsTheDenial() {
+        let denied = ShareMyLocationDenial(isDenied: true)
+
+        let back = denied.next(.inactive).next(.background).next(.inactive).next(.active)
+
+        XCTAssertFalse(back.isDenied)
+        XCTAssertFalse(back.leftApp)
+    }
+
+    func test_next_aNewDenialAfterAReturn_waitsForTheNextDeparture() {
+        let lifted = ShareMyLocationDenial(isDenied: true).next(.background).next(.active)
+        let deniedAgain = ShareMyLocationDenial(isDenied: true)
+
+        XCTAssertFalse(lifted.leftApp)
+        XCTAssertTrue(deniedAgain.next(.active).isDenied)
     }
 }

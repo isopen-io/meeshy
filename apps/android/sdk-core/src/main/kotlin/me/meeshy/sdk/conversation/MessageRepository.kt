@@ -28,6 +28,7 @@ import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.session.AccountFence
+import me.meeshy.sdk.session.withAccountTicket
 
 /**
  * The messages of a conversation, offline-first (ARCHITECTURE.md §4, §5): Room is the single
@@ -364,12 +365,27 @@ class MessageRepository internal constructor(
      *   never a row revived out of the window for good, its plaintext kept in the vault;
      * - a read that proves nothing (offline, refused) ⇒ a refusal that already said the target is gone ([refusedAsGone]:
      *   404, 410) keeps it deleted, its plaintext kept until a read proves its absence; any other refusal gives it back.
+     *
+     * #19422 — what the read decides belongs to the account that ASKED for it: its ticket is taken before the request, and
+     * the settlement lands only while that account is still the current one — never in the same message id of the next
+     * account, never stamped with whoever the session names when the write lands. [authorId], when given, is the account
+     * that queued the deletion: under any other account the settlement is refused, the request would leave signed by one
+     * account about the message of another.
      */
-    suspend fun settleRefusedDeletion(conversationId: String?, messageId: String, refusedAsGone: Boolean = false) {
-        when (val read = conversationId?.let { history.readBack(it, messageId) } ?: MessageReadBack.Unknown) {
-            is MessageReadBack.Served -> if (read.message.deletedAt == null) markUndeleted(messageId, snapshot = read.message)
-            MessageReadBack.Absent -> confirmDeletion(messageId)
-            MessageReadBack.Unknown -> if (!refusedAsGone) markUndeleted(messageId)
+    suspend fun settleRefusedDeletion(
+        conversationId: String?,
+        messageId: String,
+        refusedAsGone: Boolean = false,
+        authorId: String? = null,
+    ) {
+        val ticket = mutations.ticket()
+        if (!authorId.isNullOrBlank() && ticket != null && ticket.ownerId != authorId) return
+        val read = conversationId?.let { history.readBack(it, messageId) } ?: MessageReadBack.Unknown
+        if (!mutations.isCurrent(ticket)) return
+        when (read) {
+            is MessageReadBack.Served -> if (read.message.deletedAt == null) mutations.markUndeleted(ticket, messageId, read.message)
+            MessageReadBack.Absent -> mutations.commitUnder(ticket) { withAccountTicket(ticket) { confirmDeletion(messageId) } }
+            MessageReadBack.Unknown -> if (!refusedAsGone) mutations.markUndeleted(ticket, messageId, null)
         }
     }
 

@@ -12,6 +12,7 @@ struct ProfileSendContentSheet: View {
     @StateObject private var model: ProfileSendContentViewModel
     @StateObject private var posts: ProfileUserPostsViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var hasSettled = false
 
     init(userId: String, displayName: String, tint: Color,
          meId: String = AuthManager.shared.currentUser?.id ?? "") {
@@ -42,7 +43,14 @@ struct ProfileSendContentSheet: View {
             }
             .padding(MeeshySpacing.xl)
         }
-        .task { await posts.loadInitial() }
+        .task {
+            await posts.loadInitial()
+            hasSettled = true
+        }
+        .task(id: PagingKey(kind: model.kind, served: posts.posts.count, wanted: pagesFurther)) {
+            guard pagesFurther else { return }
+            await posts.loadMore()
+        }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
@@ -66,32 +74,96 @@ struct ProfileSendContentSheet: View {
         moveEarlier: ProfileSendContentCopy.pick, moveLater: ProfileSendContentCopy.pick
     )
 
+    nonisolated private struct PagingKey: Hashable {
+        let kind: ProfileSendContentKind
+        let served: Int
+        let wanted: Bool
+    }
+
+    private var listing: ProfileSendContentListing {
+        ProfileSendContentListing.resolve(hasChoices: !choices.isEmpty, settled: hasSettled,
+                                          isLoading: posts.isLoading || posts.isLoadingMore,
+                                          hasMore: posts.hasMore, pagination: posts.paginationState)
+    }
+
+    private var pagesFurther: Bool {
+        ProfileSendContentListing.pagesFurther(hasChoices: !choices.isEmpty, settled: hasSettled,
+                                               isLoading: posts.isLoading || posts.isLoadingMore,
+                                               hasMore: posts.hasMore, pagination: posts.paginationState)
+    }
+
     @ViewBuilder
     private var content: some View {
-        let shown = choices
-        if shown.isEmpty && posts.isLoading {
-            HStack(spacing: MeeshySpacing.sm) {
-                ForEach(0..<3, id: \.self) { _ in MeeshyTicket(title: "", code: "", size: .mini, kind: .loading) }
-            }
-            .accessibilityHidden(true)
-        } else if shown.isEmpty {
+        switch listing {
+        case .loading:
+            loadingRow
+        case .failed:
+            failure
+        case .empty:
             MeeshyNote(ProfileSendContentCopy.nothing(model.kind), lead: .systemImage("tray"), tint: tint)
-        } else {
-            MeeshyThumbnailRow(
-                shown.map { MeeshyThumbnail(id: $0.id, accessibilityLabel: ProfileSendContentCopy.label(of: $0)) },
-                current: model.selectedId,
-                label: ProfileSendContentCopy.kind(model.kind),
-                words: Self.words,
-                alignment: .leading,
-                onSelect: { id in model.selectedId = id },
-                content: { thumbnail, state in
-                    CachedAsyncImage(url: shown.first { $0.id == thumbnail.id }.flatMap { ProfilePublicationTiles.thumbnail(of: $0) },
-                                     targetSize: state.size, showsStatusOverlays: false) {
-                        tint.opacity(MeeshyOpacity.light)
-                    }
-                    .scaledToFill()
-                }
-            )
+        case .choices:
+            choiceRow(choices)
+            if posts.hasMore && posts.paginationState != .exhausted {
+                MeeshyButton(ProfileSendContentCopy.older, systemImage: "clock.arrow.circlepath", kind: .tinted,
+                             size: .s44, tint: tint, isPending: posts.isLoadingMore,
+                             action: { Task { await posts.loadMore() } })
+                    .accessibilityIdentifier("profile.sendContent.older")
+            }
+        }
+    }
+
+    private func choiceRow(_ shown: [FeedPost]) -> some View {
+        MeeshyThumbnailRow(
+            shown.map { MeeshyThumbnail(id: $0.id, accessibilityLabel: ProfileSendContentCopy.label(of: $0)) },
+            current: model.selectedId,
+            label: ProfileSendContentCopy.kind(model.kind),
+            words: Self.words,
+            alignment: .leading,
+            onSelect: { id in model.selectedId = id },
+            content: { thumbnail, state in
+                ProfileSendContentTile(post: shown.first { $0.id == thumbnail.id }, size: state.size, tint: tint)
+            }
+        )
+    }
+
+    /// Le chargement a la forme de la rangée qui le remplace : trois vignettes K20 « en préparation », aux mesures
+    /// de la rangée servie — rien ne saute à l'arrivée des contenus.
+    private var loadingRow: some View {
+        MeeshyThumbnailRow(
+            (0..<3).map { MeeshyThumbnail(id: "loading-\($0)", accessibilityLabel: ProfileSendContentCopy.kind(model.kind),
+                                          status: .preparing) },
+            current: nil,
+            label: ProfileSendContentCopy.kind(model.kind),
+            words: Self.words,
+            alignment: .leading,
+            content: { _, _ in tint.opacity(MeeshyOpacity.light) }
+        )
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private var failure: some View {
+        let offline = NetworkMonitor.shared.isOffline
+        return MeeshyStateBlock(
+            kind: offline ? .offline : .error,
+            title: offline ? ProfileSendContentCopy.offline : ProfileSendContentCopy.loadError,
+            primary: MeeshyStateBlockAction(title: ProfileSendContentCopy.retry, systemImage: "arrow.clockwise",
+                                            perform: { retry() }),
+            art: .none,
+            size: .compact,
+            tint: tint
+        )
+    }
+
+    private func retry() {
+        Task {
+            hasSettled = false
+            if posts.posts.isEmpty {
+                await posts.loadInitial()
+            } else {
+                await posts.loadMore()
+            }
+            hasSettled = true
         }
     }
 
@@ -107,6 +179,37 @@ struct ProfileSendContentSheet: View {
             case .failed(let reason):
                 FeedbackToastManager.shared.showError(reason)
             }
+        }
+    }
+}
+
+/// Une vignette de « Lui envoyer un contenu » : l'image servie du contenu, ou, pour une publication sans média, la
+/// première ligne de son texte posée sur l'aplat — deux publications texte se distinguent à l'œil.
+private struct ProfileSendContentTile: View {
+    let post: FeedPost?
+    let size: CGSize
+    let tint: Color
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        if let post, let text = ProfileSendContentCopy.textTile(of: post) {
+            ZStack(alignment: .topLeading) {
+                tint.opacity(MeeshyOpacity.light)
+                Text(text)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundStyle(MeeshyColors.textPrimary(isDark: colorScheme == .dark))
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                    .padding(MeeshySpacing.xs)
+                    .accessibilityHidden(true)
+            }
+        } else {
+            CachedAsyncImage(url: post.flatMap { ProfilePublicationTiles.thumbnail(of: $0) },
+                             targetSize: size, showsStatusOverlays: false) {
+                tint.opacity(MeeshyOpacity.light)
+            }
+            .scaledToFill()
         }
     }
 }
@@ -149,10 +252,38 @@ enum ProfileSendContentCopy {
         kind == .publication ? ProfilePublicationGenre.all.emptyTitle : kind.genre.emptyTitle
     }
 
+    static var older: String {
+        String(localized: "profile.sendContent.older", defaultValue: "Voir plus ancien", bundle: .main)
+    }
+
+    static var offline: String {
+        String(localized: "profile.sendContent.offline", defaultValue: "Vous êtes hors ligne", bundle: .main)
+    }
+
+    static var loadError: String {
+        String(localized: "profile.posts.loadError", defaultValue: "Erreur lors du chargement des publications",
+               bundle: .main)
+    }
+
+    static var retry: String {
+        String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main)
+    }
+
     static func label(of post: FeedPost) -> String {
-        let text = post.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let firstLine = text.split(separator: "\n").first.map(String.init) ?? ""
-        guard firstLine.isEmpty else { return String(firstLine.prefix(60)) }
+        let line = firstLine(of: post)
+        guard line.isEmpty else { return String(line.prefix(60)) }
         return kind(ProfileSendContentKind.allCases.first { $0.accepts(post) } ?? .publication)
+    }
+
+    /// La première ligne d'une publication SANS média, posée dans sa vignette ; `nil` dès qu'une image la montre.
+    static func textTile(of post: FeedPost) -> String? {
+        guard ProfilePublicationTiles.thumbnail(of: post) == nil else { return nil }
+        let line = firstLine(of: post)
+        return line.isEmpty ? nil : line
+    }
+
+    private static func firstLine(of post: FeedPost) -> String {
+        let text = post.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.split(separator: "\n").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
     }
 }

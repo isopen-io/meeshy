@@ -663,13 +663,7 @@ export function registerTranslationRoutes(
                 status: { type: 'string', description: 'Processing status', enum: ['completed', 'processing'] },
                 attachment: voiceAttachmentSchema,
                 transcription: voiceTranscriptionSchema,
-                // Volontairement SANS `items` : les deux producteurs de cette
-                // clé n'ont pas la même forme (`translateSync` rend
-                // `audioBase64`, `getAttachmentWithTranscription` rend
-                // `audioPath`/`id`/`createdAt`), et un tableau sans `items`
-                // laisse passer ses éléments INTACTS — vérifié au compilateur.
-                // Déclarer l'une des deux formes en tronquerait l'autre.
-                translatedAudios: { type: 'array' }
+                translatedAudios: { type: 'array', items: voiceTranslatedAudioSchema }
               }
             }
           }

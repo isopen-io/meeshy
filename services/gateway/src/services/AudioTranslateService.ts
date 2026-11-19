@@ -59,6 +59,7 @@ import type {
 import type { AttachmentTranscription, AttachmentTranslations } from '@meeshy/shared/types/attachment-audio';
 import { attachmentTranscriptionView, type AttachmentTranscriptionView } from './audio/attachmentTranscriptionView';
 import { guardedTimeout } from '../utils/guarded-timer';
+import { mergeTranslationEntries } from './message-translation/translatedTrackSave';
 
 // Response timeout in milliseconds
 const DEFAULT_TIMEOUT = 60000; // 60 seconds for fast voice ops (status, profile, …)
@@ -847,14 +848,11 @@ export class AudioTranslateService extends EventEmitter {
 
       // Construire les traductions JSON
       const existingTranslations = (attachment?.translations as unknown as AttachmentTranslations) || {};
-      const translationsData: AttachmentTranslations = { ...existingTranslations };
-
-      for (const translation of result.translations) {
-        translationsData[translation.targetLanguage] = {
-          type: 'audio',
+      const incomingTranslations: AttachmentTranslations = Object.fromEntries(
+        result.translations.map(translation => [translation.targetLanguage, {
+          type: 'audio' as const,
           transcription: translation.translatedText,
-          url: translation.audioUrl,
-          path: translation.audioUrl,
+          ...(translation.audioUrl ? { url: translation.audioUrl, path: translation.audioUrl } : {}),
           durationMs: translation.durationMs || 0,
           format: 'mp3',
           cloned: translation.voiceCloned,
@@ -863,8 +861,9 @@ export class AudioTranslateService extends EventEmitter {
           segments: translation.segments,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
-        };
-      }
+        }])
+      );
+      const translationsData = mergeTranslationEntries(existingTranslations, incomingTranslations);
 
       // Mettre à jour l'attachment avec transcription et traductions
       await this.prisma.messageAttachment.update({

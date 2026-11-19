@@ -143,6 +143,11 @@ describe('MON partage, tel que la passerelle le sert (#18389)', () => {
     });
   });
 
+  test('le démarrage servi (`startedAt`, #18580) est gardé tel quel ; absent ou illisible, il n’existe pas', () => {
+    expect(decodeOwnSharedLocation({ recipients: [row], expiresAt: null, startedAt: '2026-11-14T08:00:00.000Z' })?.startedAt).toBe('2026-11-14T08:00:00.000Z');
+    expect(decodeOwnSharedLocation({ recipients: [row], expiresAt: null, startedAt: 12 })?.startedAt).toBeUndefined();
+  });
+
   test('une ligne illisible se saute ; une précision inconnue se lit « ville »', () => {
     const decoded = decodeOwnSharedLocation({ recipients: [{ userId: 'x' }, { ...row, expiresAt: 'demain' }, { ...row, precision: 'gps' }], expiresAt: null });
     expect(decoded?.recipients).toEqual([{ userId: ID.toLowerCase(), precision: 'city', expiresAt: row.expiresAt }]);

@@ -29,13 +29,18 @@ public enum OwnProfileSync {
 
     /// Appliqué au compte connecté, avec la règle de la revalidation (`updateUserAfterRevalidation`) : la session
     /// se garde au trousseau pour le démarrage à froid, et une modification optimiste encore en vol sur CET appareil
-    /// n'est pas écrasée — elle se lève dès que l'instantané la porte.
+    /// n'est pas écrasée — elle se lève dès que l'instantané la porte, et seulement sur les champs qu'il porte : une bio
+    /// en vol reste protégée (#19306). Le sélecteur de comptes suit le nom et la photo appliqués.
     @MainActor
     public static func apply(_ event: ProfileUpdatedEvent, to auth: AuthManager) {
         guard let user = auth.currentUser, let repainted = Self.projected(user, applying: event) else { return }
-        let resolved = AuthManager.resolveServerUserWithOptimistic(repainted, pending: auth.pendingOptimisticProfile)
+        let resolved = AuthManager.resolveServerUserWithOptimistic(
+            repainted, pending: auth.pendingOptimisticProfile, carrying: .snapshot)
         auth.currentUser = resolved.user
         auth.saveUserToKeychain(resolved.user, userId: resolved.user.id)
+        if auth.savedAccounts.contains(where: { $0.id == resolved.user.id }) {
+            auth.updateSavedAccountActivity(from: resolved.user)
+        }
         guard resolved.clearedPending else { return }
         auth.pendingOptimisticProfile = nil
         auth.clearPendingProfileFromKeychain(userId: resolved.user.id)

@@ -79,7 +79,7 @@
     <string name="feed_reel_republished_by">Reposted by %1$s</string>
     <string name="feed_reel_views">Views</string>
     <string name="feed_report_reason_harassment">Harassment</string>
-    <string name="feed_report_reason_hate_speech">Hate speech</string>
+    <string name="feed_report_reason_hate_speech">Hate</string>
     <string name="feed_report_reason_impersonation">Impersonation</string>
     <string name="feed_report_reason_inappropriate">Inappropriate content</string>
     <string name="feed_report_reason_other">Other</string>

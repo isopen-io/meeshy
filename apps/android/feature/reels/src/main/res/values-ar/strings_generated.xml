@@ -28,7 +28,7 @@
     <string name="reels_mute">كتم الصوت</string>
     <string name="reels_open_failure_back">رجوع</string>
     <string name="reels_report_reason_harassment">تحرّش</string>
-    <string name="reels_report_reason_hate_speech">خطاب كراهية</string>
+    <string name="reels_report_reason_hate_speech">كراهية</string>
     <string name="reels_report_reason_impersonation">انتحال الهوية</string>
     <string name="reels_report_reason_inappropriate">محتوى غير لائق</string>
     <string name="reels_report_reason_other">أخرى</string>

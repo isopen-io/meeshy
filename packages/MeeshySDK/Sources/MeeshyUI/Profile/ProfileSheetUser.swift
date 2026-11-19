@@ -47,6 +47,9 @@ public struct ProfileSheetUser: Identifiable, Equatable {
     public let city: String?
     /// L'accent qu'il a CHOISI pour sa vitrine (#19201, #19391), une teinte de la liste ; `nil` = automatique.
     public let profileAccentColor: String?
+    /// La face sur laquelle la fiche s'ouvre (#19732) : la Vitrine, sauf demande d'un raccourci. Elle ne change pas QUI
+    /// on ouvre, l'égalité l'ignore.
+    public private(set) var openingFace: RelationFace = .vitrine
 
     public init(
         userId: String? = nil, username: String, displayName: String? = nil,
@@ -92,6 +95,12 @@ public struct ProfileSheetUser: Identifiable, Equatable {
 
     public var resolvedDisplayName: String {
         displayName ?? username
+    }
+
+    public func opening(on face: RelationFace) -> ProfileSheetUser {
+        var copy = self
+        copy.openingFace = face
+        return copy
     }
 }
 

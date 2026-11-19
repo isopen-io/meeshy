@@ -203,13 +203,14 @@ public struct GamePlayerBanner: Equatable, Sendable {
         self.attention = GameAttention.of(game, hidden: false)
     }
 
-    /// Les pièces qui existent, dans l'ordre du bandeau : le niveau, les étincelles, puis le reste.
+    /// Les pièces qui existent, dans l'ordre du bandeau : le rang en tête — devenir Légende est l'objet du jeu (#17394,
+    /// #19705) —, puis le niveau, les étincelles et le reste.
     public var pieces: [Piece] {
         var shown: [Piece] = []
+        if rank != nil { shown.append(.rank) }
         if showsLevel { shown.append(.level) }
         if showsScore { shown.append(.sparks) }
         if meeshes != nil { shown.append(.meesh) }
-        if rank != nil { shown.append(.rank) }
         if league != nil { shown.append(.league) }
         if flame != nil { shown.append(.flame) }
         if trophies != nil { shown.append(.trophies) }

@@ -179,7 +179,7 @@ déclarer un hôte d'API ne fait qu'ajouter une vérification qui peut échouer 
 
 ## Autres App Links (racine-liens-profonds-android, #14828)
 
-Le manifeste revendique aussi, en `autoVerify`, sur `meeshy.me`, `www.meeshy.me` et `app.meeshy.me` : `/me`, `/me/…`,
+Le manifeste revendique aussi, en `autoVerify`, sur `meeshy.me` et `www.meeshy.me` (jamais `app.meeshy.me`, qui ne résout pas : un hôte non vérifiable fait échouer tout son filtre) : `/me`, `/me/…`,
 `/c/`, `/conversation/`, `/l/`, `/p/`, `/s/`, `/stories/`, `/users/`, `/reels`, `/community/`, `/communities/`, `/hashtag/`
 et `/signup`. `/share` n'est PAS revendiqué (le navigateur le garde). Le fichier `/.well-known/assetlinks.json` de chaque
 hôte doit nommer `me.meeshy.app` avec l'empreinte du certificat de signature, sinon Android n'ouvre pas ces liens dans

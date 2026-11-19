@@ -12,6 +12,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { applyHistoryFloor, historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
 import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
 import { attachmentMediaSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
+import { servedAttachmentTranslations } from '../../services/attachments/servedAttachmentTranslations';
 import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
 import { servePostReplyCitations } from '../../services/messaging/servedPostReply';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -209,7 +210,18 @@ function serializeThreadMessage<T extends Record<string, unknown>>(message: T): 
     ),
     // #10286 — un invité anonyme ne sert jamais sa carte de liens suivis.
     metadata: servedLinkMetadata(message.metadata, message.sender as LinkSenderFacts | null | undefined),
+    // #19672 — `attachmentMediaSelect` charge `translations` avec le chemin
+    // disque de chaque piste ; le schéma du fil (`additionalProperties: true`)
+    // ne le retire pas.
+    ...(Array.isArray(message.attachments)
+      ? { attachments: message.attachments.map(servedThreadAttachment) }
+      : {}),
   };
+}
+
+function servedThreadAttachment(attachment: unknown): unknown {
+  if (!attachment || typeof attachment !== 'object' || !('translations' in attachment)) return attachment;
+  return { ...attachment, translations: servedAttachmentTranslations(attachment.translations) };
 }
 
 /**

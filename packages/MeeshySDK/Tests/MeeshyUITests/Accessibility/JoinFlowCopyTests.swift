@@ -84,4 +84,24 @@ final class JoinFlowCopyTests: XCTestCase {
         }
         XCTAssertEqual(JoinFlowCopy.goneTitle(in: try lproj("fr")), "Ce lien n'est plus valable")
     }
+
+    func test_goneMessage_namesTheCreatorWhenThePreviewServedHim() throws {
+        let french = try lproj("fr")
+
+        XCTAssertEqual(JoinFlowCopy.goneMessage(creatorFirstName: "Aïssa", in: french), "Demande un nouveau lien à Aïssa.")
+        XCTAssertEqual(JoinFlowCopy.goneMessage(creatorFirstName: nil, in: french), JoinFlowCopy.goneMessage(in: french))
+        XCTAssertEqual(JoinFlowCopy.goneMessage(creatorFirstName: "Aïssa", in: try lproj("en")), "Ask Aïssa for a new link.")
+    }
+
+    func test_goneLinkCopy_isTranslatedInTheSevenLanguages() throws {
+        for code in Self.languages {
+            let bundle = try lproj(code)
+            let named = JoinFlowCopy.goneMessage(creatorFirstName: "Aïssa", in: bundle)
+            XCTAssertTrue(named.contains("Aïssa") && !named.contains("joinFlow."), "\(code) : \(named)")
+            let label = JoinFlowCopy.goneTicketLabel(title: "Studio", address: "meeshy.me/chat/s", in: bundle)
+            XCTAssertTrue(label.contains("Studio") && label.contains("meeshy.me/chat/s"), "\(code) : \(label)")
+            XCTAssertNotEqual(JoinFlowCopy.goneInvitation(in: bundle), "joinFlow.gone.invitation", code)
+            XCTAssertNotEqual(JoinFlowCopy.goneCreatorCaption(in: bundle), "joinFlow.gone.creatorRole", code)
+        }
+    }
 }

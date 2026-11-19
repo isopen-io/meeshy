@@ -1,9 +1,21 @@
 import AppIntents
 import MeeshySDK
+import MeeshyUI
 import Foundation
 
+/// Où mène le raccourci Talkie (#19732) : la fiche du proche, ouverte sur la face Actions qui porte la carte Talkie —
+/// un seul geste entre le raccourci et « Maintenir pour parler ».
+enum TalkieShortcutRoute {
+    static func url(username: String) -> URL? {
+        guard let vitrine = VitrineOpenRouter.vitrineURL(username: username),
+              var components = URLComponents(url: vitrine, resolvingAgainstBaseURL: false) else { return nil }
+        components.queryItems = [URLQueryItem(name: DeepLinkParser.faceQueryKey, value: RelationFace.actions.rawValue)]
+        return components.url
+    }
+}
+
 /// **« Maintenir : Talkie avec Léo »** (planche `Hors-App`, vue 4, #19524) : le raccourci que le Bouton Action, Siri et
-/// Raccourcis proposent. Il ouvre la vitrine du proche, où la carte Talkie se maintient pour parler.
+/// Raccourcis proposent. Il ouvre la fiche du proche sur la face Actions, où la carte Talkie se maintient pour parler.
 ///
 /// Les personnes proposées sont celles du widget « Mes proches » — le même cliché du groupe d'app
 /// (`ClosePeopleWidgetKeys`), Proche et au-dessus. Une personne qui n'y est plus ne se résout plus : un raccourci
@@ -33,7 +45,7 @@ struct TalkieWithCloseOneIntent: AppIntent {
         } else {
             chosen = try await $person.requestValue()
         }
-        guard let url = chosen.username.flatMap({ VitrineOpenRouter.vitrineURL(username: $0) }) else {
+        guard let url = chosen.username.flatMap(TalkieShortcutRoute.url(username:)) else {
             throw $person.needsValueError()
         }
         return .result(opensIntent: OpenURLIntent(url))

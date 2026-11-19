@@ -598,7 +598,7 @@ struct RootView: View {
                     .open(postId: postId) { router.push(.postDetail(postId)) }
             }
 
-        case .userProfile(let username):
+        case .userProfile(let username, let face):
             // Opens the profile sheet over the conversation list (same
             // surface as in-app `Link` taps via Router.handleDeepLink and
             // as notification-driven profile navigation). La fabrique
@@ -606,7 +606,7 @@ struct RootView: View {
             // `/l/<token>` de type PROFILE porte un userId, jamais un handle,
             // et le passer comme `username` interrogeait le serveur avec un
             // pseudo qui n'existe pas.
-            router.deepLinkProfileUser = ProfileSheetUser.from(idOrUsername: username)
+            router.deepLinkProfileUser = ProfileSheetUser.from(idOrUsername: username).opening(on: face)
 
         case .ownProfile:
             // Pop to the conversation list root first so back-swipe from

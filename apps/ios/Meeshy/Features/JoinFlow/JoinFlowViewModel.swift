@@ -102,6 +102,8 @@ final class JoinFlowViewModel: ObservableObject, JoinFlowModeling {
             let result = try await links.joinAnonymously(linkId: info.linkId, request: makeRequest(for: info))
             joinResult = result
             phase = .success
+        } catch where JoinFlowCopy.isGone(error) {
+            phase = .gone
         } catch {
             errorMessage = JoinFlowCopy.joinFailure(error)
         }

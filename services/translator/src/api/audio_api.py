@@ -82,7 +82,7 @@ class VoiceMessageResponse(BaseModel):
     original_language: str
     translated_text: str
     target_language: str
-    audio_url: str
+    audio_url: Optional[str] = None
     processing_time_ms: int
 
 

@@ -53,7 +53,7 @@
     <string name="profile_progression_title">Minha Lenda</string>
     <string name="profile_report_quick_reason_fake_profile">Perfil falso</string>
     <string name="profile_report_quick_reason_harassment">Assédio</string>
-    <string name="profile_report_quick_reason_hate_speech">Discurso de ódio</string>
+    <string name="profile_report_quick_reason_hate_speech">Ódio</string>
     <string name="profile_report_quick_reason_impersonation">Falsidade ideológica</string>
     <string name="profile_report_quick_reason_inappropriate">Conteúdo inapropriado</string>
     <string name="profile_report_quick_reason_other">Outro</string>

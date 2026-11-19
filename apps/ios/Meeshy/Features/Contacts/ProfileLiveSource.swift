@@ -41,6 +41,8 @@ struct ProfileLiveSource: View {
             unreachable = nil
             for await next in PhoneReachabilityLiveState.stream(of: request.userId).values { unreachable = next }
         }
+        .adaptiveOnChange(of: circle.offersBattery) { _, offered in if !offered { battery = nil } }
+        .adaptiveOnChange(of: circle.offersPhoneReachability) { _, offered in if !offered { unreachable = nil } }
         .adaptiveOnChange(of: locations.pins, initial: true) { _, pins in
             Task { await places.resolve(pins.filter { $0.id == request.userId }) }
         }
@@ -52,8 +54,8 @@ struct ProfileLiveSource: View {
         if let board = ProfileLiveBoard.resolve(
             level: circle.toolGateLevel,
             place: pin.map { ProfileLiveSourceRules.place(of: $0, name: places.name(for: $0), fallback: request.displayName, now: now) },
-            battery: ProfileLiveSourceRules.battery(battery, now: now),
-            unreachableSince: unreachable?.unreachableSince,
+            battery: circle.offersBattery ? ProfileLiveSourceRules.battery(battery, now: now) : nil,
+            unreachableSince: circle.offersPhoneReachability ? unreachable?.unreachableSince : nil,
             isOnline: request.isOnline,
             staleAge: request.staleAge,
             mood: request.mood

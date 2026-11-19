@@ -7,12 +7,14 @@ import { postJoinSystemMessage } from './joinSystemMessage';
 import { NEW_MEMBER_PERMISSIONS } from '../participantRights';
 import { newMemberRefusal } from './newMemberAdmission';
 import { resolveConversationEntry, REJOIN_PARTICIPANT_STATE } from './conversationEntryAdmission';
+import { commitParticipantRejoin } from './rejoinParticipantWrite';
 import { recipientLanguage } from '../../utils/recipient-language';
 import { announceConversationLanguageChange } from '../message-translation/conversationLanguageChanges';
 import { CerclesAchievements } from '../achievements/CerclesAchievements';
 import type { EngagementService } from '../engagement/EngagementService';
 import type { NotificationService } from '../notifications/NotificationService';
 import { applyCommunityAdmission, planSalonEntry, type SalonCommunity } from './communityMembershipSync';
+import { communityMemberAnnouncerOverIO } from '../community-member-broadcast';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'ConversationMemberAdmission' });
@@ -146,11 +148,18 @@ export async function admitConversationMember(
 
   let joinedParticipantId: string;
   if (entry.outcome === 'rejoin' && entry.participantId) {
-    const rejoined = await prisma.participant.update({
-      where: { id: entry.participantId },
-      data: { ...REJOIN_PARTICIPANT_STATE, ...addedMemberFields }
+    // #19688 — la garde est AUSSI dans le `where` de l'écriture : un
+    // bannissement commis entre la décision ci-dessus et cette ligne ne doit
+    // pas être rallumé. Le refus reste le verdict de CETTE porte, qui ne fait
+    // jamais tomber le lot.
+    const committed = await commitParticipantRejoin<{ id: string }>({
+      prisma,
+      participantId: entry.participantId,
+      data: { ...REJOIN_PARTICIPANT_STATE, ...addedMemberFields },
     });
-    joinedParticipantId = rejoined.id;
+    if (committed.outcome === 'banned') return { userId, outcome: 'banned' };
+    if (committed.outcome === 'vanished') return { userId, outcome: 'not-found' };
+    joinedParticipantId = committed.participant.id;
     invalidateParticipantLookup(entry.participantId, conversationId);
   } else {
     const created = await prisma.participant.create({
@@ -172,7 +181,7 @@ export async function admitConversationMember(
     }).catch(() => undefined);
   }
 
-  if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission);
+  if (community) await applyCommunityAdmission(prisma, community.communityId, communityAdmission, communityMemberAnnouncerOverIO(prisma, ports.io));
   announceConversationLanguageChange({ kind: 'arrival', conversationId, language: addedMemberFields.language, readerUserId: userId });
 
 
