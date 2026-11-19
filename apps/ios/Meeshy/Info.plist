@@ -88,6 +88,8 @@
 	<string>Meeshy reads the song playing in Apple Music to share it with the Close friends you granted it to, and only with them.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Meeshy needs access to your microphone for voice messages, video calls, and audio recording.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Meeshy uses your phone's activity (walking, cycling, driving) to show the people you share your exact location with how you are moving, and only them.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Meeshy needs permission to save photos and videos to your library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

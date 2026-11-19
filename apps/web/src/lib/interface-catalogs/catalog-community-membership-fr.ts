@@ -69,6 +69,16 @@ const frCommunityMembership = {
   'community.posts.error.offline': "Hors ligne : les publications s’afficheront au retour du réseau.",
   'community.posts.retry': "Réessayer",
   'community.posts.loadingMore': "Chargement de la suite",
+  'community.members.requests.section': "Demandes en attente",
+  'community.members.requests.asked': "Demande du {date}",
+  'community.members.requests.accept': "Accepter",
+  'community.members.requests.reject': "Refuser",
+  'community.members.requests.acceptLabel': "Accepter la demande de {name}",
+  'community.members.requests.rejectLabel': "Refuser la demande de {name}",
+  'community.members.requests.reject.confirm.body': "{name} ne pourra pas redemander avant sept jours.",
+  'community.members.requests.gone': "Cette demande a déjà été traitée.",
+  'community.members.requests.accepted': "{name} fait désormais partie de la communauté.",
+  'community.members.requests.more': "Voir plus de demandes",
 } as const;
 
 export default frCommunityMembership;

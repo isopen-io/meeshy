@@ -7,6 +7,8 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Glyph } from '@/components/glyph';
 import { ApiError } from '@/lib/api/client';
 import { COMMUNITIES_QUERY_PREFIX, communityQueryOptions, type CommunityPage } from '@/lib/api/communities';
+import { performDecideJoinRequest, type JoinRequestOutcome } from '@/lib/api/community-join-request-actions';
+import { communityJoinRequestsQueryOptions, isCommunityStewardOf, type CommunityJoinRequest, type JoinRequestDecision } from '@/lib/api/community-join-requests';
 import { performChangeMemberRole, performRemoveMember, type MemberGestureOutcome } from '@/lib/api/community-member-actions';
 import { communityMembersQueryOptions, memberGesturesOf, memberSectionsOf, type CommunityMember, type CommunityMemberRole } from '@/lib/api/community-members';
 import { apiDeps } from '@/lib/api/deps';
@@ -20,6 +22,7 @@ import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { COMMUNITIES_HEADER_HEIGHT, CommunitiesOfflineNotice, CommunityRefused } from '@/routes/communities-parts';
+import { JoinRequestsSection } from '@/routes/community-join-requests-parts';
 import { MemberRow, MemberSection, MembersEmpty, MembersLoadError, MembersSkeleton } from '@/routes/community-members-parts';
 import { Link } from '@/routes/route-table';
 
@@ -39,6 +42,12 @@ import { Link } from '@/routes/route-table';
  * arrivé en 31e position perdait son menu). Les gestes sont optimistes, avec
  * retour arrière (`community-member-actions.ts`) ; le retrait est confirmé.
  *
+ * **Les demandes en attente** (#19871) ouvrent l'écran pour l'intendant seul
+ * (`isCommunityStewardOf`) : la liste n'est même pas demandée à un autre
+ * lecteur, à qui la passerelle répondrait 404. Accepter et refuser sont
+ * optimistes (`community-join-request-actions.ts`) ; refuser est confirmé,
+ * parce que le demandeur ne pourra pas redemander avant sept jours.
+ *
  * 403 et 404 rendent le MÊME refus que le détail (D-6).
  */
 
@@ -55,6 +64,11 @@ type GestureFailure = keyof typeof FAILURE_KEY;
 const failureOf = (outcome: MemberGestureOutcome): GestureFailure | null =>
   outcome.status === 'refused' || outcome.status === 'offline' || outcome.status === 'error' ? outcome.status : null;
 
+type RequestNotice = { readonly kind: 'accepted'; readonly name: string } | { readonly kind: 'gone' };
+
+const requestFailureOf = (outcome: JoinRequestOutcome): GestureFailure | null =>
+  outcome.status === 'offline' || outcome.status === 'error' ? outcome.status : null;
+
 export default function CommunityMembersScreen() {
   const { community: communityId } = useParams<'/communities/$community/members'>();
   const language = currentInterfaceLanguage();
@@ -66,6 +80,9 @@ export default function CommunityMembersScreen() {
   const [pending, setPending] = useState<string | null>(null);
   const [failure, setFailure] = useState<GestureFailure | null>(null);
   const [removing, setRemoving] = useState<CommunityMember | null>(null);
+  const [rejecting, setRejecting] = useState<CommunityJoinRequest | null>(null);
+  const [deciding, setDeciding] = useState<string | null>(null);
+  const [notice, setNotice] = useState<RequestNotice | null>(null);
 
   const detail = useQuery(
     {
@@ -85,6 +102,13 @@ export default function CommunityMembersScreen() {
     { ...communityMembersQueryOptions(apiDeps, community?.id ?? communityId), enabled: enabled && community !== undefined },
     appQueryClient,
   );
+
+  const steward = community !== undefined && isCommunityStewardOf(community, viewerId);
+  const joinRequests = useInfiniteQuery(
+    { ...communityJoinRequestsQueryOptions(apiDeps, community?.id ?? communityId), enabled: enabled && steward },
+    appQueryClient,
+  );
+  const requests = steward ? (joinRequests.data?.pages.flatMap((page) => page.requests) ?? []) : [];
 
   const scroller = useRef<HTMLElement | null>(null);
   const rows = members.data?.pages.flatMap((page) => page.members) ?? null;
@@ -118,6 +142,19 @@ export default function CommunityMembersScreen() {
     settle(await performRemoveMember({ community, member, deps: actionDeps }));
   };
 
+  const decide = async (request: CommunityJoinRequest, decision: JoinRequestDecision) => {
+    if (community === undefined || deciding !== null) return;
+    setRejecting(null);
+    setDeciding(request.id);
+    setFailure(null);
+    setNotice(null);
+    const outcome = await performDecideJoinRequest({ community, request, decision, deps: actionDeps });
+    setDeciding(null);
+    setFailure(requestFailureOf(outcome));
+    if (outcome.status === 'accepted') setNotice({ kind: 'accepted', name: request.name });
+    if (outcome.status === 'gone') setNotice({ kind: 'gone' });
+  };
+
   const refused =
     (detail.error instanceof ApiError && (detail.error.status === 403 || detail.error.status === 404)) ||
     (members.error instanceof ApiError && (members.error.status === 403 || members.error.status === 404));
@@ -133,6 +170,17 @@ export default function CommunityMembersScreen() {
       <MembersEmpty language={language} />
     ) : (
       <div className="grid gap-5">
+        {requests.length === 0 ? null : (
+          <JoinRequestsSection
+            language={language}
+            requests={requests}
+            hasMore={joinRequests.hasNextPage}
+            busy={deciding !== null || !online}
+            onAccept={(request) => void decide(request, 'accept')}
+            onReject={(request) => setRejecting(request)}
+            onMore={() => void joinRequests.fetchNextPage()}
+          />
+        )}
         {memberSectionsOf(rows).map((section) => (
           <MemberSection key={section.role} language={language} role={section.role} count={section.members.length}>
             {section.members.map((member, index) => (
@@ -195,6 +243,13 @@ export default function CommunityMembersScreen() {
               {translateMembership(language, FAILURE_KEY[failure])}
             </p>
           )}
+          {notice === null ? null : (
+            <p role="status" data-community-join-request-notice={notice.kind} className="text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              {notice.kind === 'accepted'
+                ? translateMembership(language, 'community.members.requests.accepted', { name: notice.name })
+                : translateMembership(language, 'community.members.requests.gone')}
+            </p>
+          )}
           {refused ? <CommunityRefused language={language} /> : body}
         </div>
       </main>
@@ -208,6 +263,18 @@ export default function CommunityMembersScreen() {
           tone="destructive"
           onCancel={() => setRemoving(null)}
           onConfirm={() => void remove(removing)}
+        />
+      )}
+      {rejecting === null ? null : (
+        <ConfirmDialog
+          name="community-join-request-reject"
+          title={translateMembership(language, 'community.members.requests.rejectLabel', { name: rejecting.name })}
+          body={translateMembership(language, 'community.members.requests.reject.confirm.body', { name: rejecting.name })}
+          cancelLabel={translate(language, 'common.cancel')}
+          confirmLabel={translateMembership(language, 'community.members.requests.reject')}
+          tone="destructive"
+          onCancel={() => setRejecting(null)}
+          onConfirm={() => void decide(rejecting, 'reject')}
         />
       )}
     </div>
