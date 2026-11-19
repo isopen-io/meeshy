@@ -69,6 +69,7 @@ async function notifyRequester(deps: JoinRequestDecidedDeps, rejection: JoinRequ
     userId: requester.id,
     type: 'community_invite',
     priority: 'normal',
+    title: communityName,
     content: notificationString(lang, 'community.joinRejected', { title: communityName }),
     context: { communityId: rejection.communityId, communityName },
     metadata: { action: 'view_community' },
@@ -110,9 +111,9 @@ export function scheduleJoinRequestRejected(
     readonly deliver: JoinRequestDecidedDeps['deliver'];
   },
 ): void {
-  const notifications = options.notifications === undefined ? getSharedNotificationService() : options.notifications;
   (options.afterResponse ?? deferAfterResponse)(async () => {
     try {
+      const notifications = options.notifications === undefined ? getSharedNotificationService() : options.notifications;
       await announceJoinRequestRejected({ prisma, notifications: notifications ?? null, deliver: options.deliver }, rejection);
     } catch (error) {
       logger.warn('community join rejected announcement failed', { communityId: rejection.communityId, error });

@@ -56,7 +56,7 @@ const REQUESTED_STYLE = {
 
 const retryDateOf = (language: InterfaceLanguage, retryAt: string | null | undefined): string | null => {
   const at = typeof retryAt === 'string' ? Date.parse(retryAt) : Number.NaN;
-  return Number.isFinite(at) ? new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long' }).format(at) : null;
+  return Number.isFinite(at) ? new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }).format(at) : null;
 };
 
 const LEAVE_STYLE = {

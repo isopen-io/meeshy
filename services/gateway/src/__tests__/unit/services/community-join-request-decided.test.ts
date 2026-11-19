@@ -78,6 +78,7 @@ describe('announceJoinRequestRejected (#19879)', () => {
     expect(createNotification.mock.calls[0]?.[0]).toMatchObject({
       userId: ANNA,
       type: 'community_invite',
+      title: 'Jardins & Potagers',
       content: 'Your request to join Jardins & Potagers was not accepted',
       lang: 'en',
       context: { communityId: COMMUNITY, communityName: 'Jardins & Potagers' },
@@ -108,7 +109,9 @@ describe('announceJoinRequestRejected (#19879)', () => {
   });
 
   it('ne notifie pas un compte qui n’est plus utilisable, mais sa room reçoit quand même l’état', async () => {
-    const { deps, createNotification, deliver } = world({ requester: null });
+    const { deps, createNotification, deliver } = world({
+      requester: { id: ANNA, systemLanguage: 'en', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null, deletedAt: new Date('2026-11-01T00:00:00.000Z') },
+    });
 
     await announceJoinRequestRejected(deps, change);
 
