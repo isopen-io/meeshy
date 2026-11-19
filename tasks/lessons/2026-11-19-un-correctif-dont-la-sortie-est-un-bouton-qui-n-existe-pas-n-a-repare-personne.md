@@ -146,3 +146,25 @@ fusion qui touche `packages/shared` mesure l'ANCIEN paquet tant que
 `packages/shared && bun run build` n'a pas tourné — la CI, elle, le reconstruit
 à chaque job (`Build shared package (bun)`), et c'est pourquoi elle était verte
 pendant que le poste était rouge.
+
+### Le run de PR qui est SAUTÉ annule quand même le `workflow_dispatch` lancé pour le remplacer
+
+Suite directe de la leçon du cycle 181 (#19755) — « pousser sur la branche
+ANNULE le verdict en vol ». Elle disait de ne pas pousser PENDANT un run ; elle
+ne disait pas ce qui suit, et il coûte une heure et demie :
+
+```
+21:08:31  workflow_dispatch   → run 30714 (le vrai verdict)
+21:08:33  pull_request        → run 30715, conclusion SKIPPED
+21:12:43  run 30714           → CANCELLED
+```
+
+**La CI des PR est gelée : le run de PR ne fait RIEN — et il gagne quand même
+le groupe de concurrence.** Deux secondes d'écart ont suffi : dispatcher juste
+après la poussée, c'est armer son propre annulateur.
+
+> L'ordre juste est : **pousser → attendre que le run de PR soit CRÉÉ et
+> conclu (il l'est en quelques secondes, puisqu'il saute) → dispatcher.**
+> Dispatcher d'abord paraît plus rapide et ne l'est jamais : le run utile meurt
+> avant son premier job, et le seul signe est un « Verdict CI » rouge qui ne dit
+> pas sa cause.
