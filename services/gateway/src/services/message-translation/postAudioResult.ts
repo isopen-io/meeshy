@@ -8,17 +8,34 @@
  * seulement quand la pièce de message est absente.
  *
  * La piste traduite s'écrit comme celle d'un message, par `saveTranslatedTrack` :
- * un fichier de la PASSERELLE sous `translated/<postMediaId>_<langue>.<ext>`,
+ * un fichier de la PASSERELLE sous `translated/post/<postMediaId>_<langue>.<ext>`,
  * jamais l'URL ni le chemin du conteneur traducteur (son cache TTS peut rendre la
  * même URL à deux médias). Une piste non écrite n'annonce ni `path` ni `url`, et
  * `PostAudioService.handleAudioTranslationsReady` garde alors la précédente.
- * Un id de `PostMedia` n'est jamais celui d'une `MessageAttachment` : l'écriture
- * y est en clair, les médias de post n'étant pas scellés au repos.
+ *
+ * Le sous-dossier `post/` est ce qui la fait servir comme le fichier d'origine
+ * de son média : la route de fichiers ne reconnaît pour piste de MESSAGE que
+ * `translated/<id>_…` (refus #9588 sans ligne), et toute autre clé suit le
+ * régime d'un fichier qui n'est pas une pièce jointe de message — celui de
+ * l'original d'un `PostMedia`. Un id de `PostMedia` n'ouvre donc jamais une
+ * piste de message, et l'écriture se fait en clair (aucune ligne de message).
+ *
+ * Rien ne s'écrit avant d'avoir prouvé l'entrée — le PULL ZMQ n'est pas
+ * authentifié : ids ObjectId, média existant dont le post est celui annoncé,
+ * langue et extension dans des listes fermées.
  */
 import * as path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { enhancedLogger } from '../../utils/logger-enhanced';
 import { PostAudioService } from '../posts/PostAudioService';
 import { saveTranslatedTrack } from './translatedTrackSave';
+
+const logger = enhancedLogger.child({ module: 'postAudioResult' });
+
+const TRACK_LANGUAGE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/;
+const TRACK_EXTENSIONS: ReadonlySet<string> = new Set(['mp3', 'wav', 'ogg', 'm4a', 'aac', 'opus', 'webm']);
+const MIME_SUBTYPE_EXTENSION: Readonly<Record<string, string>> = { mpeg: 'mp3' };
 
 export type PostAudioTarget = { readonly postId: string; readonly postMediaId: string };
 
@@ -38,14 +55,15 @@ export type PostTranslatedAudio = {
   readonly textOnly?: boolean;
 };
 
-export function namedPostAudioTarget(event: PostAudioReference): PostAudioTarget | null {
-  return event.postId && event.postMediaId ? { postId: event.postId, postMediaId: event.postMediaId } : null;
+export function namesPostAudio(event: PostAudioReference): boolean {
+  return Boolean(event.postId || event.postMediaId);
 }
 
 export async function postAudioTargetOfMedia(
   prisma: Pick<PrismaClient, 'postMedia'>,
   mediaId: string
 ): Promise<PostAudioTarget | null> {
+  if (!isValidObjectId(mediaId)) return null;
   const media = await prisma.postMedia.findUnique({
     where: { id: mediaId },
     select: { id: true, postId: true, comment: { select: { postId: true } } },
@@ -54,18 +72,38 @@ export async function postAudioTargetOfMedia(
   return media && postId ? { postId, postMediaId: media.id } : null;
 }
 
+export async function verifiedPostAudioTarget(
+  prisma: Pick<PrismaClient, 'postMedia'>,
+  event: PostAudioReference
+): Promise<PostAudioTarget | null> {
+  const owner = isValidObjectId(event.postId) && event.postMediaId ? await postAudioTargetOfMedia(prisma, event.postMediaId) : null;
+  if (owner?.postId === event.postId) return owner;
+  logger.warn('résultat audio de post refusé : média inconnu ou post incohérent');
+  return null;
+}
+
+function trackExtension(mimeType: string | undefined): string | null {
+  const subtype = mimeType?.replace('audio/', '') || 'mp3';
+  const extension = MIME_SUBTYPE_EXTENSION[subtype] ?? subtype;
+  return TRACK_EXTENSIONS.has(extension) ? extension : null;
+}
+
 export async function persistPostAudioTranslations(
   prisma: Pick<PrismaClient, 'messageAttachment' | 'message'>,
-  target: PostAudioTarget,
+  target: PostAudioTarget | null,
   translatedAudios: ReadonlyArray<PostTranslatedAudio>
 ): Promise<void> {
-  if (translatedAudios.length === 0) return;
+  const admitted = translatedAudios.flatMap((audio) => {
+    const ext = trackExtension(audio.audioMimeType);
+    return ext && TRACK_LANGUAGE.test(audio.targetLanguage) ? [{ audio, ext }] : [];
+  });
+  if (admitted.length < translatedAudios.length) logger.warn('piste de post refusée : langue ou format hors liste');
+  if (!target || admitted.length === 0) return;
   const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
-  const entries = await Promise.all(translatedAudios.map(async (audio) => {
-    const ext = audio.audioMimeType?.replace('audio/', '') || 'mp3';
+  const entries = await Promise.all(admitted.map(async ({ audio, ext }) => {
     const track = await saveTranslatedTrack(prisma, {
       translatedDir,
-      filename: `${target.postMediaId}_${audio.targetLanguage}.${ext}`,
+      filename: `post/${target.postMediaId}_${audio.targetLanguage}.${ext}`,
       attachmentId: target.postMediaId,
       language: audio.targetLanguage,
       binary: audio._audioBinary,

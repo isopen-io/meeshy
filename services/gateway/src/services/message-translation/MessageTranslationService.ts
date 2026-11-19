@@ -7,7 +7,7 @@
  */
 
 import { mergeTranslationEntries, saveTranslatedTrack } from './translatedTrackSave';
-import { namedPostAudioTarget, persistPostAudioTranslations, postAudioTargetOfMedia, postTranscriptionReadyEvent } from './postAudioResult';
+import { namesPostAudio, persistPostAudioTranslations, postAudioTargetOfMedia, postTranscriptionReadyEvent, verifiedPostAudioTarget } from './postAudioResult';
 import { EventEmitter } from 'events';
 import * as path from 'path';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -1079,8 +1079,7 @@ export class MessageTranslationService extends EventEmitter {
         `Temps: ${data.processingTimeMs}ms | TaskID: ${data.taskId}`
       );
 
-      const namedPost = namedPostAudioTarget(data);
-      if (namedPost) return await persistPostAudioTranslations(this.prisma, namedPost, data.translatedAudios);
+      if (namesPostAudio(data)) return await persistPostAudioTranslations(this.prisma, await verifiedPostAudioTarget(this.prisma, data), data.translatedAudios);
 
       // 1. Récupérer les infos de l'attachment et traductions existantes
       const attachment = await this.prisma.messageAttachment.findUnique({
@@ -1515,9 +1514,9 @@ export class MessageTranslationService extends EventEmitter {
       }
 
       // Un post n'a pas de messageAttachment : MeeshySocketIOManager le route vers PostAudioService.
-      const namedPost = namedPostAudioTarget(data);
-      if (namedPost) {
-        this.emit('transcriptionReady', postTranscriptionReadyEvent(data, namedPost));
+      if (namesPostAudio(data)) {
+        const namedPost = await verifiedPostAudioTarget(this.prisma, data);
+        if (namedPost) this.emit('transcriptionReady', postTranscriptionReadyEvent(data, namedPost));
         return;
       }
 
