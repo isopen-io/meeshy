@@ -351,10 +351,13 @@ struct NearbyPersonRow: View {
 
     var body: some View {
         let window = SharedLocationWindow(deadline: pin.deadline, now: now)
-        let subtitle = [place, LocationMapCopy.precisionWord(pin.precision)].compactMap { $0 }.joined(separator: " · ")
+        let motion = LocationMotionGlyph.drawn(pin.shownMotion(now: now))
+        let subtitle = [motion.map(LocationMotionGlyph.label(for:)), place, LocationMapCopy.precisionWord(pin.precision)]
+            .compactMap { $0 }.joined(separator: " · ")
         MeeshyPersonRow(
             title: pin.name,
             subtitle: subtitle,
+            subtitleImage: motion.flatMap(LocationMotionGlyph.symbol(for:)),
             meta: distanceMeters.map { LocationMapCopy.distance($0, locale: locale) },
             metaDetail: LocationMapCopy.remainingShort(window),
             levelImage: pin.circle.map { PersonLocationCard.circleSymbol($0) },
