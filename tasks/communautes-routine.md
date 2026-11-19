@@ -585,3 +585,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Auditeur adversarial : non bloquant ; deux états hérités relevés → #19872.
 - Suivis ouverts (milestone 284) : iOS #19869, Android #19870, intendants (liste, accepter, refuser, `community:join-requested`) #19871, clôture des demandes #19872.
 - Prochain lot recommandé : #19871 (web d'abord), sans quoi une demande envoyée n'a personne pour y répondre.
+
+## 2026-11-19 — réveil 11:38 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #19868 fusionnée (`6f3155bf4`).
+- Lot : #19871 — les intendants d'une communauté voient, acceptent et refusent les demandes d'entrée (web d'abord).
