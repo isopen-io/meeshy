@@ -137,7 +137,7 @@ public nonisolated struct MeeshyMotionRecipe: Sendable, Equatable {
         switch name {
         case .reveal: tokens = [.rise]
         case .shimmer: tokens = [.pulse, .rise]
-        case .celebrate: tokens = [.morph, .pulse]
+        case .celebrate: tokens = [.morph, .rise]
         }
         return MeeshyMotionNamedRecipe(name: name, tokens: tokens, isReduced: reduce)
     }

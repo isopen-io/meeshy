@@ -16,6 +16,7 @@ import { withServedRepostCredits } from './repostCreditChips';
 import { withServedDerivedContent } from './storyContentComposition';
 import { negotiateWireStoryEffects, type WireReader } from './storyEffectsV3';
 import { servedPerson } from '../appearance/authorProfileDecor';
+import { withServedPostMedia } from './servedPostMedia';
 
 export type { WireReader } from './storyEffectsV3';
 
@@ -159,7 +160,7 @@ export function withMentions<T extends { postMentions?: unknown; mentions?: unkn
   // #10524 — la puce de crédit se retire avant la négociation, sur le blob
   // tel qu'enregistré. #10523 — et d'abord du `content` qui en dérive, tant
   // que le blob dit encore quel texte était la puce.
-  const served = withServedAuthors(withServedRepostCredits(withServedDerivedContent(flat)));
+  const served = withServedPostMedia(withServedAuthors(withServedRepostCredits(withServedDerivedContent(flat))));
   return withNestedRepostMentions(negotiateWireStoryEffects(served, reader), reader);
 }
 

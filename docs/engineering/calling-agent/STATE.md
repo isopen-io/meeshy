@@ -1657,6 +1657,34 @@ socket jusqu'au client.
 4. #18727, #18773, #18729, #18774 ; #18697, #18691, #18728 ; #18629, #17133, #18611, #18600.
 5. **Recentrer sur les appels eux-mêmes** dès que la dette d'effacement est soldée : latence de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
 
+## Cycle 49 — 2026-11-19
+
+- **Base** : `origin/dev` @ `d88c406d7`. #19753 (cycle 48) est fusionnée, #19734 fermée. La CI de `dev` tourne de nouveau sur push ; celle des PR reste « skipped », la preuve passe par `workflow_dispatch`.
+- **Branche** : `claude/determined-volta-qasy8w`.
+- **Objectif** : #19750. Les pistes traduites d'un `PostMedia` s'effacent avec lui, et aucune réponse de post ne sert leur chemin disque (`translations.<lang>.path`).
+- **Livré** (passerelle seule) :
+  - **Effacement** : `POST_MEDIA_FILE_COLUMNS` et `PostMediaFileRow` portent `translations`. `reclaimMediaRowBytes` efface les `url` rendues par `translationTrackUrls` (`derivedAttachmentFiles.ts` : seulement une adresse de notre stockage, jamais une clé avec `..`, jamais `path`). La garde `Sound` s'applique. Tous les lecteurs répandent les colonnes : expiration des stories, édition, purge de compte, balayage, `DELETE` d'un média.
+  - **Sortie** : `servedPostMedia.ts` (`withServedPostMedia`, `withServedCarrierMedia`, `servedMediaRow`) réutilise `servedAttachmentTranslations` (#19672) sur `media[]`, `repostOf`, `comments[]` et `quotedMedia`. Appliqué à `withMentions` (tout le REST des posts), `emitPostToAudience` et `comment:*` (socket), `hoistCommentCarriers` (extrait de `comments.ts`, qui reste sous 1000 lignes), `serveCitedPostMedia` et `GET /admin/posts/:postId`.
+  - La persistance n'a pas changé : `path` reste en base.
+- **Tests** :
+  - Rouge : reclaim `2 failed, 14 passed` ; expiration des stories `1 failed, 15 passed` ; routes + socket `10 failed, 1 passed` ; fiche admin `1 failed, 4 passed` ; `quotedMedia` (réserve R1 de la QA) `5 failed, 8 passed`.
+  - Vert, relancé par moi : reclaim + routes + socket `3 suites, 27 passed`, puis après R1 `2 suites, 13 passed`.
+  - Spécialiste : `333 suites, 5384 passed` (posts, routes/posts, socketio, lot), `tsc --noEmit` à 0. Échec préexistant sans lien : `gateway-test-file-size-budget` (`calls-routes.test.ts` 2154 → 2175, déjà rouge sur `dev`).
+- **Rétrocompatibilité** : aucun client ne lit `path` (iOS `APIAttachmentTranslation`, Android `ApiAttachmentTranslation`, web : aucune lecture). Seule la clé `path` disparaît ; une carte d'une autre forme traverse inchangée.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves. Mutations M1 à M14 toutes tuées.
+  - R1 (`quotedMedia` fuyait) : corrigée dans le lot (`514e28764`).
+  - R2 : l'effacement ne libère encore aucun octet en production, car la voie post enregistre l'`audioUrl` du traducteur (`/outputs/…`) sans écrire de fichier passerelle. Rattachée à #19749.
+  - R3 : #19825 (ne viser que les clés sous `translated/`).
+  - Non couvert : `Sound.translations` n'a aucun écrivain aujourd'hui.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre (preuve par `workflow_dispatch` de `ci.yml` sur la branche, puis fusion).
+1. **#19749** (le résultat ZMQ atteint le post, et la piste s'écrit par `saveTranslatedTrack`) : sans lui, l'effacement de #19750 reste sans effet. Puis #19825.
+2. #19702, #19673, #19735, #19751.
+3. #19520 (second critère, avec `sre-infra`) et #19471.
+4. **Recentrer sur les appels** dès #19749 soldée : latence `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
+
 ## Cycle 50 — 2026-11-19
 
 - **Base** : `origin/dev` @ `96f5519cca`, puis fusionnée avec `dev` @ `0da8f615f3` (merge `c7088d4da3`). #19753 (cycle 48) est fusionnée. Le cycle 49 (#19772, effacement des pistes de post et retrait de `path`, branche `claude/determined-volta-98am8h`) avait une session vivante, qui avait poussé 15 min avant ce cycle : **je lui ai cédé la PR** et je n'ai touché aucun de ses fichiers.

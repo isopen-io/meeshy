@@ -65,7 +65,7 @@ public final class TrackingLinkService: Sendable {
     public func fetchVisitorPlaces(token: String, since: Date) async throws -> TrackingLinkPlaceStats {
         let response: APIResponse<TrackingLinkPlaceStats> = try await api.request(
             TrackingLinksEndpoint.byTokenStats(token: token),
-            queryItems: [URLQueryItem(name: "startDate", value: ISO8601DateFormatter().string(from: since))]
+            queryItems: [URLQueryItem(name: "startDate", value: WireDate.string(from: since))]
         )
         return response.data
     }

@@ -138,3 +138,22 @@ describe('GET /admin/posts/:postId — select explicite à la racine (#4166 crit
     expect(call.select._count).toBeDefined();
   });
 });
+
+describe('GET /admin/posts/:postId — les pistes traduites sortent sans chemin disque (#19750)', () => {
+  it('retire `translations.<langue>.path` du média, garde le reste de la piste', async () => {
+    const prisma = makeMockPrisma();
+    const track = { type: 'audio', transcription: 'bonjour', url: '/api/v1/attachments/file/translated/m1_fr.mp3' };
+    prisma.post.findUnique.mockResolvedValue({
+      id: VALID_ID,
+      media: [{ id: 'm1', translations: { fr: { ...track, path: '/app/uploads/translated/m1_fr.mp3' } } }],
+    });
+    const app = buildApp(prisma);
+    await app.ready();
+
+    const res = await app.inject({ method: 'GET', url: `/posts/${VALID_ID}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain('/app/uploads/');
+    expect(res.json().data.media[0].translations.fr).toEqual(track);
+  });
+});
