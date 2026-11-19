@@ -31,14 +31,14 @@ final class ShareLinkDetailViewModel: ObservableObject {
     @Published private(set) var isDeleted = false
 
     private let service: ShareLinkManaging
-    private let removeParticipant: @Sendable (String, String) async throws -> Void
+    private let removeParticipant: @concurrent @Sendable (String, String) async throws -> Void
     private let onLinkChanged: @MainActor (MyShareLink) -> Void
     private let onLinkDeleted: @MainActor (String) -> Void
 
     init(
         link: MyShareLink,
         service: ShareLinkManaging = ShareLinkService.shared,
-        removeParticipant: @escaping @Sendable (String, String) async throws -> Void,
+        removeParticipant: @escaping @concurrent @Sendable (String, String) async throws -> Void,
         onLinkChanged: @escaping @MainActor (MyShareLink) -> Void = { _ in },
         onLinkDeleted: @escaping @MainActor (String) -> Void = { _ in }
     ) {

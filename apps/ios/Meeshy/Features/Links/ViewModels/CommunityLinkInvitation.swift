@@ -7,11 +7,13 @@ nonisolated struct CommunityInviteCandidate: Equatable, Sendable, Identifiable {
     let id: String
     let name: String
     let avatar: String?
+    let ring: ServedProfileDecorItem?
 
-    init(id: String, name: String, avatar: String?) {
+    init(id: String, name: String, avatar: String?, ring: ServedProfileDecorItem? = nil) {
         self.id = id
         self.name = name
         self.avatar = avatar
+        self.ring = ring
     }
 
     /// Le prénom sous l'avatar de la rangée : le premier mot du nom.

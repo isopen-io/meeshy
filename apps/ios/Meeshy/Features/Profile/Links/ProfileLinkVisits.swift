@@ -40,7 +40,7 @@ nonisolated struct ProfileLinkVisitsReading: Codable, Equatable, Sendable {
 /// remet au widget « Mon lien ». Injecté pour les témoins.
 struct ProfileLinkVisitsSources {
     let cached: (_ ownerId: String) -> ProfileLinkVisitsReading?
-    let fetch: () async throws -> ProfileLinkVisitStats
+    let fetch: @MainActor () async throws -> ProfileLinkVisitStats
     let save: (_ ownerId: String, _ reading: ProfileLinkVisitsReading) -> Void
     let publish: (_ reading: ProfileLinkVisitsReading, _ link: ProfileLink) -> Void
 

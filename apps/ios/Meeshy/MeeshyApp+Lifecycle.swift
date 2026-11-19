@@ -110,9 +110,7 @@ extension MeeshyApp {
             DeepLinkRouter.shared.replayShareLinkAwaitingAccount()
         case .startNotificationCoordinators:
             NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
-            WidgetDataManager.shared.followProfileLink(
-                AuthManager.shared.$currentUser.map { $0?.username }.eraseToAnyPublisher()
-            )
+            WidgetDataManager.shared.followProfileLink()
             NotificationCoordinator.shared.start()
             NotificationGapResyncCoordinator.shared.start()
         case .startCache:

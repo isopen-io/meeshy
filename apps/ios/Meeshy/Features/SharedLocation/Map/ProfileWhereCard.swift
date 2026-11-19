@@ -53,7 +53,8 @@ struct ProfileWhereCard: View {
             Task { await places.resolve(pins.filter { $0.id == userId }) }
         }
         .sheet(isPresented: $sharesMine) {
-            ShareMyLocationSheet(recipients: [ShareMyLocationRecipient(userId: userId, name: displayName, circle: pin?.circle)])
+            ShareMyLocationSheet(recipients: [ShareMyLocationRecipient(userId: userId, name: displayName, circle: pin?.circle,
+                                                                       avatarURL: pin?.avatarURL)])
         }
     }
 

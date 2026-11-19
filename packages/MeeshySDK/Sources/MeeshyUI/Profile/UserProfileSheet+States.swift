@@ -225,7 +225,9 @@ struct ProfileUnavailableView: View {
                             avatar: {
                                 MeeshyAvatar(name: name, context: .userListItem,
                                              accentColor: DynamicColorGenerator.colorForName(person.username),
-                                             avatarURL: person.avatar, ring: person.avatarRing)
+                                             avatarURL: person.avatar,
+                                             presenceState: person.isOnline.map { UserPresence(isOnline: $0).state },
+                                             ring: person.avatarRing)
                             })
         }
         .padding(.horizontal, MeeshySpacing.xl)

@@ -205,6 +205,7 @@ public struct UserProfileSheet: View {
         .sheet(isPresented: $showReportSheet) {
             ProfileReportSheet(name: displayUser.resolvedDisplayName, avatarURL: displayUser.avatarURL,
                                accentColor: profileAccent, ring: displayUser.profileDecor?.avatarRing,
+                               presence: ProfileHeroPlan.presence(resolvedPresence, isMuted: isIdentityMuted),
                                isAlreadyBlocked: isBlocked, reportMessages: dependencies.reportMessages, reportedUserId: resolvedUserId,
                                onSend: { draft in await sendReport(draft) },
                                onRetryBlock: { await retryReportBlock() })

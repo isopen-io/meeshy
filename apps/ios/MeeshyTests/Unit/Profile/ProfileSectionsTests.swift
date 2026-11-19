@@ -219,7 +219,7 @@ final class ProfileSectionsTests: XCTestCase {
         let circles = try code("Meeshy/Features/Profile/Views/ProfileCirclesSection.swift")
         XCTAssertTrue(circles.contains("MeeshyCircleScale("), "les pastilles sont l'échelle K33")
         XCTAssertTrue(circles.contains("form: .dots"))
-        XCTAssertTrue(circles.contains("counts: Self.scaleCounts(of: summary)"))
+        XCTAssertTrue(circles.contains("counts: phase == .counts ? Self.scaleCounts(of: summary) : nil"), "les nombres ne paraissent qu'une fois servis, jamais cinq zéros au chargement")
         XCTAssertTrue(circles.contains("ScrollView(.horizontal"), "aux grandes tailles, l'échelle défile au lieu d'écraser les noms")
         XCTAssertFalse(circles.contains("ProfileCirclePill"), "aucune pastille redessinée sur place (loi 12)")
         let band = try code("Meeshy/Features/Profile/Views/ProfileActivityBand.swift")
@@ -890,7 +890,7 @@ final class ProfileLinksFaceTests: XCTestCase {
     func test_linksFace_isMadeOfTheKit() throws {
         let face = try code("Meeshy/Features/Profile/Faces/ProfileLinksFace.swift")
         XCTAssertTrue(face.contains("MeeshyTicket("), "le lien de profil est un billet K30")
-        XCTAssertTrue(face.contains("MeeshyCodeCard("), "son QR est la carte de code K31")
+        XCTAssertTrue(face.contains("MeeshyCodePlate("), "son QR est la plaque de la carte de code K31")
         XCTAssertTrue(face.contains("MeeshyLabeledAction("), "ses gestes sont des actions libellées K32")
         for drawn in ["RoundedRectangle(", "LinearGradient(", "Capsule("] {
             XCTAssertFalse(face.contains(drawn), "\(drawn) : aucun composant redessiné sur place")
@@ -1092,7 +1092,8 @@ final class TrackingLinkInsightsTests: XCTestCase {
         let card = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Profile/Links/ProfileCardView.swift"))
         XCTAssertTrue(card.contains("MeeshyStateBlock(kind: .denied, title: ProfileLinksCopy.contactlessUnavailable"),
                       "« Ce téléphone ne sait pas faire ça » est un bloc d'état K38")
-        XCTAssertTrue(card.contains("MeeshySectionHeader(title: ProfileLinksCopy.instead"), "« À la place »")
+        XCTAssertTrue(card.contains("MeeshySectionHeader(title: contactlessUnavailable ? ProfileLinksCopy.instead : ContactlessCopy.withoutChip"),
+                      "« À la place » quand le téléphone ne peut pas, « Sans la puce » sinon")
         XCTAssertTrue(card.contains("action: { mode = .qr }"), "« Montrer mon QR » passe au QR")
         XCTAssertTrue(card.contains("scannerShown = true"), "scanner celui de l'autre reste possible")
     }

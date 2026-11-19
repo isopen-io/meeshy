@@ -73,7 +73,8 @@ struct PersonLocationMapScreen: View {
         .onReceive(NetworkMonitor.shared.isOfflinePublisher.receive(on: DispatchQueue.main)) { isOffline = $0 }
         .adaptiveOnChange(of: model.pins, initial: true) { _, pins in Task { await places.resolve(pins.filter { $0.id == userId }) } }
         .sheet(isPresented: $sharesMine) {
-            ShareMyLocationSheet(recipients: [ShareMyLocationRecipient(userId: userId, name: displayName, circle: pin?.circle)])
+            ShareMyLocationSheet(recipients: [ShareMyLocationRecipient(userId: userId, name: displayName, circle: pin?.circle,
+                                                                       avatarURL: pin?.avatarURL)])
         }
         .fullScreenCover(isPresented: $bloodHistoryOpen) {
             BloodLocationScreen(userId: userId, displayName: displayName)
@@ -160,7 +161,8 @@ struct PersonLocationMapScreen: View {
     private func heroAvatar(_ pin: SharedLocationPin) -> some View {
         MeeshyAvatarMorph(id: LocationMapMorph.id(pin.id), size: MeeshyAvatarMorphSize.hero) {
             MeeshyAvatar(name: pin.name, context: .custom(CGFloat(MeeshyAvatarMorphSize.hero)),
-                         accentColor: DynamicColorGenerator.colorForName(pin.name), avatarURL: pin.avatarURL)
+                         accentColor: DynamicColorGenerator.colorForName(pin.name), avatarURL: pin.avatarURL,
+                         presenceState: pin.presence)
         }
         .padding(.top, 120)
         .accessibilityHidden(true)

@@ -90,7 +90,7 @@ final class ProgressionHeroWiringTests: XCTestCase {
         XCTAssertTrue(code.contains("guard occasion.estObtenu else { return MeeshyColors.neutral500"),
                       "La couleur EST le signal « c'est à vous » : la servir à ce qui n'est pas "
                           + "obtenu la vide de son sens sur tout l'écran.")
-        XCTAssertTrue(code.contains("if !reduceMotion && occasion.estObtenu {"),
+        XCTAssertTrue(code.contains("if MeeshyMotion.showsParticles(.celebrate, reduce: reduceMotion) && occasion.estObtenu {"),
                       "Un rayonnement dit « ta-daa » : le peindre autour d'un palier NON obtenu "
                           + "félicite pour rien.")
     }

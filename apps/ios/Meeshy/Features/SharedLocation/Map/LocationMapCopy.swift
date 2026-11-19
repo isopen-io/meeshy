@@ -162,6 +162,10 @@ enum LocationMapCopy {
         case .byCircle: return String(localized: "locationMap.nearby.byCircle", defaultValue: "Par cercle", bundle: .main)
         }
     }
+    static func sortValue(_ sort: NearbySort, circles: String) -> String {
+        String(format: String(localized: "locationMap.nearby.sort.value", defaultValue: "%1$@, %2$@", bundle: .main),
+               self.sort(sort), circles)
+    }
     static var notOnMap: String { String(localized: "locationMap.nearby.notOnMap", defaultValue: "Pas sur la carte", bundle: .main) }
     /// Un proche en pause par son fantôme (#19562) : aucune heure, aucun lieu, aucune précision.
     static var ghostPaused: String {
