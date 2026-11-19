@@ -173,7 +173,7 @@ class GamePlayerBannerTest {
     }
 
     @Test
-    fun `pas de points, pas de total ; niveau 1, ni anneau ni jauge`() {
+    fun `pas de points, pas de total, et au niveau 1 ni anneau ni jauge`() {
         assertThat(GamePlayerBanner.make(nothing(held = 2))!!.showsScore).isFalse()
         assertThat(GamePlayerBanner.make(nothing(level = level(1, score = 40)))!!.showsScore).isTrue()
         assertThat(GamePlayerBanner.make(nothing(level = level(1, score = 40)))!!.showsLevel).isFalse()
