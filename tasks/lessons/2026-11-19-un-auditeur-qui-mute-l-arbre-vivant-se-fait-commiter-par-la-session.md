@@ -1,8 +1,8 @@
-# Un auditeur qui MUTE l'arbre vivant se fait committer par la session qui l'a lancé
+## Un auditeur qui MUTE l'arbre vivant se fait committer par la session qui l'a lancé (cycle 186, #19827)
 
 *2026-11-19, cycle 186, #19827 — incident réel, attrapé par l'audit lui-même.*
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 J'ai lancé l'`auditeur-adversarial` sur le lot #19827 **dans le worktree
 principal**, pendant que je continuais à travailler dedans. Sa méthode est la
@@ -23,7 +23,7 @@ rend l'incident dangereux : **rien dans l'arbre ne le signale.** Un `git bisect`
 un `cherry-pick` de `0f4a5df9ca` seul, ou une relecture commit par commit
 embarquent une régression de sécurité en silence.
 
-## Les deux règles
+### Les deux règles
 
 > **1. Un agent qui mute l'arbre pour mesurer travaille dans SON worktree, pas
 > dans le mien.** La mesure par mutation est une bonne méthode ; elle est
@@ -36,7 +36,7 @@ embarquent une régression de sécurité en silence.
 > minimum relire `git diff --cached --stat` avant de committer : un fichier
 > inattendu dans la liste est l'alerte, et elle était là.
 
-## Ce qui a bien marché, et qu'il faut garder
+### Ce qui a bien marché, et qu'il faut garder
 
 - **Le cliquet a fait son travail** : sous la mutation embarquée, 6 témoins
   tombent. La CI aurait rougi sur ce commit. Ce n'est pas le filet qui a manqué,
@@ -45,7 +45,7 @@ embarquent une régression de sécurité en silence.
   ses constats techniques. Un auditeur qui déclare ce qu'il a lui-même cassé
   vaut mieux qu'un auditeur qui rend un arbre propre sans rien dire.
 
-## Le réflexe à prendre
+### Le réflexe à prendre
 
 Avant tout commit fait pendant qu'un agent tourne : `git diff --cached --stat`,
 et **un fichier hors du périmètre du lot arrête le commit.** Le périmètre, on

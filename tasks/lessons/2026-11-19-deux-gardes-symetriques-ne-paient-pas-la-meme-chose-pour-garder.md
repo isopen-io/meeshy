@@ -1,8 +1,8 @@
-# Deux gardes symétriques ne paient pas la même chose pour GARDER
+## Deux gardes symétriques ne paient pas la même chose pour GARDER (cycle 186, #19827)
 
 *2026-11-19, cycle 186, #19827.*
 
-## Le motif
+### Le motif
 
 Un dépôt qui pose une garde à l'ENTRÉE d'un tuyau en pose presque toujours une à
 la SORTIE, et la seconde ressemble assez à la première pour qu'on soit tenté de
@@ -17,7 +17,7 @@ Les deux voient les MÊMES causes — clé maîtresse absente, base des clés
 injoignable, charge informe. Recopier le verdict du drain à l'enfilage aurait
 retenu du clair pour des causes qu'aucune attente ne débloque.
 
-## La question qui tranche
+### La question qui tranche
 
 Pas « cette cause est-elle permanente ? » — elle l'est ou non indépendamment du
 site. Mais :
@@ -35,7 +35,7 @@ D'où un ensemble PERMANENT plus LARGE à l'enfilage qu'au drain, sur les mêmes
 causes. L'asymétrie n'est pas une négligence : elle est le contenu du lot, et
 elle s'écrit au site.
 
-## Le corollaire qui tient en production
+### Le corollaire qui tient en production
 
 Quand la garde décide de retenir quelque chose de plus sensible que son jumeau,
 la restriction qui en découle doit être tenue par le CODE, pas par une note. Ici
@@ -45,7 +45,7 @@ et non par un commentaire demandant de ne pas l'y pousser. Et la propriété « 
 n'en ressort pas par un autre chemin » se VÉRIFIE sur chaque sortie de la
 structure plutôt que de se supposer.
 
-## Ce qu'il faut faire quand on écrit la seconde garde
+### Ce qu'il faut faire quand on écrit la seconde garde
 
 1. Nommer, pour chaque garde, **ce que garder retient** — pas ce que garder
    permet.

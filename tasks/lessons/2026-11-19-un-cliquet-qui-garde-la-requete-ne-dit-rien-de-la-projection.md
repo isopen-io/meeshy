@@ -1,8 +1,8 @@
-# Un cliquet qui garde la REQUÊTE ne dit rien de la PROJECTION
+## Un cliquet qui garde la REQUÊTE ne dit rien de la PROJECTION (cycle 186, #19938)
 
 *2026-11-19, cycle 186, #19938.*
 
-## Le motif
+### Le motif
 
 Une loi qui se prononce sur des colonnes publie son `select` et pose un cliquet :
 « tout consommateur doit les SÉLECTIONNER » (`MESSAGE_LIVENESS_SELECT`, #17208).
@@ -21,7 +21,7 @@ select: { id: true, createdAt: true, ...MESSAGE_LIVENESS_SELECT },   // ✅ la l
 { createdAt: …, deletedAt: …, expiresAt: … }                          // ❌ la perte
 ```
 
-## Pourquoi rien ne rougit
+### Pourquoi rien ne rougit
 
 Trois protections échouent ensemble, et c'est leur conjonction qui fait durer le
 défaut :
@@ -34,7 +34,7 @@ défaut :
    colonne et la jette rend alors **exactement le même résultat qu'un site
    juste**. Aucun témoin de verdict ne peut tomber.
 
-## La règle
+### La règle
 
 > **Suivre une colonne de la requête au verdict, pas de la loi à la requête.**
 > Le cliquet du `select` garde la première moitié du trajet ; la seconde moitié
@@ -45,7 +45,7 @@ Remède appliqué : la recopie vit à SON site, collée au `select` et au verdic
 `select`. Ajouter une quatrième preuve se fait en touchant trois déclarations
 voisines, et l'oubli tombe sur la DÉCLARATION, avant tout scénario.
 
-## Et le corollaire sur les doubles
+### Et le corollaire sur les doubles
 
 Le dépôt connaissait « un double de test ment aussi par ce qu'il ACCEPTE »
 (cycle 112). Voici la face qui manquait :
