@@ -1461,3 +1461,48 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `src/lib/shared-locations` 152 verts + `api/shared-locations` 24 verts, `tsc` vert. iOS et Android par la CI.
 - Prochain lot recommandé : fusion de #19683, puis #19681 (startedAt persisté au relancement natif), plafond
   `untilStopped` de `listOnlyState`, #18351 une fois décidé.
+
+## 2026-11-18 — réveil de 23 h : un appareil relancé après une reprise ne republie plus (#19681)
+
+- Reprise : #19683 fusionnée dans `dev` le 2026-11-18 à 20:12 UTC (f1e316f0f0), #18580 et #18714 fermées à la main.
+  #19682 (début arrondi) attend toujours la décision du porteur (commentaire du 2026-11-18 à 21:23 UTC) : sa branche
+  reste sans PR.
+- Lot : #19681. iOS et Android gardent le démarrage accepté par CET appareil (`publishedStart`) dans le même stockage
+  que la marque « reçue », sous la clé du compte : relancé après qu'un autre appareil a repris le partage, le client ne
+  prend plus le démarrage de l'autre pour le sien et cède au lieu de republier. Effacé à l'arrêt, à la cession et
+  quand la passerelle ne sert plus personne. Le web l'avait déjà (localStorage). Un horodatage de démarrage, aucune
+  position : rien à sceller.
+- Témoins : relancement après cession ⇒ aucun relevé ne part et la marque « reçue » est posée ; relancement sans
+  cession ⇒ la publication continue ; partage arrêté ailleurs ⇒ le démarrage gardé s'efface (iOS
+  `SharedLocationSharingSyncTests`, Android `SharedLocationSharingSyncTest`). Swift et Kotlin se prouvent par la CI.
+
+## 2026-11-19 — réveil de 1 h : #19768 (relancement natif) recalée sur dev
+
+- Reprise : #19768 toujours ouverte, tête 798b61316 intacte ; la CI des PR reste gelée (35 vérifications « skipped »
+  sur sa tête), le porteur fusionne les PR dans `dev` une à une. Aucun nouveau lot ouvert. #19682 attend toujours la
+  décision du porteur.
+- `origin/dev` (e4282f1e6) fusionnée à la main, sans conflit. `dev` a touché les écrans iOS de la carte (haptiques,
+  présence des observateurs), jamais `SharedLocationSharingCenter` ni le centre Android.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests rc=0. Swift et
+  `sdk-core` ne compilent pas en conteneur : `ios.yml` et `android.yml` feront foi au dégel.
+
+## 2026-11-19 — réveil de 5 h : #19768 (relance après reprise) recalée sur dev
+
+- Reprise : #19768 toujours ouverte, tête a263f99ad intacte ; la CI des PR reste gelée (35 vérifications « skipped »).
+  #19682 attend toujours la décision du porteur (aucune réponse depuis le 2026-11-18). Aucun nouveau lot ouvert.
+- `origin/dev` (96f5519cc : appels, profil iOS, pastilles des avatars) fusionnée à la main, sans conflit : `dev` n'a
+  touché ni `SharedLocationSharingCenter` iOS ni le centre Android (seules les feuilles de carte iOS bougent, hors lot).
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 046) rc=0,
+  couleurs d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
+- Prochain lot recommandé : fusion de #19768 au dégel, puis #19767, plafond `untilStopped` de `listOnlyState`,
+  #19682 une fois décidée.
+
+## 2026-11-19 — réveil de 9 h : #19768 recalée sur dev (a6b7eada5)
+
+- Reprise : #19768 toujours ouverte, tête 072cc35df intacte ; la CI des PR reste gelée (35 vérifications « skipped »).
+  #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (a6b7eada5 : tests SDK iOS, appels, profil) fusionnée à la main, sans conflit et sans fichier commun
+  avec le lot.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, inscription des tests (2 046) rc=0,
+  couleurs d'accent rc=0.
+- Prochain lot recommandé : inchangé (fusion de #19768 au dégel, puis #19767, plafond `untilStopped`, #19682 décidée).

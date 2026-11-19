@@ -564,6 +564,47 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertTrue(sut.fixes.isFollowing)
     }
 
+    /// #19681 : l'identité du démarrage survit au lancement. Relancé après qu'un autre appareil a repris le partage, cet
+    /// appareil ne prend pas le démarrage de l'autre pour le sien : il cède au lieu de republier.
+    func test_aRelaunch_afterAnotherDeviceTookOver_doesNotRepublish() async {
+        let store = FakeSharedLocationRosterStore()
+        _ = await publishingSUT(store: store)
+        let relaunched = makeSUT(store: store)
+        relaunched.served.snapshot = served(elsewhere, [(alice, .exact, TimeInterval(8 * 3600))])
+
+        await relaunched.center.sync()
+        relaunched.fixes.subject.send(SharedLocationFix(latitude: 45, longitude: 5)!)
+        await settle(until: { false })
+
+        XCTAssertFalse(relaunched.fixes.isFollowing)
+        XCTAssertTrue(relaunched.emitter.updates.isEmpty)
+        XCTAssertTrue(store.received)
+        XCTAssertNil(store.publishedStart)
+    }
+
+    func test_aRelaunch_withoutTakeover_keepsPublishing() async {
+        let store = FakeSharedLocationRosterStore()
+        _ = await publishingSUT(store: store)
+        let relaunched = makeSUT(store: store)
+        relaunched.served.snapshot = served(mine, [(alice, .exact, TimeInterval(8 * 3600))])
+
+        await relaunched.center.sync()
+
+        XCTAssertTrue(relaunched.fixes.isFollowing)
+        XCTAssertFalse(store.received)
+        XCTAssertEqual(store.publishedStart, mine)
+    }
+
+    func test_aShareStoppedElsewhere_forgetsTheKeptStart() async {
+        let store = FakeSharedLocationRosterStore()
+        let sut = await publishingSUT(store: store)
+        sut.served.snapshot = served(nil, [])
+
+        await sut.center.sync()
+
+        XCTAssertNil(store.publishedStart)
+    }
+
     func test_theOwnSnapshot_decodesTheStartTheGatewayNames() throws {
         let raw = Data(#"{"recipients":[],"expiresAt":null,"startedAt":"2026-01-01T00:00:00.000Z"}"#.utf8)
         XCTAssertEqual(try JSONDecoder().decode(SharedLocationOwnSnapshot.self, from: raw).startedAt, mine)

@@ -42,6 +42,7 @@ class SharedLocationSharingSyncTest {
         private val scope: TestScope,
         val saved: MutableMap<String, String?> = mutableMapOf(),
         val receivedMarks: MutableMap<String, Boolean> = mutableMapOf(),
+        val startMarks: MutableMap<String, String?> = mutableMapOf(),
     ) {
         var servedSnapshot: SharedLocationOwnSnapshot? = null
         var servedFailure: Exception? = null
@@ -97,6 +98,10 @@ class SharedLocationSharingSyncTest {
                     writes += "received:$accountId=$received"
                     receivedMarks[accountId] = received
                 }
+                override fun loadPublishedStart(accountId: String): String? = startMarks[accountId]
+                override fun savePublishedStart(accountId: String, startedAt: String?) {
+                    startMarks[accountId] = startedAt
+                }
             },
             accountId = { account },
             connected = connected,
@@ -111,7 +116,7 @@ class SharedLocationSharingSyncTest {
             },
         )
 
-        fun relaunched(): Device = Device(scope, saved, receivedMarks)
+        fun relaunched(): Device = Device(scope, saved, receivedMarks, startMarks)
     }
 
     private fun served(vararg pairs: Pair<String, Long>) =
@@ -515,5 +520,57 @@ class SharedLocationSharingSyncTest {
         runCurrent()
 
         assertThat(device.receivedMarks["me"]).isNotEqualTo(true)
+    }
+
+    @Test
+    fun `relance apres qu'un autre appareil a repris le partage, cet appareil cede au lieu de republier`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        relaunched.servedSnapshot = servedFrom(elsewhere, alice to hour)
+
+        relaunched.ownChanged.emit(Unit)
+        runCurrent()
+        advanceTimeBy(10_000L)
+        relaunched.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(relaunched.receivedMarks["me"]).isTrue()
+        assertThat(relaunched.updates).isEmpty()
+        assertThat(relaunched.startMarks["me"]).isNull()
+    }
+
+    @Test
+    fun `relance sans reprise ailleurs, cet appareil continue de publier`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        val relaunched = device.relaunched()
+        relaunched.center.restore()
+        runCurrent()
+        relaunched.servedSnapshot = servedFrom(mine, alice to hour)
+
+        relaunched.ownChanged.emit(Unit)
+        runCurrent()
+        advanceTimeBy(10_000L)
+        relaunched.stream.emit(LiveLocationFix(45.0, 5.0, accuracy = 8.0))
+        runCurrent()
+
+        assertThat(relaunched.receivedMarks["me"]).isNotEqualTo(true)
+        assertThat(relaunched.updates).isNotEmpty()
+        assertThat(relaunched.startMarks["me"]).isEqualTo(mine)
+    }
+
+    @Test
+    fun `un partage arrete ailleurs oublie le demarrage garde`() = runTest {
+        val device = Device(this)
+        publishing(device)
+        device.servedSnapshot = servedFrom(null)
+
+        device.ownChanged.emit(Unit)
+        runCurrent()
+
+        assertThat(device.startMarks["me"]).isNull()
     }
 }
