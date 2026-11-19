@@ -11,7 +11,13 @@ public object PhoneCallReportPolicy {
     public const val MODE_IN_CALL: Int = 2
     public const val MODE_IN_COMMUNICATION: Int = 3
 
-    public fun isInCall(audioMode: Int): Boolean = audioMode == MODE_IN_CALL || audioMode == MODE_IN_COMMUNICATION
+    /**
+     * Pendant qu'un appel Meeshy SONNE, son aperçu audible passe le téléphone en `MODE_IN_COMMUNICATION` avant tout
+     * décroché ([MeeshyCallRinging]) : ce mode-là ne dit rien — le compter dirait « en appel » à tort, et dirait aux Sangs
+     * qu'un appel arrive, puis quand il est refusé (audit #18753). Un appel téléphonique (`MODE_IN_CALL`) compte toujours.
+     */
+    public fun isInCall(audioMode: Int, meeshyCallRinging: Boolean = false): Boolean =
+        audioMode == MODE_IN_CALL || (audioMode == MODE_IN_COMMUNICATION && !meeshyCallRinging)
 
     /**
      * Un rapport part quand la valeur CHANGE par rapport au dernier accepté — et toujours le premier de la session, même
@@ -20,4 +26,19 @@ public object PhoneCallReportPolicy {
      */
     public fun shouldReport(lastAccepted: Boolean?, current: Boolean, signedIn: Boolean, sharingEnabled: Boolean?): Boolean =
         signedIn && sharingEnabled != false && lastAccepted != current
+}
+
+/**
+ * « Un appel Meeshy sonne et son aperçu est audible » (#18753) : allumé par le coordinateur d'appel quand il route
+ * l'aperçu avant décroché, éteint au décroché et à la fin. Seul le rapporteur « en appel » le lit, pour ne pas compter
+ * ce mode audio comme un appel. Un drapeau de processus, sans état durable.
+ */
+public object MeeshyCallRinging {
+    private val ringing = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    public val isRinging: Boolean get() = ringing.get()
+
+    public fun set(value: Boolean) {
+        ringing.set(value)
+    }
 }

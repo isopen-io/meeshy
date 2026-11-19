@@ -3,11 +3,25 @@ import Foundation
 import CallKit
 import MeeshySDK
 
-/// La règle pure : un appel est en cours tant qu'UN appel n'est pas terminé — appel du téléphone ou appel Meeshy,
-/// CallKit les voit tous. Aucun identifiant, aucun numéro, aucun UUID n'en sort : un booléen.
+/// La règle pure : on est en appel tant qu'UN appel non terminé est DÉCROCHÉ ou SORTANT — appel du téléphone ou appel
+/// Meeshy, CallKit les voit tous. Un appel ENTRANT qui sonne n'en est pas un : le compter dirait « en appel » à tort, et
+/// dirait surtout aux Sangs qu'un appel arrive, et quand il est refusé (audit #18753). Aucun identifiant, aucun numéro,
+/// aucun UUID n'en sort : un booléen.
 nonisolated enum PhoneCallActivity {
-    static func isActive(callsEnded: [Bool]) -> Bool {
-        callsEnded.contains(false)
+    struct Call: Equatable {
+        let hasEnded: Bool
+        let hasConnected: Bool
+        let isOutgoing: Bool
+    }
+
+    static func isActive(_ calls: [Call]) -> Bool {
+        calls.contains { !$0.hasEnded && ($0.hasConnected || $0.isOutgoing) }
+    }
+}
+
+extension PhoneCallActivity.Call {
+    nonisolated init(_ call: CXCall) {
+        self.init(hasEnded: call.hasEnded, hasConnected: call.hasConnected, isOutgoing: call.isOutgoing)
     }
 }
 
@@ -64,7 +78,7 @@ final class CallKitCallActivity {
 
     /// L'état des appels MAINTENANT.
     var isActive: Bool {
-        PhoneCallActivity.isActive(callsEnded: observer.calls.map(\.hasEnded))
+        PhoneCallActivity.isActive(observer.calls.map(PhoneCallActivity.Call.init))
     }
 }
 
@@ -73,7 +87,7 @@ nonisolated final class CallObserverDelegateProxy: NSObject, CXCallObserverDeleg
     var onChange: (@MainActor (Bool) -> Void)?
 
     func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
-        let active = PhoneCallActivity.isActive(callsEnded: callObserver.calls.map(\.hasEnded))
+        let active = PhoneCallActivity.isActive(callObserver.calls.map(PhoneCallActivity.Call.init))
         let onChange = self.onChange
         MainActor.assumeIsolated { onChange?(active) }
     }

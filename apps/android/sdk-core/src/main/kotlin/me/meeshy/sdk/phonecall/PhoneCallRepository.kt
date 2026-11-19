@@ -173,10 +173,11 @@ class PhoneCallRepository internal constructor(
         sources.cache.write(PhoneCallRosterSnapshot.of(viewer, PhoneCallRoster(byUser = byUser)))
     }
 
+    /** Mon propre état ne m'est jamais montré : il n'entre ni dans le registre ni dans la pastille (comme le web et iOS). */
     private fun receive(event: PhoneCallEvent) {
+        if (event.userId == sources.viewerId()) return
         reduce { it.apply(event) }
         val announcement = event.announcement ?: return
-        if (event.userId == sources.viewerId()) return
         _notices.tryEmit(PhoneCallNotice(event.userId, announcement))
     }
 

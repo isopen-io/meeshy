@@ -12,6 +12,7 @@ final class PhoneCallCenterTests: XCTestCase {
 
     private let clock = Date(timeIntervalSince1970: 1_800_000_000)
 
+    @MainActor
     private final class Session {
         var viewer: String?
         var inCall = false
@@ -215,6 +216,20 @@ final class PhoneCallCenterTests: XCTestCase {
         XCTAssertTrue(rig.store.states.isEmpty)
     }
 
+    func test_catchUp_inFlightDuringAnAccountSwitch_writesNothingForTheNewAccount() async {
+        let rig = makeSUT(viewer: "me")
+        rig.sut.accountChanged(to: "me")
+        rig.service.snapshotResult = .success([state("sangDeA")])
+        let sut = rig.sut
+        let session = rig.session
+        rig.service.snapshotHook = {
+            session.viewer = "other-account"
+            sut.accountChanged(to: "other-account")
+        }
+        await rig.sut.catchUp()
+        XCTAssertTrue(rig.store.states.isEmpty)
+    }
+
     func test_firstAccountOfTheLaunch_keepsTheCache_whenItIsTheCacheOwner() async {
         let rig = makeSUT(viewer: nil, cacheOwner: "me")
         await rig.sut.receive(started(announced: false))
@@ -241,9 +256,19 @@ final class PhoneCallCenterTests: XCTestCase {
         XCTAssertTrue(PhoneCallWording.headline(long, now: clock).contains(time))
     }
 
-    func test_callActivity_isActiveWhileOneCallHasNotEnded() {
-        XCTAssertFalse(PhoneCallActivity.isActive(callsEnded: []))
-        XCTAssertFalse(PhoneCallActivity.isActive(callsEnded: [true]))
-        XCTAssertTrue(PhoneCallActivity.isActive(callsEnded: [true, false]))
+    private func call(ended: Bool = false, connected: Bool = false, outgoing: Bool = false) -> PhoneCallActivity.Call {
+        PhoneCallActivity.Call(hasEnded: ended, hasConnected: connected, isOutgoing: outgoing)
+    }
+
+    func test_callActivity_isActiveWhileOneCallIsAnsweredOrPlaced() {
+        XCTAssertFalse(PhoneCallActivity.isActive([]))
+        XCTAssertFalse(PhoneCallActivity.isActive([call(ended: true, connected: true)]))
+        XCTAssertTrue(PhoneCallActivity.isActive([call(ended: true), call(connected: true)]))
+        XCTAssertTrue(PhoneCallActivity.isActive([call(outgoing: true)]))
+    }
+
+    func test_callActivity_aRingingCallIsNotInACall_soItRevealsNoIncomingCall() {
+        XCTAssertFalse(PhoneCallActivity.isActive([call()]))
+        XCTAssertFalse(PhoneCallActivity.isActive([call(), call(ended: true, connected: true)]))
     }
 }

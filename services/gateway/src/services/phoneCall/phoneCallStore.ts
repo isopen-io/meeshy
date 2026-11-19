@@ -20,7 +20,8 @@ const id = (userId: string): string => userId.toLowerCase();
 const stateKey = (userId: string): string => `pcall:state:${id(userId)}`;
 const contextOf = (userId: string): string => `PhoneCall.state:${id(userId)}`;
 const lockKey = (userId: string): string => `pcall:lock:${id(userId)}`;
-const TTL = PHONE_CALL_CONFIG.reportTtlMinutes * 60;
+/** La durée de vie d'un rapport, plus un pas d'arrondi : l'expiration SERVIE est arrondie au pas supérieur. */
+const TTL = (PHONE_CALL_CONFIG.reportTtlMinutes + PHONE_CALL_CONFIG.servedSinceStepMinutes) * 60;
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 const text = (value: unknown): string | null => (typeof value === 'string' && value.length > 0 ? value : null);

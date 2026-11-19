@@ -14,6 +14,8 @@ final class MockPhoneCallService: PhoneCallServiceProviding, @unchecked Sendable
         PhoneCallPersonSettings(userId: "peer", isShared: true)
     )
     var updatePersonSettingsResult: Result<PhoneCallPersonSettings, Error>?
+    /// Joué PENDANT le rattrapage, avant sa réponse : ce qui arrive à l'app pendant qu'un instantané est en vol.
+    var snapshotHook: (@MainActor @Sendable () -> Void)?
 
     private var reports: [Bool] = []
     private var emitterUpdates: [Bool] = []
@@ -30,7 +32,10 @@ final class MockPhoneCallService: PhoneCallServiceProviding, @unchecked Sendable
         }
     }
 
-    func snapshot() async throws -> [PhoneCallState] { try snapshotResult.get() }
+    func snapshot() async throws -> [PhoneCallState] {
+        if let snapshotHook { await snapshotHook() }
+        return try snapshotResult.get()
+    }
 
     func emitterSettings() async throws -> PhoneCallEmitterSettings { try emitterSettingsResult.get() }
 

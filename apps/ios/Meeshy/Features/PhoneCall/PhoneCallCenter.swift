@@ -26,6 +26,8 @@ final class PhoneCallCenter {
     private let currentCallActivity: () -> Bool
     private let lane = OrderedEventLane()
     private var account: String?
+    /// Avance à chaque changement de compte : un rattrapage parti sous un compte ne s'applique jamais à un autre.
+    private var accountGeneration = 0
     private let cacheOwner: PhoneCallCacheOwnerStoring
     private var cancellables = Set<AnyCancellable>()
 
@@ -90,10 +92,12 @@ final class PhoneCallCenter {
         await announce(announcement.kind, of: event.userId)
     }
 
-    /// Le rattrapage à chaque socket accrochée : l'instantané fait foi.
+    /// Le rattrapage à chaque socket accrochée : l'instantané fait foi — pour le compte qui l'a demandé, et lui seul.
+    /// Un changement de compte pendant la requête jette la réponse : elle porte les Sangs de l'autre compte (audit #18753).
     func catchUp() async {
-        guard let items = try? await service.snapshot() else { return }
+        let generation = accountGeneration
         let viewer = viewerId()
+        guard let items = try? await service.snapshot(), generation == accountGeneration, viewer == viewerId() else { return }
         store.reconcile(with: items.filter { $0.userId != viewer })
     }
 
@@ -123,6 +127,7 @@ final class PhoneCallCenter {
         let previous = account
         account = userId
         guard previous != userId else { return }
+        accountGeneration += 1
         if userId == nil || previous != nil || cacheOwner.owner != userId {
             store.reset()
             feed.reset()

@@ -19,6 +19,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import me.meeshy.core.common.DefaultDispatcher
 import me.meeshy.sdk.lifecycle.AppLifecycleHook
+import me.meeshy.sdk.model.phonecall.MeeshyCallRinging
 import me.meeshy.sdk.model.phonecall.PhoneCallReportPolicy
 import me.meeshy.sdk.phonecall.DeviceCallReader
 import me.meeshy.sdk.phonecall.PhoneCallReporting
@@ -33,7 +34,7 @@ class AndroidDeviceCall @Inject constructor(
 ) : DeviceCallReader {
     override fun isInCall(): Boolean? {
         val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return null
-        return PhoneCallReportPolicy.isInCall(audio.mode)
+        return PhoneCallReportPolicy.isInCall(audio.mode, meeshyCallRinging = MeeshyCallRinging.isRinging)
     }
 }
 

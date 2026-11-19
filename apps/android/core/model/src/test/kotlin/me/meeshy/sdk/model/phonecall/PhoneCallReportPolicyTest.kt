@@ -22,6 +22,23 @@ class PhoneCallReportPolicyTest {
     }
 
     @Test
+    fun `l'apercu d'un appel Meeshy qui sonne n'est pas un appel, et ne trahit pas qu'un appel arrive`() {
+        val mode = PhoneCallReportPolicy.MODE_IN_COMMUNICATION
+        assertThat(PhoneCallReportPolicy.isInCall(mode, meeshyCallRinging = true)).isFalse()
+        assertThat(PhoneCallReportPolicy.isInCall(PhoneCallReportPolicy.MODE_IN_CALL, meeshyCallRinging = true)).isTrue()
+        assertThat(PhoneCallReportPolicy.isInCall(mode, meeshyCallRinging = false)).isTrue()
+    }
+
+    @Test
+    fun `le signal de sonnerie Meeshy s'allume a l'apercu et s'eteint au decroche ou a la fin`() {
+        MeeshyCallRinging.set(false)
+        MeeshyCallRinging.set(true)
+        assertThat(MeeshyCallRinging.isRinging).isTrue()
+        MeeshyCallRinging.set(false)
+        assertThat(MeeshyCallRinging.isRinging).isFalse()
+    }
+
+    @Test
     fun `le premier rapport part toujours, meme faux, pour clore un appel que l'app n'a pas vu finir`() {
         assertThat(PhoneCallReportPolicy.shouldReport(lastAccepted = null, current = false, signedIn = true, sharingEnabled = true)).isTrue()
         assertThat(PhoneCallReportPolicy.shouldReport(lastAccepted = null, current = true, signedIn = true, sharingEnabled = null)).isTrue()
