@@ -82,10 +82,17 @@ export type OutboxState = {
    * supprimée, et l'entrée ne peut plus JAMAIS aboutir alors que
    * `upload.files` porte encore le fichier (IndexedDB garde les `File`).
    *
-   * Il efface le LOT ENTIER, jamais le seul id nommé par le refus : la
-   * passerelle refuse l'envoi en bloc (`admitMessageAttachments` s'arrête au
-   * premier fautif), donc rien n'a été attaché et les pièces survivantes du
-   * lot n'ont plus de porteur — elles partiront au balayage comme les autres.
+   * Il efface le LOT ENTIER, jamais le seul id nommé par le refus : le refus
+   * porte sur l'ENVOI, pas sur une pièce (`admitMessageAttachments` s'arrête au
+   * premier fautif et ne nomme que lui), et la reprise repart donc du lot
+   * entier. Les copies que le premier téléversement avait réussies deviennent
+   * orphelines et partent au balayage suivant.
+   *
+   * **Ce n'est PAS parce que « rien n'a été attaché »** — l'admission admet
+   * explicitement une pièce déjà portée par le message de ce même
+   * `clientMessageId` (`carriersOfThisSend`), donc une pièce du lot peut avoir
+   * un porteur. C'est pour ça que la décision est ici, et son coût réel aussi :
+   * la pièce attachée ne se ré-attachera pas à la reprise (#19917).
    */
   forgetUploadedIds(conversationId: string, clientMessageId: string): void;
   /** LE GESTE DE LA CONFIRMATION — appelé par `perform-send.ts` sur un 2xx,
@@ -192,9 +199,12 @@ export function createOutboxStore(): StoreApi<OutboxState> {
             ...state.entries,
             [conversationId]: replaceEntry(current, clientMessageId, (entry) => {
               if (entry.upload === undefined || entry.upload.attachmentIds === undefined) return entry;
-              /* La clé est RETIRÉE, jamais posée à `undefined` : c'est elle que
-                 `uploadPhase` interroge (`!== undefined`), et c'est la forme
-                 que la file durable réécrit sur l'appareil. */
+              /* La clé est RETIRÉE, jamais posée à `undefined` — pour le TYPE,
+                 et pas pour la forme persistée : `exactOptionalPropertyTypes`
+                 refuse `attachmentIds: undefined` sur un champ optionnel, et
+                 c'est ce refus-là qui garde le geste. `uploadPhase` interroge
+                 `!== undefined` et se comporterait pareil dans les deux cas,
+                 comme `structuredClone`, qui garde une clé `undefined`. */
               const { attachmentIds: _forgotten, ...upload } = entry.upload;
               return { ...entry, upload };
             }),

@@ -80,6 +80,35 @@ seul geste, sans rien mémoriser.
 > même phrase dans leur doc-comment ; un seul porte le défaut, et la différence est dans ce
 > qu'ils font APRÈS l'échec — pas dans ce qu'ils mémorisent.
 
+### Trois témoins qui ne pouvaient pas tomber — et le troisième a résisté à sa première réparation
+
+L'audit adversarial du lot a rendu VERTES trois mutations de production. Les
+deux premières ont une cause commune, et elle mérite d'être dite :
+
+| mutation restée verte | ce qu'elle casse |
+|---|---|
+| `forgetUploadedIds` ignore son `clientMessageId` | le refus d'un envoi fait oublier les ids de **l'envoi voisin** de la même conversation |
+| le prédicat ne regarde que le CODE, pas le statut | un futur 403 portant le même mot ferait oublier des ids |
+| l'oubli déplacé APRÈS `markFailed` | un arrêt brutal entre les deux `set` persiste « en échec » avec l'id mort |
+
+> **Aucun de mes scénarios n'avait deux entrées dans une conversation.** Un
+> défaut se raconte au singulier — « un envoi dont la pièce a été balayée » —
+> et le témoin qu'on en tire hérite de ce singulier. La question à poser à un
+> geste qui prend une CLÉ est : *mon témoin contient-il seulement ce que cette
+> clé désigne ?* S'il n'y a qu'une ligne, la clé n'est pas exercée.
+
+Et la troisième porte une leçon de plus. Mon premier témoin de l'ORDRE
+assertait sur ce que la file avait ÉCRIT sur l'appareil — il est resté **VERT**
+sous l'inversion, parce que les deux `set` publient l'un après l'autre et que
+la dernière écriture gagne : l'état final est le même dans les deux ordres.
+
+> **Ce que garantit un ORDRE n'est pas l'état FINAL — c'est chacun des états
+> PUBLIÉS en chemin.** Un témoin qui lit l'arrivée ne peut pas voir un ordre ;
+> il faut relever la SÉQUENCE et affirmer sur l'invariant (« aucun état publié
+> ne porte *en échec* avec les ids morts »). Même famille que la leçon du cycle
+> 185, versée le même jour :
+> `2026-11-19-un-commentaire-qui-promet-un-ordre-est-une-affirmation.md`.
+
 ### Le témoin qui ne pouvait pas tomber, attrapé par sa propre mutation
 
 La boucle sur les sept langues comparait `sendFailureReasonIn(refused, l)` à

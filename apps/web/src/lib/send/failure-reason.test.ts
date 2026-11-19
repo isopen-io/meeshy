@@ -78,7 +78,10 @@ describe('sendFailureReason', () => {
          seulement qu'une phrase est bien SERVIE. */
       expect(served ?? '').not.toHaveLength(0);
     }
-    /* Et c'est le SEUL 4xx que la bande d'envoi propose de rejouer. */
+    /* Et la bande d'envoi propose de le rejouer. Ce n'est pas le SEUL 4xx dans
+       ce cas — 408/425/429 (`RETRYABLE_CLIENT_STATUSES`) le sont aussi — mais
+       il l'est pour une raison DIFFÉRENTE : eux se rejouent à l'identique,
+       celui-ci parce que le client vient de réparer l'entrée. */
     expect(isPermanentFailure(refused)).toBe(false);
   });
 

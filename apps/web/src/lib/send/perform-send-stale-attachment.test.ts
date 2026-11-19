@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
 import { createHttpTransport } from '@/lib/api/http';
+import { ATTACHMENT_NOT_FOUND, isStaleAttachmentRefusal } from '@/lib/api/attachment-refusal';
 import { isPermanentFailure } from '@/lib/api/outcome';
 import type { ImagePreparer } from '@/lib/media/prepare-image-upload';
 
@@ -220,6 +221,100 @@ describe('performSend — la pièce jointe que la passerelle ne trouve plus (#19
     expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0);
   });
 
+  test('seule l’entrée REFUSÉE oublie ses ids — sa voisine de la même conversation garde les siens', async () => {
+    const { impl } = routedFetch({
+      '/attachments/upload': [uploadOf({ id: 'att-1', name: 'prisme.png' }), uploadOf({ id: 'att-2', name: 'bulle.png' })],
+      '/conversations/c-a/messages': [{ status: 503, body: { success: false, error: 'passerelle' } }, staleRefusal],
+    });
+    const outbox = createOutboxStore();
+    const deps = depsOf(impl, outbox);
+
+    /* La voisine échoue par une panne PASSAGÈRE : elle garde son id, et sa
+       reprise ne doit pas re-téléverser. */
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(png('prisme.png'))] },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(png('bulle.png'))] },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const entries = entriesOf(outbox.getState(), 'c-a');
+    expect(entries).toHaveLength(2);
+    expect(entries[0]?.upload?.attachmentIds).toEqual(['att-1']);
+    expect(entries[1]?.upload?.attachmentIds).toBeUndefined();
+  });
+
+  test('AUCUN état publié ne montre « en échec » avec les ids morts — l’ordre des deux gestes EST la garantie', async () => {
+    const { impl } = routedFetch({
+      '/attachments/upload': uploadOf({ id: 'att-1', name: 'prisme.png' }),
+      '/conversations/c-a/messages': staleRefusal,
+    });
+    const records = memoryDeviceRecords();
+    const outbox = createOutboxStore();
+    const deps = depsOf(impl, outbox);
+    const durability = createOutboxDurability({ outbox, records, activeViewer: () => 'u-viewer', deps: () => deps });
+    await durability.start();
+
+    /* Chaque `set` zustand NOTIFIE : la bande, la file durable et le rendu
+       lisent l'état INTERMÉDIAIRE entre `forgetUploadedIds` et `markFailed`.
+       L'ordre inverse publierait, un instant, une entrée « en échec » portant
+       encore l'id mort — et c'est cet instant qu'un arrêt brutal persiste. */
+    const published: { readonly failed: boolean; readonly ids?: readonly string[] }[] = [];
+    const stop = outbox.subscribe((state) => {
+      const entry = entriesOf(state, 'c-a')[0];
+      if (entry === undefined) return;
+      published.push({
+        failed: entry.delivery === 'failed',
+        ...(entry.upload?.attachmentIds === undefined ? {} : { ids: entry.upload.attachmentIds }),
+      });
+    });
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(png('prisme.png'))] },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    stop();
+    await durability.settled();
+
+    expect(published.filter((state) => state.failed)).not.toHaveLength(0);
+    expect(published.filter((state) => state.failed && state.ids !== undefined)).toEqual([]);
+    /* Et ce que la file a écrit sur l'appareil — ce qu'un redémarrage relira. */
+    const stored = (await records.load(outboxRecordKey('u-viewer'))) as Record<string, readonly OutboxEntry[]>;
+    expect(stored['c-a']?.[0]?.delivery).toBe('failed');
+    expect(stored['c-a']?.[0]?.upload?.attachmentIds).toBeUndefined();
+  });
+
+  test('un 404 SANS le code nommé garde les ids : c’est le refus qui est reconnu, pas le statut', async () => {
+    const { impl, calls } = routedFetch({
+      '/attachments/upload': uploadOf({ id: 'att-1', name: 'prisme.png' }),
+      '/conversations/c-a/messages': {
+        status: 404,
+        body: { success: false, error: 'Conversation not found', code: 'CONVERSATION_NOT_FOUND' },
+      },
+    });
+    const outbox = createOutboxStore();
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(png('prisme.png'))] },
+      viewerId: 'u-viewer',
+      deps: depsOf(impl, outbox),
+    });
+
+    const entry = soleEntry(outbox);
+    expect(entry?.upload?.attachmentIds).toEqual(['att-1']);
+    expect(isPermanentFailure(entry?.lastError)).toBe(true);
+    expect(uploadCount(calls)).toBe(1);
+  });
+
   test('un refus de DROIT garde les ids : re-téléverser ne changerait rien', async () => {
     const { impl, calls } = routedFetch({
       '/attachments/upload': uploadOf({ id: 'att-1', name: 'prisme.png' }),
@@ -242,5 +337,19 @@ describe('performSend — la pièce jointe que la passerelle ne trouve plus (#19
     expect(entry?.upload?.attachmentIds).toEqual(['att-1']);
     expect(isPermanentFailure(entry?.lastError)).toBe(true);
     expect(uploadCount(calls)).toBe(1);
+  });
+});
+
+describe('isStaleAttachmentRefusal — ce que le prédicat reconnaît (#19865)', () => {
+  test('le code NE SUFFIT PAS : le statut est exigé avec lui', () => {
+    expect(isStaleAttachmentRefusal({ status: 404, code: ATTACHMENT_NOT_FOUND })).toBe(true);
+    /* `ATTACHMENT_NOT_FOUND` est servi ailleurs dans le dépôt (`routes/posts/core.ts`,
+       `AttachmentTranslateService`) : rien n'interdit qu'une route le pose un jour
+       sur un autre statut, où oublier des ids n'aurait aucun sens. */
+    expect(isStaleAttachmentRefusal({ status: 403, code: ATTACHMENT_NOT_FOUND })).toBe(false);
+    expect(isStaleAttachmentRefusal({ status: 409, code: ATTACHMENT_NOT_FOUND })).toBe(false);
+    expect(isStaleAttachmentRefusal({ status: 404, code: 'CONVERSATION_NOT_FOUND' })).toBe(false);
+    expect(isStaleAttachmentRefusal({ status: 404 })).toBe(false);
+    expect(isStaleAttachmentRefusal(undefined)).toBe(false);
   });
 });
