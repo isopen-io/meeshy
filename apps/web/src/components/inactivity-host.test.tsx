@@ -60,6 +60,12 @@ const clientWithJacques = (): QueryClient => {
 
 const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
 
+/** Attend une CONDITION, pas une durée : sous la charge de la suite complète, le catalogue et l'annonce arrivent plus tard. */
+const until = async (ready: () => boolean, timeoutMs = 2_000): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  while (!ready() && Date.now() < deadline) await settle();
+};
+
 const mountHost = async (client: QueryClient, store: ReturnType<typeof createPillAnnouncementStore>, socket: SocketClient) =>
   mount(<InactivityHost client={client} store={store} watch={(watcher) => watcher(socket)} snapshot={async () => ({ ok: true, data: [] })} language={() => 'fr'} />);
 
@@ -73,7 +79,7 @@ describe('l’hôte de l’alerte d’inactivité', () => {
     await mountHost(client, store, socket);
     const state = served();
     await act(async () => fire(INACTIVITY_SERVER_EVENTS.INACTIVITY_ALERT, { userId: JACQUES, state, announcement: { kind: 'alert', inactiveSince: state.inactiveSince, at: state.alertedAt } }));
-    await settle();
+    await until(() => store.getState().queue.length > 0);
     expect(inactivityStateOf(client, JACQUES, Date.now())?.lastBattery?.level).toBe(9);
     expect(store.getState().queue.map((entry) => [entry.text, entry.tone])).toEqual([['Jacques n’a pas répondu à « Tout va bien ? »', 'alert']]);
   });
@@ -86,7 +92,7 @@ describe('l’hôte de l’alerte d’inactivité', () => {
     const state = served();
     await act(async () => fire(INACTIVITY_SERVER_EVENTS.INACTIVITY_ALERT, { userId: JACQUES, state }));
     await act(async () => fire(INACTIVITY_SERVER_EVENTS.INACTIVITY_CLEARED, { userId: JACQUES, announcement: { kind: 'responded', inactiveSince: state.inactiveSince, at: new Date().toISOString() } }));
-    await settle();
+    await until(() => store.getState().queue.length > 0);
     expect(inactivityStateOf(client, JACQUES, Date.now())).toBeNull();
     expect(store.getState().queue.map((entry) => entry.text)).toEqual(['Jacques va bien']);
   });
