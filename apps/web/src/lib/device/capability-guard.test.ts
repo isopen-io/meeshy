@@ -17,6 +17,7 @@ const SRC = fileURLToPath(new URL('../..', import.meta.url));
 const READS_RAW_SIGNALS: Readonly<Record<string, string>> = {
   'lib/device/capability-tier.ts': 'le lecteur unique',
   'lib/links/click-context.ts': 'la telemetrie d\'un clic : des valeurs brutes, aucune decision',
+  'lib/calls/call-network-recovery.ts': 'ecoute le CHANGEMENT de reseau pour relancer ICE pendant un appel : aucun seuil, aucune decision de capacite',
 };
 
 const SIGNAL = /\b(hardwareConcurrency|deviceMemory)\b|navigator\)?\.connection|['"]connection['"]/;
