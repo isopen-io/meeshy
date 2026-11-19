@@ -1,9 +1,9 @@
-# Un tri qui prétend CLORE une classe est celui qu'on vérifie le moins
+## Un tri qui prétend CLORE une classe est celui qu'on vérifie le moins
 
 *2026-11-19, cycle 185 (#19803 → #19909, #19910). Mesuré par l'audit adversarial
 du lot, qui a rendu un verdict BLOQUANT sur la mesure centrale du lot.*
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 #19748 avait trié les 83 égalités nues de `deletedAt` du dépôt et conclu : 81 sont
 exactes (76 sur `Message`, où la discipline d'écriture est complète, 5 sur une
@@ -20,7 +20,7 @@ Je n'ai pas vérifié le tri. Je l'ai **recopié**, et la phrase fausse qui en d
 retrouvée écrite à **quatre endroits** — commentaire de production, en-tête du
 témoin, corps de l'issue, journal — chacun la tenant du précédent.
 
-## La règle
+### La règle
 
 **Une énumération porte DEUX affirmations, et le tri qui prétend clore la classe
 rend la seconde invisible :**
@@ -42,7 +42,7 @@ invitation à ne plus compter — il a l'air d'avoir déjà fait le travail.
 > que je ne lisais pas un compte comme un compte : je lisais **une classe comme
 > close**.
 
-## Ce qu'il faut faire, mécaniquement
+### Ce qu'il faut faire, mécaniquement
 
 1. **Devant un lot qui se dit « le dernier de » quelque chose, refaire le balayage
    AVANT d'écrire la première ligne.** C'est un `grep` ; le coût est nul face à celui
@@ -57,7 +57,7 @@ invitation à ne plus compter — il a l'air d'avoir déjà fait le travail.
 4. **Et une phrase recopiée dans N fichiers se corrige dans les N.** L'audit a dû
    nommer les quatre sites un par un pour que la correction soit complète.
 
-## Le corollaire qui m'a le plus coûté
+### Le corollaire qui m'a le plus coûté
 
 J'avais aussi conclu qu'un ordre de fusion (« l'autre lot d'abord, le mien ensuite »)
 refermait le risque de mon correctif. **Un ordonnancement ne referme que les
@@ -70,7 +70,7 @@ réponse au risque entier ; il n'en couvrait qu'un quart, et le moins grave.
 > devient vrai à cause de l'ordre, et qu'est-ce qui devient vrai à cause de mon
 > patch ?** Seul le premier ensemble est gouverné par l'ordre.
 
-## Et la leçon de témoin, enfreinte sur le site qu'elle réparait
+### Et la leçon de témoin, enfreinte sur le site qu'elle réparait
 
 Ce lot dénonçait « un témoin qui recopie la clause ne vérifie que sa propre copie »
 — et ne gardait son propre site que par un `readFileSync` + `toContain(...)` et un
