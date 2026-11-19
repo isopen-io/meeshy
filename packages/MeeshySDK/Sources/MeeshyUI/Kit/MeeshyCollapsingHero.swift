@@ -12,7 +12,7 @@ import SwiftUI
 /// une fois, comme un en-tête, avec son sous-titre. La barre repliée devient un
 /// bouton nommé par `collapsedTapLabel` quand l'hôte donne `onCollapsedTap`.
 /// Une feuille, qui n'a pas de barre d'état au-dessus d'elle, donne `topInset`.
-/// Un tic léger marque l'épinglage, un seul par sens ; sous « Réduire les animations »
+/// L'épinglage ne vibre pas : un changement de vue n'a pas de retour haptique (#19783). Sous « Réduire les animations »
 /// (système ou forcé dans Meeshy), l'identité ne glisse plus : elle passe dans la barre
 /// par un fondu.
 public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, AvatarSlot: View>: View {
@@ -95,9 +95,6 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
         .frame(height: CGFloat(recipe.height))
-        .adaptiveOnChange(of: progress) { previous, current in
-            if MeeshyCollapsingHeroRecipe.pinTick(from: previous, to: current) { HapticFeedback.light() }
-        }
     }
 
     @ViewBuilder

@@ -67,10 +67,12 @@ struct ProfileView: View {
     @State private var isUploadingBanner = false
     @State private var bannerPickerShown = false
     @State private var scrollRelay = ScrollOffsetRelay()
-    /// Ma fiche n'a plus qu'une face, la Vitrine (#19782) : « Mes liens » vit dans son hub, et les faces Liens et
-    /// Actions ne se montent plus ici.
+    /// Les trois faces (#18869) : la face montrée, et les portes que la Vitrine et la face Actions ouvrent.
+    @State private var face: ProfileFace = .vitrine
     @State private var seenAsShown = false
     @State private var shareShown = false
+    /// « Créer un lien » touché à côté du sélecteur : la face Liens ouvre son choix de création, puis consomme la demande.
+    @State private var linkCreateRequested = false
     @State private var securityShown = false
     @State private var logoutAsked = false
     @State private var moodComposerShown = false
@@ -104,7 +106,7 @@ struct ProfileView: View {
 
             editHeader
 
-            shareButton
+            faceSelector
 
             ProfileEditOfflineBand(isEditing: isEditing)
 
@@ -410,11 +412,11 @@ struct ProfileView: View {
                     // Premier chargement, cache vide (AuthManager n'a encore aucun compte) : le gabarit fait du squelette
                     // du kit (K38, #19594) cède à la fiche par `motion.reveal` (K26, #19528) : même place, fondu croisé.
                     MeeshyRevealZone(isRevealed: !MeeshySkeletonLaw.shows(isLoading: true, hasCachedData: user != nil)) {
-                        vitrineContent
+                        faceContent
                     } placeholder: {
                         ProfileVitrineSkeleton()
                     }
-                    Spacer().frame(height: MeeshySpacing.xxxl + 8 + (showsShareButton ? Self.shareButtonRoom : 0))
+                    Spacer().frame(height: MeeshySpacing.xxxl + 8 + (showsFaceSelector ? Self.faceSelectorRoom : 0))
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
             }
@@ -444,41 +446,56 @@ struct ProfileView: View {
         door.open(with: router)
     }
 
-    // MARK: - La Vitrine seule (#19782)
+    // MARK: - Les trois faces (#18869)
 
-    /// La place que le bouton « Partager » occupe en bas : le contenu défile jusqu'au-dessus de lui.
-    private static let shareButtonRoom: CGFloat = 72
+    /// La place que le sélecteur de faces occupe en bas : le contenu défile jusqu'au-dessus de lui.
+    private static let faceSelectorRoom: CGFloat = 72
 
-    /// « Partager mon profil », en bas à droite dans la zone du pouce, hors édition et quand mon lien existe.
-    private var showsShareButton: Bool {
-        user != nil && !isEditing && ProfileLink(username: user?.username) != nil
+    private var showsFaceSelector: Bool {
+        user != nil && ProfileFace.showsSelector(isEditing: isEditing)
     }
 
     @ViewBuilder
-    private var shareButton: some View {
-        if showsShareButton {
+    private var faceSelector: some View {
+        if showsFaceSelector {
             VStack {
                 Spacer()
-                HStack {
-                    Spacer()
-                    MeeshyGlassButton(
-                        systemImage: ProfileFaceAccessory.share.systemImage,
-                        label: ProfileFaceAccessory.share.label,
-                        kind: .active,
-                        size: .s48,
-                        action: { shareShown = true }
-                    )
-                }
-                .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.bottom, MeeshySpacing.sm)
+                ProfileFaceSelector(face: $face, canShare: ProfileLink(username: user?.username) != nil,
+                                    onAccessory: { performFaceAccessory($0) })
             }
             .meeshyTransition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 
-    private var vitrineContent: some View {
-        VStack(spacing: MeeshySpacing.xxl) { vitrineFace }
-            .meeshyCascadeFace()
+    private func performFaceAccessory(_ accessory: ProfileFaceAccessory) {
+        switch accessory {
+        case .share: shareShown = true
+        case .createLink: linkCreateRequested = true
+        }
+    }
+
+    /// La face montrée glisse dans le sens du geste sur le sélecteur (Vitrine < Liens < Actions, #19606).
+    private var faceContent: some View {
+        MeeshySegmentedPages(selection: ProfileFace.shown(face, isEditing: isEditing), order: ProfileFace.allCases) { shown in
+            facePage(shown)
+        }
+    }
+
+    @ViewBuilder
+    private func facePage(_ shown: ProfileFace) -> some View {
+        switch shown {
+        case .vitrine:
+            VStack(spacing: MeeshySpacing.xxl) { vitrineFace }
+                .meeshyCascadeFace()
+        case .links:
+            ProfileLinksFace(user: user, accentColor: shownAccentHex, createRequested: $linkCreateRequested,
+                             onOpen: { router.push($0) })
+        case .actions:
+            ProfileActionsFace(user: user, stats: stats, accentColor: shownAccentHex,
+                               canShare: ProfileLink(username: user?.username) != nil,
+                               canSetMood: statusComposer != nil,
+                               legend: legend.summary, onAction: { perform($0) }, prefs: UserPreferencesManager.shared)
+        }
     }
 
     /// La Vitrine : qui je suis. Mon contact ne s'y lit qu'en édition (planche `Moi-Edition`) ; hors édition, la face
@@ -603,6 +620,7 @@ struct ProfileView: View {
         case .share: shareShown = true
         case .seenAs: seenAsShown = true
         case .edit:
+            face = .vitrine
             setEditing(true)
         case .mood: moodComposerShown = true
         case .stats: router.push(.userStats)

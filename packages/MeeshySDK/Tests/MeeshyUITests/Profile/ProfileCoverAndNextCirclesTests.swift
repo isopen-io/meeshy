@@ -140,4 +140,19 @@ final class ProfileCoverAndNextCirclesTests: XCTestCase {
         let source = try profileSource("ProfileNextCircles.swift")
         XCTAssertTrue(source.contains("shape: .blob"))
     }
+
+    // MARK: - Un changement de vue ne vibre pas (#19783)
+
+    /// Les haptiques restent aux actions ; changer de face ou d'onglet, épingler l'en-tête en défilant, revenir en
+    /// arrière par glissement ou déplier une pilule ne vibrent plus.
+    func test_viewChanges_carryNoHaptic() throws {
+        let sources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Sources/MeeshyUI")
+        for path in ["Kit/MeeshySegmented.swift", "Kit/MeeshyCollapsingHero.swift",
+                     "Profile/ProfileCoverPresentation.swift", "Profile/AvatarListeningSource.swift"] {
+            let code = try String(contentsOf: sources.appendingPathComponent(path), encoding: .utf8)
+            XCTAssertFalse(code.contains("HapticFeedback."), "\(path) : un changement de vue ne vibre pas")
+        }
+    }
 }

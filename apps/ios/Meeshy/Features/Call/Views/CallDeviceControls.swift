@@ -152,12 +152,18 @@ private struct CallPressLabel<Content: View>: View {
     }
 }
 
-/// Le doigt posé ne joue plus de choc : un tic d'ambiance, muet ; l'action garde son retour au relâchement (#19783).
+/// Un léger choc au doigt posé (iOS 17+) ; l'action garde son propre retour
+/// au relâchement.
 private struct CallPressHaptic: ViewModifier {
     let isPressed: Bool
 
+    @ViewBuilder
     func body(content: Content) -> some View {
-        content
+        if #available(iOS 17.0, *) {
+            content.sensoryFeedback(.impact(weight: .light), trigger: isPressed) { _, pressed in pressed }
+        } else {
+            content
+        }
     }
 }
 

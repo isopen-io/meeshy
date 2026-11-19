@@ -17,8 +17,8 @@ public nonisolated enum MeeshyCollapsingHeroAlignment: String, Sendable, Equatab
 /// titre finissent à 55 % ; la bannière s'efface de 0 à 50 %, le verre apparaît
 /// de 50 à 100 % ; l'identité passe dans la barre au-delà de 50 %. Sous « Réduire les
 /// animations », le doigt mène toujours la hauteur, mais l'identité ne glisse plus :
-/// elle s'efface et reparaît à sa place au passage de main (un fondu). Un tic léger
-/// marque l'épinglage, un seul par sens (`pinTick`).
+/// elle s'efface et reparaît à sa place au passage de main (un fondu). L'épinglage ne
+/// vibre pas : un changement de vue n'a pas de retour haptique (#19783).
 public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
 
     public static let expandedHeight: Double = 318
@@ -112,12 +112,6 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
     /// droits pour une bannière qui s'efface.
     public static func bannerCornerRadius(_ recipe: MeeshyCollapsingHeroRecipe, keepsBannerInBar: Bool) -> Double {
         keepsBannerInBar ? barCornerRadius * recipe.glassOpacity : 0
-    }
-
-    /// Le tic d'épinglage : il sonne quand l'avancée franchit l'épinglage, dans un sens ou dans l'autre, une fois.
-    public static func pinTick(from previous: Double, to current: Double) -> Bool {
-        guard previous.isFinite, current.isFinite else { return false }
-        return (clamp01(previous) >= 1) != (clamp01(current) >= 1)
     }
 
     private static func travelShare(_ share: Double, reduceMotion: Bool) -> Double {

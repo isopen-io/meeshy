@@ -9,12 +9,11 @@ import MeeshyUI
 /// billets de rangée filtrés par famille (K04), chacun avec son chiffre. Le cache se peint d'abord, le réseau revalide
 /// en silence (loi 8) ; une section vide a une sortie, une section en échec a « Réessayer ».
 ///
-/// `showsHeader` : l'en-tête de face (avatar, « Mes liens », pseudo, scanner) n'apparaît que sur ma fiche ; la page
-/// « Mes liens » poussée a déjà le sien.
+/// Sans en-tête de face (#19782) : ni avatar, ni « Mes liens » en grand, ni pseudo — la fiche les porte déjà au-dessus,
+/// et la page « Mes liens » poussée a le sien.
 struct ProfileLinksFace: View {
     let user: MeeshyUser?
     let accentColor: String
-    let showsHeader: Bool
     /// Une demande de création venue d'ailleurs (le bouton à côté du sélecteur de faces) : ouverte, puis consommée.
     let createRequested: Binding<Bool>
     let onOpen: (Route) -> Void
@@ -25,13 +24,12 @@ struct ProfileLinksFace: View {
     @State private var presented: ProfileLinksPresented?
     @State private var sent: SharedContentWrapper?
 
-    init(user: MeeshyUser?, accentColor: String, showsHeader: Bool = true,
+    init(user: MeeshyUser?, accentColor: String,
          createRequested: Binding<Bool> = .constant(false),
          links: ProfileLinksFaceModel? = nil, addresses: ProfileAddressesStore = .shared,
          visits: ProfileLinkVisitsModel? = nil, onOpen: @escaping (Route) -> Void) {
         self.user = user
         self.accentColor = accentColor
-        self.showsHeader = showsHeader
         self.createRequested = createRequested
         self.onOpen = onOpen
         _links = StateObject(wrappedValue: links ?? ProfileLinksFaceModel())
@@ -44,7 +42,6 @@ struct ProfileLinksFace: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
-            if showsHeader { header.meeshyCascade(rank: 0) }
             if let profileLink {
                 ProfileNoveltyReader(feature: .profileLink, accountId: user?.id) { badge in
                     profileTicket(profileLink, badge: badge)
@@ -78,16 +75,6 @@ struct ProfileLinksFace: View {
         async let mine: Void = addresses.load()
         async let counted: Void = visits.load(ownerId: user?.id, link: profileLink)
         _ = await (created, mine, counted)
-    }
-
-    // MARK: - En-tête
-
-    private var header: some View {
-        ProfileFaceHeader(user: user, title: ProfileLinksCopy.title, accentColor: accentColor,
-                          identifier: "profile.links.header") {
-            MeeshyGlassButton(systemImage: "qrcode.viewfinder", label: ProfileLinksCopy.scan, size: .s44,
-                              action: { presented = .scanner })
-        }
     }
 
     // MARK: - Mon lien de profil

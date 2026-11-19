@@ -47,6 +47,15 @@ final class ProfileFaceAccessoryTests: XCTestCase {
         XCTAssertFalse(face.contains("systemImage: \"square.and.arrow.up\""), "plus de partage figé")
     }
 
+    func test_createLinkAccessory_opensTheSameChooserAsTheLinksFace() throws {
+        let profile = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
+        XCTAssertTrue(profile.contains("case .createLink: linkCreateRequested = true"))
+        XCTAssertTrue(profile.contains("createRequested: $linkCreateRequested"))
+        let links = try code("Meeshy/Features/Profile/Faces/ProfileLinksFace.swift")
+        XCTAssertTrue(links.contains("presented = .create"), "la même présentation que « Créer un lien » de la face")
+        XCTAssertTrue(links.contains("createRequested.wrappedValue = false"), "la demande se consomme une fois")
+    }
+
     func test_faceChange_contentSlidesInTheOrderOfTheFaces_vitrineThenLinksThenActions() {
         let order = ProfileFace.allCases
         func travel(_ from: ProfileFace, _ to: ProfileFace) -> MeeshySegmentedTravel {
@@ -59,15 +68,9 @@ final class ProfileFaceAccessoryTests: XCTestCase {
         XCTAssertEqual(travel(.links, .links), MeeshySegmentedTravel.none)
     }
 
-    /// #19782 — ma fiche n'a plus que la Vitrine : ni sélecteur de faces, ni face Liens, ni face Actions ; « Partager
-    /// mon profil » reste, seul, en bas à droite.
-    func test_myProfile_showsTheVitrineOnly_andKeepsTheShareButton() throws {
+    func test_faceContent_isPagedByTheKit_andNoLongerMorphedWithoutDirection() throws {
         let view = try code("Meeshy/Features/Profile/Views/ProfileView.swift")
-        XCTAssertFalse(view.contains("ProfileFaceSelector("), "plus de sélecteur de faces sur ma fiche")
-        XCTAssertFalse(view.contains("ProfileLinksFace("), "« Mes liens » vit dans son hub")
-        XCTAssertFalse(view.contains("ProfileActionsFace("), "plus de face Actions sur ma fiche")
-        XCTAssertFalse(view.contains("MeeshySegmentedPages("))
-        XCTAssertTrue(view.contains("systemImage: ProfileFaceAccessory.share.systemImage"))
-        XCTAssertTrue(view.contains("action: { shareShown = true }"))
+        XCTAssertTrue(view.contains("MeeshySegmentedPages(selection: ProfileFace.shown(face, isEditing: isEditing)"))
+        XCTAssertFalse(view.contains(".meeshyMotion(.morph, value: face)"))
     }
 }
