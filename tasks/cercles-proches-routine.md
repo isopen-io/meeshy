@@ -1520,3 +1520,9 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `SharedLocationSharingSyncTest` (trois cas). Swift et `sdk-core` se prouvent par la CI.
 - Gardes iOS : règles maison (42) rc=0, cohésion rc=0, couleurs d'accent rc=0 ; inscription des tests rc=1, rouge
   HÉRITÉ de `dev` (cd0157b87 : `AnchoredSheetNamingGuardTests.swift` absent du pbxproj), étranger au lot.
+- Contre-audit : un BLOQUANT corrigé (la marque d'appareil était réécrite avant que la liste reçue soit enregistrée :
+  la cession ne tenait qu'un lancement — la liste est désormais écrite « reçue », sans démarrage, avant la marque) et
+  un repli fermé (une passerelle d'avant la liste seule ne reçoit pas la position de l'appareil avant la relecture ; le
+  retrait reste en attente). Restent assumés : une relecture en échec lève l'attente (critère de l'issue), une liste
+  d'avant la marque restaurée ailleurs publie encore (décision au porteur).
+- Prochain lot recommandé : fusion de cette PR, plafond `untilStopped` de `listOnlyState`, #19682 une fois décidée.
