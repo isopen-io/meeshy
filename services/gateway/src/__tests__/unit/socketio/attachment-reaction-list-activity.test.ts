@@ -37,7 +37,7 @@ type Capture = { readonly where: MongoDocument; readonly data: MongoDocument };
 
 /**
  * Le document de la conversation hôte, à la forme NOMINALE : `lastActivityAt`
- * ABSENT, ce que produisent les dix-neuf chemins de création (#19800). Le double
+ * ABSENT, ce que produisent les treize chemins de création (#19800). Le double
  * ÉVALUE le `where` contre lui au lieu de rendre `count: 1` quelle que soit la
  * clause — « un double ment aussi par ce qu'il ACCEPTE ».
  */

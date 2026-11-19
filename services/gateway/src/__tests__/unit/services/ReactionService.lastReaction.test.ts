@@ -106,12 +106,22 @@ describe('ReactionService — la dernière réaction de la conversation (#7545)'
 
     await service.addReaction({ messageId: MESSAGE_ID, participantId: PARTICIPANT_ID, emoji: '❤️' });
 
-    // La clause n'est pas COMPARÉE à une copie : elle est ÉVALUÉE contre le
-    // document que la création produit — celui dont `lastActivityAt` est ABSENT.
-    // Une égalité nue y rendait `count: 0`, et cette assertion-ci tombe (#19800).
+    // La clause n'est pas COMPARÉE à une copie : elle est ÉVALUÉE contre des
+    // documents. Le premier est celui que la création produit — `lastActivityAt`
+    // ABSENT —, où une égalité nue rendait `count: 0` (#19800).
     const [{ where, data }] = conversationUpdateMany.mock.calls[0] as [{ where: MongoDocument; data: MongoDocument }];
     expect(matchesMongoWhere({ id: CONVERSATION_ID, lastMessageAt: new Date('2026-10-01T08:00:00.000Z') }, where)).toBe(true);
     expect(data).toEqual({ lastActivityAt: REACTED_AT });
+
+    // Et la MONOTONIE, que le titre promet : elle ne s'observe que sur un
+    // document DATÉ. Sur le document à colonne absente, la branche d'absence
+    // apparie quel que soit l'opérateur de la troisième — `lt` inversé en `gt`
+    // laissait donc ce témoin VERT, relevé par l'audit adversarial de #19800.
+    // « Un témoin qui nomme correctement la moitié qu'il garde GÈLE l'autre. »
+    const avant = { id: CONVERSATION_ID, lastActivityAt: new Date(REACTED_AT.getTime() - 1_000) };
+    const apres = { id: CONVERSATION_ID, lastActivityAt: new Date(REACTED_AT.getTime() + 1_000) };
+    expect(matchesMongoWhere(avant, where)).toBe(true);
+    expect(matchesMongoWhere(apres, where)).toBe(false);
   });
 
   it("#9026 — un ajout sans effet n'est pas une activité", async () => {

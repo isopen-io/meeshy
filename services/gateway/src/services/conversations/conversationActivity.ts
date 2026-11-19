@@ -24,9 +24,21 @@ const logger = enhancedLogger.child({ module: 'ConversationActivity' });
  * (#19800). Sous MongoDB, `{ lastActivityAt: null }` est une ÉGALITÉ : elle
  * exige la clé PRÉSENTE et nulle. Or **aucun chemin de création n'écrit la
  * colonne**, et la mesure qui le prouve se prend par l'autre bout plutôt qu'en
- * énumérant les créations : il existe **un seul** `data: { lastActivityAt }`
- * dans tout le dépôt, et c'est celui-ci (les onze `prisma.conversation.create`
- * de la passerelle, sans aucun `createMany` ni `upsert`, n'en portent pas).
+ * énumérant les créations : **sur `Conversation`, cette unité est le SEUL site
+ * qui écrive `lastActivityAt`** — mesuré le 2026-11-19, un unique
+ * `data: { lastActivityAt }` visant ce modèle, quand les treize chemins de
+ * création du dépôt (onze `prisma.conversation.create` sous
+ * `services/gateway/src`, un dans `prisma/seed-meeshy-conversation.ts`, l'unique
+ * `upsert` de `packages/shared/seed.ts`, aucun `createMany`) n'en portent aucun.
+ *
+ * **La portée « sur `Conversation` » est portante, pas décorative** : la colonne
+ * `lastActivityAt` existe AUSSI sur `UserSession`, où elle est REQUISE et où
+ * quatre sites l'écrivent (`services/auth/session-activity.ts`,
+ * `SessionService`, `AuthService`, `routes/auth/magic-link.ts`). Une mesure de
+ * cette colonne qui ne nomme pas son modèle rend donc le mauvais chiffre, et
+ * c'est l'audit adversarial de ce lot qui l'a relevé — la première rédaction
+ * disait « un seul dans tout le dépôt », faux de quatre.
+ *
  * Sans `{ isSet: false }`, `updateMany` n'appariait AUCUNE conversation, rendait
  * `count: 0` — ce qui n'est pas une erreur — et la colonne restait absente pour
  * toujours. **Les QUATRE alimenteurs de l'axe « activité » étaient donc inertes

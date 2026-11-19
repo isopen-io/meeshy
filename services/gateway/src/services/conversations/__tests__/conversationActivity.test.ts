@@ -11,8 +11,9 @@
  *
  * Le double de ce fichier appliquait le `where` À LA MAIN, et son type de ligne
  * — `{ lastActivityAt: Date | null }` — ne savait pas REPRÉSENTER l'état
- * nominal : une conversation dont la colonne est ABSENTE, ce que les dix-neuf
- * chemins de création produisent tous, aucun n'écrivant `lastActivityAt`. Sa
+ * nominal : une conversation dont la colonne est ABSENTE, ce que les TREIZE
+ * chemins de création du dépôt produisent tous, aucun n'écrivant
+ * `Conversation.lastActivityAt`. Sa
  * branche `filter === null ⇒ current === null` tenait donc l'absence pour une
  * égalité, ce que MongoDB ne fait pas, et les cinq alimenteurs de l'axe
  * « activité » ont été inertes POUR TOUTES LES CONVERSATIONS avec six témoins
@@ -45,7 +46,7 @@ type Emitted = { room: string; event: string; payload: Record<string, unknown> }
 
 /**
  * Le document d'une conversation, tel que la base le porte. La forme NOMINALE
- * — celle que produisent les dix-neuf chemins de création — n'a PAS de clé
+ * — celle que produisent les TREIZE chemins de création du dépôt — n'a PAS de clé
  * `lastActivityAt` : `absente()` la rend, `nulle()` rend l'autre « pas encore »,
  * celui qu'un chemin a explicitement remis à zéro.
  */

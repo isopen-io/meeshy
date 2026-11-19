@@ -47,7 +47,7 @@
  * Mesuré le 2026-11-19 : **1 site**, et il était nu — l'ÉCRITURE monotone de
  * `recordConversationActivity`, unique écrivain de `Conversation.lastActivityAt`.
  * Son `OR` portait `{ lastActivityAt: null }` et `{ lt: at }`, donc il
- * n'appariait aucune conversation : les dix-neuf chemins de création n'écrivent
+ * n'appariait aucune conversation : les treize chemins de création n'écrivent
  * pas la colonne. `updateMany` rendait `count: 0`, la première écriture ne
  * pouvait jamais avoir lieu, et les QUATRE alimenteurs de l'axe « activité » du
  * rang de liste — réaction de message, réaction de pièce jointe, appel, épingle
@@ -105,13 +105,48 @@ const SRC_DIR = join(__dirname, '..');
  * (`Participant`, `CallParticipant`), l'échéance (`ServerEncryptionKey`,
  * `Notification`, `Post`, `ShareLink`, `UserDevice`, `Sound`) et le rang
  * d'activité (`Conversation.lastActivityAt`, #19800).
- *
- * `lastActivityAt` vit aussi sur `UserSession`, où elle est REQUISE
- * (`DateTime @default(now())`) : aucun filtre ne peut y poser l'égalité nue que
- * ce cliquet cherche, et `isSet` n'existe pas sur une colonne requise (cycle
- * 181, constat D). Le nom est partagé, le piège ne l'est pas.
  */
 const COLONNES = new Set(['leftAt', 'bannedAt', 'expiresAt', 'lastActivityAt']);
+
+/**
+ * **Une colonne n'est pas un piège sur tous les modèles qui la portent**, et
+ * `lastActivityAt` est le cas qui l'a prouvé : `DateTime?` sur `Conversation`
+ * (le piège y est, #19800) et `DateTime @default(now())` sur `UserSession`,
+ * donc REQUISE, donc toujours présente, donc l'égalité nue y est EXACTE.
+ *
+ * Ce qui rend la distinction PORTANTE et non cosmétique, et c'est l'audit
+ * adversarial du cycle 182 qui l'a mesuré de bout en bout : la première version
+ * de ce cliquet se contentait du nom de colonne et absolvait le risque par une
+ * phrase — « aucun filtre ne peut poser l'égalité nue sur `UserSession` ». Elle
+ * était FAUSSE. L'audit l'a reproduite dans les deux sens :
+ *
+ * ```
+ * where: { lastActivityAt: null }            sur userSession  ⇒  tsc EXIT=0, cliquet ROUGE
+ * where: { lastActivityAt: { isSet: false } } sur userSession  ⇒  TS2353 — NE COMPILE PAS
+ * ```
+ *
+ * Un cliquet qui rougit sur un site dont **le seul remède qu'il nomme ne
+ * compile pas** ne laisse que deux issues, mauvaises toutes les deux : geler la
+ * ligne sous une absolution réservée à une discipline d'ÉCRITURE qu'elle n'a
+ * pas, ou retirer la colonne et perdre la garde sur `Conversation`. C'est la
+ * forme exacte du constat D du cycle 181, dans la phrase même qui le citait.
+ *
+ * **Sur une colonne REQUISE, le remède n'est pas `isSet`, c'est de SUPPRIMER le
+ * filtre** — il n'y a rien à apparier de plus.
+ *
+ * Un site dont le modèle ne se résout pas (`model: ''`) est GARDÉ, jamais
+ * absous : la direction sûre pour un cliquet est le faux positif, qui fait
+ * regarder, et l'inventaire des sites nus étant VIDE, aucun n'est vivant.
+ */
+const MODELES_PAR_COLONNE: Readonly<Record<string, readonly string[]>> = {
+  lastActivityAt: ['conversation'],
+};
+
+/** Ce site est-il sur un modèle où sa colonne est OPTIONNELLE — donc piégeuse ? */
+const colonneEstPiegeuse = (site: { readonly field: string; readonly model: string }): boolean => {
+  const modeles = MODELES_PAR_COLONNE[site.field];
+  return modeles === undefined || site.model === '' || modeles.includes(site.model);
+};
 
 /**
  * Les égalités nues GELÉES — et une ligne n'y entre QU'AVEC la discipline
@@ -301,6 +336,42 @@ const FIXTURE_SOEUR_INTERVALLE_REPAREE = `
   });
 `;
 
+/**
+ * Les quatre formes de RÉSOLUTION DU MODÈLE (#19800, audit du cycle 182). Elles
+ * existent parce que la distinction `Conversation` / `UserSession` décide d'un
+ * ROUGE sans remède, et qu'une distinction qu'on énonce sans la mesurer protège
+ * le site qu'elle cache.
+ */
+const FIXTURE_MODELE_DELEGUE = `
+  await prisma.conversation.updateMany({
+    where: { id, OR: [{ lastActivityAt: null }, { lastActivityAt: { lt: at } }] },
+    data: { lastActivityAt: at },
+  });
+`;
+
+/** Le délégué sous un porteur et un `await` — la forme d'un service. */
+const FIXTURE_MODELE_DELEGUE_PORTE = `
+  const rows = await this.prisma.userSession.findMany({
+    where: { lastActivityAt: null },
+    select: { id: true },
+  });
+`;
+
+/** Le modèle par l'ANNOTATION, quand aucun appel n'enveloppe le littéral. */
+const FIXTURE_MODELE_ANNOTE = `
+  const VIVANT: Prisma.ConversationWhereInput = { isActive: true, lastActivityAt: null };
+`;
+
+/**
+ * Et le modèle NON RÉSOLU : un `where` passé en paramètre, qu'aucun délégué
+ * n'enveloppe. Il doit rester GARDÉ — un `''` n'est pas une absolution.
+ */
+const FIXTURE_MODELE_INCONNU = `
+  export function scope(): SomeOpaqueType {
+    return { where: { lastActivityAt: null } };
+  }
+`;
+
 const FIXTURE_EN_COMMENTAIRE = `
   // Audit C5 — \`{leftAt: null}\` seul manque les documents Mongo sans la clé.
   /** Et \`where: { bannedAt: null }\` dans un doc-comment non plus. */
@@ -333,6 +404,41 @@ describe('le balayage lui-même — un scanner qui cherche une GRAPHIE doit prou
 
   it('et il absout le MÊME site une fois la troisième branche posée', () => {
     expect(sites(FIXTURE_SOEUR_INTERVALLE_REPAREE)).toEqual(['lastActivityAt:true']);
+  });
+
+  it.each([
+    ['le délégué de l’appel englobant', FIXTURE_MODELE_DELEGUE, 'conversation'],
+    ['un délégué porté, sous `await`', FIXTURE_MODELE_DELEGUE_PORTE, 'userSession'],
+    ['l’annotation `Prisma.<Modèle>WhereInput`', FIXTURE_MODELE_ANNOTE, 'conversation'],
+    ['rien du tout — et il le DIT', FIXTURE_MODELE_INCONNU, ''],
+  ])('résout le MODÈLE par %s', (_voie, fixture, attendu) => {
+    expect(equalityNullFiltersIn('fixture.ts', fixture, COLONNES).map((site) => site.model)).toEqual([attendu]);
+  });
+
+  /**
+   * Le constat A de l'audit du cycle 182, dans les DEUX sens. Sans le modèle, ce
+   * cliquet accusait le site de session — où `isSet: false` ne compile pas
+   * (`TS2353`), donc où il n'avait aucun remède à offrir.
+   */
+  it('ne tient PAS pour piégeuse une colonne requise sur SON modèle (`UserSession.lastActivityAt`)', () => {
+    const [site] = equalityNullFiltersIn('fixture.ts', FIXTURE_MODELE_DELEGUE_PORTE, COLONNES);
+    expect(colonneEstPiegeuse(site)).toBe(false);
+  });
+
+  it('la tient pour piégeuse sur le modèle où elle est OPTIONNELLE, et sur un modèle non résolu', () => {
+    const [conversation] = equalityNullFiltersIn('fixture.ts', FIXTURE_MODELE_ANNOTE, COLONNES);
+    const [inconnu] = equalityNullFiltersIn('fixture.ts', FIXTURE_MODELE_INCONNU, COLONNES);
+    expect([colonneEstPiegeuse(conversation), colonneEstPiegeuse(inconnu)]).toEqual([true, true]);
+  });
+
+  /**
+   * Et la portée par modèle ne s'applique QU'aux colonnes qui la déclarent : les
+   * trois colonnes triées avant #19800 restent gardées sur tout modèle, leur
+   * mesure ayant été prise ainsi.
+   */
+  it('garde les colonnes SANS portée de modèle sur n’importe quel modèle', () => {
+    const [site] = equalityNullFiltersIn('fixture.ts', FIXTURE_FILTRE_NU, COLONNES);
+    expect([site.model, colonneEstPiegeuse(site)]).toEqual(['participant', true]);
   });
 
   it('ne lit pas les COMMENTAIRES — sinon il relèverait les notes des cycles précédents', () => {
@@ -405,6 +511,7 @@ describe('aucun filtre de soft-state ne décide sur une égalité nue (#19690, #
   it('chacun dit l’absence dans le MÊME `OR`, sauf ceux dont la discipline d’ÉCRITURE est mesurée', () => {
     const nus = balayage().sites
       .filter((site) => !site.absenceSaidInSameOr)
+      .filter(colonneEstPiegeuse)
       .filter((site) => DISCIPLINE_D_ECRITURE[`${site.file}#${site.field}`] === undefined)
       .map((site) => `${site.file}:${site.line}#${site.field} (${site.spelling})`);
 
@@ -422,6 +529,7 @@ describe('aucun filtre de soft-state ne décide sur une égalité nue (#19690, #
   it('une discipline gelée couvre le NOMBRE de sites qu’elle a mesuré, jamais un de plus', () => {
     const comptes = balayage().sites
       .filter((site) => !site.absenceSaidInSameOr)
+      .filter(colonneEstPiegeuse)
       .reduce<Record<string, number>>((tally, site) => {
         const cle = `${site.file}#${site.field}`;
         return { ...tally, [cle]: (tally[cle] ?? 0) + 1 };
@@ -452,7 +560,10 @@ describe('aucun filtre de soft-state ne décide sur une égalité nue (#19690, #
    */
   it('aucune discipline gelée ne couvre un site qui n’existe plus — une absolution périmée absout le suivant', () => {
     const nus = new Set(
-      balayage().sites.filter((site) => !site.absenceSaidInSameOr).map((site) => `${site.file}#${site.field}`)
+      balayage().sites
+        .filter((site) => !site.absenceSaidInSameOr)
+        .filter(colonneEstPiegeuse)
+        .map((site) => `${site.file}#${site.field}`)
     );
 
     expect(Object.keys(DISCIPLINE_D_ECRITURE).filter((cle) => !nus.has(cle))).toEqual([]);

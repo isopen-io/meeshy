@@ -93,6 +93,21 @@ export type EqualityNullSite = {
   readonly file: string;
   readonly line: number;
   readonly field: string;
+  /**
+   * Le MODÈLE Prisma que ce `where` interroge, en casse de délégué
+   * (`conversation`, `userSession`), ou `''` quand le balayage ne sait pas le
+   * résoudre — ce qui est la direction SÛRE : un appelant qui filtre par modèle
+   * garde les sites non résolus (cf. `fieldsOfModel`).
+   *
+   * Il existe parce qu'une colonne N'EST PAS un piège sur tous les modèles qui
+   * la portent : `lastActivityAt` est `DateTime?` sur `Conversation` (le piège y
+   * est) et `DateTime @default(now())` sur `UserSession` (REQUISE, donc toujours
+   * présente, donc l'égalité nue y est EXACTE). Sans le modèle, ce balayage
+   * accusait le site de session — et le remède qu'il prescrit, `isSet: false`,
+   * NE COMPILE PAS sur une colonne requise (`TS2353`). Un cliquet dont le seul
+   * remède ne compile pas est un piège armé, pas une garde (audit du cycle 182).
+   */
+  readonly model: string;
   /** La graphie rencontrée — les deux disent la même égalité. */
   readonly spelling: 'null' | 'equals';
   /** `true` seulement si une BRANCHE du même `OR` est exactement le prédicat d'absence. */
@@ -198,6 +213,36 @@ const topLevelElements = (array: string): string[] => {
 const isAbsencePredicate = (branch: string, field: string): boolean =>
   new RegExp(`^\\{\\s*${field}\\s*:\\s*\\{\\s*isSet\\s*:\\s*false\\s*,?\\s*\\}\\s*,?\\s*\\}$`).test(branch);
 
+/**
+ * Le MODÈLE qu'interroge le `where` ouvert à `whereStart`.
+ *
+ * Deux voies, dans cet ordre, et toutes deux LOCALES au littéral — ce qui est
+ * nommé plus haut dans la fonction ne gouverne pas ce `where`-ci :
+ *
+ *   1. le DÉLÉGUÉ de l'appel englobant — `prisma.conversation.updateMany({`,
+ *      `this.prisma.userSession.findMany({`, `tx.participant.count({` ;
+ *   2. l'ANNOTATION `Prisma.<Modèle>WhereInput`, dont on rend le modèle en casse
+ *      de délégué (`ConversationWhereInput` → `conversation`).
+ *
+ * Rend `''` quand aucune des deux ne conclut. **Un `''` n'est jamais une
+ * absolution** : c'est l'appelant qui décide, et il garde les non résolus.
+ */
+const DELEGATE_CALL = /(?:^|[\s(,=[{])(?:await\s+)?(?:[\w$.]*\bprisma|tx|trx|db|client)\s*\.\s*([\w$]+)\s*\.\s*[\w$]+\s*\($/;
+const WHERE_INPUT_MODEL = /Prisma\.(\w+?)WhereInput/;
+
+function modelOf(source: string, whereStart: number): string {
+  const before = source.slice(Math.max(0, whereStart - 400), whereStart);
+  // On remonte depuis le `where` vers l'ouverture de l'appel : tout ce qui
+  // sépare les deux est fait d'arguments et d'autres clés d'options.
+  for (let cut = before.length; cut > 0; cut -= 1) {
+    const delegate = before.slice(0, cut).match(DELEGATE_CALL);
+    if (delegate) return delegate[1];
+  }
+  const annotated = before.match(new RegExp(WHERE_INPUT_MODEL.source + '(?![\\s\\S]*' + WHERE_INPUT_MODEL.source + ')'));
+  if (annotated) return annotated[1].charAt(0).toLowerCase() + annotated[1].slice(1);
+  return '';
+}
+
 type Pass = {
   readonly sites: EqualityNullSite[];
   /** Les identifiants RÉPANDUS sous un `where` — les fragments nommés de ce fichier. */
@@ -262,10 +307,13 @@ const onePass = (text: string, fields: ReadonlySet<string>, whereFragments: Read
       ? topLevelElements(text.slice(parent.start, blockEndOf(text, parent.start, '[', ']') + 1))
       : [];
 
+    const whereFrame = [...stack].reverse().find((frame) => frame.kind === '{' && frame.key === 'where');
+
     sites.push({
       file: '',
       line: text.slice(0, i).split('\n').length,
       field: filtered.field,
+      model: whereFrame ? modelOf(text, whereFrame.start) : '',
       spelling: filtered.spelling,
       absenceSaidInSameOr: sisters.some((branch) => isAbsencePredicate(branch, filtered.field)),
     });
