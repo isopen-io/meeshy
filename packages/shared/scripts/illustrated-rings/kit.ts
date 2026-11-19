@@ -204,10 +204,31 @@ export const transform = (overrides: Record<string, unknown> = {}) => ({
 });
 
 /** Une pièce : ses formes, ses peintures du FOND vers l'AVANT (un trait sur un remplissage s'écrit après lui), sa transformation. */
-export const art = (shapes: readonly unknown[], paints: readonly unknown[], tr: Record<string, unknown> = {}) => ({
-  ty: 'gr',
-  it: [...shapes, ...[...paints].reverse(), transform(tr)],
-});
+type Ellipse = ReturnType<typeof ellipse>;
+type Paint = { readonly ty?: string; readonly r?: number };
+
+const isEllipse = (shape: unknown): shape is Ellipse => (shape as { ty?: string }).ty === 'el';
+const isEvenOdd = (paint: unknown): boolean => (paint as Paint).r === 2;
+const width = (shape: Ellipse): number => shape.s.k[0] ?? 0;
+
+/**
+ * Un anneau (deux ellipses sous une peinture pair-impair) s'émet en règle NON NULLE, l'ellipse intérieure
+ * tracée en sens inverse : le moteur Core Animation de Lottie (iOS) ignore la règle pair-impair d'un
+ * DÉGRADÉ et peindrait un disque plein par-dessus l'avatar (#19935). Le sens inverse perce partout.
+ */
+function nonzeroAnnulus(shapes: readonly unknown[], paints: readonly unknown[]) {
+  if (shapes.length !== 2 || !shapes.every(isEllipse) || !paints.some(isEvenOdd)) return { shapes, paints };
+  const outer = Math.max(...shapes.map(width));
+  return {
+    shapes: shapes.map((shape) => ({ ...shape, d: width(shape) === outer ? 1 : 3 })),
+    paints: paints.map((paint) => (isEvenOdd(paint) ? { ...(paint as object), r: 1 } : paint)),
+  };
+}
+
+export const art = (shapes: readonly unknown[], paints: readonly unknown[], tr: Record<string, unknown> = {}) => {
+  const annulus = nonzeroAnnulus(shapes, paints);
+  return { ty: 'gr', it: [...annulus.shapes, ...[...annulus.paints].reverse(), transform(tr)] };
+};
 
 /** Un ensemble de pièces, du FOND vers l'AVANT. */
 export const stack = (children: readonly unknown[], tr: Record<string, unknown> = {}) => ({ ty: 'gr', it: [...[...children].reverse(), transform(tr)] });
