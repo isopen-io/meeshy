@@ -155,7 +155,6 @@ struct ProfileCoverChrome: ViewModifier {
     /// descente — l'écran d'origine est déjà découvert. Sans fin d'animation lisible (iOS 16), elle se retire aussitôt.
     private func leave() {
         isLeaving = true
-        HapticFeedback.light()
         guard #available(iOS 17, *) else { return dismissWithoutMotion() }
         withAnimation(MeeshyMotion.animation(.rise, reduce: reduceMotion), completionCriteria: .logicallyComplete) {
             drag = max(width, drag)
