@@ -669,7 +669,9 @@ describe('EncryptionService - Extended Coverage', () => {
       const service = new EncryptionService(failPrisma);
       await service.initialize();
 
-      await expect(service.getOrCreateConversationKey('conv-fail')).rejects.toThrow('Key gen failure');
+      // #19786 — l'échec propagé est CLASSÉ (503 rejouable, jamais 400 permanent) ; sa cause reste lisible.
+      const error = await service.getOrCreateConversationKey('conv-fail').catch((e: unknown) => e);
+      expect((error as { underlying?: Error }).underlying).toMatchObject({ message: 'Key gen failure' });
 
       const locks = (service as any).keyGenerationLocks as Map<string, any>;
       expect(locks.has('conv-fail')).toBe(false);

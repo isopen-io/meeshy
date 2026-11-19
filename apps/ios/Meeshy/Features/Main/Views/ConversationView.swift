@@ -689,7 +689,7 @@ struct ConversationView: View {
             expandedBand: { expandedHeaderBand },
             searchBar: { searchBar },
             onBandHeightChange: { headerState.bandHeight = $0 }
-        )
+        ).modifier(ConversationActAdvanceAnchor(conversationId: isAnonymous ? nil : conversation?.id, below: headerState.bandHeight))
     }
 
     private var anonymousHeaderBar: ConversationGuestHeaderBar {

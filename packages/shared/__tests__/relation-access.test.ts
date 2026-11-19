@@ -126,6 +126,8 @@ describe('resolveRelationAccess — la matrice niveau -> feature', () => {
     ['device.battery', 'CLOSE'],
     ['device.battery.pull', 'BLOOD'],
     ['device.unreachable', 'CLOSE'],
+    ['safety.inactivity', 'BLOOD'],
+    ['device.call', 'BLOOD'],
   ];
 
   it.each(EXPECTED_MINIMUM)('%s s\'ouvre exactement à partir de %s (consentement donné)', (feature, minimum) => {

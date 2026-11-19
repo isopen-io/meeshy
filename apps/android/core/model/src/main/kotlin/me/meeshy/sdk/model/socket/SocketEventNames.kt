@@ -29,6 +29,14 @@ object SocketEventNames {
     const val PHONE_UNREACHABLE = "phone:unreachable"
     const val PHONE_REACHABLE = "phone:reachable"
 
+    // vérification d'inactivité (#18738, TEL-02) : serveur -> client, `user:<Sang>` ; aucun événement montant
+    const val INACTIVITY_ALERT = "inactivity:alert"
+    const val INACTIVITY_CLEARED = "inactivity:cleared"
+
+    // en appel (#18753, ACT-01) : serveur -> client, `user:<Sang>` ; aucun événement montant (POST /me/device/call)
+    const val PHONE_CALL_STARTED = "phone-call:started"
+    const val PHONE_CALL_ENDED = "phone-call:ended"
+
     // connection health
     const val HEARTBEAT_ACK = "heartbeat:ack"
 
@@ -207,6 +215,7 @@ object SocketEventNames {
     const val PRESENCE_SNAPSHOT = "presence:snapshot"
 
     // game
+    const val GAME_MISSIONS_UPDATED = "game:missions-updated"
     const val GAME_UPDATED = "game:updated"
 
     // pack
@@ -322,6 +331,10 @@ object SocketEventNames {
         BATTERY_REPORT,
         PHONE_UNREACHABLE,
         PHONE_REACHABLE,
+        INACTIVITY_ALERT,
+        INACTIVITY_CLEARED,
+        PHONE_CALL_STARTED,
+        PHONE_CALL_ENDED,
         AUDIO_TRANSCRIPTION_READY,
         AUDIO_TRANSLATION_READY,
         AUTH_SESSION_REVOKED,
@@ -416,6 +429,7 @@ object SocketEventNames {
         E2EE_ENVELOPE,
         ENGAGEMENT_CONVERSATION_UPDATED,
         ENGAGEMENT_POST_UPDATED,
+        GAME_MISSIONS_UPDATED,
         GAME_UPDATED,
         LOCATION_LIVE_START,
         LOCATION_LIVE_STARTED,

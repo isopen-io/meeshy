@@ -98,6 +98,10 @@ struct HeaderPeerListening: ViewModifier {
             .modifier(AvatarBatteryOverlay(userId: userId, avatarSize: avatarSize))
             // Le téléphone injoignable du pair (#18737), dans l'en-tête comme sur la ligne de liste.
             .modifier(AvatarPhoneReachabilityOverlay(userId: userId, avatarSize: avatarSize))
+            // L'alerte d'inactivité du pair (#18738) : le glyphe tant qu'il n'a pas répondu à « Tout va bien ? ».
+            .modifier(AvatarInactivityOverlay(userId: userId, avatarSize: avatarSize))
+            // « En appel » du pair (#18753) : le glyphe et « En appel depuis… », jamais avec qui.
+            .modifier(AvatarPhoneCallOverlay(userId: userId, avatarSize: avatarSize))
     }
 }
 

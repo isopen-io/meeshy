@@ -167,13 +167,7 @@ final class MediaSessionCoordinatorTests: XCTestCase {
 final class MediaSessionCoordinatorThreadSafetySourceGuardTests: XCTestCase {
 
     private func coordinatorSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshySDK/Media/MediaSessionCoordinator.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try MediaSessionCoordinatorSourceUnit.read()
     }
 
     func test_callActive_isNotUnsafeNonisolated() throws {

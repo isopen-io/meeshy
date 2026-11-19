@@ -821,6 +821,43 @@ export type {
 } from './battery.js';
 // Mon profil synchronisé entre mes appareils (#18924) : les types seuls, le schéma reste hors du baril.
 export type { OwnProfileField, OwnProfileSnapshot, ProfileUpdatedEventData } from './own-profile-sync.js';
+export {
+  INACTIVITY_DELAY_HOURS,
+  INACTIVITY_CHECK_CONFIG,
+  INACTIVITY_ANNOUNCEMENT_KINDS,
+  WELLNESS_CHECK_NOTIFICATION_TYPE,
+  INACTIVITY_ALERT_NOTIFICATION_TYPE,
+} from './inactivity-check.js';
+export type {
+  InactivityDelayHours,
+  InactivityCheckConfig,
+  InactivityAnnouncement,
+  InactivityAnnouncementKind,
+  InactivityAlertState,
+  InactivityAlertEventData,
+  InactivityClearedEventData,
+  InactivitySnapshot,
+  InactivityCheckSettings,
+  InactivityCheckSettingsUpdate,
+  InactivityCheckPersonSettings,
+  InactivityLastPosition,
+  InactivityLastBattery,
+  WellnessOkAck,
+} from './inactivity-check.js';
+export { PHONE_CALL_ANNOUNCEMENT_KINDS, PHONE_CALL_CONFIG } from './phone-call.js';
+export type {
+  PhoneCallAnnouncement,
+  PhoneCallAnnouncementKind,
+  PhoneCallConfig,
+  PhoneCallState,
+  PhoneCallStartedEventData,
+  PhoneCallEndedEventData,
+  PhoneCallSnapshot,
+  PhoneCallAck,
+  PhoneCallReport,
+  PhoneCallEmitterSettings,
+  PhoneCallPersonSettings,
+} from './phone-call.js';
 export * from './phone-reachability-constants.js';
 export type {
   PhoneReachabilityAnnouncement,

@@ -15,7 +15,7 @@ import * as crypto from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { guardedInterval, guardedTimeout } from '../utils/guarded-timer';
 import type { SealedQueuedPayload } from '@meeshy/shared/types/delivery-queue';
-import { AT_REST_AAD_V1, atRestAad, DELIVERY_QUEUE_AAD_V1, DELIVERY_QUEUE_AAD_V2, deliveryQueueAad, deliveryQueueAadV2, type DeliveryQueueBinding, openBytes, sealBytes, ServerAtRestUnavailableError, ServerAtRestUnreadableError, type AtRestEnvelope, type AtRestKeyring } from './messaging/serverAtRest';
+import { AT_REST_AAD_V1, atRestAad, ConversationKeyGenerationFailedError, DELIVERY_QUEUE_AAD_V1, DELIVERY_QUEUE_AAD_V2, deliveryQueueAad, deliveryQueueAadV2, type DeliveryQueueBinding, isServerAtRestUnavailable, openBytes, sealBytes, ServerAtRestUnavailableError, ServerAtRestUnreadableError, type AtRestEnvelope, type AtRestKeyring } from './messaging/serverAtRest';
 import { ServerKeyVault } from './ServerKeyVault';
 
 // Create a child logger for encryption operations
@@ -139,7 +139,25 @@ export class EncryptionService implements AtRestKeyring {
   private initialized = false;
   private cacheCleanupInterval?: NodeJS.Timeout;
   // Lock map for atomic key generation - prevents TOCTOU race condition
-  private keyGenerationLocks: Map<string, { promise: Promise<string>; resolve: (value: string) => void }> = new Map();
+  /**
+   * #19786 — le verrou porte son `reject` autant que son `resolve`. Sans lui, un
+   * appelant entré par `return existingLock.promise` détenait une promesse que
+   * l'échec de la génération ne réglait JAMAIS : ni résolue, ni rejetée, aucun
+   * minuteur pour la libérer. Sur une requête HTTP, une réponse qui n'arrive pas.
+   *
+   * Portée exacte, et elle n'est pas totale : le règlement couvre les échecs qui
+   * LÈVENT ou REJETTENT. Un `create` qui ne se règle JAMAIS (socket mort, mongos
+   * bloqué au-delà de `serverSelectionTimeoutMS`) laisse les attendants pendus
+   * comme avant — le minuteur de 100 ms retire l'entrée de la CARTE, il ne RÈGLE
+   * pas la promesse déjà détenue. Les deux autres cartes de requêtes en attente
+   * de la passerelle (`VoiceProfileService`, `AudioTranslateService`) portent une
+   * échéance pour cela ; celle-ci non. Suivi : #19826.
+   */
+  private keyGenerationLocks: Map<string, {
+    promise: Promise<string>;
+    resolve: (value: string) => void;
+    reject: (reason: unknown) => void;
+  }> = new Map();
 
   constructor(prisma: PrismaClient) {
     this.keyVault = new ServerKeyVault(prisma);
@@ -200,11 +218,41 @@ export class EncryptionService implements AtRestKeyring {
 
       // ATOMIC: Create lock entry SYNCHRONOUSLY before any await
       // This ensures only one caller can start key generation
-      let resolveLock: (value: string) => void;
-      const lockPromise = new Promise<string>((resolve) => {
+      let resolveLock!: (value: string) => void;
+      let rejectLock!: (reason: unknown) => void;
+      const lockPromise = new Promise<string>((resolve, reject) => {
         resolveLock = resolve;
+        rejectLock = reject;
       });
-      this.keyGenerationLocks.set(conversationId, { promise: lockPromise, resolve: resolveLock! });
+      // #19786 — la promesse du verrou peut n'avoir AUCUN attendant : c'est même
+      // le cas nominal, un seul appelant. La rejeter sans écouteur est un rejet
+      // NON OBSERVÉ : en production la passerelle enregistre son propre
+      // `process.on('unhandledRejection')` (`server.ts`, dont le `process.exit`
+      // est explicitement commenté), donc l'effet serait une ligne de journal
+      // de crash par échec de génération — pas une chute, et c'est mesuré. Sous
+      // jest, en revanche, le worker MEURT : sans ce `catch`, la suite entière
+      // rend « Tests: 0 total ». Ce `catch` ne consomme pas le rejet pour les
+      // attendants (il en dérive une promesse à part) ; il déclare seulement
+      // qu'un rejet non observé est attendu. Règle du dépôt sur `void p`, prise
+      // par l'autre bout.
+      void lockPromise.catch(() => undefined);
+      const lockEntry = { promise: lockPromise, resolve: resolveLock, reject: rejectLock };
+      this.keyGenerationLocks.set(conversationId, lockEntry);
+
+      // #19786 (audit adversarial) — le retrait est lié à l'IDENTITÉ de CETTE
+      // entrée, pas au seul `conversationId`. Un essai qui échoue arme un
+      // minuteur de 100 ms ; sans cette garde, ce minuteur supprimait le verrou
+      // d'un essai SUIVANT encore en vol, et le suivant du suivant repartait en
+      // génération : mesuré à deux `ServerEncryptionKey` pour une conversation,
+      // sous un verrou dont le propos est précisément de l'empêcher. Le lot
+      // #19786 a rendu ce danger atteignable en faisant du réessai le cas
+      // nominal — avant lui, un échec laissait les attendants PENDUS, donc
+      // personne pour arriver après.
+      const releaseOwnLock = () => {
+        if (this.keyGenerationLocks.get(conversationId) === lockEntry) {
+          this.keyGenerationLocks.delete(conversationId);
+        }
+      };
 
       try {
         // Double-check after acquiring lock - race window is now closed.
@@ -214,7 +262,7 @@ export class EncryptionService implements AtRestKeyring {
         const existingKeyId = this.keyVault.getConversationKeyId(conversationId);
         if (existingKeyId) {
           logger.debug('Key found after lock acquisition', { conversationId, keyId: existingKeyId });
-          resolveLock!(existingKeyId);
+          resolveLock(existingKeyId);
           return existingKeyId;
         }
 
@@ -223,17 +271,31 @@ export class EncryptionService implements AtRestKeyring {
         await this.keyVault.setConversationKey(conversationId, keyId);
 
         logger.debug('Generated new conversation key', { conversationId, keyId });
-        resolveLock!(keyId);
+        resolveLock(keyId);
         return keyId;
       } catch (error) {
-        // On error, reject waiting promises with a new generation attempt
-        this.keyGenerationLocks.delete(conversationId);
-        throw error;
+        // #19786 — les attendants reçoivent la MÊME erreur, pas un silence, et
+        // le verrou quitte la carte pour qu'un appelant suivant refasse le
+        // chemin complet au lieu de s'abonner à un échec déjà consommé. C'est
+        // ce RETRAIT qui produit l'effet (son témoin le mesure) : l'ordre des
+        // deux instructions est indifférent, aucun code JS ne pouvant
+        // s'exécuter entre deux instructions synchrones du même job.
+        releaseOwnLock();
+        // #19786 (audit adversarial) — l'erreur qui voyage est CLASSÉE. Brute,
+        // elle ne passait aucun prédicat de `MessagingService`, finissait dans
+        // la branche terminale « erreur interne » et se servait en HTTP 400 —
+        // que le client web tient pour PERMANENT, sans rejeu, là où la
+        // pendaison d'avant finissait en `TIMEOUT` retryable. Un refus de clé
+        // maîtresse (`ServerAtRestUnavailableError`) est DÉJÀ classé et dit
+        // autre chose : il traverse tel quel.
+        const classified = isServerAtRestUnavailable(error)
+          ? error
+          : new ConversationKeyGenerationFailedError(conversationId, error);
+        rejectLock(classified);
+        throw classified;
       } finally {
         // Clean up lock after a small delay to allow late-comers to get the result
-        guardedTimeout({ name: 'encryption-key-generation-lock-release', afterMs: 100, logger, run: () => {
-          this.keyGenerationLocks.delete(conversationId);
-        } });
+        guardedTimeout({ name: 'encryption-key-generation-lock-release', afterMs: 100, logger, run: releaseOwnLock });
       }
     }
 

@@ -931,6 +931,12 @@ final class FakeSharedLocationRosterStore: SharedLocationRosterStoring {
     func loadReceived() -> Bool { received }
 
     func saveReceived(_ received: Bool) { self.received = received }
+
+    var publishedStart: String?
+
+    func loadPublishedStart() -> String? { publishedStart }
+
+    func savePublishedStart(_ startedAt: String?) { publishedStart = startedAt }
 }
 
 @MainActor

@@ -60,7 +60,7 @@ import { persistableEncryption } from './e2eeRelayPayload';
 import { sealMessageIfConversationObsoleted } from '../conversations/obsoleteMessageSeal';
 import { mayReturnToSalon } from '../conversations/communityMembershipSync';
 import { newMemberRefusal } from '../conversations/newMemberAdmission';
-import { isUncommittedMessageWrite, MESSAGE_SEND_RETRY_AFTER_SECONDS } from './retryableWrite';
+import { isRetryableMessageWrite, MESSAGE_SEND_RETRY_AFTER_SECONDS } from './retryableWrite';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -601,8 +601,9 @@ export class MessagingService {
         return this.createErrorResponse(error.message, error.code);
       }
       // Audit de #19080, E3 — une transaction non validée (P2034, P2028) n'est pas un refus : rejouable.
-      if (isUncommittedMessageWrite(error)) {
-        logger.warn('message write not committed, retryable', { ...corr, prismaCode: (error as { code: string }).code });
+      // #19786 — une clé de conversation qu'on n'a pas pu créer non plus : rien n'est écrit.
+      if (isRetryableMessageWrite(error)) {
+        logger.warn('message write not committed, retryable', { ...corr, prismaCode: (error as { code?: string }).code });
         return this.createErrorResponse(
           ErrorMessages[ErrorCode.MESSAGE_SEND_RETRYABLE].fr, ErrorCode.MESSAGE_SEND_RETRYABLE, MESSAGE_SEND_RETRY_AFTER_SECONDS
         );

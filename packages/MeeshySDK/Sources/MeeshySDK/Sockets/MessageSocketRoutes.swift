@@ -26,6 +26,8 @@ enum MessageSocketRoutes {
             nowPlaying(manager),
             battery(manager),
             phoneReachability(manager),
+            inactivity(manager),
+            phoneCall(manager),
             sharedLocation(manager),
             conversations(manager),
             notifications(manager, presentedToken: presentedToken),

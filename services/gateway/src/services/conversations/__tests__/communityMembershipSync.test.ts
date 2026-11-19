@@ -11,9 +11,11 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import { applyCommunityAdmission, planCommunityAdmission } from '../communityMembershipSync';
+import { findManyIn } from '../../../__tests__/helpers/mongo-where';
 
 type Ligne = { readonly id: string; readonly userId: string; readonly isActive: boolean };
 
+const UN_PASSE = new Date('2026-10-01T00:00:00Z');
 const COMMUNITY_ID = 'comm-1';
 const MOI = 'moi';
 const CREATEUR = 'createur';
@@ -28,7 +30,16 @@ function prismaDouble(lignes: readonly Ligne[], options: { readonly vivants?: re
       createMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     user: {
-      findMany: jest.fn<any>(async (args: any) => (args.where.id.in as string[]).filter((id) => vivants.has(id)).map((id) => ({ id }))),
+      // Le double ÉVALUE le `where` contre des lignes à la forme NOMINALE de
+      // production — ni `deletedAt` ni `deactivatedAt`, qu'aucune création de
+      // compte n'écrit (#19799). Un double qui filtre sur son propre ensemble
+      // accepte une clause d'égalité nue qui, en base, n'apparie personne.
+      findMany: jest.fn<any>(async (args: any) => {
+        const lignesUser = (args.where.id.in as string[]).map((id) => (
+          vivants.has(id) ? { id, isActive: true } : { id, isActive: true, deactivatedAt: UN_PASSE }
+        ));
+        return findManyIn(lignesUser).findMany(args);
+      }),
       findFirst: jest.fn<any>(async (args: any) => {
         const [moi, eux] = args.where.OR as [{ blockedUserIds: { hasSome: string[] } }, { id: { in: string[] } }];
         const touche = [...moi.blockedUserIds.hasSome, ...eux.id.in].some((id) => bloques.has(id));

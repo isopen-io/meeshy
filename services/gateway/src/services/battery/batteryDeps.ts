@@ -24,6 +24,10 @@ import { phoneReachabilityRelayDepsOf } from '../phoneReachability/phoneReachabi
 import { sharedBatteryGrantsAmong } from '../sharedLocation/sharedLocationBattery';
 import { lazySharedLocationCache } from '../sharedLocation/sharedLocationLazyCache';
 import { capturePhoneReachabilityAccess, refreshPhoneReachabilityBetween } from '../phoneReachability/phoneReachabilityRelay';
+import { inactivityRelayDepsOf } from '../inactivityCheck/inactivityDeps';
+import { refreshInactivityBetween } from '../inactivityCheck/inactivityRelay';
+import { phoneCallRelayDepsOf } from '../phoneCall/phoneCallDeps';
+import { refreshPhoneCallBetween } from '../phoneCall/phoneCallRelay';
 
 /** Sans Redis (développement, panne), l'ensemble des émetteurs surveillés vit dans le processus. */
 const localSets = new Map<string, Set<string>>();
@@ -178,7 +182,7 @@ export function batteryPullDepsOf(params: { readonly prisma: PrismaClient; reado
  * pour les gestes qui les rejouent ensemble (fin d'un rôle d'équipe, `revokeTeamSharesOf`).
  */
 export function deviceStateRelaysOf(params: { readonly prisma: PrismaClient; readonly io: ServerEmitIO | undefined }) {
-  return { battery: batteryRelayDepsOf(params), phoneReachability: phoneReachabilityRelayDepsOf(params) };
+  return { battery: batteryRelayDepsOf(params), phoneReachability: phoneReachabilityRelayDepsOf(params), inactivity: inactivityRelayDepsOf(params), phoneCall: phoneCallRelayDepsOf(params) };
 }
 
 type RefreshParams = { readonly prisma: PrismaClient; readonly io: ServerEmitIO | undefined; readonly report: (error: unknown) => void };
@@ -221,6 +225,16 @@ export async function refreshBatteryAfter(
   }
   try {
     await refreshPhoneReachabilityBetween(phoneReachabilityRelayDepsOf(params), { userA: pair.userA, userB: pair.userB, before: phone });
+  } catch (error) {
+    params.report(error);
+  }
+  try {
+    await refreshInactivityBetween(inactivityRelayDepsOf(params), { userA: pair.userA, userB: pair.userB });
+  } catch (error) {
+    params.report(error);
+  }
+  try {
+    await refreshPhoneCallBetween(phoneCallRelayDepsOf(params), { userA: pair.userA, userB: pair.userB });
   } catch (error) {
     params.report(error);
   }

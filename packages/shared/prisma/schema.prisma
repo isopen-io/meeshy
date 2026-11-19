@@ -211,6 +211,15 @@ model User {
   /// date (#18737, le fantôme de TEL-01) : aucun Proche ni Sang ne la reçoit, et le téléphone n'est plus
   /// sondé. Optionnel, sans migration.
   unreachableSharingDisabledAt DateTime?
+  /// Non nul = le compte a COUPÉ sa vérification d'inactivité pour tous depuis cette date (#18738, TEL-02) :
+  /// aucune question « Tout va bien ? », aucun Sang prévenu. Optionnel, sans migration.
+  inactivityCheckDisabledAt DateTime?
+  /// Le délai sans activité avant « Tout va bien ? », en heures (6, 12 ou 24) ; nul = le défaut (12 h).
+  /// Une valeur hors de la liste vaut le défaut. Optionnel, sans migration.
+  inactivityCheckDelayHours Int?
+  /// Non nul = le compte a coupé le partage d'« EN APPEL » pour tous depuis cette date (#18753, ACT-01) :
+  /// rien n'est rangé ni servi. Optionnel, sans migration.
+  callSharingDisabledAt     DateTime?
   /// Pays appareil (Locale.current.region iOS) propage sur CHAQUE requete via
   /// X-Meeshy-Country, persiste par le middleware gateway deviceCountry.
   /// Signal continu (contrairement a registrationCountry, capture une seule
@@ -2306,6 +2315,17 @@ model RelationFeatureSetting {
   unreachableShared          Boolean?
   /// Quand ce partage a été RETIRÉ (trace).
   unreachableWithdrawnAt     DateTime?
+  /// Partage de l'ALERTE D'INACTIVITÉ de `ownerId` à `otherId` (#18738), TRI-ÉTAT : nul = le défaut du
+  /// niveau effectif (accordé entre Sangs et dans l'équipe), `true` = accordé, `false` = refusé.
+  /// Optionnel, sans migration.
+  inactivityShared           Boolean?
+  /// Quand ce partage a été RETIRÉ (trace).
+  inactivityWithdrawnAt      DateTime?
+  /// Partage d'« EN APPEL » de `ownerId` à `otherId` (#18753), TRI-ÉTAT : nul = le défaut du niveau
+  /// effectif (accordé entre Sangs et dans l'équipe), `true` = accordé, `false` = refusé. Optionnel.
+  callShared                 Boolean?
+  /// Quand ce partage a été RETIRÉ (trace).
+  callWithdrawnAt            DateTime?
   /// Non nul = `ownerId` est en FANTÔME CIBLÉ pour `otherId` depuis cette date (#13937) : l'autre ne
   /// reçoit ni historique ni alerte de proximité, et rien ne lui dit pourquoi. Ce n'est pas un
   /// consentement : une ligne née d'un fantôme laisse ses quatre partages faux.

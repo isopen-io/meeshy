@@ -11,6 +11,8 @@ import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { Glyph } from './glyph';
 import { ReadingModeChip } from './reading-mode-chip';
 import { ThreadCallButton } from './thread-call-button';
+import { ThreadInactivityLine } from './thread-inactivity-line';
+import { ThreadPhoneCallLine } from './thread-phone-call-line';
 import { ThreadShareButton } from './thread-share-button';
 import { UnreadBadge } from './unread-badge';
 import { useListeningBand } from '@/lib/now-playing/listening-band';
@@ -417,6 +419,10 @@ export function ThreadHeader({
                 {subtitleText}
               </p>
             ) : null}
+            {/* L'ALERTE D'INACTIVITÉ D'UN SANG (#18738) : « Aucune activité depuis 08:00 », tant qu'elle est servie. */}
+            {group ? null : <ThreadInactivityLine userId={peerKey} language={currentInterfaceLanguage()} />}
+            {/* « EN APPEL » D'UN SANG (#18753) : « En appel depuis 12 min », jamais avec qui. */}
+            {group ? null : <ThreadPhoneCallLine userId={peerKey} language={currentInterfaceLanguage()} />}
           </div>
         ) : null}
         {expanded && !preview ? <EngagementPill snapshot={engagement} interactive {...(onDismissFlame === undefined ? {} : { onHideFlame: onDismissFlame })} /> : null}

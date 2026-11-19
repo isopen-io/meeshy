@@ -1684,3 +1684,52 @@ socket jusqu'au client.
 2. #19702, #19673, #19735, #19751.
 3. #19520 (second critère, avec `sre-infra`) et #19471.
 4. **Recentrer sur les appels** dès #19749 soldée : latence `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
+
+## Cycle 49 bis — 2026-11-19 (session parallèle, PR #19772)
+
+- **Collision** : cette session et la session de la PR qui a fermé #19750 (`8a97db9b90`) ont livré le même lot en parallèle. La version de `dev` est gardée, parce qu'elle projette `path` à la sérialisation (`servedPostMedia.ts`) et non dans le client Prisma. Elle évite ainsi la réserve R2 de cette session : le miroir du seau et les relectures-réécritures restaient aveugles au `path`. Les deux commits de lot de cette session sont annulés (`git revert`) dans la PR, et #19769 et #19770 sont à requalifier, puisqu'elles visaient l'extension Prisma retirée.
+- **Ce que la PR #19772 apporte encore à `dev`** : quatre rouges de `dev` révélés par la preuve CI.
+  - **`Tests · web`** : la garde `capability-guard.test.ts` relevait `lib/calls/call-network-recovery.ts`, qui écoute `navigator.connection` pour relancer ICE. C'est une exception motivée.
+  - **Budget de taille** : `calls-routes.test.ts` passait de 2154 à 2175 lignes (#19778). La suite est scindée en join, retrait et harnais partagé, avec 93 témoins avant comme après. La dette est enregistrée en baisse, de 2154 à 1198.
+  - **`ci.yml`** : une reprise d'apt lance `dpkg --configure -a`. Jusqu'ici, le `timeout 300` laissait dpkg interrompu et toutes les reprises échouaient.
+  - **Cliquet #4649** : les suites scindées chargent les vrais schémas de réponse.
+- **Leçon** : deux sessions de la routine ont tourné en même temps sur le même lot. Le relevé du démarrage (§ 1.1) doit aussi lister les PR ouvertes ou fusionnées dans l'heure qui citent l'issue visée, et pas seulement les branches qui touchent les fichiers.
+## Cycle 50 — 2026-11-19
+
+- **Base** : `origin/dev` @ `96f5519cca`, puis fusionnée avec `dev` @ `0da8f615f3` (merge `c7088d4da3`). #19753 (cycle 48) est fusionnée. Le cycle 49 (#19772, effacement des pistes de post et retrait de `path`, branche `claude/determined-volta-98am8h`) avait une session vivante, qui avait poussé 15 min avant ce cycle : **je lui ai cédé la PR** et je n'ai touché aucun de ses fichiers.
+- **Branche** : `claude/determined-volta-32m83u`. PR **en brouillon**, non fusionnée (voir les conditions plus bas).
+- **Objectif** : #19749. Les traductions vocales d'un post ou d'une story arrivent jusqu'à `PostMedia.translations`.
+- **Livré** :
+  - **Traducteur** (`zmq_audio_handler.py`) : `audio_process_completed` et `transcription_ready` recopient `postId` et `postMediaId` quand la requête les porte. Pour un message, aucune clé n'est ajoutée.
+  - **Passerelle** :
+    - `ZmqMessageHandler` relaie les deux champs.
+    - Repli pour un ancien traducteur : quand aucune `MessageAttachment` ne porte l'id, la passerelle cherche un `PostMedia` (et passe par `comment.postId` pour un média de commentaire).
+    - La branche post est extraite dans `message-translation/postAudioResult.ts`. `MessageTranslationService.ts` passe de 3022 à 2984 lignes.
+    - La piste est persistée par `saveTranslatedTrack` sous `translated/post/<postMediaId>_<lang>.<ext>`, que la route de fichiers sert comme l'original d'un post (`not-an-attachment`). Le refus #9588 des pistes de message n'est pas touché.
+    - Rien ne s'écrit avant validation : ObjectId, existence du `PostMedia`, cohérence avec le `postId`, langue et extension dans des listes fermées.
+- **Tests** :
+  - **Pytest**, `test_post_audio_events_carry_post_reference.py` : rouge `2 failed, 2 passed`, puis vert `4 passed`.
+  - **Jest**, `postAudioResult.test.ts` :
+    - premier passage : rouge `3 failed, 2 passed`, puis vert ;
+    - après la QA : rouge `8 failed, 5 passed`, puis `13 passed`. Je l'ai relancé moi-même sur l'arbre fusionné : `13 passed`.
+  - Le témoin B1 demande la piste à la vraie `registerFileStreamRoute` : 200, les octets, et le même cache que l'original.
+  - Spécialiste, sur l'arbre fusionné : `80 suites` vertes, `1276 passed`, et 1 rouge sans lien avec le lot (`gateway-test-file-size-budget` sur `calls-routes.test.ts`, 2154 → 2175, un fichier identique à `dev`). `tsc` : 0.
+- **QA** (`auditeur-adversarial`, deux passages) :
+  - Premier passage : **défavorable** (B1, l'adresse rendait 404 ; R2, `postMediaId='../../evil'` écrivait hors de `UPLOAD_PATH`).
+  - Second passage : **favorable avec réserves**. Mutations N1, N2, N4 à N6 et N11 à N13 tuées ; N8, N9 et N10 survivent ; N3 et N7 sont équivalentes.
+
+### Conditions de fusion (à tenir au cycle 51, avant tout passage à « prête »)
+
+- **A (élevée, sécurité)** : la clé `translated/post/<postMediaId>_<lang>` se devine (l'id est servi, et un ObjectId est en partie prévisible). L'original est protégé par un UUID, et la route ne juge aucun propriétaire pour les fichiers de post. Correction : reprendre le secret de l'original (le nom de base de son fichier) ou un jeton aléatoire écrit en base. Cela règle aussi E (cache d'un an sur une clé réécrite en place).
+- **B** : fusionner #19772 AVANT ce lot. Sans #19772, `path` part brut chez les clients, et les pistes survivent à leur média.
+- **C** : avec `audio/mp4` (m4a) ou `audio/flac`, toute l'entrée est écartée, texte compris. Il faut associer `mp4` à `m4a` et dégrader en `textOnly` au lieu d'écarter l'entrée.
+- **D** : écrire des témoins pour N9 (transcription nommée incohérente), N8 (choix `||` contre `&&` dans `namesPostAudio`) et N10 (`mpeg` vers `mp3`).
+- Issues de suivi ouvertes : #19804 (verrou sur `PostMedia.translations`), #19805 (événements progressifs d'un post), #19806 (langue et extension non validées sur la voie message).
+
+### Cycle suivant : par où reprendre
+
+0. Vérifier si #19772 est fusionnée. Sinon, la laisser à sa session si celle-ci a poussé depuis moins d'une heure ; sinon la reprendre (preuve par `workflow_dispatch` de `ci.yml`, car la CI des PR est en `skipped`).
+1. Sur la branche de ce cycle, corriger A, C et D (un spécialiste), passer la QA adversariale sur le diff, fusionner `origin/dev` (qui contiendra #19772), prouver la CI par `workflow_dispatch`, retirer le brouillon et fusionner. Fermer #19749 avec sa preuve.
+2. Puis #19702, #19673, #19735, #19751 et #19806.
+3. #19520, second critère : constat sur le serveur avec `sre-infra`, dans la même séance que la mesure des journaux d'accès pour #19471.
+4. **Recentrer sur les appels eux-mêmes** dès que la dette des pistes de post est soldée : latence de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.

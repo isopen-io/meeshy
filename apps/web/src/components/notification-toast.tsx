@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useStore } from 'zustand/react';
 
 import { attachmentSrc } from '@/lib/api/media-url';
+import { answerWellnessCheck } from '@/lib/inactivity/wellness-answer';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { notificationAccent, notificationFamily } from '@/lib/notifications/categories';
@@ -197,6 +198,8 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
       dragged.current = false;
       return;
     }
+    /* « Tout va bien ? » (#18738) : la toucher, c'est répondre « Je vais bien ». */
+    void answerWellnessCheck(notification);
     void markNotificationReadAction(notification.id);
     onDismiss();
   };

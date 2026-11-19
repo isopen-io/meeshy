@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- « En appel » (#18753, ACT-01) : android-only tant que les clés phoneCall.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="phone_call_someone">Un proche</string>
+    <string name="phone_call_pill_started">%1$s est en appel</string>
+    <string name="phone_call_pill_ended">%1$s a raccroché</string>
+    <string name="phone_call_since_minutes">En appel depuis %1$d min</string>
+    <string name="phone_call_since_clock">En appel depuis %1$s</string>
+    <string name="phone_call_a11y">%1$s est en appel</string>
+    <string name="phone_call_share_global_title">Montrer à mes Sangs que je suis en appel</string>
+    <string name="phone_call_share_global_scope">Jamais avec qui.</string>
+    <string name="phone_call_share_person">Montrer à %1$s que je suis en appel</string>
+    <string name="phone_call_share_person_scope">%1$s voit que je suis en appel, jamais avec qui.</string>
+    <string name="phone_call_share_off">« En appel » est désactivé.</string>
+</resources>

@@ -423,7 +423,8 @@ export class ZmqMessageHandler extends EventEmitter {
       voiceModelUserId: event.voiceModelUserId,
       voiceModelQuality: event.voiceModelQuality,
       processingTimeMs: event.processingTimeMs,
-      newVoiceProfile: enrichedVoiceProfile // Avec _embeddingBinary
+      newVoiceProfile: enrichedVoiceProfile, // Avec _embeddingBinary
+      ...(event.postId && event.postMediaId ? { postId: event.postId, postMediaId: event.postMediaId } : {}),
     });
   }
 

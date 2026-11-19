@@ -57,6 +57,12 @@ export const deviceBattery = '/api/v1/me/device/battery';
 /** GET · PUT /api/v1/me/device/battery/settings */
 export const deviceBatterySettings = '/api/v1/me/device/battery/settings';
 
+/** POST /api/v1/me/device/call */
+export const deviceCall = '/api/v1/me/device/call';
+
+/** GET · PUT /api/v1/me/device/call/settings */
+export const deviceCallSettings = '/api/v1/me/device/call/settings';
+
 /** GET · PUT /api/v1/me/device/reachability/settings */
 export const deviceReachabilitySettings = '/api/v1/me/device/reachability/settings';
 
@@ -231,3 +237,9 @@ export const stickersByStickerIdUse = (stickerId: string): string => `/api/v1/me
 
 /** GET · PUT /api/v1/me/terms */
 export const terms = '/api/v1/me/terms';
+
+/** POST /api/v1/me/wellness/ok */
+export const wellnessOk = '/api/v1/me/wellness/ok';
+
+/** GET · PUT /api/v1/me/wellness/settings */
+export const wellnessSettings = '/api/v1/me/wellness/settings';

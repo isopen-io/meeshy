@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- La vérification d'inactivité (#18738) : android-only tant que les clés inactivity.* ne sont pas au catalogue iOS. -->
+<resources>
+    <string name="inactivity_someone">someone close</string>
+    <string name="inactivity_pill_alert">%1$s didn\'t answer “Are you OK?”</string>
+    <string name="inactivity_pill_responded">%1$s is OK</string>
+    <string name="inactivity_card_since">No activity since %1$s</string>
+    <string name="inactivity_battery">Battery %1$d %%</string>
+    <string name="inactivity_open_map">See last location</string>
+    <string name="inactivity_a11y">No activity from %1$s</string>
+    <string name="inactivity_share_person">Alert %1$s if I don\'t answer</string>
+    <string name="inactivity_share_person_scope">%1$s is alerted if I don\'t answer “Are you OK?”.</string>
+    <string name="inactivity_share_off">Inactivity check is off.</string>
+    <string name="inactivity_delay_title">Inactivity check</string>
+    <string name="inactivity_delay_scope">No answer to “Are you OK?”: your Blood are alerted.</string>
+    <string name="inactivity_delay_6h">6 h</string>
+    <string name="inactivity_delay_12h">12 h</string>
+    <string name="inactivity_delay_24h">24 h</string>
+    <string name="inactivity_delay_off">Off</string>
+    <string name="inactivity_wellness_ok">I\'m OK</string>
+</resources>

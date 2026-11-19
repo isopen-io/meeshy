@@ -93,6 +93,21 @@ export type EqualityNullSite = {
   readonly file: string;
   readonly line: number;
   readonly field: string;
+  /**
+   * Le MODÈLE Prisma que ce `where` interroge, en casse de délégué
+   * (`conversation`, `userSession`), ou `''` quand le balayage ne sait pas le
+   * résoudre — ce qui est la direction SÛRE : un appelant qui filtre par modèle
+   * garde les sites non résolus (cf. `fieldsOfModel`).
+   *
+   * Il existe parce qu'une colonne N'EST PAS un piège sur tous les modèles qui
+   * la portent : `lastActivityAt` est `DateTime?` sur `Conversation` (le piège y
+   * est) et `DateTime @default(now())` sur `UserSession` (REQUISE, donc toujours
+   * présente, donc l'égalité nue y est EXACTE). Sans le modèle, ce balayage
+   * accusait le site de session — et le remède qu'il prescrit, `isSet: false`,
+   * NE COMPILE PAS sur une colonne requise (`TS2353`). Un cliquet dont le seul
+   * remède ne compile pas est un piège armé, pas une garde (audit du cycle 182).
+   */
+  readonly model: string;
   /** La graphie rencontrée — les deux disent la même égalité. */
   readonly spelling: 'null' | 'equals';
   /** `true` seulement si une BRANCHE du même `OR` est exactement le prédicat d'absence. */
@@ -111,8 +126,47 @@ export type EqualityNullSweep = {
   readonly unresolvedFragments: readonly string[];
 };
 
+const blankKeepingLines = (texte: string): string => texte.replace(/[^\n]/g, ' ');
+
+/**
+ * Dépouille commentaires et littéraux de chaîne **sans déplacer une seule
+ * ligne** (#19799, audit du cycle 181).
+ *
+ * Deux défauts, tous deux mesurés :
+ *
+ *  · un bloc `/* … *\/` remplacé par la chaîne VIDE emporte ses retours à la
+ *    ligne, et tout ce qui suit remonte d'autant : le site
+ *    `routes/communities/addable-user.ts:19` était NOMMÉ `:8`, onze lignes de
+ *    doc-comment plus haut. Un cliquet dont la valeur est de NOMMER fichier,
+ *    ligne, colonne et graphie n'a pas le droit de se tromper sur le plus
+ *    actionnable des quatre — à `:8` il n'y a rien, et la conclusion naturelle du
+ *    lecteur est que le cliquet s'est trompé de SITE ;
+ *  · le CONTENU d'un littéral de chaîne n'est pas du code. Un libellé, un message
+ *    de journal ou une fixture qui CITE `champ: { isSet: false }` est dépouillé
+ *    comme un commentaire, pour la même raison.
+ *
+ *    **Ce dépouillement est une CEINTURE, pas la garde** — mesuré : c'est
+ *    l'ancrage `^…$` d'`isAbsencePredicate` sur la BRANCHE qui refuse déjà une
+ *    citation, une branche `{ label: "…" }` n'étant pas un prédicat d'absence
+ *    canonique. Lui attribuer cette fermeture serait une affirmation fausse de
+ *    plus dans un doc-comment. Ce qu'il porte vraiment : il met le filtre hors
+ *    d'atteinte de toute recherche TEXTUELLE future posée sur la même source.
+ *
+ *    Et il est SÛR pour une raison précise, qui tient à son motif et non au
+ *    hasard : les deux premières alternatives exigent la quote fermante **sur la
+ *    même ligne** (`[^'\\\n]`), si bien qu'une quote orpheline — le `/['"]/` d'un
+ *    littéral de regex — n'ouvre pas de chaîne et ne désynchronise rien. Mesuré
+ *    sur les 1722 fichiers de production : 0 site gagné, 0 site perdu.
+ *
+ * Le bloc est donc remplacé par ses PROPRES retours à la ligne, et le contenu
+ * d'une chaîne par des espaces, ses `\n` gardés.
+ */
 const withoutComments = (source: string): string =>
-  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  source
+    .replace(/\/\*[\s\S]*?\*\//g, (bloc) => bloc.replace(/[^\n]/g, ''))
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+    .replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`/g, (chaine) =>
+      `${chaine[0]}${blankKeepingLines(chaine.slice(1, -1))}${chaine[chaine.length - 1]}`);
 
 /** Ce qui suit un `...` sans nommer de fragment cherchable. */
 const SPREAD_KEYWORDS = new Set(['new', 'this', 'await', 'typeof', 'void']);
@@ -198,6 +252,36 @@ const topLevelElements = (array: string): string[] => {
 const isAbsencePredicate = (branch: string, field: string): boolean =>
   new RegExp(`^\\{\\s*${field}\\s*:\\s*\\{\\s*isSet\\s*:\\s*false\\s*,?\\s*\\}\\s*,?\\s*\\}$`).test(branch);
 
+/**
+ * Le MODÈLE qu'interroge le `where` ouvert à `whereStart`.
+ *
+ * Deux voies, dans cet ordre, et toutes deux LOCALES au littéral — ce qui est
+ * nommé plus haut dans la fonction ne gouverne pas ce `where`-ci :
+ *
+ *   1. le DÉLÉGUÉ de l'appel englobant — `prisma.conversation.updateMany({`,
+ *      `this.prisma.userSession.findMany({`, `tx.participant.count({` ;
+ *   2. l'ANNOTATION `Prisma.<Modèle>WhereInput`, dont on rend le modèle en casse
+ *      de délégué (`ConversationWhereInput` → `conversation`).
+ *
+ * Rend `''` quand aucune des deux ne conclut. **Un `''` n'est jamais une
+ * absolution** : c'est l'appelant qui décide, et il garde les non résolus.
+ */
+const DELEGATE_CALL = /(?:^|[\s(,=[{])(?:await\s+)?(?:[\w$.]*\bprisma|tx|trx|db|client)\s*\.\s*([\w$]+)\s*\.\s*[\w$]+\s*\($/;
+const WHERE_INPUT_MODEL = /Prisma\.(\w+?)WhereInput/;
+
+function modelOf(source: string, whereStart: number): string {
+  const before = source.slice(Math.max(0, whereStart - 400), whereStart);
+  // On remonte depuis le `where` vers l'ouverture de l'appel : tout ce qui
+  // sépare les deux est fait d'arguments et d'autres clés d'options.
+  for (let cut = before.length; cut > 0; cut -= 1) {
+    const delegate = before.slice(0, cut).match(DELEGATE_CALL);
+    if (delegate) return delegate[1];
+  }
+  const annotated = before.match(new RegExp(WHERE_INPUT_MODEL.source + '(?![\\s\\S]*' + WHERE_INPUT_MODEL.source + ')'));
+  if (annotated) return annotated[1].charAt(0).toLowerCase() + annotated[1].slice(1);
+  return '';
+}
+
 type Pass = {
   readonly sites: EqualityNullSite[];
   /** Les identifiants RÉPANDUS sous un `where` — les fragments nommés de ce fichier. */
@@ -262,10 +346,13 @@ const onePass = (text: string, fields: ReadonlySet<string>, whereFragments: Read
       ? topLevelElements(text.slice(parent.start, blockEndOf(text, parent.start, '[', ']') + 1))
       : [];
 
+    const whereFrame = [...stack].reverse().find((frame) => frame.kind === '{' && frame.key === 'where');
+
     sites.push({
       file: '',
       line: text.slice(0, i).split('\n').length,
       field: filtered.field,
+      model: whereFrame ? modelOf(text, whereFrame.start) : '',
       spelling: filtered.spelling,
       absenceSaidInSameOr: sisters.some((branch) => isAbsencePredicate(branch, filtered.field)),
     });

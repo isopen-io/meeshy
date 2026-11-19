@@ -150,6 +150,23 @@ final class ProfileInCommonTests: XCTestCase {
         XCTAssertEqual(history[1].date, start.addingTimeInterval(5 * day), "une rétrogradation puis un retour ne déplacent pas le jalon")
     }
 
+    /// #19854 : un lien franchi Ami avant Connaissance (demande directe, puis un passage par Connaissance) ne fait pas
+    /// remonter la frise — les cercles se lisent dans l'ordre de leurs rangs, les autres jalons gardent leur place.
+    func test_history_ordersCircleStepsByRank_evenWhenALowerCircleIsDatedLater() {
+        let start = Date(timeIntervalSince1970: 1_772_755_200)
+        let inCommon = UserInCommon(id: "leo", history: [
+            InCommonHistoryStep(kind: .firstMessage, at: start),
+            InCommonHistoryStep(kind: .friend, at: start.addingTimeInterval(60)),
+            InCommonHistoryStep(kind: .acquaintance, at: start.addingTimeInterval(120)),
+            InCommonHistoryStep(kind: .close, at: start.addingTimeInterval(180)),
+            InCommonHistoryStep(kind: .blood, at: start.addingTimeInterval(240)),
+        ])
+
+        let history = ProfileInCommonDigest.resolve(conversations: 1, inCommon: inCommon).history
+
+        XCTAssertEqual(history.map(\.kind), [.firstMessage, .acquaintance, .friend, .close, .blood])
+    }
+
     func test_history_isEmptyWhenTheServerDoesNotServeIt() {
         XCTAssertTrue(ProfileInCommonDigest.resolve(conversations: 1, inCommon: leoInCommon()).history.isEmpty)
     }

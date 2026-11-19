@@ -27,6 +27,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case deviceAlive
     case deviceBattery
     case deviceBatterySettings
+    case deviceCall
+    case deviceCallSettings
     case deviceReachabilitySettings
     case engagement
     case export
@@ -85,6 +87,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case stickersByStickerId(stickerId: String)
     case stickersByStickerIdUse(stickerId: String)
     case terms
+    case wellnessOk
+    case wellnessSettings
 
     public var path: String {
         switch self {
@@ -103,6 +107,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .deviceAlive: return "/api/v1/me/device/alive"
         case .deviceBattery: return "/api/v1/me/device/battery"
         case .deviceBatterySettings: return "/api/v1/me/device/battery/settings"
+        case .deviceCall: return "/api/v1/me/device/call"
+        case .deviceCallSettings: return "/api/v1/me/device/call/settings"
         case .deviceReachabilitySettings: return "/api/v1/me/device/reachability/settings"
         case .engagement: return "/api/v1/me/engagement"
         case .export: return "/api/v1/me/export"
@@ -161,6 +167,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .stickersByStickerId(let stickerId): return "/api/v1/me/stickers/\(stickerId)"
         case .stickersByStickerIdUse(let stickerId): return "/api/v1/me/stickers/\(stickerId)/use"
         case .terms: return "/api/v1/me/terms"
+        case .wellnessOk: return "/api/v1/me/wellness/ok"
+        case .wellnessSettings: return "/api/v1/me/wellness/settings"
         }
     }
 }

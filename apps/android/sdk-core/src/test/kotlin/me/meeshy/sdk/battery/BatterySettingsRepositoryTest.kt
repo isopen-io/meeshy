@@ -3,6 +3,7 @@ package me.meeshy.sdk.battery
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.battery.BatteryEmitterSettings
+import me.meeshy.sdk.model.battery.BatteryEmitterSettingsBody
 import me.meeshy.sdk.model.battery.BatteryPersonSettingsBody
 import me.meeshy.sdk.model.battery.BatteryPersonSettingsWire
 import me.meeshy.sdk.model.battery.BatteryPullResultWire
@@ -17,7 +18,7 @@ class BatterySettingsRepositoryTest {
     private fun refused(code: String) = NetworkResult.Failure(ApiError("refusé", code = code, httpStatus = 429))
 
     private fun repository(
-        setEmitter: suspend (BatteryEmitterSettings) -> NetworkResult<BatteryEmitterSettings> = { NetworkResult.Success(it) },
+        setEmitter: suspend (BatteryEmitterSettingsBody) -> NetworkResult<BatteryEmitterSettings> = { NetworkResult.Success(BatteryEmitterSettings(it.sharingEnabled)) },
         setPerson: suspend (String, BatteryPersonSettingsBody) -> NetworkResult<BatteryPersonSettingsWire> =
             { _, _ -> NetworkResult.Success(BatteryPersonSettingsWire()) },
         pull: suspend (String) -> NetworkResult<BatteryPullResultWire> =

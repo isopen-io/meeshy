@@ -133,6 +133,17 @@ final class ProfileCircleViewModel: ObservableObject {
         effectiveToolLevel == .close
     }
 
+    /// « Prévenir si je ne réponds pas » (#18738) : entre Sangs (`safety.inactivity`), accordé par défaut et retirable.
+    var offersInactivity: Bool {
+        effectiveToolLevel >= RelationFeature.safetyInactivity.minimumLevel
+    }
+
+    /// « Montrer quand je suis en appel » (#18753) : entre Sangs et dans l'équipe (`device.call`), accordé par défaut
+    /// et retirable.
+    var offersPhoneCall: Bool {
+        effectiveToolLevel >= RelationFeature.deviceCall.minimumLevel
+    }
+
     private var effectiveToolLevel: RelationLevel {
         max(shownLevel ?? .public, toolLevel ?? .public)
     }

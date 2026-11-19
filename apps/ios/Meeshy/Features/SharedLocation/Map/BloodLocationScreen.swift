@@ -48,7 +48,8 @@ struct BloodLocationScreen: View {
             ghostPin
             chrome
         }
-        .meeshyAnchoredSheet(isPresented: .constant(true), height: .detents([0.5, 0.9], initial: 0),
+        .meeshyAnchoredSheet(isPresented: .constant(true), accessibilityLabel: BloodLocationCopy.title(name: displayName),
+                             height: .detents([0.5, 0.9], initial: 0),
                              isDragDismissEnabled: false, closeLabel: nil, surface: .dark, outside: .passesThrough) {
             ScrollView { BloodLocationSheet(model: model, displayName: displayName, tint: tint,
                                             isPlaying: $isPlaying, onShareMine: { sharesMine = true },
