@@ -20,17 +20,31 @@ describe('tout créateur de MessageAttachment pose la clé `messageId` (#19801)'
    * passerait la règle au vert pour la pire des raisons — c'est la forme que le
    * cliquet du budget de taille a payée (#4531), et elle se dit d'abord.
    */
-  it('voit bien les créateurs de pièces jointes', () => {
+  it('voit les CINQ créateurs, nommément', () => {
     const { sites } = sweepAttachmentPendingKey(SRC);
 
-    expect(sites.length).toBeGreaterThanOrEqual(5);
-    expect(sites.map((site) => site.file)).toContain('routes/uploads/tus-handler.ts');
+    // Une borne EXACTE, pas un plancher. L'audit du cycle 183 a mesuré qu'un
+    // `>= 5` laissait passer un balayage PARTIEL : un sixième créateur écrit
+    // sous un littéral de regex à apostrophes impaires devenait invisible, et
+    // les deux assertions restaient vertes. Une borne garde contre un balayage
+    // VIDE ; seule une borne exacte garde contre un balayage AMPUTÉ.
+    expect([...sites].map((site) => site.file).sort()).toEqual([
+      'routes/uploads/tus-handler.ts',
+      'services/attachments/UploadProcessor.ts',
+      'services/attachments/UploadProcessor.ts',
+      'services/messaging/MessageProcessor.ts',
+      'services/messaging/copyAttachments.ts',
+    ]);
   });
 
   it('aucun créateur n’omet la clé, et aucun ne la laisse indécidable', () => {
     const { offenders } = sweepAttachmentPendingKey(SRC);
 
-    expect(offenders.map((site) => `${site.file} (${site.method}) : ${site.verdict} — ${site.why}`)).toEqual([]);
+    // Le REMÈDE vit dans le message, pas seulement dans le docblock : la sortie
+    // CI ne montre pas le second, et un rouge sans sortie envoie chercher.
+    expect(offenders.map((site) => `${site.file} (${site.method}) : ${site.verdict} — ${site.why}`
+      + ' ⇒ REMÈDE : poser `messageId` au site de création (`null` pour une pièce en attente,'
+      + ' `x || null` si la valeur peut manquer) — jamais une ligne d’inventaire ici')).toEqual([]);
   });
 
   /**
@@ -77,6 +91,59 @@ describe('tout créateur de MessageAttachment pose la clé `messageId` (#19801)'
 
     expect(attachmentCreationsIn('f.ts', many)[0]).toMatchObject({ method: 'createMany', verdict: 'unresolved' });
     expect(attachmentCreationsIn('f.ts', upsert)[0]).toMatchObject({ method: 'upsert', verdict: 'missing' });
+  });
+
+  /**
+   * **POSER LA CLÉ NE SUFFIT PAS.** Prisma IGNORE un champ `undefined` comme un
+   * champ absent (`helpers/mongo-where.ts` le dit en tête), si bien qu'une
+   * valeur optionnelle reproduit EXACTEMENT le défaut que ce cliquet garde. La
+   * première version du balayage rendait `poses` sur les deux formes ci-dessous
+   * — trouvé par l'audit adversarial, et c'est le seul constat qui attaquait la
+   * garantie que ce lot prétend installer.
+   *
+   * `UploadProcessor.ts:431` écrit `const finalMessageId = messageId || null;`
+   * précisément pour fermer ce trou : la discipline du dépôt est « la clé est
+   * posée ET sa valeur n'est jamais `undefined` », et le cliquet garde les deux.
+   */
+  it('rougit sur une valeur qui peut rendre `undefined`, que Prisma ignore comme une clé absente', () => {
+    const optionnel = 'prisma.messageAttachment.create({ data: { messageId: peutEtre?.id, originalName: f } });';
+    const litteral = 'prisma.messageAttachment.create({ data: { messageId: undefined, originalName: f } });';
+
+    expect(attachmentCreationsIn('f.ts', optionnel).map((site) => site.verdict)).toEqual(['unresolved']);
+    expect(attachmentCreationsIn('f.ts', litteral).map((site) => site.verdict)).toEqual(['unresolved']);
+  });
+
+  it('admet les formes des cinq créateurs vivants : `null`, un identifiant, et `x || null`', () => {
+    const formes = [
+      'prisma.messageAttachment.create({ data: { messageId: null, originalName: f } });',
+      'prisma.messageAttachment.create({ data: { messageId: newMessageId, rank } });',
+      'prisma.messageAttachment.create({ data: { messageId: messageId || null, originalName: f } });',
+      // `?? null` ferme le cas même sur une chaîne OPTIONNELLE à gauche.
+      'prisma.messageAttachment.create({ data: { messageId: peutEtre?.id ?? null, originalName: f } });',
+    ];
+
+    for (const forme of formes) expect(attachmentCreationsIn('f.ts', forme).map((s) => s.verdict)).toEqual(['poses']);
+  });
+
+  /**
+   * UN LITTÉRAL DE REGEX NE DOIT PAS ÉTEINDRE LE RESTE DU FICHIER. Sans état
+   * « regex », l'apostrophe d'un jeu de caractères ouvre une chaîne qui court
+   * jusqu'à la fin du fichier, et tout créateur situé plus bas disparaît — le
+   * pire défaut possible pour un balayage, parce qu'il se présente comme un
+   * VERT. Le dépôt porte déjà un tel motif
+   * (`jobs/backfill-search-tokens.ts` → `/for the field '([^']+)'/`), sauvé par
+   * la seule PARITÉ de ses apostrophes.
+   */
+  it('voit un créateur écrit SOUS un littéral de regex à apostrophes impaires', () => {
+    const source = "const re = /[^']+/;\nprisma.messageAttachment.create({ data: { messageId: null, originalName: f } });";
+
+    expect(attachmentCreationsIn('f.ts', source).map((site) => site.verdict)).toEqual(['poses']);
+  });
+
+  it('ne prend pas une DIVISION pour une regex — le créateur qui suit reste vu', () => {
+    const source = "const ratio = total / 2;\nprisma.messageAttachment.create({ data: { originalName: f } });";
+
+    expect(attachmentCreationsIn('f.ts', source).map((site) => site.verdict)).toEqual(['missing']);
   });
 
   /**

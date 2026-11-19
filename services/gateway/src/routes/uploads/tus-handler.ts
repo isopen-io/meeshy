@@ -726,14 +726,22 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             // n'écrit pas un champ optionnel qu'on ne lui donne pas : sans cette
             // ligne le document n'a AUCUNE clé `messageId`, et
             // `{ messageId: null }` — une ÉGALITÉ sous MongoDB — ne l'apparie
-            // jamais (`utils/prisma-unset.ts`). Les DEUX lecteurs de cette
-            // colonne cherchent une pièce « encore libre » :
-            // `MaintenanceService.cleanupOrphanedAttachments` (le balayage des
-            // orphelines, qui ne voyait donc aucun média poussé ici puis jamais
-            // envoyé — fuite de stockage silencieuse) et `FREE_ATTACHMENT`
-            // (`services/calls/callRecordingLink.ts`, qui dit déjà l'absence).
-            // La branche `PostMedia` du MÊME `else`, vingt lignes plus haut,
-            // pose `postId: null` pour exactement cette raison.
+            // jamais (`utils/prisma-unset.ts`). TROIS lecteurs de cette colonne
+            // cherchent une pièce « encore libre », et ils ne la cherchent pas
+            // de la même façon :
+            //   - `MaintenanceService.cleanupOrphanedAttachments` — égalité
+            //     NUE, donc il ne voyait aucun média poussé ici puis jamais
+            //     envoyé : fuite de stockage silencieuse, le défaut de #19801 ;
+            //   - `FREE_ATTACHMENT` (`services/calls/callRecordingLink.ts`) —
+            //     dit déjà les deux états d'absence ;
+            //   - `AttachmentService.associateAttachmentsToMessage` —
+            //     l'ATTACHEMENT lui-même, par `unsetOrNull('messageId')`. C'est
+            //     lui qui rend l'ARRIÉRÉ d'avant #19801 encore attachable : une
+            //     pièce sans la clé peut toujours rejoindre un message, elle ne
+            //     peut simplement pas être balayée.
+            // La branche `PostMedia` du MÊME `else` — même fonction, même
+            // `if/else`, 87 lignes plus haut — pose `postId: null` pour
+            // exactement cette raison.
             messageId: null,
             originalName: filename,
             ...persistedRenditionFields(rendered),

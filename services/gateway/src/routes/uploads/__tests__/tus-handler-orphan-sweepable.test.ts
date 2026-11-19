@@ -14,11 +14,12 @@
  * toujours, sans qu'aucune erreur ne remonte — le balayage journalise qu'il n'a
  * rien trouvé à nettoyer.
  *
- * ## La preuve tient dans la branche JUMELLE, vingt lignes plus haut
+ * ## La preuve tient dans la branche JUMELLE du même `if/else`
  *
- * Le même `if/else` crée un `PostMedia` pour un contexte de publication, et il
- * pose `postId: null` EXPLICITEMENT — parce que `sweepPendingPostMedia` lit
- * cette clé pour trouver les médias abandonnés. La discipline d'écriture était
+ * Le même `if/else` crée un `PostMedia` pour un contexte de publication — 87
+ * lignes plus haut dans la même fonction — et il pose `postId: null`
+ * EXPLICITEMENT, parce que `sweepPendingPostMedia` lit cette clé pour trouver
+ * les médias abandonnés. La discipline d'écriture était
  * donc déjà la réponse du dépôt, appliquée par la branche voisine du même
  * `else`. C'est ce que le troisième témoin épingle : **les deux branches posent
  * leur clé d'attente, ou aucune ne la pose.**
