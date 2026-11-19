@@ -195,11 +195,11 @@ enum GameCopy {
         return String(localized: "game.level.to_next", defaultValue: "\(pointsText) jusqu’au niveau \(levelText)", bundle: .main)
     }
 
-    /// Ce que VoiceOver lit sur l'anneau de niveau : « Niveau 34, palier Éclat, quatrième palier ».
+    /// Ce que VoiceOver lit sur l'anneau de niveau : « Ta lumière au niveau 34, Éclat, quatrième état » (#17394).
     static func levelRingAccessibility(level: Int, tier: LevelTierKey) -> String {
         String(
             localized: "game.level.ring.a11y",
-            defaultValue: "Niveau \(formatCount(level)), \(tierName(tier)), \(tierOrdinal(tier)) état de ta lumière",
+            defaultValue: "Ta lumière au niveau \(formatCount(level)), \(tierName(tier)), \(tierOrdinal(tier)) état",
             bundle: .main
         )
     }

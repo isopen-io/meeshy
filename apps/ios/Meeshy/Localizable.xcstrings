@@ -282023,43 +282023,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المستوى %@، %@، الحالة %@ لنورك"
+            "value": "نورك في المستوى %@، %@، الحالة %@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Level %@, %@, %@ Gestalt deines Lichts"
+            "value": "Dein Licht auf Level %@, %@, %@ Gestalt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Level %@, %@, %@ phase of your light"
+            "value": "Your light at level %@, %@, %@ phase"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nivel %@, %@, %@ estado de tu luz"
+            "value": "Tu luz en el nivel %@, %@, %@ estado"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niveau %@, %@, %@ état de ta lumière"
+            "value": "Ta lumière au niveau %@, %@, %@ état"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Livello %@, %@, %@ stato della tua luce"
+            "value": "La tua luce al livello %@, %@, %@ stato"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nível %@, %@, %@ estado da sua luz"
+            "value": "Sua luz no nível %@, %@, %@ estado"
           }
         }
       }
@@ -287371,6 +287371,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nível %@"
+          }
+        }
+      }
+    },
+    "game2.banner.light": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نورك في المستوى %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Licht auf Level %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your light at level %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu luz en el nivel %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ta lumière au niveau %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tua luce al livello %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua luz no nível %@"
           }
         }
       }
