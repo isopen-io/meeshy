@@ -17,6 +17,17 @@ final class SafetyAlertNotificationTests: XCTestCase {
         XCTAssertFalse(category.hiddenPreviewsBodyPlaceholder.localizedCaseInsensitiveContains("chute"))
     }
 
+    func test_aPushedClearing_namesThePerson_evenAppClosed() {
+        XCTAssertEqual(FallDetectionCenter.clearedUserId(in: ["type": "safety_alert_cleared", "userId": "peer"]), "peer")
+        XCTAssertNil(FallDetectionCenter.clearedUserId(in: ["type": "safety_alert", "userId": "peer"]))
+        XCTAssertNil(FallDetectionCenter.clearedUserId(in: ["type": "safety_alert_cleared", "userId": ""]))
+    }
+
+    @MainActor
+    func test_aForeignWakeIsNotHandled() {
+        XCTAssertFalse(FallDetectionCenter.handledClearingWake(["type": "new_message", "userId": "peer"]) { _ in })
+    }
+
     func test_aForeignPushIsNotRouted() {
         XCTAssertFalse(FallDetectionCenter.routesForegroundPush(["type": "new_message", "userId": "peer"]))
     }

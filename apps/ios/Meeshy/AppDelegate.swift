@@ -204,7 +204,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             }
             return
         }
-        if Self.handledEndToEndWake(userInfo, completionHandler: completionHandler) || BatteryCenter.handledPullWake(userInfo, completionHandler: completionHandler) || PhoneReachabilityCenter.handledProbeWake(userInfo, completionHandler: completionHandler) { return }
+        if Self.handledEndToEndWake(userInfo, completionHandler: completionHandler) || BatteryCenter.handledPullWake(userInfo, completionHandler: completionHandler) || PhoneReachabilityCenter.handledProbeWake(userInfo, completionHandler: completionHandler) || FallDetectionCenter.handledClearingWake(userInfo, completionHandler: completionHandler) { return }
         // Multi-device : un autre appareil du compte a décroché — pendant
         // socketless de `call:already-answered` (voir sendCallCancellationPushes
         // côté gateway pour le rationale réseau). Le device qui a décroché
