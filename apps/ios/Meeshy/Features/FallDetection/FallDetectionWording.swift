@@ -68,6 +68,9 @@ enum FallDetectionWording {
     static var imOk: String {
         String(localized: "fall.own.ok", defaultValue: "Je vais bien", bundle: .main)
     }
+    static var imOkFailed: String {
+        String(localized: "fall.own.okFailed", defaultValue: "Ta réponse n'est pas partie. Réessaie « Je vais bien ».", bundle: .main)
+    }
 
     // MARK: - La notification
 
@@ -102,6 +105,9 @@ enum FallDetectionWording {
     static var consentNotEmergency: String {
         String(localized: "fall.consent.notEmergency", defaultValue: "Ce n'est pas un service d'urgence : ton Apple Watch appelle déjà les secours.", bundle: .main)
     }
+    static var consentLockedLimit: String {
+        String(localized: "fall.consent.lockedLimit", defaultValue: "Si ton iPhone reste verrouillé plus de 30 minutes après la chute, l'alerte ne part pas — ton Apple Watch appelle déjà les secours.", bundle: .main)
+    }
     static var consentWithdraw: String {
         String(localized: "fall.consent.withdraw", defaultValue: "Pour retirer ton accord : coupe ce réglage. La collecte s'arrête et l'alerte en cours s'efface chez tes Sangs.", bundle: .main)
     }
@@ -116,6 +122,15 @@ enum FallDetectionWording {
     }
     static var healthDenied: String {
         String(localized: "fall.consent.healthDenied", defaultValue: "Autorise Meeshy à lire les chutes dans Santé pour que tes Sangs soient prévenus.", bundle: .main)
+    }
+    static var healthUnavailable: String {
+        String(localized: "fall.consent.healthUnavailable", defaultValue: "Santé n'a pas donné accès aux chutes : la détection reste désactivée et ton accord a été retiré.", bundle: .main)
+    }
+    static var detectionInactive: String {
+        String(localized: "fall.settings.inactive", defaultValue: "Détection inactive — autorise Santé", bundle: .main)
+    }
+    static var authorizeHealth: String {
+        String(localized: "fall.settings.authorizeHealth", defaultValue: "Autoriser", bundle: .main)
     }
     static var shareTitle: String {
         String(localized: "fall.share.person", defaultValue: "Prévenir si ma montre détecte une chute", bundle: .main)

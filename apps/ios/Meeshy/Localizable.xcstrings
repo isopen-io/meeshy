@@ -377198,6 +377198,53 @@
         }
       }
     },
+    "fall.own.okFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يُرسل ردّك. أعد المحاولة: « أنا بخير »."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Antwort wurde nicht gesendet. Tippe erneut auf „Mir geht es gut“."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your reply didn't go through. Tap “I'm OK” again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu respuesta no se envió. Vuelve a tocar «Estoy bien»."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ta réponse n'est pas partie. Réessaie « Je vais bien »."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tua risposta non è partita. Tocca di nuovo «Sto bene»."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua resposta não foi enviada. Toque de novo em “Estou bem”."
+          }
+        }
+      }
+    },
     "fall.notification.hiddenPreview": {
       "extractionState": "manual",
       "localizations": {
@@ -377241,6 +377288,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alerta de segurança"
+          }
+        }
+      }
+    },
+    "fall.settings.authorizeHealth": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "السماح"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erlauben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorizar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autoriser"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorizza"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorizar"
           }
         }
       }
@@ -377382,6 +377476,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Com seu Apple Watch. Desativada até você aceitar."
+          }
+        }
+      }
+    },
+    "fall.settings.inactive": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الاكتشاف غير نشط — اسمح لتطبيق صحتي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erkennung inaktiv – erlaube Health"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detection inactive — allow Health"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detección inactiva: autoriza Salud"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Détection inactive — autorise Santé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rilevamento inattivo: autorizza Salute"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detecção inativa — autorize o Saúde"
           }
         }
       }
@@ -377570,6 +377711,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Por quanto tempo: no máximo 6 horas, ou até você responder “Estou bem”. Nada é guardado depois."
+          }
+        }
+      }
+    },
+    "fall.consent.lockedLimit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إذا بقي iPhone مقفلًا أكثر من 30 دقيقة بعد السقوط، فلن يُرسَل التنبيه — ساعة Apple Watch تتصل بالفعل بخدمات الطوارئ."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bleibt dein iPhone nach dem Sturz länger als 30 Minuten gesperrt, wird die Warnung nicht gesendet – deine Apple Watch ruft bereits den Notruf."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If your iPhone stays locked for more than 30 minutes after the fall, the alert isn't sent — your Apple Watch already calls emergency services."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si tu iPhone sigue bloqueado más de 30 minutos después de la caída, la alerta no se envía: tu Apple Watch ya llama a los servicios de emergencia."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si ton iPhone reste verrouillé plus de 30 minutes après la chute, l'alerte ne part pas — ton Apple Watch appelle déjà les secours."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se il tuo iPhone resta bloccato per più di 30 minuti dopo la caduta, l'avviso non parte: il tuo Apple Watch chiama già i soccorsi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se o seu iPhone ficar bloqueado por mais de 30 minutos após a queda, o alerta não é enviado — seu Apple Watch já liga para os serviços de emergência."
           }
         }
       }
@@ -377852,6 +378040,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Permita que o Meeshy leia as quedas no Saúde para que seus Sangue sejam avisados."
+          }
+        }
+      }
+    },
+    "fall.consent.healthUnavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يمنح تطبيق صحتي الوصول إلى السقطات: يبقى الاكتشاف معطّلًا وسُحبت موافقتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health hat keinen Zugriff auf Stürze gewährt: Die Erkennung bleibt aus und deine Zustimmung wurde zurückgezogen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health didn't grant access to falls: detection stays off and your consent was withdrawn."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salud no dio acceso a las caídas: la detección sigue desactivada y tu consentimiento se ha retirado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Santé n'a pas donné accès aux chutes : la détection reste désactivée et ton accord a été retiré."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salute non ha dato accesso alle cadute: il rilevamento resta disattivato e il tuo consenso è stato ritirato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O Saúde não deu acesso às quedas: a detecção continua desativada e seu consentimento foi retirado."
           }
         }
       }

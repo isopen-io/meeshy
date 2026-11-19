@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 import MeeshySDK
 @testable import Meeshy
@@ -11,7 +12,9 @@ final class FallConsentSettingsViewModelTests: XCTestCase {
     private final class Observer {
         var enableCalls = 0
         var stopCalls = 0
+        var resumeCalls = 0
         var grants = true
+        let blocked = CurrentValueSubject<Bool, Never>(false)
     }
 
     private func makeSUT() -> (FallConsentSettingsViewModel, MockFallDetectionService, Observer) {
@@ -23,7 +26,9 @@ final class FallConsentSettingsViewModelTests: XCTestCase {
                 observer.enableCalls += 1
                 return observer.grants
             },
-            stopObserver: { observer.stopCalls += 1 }
+            stopObserver: { observer.stopCalls += 1 },
+            resumeObserver: { observer.resumeCalls += 1 },
+            observerBlocked: observer.blocked.eraseToAnyPublisher()
         )
         return (sut, service, observer)
     }
@@ -64,11 +69,33 @@ final class FallConsentSettingsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.notice, FallDetectionWording.consentMinor)
     }
 
-    func test_accept_aRefusedHealthAuthorizationIsSaid() async {
-        let (sut, _, observer) = makeSUT()
+    func test_accept_aFailedHealthAuthorization_withdrawsTheConsent_andSwitchesBackOff() async {
+        let (sut, service, observer) = makeSUT()
         observer.grants = false
         await sut.load()
         await sut.accept()
+        XCTAssertEqual(service.updateConsentCalls, [.consent(version: "2026-11-19"), .withdraw])
+        XCTAssertFalse(sut.isConsented)
+        XCTAssertEqual(observer.stopCalls, 1)
+        XCTAssertEqual(sut.notice, FallDetectionWording.healthUnavailable)
+    }
+
+    func test_consentedButTheObserverIsBlocked_saysDetectionInactive_untilItRuns() async {
+        let (sut, service, observer) = makeSUT()
+        service.consentSettingsResult = .success(FallConsentSettings(consentedAt: Date(), consentVersion: "2026-11-19", currentVersion: "2026-11-19"))
+        await sut.load()
+        XCTAssertFalse(sut.isDetectionInactive)
+        observer.blocked.send(true)
+        XCTAssertTrue(sut.isDetectionInactive)
+        observer.blocked.send(false)
+        XCTAssertFalse(sut.isDetectionInactive)
+    }
+
+    func test_authorizeHealth_fromTheInactiveState_asksAgain_andSaysARefusal() async {
+        let (sut, _, observer) = makeSUT()
+        observer.grants = false
+        await sut.authorizeHealth()
+        XCTAssertEqual(observer.enableCalls, 1)
         XCTAssertEqual(sut.notice, FallDetectionWording.healthDenied)
     }
 
@@ -90,5 +117,15 @@ final class FallConsentSettingsViewModelTests: XCTestCase {
         await sut.toggle(false)
         XCTAssertTrue(sut.isConsented)
         XCTAssertEqual(sut.notice, FallDetectionWording.saveFailed)
+    }
+
+    func test_switchingOff_aFailureRestartsTheObserver() async {
+        let (sut, service, observer) = makeSUT()
+        await sut.load()
+        await sut.accept()
+        service.updateConsentResult = .failed
+        await sut.toggle(false)
+        XCTAssertEqual(observer.stopCalls, 1)
+        XCTAssertEqual(observer.resumeCalls, 1)
     }
 }

@@ -1,34 +1,51 @@
+import Combine
 import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
 /// L'ACCORD EXPLICITE de la chute détectée (#18748, art. 9 RGPD) : l'interrupteur n'est JAMAIS coché par défaut, le
-/// cocher ouvre le texte d'accord (ce qui part, à qui, combien de temps, ce que ce n'est pas, comment retirer), et
-/// seul « J'accepte » enregistre l'accord sur la version lue. L'autorisation Santé n'est demandée qu'APRÈS. Le décocher
-/// retire l'accord : la collecte s'arrête et l'alerte en cours s'efface chez les Sangs.
+/// cocher ouvre le texte d'accord (ce qui part, à qui, combien de temps, ce que ce n'est pas, ses limites, comment
+/// retirer), et seul « J'accepte » enregistre l'accord sur la version lue. L'autorisation Santé n'est demandée qu'APRÈS ;
+/// si elle échoue, l'accord est RETIRÉ côté serveur et l'interrupteur revient à « non » — l'interface ne promet jamais
+/// une détection qui ne tourne pas. Accord servi mais observateur bloqué : « Détection inactive » reste affiché. Le
+/// décocher retire l'accord : la collecte s'arrête et l'alerte en cours s'efface chez les Sangs ; un retrait en échec
+/// rend l'accord ET relance l'observateur.
 @MainActor
 final class FallConsentSettingsViewModel: ObservableObject {
     @Published private(set) var settings: FallConsentSettings?
     @Published var isConsentSheetPresented = false
     @Published var notice: String?
+    @Published private(set) var isObserverBlocked = false
 
     private let service: FallDetectionServiceProviding
     private let enableObserver: @MainActor () async -> Bool
     private let stopObserver: @MainActor () -> Void
+    private let resumeObserver: @MainActor () async -> Void
+    private var cancellables = Set<AnyCancellable>()
 
     nonisolated deinit {}
 
     init(
         service: FallDetectionServiceProviding = FallDetectionService.shared,
         enableObserver: @escaping @MainActor () async -> Bool = { await FallDetectionCenter.shared.enableAfterConsent() },
-        stopObserver: @escaping @MainActor () -> Void = { FallDetectionCenter.shared.stopObserving() }
+        stopObserver: @escaping @MainActor () -> Void = { FallDetectionCenter.shared.stopObserving() },
+        resumeObserver: @escaping @MainActor () async -> Void = { await FallDetectionCenter.shared.resumeIfConsented() },
+        observerBlocked: AnyPublisher<Bool, Never> = FallDetectionCenter.shared.$isDetectionBlocked.eraseToAnyPublisher()
     ) {
         self.service = service
         self.enableObserver = enableObserver
         self.stopObserver = stopObserver
+        self.resumeObserver = resumeObserver
+        observerBlocked
+            .removeDuplicates()
+            .sink { [weak self] blocked in self?.isObserverBlocked = blocked }
+            .store(in: &cancellables)
     }
 
     var isConsented: Bool { settings?.isConsented ?? false }
+
+    /// L'accord est enregistré, mais la détection ne tourne pas sur cet appareil : l'interface le dit, durablement.
+    var isDetectionInactive: Bool { isConsented && isObserverBlocked }
 
     func load() async {
         guard let served = try? await service.consentSettings() else { return }
@@ -48,8 +65,7 @@ final class FallConsentSettingsViewModel: ObservableObject {
         switch await service.updateConsent(.consent(version: version)) {
         case .saved(let saved):
             settings = saved
-            let authorized = await enableObserver()
-            if !authorized { notice = FallDetectionWording.healthDenied }
+            guard await enableObserver() else { return await withdrawAfterHealthFailure() }
         case .minor:
             notice = FallDetectionWording.consentMinor
         case .staleVersion:
@@ -57,6 +73,21 @@ final class FallConsentSettingsViewModel: ObservableObject {
         case .failed:
             notice = FallDetectionWording.saveFailed
         }
+    }
+
+    /// Depuis « Détection inactive » : redemander Santé.
+    func authorizeHealth() async {
+        guard !(await enableObserver()) else { return }
+        notice = FallDetectionWording.healthDenied
+    }
+
+    /// Santé refusée ou en échec juste après l'accord : l'accord se retire, l'interrupteur revient à « non ». Si le
+    /// retrait lui-même échoue, l'accord reste servi et l'état « Détection inactive » le dit.
+    private func withdrawAfterHealthFailure() async {
+        notice = FallDetectionWording.healthUnavailable
+        guard case .saved(let withdrawn) = await service.updateConsent(.withdraw) else { return }
+        settings = withdrawn
+        stopObserver()
     }
 
     private func withdraw() async {
@@ -68,6 +99,7 @@ final class FallConsentSettingsViewModel: ObservableObject {
         guard case .saved(let saved) = await service.updateConsent(.withdraw) else {
             settings = previous
             notice = FallDetectionWording.saveFailed
+            if previous?.isConsented == true { await resumeObserver() }
             return
         }
         settings = saved
@@ -102,6 +134,9 @@ struct FallConsentSettingsSection: View {
                         .accessibilityIdentifier("fall.consent.toggle")
                     }
                 }
+                if viewModel.isDetectionInactive {
+                    FallDetectionInactiveRow(authorize: { Task { await viewModel.authorizeHealth() } })
+                }
             }
         }
         .task { await viewModel.load() }
@@ -116,6 +151,33 @@ struct FallConsentSettingsSection: View {
             FeedbackToastManager.shared.showError(new)
             viewModel.notice = nil
         }
+    }
+}
+
+/// « Détection inactive — autorise Santé » : l'accord est servi, l'observateur ne tourne pas. Persistant tant que c'est
+/// vrai, avec le geste qui le répare.
+private struct FallDetectionInactiveRow: View {
+    let authorize: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: MeeshySpacing.md) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(MeeshyColors.warning)
+                .accessibilityHidden(true)
+            Text(FallDetectionWording.detectionInactive)
+                .font(.footnote.weight(.semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(action: authorize) {
+                Text(FallDetectionWording.authorizeHealth)
+                    .font(.footnote.weight(.bold))
+                    .frame(minHeight: MeeshyControlSize.tapTarget)
+            }
+            .accessibilityIdentifier("fall.consent.authorizeHealth")
+        }
+        .padding(.horizontal, MeeshySpacing.md)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("fall.consent.inactive")
     }
 }
 
@@ -171,6 +233,7 @@ private struct FallConsentSheet: View {
             FallDetectionWording.consentWho,
             FallDetectionWording.consentHowLong,
             FallDetectionWording.consentNotEmergency,
+            FallDetectionWording.consentLockedLimit,
             FallDetectionWording.consentWithdraw,
         ]
     }
