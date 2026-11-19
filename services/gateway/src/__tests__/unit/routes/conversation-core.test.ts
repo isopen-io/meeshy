@@ -1,6 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 // ─── Top-level mock variables (hoisted before jest.mock calls) ────────────────
+const ORDRE_DE_RECENCE = [{ lastMessageAt: 'desc' }, { id: 'desc' }]; // #19881 — tête = récence, `id` ne fait QUE départager
 const mockResolveConversationId = jest.fn<any>();
 const mockCanAccessConversation = jest.fn<any>();
 const mockIsBlockedBetween = jest.fn<any>();
@@ -1036,11 +1037,10 @@ describe('registerCoreRoutes', () => {
 
       await getListHandler(fastify)(req, reply);
 
-      expect(prisma.conversation.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ AND: expect.arrayContaining([{ lastMessageAt: { lt: cursorDate } }]) }),
-        })
-      );
+      // #19881 — borne sur `(rang, id)` : plafond `lte` ET branche STRICTE, les deux moitiés de ce que gardait la forme d'avant ; le départage est gardé par l'EFFET (`conversation-list-rank-tiebreak`).
+      const strict = expect.objectContaining({ AND: expect.arrayContaining([{ lastMessageAt: { lt: cursorDate } }]) });
+      const borne = expect.objectContaining({ AND: expect.arrayContaining([{ lastMessageAt: { lte: cursorDate } }, expect.objectContaining({ OR: expect.arrayContaining([strict]) })]) });
+      expect(prisma.conversation.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: borne }));
     });
 
     it('handles beforeCursor when cursorConversation has null lastMessageAt', async () => {
@@ -1103,7 +1103,7 @@ describe('registerCoreRoutes', () => {
       // conversation first. Only the delta consumers trade recency for
       // resumability.
       expect(prisma.conversation.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: { lastMessageAt: 'desc' } })
+        expect.objectContaining({ orderBy: ORDRE_DE_RECENCE })
       );
     });
 
@@ -1121,7 +1121,7 @@ describe('registerCoreRoutes', () => {
       // would pair a cursor with a sort it has no relation to. No client
       // combines the two — the guard is for the one that tries.
       expect(prisma.conversation.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: { lastMessageAt: 'desc' } })
+        expect.objectContaining({ orderBy: ORDRE_DE_RECENCE })
       );
     });
 
@@ -1135,7 +1135,7 @@ describe('registerCoreRoutes', () => {
       // No delta filter was applied, so this is a normal page: ordering it by
       // `updatedAt` would hand the list screen its OLDEST conversations first.
       expect(prisma.conversation.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ orderBy: { lastMessageAt: 'desc' } })
+        expect.objectContaining({ orderBy: ORDRE_DE_RECENCE })
       );
     });
 
