@@ -30,7 +30,7 @@ nonisolated enum LocationMapFan {
         let ordered = points.sorted { $0.0 < $1.0 }
         let groups = ordered.reduce(into: [[(String, CGPoint)]]()) { groups, entry in
             let index = groups.firstIndex { group in
-                group.contains { hypot($0.1.x - entry.1.x, $0.1.y - entry.1.y) < minimumDistance }
+                group.contains { distance($0.1, entry.1) < minimumDistance }
             }
             if let index { groups[index].append(entry) } else { groups.append([entry]) }
         }
@@ -40,13 +40,20 @@ nonisolated enum LocationMapFan {
                 return
             }
             let n = Double(group.count)
-            let centre = CGPoint(x: group.map { $0.1.x }.reduce(0, +) / n, y: group.map { $0.1.y }.reduce(0, +) / n)
-            let radius = max(minimumDistance * 0.6, minimumDistance / (2 * sin(.pi / n)))
+            let centreX: Double = group.reduce(0.0) { $0 + Double($1.1.x) } / n
+            let centreY: Double = group.reduce(0.0) { $0 + Double($1.1.y) } / n
+            let radius: Double = max(minimumDistance * 0.6, minimumDistance / (2 * sin(Double.pi / n)))
             for (index, entry) in group.enumerated() {
-                let angle = -Double.pi / 2 + 2 * .pi * Double(index) / n
-                placed[entry.0] = CGPoint(x: centre.x + radius * cos(angle), y: centre.y + radius * sin(angle))
+                let angle: Double = -Double.pi / 2 + 2 * Double.pi * Double(index) / n
+                placed[entry.0] = CGPoint(x: centreX + radius * cos(angle), y: centreY + radius * sin(angle))
             }
         }
+    }
+
+    private static func distance(_ a: CGPoint, _ b: CGPoint) -> Double {
+        let dx = Double(a.x - b.x)
+        let dy = Double(a.y - b.y)
+        return (dx * dx + dy * dy).squareRoot()
     }
 }
 
