@@ -7,7 +7,17 @@ import { FOUNDING_MEMBER_PERMISSIONS } from '../participantRights';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { RANK_SELECT, highestRankedConversations } from '../conversations/highestRanked';
 
-/** La fenêtre de chaque flux du rang : la preuve du top-K exige `take` ≥ K sur les DEUX (#19836). */
+/**
+ * La fenêtre de chaque flux du rang. **C'est une TRONCATURE héritée, pas une borne
+ * que la preuve du top-K démontre** (relevé par l'audit adversarial de #19835) :
+ * `take: 20` était déjà là avant que le rang n'arrive, et le filtre d'exactitude
+ * des membres s'applique APRÈS elle — un groupe appariant exactement mais hors
+ * des vingt premiers reste invisible, et l'appel en crée alors un neuf
+ * (`reserveTarget`, `callConversationRebranch.ts`). Ce que la preuve EXIGE, c'est
+ * que les deux flux lisent la MÊME fenêtre, quelle qu'elle soit ; ce que 20 vaut
+ * se mesure en production (combien de groupes partagent un même ensemble de
+ * membres ?) et n'est mesuré par rien.
+ */
 const CALL_GROUP_WINDOW = 20;
 
 /**
@@ -102,7 +112,12 @@ export async function findExactCallGroups(
     participants: { where: { isActive: true }, select: { userId: true } },
   };
   const rows: readonly GroupRow[] = await highestRankedConversations(
-    (orderBy) => prisma.conversation.findMany({ where, select, orderBy, take: CALL_GROUP_WINDOW }),
+    (stream) => prisma.conversation.findMany({
+      where: { ...where, ...stream.where },
+      select,
+      orderBy: stream.orderBy,
+      take: CALL_GROUP_WINDOW,
+    }),
     CALL_GROUP_WINDOW,
   );
   const exact = rows.filter((row) => isPlainLiveGroup(row) && sameSet(activeKeys(row), target));

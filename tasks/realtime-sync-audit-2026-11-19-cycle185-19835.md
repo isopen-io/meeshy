@@ -166,10 +166,100 @@ pour un cycle de plus.
   de sites porte deux affirmations, et la seconde — « ce sont les sites où la
   règle s'applique » — se remesure.*
 
+## Ce que l'audit adversarial a trouvé, et qui a changé le lot
+
+Le lot a été audité avant fusion, et l'audit a rendu **un constat bloquant** —
+lequel ne portait ni sur le rang ni sur le `select`, mais sur ce que le correctif
+a rendu CONCURRENT.
+
+### Le constat bloquant : deux flux, deux résolutions du régime
+
+`core-lifecycle` ne choisit pas seulement un rang : il choisit d'abord un
+**RÉGIME** (`firstFound` le long de `directLookupWheres` — le chiffré d'abord,
+« n'importe lequel » ensuite, #12966). La première rédaction mettait le rang
+DEHORS :
+
+```ts
+highestRankedConversation((orderBy) => firstFound(lookups, (where) => findFirst({ where, orderBy, … })))
+```
+
+Les deux flux étant lancés **ensemble**, chacun refaisait la descente du régime
+pour son compte, et **les deux lectures ne partagent aucun instantané**. Il
+suffit qu'un tête-à-tête `e2ee` apparaisse entre elles pour que l'un retombe sur
+« n'importe lequel » — donc sur le lisible — pendant que l'autre trouve le
+chiffré ; le rang, comparant les deux têtes, sert alors **LE CLAIR**. C'est
+exactement la bascule silencieuse que la décision du 2026-10-25 interdit
+(#12949).
+
+Mesuré, sur le même double, dans les deux sens :
+
+```
+imbrication de PRODUCTION (régime dehors)   → le chiffré      ✓
+imbrication inverse       (rang dehors)     → LE CLAIR        ✗  ← la première rédaction
+```
+
+Le correctif est l'inversion, et il est **gratuit** : le compte de lectures est
+inchangé (deux par index de `lookups` atteint), et ce sens-ci court-circuite au
+premier index qui apparie. Témoin :
+`__tests__/unit/services/conversations/conversation-reopen-regime-before-rank.test.ts`,
+qui exerce les DEUX imbrications pour que la raison du sens retenu soit lisible
+et pas seulement affirmée.
+
+> **Une règle d'ordre lue par deux flux CONCURRENTS ne peut pas porter une
+> décision qui la précède.** La preuve du top-K vaut sur UN jeu de lignes ; deux
+> aller-retours ne sont pas un instantané. Toute décision antérieure au rang se
+> résout DEHORS, et le rang ne départage qu'à l'intérieur de ce qu'elle a retenu.
+
+### Ce que l'audit a corrigé d'autre dans le même lot
+
+- **`recent_activity` de l'administration PASSE au rang**, au lieu de rester sur
+  `lastMessageAt` avec une décision écrite. L'argument de coût de la première
+  rédaction était **FAUX** : `max(a, b) ≥ X ⟺ a ≥ X OU b ≥ X`, la borne du rang
+  s'écrit donc en `where` (et `list-rank.ts` le fait déjà). Et la surface PROMET
+  l'activité — « Activité la plus récente » dans les quatre catalogues
+  d'administration, champ servi nommé `lastActivity`. C'était un défaut qu'on
+  documentait au lieu de le corriger.
+- **Le flux d'activité ne lit plus que les lignes qui en portent une**
+  (`{ lastActivityAt: { not: null } }`, comme `list-rank.ts`). Sans ce filtre, la
+  colonne étant absente presque partout, ce flux dépensait sa fenêtre entière sur
+  des lignes toutes à égalité sur `null` — les K plus récemment CRÉÉES, qui ne
+  peuvent jamais gagner — et chargeait pour rien, sur le groupe d'appel, vingt
+  lignes avec leur relation `participants`.
+- **Le garde `NaN` était justifié par une forme IMPOSSIBLE.**
+  `Conversation.lastMessageAt` est REQUISE (`DateTime @default(now())`) : deux
+  colonnes nulles ne s'atteignent pas par ce modèle. La raison écrite au site dit
+  désormais la vraie : une règle d'ordre n'a pas à dépendre de la nullabilité
+  d'un schéma qu'elle ne lit pas.
+- **`CALL_GROUP_WINDOW` est une TRONCATURE héritée, pas une borne démontrée.**
+  Citer #19836 pour la justifier inversait le sens de cette issue. Le site le dit,
+  et nomme ce qui n'est mesuré par rien.
+- **Trois clients, pas deux** : iOS porte le même repli au rang
+  (`TalkieVoiceCopy.swift`). Le constat du lot en est renforcé — des quatre
+  sites, le serveur était le SEUL à trier sur le dernier message.
+- **Deux témoins ne pouvaient pas tomber.** Celui de la fenêtre démontrait
+  l'INVERSE de son titre (sur son jeu de lignes, une fenêtre d'une ligne par flux
+  ne perdait rien : il faut que le MÊME flux porte deux lignes du top-K) ; et le
+  départage sur `id` n'était gardé que par des `toEqual` sur le littéral de
+  l'`orderBy` — aucun COMPORTEMENT ne tombait. Les deux sont réécrits, et le
+  moteur du témoin n'applique plus `id` de lui-même : un double qui départage en
+  douce rend la mutation indétectable.
+
+### Le ROUGE après réécriture, remesuré
+
+| mutation | témoins rouges |
+|---|---|
+| le rang DEHORS, le régime dedans (la première rédaction) | **1** (le témoin dédié, dans les deux sens) |
+| départage sur `id` retiré d'un flux | **4**, dont **3 de comportement** |
+| `outranks` départageant à l'envers | **2** |
+| un seul flux lu | **5** / 15 |
+| l'ancien tri sur `recent_activity` | **4** / 5 |
+
 ## Les suivis
 
 | constat | issue |
 |---|---|
 | deux lignes de rang identique à la frontière d'une page de la liste | #19881 (**prise** par une autre session, PR #19891) |
-| index `Conversation(isActive, lastActivityAt)` et p95 du chemin de fusion | #19837 (avant promotion en production) |
-| `recent_activity` de l'administration : filtrer sur le rang demande le patron de #19748 | consigné au site ; aucune issue ouverte faute de demande produit |
+| p95 du chemin de fusion de `GET /conversations`, et les index RÉELLEMENT créés en base | #19837 (avant promotion en production) — **mais l'issue nomme un index que `schema.prisma` DÉCLARE déjà** (`@@index([isActive, lastActivityAt])`, ligne 878) : ce qui reste à instruire est la création effective (sous Prisma/MongoDB, `@@index` déclaré ≠ index créé) et, pour les ordres de ce lot, un composé portant `_id` |
+| les DEUX lecteurs de rang du dépôt divergent — `list-rank.ts` ne départage pas ses ex aequo et ne consomme pas `rankStreams()` | **#19904** (ouverte par ce lot) |
+| `talkieFallback` : `deletedAt: null` sans `unsetOrNull` exclut les documents où la clé est ABSENTE (fail-closed, antérieur au lot) | **#19905** (ouverte par ce lot) |
+| `CALL_GROUP_WINDOW` : une troncature de 20 qu'aucune mesure ne soutient | **#19906** (ouverte par ce lot) |

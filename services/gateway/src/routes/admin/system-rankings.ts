@@ -16,6 +16,8 @@ import {
   servedNamePreview,
   type ConversationNamePreview,
 } from './conversation-name-preview';
+import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank';
+import { RANK_SELECT, highestRankedConversations } from '../../services/conversations/highestRanked';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 // `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
@@ -614,20 +616,29 @@ async function rankConversations(
     }
 
     case 'recent_activity': {
-      // #19835 — RESTE sur `lastMessageAt`, et ici il faut le dire deux fois.
-      // D'abord la décision : ce classement mesure le trafic de MESSAGES, et son
-      // nom (`recent_activity`) est une valeur d'API antérieure à #9026 — il ne
-      // promet pas le rang de liste. Ensuite le coût, qui est ce qui rendrait la
-      // bascule un lot à part : la colonne est ici un FILTRE (`gte: startDate`)
-      // autant qu'un ordre, et filtrer sur max(`lastMessageAt`,
-      // `lastActivityAt`) ne s'écrit pas plus en `where` qu'en `orderBy` — c'est
-      // le patron de tri de #19748, pas un `orderBy` à remplacer.
-      const convos = await fastify.prisma.conversation.findMany({
-        where: startDate ? { lastMessageAt: { gte: startDate } } : {},
-        select: { id: true, identifier: true, title: true, type: true, avatar: true, lastMessageAt: true },
-        orderBy: { lastMessageAt: 'desc' },
-        take: limit
-      });
+      // #19835 — ce classement PASSE au RANG (max(`lastMessageAt`,
+      // `lastActivityAt`), #9026), là où ses trois voisins d'administration
+      // restent sur le dernier message. La raison n'est pas une préférence : la
+      // surface PROMET l'activité à l'administrateur, en QUATRE langues
+      // (« Activité la plus récente », `apps/web/src/lib/interface-catalogs/
+      // admin/classement-supervision-*.ts`), et le champ servi s'appelle
+      // `lastActivity`. Une réaction, un appel, une épingle sont de l'activité.
+      //
+      // Le filtre de fenêtre suit, et il s'écrit : max(a, b) ≥ X ⟺ a ≥ X OU
+      // b ≥ X — le même idiome que `list-rank.ts`. Seul l'ORDRE ne s'écrit pas
+      // en Prisma, et c'est ce que les deux flux résolvent ; ce classement n'a
+      // ni curseur ni `skip`, donc `take: limit` suffit à la preuve du top-K.
+      const convos = await highestRankedConversations(
+        (stream) => fastify.prisma.conversation.findMany({
+          where: startDate
+            ? { ...stream.where, OR: [{ lastMessageAt: { gte: startDate } }, { lastActivityAt: { gte: startDate } }] }
+            : { ...stream.where },
+          select: { ...RANK_SELECT, identifier: true, title: true, type: true, avatar: true },
+          orderBy: stream.orderBy,
+          take: limit
+        }),
+        limit
+      );
       const previews = await loadConversationNamePreviews(fastify.prisma, convos, { allowed: canSeeMembers });
       return convos.map(c => ({
         id: c.id,
@@ -637,7 +648,8 @@ async function rankConversations(
         image: c.avatar,
         ...servedNamePreview(previews.get(c.id)),
         count: 0,
-        lastActivity: c.lastMessageAt?.toISOString()
+        // Le champ dit « activité » : il sert donc le RANG, pas le dernier message.
+        lastActivity: listRankFromColumns(c)?.toISOString()
       }));
     }
 

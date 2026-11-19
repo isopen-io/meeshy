@@ -173,7 +173,9 @@ describe('le groupe exact d’un appel est choisi par son RANG (#19650)', () => 
 describe('l’appel manqué d’une invitée non membre mène au tête-à-tête de plus haut rang (#9115)', () => {
   const missedDestination = async (docs: readonly DirectDoc[]) => {
     const conversations = findConversationsIn(docs);
-    const createMissedCallNotification = jest.fn(async () => undefined);
+    // Le double DÉCLARE le paramètre qu'il reçoit : sans cela `mock.calls[0]` est
+    // un tuple VIDE au typage, et lire son premier élément n'est plus vérifiable.
+    const createMissedCallNotification = jest.fn(async (_params: { readonly conversationId: string | null }) => undefined);
     const prisma = {
       callSession: {
         findUnique: jest.fn(async () => ({ status: 'missed', invitedUserIds: [PEER], participants: [] })),
@@ -192,7 +194,7 @@ describe('l’appel manqué d’une invitée non membre mène au tête-à-tête 
     const io = { to: jest.fn(() => ({ emit: jest.fn() })) };
     lifecycle.arm(io as never, { callId: CALL, conversationId: 'other', inviterUserId: ME, inviteeUserId: PEER, callType: 'audio' });
     await lifecycle.callEnded(io as never, CALL);
-    return (createMissedCallNotification.mock.calls[0]?.[0] as { conversationId: string | null } | undefined)?.conversationId;
+    return createMissedCallNotification.mock.calls[0]?.[0]?.conversationId;
   };
 
   it('le tête-à-tête REMONTÉ par une réaction est nommé, pas celui au dernier message plus récent', async () => {

@@ -122,8 +122,8 @@ export function createCallInvitationLifecycle(deps: CallInvitationLifecycleDeps)
         { participants: { some: { userId: invitation.inviterUserId, isActive: true } } },
       ],
     };
-    const direct = await highestRankedConversation((orderBy) =>
-      deps.prisma.conversation.findFirst({ where, orderBy, select: RANK_SELECT })
+    const direct = await highestRankedConversation((stream) =>
+      deps.prisma.conversation.findFirst({ where: { ...where, ...stream.where }, orderBy: stream.orderBy, select: RANK_SELECT })
     );
     return direct?.id ?? null;
   };

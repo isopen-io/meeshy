@@ -258,15 +258,18 @@ export function registerCreateConversationRoute(
         // l'utilisateur retombe sur une DM morte.
         //
         // #19835 — « active » est le RANG (max(`lastMessageAt`,
-        // `lastActivityAt`), #9026), pas le dernier message : un doublon où l'on
-        // vient de réagir, de s'appeler ou d'épingler est le vivant, et c'est
-        // précisément lui que l'ancien tri écartait. La PRÉFÉRENCE DE RÉGIME
-        // passe avant le rang et ne bouge pas (#12966) : les deux flux parcourent
-        // les mêmes `lookups` dans le même ordre, donc un tête-à-tête chiffré
-        // existant gagne toujours, et le rang ne départage qu'À régime égal.
-        const existingDirect = await highestRankedConversation((orderBy) => firstFound(lookups, (where) => prisma.conversation.findFirst({
-          where,
-          orderBy,
+        // `lastActivityAt`), #9026), pas le dernier message : le doublon où l'on
+        // vient de réagir, de s'appeler ou d'épingler est le vivant.
+        //
+        // **L'ORDRE DES DEUX DÉCISIONS EST STRUCTUREL : `firstFound` DEHORS (le
+        // régime), le rang DEDANS** (#12966, #12949). L'inverse confie le régime
+        // à DEUX résolutions indépendantes — un flux par colonne, lancés
+        // ensemble — et un `e2ee` apparu entre les deux lectures fait servir LE
+        // CLAIR. Mesuré, avec les deux imbrications :
+        // `__tests__/unit/services/conversations/conversation-reopen-regime-before-rank.test.ts`.
+        const existingDirect = await firstFound(lookups, (where) => highestRankedConversation((stream) => prisma.conversation.findFirst({
+          where: { ...where, ...stream.where },
+          orderBy: stream.orderBy,
           include: {
             participants: {
               include: {
