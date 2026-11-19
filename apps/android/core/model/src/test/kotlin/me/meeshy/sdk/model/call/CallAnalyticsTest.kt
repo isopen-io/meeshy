@@ -258,6 +258,17 @@ class CallAnalyticsHostileSampleTest {
     }
 
     @Test
+    fun `a negative sample next to a valid one counts as zero in the average`() {
+        val fields = CallAnalytics(startedAtMs = 0, connectedAtMs = 1)
+            .plusSample(CallQualitySample(rttMs = 100.0, packetLoss = 0.02))
+            .plusSample(CallQualitySample(rttMs = -250.0, packetLoss = -0.4))
+            .fields(1, false, CallEndReason.Local, "x")
+
+        assertThat(fields["averageRtt"] as Double).isWithin(1e-9).of(50.0)
+        assertThat(fields["averagePacketLoss"] as Double).isWithin(1e-9).of(1.0)
+    }
+
+    @Test
     fun `a loss fraction above one is capped at one hundred percent`() {
         val fields = fieldsOf(foldAll(CallQualitySample(rttMs = 50.0, packetLoss = 3.0)))
 

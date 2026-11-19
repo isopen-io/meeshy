@@ -80,8 +80,9 @@ data class CallAnalytics(
      * for a missing anchor.
      *
      * `averagePacketLoss` and `maxPacketLoss` are PERCENTAGES (0–100), like iOS
-     * and the web, since 2026-11-20 (#19896). Android rows written before that
-     * date carry a FRACTION (0–1); they are not renormalised server-side.
+     * and the web, from the first build that ships #19896. Builds before it keep
+     * emitting a FRACTION (0–1) until updated; the payload carries no app version,
+     * so those rows cannot be told apart and are not renormalised server-side.
      * `averageRtt`, `averagePacketLoss` and `maxPacketLoss` are always finite and
      * `>= 0` (`socketCallAnalyticsSchema` requires `nonnegative()`): an overflowing
      * sum is emitted as 0 rather than omitted (#19899).
