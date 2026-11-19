@@ -22,6 +22,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { AttachmentReactionService } from '../../../services/AttachmentReactionService';
 import { loadRankedConversationPage, type RowsQuery } from '../../../routes/conversations/utils/list-rank';
 import { matchesMongoWhere, type MongoDocument } from '../../helpers/mongo-where';
+import { moteurDeRang } from '../../helpers/list-rank-engine';
 
 const BAVARDE = '507f1f77bcf86cd799450011';
 const TRANQUILLE = '507f1f77bcf86cd799450012';
@@ -43,16 +44,11 @@ const monde = () => {
     { id: TRANQUILLE, lastMessageAt: at('2026-11-08T09:00:00.000Z') },
   ];
 
-  const trie = (where: MongoDocument, key: string, skip: number, take: number) =>
-    rows
-      .filter((row) => matchesMongoWhere(row, where))
-      .sort((a, b) => ((b[key] as Date | undefined)?.getTime() ?? 0) - ((a[key] as Date | undefined)?.getTime() ?? 0))
-      .slice(skip, skip + take);
+  const base = moteurDeRang(rows);
 
   const moteur = {
     conversation: {
-      findMany: async (args: { where: MongoDocument; orderBy: Record<string, 'asc' | 'desc'>; take: number }) =>
-        trie(args.where, Object.keys(args.orderBy)[0], 0, args.take),
+      findMany: base.prisma.conversation.findMany,
       updateMany: async (args: { where: MongoDocument; data: MongoDocument }) => {
         const touchees = rows.filter((row) => matchesMongoWhere(row, args.where));
         touchees.forEach((row) => Object.assign(row, args.data));
@@ -64,7 +60,7 @@ const monde = () => {
   const page = () =>
     loadRankedConversationPage({
       prisma: moteur as never,
-      readRows: async (query: RowsQuery) => trie(query.where as MongoDocument, 'lastMessageAt', query.skip, query.take) as never,
+      readRows: base.readRows as never,
       where: {},
       curseur: { genre: 'absent' },
       deltaOrder: false,
