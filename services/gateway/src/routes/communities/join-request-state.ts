@@ -12,6 +12,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { liveJoinRequestWhere } from '../../services/community-join-request-lifecycle';
 
 const logger = enhancedLogger.child({ module: 'CommunityJoinRequestState' });
 
@@ -25,11 +26,12 @@ export async function viewerJoinRequestState(
     readonly requiresJoinApproval: boolean;
     readonly isMember: boolean;
   },
+  now: Date = new Date(),
 ): Promise<ViewerJoinRequestState> {
   if (!input.requiresJoinApproval || input.isMember) return null;
   try {
     const pending = await prisma.communityJoinRequest.findFirst({
-      where: { communityId: input.communityId, userId: input.viewerId, status: 'pending' },
+      where: { communityId: input.communityId, userId: input.viewerId, ...liveJoinRequestWhere(now) },
       select: { id: true },
     });
     return pending ? 'pending' : null;
