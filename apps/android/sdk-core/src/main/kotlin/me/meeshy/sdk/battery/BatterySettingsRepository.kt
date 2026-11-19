@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.meeshy.sdk.model.battery.BatteryEmitterSettings
+import me.meeshy.sdk.model.battery.BatteryEmitterSettingsBody
 import me.meeshy.sdk.model.battery.BatteryPersonSettingsBody
 import me.meeshy.sdk.model.battery.BatteryPersonSettingsWire
 import me.meeshy.sdk.model.battery.BatteryPullResultWire
@@ -61,7 +62,7 @@ interface BatterySettingsGateway {
 /** Les appels REST — isolés pour que les tests les pilotent à la main. */
 internal class BatterySettingsCalls(
     val emitter: suspend () -> NetworkResult<BatteryEmitterSettings>,
-    val setEmitter: suspend (BatteryEmitterSettings) -> NetworkResult<BatteryEmitterSettings>,
+    val setEmitter: suspend (BatteryEmitterSettingsBody) -> NetworkResult<BatteryEmitterSettings>,
     val person: suspend (String) -> NetworkResult<BatteryPersonSettingsWire>,
     val setPerson: suspend (String, BatteryPersonSettingsBody) -> NetworkResult<BatteryPersonSettingsWire>,
     val pull: suspend (String) -> NetworkResult<BatteryPullResultWire>,
@@ -99,7 +100,7 @@ class BatterySettingsRepository internal constructor(
     override suspend fun setSharing(enabled: Boolean): Boolean {
         val before = _sharingEnabled.value
         _sharingEnabled.value = enabled
-        val served = calls.setEmitter(BatteryEmitterSettings(enabled)).getOrNull()
+        val served = calls.setEmitter(BatteryEmitterSettingsBody(enabled)).getOrNull()
         _sharingEnabled.value = served?.sharingEnabled ?: before
         return served != null
     }

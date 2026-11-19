@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.phonereachability.PhoneAliveResultWire
 import me.meeshy.sdk.model.phonereachability.PhoneReachabilityEmitterSettings
+import me.meeshy.sdk.model.phonereachability.PhoneReachabilityEmitterSettingsBody
 import me.meeshy.sdk.model.phonereachability.PhoneReachabilityPersonSettingsBody
 import me.meeshy.sdk.model.phonereachability.PhoneReachabilityPersonSettingsWire
 import me.meeshy.sdk.model.relation.RelationLevel
@@ -16,7 +17,7 @@ class PhoneReachabilitySettingsRepositoryTest {
     private fun refused() = NetworkResult.Failure(ApiError("refusé", code = "PHONE_REACHABILITY_UNAVAILABLE", httpStatus = 503))
 
     private fun repository(
-        setEmitter: suspend (PhoneReachabilityEmitterSettings) -> NetworkResult<PhoneReachabilityEmitterSettings> = { NetworkResult.Success(it) },
+        setEmitter: suspend (PhoneReachabilityEmitterSettingsBody) -> NetworkResult<PhoneReachabilityEmitterSettings> = { NetworkResult.Success(PhoneReachabilityEmitterSettings(it.sharingEnabled)) },
         setPerson: suspend (String, PhoneReachabilityPersonSettingsBody) -> NetworkResult<PhoneReachabilityPersonSettingsWire> =
             { _, _ -> NetworkResult.Success(PhoneReachabilityPersonSettingsWire()) },
         level: String? = "BLOOD",
