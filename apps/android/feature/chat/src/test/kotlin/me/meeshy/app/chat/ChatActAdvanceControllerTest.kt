@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.model.ParticipantPermissions
+import me.meeshy.ui.component.bubble.BubbleContent
 import me.meeshy.sdk.model.game.GameActAdvance
 import me.meeshy.sdk.model.game.GameActAdvanceWatch
 import me.meeshy.sdk.model.game.GameMission
