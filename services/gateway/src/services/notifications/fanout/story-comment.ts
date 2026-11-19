@@ -7,6 +7,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger } from '../../../utils/logger-enhanced';
 import { filterPostConsumers } from '../../posts/postAudience';
+import { NOT_DELETED } from '../../posts/softDelete';
 import { textSynthesis } from '../content-synthesis';
 import { FANOUT_ROW_CAP } from './row-cap';
 import { getBlockedUserIdsAmong } from '../../../utils/blocking';
@@ -62,7 +63,21 @@ export async function getStoryNotificationRecipients(
     prisma.postComment.findMany({
       where: {
         postId,
-        deletedAt: null,
+        // #19803 — `NOT_DELETED` (`{ isSet: false }`), la discipline que 103
+        // autres lectures du dépôt emploient déjà : un commentaire non supprimé
+        // n'a PAS la clé, ses deux créateurs ne l'écrivant pas. L'égalité nue
+        // qui vivait ici n'appariait donc AUCUN commentaire — **aucun
+        // commentateur précédent n'a jamais été prévenu** qu'un nouveau
+        // commentaire était arrivé sous la story.
+        //
+        // Ce site n'était PAS le seul à lire cette colonne par une égalité, et
+        // la première rédaction de ce commentaire l'affirmait — à tort. L'audit
+        // du lot a trouvé trois autres sites sur les mêmes modèles, dans
+        // `routes/me/export-sections.ts`, où le même défaut vidait l'export
+        // RGPD (#19909). Le tri de #19748 en avait manqué quatre : il n'est donc
+        // pas clos, et son compte ne doit pas être réhérité (c'est la leçon
+        // « un compte est une AFFIRMATION » appliquée au tri censé la clore).
+        deletedAt: NOT_DELETED,
         authorId: { notIn: excludedEngagerIds },
       },
       distinct: ['authorId'],
