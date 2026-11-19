@@ -30,6 +30,20 @@ describe('ce que `getStats` dit des gels, de la limitation et du relais (#19876)
     expect(media.jitterBufferEmittedCount).toBe(96);
   });
 
+  test('le tampon de gigue ne compte que les flux qui portent le délai ET un compte émis positif (QA R2)', () => {
+    const media = readMediaQuality(report([
+      { type: 'inbound-rtp', kind: 'audio', jitterBufferDelay: 4.8, jitterBufferEmittedCount: 96 },
+      { type: 'inbound-rtp', kind: 'audio', jitterBufferDelay: 48 },
+      { type: 'inbound-rtp', kind: 'audio', jitterBufferDelay: 9, jitterBufferEmittedCount: 0 },
+      { type: 'inbound-rtp', kind: 'audio', jitterBufferEmittedCount: 500 },
+    ]));
+    expect(media.jitterBufferDelay).toBe(4.8);
+    expect(media.jitterBufferEmittedCount).toBe(96);
+    const orphan = readMediaQuality(report([{ type: 'inbound-rtp', kind: 'audio', jitterBufferDelay: 48 }]));
+    expect(orphan.jitterBufferDelay).toBeNull();
+    expect(orphan.jitterBufferEmittedCount).toBeNull();
+  });
+
   test('la limitation est celle de l’ÉMISSION vidéo', () => {
     expect(readMediaQuality(report(chrome)).qualityLimitationReason).toBe('bandwidth');
   });

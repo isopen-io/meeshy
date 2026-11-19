@@ -19,7 +19,7 @@ export type MediaQuality = {
   readonly freezeCount: number | null;
   /** Secondes. */
   readonly totalFreezesDuration: number | null;
-  /** Secondes cumulées ; divisées par `jitterBufferEmittedCount` au rapport. */
+  /** Secondes cumulées des seuls flux qui portent aussi un compte émis positif ; divisées par `jitterBufferEmittedCount` au rapport. */
   readonly jitterBufferDelay: number | null;
   readonly jitterBufferEmittedCount: number | null;
   readonly concealedSamples: number | null;
@@ -58,14 +58,15 @@ export function readMediaQuality(report: StatsReportLike): MediaQuality {
   report.forEach((entry) => entries.push(entry));
   const video = entries.filter((entry) => entry.type === 'inbound-rtp' && entry.kind === 'video');
   const audio = entries.filter((entry) => entry.type === 'inbound-rtp' && entry.kind !== 'video');
+  const buffered = audio.filter((entry) => measured(entry.jitterBufferDelay) && measured(entry.jitterBufferEmittedCount) && entry.jitterBufferEmittedCount > 0);
   const pair = selectedPair(entries);
   const local = pair === undefined ? undefined : entries.find((entry) => entry.type === 'local-candidate' && entry.id === pair.localCandidateId);
   const candidateType = text(local?.candidateType);
   return {
     freezeCount: sumOf(video, 'freezeCount'),
     totalFreezesDuration: sumOf(video, 'totalFreezesDuration'),
-    jitterBufferDelay: sumOf(audio, 'jitterBufferDelay'),
-    jitterBufferEmittedCount: sumOf(audio, 'jitterBufferEmittedCount'),
+    jitterBufferDelay: sumOf(buffered, 'jitterBufferDelay'),
+    jitterBufferEmittedCount: sumOf(buffered, 'jitterBufferEmittedCount'),
     concealedSamples: sumOf(audio, 'concealedSamples'),
     nackCount: sumOf(video, 'nackCount'),
     pliCount: sumOf(video, 'pliCount'),
