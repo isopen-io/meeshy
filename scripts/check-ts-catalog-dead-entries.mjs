@@ -599,12 +599,10 @@ const PENDING_CLIENT_ENTRIES = {
   'me.deviceAlive': { issue: 18737, reason: 'POST /me/device/alive — la réponse du téléphone à la sonde silencieuse, appelée par iOS et Android seulement' },
   'me.deviceCall': { issue: 18753, reason: 'POST /me/device/call — le rapport « en appel » du téléphone suivi, appelé par iOS et Android seulement ; un navigateur ne voit pas les appels' },
   // La chute détectée (#18748) : la passerelle sert le socle avant les lots clients ; le rapport ne vient que d'un iPhone
-  // (HealthKit), les quatre autres routes attendent les lots iOS, Android et web de #18748.
+  // (HealthKit) : « Je vais bien » et l’accord ne vivent que dans l’app iPhone ; le web lit le rattrapage et le réglage par personne.
   'me.healthFall': { issue: 18748, reason: 'POST /me/health/fall — le rapport de chute de l’iPhone (HealthKit), appelé par iOS seulement' },
-  'me.healthFallOk': { issue: 18748, reason: 'POST /me/health/fall/ok — « Je vais bien », attendu des lots clients de #18748' },
-  'me.healthFallSettings': { issue: 18748, reason: 'GET · PUT /me/health/fall/settings — l’accord explicite, attendu des lots clients de #18748' },
-  'relations.falls': { issue: 18748, reason: 'GET /relations/falls — le rattrapage des alertes en cours, attendu des lots clients de #18748' },
-  'relations.byUserIdFallSettings': { issue: 18748, reason: 'GET · PUT /relations/:userId/fall/settings — le retrait par personne, attendu des lots clients de #18748' },
+  'me.healthFallOk': { issue: 18748, reason: 'POST /me/health/fall/ok — « Je vais bien », appelé par iOS seulement (le web ne rapporte aucune chute)' },
+  'me.healthFallSettings': { issue: 18748, reason: 'GET · PUT /me/health/fall/settings — l’accord explicite, recueilli par iOS seulement' },
   'relations.byUserIdPhoneReachability': { issue: 18737, reason: 'GET /relations/:userId/phone-reachability — l’état d’une personne, lu par iOS et Android ; le web suit le rattrapage et `phone:*`' },
   // Le relais de la confirmation d'un appareil par code (#19156, spec 2026-11-17 § 5.2) : la passerelle le sert avant
   // les lots clients de la spécification (§ 10 : web lot 6, iOS lots 3-4, Android lot 5), portés par #18906.
