@@ -87,7 +87,7 @@ export async function performCreateCommunity({
  * double geste sur deux onglets ne doit pas rendre une erreur qui ment.
  */
 
-export type JoinCommunityOutcome = { readonly status: 'joined' | 'refused' | 'offline' | 'error' };
+export type JoinCommunityOutcome = { readonly status: 'joined' | 'requested' | 'refused' | 'cooldown' | 'offline' | 'error' };
 export type LeaveCommunityOutcome = { readonly status: 'left' | 'offline' | 'error' };
 
 type CacheEntry = readonly [readonly unknown[], unknown];
@@ -123,6 +123,24 @@ const removeFromLists = (queryClient: QueryClient, communityId: string) =>
     if (data !== undefined) queryClient.setQueryData(key, withoutCommunity(data, communityId));
   });
 
+/**
+ * **DEMANDER À ENTRER** (#19868) — une communauté qui valide chaque entrée
+ * (`requiresJoinApproval`) reçoit une DEMANDE : au geste, le détail passe à
+ * « Demande envoyée » sans compter personne de plus ni donner de rôle, et la
+ * carte n'entre PAS dans « mes communautés ». La RÉPONSE fait foi sur le
+ * cache : un 202 `pending` sur une communauté crue à entrée directe (cache
+ * périmé) défait l'entrée optimiste et pose la demande ; un 403
+ * `COMMUNITY_JOIN_COOLDOWN` (refus de moins de sept jours) rend le cache
+ * d'avant et se dit.
+ */
+const COOLDOWN = 'COMMUNITY_JOIN_COOLDOWN';
+
+const settleRequested = (queryClient: QueryClient, snapshot: readonly CacheEntry[], communityId: string): JoinCommunityOutcome => {
+  restore(queryClient, snapshot);
+  patchDetail(queryClient, communityId, (cached) => ({ ...cached, viewerRole: null, requiresJoinApproval: true, viewerJoinRequest: 'pending' }));
+  return { status: 'requested' };
+};
+
 export async function performJoinCommunity({
   community,
   deps,
@@ -133,18 +151,26 @@ export async function performJoinCommunity({
   if (!deps.isOnline()) return { status: 'offline' };
   const { queryClient } = deps;
   const snapshot = snapshotOf(queryClient);
-  const joined: CommunitySummary = { ...community, viewerRole: 'member', memberCount: community.memberCount + 1 };
-  patchDetail(queryClient, community.id, (cached) => ({ ...cached, viewerRole: 'member', memberCount: cached.memberCount + 1 }));
+  const validating = community.requiresJoinApproval === true;
+  if (validating) {
+    patchDetail(queryClient, community.id, (cached) => ({ ...cached, viewerJoinRequest: 'pending' }));
+  } else {
+    patchDetail(queryClient, community.id, (cached) => ({ ...cached, viewerRole: 'member', memberCount: cached.memberCount + 1 }));
+  }
 
   const result = await changeMembership(deps, community.id, 'join');
+  if (result.ok && result.data === 'pending') return settleRequested(queryClient, snapshot, community.id);
   if (!result.ok && result.status !== 409) {
     restore(queryClient, snapshot);
-    return { status: result.status === 403 ? 'refused' : 'error' };
+    if (result.status !== 403) return { status: 'error' };
+    return { status: result.code === COOLDOWN ? 'cooldown' : 'refused' };
   }
-  if (!result.ok) {
+  if (!result.ok || validating) {
     restore(queryClient, snapshot);
-    patchDetail(queryClient, community.id, (cached) => ({ ...cached, viewerRole: 'member' }));
+    patchDetail(queryClient, community.id, (cached) => ({ ...cached, viewerRole: 'member', viewerJoinRequest: null }));
+    void queryClient.invalidateQueries({ queryKey: [...DETAIL_PREFIX] });
   }
+  const joined: CommunitySummary = { ...community, viewerRole: 'member', viewerJoinRequest: null, memberCount: community.memberCount + 1 };
   const list = queryClient.getQueryData<InfiniteData<CommunityPage, number>>(communitiesQueryKey(''));
   if (list !== undefined) queryClient.setQueryData(communitiesQueryKey(''), prepend(list, joined));
   void queryClient.invalidateQueries({ queryKey: [...LIST_PREFIX], refetchType: 'none' });

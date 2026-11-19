@@ -58,4 +58,26 @@ describe('CommunityMembershipAction', () => {
     expect(html).toContain('role="alert"');
     expect(html).toContain('only join by invitation');
   });
+
+  test('« Demander à rejoindre » quand chaque entrée est validée (#19868)', () => {
+    const html = renderToStaticMarkup(<CommunityMembershipAction language="fr" action="request" {...base} />);
+    expect(html).toContain('data-community-join');
+    expect(html).toContain('Demander à rejoindre');
+    expect(html).not.toContain(' disabled="');
+  });
+
+  test('« Demande envoyée » est un état, pas un bouton, et dit qui doit l’accepter (#19868)', () => {
+    const html = renderToStaticMarkup(<CommunityMembershipAction language="fr" action="requested" {...base} />);
+    expect(html).toContain('data-community-join-requested');
+    expect(html).toContain('Demande envoyée');
+    expect(html).not.toContain('<button');
+    expect(html).toContain('role="status"');
+    expect(html).toContain('administrateur ou un modérateur');
+  });
+
+  test('un refus récent dit le délai, dans la langue du lecteur (#19868)', () => {
+    const html = renderToStaticMarkup(<CommunityMembershipAction language="en" action="request" {...base} failure="cooldown" />);
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('7 days');
+  });
 });

@@ -104,13 +104,29 @@ public nonisolated struct ProfileInCommonDigest: Equatable, Sendable {
         }
     }
 
-    /// Un jalon par sorte, le premier daté ; dans l'ordre du temps.
+    /// Un jalon par sorte, le premier daté ; dans l'ordre du temps, sauf les cercles, qui se lisent dans l'ordre de
+    /// leurs rangs aux places qu'ils occupent (#19854) : un lien devenu Ami avant Connaissance ne fait pas reculer la frise.
     private static func historySteps(_ steps: [InCommonHistoryStep]) -> [HistoryStep] {
         let dated = steps.compactMap { step -> HistoryStep? in
             guard let kind = step.historyKind, let date = step.date else { return nil }
             return HistoryStep(kind: kind, date: date)
         }
         let earliest = Dictionary(dated.map { ($0.kind, $0) }, uniquingKeysWith: { $0.date <= $1.date ? $0 : $1 })
-        return earliest.values.sorted { $0.date < $1.date }
+        let timeline = earliest.values.sorted { $0.date < $1.date }
+        var circles = timeline.filter { circleRank($0.kind) != nil }
+            .sorted { (circleRank($0.kind) ?? 0) < (circleRank($1.kind) ?? 0) }[...]
+        return timeline.map { step in
+            circleRank(step.kind) == nil ? step : circles.removeFirst()
+        }
+    }
+
+    private static func circleRank(_ kind: InCommonHistoryKind) -> Int? {
+        switch kind {
+        case .acquaintance: return 0
+        case .friend: return 1
+        case .close: return 2
+        case .blood: return 3
+        case .firstMessage, .messages1000: return nil
+        }
     }
 }

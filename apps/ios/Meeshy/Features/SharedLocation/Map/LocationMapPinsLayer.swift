@@ -22,6 +22,34 @@ enum LocationMapPinFreshness: Equatable {
     case lastKnown
 }
 
+/// Des personnes posées au même point (#19851 : la précision « ville » les arrondit toutes au même centre) s'écartent en
+/// éventail autour de ce point : aucune n'en cache une autre, et chacune garde l'avatar et le cercle de SA personne. Le
+/// groupement est glouton sur la distance à l'écran ; l'ordre des identifiants rend l'éventail stable d'un rendu à l'autre.
+nonisolated enum LocationMapFan {
+    static func spread(_ points: [(String, CGPoint)], minimumDistance: Double) -> [String: CGPoint] {
+        let ordered = points.sorted { $0.0 < $1.0 }
+        let groups = ordered.reduce(into: [[(String, CGPoint)]]()) { groups, entry in
+            let index = groups.firstIndex { group in
+                group.contains { hypot($0.1.x - entry.1.x, $0.1.y - entry.1.y) < minimumDistance }
+            }
+            if let index { groups[index].append(entry) } else { groups.append([entry]) }
+        }
+        return groups.reduce(into: [String: CGPoint]()) { placed, group in
+            guard group.count > 1 else {
+                group.forEach { placed[$0.0] = $0.1 }
+                return
+            }
+            let n = Double(group.count)
+            let centre = CGPoint(x: group.map { $0.1.x }.reduce(0, +) / n, y: group.map { $0.1.y }.reduce(0, +) / n)
+            let radius = max(minimumDistance * 0.6, minimumDistance / (2 * sin(.pi / n)))
+            for (index, entry) in group.enumerated() {
+                let angle = -Double.pi / 2 + 2 * .pi * Double(index) / n
+                placed[entry.0] = CGPoint(x: centre.x + radius * cos(angle), y: centre.y + radius * sin(angle))
+            }
+        }
+    }
+}
+
 /// LES ÉPINGLES AU-DESSUS DE LA CARTE (#18872) : chaque personne est son avatar (K36) posé là où la carte montre sa
 /// position SERVIE, entourée du flou servi à l'échelle de la carte ; la mienne est une petite épingle « own ». Rien ne
 /// se dessine hors champ, et rien ne se dessine avant que la carte ait dit ce qu'elle montre.
@@ -46,8 +74,12 @@ struct LocationMapPinsLayer: View {
                 if let me, viewport.contains(latitude: me.latitude, longitude: me.longitude, margin: 40) {
                     ownPin.position(viewport.point(latitude: me.latitude, longitude: me.longitude))
                 }
-                ForEach(visiblePins(in: viewport)) { pin in
-                    pinView(pin, viewport: viewport)
+                let shown = visiblePins(in: viewport)
+                let placed = LocationMapFan.spread(
+                    shown.map { ($0.id, viewport.point(latitude: $0.latitude, longitude: $0.longitude)) },
+                    minimumDistance: MeeshyMapPinRecipe.selectedDiameter + 4)
+                ForEach(shown) { pin in
+                    pinView(pin, viewport: viewport, at: placed[pin.id])
                 }
             }
             .frame(width: CGFloat(viewport.width), height: CGFloat(viewport.height))
@@ -62,8 +94,8 @@ struct LocationMapPinsLayer: View {
         }
     }
 
-    private func pinView(_ pin: SharedLocationPin, viewport: LocationMapViewport) -> some View {
-        let point = viewport.point(latitude: pin.latitude, longitude: pin.longitude)
+    private func pinView(_ pin: SharedLocationPin, viewport: LocationMapViewport, at fanned: CGPoint?) -> some View {
+        let point = fanned ?? viewport.point(latitude: pin.latitude, longitude: pin.longitude)
         let precision = Self.precision(of: pin, viewport: viewport)
         let lift = precision.radius == 0 ? (MeeshyMapPinRecipe.defaultDiameter + MeeshyMapPinRecipe.tipSide) / 2 : 0
         let freshness = Self.freshness(of: pin, isOffline: isOffline)

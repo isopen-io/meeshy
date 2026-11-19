@@ -223,16 +223,19 @@ public struct MeeshyStepper: View {
         let state = MeeshyStepperMilestoneState.state(index: index, current: recipe.selectedIndex)
         let isCurrent = state == .current
         return VStack(spacing: MeeshySpacing.xs) {
-            Image(systemName: stop.systemImage ?? "circle.fill")
-                .meeshyScaledFont(diameter * 0.5)
-                .foregroundStyle(isCurrent ? MeeshyColors.indigo950 : (state == .done ? accent : Color.secondary))
+            // Un jalon vit dans le médaillon morphique du kit (K45), qui ondule entre cercle et ellipse (#19854).
+            MeeshyMedallion(systemImage: stop.systemImage ?? "circle.fill",
+                            kind: state == .todo ? .neutral : .accent,
+                            tint: state == .todo ? nil : accent,
+                            shape: .blob,
+                            fill: isCurrent ? .solid : .soft,
+                            size: diameter >= 44 ? .s44 : .s36)
                 .frame(width: diameter, height: diameter)
-                .background(Circle().fill(isCurrent ? accent : Color.secondary.opacity(MeeshyOpacity.subtle)))
-                .overlay(Circle().stroke(state == .todo ? Color.secondary.opacity(MeeshyOpacity.medium) : accent, lineWidth: 1.5))
             Text(verbatim: stop.title)
                 .meeshyScaledFont(MeeshyFont.smallSize, weight: .bold)
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
+                .minimumScaleFactor(0.75)
             if let caption = stop.caption {
                 Text(verbatim: caption)
                     .meeshyScaledFont(MeeshyFont.footnoteSize)
