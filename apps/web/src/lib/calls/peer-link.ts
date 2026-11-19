@@ -31,6 +31,8 @@
  * Les reprises épuisées, un relais TURN est imposé pour une dernière.
  */
 
+import { videoCodecProbe, type VideoCodecFamily } from './call-codec-probe';
+
 export type LinkState = 'connecting' | 'connected' | 'reconnecting' | 'failed';
 
 export type OutgoingSignal =
@@ -51,6 +53,8 @@ export type PeerLinkDeps = {
   readonly receiveOnly?: boolean;
   /** Le réglage de la description ENVOYÉE (#8697, `call-opus-sdp.ts`) ; la description locale reste celle du navigateur. */
   readonly shapeSdp?: (sdp: string) => string;
+  /** Les codecs que l'appareil encode en matériel (#19777) ; la sonde de la page par défaut, jamais attendue. */
+  readonly videoCodecEfficiency?: () => ReadonlySet<VideoCodecFamily> | null;
   readonly createConnection?: (config: RTCConfiguration) => RTCPeerConnection;
   readonly createStream?: () => MediaStream;
   readonly schedule?: (fn: () => void, ms: number) => unknown;
@@ -87,28 +91,66 @@ export function isStaleEpoch(incoming: number, highWaterMark: number): boolean {
 }
 
 const ICE_CANDIDATE_POOL_SIZE = 4;
-const VIDEO_CODEC_ORDER: readonly string[] = ['video/h264', 'video/vp8', 'video/vp9'];
+const H264 = 'video/h264';
+const VIDEO_CODEC_ORDER: readonly string[] = [H264, 'video/vp8', 'video/vp9'];
 const VIDEO_RETRANSMISSION = 'video/rtx';
+/** `profile_idc` du `profile-level-id` : High (0x64, constrained high compris), Main (0x4d), Baseline (0x42). */
+const H264_PROFILES: readonly { readonly idc: string; readonly family: VideoCodecFamily }[] = [
+  { idc: '64', family: 'h264-high' },
+  { idc: '4d', family: 'h264-main' },
+  { idc: '42', family: 'h264-baseline' },
+];
+const PROFILE_LEVEL_ID = /profile-level-id=([0-9a-f]{2})/i;
 
 /** La configuration de la connexion, celle d'iOS (`P2PWebRTCClient.swift`) : un seul transport par pair, RTCP multiplexé, pool ICE pré-chauffé. */
 export function peerConfiguration(iceServers: readonly RTCIceServer[]): RTCConfiguration {
   return { iceServers: [...iceServers], bundlePolicy: 'max-bundle', rtcpMuxPolicy: 'require', iceCandidatePoolSize: ICE_CANDIDATE_POOL_SIZE };
 }
 
-/** H264 > VP8 > VP9 (`P2PWebRTCClient+CodecPreferences.swift`), AV1 exclu, RTX gardé : sans lui la retransmission vidéo se tait. */
-export function orderVideoCodecs(codecs: readonly RTCRtpCodec[]): RTCRtpCodec[] {
-  const rank = (codec: RTCRtpCodec): number => {
+const h264Profile = (codec: RTCRtpCodec): number => {
+  const idc = PROFILE_LEVEL_ID.exec(codec.sdpFmtpLine ?? '')?.[1]?.toLowerCase();
+  const index = H264_PROFILES.findIndex((profile) => profile.idc === idc);
+  return index === -1 ? H264_PROFILES.length : index;
+};
+
+const familyOf = (codec: RTCRtpCodec): VideoCodecFamily | null => {
+  const mime = codec.mimeType.toLowerCase();
+  if (mime === 'video/vp8') return 'vp8';
+  if (mime === 'video/vp9') return 'vp9';
+  return mime === H264 ? (H264_PROFILES[h264Profile(codec)]?.family ?? null) : null;
+};
+
+/**
+ * H264 > VP8 > VP9 (`P2PWebRTCClient+CodecPreferences.swift`), AV1, RED et
+ * ULPFEC exclus comme sur iOS, RTX gardé : sans lui la retransmission vidéo se
+ * tait. Dans H264, High puis Main avant la baseline (#19777). Un codec que la
+ * sonde dit encodé en matériel passe devant les autres DE SON RANG — H264
+ * restant toujours en tête : les pairs natifs l'encodent en matériel.
+ */
+export function orderVideoCodecs(codecs: readonly RTCRtpCodec[], efficient: ReadonlySet<VideoCodecFamily> | null = null): RTCRtpCodec[] {
+  const group = (codec: RTCRtpCodec): number => {
     const mime = codec.mimeType.toLowerCase();
-    if (mime === VIDEO_RETRANSMISSION) return VIDEO_CODEC_ORDER.length;
-    return VIDEO_CODEC_ORDER.indexOf(mime);
+    if (mime === VIDEO_RETRANSMISSION) return 2;
+    if (mime === H264) return 0;
+    return VIDEO_CODEC_ORDER.includes(mime) ? 1 : -1;
   };
-  return codecs.filter((codec) => rank(codec) !== -1).sort((a, b) => rank(a) - rank(b));
+  const hardware = (codec: RTCRtpCodec): number => {
+    const family = familyOf(codec);
+    return efficient === null || efficient.size === 0 || (family !== null && efficient.has(family)) ? 0 : 1;
+  };
+  const within = (codec: RTCRtpCodec): number => (codec.mimeType.toLowerCase() === H264 ? h264Profile(codec) : VIDEO_CODEC_ORDER.indexOf(codec.mimeType.toLowerCase()));
+  const key = (codec: RTCRtpCodec): readonly number[] => [group(codec), hardware(codec), within(codec)];
+  const compare = (a: RTCRtpCodec, b: RTCRtpCodec): number => {
+    const [left, right] = [key(a), key(b)];
+    return left.reduce((order, value, index) => (order !== 0 ? order : value - (right[index] ?? 0)), 0);
+  };
+  return codecs.filter((codec) => group(codec) !== -1).sort(compare);
 }
 
-function preferVideoCodecs(transceiver: RTCRtpTransceiver): void {
+function preferVideoCodecs(transceiver: RTCRtpTransceiver, efficient: ReadonlySet<VideoCodecFamily> | null): void {
   if (typeof transceiver.setCodecPreferences !== 'function') return;
   const capabilities = typeof RTCRtpReceiver === 'undefined' ? null : RTCRtpReceiver.getCapabilities?.('video');
-  const preferred = orderVideoCodecs(capabilities?.codecs ?? []);
+  const preferred = orderVideoCodecs(capabilities?.codecs ?? [], efficient);
   if (preferred.length === 0) return;
   try {
     transceiver.setCodecPreferences(preferred);
@@ -147,11 +189,17 @@ function preferOpusRed(transceiver: RTCRtpTransceiver): void {
 
 const kindOf = (transceiver: RTCRtpTransceiver): string | null => transceiver.receiver.track?.kind ?? transceiver.sender.track?.kind ?? null;
 
+const pageCodecEfficiency = (): ReadonlySet<VideoCodecFamily> | null => {
+  videoCodecProbe.prime();
+  return videoCodecProbe.current();
+};
+
 export function createPeerLink(deps: PeerLinkDeps): PeerLink {
   const schedule = deps.schedule ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
   const cancel = deps.cancel ?? ((handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>));
   const createConnection = deps.createConnection ?? ((config: RTCConfiguration) => new RTCPeerConnection(config));
   const polite = isPolitePeer(deps.localUserId, deps.remoteUserId);
+  const codecEfficiency = deps.videoCodecEfficiency ?? pageCodecEfficiency;
 
   const pc = createConnection(peerConfiguration(deps.iceServers));
   const remote = (deps.createStream ?? (() => new MediaStream()))();
@@ -349,7 +397,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
       preferOpusRed(audioTransceiver);
       const video = videoTrack();
       videoTransceiver = pc.addTransceiver(video ?? 'video', { direction: video === null ? 'recvonly' : 'sendrecv', streams: [deps.localStream] });
-      preferVideoCodecs(videoTransceiver);
+      preferVideoCodecs(videoTransceiver, codecEfficiency());
       if (deps.onChannel !== undefined && typeof pc.createDataChannel === 'function') deps.onChannel(pc.createDataChannel('transcription', { ordered: true }));
       deps.onState('connecting');
       await makeOffer();
@@ -366,7 +414,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
       if (description.type !== 'offer') return;
       if (audioTransceiver === null || videoTransceiver === null) await bindAnswererTracks();
       if (audioTransceiver !== null) preferOpusRed(audioTransceiver);
-      if (videoTransceiver !== null) preferVideoCodecs(videoTransceiver);
+      if (videoTransceiver !== null) preferVideoCodecs(videoTransceiver, codecEfficiency());
       if (!everConnected) deps.onState('connecting');
       await pc.setLocalDescription();
       sendDescription();
@@ -390,7 +438,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
       if (videoTransceiver === null) {
         if (track === null) return;
         videoTransceiver = pc.addTransceiver(track, { direction: 'sendrecv', streams: [deps.localStream] });
-        preferVideoCodecs(videoTransceiver);
+        preferVideoCodecs(videoTransceiver, codecEfficiency());
         return;
       }
       await videoTransceiver.sender.replaceTrack(track);

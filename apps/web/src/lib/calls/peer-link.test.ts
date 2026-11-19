@@ -474,6 +474,25 @@ describe('configuration et codecs de la négociation (#11319)', () => {
     expect(orderVideoCodecs(CAPABILITIES.video ?? []).map((codec) => codec.mimeType)).toEqual(['video/H264', 'video/VP8', 'video/VP9', 'video/rtx']);
   });
 
+  const H264 = (profileLevelId: string, packetizationMode = 1) => ({ mimeType: 'video/H264', clockRate: 90000, sdpFmtpLine: `level-asymmetry-allowed=1;packetization-mode=${packetizationMode};profile-level-id=${profileLevelId}` });
+  const BROWSER_H264 = [H264('42001f'), H264('42e01f'), H264('4d001f'), H264('f4001f'), H264('640c1f'), H264('64001f')];
+  const fmtps = (codecs: readonly RTCRtpCodec[]) => codecs.map((codec) => (codec.mimeType === 'video/H264' ? /profile-level-id=([0-9a-f]+)/i.exec(codec.sdpFmtpLine ?? '')?.[1] : codec.mimeType));
+
+  test('dans H264, High puis Main passent AVANT la baseline contrainte ; un profil inconnu ferme la marche (#19777)', () => {
+    expect(fmtps(orderVideoCodecs(BROWSER_H264))).toEqual(['640c1f', '64001f', '4d001f', '42001f', '42e01f', 'f4001f']);
+  });
+
+  test('un codec encodé en matériel passe devant, H264 restant en tête (#19777)', () => {
+    const codecs = [...BROWSER_H264, { mimeType: 'video/VP8', clockRate: 90000 }, { mimeType: 'video/VP9', clockRate: 90000 }, { mimeType: 'video/rtx', clockRate: 90000 }, { mimeType: 'video/AV1', clockRate: 90000 }];
+    expect(fmtps(orderVideoCodecs(codecs, new Set(['vp9', 'h264-baseline'] as const)))).toEqual(['42001f', '42e01f', '640c1f', '64001f', '4d001f', 'f4001f', 'video/VP9', 'video/VP8', 'video/rtx']);
+  });
+
+  test('sans H264 offert, le codec encodé en matériel prend la tête ; une sonde vide garde l’ordre statique', () => {
+    const codecs = [{ mimeType: 'video/VP8', clockRate: 90000 }, { mimeType: 'video/VP9', clockRate: 90000 }];
+    expect(fmtps(orderVideoCodecs(codecs, new Set(['vp9'] as const)))).toEqual(['video/VP9', 'video/VP8']);
+    expect(fmtps(orderVideoCodecs(codecs, new Set()))).toEqual(['video/VP8', 'video/VP9']);
+  });
+
   test('sans capacité vidéo annoncée, l’ordre vidéo est vide', () => {
     expect(orderVideoCodecs([])).toEqual([]);
   });
@@ -483,6 +502,24 @@ describe('configuration et codecs de la négociation (#11319)', () => {
     await withCodecCapabilities(() => peer.offer());
     expect(fake.calls).toContain('codecs:video:video/H264,video/VP8,video/VP9,video/rtx');
     expect(fake.calls).toContain('codecs:audio:audio/opus,audio/red,audio/G722');
+  });
+
+  test('l’offre suit le résultat de la sonde déjà rendu, sans l’attendre (#19777)', async () => {
+    const fake = fakeConnection();
+    const peer = createPeerLink({
+      localUserId: 'u-a',
+      remoteUserId: 'u-b',
+      iceServers: [],
+      localStream: { getAudioTracks: () => [{ kind: 'audio' }], getVideoTracks: () => [{ kind: 'video' }] } as unknown as MediaStream,
+      send: () => undefined,
+      onRemoteStream: () => undefined,
+      onState: () => undefined,
+      videoCodecEfficiency: () => new Set(['vp9'] as const),
+      createConnection: () => fake.pc as unknown as RTCPeerConnection,
+      createStream: () => ({ getTracks: () => [], addTrack: () => undefined }) as unknown as MediaStream,
+    });
+    await withCodecCapabilities(() => peer.offer());
+    expect(fake.calls).toContain('codecs:video:video/H264,video/VP9,video/VP8,video/rtx');
   });
 
   test('un navigateur qui n’annonce aucune capacité garde la négociation par défaut', async () => {

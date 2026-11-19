@@ -49,6 +49,7 @@ import { callNoticeStore, callReactionStore, showNotice, type CallNoticeStoreApi
 import { createEngineCamera } from './engine-camera';
 import { createEngineControls } from './engine-controls';
 import { createNetworkRecovery, watchBrowserNetworkPath } from './call-network-recovery';
+import { videoCodecProbe } from './call-codec-probe';
 import { createEnginePreview } from './engine-preview';
 import { loadDefaultEngineDeps } from './engine-defaults';
 import { baseCall, emptySession } from './engine-session';
@@ -1136,6 +1137,7 @@ let singleton: CallEngine | null = null;
 /** Le moteur du navigateur — construit une fois, au premier besoin. */
 export async function defaultCallEngine(): Promise<CallEngine> {
   if (singleton !== null) return singleton;
+  videoCodecProbe.prime();
   const deps = loadDefaultEngineDeps();
   const engine = createCallEngine({ ...deps, store: callStore });
   singleton = engine;
