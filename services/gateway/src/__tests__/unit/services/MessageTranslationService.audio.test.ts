@@ -1066,8 +1066,9 @@ describe('MessageTranslationService — audio & Prisme supplement', () => {
       expect(translations.de.transcription).toBe('Hallo');
       expect(translations.de).not.toHaveProperty('url');
       expect(translations.de).not.toHaveProperty('path');
-      expect(translations.fr.url).toBe('/outputs/audio/translated/fr.mp3');
-      expect(translations.fr.path).toBe('/app/outputs/fr.mp3');
+      // #19749 — la piste vit chez la passerelle, nommée par le média, jamais à l'adresse du traducteur.
+      expect(translations.fr.url).toBe('/api/v1/attachments/file/translated/media-1_fr.mp3');
+      expect(translations.fr.path).toMatch(/\/translated\/media-1_fr\.mp3$/);
     });
 
     it('persists an empty audioUrl from a translator of the previous version (#19648) with neither url nor path', async () => {
