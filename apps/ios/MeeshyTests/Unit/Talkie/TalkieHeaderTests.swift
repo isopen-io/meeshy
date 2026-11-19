@@ -120,3 +120,20 @@ final class TalkieHeaderTests: XCTestCase {
         XCTAssertFalse(TalkieHoldLook.isQuickTap(heldFor: 0.6))
     }
 }
+
+/// #19885 — sur la carte des cercles, un appui LONG sur l'avatar d'un Proche ou d'un Sang lui parle par talkie ; sous
+/// Proche, l'appui long ne fait rien, et un toucher reste un toucher.
+final class TalkieLongHoldTests: XCTestCase {
+
+    func test_offers_fromCloseUpward_never_below() {
+        XCTAssertTrue(TalkieLongHold.offers(circle: .close))
+        XCTAssertTrue(TalkieLongHold.offers(circle: .blood))
+        XCTAssertFalse(TalkieLongHold.offers(circle: .friend))
+        XCTAssertFalse(TalkieLongHold.offers(circle: .acquaintance))
+        XCTAssertFalse(TalkieLongHold.offers(circle: nil))
+    }
+
+    func test_theVoiceOpens_onlyAfterAQuickTapWouldHaveEnded() {
+        XCTAssertGreaterThanOrEqual(TalkieLongHold.minimumDuration, TalkieHoldLook.quickTapLimit)
+    }
+}

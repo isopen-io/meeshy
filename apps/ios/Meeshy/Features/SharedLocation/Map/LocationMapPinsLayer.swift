@@ -22,6 +22,41 @@ enum LocationMapPinFreshness: Equatable {
     case lastKnown
 }
 
+/// Des personnes posées au même point (#19851 : la précision « ville » les arrondit toutes au même centre) s'écartent en
+/// éventail autour de ce point : aucune n'en cache une autre, et chacune garde l'avatar et le cercle de SA personne. Le
+/// groupement est glouton sur la distance à l'écran ; l'ordre des identifiants rend l'éventail stable d'un rendu à l'autre.
+nonisolated enum LocationMapFan {
+    static func spread(_ points: [(String, CGPoint)], minimumDistance: Double) -> [String: CGPoint] {
+        let ordered = points.sorted { $0.0 < $1.0 }
+        let groups = ordered.reduce(into: [[(String, CGPoint)]]()) { groups, entry in
+            let index = groups.firstIndex { group in
+                group.contains { distance($0.1, entry.1) < minimumDistance }
+            }
+            if let index { groups[index].append(entry) } else { groups.append([entry]) }
+        }
+        return groups.reduce(into: [String: CGPoint]()) { placed, group in
+            guard group.count > 1 else {
+                group.forEach { placed[$0.0] = $0.1 }
+                return
+            }
+            let n = Double(group.count)
+            let centreX: Double = group.reduce(0.0) { $0 + Double($1.1.x) } / n
+            let centreY: Double = group.reduce(0.0) { $0 + Double($1.1.y) } / n
+            let radius: Double = max(minimumDistance * 0.6, minimumDistance / (2 * sin(Double.pi / n)))
+            for (index, entry) in group.enumerated() {
+                let angle: Double = -Double.pi / 2 + 2 * Double.pi * Double(index) / n
+                placed[entry.0] = CGPoint(x: centreX + radius * cos(angle), y: centreY + radius * sin(angle))
+            }
+        }
+    }
+
+    private static func distance(_ a: CGPoint, _ b: CGPoint) -> Double {
+        let dx = Double(a.x - b.x)
+        let dy = Double(a.y - b.y)
+        return (dx * dx + dy * dy).squareRoot()
+    }
+}
+
 /// LES ÉPINGLES AU-DESSUS DE LA CARTE (#18872) : chaque personne est son avatar (K36) posé là où la carte montre sa
 /// position SERVIE, entourée du flou servi à l'échelle de la carte ; la mienne est une petite épingle « own ». Rien ne
 /// se dessine hors champ, et rien ne se dessine avant que la carte ait dit ce qu'elle montre.
@@ -39,6 +74,8 @@ struct LocationMapPinsLayer: View {
     /// Hors ligne, chaque épingle servie n'est plus que la dernière position connue.
     var isOffline = false
     var onSelect: ((String) -> Void)?
+    /// Un appui long sur l'avatar d'un Proche ou d'un Sang lui parle par talkie (#19885) ; `nil` : la carte n'en propose pas.
+    var talkie: TalkieSender?
 
     var body: some View {
         if let viewport {
@@ -46,8 +83,12 @@ struct LocationMapPinsLayer: View {
                 if let me, viewport.contains(latitude: me.latitude, longitude: me.longitude, margin: 40) {
                     ownPin.position(viewport.point(latitude: me.latitude, longitude: me.longitude))
                 }
-                ForEach(visiblePins(in: viewport)) { pin in
-                    pinView(pin, viewport: viewport)
+                let shown = visiblePins(in: viewport)
+                let placed = LocationMapFan.spread(
+                    shown.map { ($0.id, viewport.point(latitude: $0.latitude, longitude: $0.longitude)) },
+                    minimumDistance: MeeshyMapPinRecipe.selectedDiameter + 4)
+                ForEach(shown) { pin in
+                    pinView(pin, viewport: viewport, at: placed[pin.id])
                 }
             }
             .frame(width: CGFloat(viewport.width), height: CGFloat(viewport.height))
@@ -62,8 +103,8 @@ struct LocationMapPinsLayer: View {
         }
     }
 
-    private func pinView(_ pin: SharedLocationPin, viewport: LocationMapViewport) -> some View {
-        let point = viewport.point(latitude: pin.latitude, longitude: pin.longitude)
+    private func pinView(_ pin: SharedLocationPin, viewport: LocationMapViewport, at fanned: CGPoint?) -> some View {
+        let point = fanned ?? viewport.point(latitude: pin.latitude, longitude: pin.longitude)
         let precision = Self.precision(of: pin, viewport: viewport)
         let lift = precision.radius == 0 ? (MeeshyMapPinRecipe.defaultDiameter + MeeshyMapPinRecipe.tipSide) / 2 : 0
         let freshness = Self.freshness(of: pin, isOffline: isOffline)
@@ -76,12 +117,26 @@ struct LocationMapPinsLayer: View {
             isSelected: pin.id == selectedId,
             isStale: freshness == .lastKnown,
             onPress: onSelect.map { select in { select(pin.id) } },
-            content: { LocationMapPinAvatar(pin: pin, travels: pin.id == travellingId, size: Self.diameter(pin.id == selectedId)) },
-            badge: { MeeshyMapPinPresenceDot(color: pin.presence?.dotColor) },
+            content: { LocationMapPinAvatar(pin: pin, travels: pin.id == travellingId, size: Self.diameter(pin.id == selectedId),
+                                            showsLife: false) },
+            badge: { pinLife(pin) },
             above: { EmptyView() },
             below: { EmptyView() }
         )
+        .modifier(PinTalkie(sender: talkie, pin: pin))
         .position(x: point.x, y: point.y - CGFloat(lift))
+    }
+
+    /// Le point de présence, et par-dessus l'avatar ce que vit la personne (#19885). L'épingle découpe son contenu en
+    /// cercle : la vie se pose dans son badge, qui ne l'est pas, à la taille de l'avatar.
+    private func pinLife(_ pin: SharedLocationPin) -> some View {
+        let diameter = CGFloat(Self.diameter(pin.id == selectedId))
+        return Color.clear
+            .frame(width: diameter, height: diameter)
+            .overlay(alignment: .bottomTrailing) { MeeshyMapPinPresenceDot(color: pin.presence?.dotColor) }
+            .modifier(PeerLiveOverlays(userId: pin.id, avatarSize: diameter))
+            .offset(x: -2, y: -2)
+            .allowsHitTesting(false)
     }
 
     private var ownPin: some View {
@@ -121,6 +176,8 @@ struct LocationMapPinAvatar: View {
     let pin: SharedLocationPin
     var travels = false
     var size: Double = MeeshyMapPinRecipe.defaultDiameter
+    /// Ce que vit la personne (écoute, batterie, appel…) posé sur l'avatar ; l'épingle le pose elle-même, hors découpe.
+    var showsLife = true
 
     var body: some View {
         if travels {
@@ -135,6 +192,22 @@ struct LocationMapPinAvatar: View {
                      accentColor: DynamicColorGenerator.colorForName(pin.name), avatarURL: pin.avatarURL,
                      presenceState: pin.presence)
             .accessibilityHidden(true)
+            .modifier(PeerLiveOverlays(userId: showsLife ? pin.id : nil, avatarSize: CGFloat(size)))
+    }
+}
+
+/// Le talkie d'une épingle : seulement pour un Proche ou un Sang, et seulement quand la carte en tient un.
+private struct PinTalkie: ViewModifier {
+    let sender: TalkieSender?
+    let pin: SharedLocationPin
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let sender, TalkieLongHold.offers(circle: pin.circle) {
+            content.modifier(TalkieLongHoldModifier(sender: sender, userId: pin.id, displayName: pin.name))
+        } else {
+            content
+        }
     }
 }
 
