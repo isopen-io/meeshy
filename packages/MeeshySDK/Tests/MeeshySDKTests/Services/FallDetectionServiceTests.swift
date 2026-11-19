@@ -45,12 +45,21 @@ final class FallDetectionServiceTests: XCTestCase {
         XCTAssertEqual(failedOutcome, .failed)
     }
 
-    func test_answerOk_readsCleared() async {
+    func test_answerOk_readsCleared() async throws {
         let (service, api) = makeSUT()
         api.stubWire("/me/health/fall/ok", json: #"{"success":true,"data":{"cleared":true}}"#)
-        let cleared = await service.answerOk()
+        let cleared = try await service.answerOk()
         XCTAssertTrue(cleared)
         XCTAssertEqual(api.lastRequest?.method, "POST")
+    }
+
+    func test_answerOk_aFailureThrows_soTheBannerStays() async {
+        let (service, api) = makeSUT()
+        api.stubError("/me/health/fall/ok", error: URLError(.notConnectedToInternet))
+        do {
+            _ = try await service.answerOk()
+            XCTFail("attendu une erreur")
+        } catch {}
     }
 
     func test_updateConsent_savesOrReadsTheRefusal() async {

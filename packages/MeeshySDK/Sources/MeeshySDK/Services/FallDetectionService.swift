@@ -8,8 +8,9 @@ import Foundation
 public protocol FallDetectionServiceProviding: Sendable {
     /// `POST /me/health/fall { detectedAt }` — un instant, rien d'autre.
     func report(detectedAt: Date) async -> FallReportOutcome
-    /// `POST /me/health/fall/ok` — « Je vais bien » ; `true` quand un épisode a été clos.
-    func answerOk() async -> Bool
+    /// `POST /me/health/fall/ok` — « Je vais bien » ; `true` quand un épisode a été clos, `false` quand aucun ne
+    /// courait plus. Une panne (réseau, serveur) LÈVE : la réponse n'est pas partie, la bannière doit rester.
+    func answerOk() async throws -> Bool
     /// `GET /me/health/fall/settings`.
     func consentSettings() async throws -> FallConsentSettings
     /// `PUT /me/health/fall/settings` — l'accord sur la version lue, ou son retrait.
@@ -41,13 +42,9 @@ public final class FallDetectionService: FallDetectionServiceProviding, Sendable
         }
     }
 
-    public func answerOk() async -> Bool {
-        do {
-            let response: APIResponse<FallOkAck> = try await api.post(MeEndpoint.healthFallOk, body: EmptyBody())
-            return response.data.cleared
-        } catch {
-            return false
-        }
+    public func answerOk() async throws -> Bool {
+        let response: APIResponse<FallOkAck> = try await api.post(MeEndpoint.healthFallOk, body: EmptyBody())
+        return response.data.cleared
     }
 
     public func consentSettings() async throws -> FallConsentSettings {

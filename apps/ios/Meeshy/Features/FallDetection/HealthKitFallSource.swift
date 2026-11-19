@@ -10,6 +10,9 @@ protocol FallSampleSourcing: AnyObject {
     var isAvailable: Bool { get }
     /// L'autorisation de lecture de `numberOfTimesFallen`, demandée seulement APRÈS l'accord explicite.
     func requestAuthorization() async -> Bool
+    /// L'autorisation a-t-elle déjà été demandée, sans erreur ? Sans rien montrer : `false` quand Santé est absente,
+    /// quand la capacité HealthKit manque, ou quand la demande reste à faire sur CET appareil.
+    func authorizationReady() async -> Bool
     /// Observe le type, en livraison d'arrière-plan immédiate, pour le compte nommé.
     func start(accountId: String, deliver: @escaping @MainActor ([Date]) async -> Bool)
     /// Coupe l'observateur et la livraison d'arrière-plan.
@@ -43,6 +46,13 @@ final class HealthKitFallSource: FallSampleSourcing {
         } catch {
             return false
         }
+    }
+
+    func authorizationReady() async -> Bool {
+        guard isAvailable, let status = try? await store.statusForAuthorizationRequest(toShare: [], read: [fallType]) else {
+            return false
+        }
+        return status == .unnecessary
     }
 
     func start(accountId: String, deliver: @escaping @MainActor ([Date]) async -> Bool) {

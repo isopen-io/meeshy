@@ -148,60 +148,91 @@ struct FallDetailSection: View {
 }
 
 /// La bannière de l'ÉMETTEUR, app ouverte pendant un épisode qu'il a rapporté : « Une chute a été détectée — tout va
-/// bien ? » et « Je vais bien ». Elle ne persiste pas : la réponse, ou la fin de l'épisode, la retire.
+/// bien ? » et « Je vais bien ». Feuille sans singleton : elle ne reçoit que la réponse à donner. Une réponse qui
+/// n'est pas partie se dit, et le bouton se réarme pour réessayer.
 struct OwnFallBanner: View {
-    @ObservedObject var center: FallDetectionCenter
+    let answer: @MainActor () async -> Bool
     @State private var isAnswering = false
 
     var body: some View {
-        if center.ownEpisodeOpen {
-            HStack(spacing: MeeshySpacing.md) {
-                Image(systemName: FallDetectionWording.stateIconName)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(MeeshyColors.error)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(FallDetectionWording.ownBannerTitle)
-                        .font(.subheadline.weight(.semibold))
-                    Text(FallDetectionWording.ownBannerSubtitle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Button {
-                    isAnswering = true
-                    Task {
-                        _ = await center.answerOk()
-                        isAnswering = false
-                    }
-                } label: {
-                    Text(FallDetectionWording.imOk)
-                        .font(.subheadline.weight(.bold))
-                        .frame(minHeight: MeeshyControlSize.tapTarget)
-                        .padding(.horizontal, MeeshySpacing.md)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(MeeshyColors.success)
-                .disabled(isAnswering)
-                .accessibilityIdentifier("fall.own.ok")
+        HStack(spacing: MeeshySpacing.md) {
+            Image(systemName: FallDetectionWording.stateIconName)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(MeeshyColors.error)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                Text(FallDetectionWording.ownBannerTitle)
+                    .font(.subheadline.weight(.semibold))
+                Text(FallDetectionWording.ownBannerSubtitle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
-            .padding(MeeshySpacing.md)
-            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
-            .padding(.horizontal, MeeshySpacing.lg)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("fall.own.banner")
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+                isAnswering = true
+                Task {
+                    let sent = await answer()
+                    isAnswering = false
+                    if !sent { FeedbackToastManager.shared.showError(FallDetectionWording.imOkFailed) }
+                }
+            } label: {
+                Text(FallDetectionWording.imOk)
+                    .font(.subheadline.weight(.bold))
+                    .frame(minHeight: MeeshyControlSize.tapTarget)
+                    .padding(.horizontal, MeeshySpacing.md)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(MeeshyColors.success)
+            .disabled(isAnswering)
+            .accessibilityIdentifier("fall.own.ok")
         }
+        .padding(MeeshySpacing.md)
+        .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("fall.own.banner")
     }
 }
 
-/// Pose la bannière de l'émetteur en haut de l'app.
+/// Pose la bannière de l'émetteur en haut de l'app. Aucun `@ObservedObject` sur le centre (un overlay racine
+/// re-rendrait toute l'app à chaque publication) : l'instant de l'épisode arrive en valeur, et la bannière TOMBE
+/// d'elle-même à la fin de l'épisode (`episodeTtl`), sans attendre une autre publication.
 struct OwnFallBannerOverlay: ViewModifier {
-    @ObservedObject var center: FallDetectionCenter
+    let episodes: AnyPublisher<Date?, Never>
+    let answer: @MainActor () async -> Bool
+    @State private var detectedAt: Date?
+    @State private var expired = false
 
     func body(content: Content) -> some View {
-        content.overlay(alignment: .top) {
-            OwnFallBanner(center: center)
-                .padding(.top, MeeshySpacing.sm)
-        }
+        content
+            .overlay(alignment: .top) {
+                if let expiresAt = OwnFallEpisode.expiry(of: detectedAt), !expired {
+                    OwnFallBanner(answer: answer)
+                        .padding(.top, MeeshySpacing.sm)
+                        .task(id: expiresAt) {
+                            do { try await Task.sleep(for: .seconds(max(0, expiresAt.timeIntervalSinceNow))) } catch { return }
+                            expired = true
+                        }
+                }
+            }
+            .onReceive(episodes) { next in
+                detectedAt = next
+                expired = OwnFallEpisode.expiry(of: next).map { $0 <= Date() } ?? false
+            }
+    }
+}
+
+extension OwnFallBannerOverlay {
+    /// Le câblage de production : l'épisode du centre, et sa réponse.
+    static let live = OwnFallBannerOverlay(
+        episodes: FallDetectionCenter.shared.$ownEpisodeDetectedAt.eraseToAnyPublisher(),
+        answer: { await FallDetectionCenter.shared.answerOk() }
+    )
+}
+
+/// La fin d'un épisode rapporté : `detectedAt + episodeTtl`, `nil` hors épisode.
+enum OwnFallEpisode {
+    static func expiry(of detectedAt: Date?) -> Date? {
+        detectedAt.map { $0.addingTimeInterval(FallDetectionContract.episodeTtl) }
     }
 }

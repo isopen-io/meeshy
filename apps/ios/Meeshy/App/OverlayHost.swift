@@ -11,7 +11,7 @@ struct OverlayHost: ViewModifier {
             .modifier(TalkieOverlay(center: .shared))
             .modifier(TogetherOverlay(center: .shared))
             .bringRingOverlay()
-            .modifier(OwnFallBannerOverlay(center: .shared))
+            .modifier(OwnFallBannerOverlay.live)
             .onAppear {
                 ListeningCenter.start()
                 ListeningBroadcaster.start()

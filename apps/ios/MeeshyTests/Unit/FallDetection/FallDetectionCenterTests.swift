@@ -17,6 +17,17 @@ final class FallDetectionCenterTests: XCTestCase {
         init(viewer: String?) { self.viewer = viewer }
     }
 
+    /// Ce qui se passe PENDANT la résolution d'un nom (hors du fil principal) — un changement de compte, par exemple.
+    @MainActor
+    private final class NameHook {
+        var action: (() -> Void)?
+        func fire() {
+            let pending = action
+            action = nil
+            pending?()
+        }
+    }
+
     private final class MemoryCacheOwner: FallCacheOwnerStoring {
         var owner: String?
         init(_ owner: String?) { self.owner = owner }
@@ -30,27 +41,35 @@ final class FallDetectionCenterTests: XCTestCase {
         let service: MockFallDetectionService
         let source: FakeFallSampleSource
         let session: Session
+        let connected: PassthroughSubject<Bool, Never>
+        let nameHook: NameHook
     }
 
     private func makeSUT(viewer: String? = "me", names: [String: String] = ["peer": "Awa"], cacheOwner: String? = "me") -> Rig {
         let clock = self.clock
         let persistence = MemoryFallStatePersistence()
-        let store = FallStateStore(persistence: persistence, now: { clock })
+        let store = FallStateStore(persistence: persistence, now: { clock }, sleep: { _ in })
         let feed = FallAnnouncementFeed(now: { clock })
         let service = MockFallDetectionService()
         let source = FakeFallSampleSource()
         let session = Session(viewer: viewer)
+        let connected = PassthroughSubject<Bool, Never>()
+        let nameHook = NameHook()
         let sut = FallDetectionCenter(
             store: store, feed: feed, service: service, source: source,
             viewerId: { session.viewer },
-            displayName: { names[$0] },
+            displayName: { [nameHook] userId in
+                await nameHook.fire()
+                return names[userId]
+            },
             now: { clock },
             detectedEvents: Empty().eraseToAnyPublisher(),
             clearedEvents: Empty().eraseToAnyPublisher(),
-            connected: Empty().eraseToAnyPublisher(),
+            connected: connected.eraseToAnyPublisher(),
             cacheOwner: MemoryCacheOwner(cacheOwner)
         )
-        return Rig(sut: sut, store: store, persistence: persistence, feed: feed, service: service, source: source, session: session)
+        return Rig(sut: sut, store: store, persistence: persistence, feed: feed, service: service, source: source, session: session,
+                   connected: connected, nameHook: nameHook)
     }
 
     private func state(_ userId: String = "peer", position: InactivityLastPosition? = nil) -> FallState {
@@ -137,6 +156,37 @@ final class FallDetectionCenterTests: XCTestCase {
         XCTAssertGreaterThan(rig.source.stopCount, 0)
     }
 
+    func test_anAnnouncementWhoseNameArrivesUnderAnotherAccount_isDropped() async {
+        let rig = makeSUT()
+        rig.sut.accountChanged(to: "me")
+        rig.nameHook.action = {
+            rig.session.viewer = "other"
+            rig.sut.accountChanged(to: "other")
+        }
+        await rig.sut.receive(detected(announced: true))
+        XCTAssertTrue(rig.feed.current.isEmpty)
+    }
+
+    func test_accountChange_theFirstAccountOfTheLaunch_stopsNothingBeforeReadingItsConsent() async {
+        let rig = makeSUT()
+        rig.service.consentSettingsResult = .failure(URLError(.notConnectedToInternet))
+        rig.sut.accountChanged(to: "me")
+        await rig.sut.settle()
+        XCTAssertEqual(rig.source.stopCount, 0)
+    }
+
+    func test_accountChange_aLogoutStopsTheObserver() async {
+        let rig = makeSUT()
+        rig.service.consentSettingsResult = .success(consented)
+        rig.sut.accountChanged(to: "me")
+        await rig.sut.settle()
+        XCTAssertTrue(rig.sut.isObserving)
+        rig.session.viewer = nil
+        rig.sut.accountChanged(to: nil)
+        XCTAssertFalse(rig.sut.isObserving)
+        XCTAssertFalse(rig.source.isObserving)
+    }
+
     // MARK: - L'émetteur
 
     func test_resume_withoutConsent_neverStartsTheObserver() async {
@@ -154,6 +204,57 @@ final class FallDetectionCenterTests: XCTestCase {
         XCTAssertEqual(rig.source.authorizationRequests, 0)
     }
 
+    func test_resume_aTransportError_keepsTheObserver() async {
+        let rig = makeSUT()
+        rig.service.consentSettingsResult = .success(consented)
+        await rig.sut.resumeIfConsented()
+        rig.service.consentSettingsResult = .failure(URLError(.notConnectedToInternet))
+        await rig.sut.resumeIfConsented()
+        XCTAssertTrue(rig.sut.isObserving)
+        XCTAssertEqual(rig.source.stopCount, 0)
+    }
+
+    func test_resume_anExplicitRefusal_stopsTheObserver() async {
+        let rig = makeSUT()
+        rig.service.consentSettingsResult = .success(consented)
+        await rig.sut.resumeIfConsented()
+        rig.service.consentSettingsResult = .failure(MeeshyError.forbidden(reason: nil, body: nil))
+        await rig.sut.resumeIfConsented()
+        XCTAssertFalse(rig.sut.isObserving)
+        XCTAssertFalse(rig.source.isObserving)
+    }
+
+    func test_resume_consentedButHealthNotAuthorizedHere_isBlocked_andSaysIt() async {
+        let rig = makeSUT()
+        rig.service.consentSettingsResult = .success(consented)
+        rig.source.authorizationIsReady = false
+        await rig.sut.resumeIfConsented()
+        XCTAssertFalse(rig.sut.isObserving)
+        XCTAssertTrue(rig.sut.isDetectionBlocked)
+        XCTAssertTrue(rig.source.startedAccounts.isEmpty)
+    }
+
+    func test_reconnection_rechecksTheConsent_afterAnOfflineLaunch() async {
+        let rig = makeSUT()
+        rig.service.consentSettingsResult = .failure(URLError(.notConnectedToInternet))
+        rig.sut.accountChanged(to: "me")
+        await rig.sut.settle()
+        XCTAssertFalse(rig.sut.isObserving)
+        rig.service.consentSettingsResult = .success(consented)
+        rig.connected.send(true)
+        await rig.sut.settle()
+        XCTAssertTrue(rig.sut.isObserving)
+        XCTAssertEqual(rig.source.startedAccounts, ["me"])
+    }
+
+    func test_resume_whileAlreadyObservingTheSameAccount_doesNotRestartTheSource() async {
+        let rig = makeSUT()
+        rig.service.consentSettingsResult = .success(consented)
+        await rig.sut.resumeIfConsented()
+        await rig.sut.resumeIfConsented()
+        XCTAssertEqual(rig.source.startedAccounts, ["me"])
+    }
+
     func test_resume_withConsentOnAnOldText_doesNotObserve() async {
         let rig = makeSUT()
         rig.service.consentSettingsResult = .success(FallConsentSettings(consentedAt: clock, consentVersion: "2026-01-01", currentVersion: "2026-11-19"))
@@ -161,13 +262,37 @@ final class FallDetectionCenterTests: XCTestCase {
         XCTAssertTrue(rig.source.startedAccounts.isEmpty)
     }
 
-    func test_enableAfterConsent_asksHealthFirst_andARefusalStartsNothing() async {
+    func test_enableAfterConsent_asksHealthFirst_andARefusalStartsNothing_butIsSaid() async {
         let rig = makeSUT()
         rig.source.authorizationGranted = false
         let enabled = await rig.sut.enableAfterConsent()
         XCTAssertFalse(enabled)
         XCTAssertEqual(rig.source.authorizationRequests, 1)
         XCTAssertTrue(rig.source.startedAccounts.isEmpty)
+        XCTAssertTrue(rig.sut.isDetectionBlocked)
+        rig.sut.stopObserving()
+        XCTAssertFalse(rig.sut.isDetectionBlocked)
+    }
+
+    func test_aDeliveryOpenedForAPreviousAccount_reportsNothing_andKeepsItsAnchor() async {
+        let rig = makeSUT()
+        rig.sut.accountChanged(to: "me")
+        await rig.sut.settle()
+        _ = await rig.sut.enableAfterConsent()
+        rig.session.viewer = "other"
+        rig.sut.accountChanged(to: "other")
+        let advanced = await rig.source.emitInFlight([clock.addingTimeInterval(-60)])
+        XCTAssertFalse(advanced)
+        XCTAssertTrue(rig.service.reportCalls.isEmpty)
+    }
+
+    func test_aDeliveryWhileAnotherViewerIsSignedIn_reportsNothing() async {
+        let rig = makeSUT()
+        _ = await rig.sut.enableAfterConsent()
+        rig.session.viewer = "other"
+        let advanced = await rig.source.emit([clock.addingTimeInterval(-60)])
+        XCTAssertFalse(advanced)
+        XCTAssertTrue(rig.service.reportCalls.isEmpty)
     }
 
     func test_newRecentSamplesAreReported_oldestFirst_andOpenMyBanner() async {
@@ -202,8 +327,24 @@ final class FallDetectionCenterTests: XCTestCase {
         _ = await rig.sut.enableAfterConsent()
         _ = await rig.source.emit([clock.addingTimeInterval(-60)])
         XCTAssertTrue(rig.sut.ownEpisodeOpen)
-        await rig.sut.answerOk()
+        let answered = await rig.sut.answerOk()
+        XCTAssertTrue(answered)
         XCTAssertEqual(rig.service.answerOkCount, 1)
         XCTAssertFalse(rig.sut.ownEpisodeOpen)
+    }
+
+    func test_imOk_aFailureKeepsTheBanner_forARetry() async {
+        let rig = makeSUT()
+        _ = await rig.sut.enableAfterConsent()
+        _ = await rig.source.emit([clock.addingTimeInterval(-60)])
+        rig.service.answerOkResult = .failure(URLError(.notConnectedToInternet))
+        let answered = await rig.sut.answerOk()
+        XCTAssertFalse(answered)
+        XCTAssertTrue(rig.sut.ownEpisodeOpen)
+    }
+
+    func test_theOwnBannerFallsAtTheEndOfTheEpisode() {
+        XCTAssertNil(OwnFallEpisode.expiry(of: nil))
+        XCTAssertEqual(OwnFallEpisode.expiry(of: clock), clock.addingTimeInterval(FallDetectionContract.episodeTtl))
     }
 }

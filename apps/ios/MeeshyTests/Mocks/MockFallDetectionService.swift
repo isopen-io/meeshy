@@ -7,7 +7,7 @@ final class MockFallDetectionService: FallDetectionServiceProviding, @unchecked 
     private let lock = NSLock()
 
     var reportResults: [FallReportOutcome] = []
-    var answerOkResult = true
+    var answerOkResult: Result<Bool, Error> = .success(true)
     var consentSettingsResult: Result<FallConsentSettings, Error> = .success(
         FallConsentSettings(consentedAt: nil, consentVersion: nil, currentVersion: "2026-11-19")
     )
@@ -33,11 +33,12 @@ final class MockFallDetectionService: FallDetectionServiceProviding, @unchecked 
         }
     }
 
-    func answerOk() async -> Bool {
-        lock.withLock {
+    func answerOk() async throws -> Bool {
+        let result = lock.withLock {
             answers += 1
             return answerOkResult
         }
+        return try result.get()
     }
 
     func consentSettings() async throws -> FallConsentSettings { try consentSettingsResult.get() }
@@ -65,10 +66,13 @@ final class MockFallDetectionService: FallDetectionServiceProviding, @unchecked 
 final class FakeFallSampleSource: FallSampleSourcing {
     var isAvailable = true
     var authorizationGranted = true
+    var authorizationIsReady = true
     private(set) var authorizationRequests = 0
     private(set) var startedAccounts: [String] = []
     private(set) var stopCount = 0
     private var deliver: (@MainActor ([Date]) async -> Bool)?
+    /// La dernière livraison ouverte, gardée même après l'arrêt : une requête HealthKit déjà en vol livre encore.
+    private var inFlight: (@MainActor ([Date]) async -> Bool)?
 
     nonisolated deinit {}
 
@@ -77,9 +81,12 @@ final class FakeFallSampleSource: FallSampleSourcing {
         return authorizationGranted
     }
 
+    func authorizationReady() async -> Bool { authorizationIsReady }
+
     func start(accountId: String, deliver: @escaping @MainActor ([Date]) async -> Bool) {
         startedAccounts.append(accountId)
         self.deliver = deliver
+        inFlight = deliver
     }
 
     func stop() {
@@ -93,6 +100,12 @@ final class FakeFallSampleSource: FallSampleSourcing {
     func emit(_ samples: [Date]) async -> Bool {
         guard let deliver else { return false }
         return await deliver(samples)
+    }
+
+    /// Ce que livrerait une requête partie AVANT l'arrêt de l'observateur.
+    func emitInFlight(_ samples: [Date]) async -> Bool {
+        guard let inFlight else { return false }
+        return await inFlight(samples)
     }
 }
 

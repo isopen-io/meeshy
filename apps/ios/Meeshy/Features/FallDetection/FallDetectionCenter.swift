@@ -7,8 +7,10 @@ import UIKit
 ///
 /// - **l'émetteur** : avec son ACCORD EXPLICITE seulement (`GET /me/health/fall/settings`), la source HealthKit livre
 ///   chaque échantillon neuf de `numberOfTimesFallen` ; `FallReportPlanner` dit lesquels rapporter (`POST
-///   /me/health/fall`), et un 403 (accord retiré ailleurs) coupe l'observateur. Pendant l'épisode qu'il a rapporté, la
-///   bannière « Une chute a été détectée — tout va bien ? » lui offre « Je vais bien » ;
+///   /me/health/fall`). Seul un REFUS EXPLICITE coupe l'observateur (accord absent, 403) — une panne réseau le garde,
+///   et la reconnexion revérifie l'accord. Chaque livraison porte le compte et la génération qui l'ont ouverte : sous
+///   un autre compte, rien ne part et l'ancre ne bouge pas. Accord servi mais Santé inaccessible : `isDetectionBlocked`
+///   le dit, durablement. Pendant l'épisode rapporté, la bannière offre « Je vais bien », retirée sur SUCCÈS seulement ;
 /// - **le Sang** : `fall:detected` / `fall:cleared` tiennent l'état cache-first (`FallStateStore`), la levée poussée
 ///   (`safety_alert_cleared`) le retire aussi, et l'annonce défile dans la SyncPill (`FallAnnouncementFeed`).
 ///
@@ -24,6 +26,8 @@ final class FallDetectionCenter: ObservableObject {
     /// chute est une donnée de santé, il ne se range pas sur le disque.
     @Published private(set) var ownEpisodeDetectedAt: Date?
     @Published private(set) var isObserving = false
+    /// L'accord est servi, mais l'observateur ne peut pas tourner (Santé non autorisée, ou indisponible).
+    @Published private(set) var isDetectionBlocked = false
 
     private let service: FallDetectionServiceProviding
     private let source: FallSampleSourcing
@@ -33,7 +37,9 @@ final class FallDetectionCenter: ObservableObject {
     private let lane = OrderedEventLane()
     private let cacheOwner: FallCacheOwnerStoring
     private var account: String?
-    /// Avance à chaque changement de compte : un rattrapage parti sous un compte ne s'applique jamais à un autre.
+    private var observedAccount: String?
+    /// Avance à chaque changement de compte : un rattrapage, une annonce ou une livraison partis sous un compte ne
+    /// s'appliquent jamais à un autre.
     private var accountGeneration = 0
     private var cancellables = Set<AnyCancellable>()
 
@@ -70,7 +76,7 @@ final class FallDetectionCenter: ObservableObject {
         connected
             .removeDuplicates()
             .filter { $0 }
-            .relay(through: lane) { [weak self] _ in await self?.catchUp() }
+            .relay(through: lane) { [weak self] _ in await self?.reconnected() }
             .store(in: &cancellables)
         lane.store(in: &cancellables)
     }
@@ -111,49 +117,98 @@ final class FallDetectionCenter: ObservableObject {
         store.reconcile(with: items.filter { $0.userId != viewer })
     }
 
+    /// Le nom se résout HORS du fil principal : une annonce dont le nom revient sous un autre compte ne part pas.
     private func announce(_ kind: FallAnnouncementKind, of userId: String) async {
+        let generation = accountGeneration
         let name = await displayName(userId)
+        guard generation == accountGeneration else { return }
         feed.post(userId: userId, kind: kind, label: FallDetectionWording.pillLabel(kind: kind, name: name))
+    }
+
+    /// Socket raccrochée : l'instantané des Sangs, puis l'accord — une panne au lancement ne coupe pas la détection
+    /// pour toujours.
+    private func reconnected() async {
+        await catchUp()
+        guard viewerId() != nil else { return }
+        await resumeIfConsented()
     }
 
     // MARK: - L'émetteur
 
-    /// Observe les chutes SEULEMENT si l'accord porte sur le texte en vigueur. Appelé à l'ouverture de la session.
+    /// Observe les chutes SEULEMENT si l'accord porte sur le texte en vigueur. Appelé à l'ouverture de la session et à
+    /// chaque reconnexion. Un refus EXPLICITE (accord absent, 403) coupe ; une panne réseau laisse l'état tel quel.
     func resumeIfConsented() async {
-        guard let settings = try? await service.consentSettings(), settings.isConsented else {
-            stopObserving()
+        let generation = accountGeneration
+        let settings: FallConsentSettings
+        do {
+            settings = try await service.consentSettings()
+        } catch MeeshyError.forbidden {
+            guard generation == accountGeneration else { return }
+            return stopObserving()
+        } catch {
             return
         }
-        startObserving()
+        guard generation == accountGeneration else { return }
+        guard settings.isConsented else { return stopObserving() }
+        let ready = await source.authorizationReady()
+        guard generation == accountGeneration else { return }
+        guard ready, startObserving() else { return block() }
     }
 
-    /// Après l'accord explicite : l'autorisation Santé se demande MAINTENANT, jamais avant. Rend `false` si elle est refusée.
+    /// Après l'accord explicite (ou depuis l'état « Détection inactive ») : l'autorisation Santé se demande MAINTENANT,
+    /// jamais avant. Rend `false` quand elle échoue — l'état bloqué est alors posé.
     func enableAfterConsent() async -> Bool {
-        guard await source.requestAuthorization() else { return false }
-        startObserving()
+        guard await source.requestAuthorization(), startObserving() else {
+            block()
+            return false
+        }
         return true
     }
 
     /// Le retrait de l'accord (ou un 403 de la passerelle) : l'observateur et la livraison d'arrière-plan s'arrêtent.
     func stopObserving() {
         source.stop()
+        observedAccount = nil
         isObserving = false
+        isDetectionBlocked = false
         ownEpisodeDetectedAt = nil
     }
 
-    private func startObserving() {
-        guard let accountId = viewerId(), source.isAvailable else { return }
-        source.start(accountId: accountId) { [weak self] samples in
-            guard let self else { return false }
-            return await self.samplesArrived(samples)
-        }
-        isObserving = true
+    /// L'accord est là, l'observateur ne peut pas tourner : il s'arrête, et l'interface le dit.
+    private func block() {
+        source.stop()
+        observedAccount = nil
+        isObserving = false
+        isDetectionBlocked = true
     }
 
-    /// Les échantillons neufs que HealthKit vient de rendre. Rend `true` quand l'ancre peut avancer.
-    func samplesArrived(_ samples: [Date]) async -> Bool {
+    @discardableResult
+    private func startObserving() -> Bool {
+        guard let accountId = viewerId(), source.isAvailable else { return false }
+        isDetectionBlocked = false
+        guard !(isObserving && observedAccount == accountId) else { return true }
+        let generation = accountGeneration
+        source.start(accountId: accountId) { [weak self] samples in
+            guard let self else { return false }
+            return await self.samplesArrived(samples, accountId: accountId, generation: generation)
+        }
+        observedAccount = accountId
+        isObserving = true
+        return true
+    }
+
+    /// Une livraison ouverte pour `accountId` sous `generation` vaut-elle encore pour la session en cours ?
+    private func delivers(to accountId: String, generation: Int) -> Bool {
+        viewerId() == accountId && accountGeneration == generation
+    }
+
+    /// Les échantillons neufs que HealthKit vient de rendre pour `accountId`. Rend `true` quand l'ancre peut avancer —
+    /// jamais quand le compte (ou sa génération) a changé : la chute de A ne part pas sous B, et l'ancre de A reste.
+    func samplesArrived(_ samples: [Date], accountId: String, generation: Int) async -> Bool {
         for detectedAt in FallReportPlanner.toReport(samples, lastReported: nil, now: now()) {
+            guard delivers(to: accountId, generation: generation) else { return false }
             let outcome = await service.report(detectedAt: detectedAt)
+            guard delivers(to: accountId, generation: generation) else { return false }
             switch FallReportPlanner.next(after: outcome) {
             case .advance:
                 noteOwnEpisode(outcome, detectedAt: detectedAt)
@@ -164,7 +219,7 @@ final class FallDetectionCenter: ObservableObject {
                 return false
             }
         }
-        return true
+        return delivers(to: accountId, generation: generation)
     }
 
     /// Une chute rangée ou dédupliquée ouvre (ou garde) l'épisode que la bannière demande de clore.
@@ -173,18 +228,25 @@ final class FallDetectionCenter: ObservableObject {
         ownEpisodeDetectedAt = max(ownEpisodeDetectedAt ?? detectedAt, detectedAt)
     }
 
-    /// « Je vais bien » : l'épisode se clôt chez mes Sangs, la bannière disparaît.
+    /// « Je vais bien » : l'épisode se clôt chez mes Sangs. La bannière ne disparaît que si la réponse est PARTIE ;
+    /// une panne rend `false` et la laisse, pour réessayer.
     @discardableResult
     func answerOk() async -> Bool {
-        let cleared = await service.answerOk()
-        ownEpisodeDetectedAt = nil
-        return cleared
+        let generation = accountGeneration
+        do {
+            _ = try await service.answerOk()
+        } catch {
+            return false
+        }
+        if generation == accountGeneration { ownEpisodeDetectedAt = nil }
+        return true
     }
 
     // MARK: - Le compte
 
     /// Le compte change. La déconnexion et le passage à un AUTRE compte oublient l'état des autres et coupent
-    /// l'observateur ; le premier compte du lancement ne garde le cache que s'il en est le PROPRIÉTAIRE.
+    /// l'observateur ; le premier compte du lancement ne garde le cache que s'il en est le PROPRIÉTAIRE, et ne coupe
+    /// rien avant d'avoir lu son accord.
     func accountChanged(to userId: String?) {
         let previous = account
         account = userId
@@ -195,7 +257,7 @@ final class FallDetectionCenter: ObservableObject {
             feed.reset()
         }
         cacheOwner.owner = userId
-        stopObserving()
+        if userId == nil || previous != nil { stopObserving() }
         guard userId != nil else { return }
         lane.submit { [weak self] in await self?.resumeIfConsented() }
     }
