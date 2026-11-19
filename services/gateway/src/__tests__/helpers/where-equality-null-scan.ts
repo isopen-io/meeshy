@@ -24,6 +24,25 @@
  * cherche que la première mesure une graphie, pas une propriété (règle du
  * cycle 105).
  *
+ * ─── CE QUE CE BALAYAGE NE VOIT PAS, MESURÉ ──────────────────────────────────
+ *
+ * Il ne relève qu'une égalité écrite **EN LIGNE, sous une clé littérale
+ * `where:`**. « Inventaire VIDE » ne veut donc jamais dire « aucune égalité
+ * nue » — c'est la leçon 261 appliquée à cet instrument, et les quatre formes
+ * qui lui échappent sont des FIXTURES de ses cliquets, pas une phrase :
+ *
+ *   const LIVING = { deactivatedAt: null };  where: { id, ...LIVING }   // non vu
+ *   const living = { … };  where: { user: { is: living } }              // non vu
+ *   export const livingWhere = () => ({ deactivatedAt: null });         // non vu
+ *   where: flag ? { deactivatedAt: null } : { id }                      // non vu
+ *
+ * La deuxième n'est pas théorique : `services/community-online-count.ts` l'écrit,
+ * et c'est l'un des sites de `USABLE_ACCOUNT_WHERE` (#19799). Il ne lit pas non
+ * plus `packages/shared` ni `scripts/`, et un nom de champ QUOTÉ
+ * (`{ 'u.deletedAt': null }`, une agrégation brute) lui échappe — ce dernier à
+ * bon droit : MongoDB brut apparie la clé manquante, la sémantique y est
+ * l'INVERSE de celle que Prisma traduit.
+ *
  * **SŒURS d'un même `OR`, et pas « quelque part dans le bloc ».** La forme JUSTE
  * est une ALTERNATIVE : `OR: [{ champ: null }, { champ: { isSet: false } }]`.
  * La première version de ce balayage cherchait `isSet: false` n'importe où dans
@@ -31,7 +50,14 @@
  * `AND: [{ champ: null }, { champ: { isSet: false } }]`, une conjonction
  * impossible qui n'apparie AUCUN document : le défaut #19690 en pire, certifié
  * correct par le cliquet censé l'interdire (audit adversarial du cycle 180,
- * constat F). Et la phrase « se compose par `AND` quand le `where` porte déjà un
+ * constat F).
+ *
+ * La seconde version exigeait la bonne `OR` et l'éprouvait par un `RegExp` sur le
+ * TEXTE ENTIER du tableau : elle bénissait donc la même conjonction IMBRIQUÉE
+ * dans une branche, et une absence seulement CITÉE dans un littéral de chaîne
+ * (audit du cycle 181, constat C3 — le constat F rejoué un cran plus bas). La
+ * branche est maintenant exigée CANONIQUE, à la profondeur 0 du tableau, et les
+ * littéraux de chaîne sont dépouillés comme les commentaires. Et la phrase « se compose par `AND` quand le `where` porte déjà un
  * `OR` » — vraie des PRÉDICATS COMPLETS — invite précisément cette faute quand
  * on l'applique aux deux BRANCHES. L'absence n'est donc dite « à côté » que si
  * elle l'est dans le MÊME tableau `OR`.
@@ -70,10 +96,19 @@ export type EqualityNullSweep = {
  * Le bloc est donc remplacé par ses PROPRES retours à la ligne ; un `//` garde
  * déjà le sien, le motif ne consommant pas la fin de ligne.
  */
+const blankKeepingLines = (texte: string): string => texte.replace(/[^\n]/g, ' ');
+
 const withoutComments = (source: string): string =>
   source
     .replace(/\/\*[\s\S]*?\*\//g, (bloc) => bloc.replace(/[^\n]/g, ''))
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+    // Le CONTENU d'un littéral de chaîne n'est pas du code : un libellé, un
+    // message de journal ou une fixture qui CITE `champ: { isSet: false }`
+    // bénissait un filtre nu posé à côté (audit du cycle 181, constat C3). Même
+    // raison que les commentaires, et les retours à la ligne restent en place
+    // pour que la ligne rapportée soit celle du FICHIER.
+    .replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`/g, (chaine) =>
+      `${chaine[0]}${blankKeepingLines(chaine.slice(1, -1))}${chaine[chaine.length - 1]}`);
 
 /** Les clés d'objet sous lesquelles un `{ champ: null }` est une ÉCRITURE, jamais un filtre. */
 const PAYLOAD_KEYS = new Set(['data', 'create', 'update', 'set']);
@@ -106,6 +141,42 @@ const filteredField = (source: string, colonIndex: number, stack: readonly Frame
   const holder = stack[stack.length - 1];
   return holder && holder.kind === '{' && holder.key ? { field: holder.key, spelling: 'equals' } : null;
 };
+
+/**
+ * Les branches de PREMIER NIVEAU d'un tableau `OR`, découpées à la profondeur 0.
+ * Une sous-structure d'une autre branche n'en est pas une.
+ */
+const topLevelBranches = (interieur: string): readonly string[] => {
+  const branches: string[] = [];
+  let depth = 0;
+  let debut = 0;
+  for (let i = 0; i < interieur.length; i += 1) {
+    const char = interieur[i];
+    if (char === '{' || char === '[') depth += 1;
+    else if (char === '}' || char === ']') depth -= 1;
+    else if (char === ',' && depth === 0) {
+      branches.push(interieur.slice(debut, i));
+      debut = i + 1;
+    }
+  }
+  branches.push(interieur.slice(debut));
+  return branches.map((branche) => branche.trim()).filter((branche) => branche.length > 0);
+};
+
+/**
+ * La branche qui DIT l'absence, et rien d'autre : `{ champ: { isSet: false } }`.
+ *
+ * La forme est exigée CANONIQUE, et c'est le constat C3 de l'audit du cycle 181.
+ * La version d'avant testait un `RegExp` sur le TEXTE ENTIER du tableau `OR` :
+ * elle bénissait donc
+ * `OR: [{ c: null }, { AND: [{ c: { isSet: false } }, { c: { not: null } }] }]`,
+ * dont la seconde branche est IMPOSSIBLE — le `OR` vaut `c: null`, soit le défaut
+ * exact que ce cliquet garde, certifié correct par lui. C'est le constat F du
+ * cycle 180 rejoué un cran plus bas : il ne suffit pas d'exiger la MÊME `OR`, il
+ * faut exiger la branche ELLE-MÊME.
+ */
+const isAbsenceBranch = (branche: string, field: string): boolean =>
+  new RegExp(`^\\{\\s*${field}\\s*:\\s*\\{\\s*isSet\\s*:\\s*false\\s*\\}\\s*,?\\s*\\}$`).test(branche);
 
 /** Les `{ champ: null }` et `{ champ: { equals: null } }` POSÉS EN FILTRE dans un fichier. */
 export function equalityNullFiltersIn(file: string, source: string, fields: ReadonlySet<string>): EqualityNullSite[] {
@@ -145,7 +216,7 @@ export function equalityNullFiltersIn(file: string, source: string, fields: Read
     const holderIndex = filtered.spelling === 'equals' ? stack.length - 2 : stack.length - 1;
     const parent = holderIndex > 0 ? stack[holderIndex - 1] : undefined;
     const orBranches = parent && parent.kind === '[' && parent.key === 'OR'
-      ? text.slice(parent.start, blockEndOf(text, parent.start, '[', ']') + 1)
+      ? topLevelBranches(text.slice(parent.start + 1, blockEndOf(text, parent.start, '[', ']')))
       : null;
 
     sites.push({
@@ -153,8 +224,7 @@ export function equalityNullFiltersIn(file: string, source: string, fields: Read
       line: text.slice(0, i).split('\n').length,
       field: filtered.field,
       spelling: filtered.spelling,
-      absenceSaidInSameOr: orBranches !== null
-        && new RegExp(`${filtered.field}\\s*:\\s*\\{\\s*isSet\\s*:\\s*false`).test(orBranches),
+      absenceSaidInSameOr: orBranches !== null && orBranches.some((branche) => isAbsenceBranch(branche, filtered.field)),
     });
   }
   return sites;

@@ -23,9 +23,15 @@ export const isUsableAccount = <T extends AccountState>(account: T | null | unde
  *
  * `isUsableAccount` juge une LIGNE DÉJÀ CHARGÉE : le client Prisma rend `null`
  * pour une colonne absente comme pour une colonne nulle, donc la lecture JS est
- * exacte sans rien savoir de MongoDB. Une SÉLECTION, elle, doit choisir : sous
- * MongoDB `{ champ: null }` est une ÉGALITÉ, et elle n'apparie pas un document
- * dont la clé est ABSENTE.
+ * exacte sans rien savoir de MongoDB. Une SÉLECTION, elle, doit choisir : **dans
+ * la traduction PRISMA** d'un `where`, `{ champ: null }` est une ÉGALITÉ, et elle
+ * n'apparie pas un document dont la clé est ABSENTE (`isSet` existe depuis
+ * Prisma 3.11.1 pour dire les deux états ; ce dépôt est en 6.x).
+ *
+ * **Ce n'est PAS la sémantique de MongoDB brut**, où `{ champ: null }` apparie
+ * aussi la clé manquante. Un `$match` d'agrégation écrit à la main est donc
+ * correct tel quel — `services/relations/circlesSummary.ts`, dans ce répertoire,
+ * en porte un, et il n'y a rien à y « corriger ».
  *
  * Or **aucun des deux chemins de création de compte n'écrit ces colonnes** —
  * `registration.service.ts` (l'inscription) ni `user-management.service.ts`
@@ -40,6 +46,17 @@ export const isUsableAccount = <T extends AccountState>(account: T | null | unde
  * `jobs/broadcast-recipients.ts`), le compteur de présence de communauté portait
  * déjà la forme juste en ligne.
  *
+ * **Ce que ces deux clauses portent, et ce qu'elles ne portent pas.** Mesuré le
+ * 2026-11-19 : tout écrivain de `deactivatedAt` ou de `deletedAt` pose AUSSI
+ * `isActive: false` (`user-management.service.ts` pour `updateStatus`, `deleteUser`
+ * et `restoreUser`, `routes/account-deletion.ts`, `MaintenanceService.ts`,
+ * `migrations/migrate-from-legacy.ts`). Sur les données d'aujourd'hui, la loi
+ * ÉQUIVAUT donc à `{ isActive: true }`, et les deux `unsetOrNull` sont de la
+ * défense en profondeur — elles n'excluent personne que `isActive` n'exclue
+ * déjà. C'est dit ici pour qu'on ne lise pas « six portes refusaient tout le
+ * monde » comme « ces clauses portent le verdict » : ce qui refusait tout le
+ * monde était l'ÉGALITÉ NUE, et ce qui admet aujourd'hui est `isActive`.
+ *
  * La clé rendue est `AND` : un `where` qui porte DÉJÀ son propre `AND` compose
  * (`AND: [...USABLE_ACCOUNT_WHERE.AND, ...sien]`) au lieu de spreader, sans quoi
  * l'un écrase l'autre — le seul piège de cette constante, celui de `unsetOrNull`
@@ -48,7 +65,7 @@ export const isUsableAccount = <T extends AccountState>(account: T | null | unde
 export const USABLE_ACCOUNT_WHERE = {
   isActive: true,
   AND: [unsetOrNull('deletedAt'), unsetOrNull('deactivatedAt')],
-} satisfies Prisma.UserWhereInput;
+} as const satisfies Prisma.UserWhereInput;
 
 const STORED_ROLES: ReadonlySet<string> = new Set<string>(Object.values(GlobalUserRole));
 

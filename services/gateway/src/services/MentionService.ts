@@ -616,10 +616,19 @@ export class MentionService {
 
     if (mentionableScope(conversation.type) === 'directory') {
       // Un compte VIVANT seulement, et par la loi NOMMÉE : composé à la main
-      // (`deletedAt: null`), ce filtre n'appariait aucun compte — aucune création
-      // n'écrit la colonne — donc personne n'était mentionnable dans une
-      // conversation d'annuaire (#19799). La loi y ajoute `deactivatedAt`, que
-      // `isAddableUser` lit déjà : un compte désactivé ne se mentionne pas.
+      // (`deletedAt: null`), ce filtre n'appariait AUCUN compte, la colonne
+      // n'étant écrite par aucune création (#19799). La loi y ajoute en plus
+      // `deactivatedAt`, que `isAddableUser` lit déjà : un compte désactivé ne se
+      // mentionne pas.
+      //
+      // **Aucun symptôme de production n'a été observé, et il ne pouvait pas
+      // l'être : `canMentionUser` n'a AUCUN appelant de production** (mesuré le
+      // 2026-11-19 — ses seules occurrences du dépôt sont sa définition et ses
+      // témoins). Ce qui est réparé ici est donc une FORME, pas une panne : une
+      // forme morte est un patron qui se recopie (règle du dépôt sur
+      // `messageResponseSchema`), et c'est à ce titre qu'elle est corrigée. Le
+      // sort de la méthode elle-même — la rendre vivante ou la retirer — est
+      // #19814.
       const user = await this.prisma.user.findUnique({
         where: { id: userId, ...USABLE_ACCOUNT_WHERE },
         select: { id: true }

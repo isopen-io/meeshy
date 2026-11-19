@@ -50,9 +50,47 @@ Six portes composaient ce prédicat à la main, et les six refusaient tout le mo
 | `routes/communities/addable-user.ts:19` | `null` | le site **UNIQUE** des deux routes qui ajoutent sans accord (`POST …/invite`, `POST …/members`) : **404 pour tout le monde — personne ne pouvait être invité dans une communauté, ni ajouté par un administrateur** |
 | `socketio/presence-audience.ts` (`TEAM_COLLEAGUES_WHERE`) | `[]` | `_resolveModeratorIds` ne trouvait aucun collègue : la présence d'équipe du #16623 inerte pour l'équipe entière |
 | `services/conversations/communityMembershipSync.ts:64` | `living = []` | `everyoneAddable` rendait `false` pour toute liste non vide — aucune synchronisation d'appartenance n'ajoutait personne |
-| `services/conversations/communitySalonAdoption.ts:109` | `∅` | aucun occupant adopté dans un salon de communauté |
+| `services/conversations/communitySalonAdoption.ts:109` | `∅` | aucun occupant adopté — **et tous EXPULSÉS**, voir § ci-dessous |
 | `services/notifications/community-added.ts:85` | `recipients = []` | la notification « ajouté à une communauté » ne partait jamais |
 | `services/MentionService.ts` (`canMentionUser`) | `null` | personne n'était mentionnable dans une conversation d'annuaire |
+
+## Sur l'une des six portes, le défaut n'était pas inerte — il était DESTRUCTIF
+
+C'est le constat C4 de l'audit adversarial, et il corrige la ligne que ce journal
+portait d'abord (« aucun occupant adopté »), qui était la moitié douce du fait.
+
+`admitSalonOccupants` finit par rendre la liste des occupants à SORTIR :
+
+```ts
+const addable = await addableUnderCreator(prisma, request.createdBy, strangers);
+const admitted = strangers.filter((userId) => addable.has(userId));
+return [...former, ...strangers.filter((userId) => !addable.has(userId))];
+```
+
+`addableUnderCreator` portant l'égalité nue, `addable` était `∅` : `admitted` est
+vide **et la valeur de retour contient TOUS les `strangers`**. Cette valeur est la
+liste que `closeSalonsAfterSwitch` passe à `exitSalonOutsiders`. **À chaque
+bascule d'une communauté publique en privée, tout occupant inscrit non-membre
+était donc expulsé de chacun de ses salons** — `isActive: false`, `leftAt`,
+`conversation:participant-left`, succession du créateur, historique devenu
+illisible. L'intention de #16723 était d'ADOPTER les légitimes et de ne sortir que
+les autres ; le défaut a inversé le partage, puisque personne n'était légitime.
+
+Le chemin est écrit « NE REJETTE JAMAIS » et journalisé en best-effort : aucun
+signal n'est remonté, jamais.
+
+> **Un gate qui rend une LISTE a deux sorties, et corriger celle qu'on regarde ne
+> dit rien de l'autre.** J'ai lu ce site comme « qui entre », parce que c'est la
+> question que le lot posait ; sa valeur de retour est « qui SORT », et le même
+> `∅` qui vidait la première remplissait la seconde. La question à poser à un
+> prédicat d'admission n'est pas seulement « qui admet-il ? » mais **« que
+> devient ce qu'il n'admet pas ? »**
+
+Le correctif arrête l'hémorragie et ne soigne pas les blessés : la remédiation est
+**#19815**, qui porte aussi la mesure — et c'est, accessoirement, la SEULE mesure
+de production accessible sans base de la question que ce journal dit ne pas avoir
+pu répondre (compter les `Participant` sortis d'un salon de communauté devenue
+privée depuis #16723).
 
 ## Ce qui rend ce cas instructif
 

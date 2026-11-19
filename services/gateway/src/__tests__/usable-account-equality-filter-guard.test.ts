@@ -101,6 +101,74 @@ describe('le balayage voit une forme nue SUR CETTE COLONNE — prouvé par colon
  * Un cliquet dont la valeur est de NOMMER fichier, ligne, colonne et graphie n'a
  * pas le droit de se tromper sur le champ le plus actionnable des quatre.
  */
+/**
+ * Ce que l'instrument BÉNIT à tort, et ce qu'il NE VOIT PAS. Les deux moitiés
+ * viennent de l'audit adversarial du cycle 181 (constat C3), et les deux sont
+ * ici des témoins plutôt qu'une phrase : **une limite qu'on ne mesure pas
+ * redevient un angle mort silencieux** (règle du cycle 108).
+ */
+describe('le balayage ne bénit que la branche CANONIQUE', () => {
+  const sites = (source: string) =>
+    equalityNullFiltersIn('fixture.ts', source, COLONNES).map((site) => `${site.field}:${site.absenceSaidInSameOr}`);
+
+  it('REFUSE une branche d’absence IMPOSSIBLE — le `OR` vaut alors l’égalité nue', () => {
+    expect(sites(`
+      const rows = await prisma.user.findMany({
+        where: { id, OR: [{ deactivatedAt: null }, { AND: [{ deactivatedAt: { isSet: false } }, { deactivatedAt: { not: null } }] }] },
+      });
+    `)).toEqual(['deactivatedAt:false']);
+  });
+
+  it('REFUSE une absence CITÉE dans un littéral de chaîne — un libellé n’est pas un filtre', () => {
+    expect(sites(`
+      const rows = await prisma.user.findMany({
+        where: { id, OR: [{ deactivatedAt: null }, { label: 'deactivatedAt: { isSet: false }' }] },
+      });
+    `)).toEqual(['deactivatedAt:false']);
+  });
+
+  it('accepte la branche canonique, même accompagnée d’une troisième branche', () => {
+    expect(sites(`
+      const rows = await prisma.user.findMany({
+        where: { id, OR: [{ deactivatedAt: null }, { deactivatedAt: { isSet: false } }, { deactivatedAt: { gt: now } }] },
+      });
+    `)).toEqual(['deactivatedAt:true']);
+  });
+});
+
+/**
+ * Les QUATRE formes que l'instrument ne voit pas, mesurées. Elles ne sont pas
+ * théoriques : `services/community-online-count.ts` écrit exactement la première
+ * (constante nommée, puis `user: { is: living }`) — **l'un des sites de la loi
+ * est écrit sous une forme que ce cliquet ne relève pas.**
+ *
+ * « Inventaire VIDE » signifie donc « aucune égalité nue écrite EN LIGNE sous une
+ * clé littérale `where:` », jamais « aucune égalité nue » : c'est la leçon 261,
+ * et elle vaut de CET instrument.
+ */
+describe('ce que le balayage NE VOIT PAS — la limite est mesurée, pas affirmée', () => {
+  const vus = (source: string) => equalityNullFiltersIn('fixture.ts', source, COLONNES).length;
+
+  it.each([
+    ['une constante NOMMÉE puis répandue', `
+      const LIVING = { isActive: true, deactivatedAt: null };
+      const rows = await prisma.user.findMany({ where: { id, ...LIVING } });
+    `],
+    ['une constante NOMMÉE sous une relation', `
+      const living = { isActive: true, deactivatedAt: null };
+      const rows = await prisma.communityMember.findMany({ where: { user: { is: living } } });
+    `],
+    ['une FABRIQUE qui rend le filtre', `
+      export const livingWhere = () => ({ isActive: true, deactivatedAt: null });
+    `],
+    ['un TERNAIRE qui choisit le filtre', `
+      const rows = await prisma.user.findMany({ where: flag ? { deactivatedAt: null } : { id } });
+    `],
+  ])('ne relève pas %s', (_forme, source) => {
+    expect(vus(source)).toBe(0);
+  });
+});
+
 describe('le balayage nomme la VRAIE ligne, commentaires compris', () => {
   const SOURCE_AVEC_BLOC = [
     'import { prisma } from "./db";',
@@ -133,6 +201,12 @@ describe('aucune porte ne décide d’un compte vivant sur une égalité nue (#1
     expect(balayage().filesScanned).toBeGreaterThan(900);
   });
 
+  /**
+   * « VIDE » porte sur ce que l'instrument SAIT voir : une égalité écrite EN
+   * LIGNE sous une clé littérale `where:`. Les quatre formes qu'il ne relève pas
+   * sont mesurées au describe précédent — « zéro trouvé » n'est pas « zéro
+   * existe » (leçon 261), et l'une d'elles est écrite par un site de la loi.
+   */
   it('l’inventaire est VIDE — la réparation est `USABLE_ACCOUNT_WHERE`, jamais une ligne ici', () => {
     const nus = balayage().sites
       .filter((site) => !site.absenceSaidInSameOr)

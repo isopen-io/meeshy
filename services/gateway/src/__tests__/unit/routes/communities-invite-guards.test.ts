@@ -41,6 +41,14 @@ const DEACTIVATED_USER = '507f1f77bcf86cd799439104';
 const BLOCKS_ADMIN = '507f1f77bcf86cd799439105';
 const BLOCKED_BY_ADMIN = '507f1f77bcf86cd799439106';
 const SELF_DELETED = '507f1f77bcf86cd799439107';
+// Rang 2 — `isActive: true` ET la colonne de soft-state POSÉE. Aucun chemin de
+// production n'écrit cet état aujourd'hui (tout écrivain de `deactivatedAt` ou
+// `deletedAt` pose aussi `isActive: false`), mais sans lui la suite ne peut PAS
+// tomber : réduite à `{ isActive: true }`, la loi passerait au vert sur chacun de
+// ses témoins, et c'est l'interdit du dépôt — un témoin de RANG s'écrit sur un
+// rang AUTRE que le premier (audit adversarial du cycle 181, constat C2).
+const DEACTIVATED_STILL_ACTIVE = '507f1f77bcf86cd799439108';
+const DELETED_STILL_ACTIVE = '507f1f77bcf86cd799439109';
 const COMMUNITY = '507f1f77bcf86cd7994391a1';
 
 type Row = Record<string, unknown>;
@@ -62,6 +70,8 @@ const USERS: Row[] = [
   { id: BLOCKED_BY_ADMIN, isActive: true, blockedUserIds: [] },
   // Suppression demandée par l'utilisateur (`routes/account-deletion.ts`) : `isActive: false` + `deletedAt`, SANS `deactivatedAt`.
   { id: SELF_DELETED, isActive: false, deletedAt: new Date('2026-10-02'), blockedUserIds: [] },
+  { id: DEACTIVATED_STILL_ACTIVE, isActive: true, deactivatedAt: new Date('2026-10-03'), blockedUserIds: [] },
+  { id: DELETED_STILL_ACTIVE, isActive: true, deletedAt: new Date('2026-10-04'), blockedUserIds: [] },
 ];
 
 function makePrisma() {
@@ -94,7 +104,10 @@ function makePrisma() {
         members.find((row) => row.communityId === where.communityId && row.userId === where.userId) ?? null),
       create: jest.fn<any>(async ({ data }: { data: Row }) => {
         writes.push(data);
-        return { id: 'm-new', ...data, isActive: true, user: { id: data.userId, username: 'new', displayName: 'New', avatar: null, isOnline: true, deactivatedAt: null } };
+        // `deactivatedAt` porte une DATE, pas `null` : un double qui rend `null`
+        // ne peut pas distinguer « le sérialiseur retire la clé » de « la valeur
+        // était vide » (audit du cycle 181, constat C9).
+        return { id: 'm-new', ...data, isActive: true, user: { id: data.userId, username: 'new', displayName: 'New', avatar: null, isOnline: true, deactivatedAt: new Date('2026-10-05') } };
       }),
       update: jest.fn<any>(async ({ data }: { data: Row }) => {
         writes.push(data);
@@ -144,6 +157,16 @@ describe('POST /communities/:id/invite — qui peut être ajouté', () => {
     await app.close();
   });
 
+  it.each([
+    ['désactivé', DEACTIVATED_STILL_ACTIVE],
+    ['supprimé', DELETED_STILL_ACTIVE],
+  ])('un compte %s dont `isActive` est resté à `true` n’est pas ajouté : 404, sans écriture', async (_etat, target) => {
+    const { app, writes } = await build(ADMIN);
+    expect((await invite(app, target)).statusCode).toBe(404);
+    expect(writes).toHaveLength(0);
+    await app.close();
+  });
+
   it('une personne qui a bloqué l’inviteur n’est pas ajoutée : 404 comme un inconnu, sans écriture', async () => {
     const { app, writes } = await build(ADMIN);
     const res = await invite(app, BLOCKS_ADMIN);
@@ -182,12 +205,41 @@ describe('POST /communities/:id/members — la route jumelle de l’administrate
   it.each([
     ['un compte désactivé', DEACTIVATED_USER],
     ['un compte supprimé par son titulaire', SELF_DELETED],
+    ['un compte désactivé dont `isActive` est resté à `true`', DEACTIVATED_STILL_ACTIVE],
+    ['un compte supprimé dont `isActive` est resté à `true`', DELETED_STILL_ACTIVE],
     ['une personne qui a bloqué l’administrateur', BLOCKS_ADMIN],
     ['une personne que l’administrateur a bloquée', BLOCKED_BY_ADMIN],
   ])('%s n’est pas ajouté : 404, sans écriture', async (_label, target) => {
     const { app, writes } = await build(ADMIN);
     expect((await add(app, target)).statusCode).toBe(404);
     expect(writes).toHaveLength(0);
+    await app.close();
+  });
+});
+
+/**
+ * Ce qui part À CÔTÉ du verdict (cycle 125). Les deux routes servent le membre
+ * créé, dont la ligne `user` porte `deactivatedAt` : il n'est retenu que par
+ * l'OMISSION de `communityMemberSchema` → `userMinimalSchema`, c'est-à-dire par
+ * `fast-json-stringify` — dont `services/gateway/CLAUDE.md` dit qu'il « n'est pas
+ * une garde de confidentialité ». Portée réelle nulle aujourd'hui (la porte
+ * refuse un compte désactivé), donc c'est un PIÈGE ARMÉ, et la doctrine du
+ * cycle 84 est claire : une non-fuite accidentelle se garde par un témoin, qui
+ * garde une PORTE et non un bug. Il tombera le jour où quelqu'un déclare le champ.
+ */
+describe('la désactivation ne part pas avec le membre servi', () => {
+  it.each([
+    ['POST …/invite', invite],
+    ['POST …/members', add],
+  ])('%s sert le membre sans `deactivatedAt`', async (_route, porte) => {
+    const { app } = await build(ADMIN);
+    const res = await porte(app, NEWCOMER);
+    expect(res.statusCode).toBe(200);
+    // La NON-VACUITÉ d'abord : sur un corps vide, le `not.toContain` ci-dessous
+    // passerait sans rien attester — et une charge servie à `{}` est un défaut
+    // que ce dépôt a payé plusieurs fois.
+    expect(res.body).toContain('username');
+    expect(res.body).not.toContain('deactivatedAt');
     await app.close();
   });
 });

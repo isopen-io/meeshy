@@ -69,6 +69,7 @@ import {
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
 import { presenceStatusEmissions, TEAM_COLLEAGUES_WHERE } from './presence-audience';
+import { USABLE_ACCOUNT_WHERE } from '../services/relations/usableAccount';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -2801,8 +2802,14 @@ export class MeeshySocketIOManager {
     if (cached && Date.now() - cached.cachedAt < this.GLOBAL_ADMIN_IDS_CACHE_TTL_MS) {
       return cached.ids;
     }
+    // La MÊME loi que les collègues (`TEAM_COLLEAGUES_WHERE`) : un compte parti ne
+    // reçoit plus la présence de personne. Cette moitié-ci ne filtrait que le
+    // RÔLE, si bien qu'un administrateur désactivé ou supprimé restait dans
+    // l'audience de `user:status` de tout le monde pendant que l'autre moitié
+    // l'écartait — une asymétrie que le doc-comment de `presence-audience.ts`
+    // niait (audit adversarial du cycle 181, constat C5b).
     const rows = await this.prisma.user.findMany({
-      where: { role: { in: PRESENCE_PRIVILEGED_ROLES } },
+      where: { role: { in: PRESENCE_PRIVILEGED_ROLES }, ...USABLE_ACCOUNT_WHERE },
       select: { id: true },
     });
     const ids = rows.map(row => row.id);
