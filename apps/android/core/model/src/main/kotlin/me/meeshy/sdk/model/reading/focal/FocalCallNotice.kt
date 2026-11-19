@@ -18,6 +18,10 @@ enum class FocalCallTone { Accent, Error, Warning }
  * Ce que la rangée plate dit d'un appel (iOS `CallNoticePresentation` + `BubbleCallNoticeView`) : une seule
  * dérivation pour la carte, son libellé TalkBack et le rappel. Un appel EN COURS se lit avant son outcome (qui n'est
  * qu'un substitut neutre) et se rejoint au lieu de se rappeler.
+ *
+ * #19790 — « en cours » exige que le serveur confirme un appel vivant sous le MÊME identifiant ([liveCallId], l'appel
+ * actif de la conversation). La copie locale dit `call-live` tant qu'elle n'a pas reçu la fin de l'appel ; seule, elle
+ * proposait « Rejoindre » sur un appel fini, et la jonction répondait « appel terminé ».
  */
 data class FocalCallNotice(
     val title: FocalCallTitle,
@@ -32,16 +36,17 @@ data class FocalCallNotice(
 
 object FocalCallNoticePresenter {
 
-    fun of(summary: CallSummaryMetadata, isOutgoing: Boolean): FocalCallNotice {
+    fun of(summary: CallSummaryMetadata, isOutgoing: Boolean, liveCallId: String?): FocalCallNotice {
         val isVideo = summary.callType == MediaType.VIDEO
+        val confirmed = summary.copy(isLive = summary.isLive && liveCallId != null && liveCallId == summary.callId)
         return FocalCallNotice(
-            title = title(summary, isOutgoing, isVideo),
-            tone = tone(summary),
+            title = title(confirmed, isOutgoing, isVideo),
+            tone = tone(confirmed),
             isVideo = isVideo,
             isOutgoing = isOutgoing,
-            isLive = summary.isLive,
+            isLive = confirmed.isLive,
             durationLabel = summary.durationLabel.takeIf { !summary.isLive && summary.outcome == Outcome.COMPLETED && summary.durationSeconds > 0 },
-            dataLabel = summary.dataSpentLabel,
+            dataLabel = confirmed.dataSpentLabel,
         )
     }
 

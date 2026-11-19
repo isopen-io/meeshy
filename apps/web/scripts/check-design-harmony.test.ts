@@ -367,6 +367,31 @@ describe("le ▶ d'une vignette vidéo — l'encre sur média se LIT dans la cha
   });
 });
 
+describe("le masque de l'œil (face-rig) — un alpha, pas une couleur", () => {
+  // `paintMask` (`lib/calls/face-rig.ts`) peint un dégradé radial sur un canvas
+  // HORS DOM qui ne sert QUE de masque alpha : il est composé en
+  // `globalCompositeOperation = 'destination-in'`, où seule la composante ALPHA
+  // découpe l'œil agrandi — le noir `rgba(0, 0, 0, …)` n'est JAMAIS vu comme une
+  // couleur, il n'y a que la rampe d'alpha 1 → 1 → 0 qui compose. La charte ne
+  // nomme aucun jeton pour une rampe d'alpha de compositing ; comme le masque de
+  // luminance de la famille appel (84w) et l'onde peinte en canvas, c'est une
+  // exemption motivée À LA LIGNE, pas un chemin exempté — le fichier reste du
+  // chrome scanné pour tout le reste.
+  const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../src/${rel}`, import.meta.url)), 'utf8');
+  const faceRig = read('lib/calls/face-rig.ts');
+
+  test('le masque alpha ne laisse plus aucune violation au gate', () => {
+    expect(scanSource(faceRig)).toEqual([]);
+    expect(exemptionOf('lib/calls/face-rig.ts')).toBe(null);
+  });
+
+  test('la rampe est exemptée à la ligne, pas retirée (le masque reste un alpha)', () => {
+    expect(faceRig).toContain('harmony-exempt:');
+    expect(faceRig).toContain("globalCompositeOperation = 'destination-in'");
+    expect(faceRig).toContain('rgba(0, 0, 0, 1)');
+  });
+});
+
 describe('auditSources — le rapport', () => {
   test('compte par fichier, ignore les exemptés et le hors-périmètre', () => {
     const [first] = EXEMPT_PATHS as readonly { prefix: string }[];
