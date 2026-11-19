@@ -247,7 +247,9 @@ public struct UserProfileSheet: View {
                         .padding(.top, MeeshySpacing.lg)
                 }
 
+                // La fiche se pose sur le THÈME : sans ce ton, le kit peint ses cartes en encre claire (#19925).
                 MeeshyRevealZone(isRevealed: phase != .skeleton) { faceContent } placeholder: { ProfileSkeletonFace() }
+                    .meeshyGlassTone(.theme)
                     .padding(.top, MeeshySpacing.lg)
 
                 Color.clear.frame(height: showsFaceSelector ? MeeshySpacing.xxl * 3 : 40)

@@ -28,6 +28,7 @@ import { EngagementService } from '../../services/engagement/EngagementService';
 import { ACCOUNT_STATE_SELECT, isUsableAccount } from '../../services/relations/usableAccount';
 import { getBlockRelatedUserIds, isBlockedBetween } from '../../utils/blocking.js';
 import { admitCommunityMember } from './admission';
+import { liveJoinRequestWhere } from '../../services/community-join-request-lifecycle';
 import type { CommunityEngagementOptions } from './types';
 
 const logger = enhancedLogger.child({ module: 'CommunityEntryRoutes' });
@@ -188,9 +189,10 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
       return await guarded(request, reply, id, async (viewerId) => {
         const blocked = await getBlockRelatedUserIds(fastify.prisma, viewerId);
         // Le blocage s'exclut EN BASE : une page n'est jamais vidée par ce qu'on retire après.
+        const live = liveJoinRequestWhere(new Date());
         const where = blocked.size > 0
-          ? { communityId: id, status: 'pending', userId: { notIn: [...blocked] } }
-          : { communityId: id, status: 'pending' };
+          ? { communityId: id, ...live, userId: { notIn: [...blocked] } }
+          : { communityId: id, ...live };
         const read = await fastify.prisma.communityJoinRequest.findMany({
           where,
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -220,7 +222,7 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
    */
   async function decidableRequest(id: string, requestId: string, viewerId: string) {
     const pending = await fastify.prisma.communityJoinRequest.findFirst({
-      where: { id: requestId, communityId: id, status: 'pending' },
+      where: { id: requestId, communityId: id, ...liveJoinRequestWhere(new Date()) },
       select: { id: true, userId: true, via: true, country: true, user: { select: { id: true, ...ACCOUNT_STATE_SELECT } } }
     });
     if (!pending || !isUsableAccount(pending.user)) return null;
@@ -230,9 +232,10 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
 
   /** Bascule ATOMIQUE `pending` → décision : deux décisions concurrentes, une seule gagne. */
   async function decide(id: string, requestId: string, viewerId: string, status: 'accepted' | 'rejected'): Promise<boolean> {
+    const now = new Date();
     const flipped = await fastify.prisma.communityJoinRequest.updateMany({
-      where: { id: requestId, communityId: id, status: 'pending' },
-      data: { status, decidedAt: new Date(), decidedBy: viewerId }
+      where: { id: requestId, communityId: id, ...liveJoinRequestWhere(now) },
+      data: { status, decidedAt: now, decidedBy: viewerId }
     });
     return flipped.count === 1;
   }
@@ -262,7 +265,8 @@ export async function registerEntryRoutes(fastify: FastifyInstance, options: Com
             userId: pending.userId,
             via: joinViaOf(pending.via),
             joinCountry: pending.country ?? null,
-            createdBy: community.createdBy
+            createdBy: community.createdBy,
+            decidedBy: viewerId
           });
           return sendSuccess(reply, member);
         } catch (error) {

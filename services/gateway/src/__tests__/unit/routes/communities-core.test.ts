@@ -392,7 +392,7 @@ describe('GET /communities/:id — demande d\'entrée du lecteur (#19868)', () =
     expect(res.json().data.currentUserJoinRequest).toBe('pending');
     expect(res.json().data.requiresJoinApproval).toBe(true);
     expect(findJoinRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { communityId: COMMUNITY_ID, userId: USER_ID, status: 'pending' } }),
+      expect.objectContaining({ where: { communityId: COMMUNITY_ID, userId: USER_ID, status: 'pending', createdAt: { gte: expect.any(Date) } } }),
     );
   });
 

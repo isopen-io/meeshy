@@ -76,6 +76,9 @@ struct LocationMapPinsLayer: View {
     var onSelect: ((String) -> Void)?
     /// Un appui long sur l'avatar d'un Proche ou d'un Sang lui parle par talkie (#19885) ; `nil` : la carte n'en propose pas.
     var talkie: TalkieSender?
+    /// La fin du dernier appui long (`.distantFuture` pendant qu'il dure) : le relâchement qui le termine n'ouvre pas la
+    /// personne.
+    @State private var heldAt: Date?
 
     var body: some View {
         if let viewport {
@@ -116,14 +119,17 @@ struct LocationMapPinsLayer: View {
             isLive: freshness == .live,
             isSelected: pin.id == selectedId,
             isStale: freshness == .lastKnown,
-            onPress: onSelect.map { select in { select(pin.id) } },
+            onPress: onSelect.map { select in {
+                guard !TalkieLongHold.justEnded(at: heldAt, now: Date()) else { return }
+                select(pin.id)
+            } },
             content: { LocationMapPinAvatar(pin: pin, travels: pin.id == travellingId, size: Self.diameter(pin.id == selectedId),
                                             showsLife: false) },
             badge: { pinLife(pin) },
             above: { EmptyView() },
             below: { EmptyView() }
         )
-        .modifier(PinTalkie(sender: talkie, pin: pin))
+        .modifier(PinTalkie(sender: talkie, pin: pin, onHold: { holding in heldAt = holding ? .distantFuture : Date() }))
         .position(x: point.x, y: point.y - CGFloat(lift))
     }
 
@@ -210,11 +216,12 @@ struct LocationMapPinAvatar: View {
 private struct PinTalkie: ViewModifier {
     let sender: TalkieSender?
     let pin: SharedLocationPin
+    let onHold: (Bool) -> Void
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if let sender, TalkieLongHold.offers(circle: pin.circle) {
-            content.modifier(TalkieLongHoldModifier(sender: sender, userId: pin.id, displayName: pin.name))
+            content.modifier(TalkieLongHoldModifier(sender: sender, userId: pin.id, displayName: pin.name, onHold: onHold))
         } else {
             content
         }
