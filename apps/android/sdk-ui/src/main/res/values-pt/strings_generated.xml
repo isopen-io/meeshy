@@ -548,7 +548,6 @@
     <string name="talkie_send_rate_limited">Falas demais: tente de novo em um instante.</string>
     <string name="talkie_send_recording_copy">Gravando mensagem de voz…</string>
     <string name="talkie_send_talking">Você está falando com %1$s…</string>
-    <string name="talkie_send_voice">O walkie-talkie não passa agora: envie uma mensagem de voz.</string>
     <string name="talkie_send_waking">Acordando %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Visto anteontem às %1$s</string>
     <string name="time_lastSeen_dateAt">Visto em %1$s às %2$s</string>

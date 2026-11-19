@@ -28,4 +28,10 @@
     <string name="profile_toast_report_failed">Não foi possível enviar a denúncia</string>
     <string name="profile_stats_a11y_hint">Abre as estatísticas detalhadas</string>
     <string name="profile_tab_details">Detalhes</string>
+    <string name="profile_action_send_message">Enviar uma mensagem</string>
+    <string name="profile_section_about">Sobre</string>
+    <string name="profile_stats_memberSince">Membro desde</string>
+    <string name="profile_status_connected">Conectados</string>
+    <string name="profile_voice_title">Voz</string>
+    <string name="shared_location_share_action_a11y">Compartilhar minha localização com %1$s</string>
 </resources>

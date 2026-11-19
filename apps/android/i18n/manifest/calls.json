@@ -301,10 +301,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "profile.status.connected",
           "androidName": "call_status_connected",
-          "status": "adopted"
+          "status": "android-only"
         },
         {
           "catalog": "app",

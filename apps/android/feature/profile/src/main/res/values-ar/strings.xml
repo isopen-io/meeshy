@@ -10,4 +10,10 @@
     <string name="profile_toast_report_failed">تعذّر إرسال البلاغ</string>
     <string name="profile_stats_a11y_hint">يفتح الإحصاءات التفصيلية</string>
     <string name="profile_tab_details">التفاصيل</string>
+    <string name="profile_action_send_message">إرسال رسالة</string>
+    <string name="profile_section_about">نبذة</string>
+    <string name="profile_stats_memberSince">عضو منذ</string>
+    <string name="profile_status_connected">متصلون</string>
+    <string name="profile_voice_title">الصوت</string>
+    <string name="shared_location_share_action_a11y">مشاركة موقعي مع %1$s</string>
 </resources>

@@ -47,7 +47,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
 import { ReactionService } from '../ReactionService';
 import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { findUniqueIn } from '../../__tests__/helpers/mongo-where';

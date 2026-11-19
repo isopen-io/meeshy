@@ -77,6 +77,10 @@ public struct MeeshyMapTrace<MidLabel: View>: View {
         }
     }
 
+    private var nodeInk: Color {
+        MeeshyKitRGB(hex: MeeshyTicketRecipe.darkInkHex)?.color ?? .black
+    }
+
     private func shape(path: MeeshyMapTracePath) -> Path {
         MeeshyMapTraceShape.curve(through: path.points, smoothing: smoothing && kind != .link)
     }
@@ -85,7 +89,7 @@ public struct MeeshyMapTrace<MidLabel: View>: View {
     private func drawing(path: MeeshyMapTracePath, recipe: MeeshyMapTraceRecipe) -> some View {
         let curve = shape(path: path)
         let drawn = recipe.progress ?? 1
-        let ink = Color(red: 0.043, green: 0.043, blue: 0.071)
+        let ink = nodeInk
         ZStack {
             if recipe.kind == .history {
                 curve.stroke(tint.opacity(MeeshyMapTraceRecipe.historyHaloOpacity),
@@ -133,7 +137,7 @@ public struct MeeshyMapTrace<MidLabel: View>: View {
             if let fraction = path.fraction(ofPointAt: stop.pointIndex) {
                 let age = stops.count > 1 ? 0.55 + 0.45 * Double(order) / Double(stops.count - 1) : 1
                 Circle()
-                    .fill(Color(red: 0.043, green: 0.043, blue: 0.071))
+                    .fill(nodeInk)
                     .overlay(Circle().strokeBorder(tint, lineWidth: CGFloat(MeeshyMapTraceRecipe.nodeRing)))
                     .frame(width: CGFloat(MeeshyMapTraceRecipe.nodeDiameter), height: CGFloat(MeeshyMapTraceRecipe.nodeDiameter))
                     .opacity(age)

@@ -40,7 +40,7 @@ nonisolated enum ProfileReportAttachmentsRule {
 
     /// Ce que la feuille lit à l'ouverture du choix : rien sans source ni personne.
     @MainActor static func loader(_ source: (any ProfileReportMessagesProviding)?,
-                                  userId: String?) -> () async -> [ProfileReportAttachment] {
+                                  userId: String?) -> @MainActor () async -> [ProfileReportAttachment] {
         guard let source, let userId, !userId.isEmpty else { return { [] } }
         return { await source.attachableMessages(from: userId) }
     }

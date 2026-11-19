@@ -141,7 +141,7 @@ struct ShareLinkDetailView: View {
                                  avatarURL: link.conversation?.avatar, isDark: isDark)
                 } trailing: {
                     if open != nil {
-                        Image(systemName: "chevron.right")
+                        Image(systemName: "chevron.forward")
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                             .foregroundStyle(.secondary)
                             .accessibilityHidden(true)

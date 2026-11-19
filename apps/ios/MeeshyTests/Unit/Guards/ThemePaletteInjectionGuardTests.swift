@@ -18,8 +18,11 @@ final class ThemePaletteInjectionGuardTests: XCTestCase {
         "../../packages/MeeshySDK/Sources/MeeshyUI/Media/MediaTranscriptionView.swift",
         "../../packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyAudioEditorView.swift",
         "../../packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet.swift",
-        "../../packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+PostsTab.swift",
         "../../packages/MeeshySDK/Sources/MeeshyUI/Theme/ViewModifiers.swift"
+    ]
+
+    private static let kitOnlyViews = [
+        "../../packages/MeeshySDK/Sources/MeeshyUI/Profile/UserProfileSheet+PostsTab.swift"
     ]
 
     private func observesThemeSingleton(_ source: String) -> Bool {
@@ -40,6 +43,13 @@ final class ThemePaletteInjectionGuardTests: XCTestCase {
                 || source.contains("RootThemedBackground(theme: ThemeManager.shared)")
             XCTAssertTrue(readsPalette, "\(path) ne lit pas la palette injectée")
             XCTAssertFalse(observesThemeSingleton(source), "\(path) observe encore ThemeManager.shared")
+        }
+    }
+
+    func test_kitOnlyViews_neverReachTheThemeSingleton() throws {
+        for path in Self.kitOnlyViews {
+            let source = try code(path)
+            XCTAssertFalse(source.contains("ThemeManager"), "\(path) ne peint qu'avec le kit : aucune lecture de ThemeManager")
         }
     }
 }

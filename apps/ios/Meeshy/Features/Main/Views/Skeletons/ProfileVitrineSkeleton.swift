@@ -44,9 +44,8 @@ struct ProfileVitrineSkeleton: View {
 
     private func languagePills(_ widths: [Double]) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
-            ForEach(widths, id: \.self) { width in
-                MeeshySkeleton(shape: .pill(width: width))
-            }
+            ForEach(widths.map { AsyncRenderRow(id: $0, content: MeeshySkeleton(shape: .pill(width: $0))) },
+                    content: asyncRenderRowContent)
         }
     }
 

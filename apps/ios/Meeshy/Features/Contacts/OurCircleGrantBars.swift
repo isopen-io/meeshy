@@ -13,6 +13,19 @@ enum OurCircleTint {
     }
 }
 
+/// Le visage d'une personne de « Notre cercle » : sa photo, son contour et sa présence, tels que servis.
+struct OurCircleFace: Equatable {
+    var avatarURL: String?
+    var ring: ServedProfileDecorItem?
+    var presence: PresenceState?
+
+    @MainActor
+    static func of(_ user: MeeshyUser?, userId: String?) -> OurCircleFace {
+        OurCircleFace(avatarURL: user?.avatar, ring: user?.profileDecor?.avatarRing,
+                      presence: userId.flatMap { PresenceManager.shared.knownPresenceState(for: $0) })
+    }
+}
+
 /// « Lui t'accorde · Proche » puis ses six crans, la rangée des cercles où le commun s'allume, puis mes six crans et
 /// « Tu lui accordes · Sang ». Chaque accord est à la couleur de QUI l'accorde ; un accord connu seulement « au moins »
 /// laisse ses crans supérieurs en pointillé, rien n'est deviné au-delà.
@@ -30,7 +43,8 @@ struct OurCircleGrantBars: View {
     let myName: String
     let theirAccentHex: String?
     let myAccentHex: String
-    let myAvatarURL: String?
+    let theirFace: OurCircleFace
+    let myFace: OurCircleFace
     let theirTint: Color
     let myTint: Color
 
@@ -41,10 +55,10 @@ struct OurCircleGrantBars: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             caption(OurCircleCopy.theirSide(name: theirName), value: OurCircleCopy.grant(summary.theirs), tint: theirTint)
             notches(name: theirName, accentHex: theirAccentHex ?? DynamicColorGenerator.colorForName(theirName),
-                    avatarURL: nil, level: summary.theirs.level, isFloor: isFloor, tint: theirTint)
+                    face: theirFace, level: summary.theirs.level, isFloor: isFloor, tint: theirTint)
                 .accessibilityHidden(true)
             glyphs
-            notches(name: myName, accentHex: myAccentHex, avatarURL: myAvatarURL, level: summary.mine, isFloor: false,
+            notches(name: myName, accentHex: myAccentHex, face: myFace, level: summary.mine, isFloor: false,
                     tint: myTint)
                 .accessibilityHidden(true)
             caption(OurCircleCopy.mySide, value: CircleLevelNames.title(of: summary.mine), tint: myTint)
@@ -79,11 +93,12 @@ struct OurCircleGrantBars: View {
         }
     }
 
-    private func notches(name: String, accentHex: String, avatarURL: String?, level: RelationLevel, isFloor: Bool,
+    private func notches(name: String, accentHex: String, face: OurCircleFace, level: RelationLevel, isFloor: Bool,
                          tint: Color) -> some View {
         let reached = (levels.firstIndex(of: level) ?? 0) + 1
         return HStack(spacing: MeeshySpacing.xsPlus) {
-            MeeshyAvatar(name: name, context: .custom(Self.rowAvatar), accentColor: accentHex, avatarURL: avatarURL)
+            MeeshyAvatar(name: name, context: .custom(Self.rowAvatar), accentColor: accentHex, avatarURL: face.avatarURL,
+                         presenceState: face.presence, ring: face.ring)
             ForEach(levels.indices, id: \.self) { index in
                 notch(filled: index < reached, unknown: isFloor && index >= reached, tint: tint)
             }

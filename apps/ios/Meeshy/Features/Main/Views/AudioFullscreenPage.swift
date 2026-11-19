@@ -243,6 +243,16 @@ struct AudioFullscreenPage: View, Equatable {
         ) { event in appendTranslatedAudio(from: event) }
     }
 
+    private func profileSheet(_ user: ProfileSheetUser) -> some View {
+        UserProfileSheet(
+            user: user,
+            moodEmoji: moodEmojiProvider?(user.userId ?? ""),
+            onMoodTap: moodTapProvider.flatMap { $0(user.userId ?? "") },
+            presenceProvider: { knownPresence(of: $0) },
+            postsContent: ProfilePostsOpener.postsContent { selectedProfileUser = nil }, dependencies: .live
+        )
+    }
+
     // MARK: - Dispositions
 
     /// **Les paroles défilent SOUS le reste, en flou, jusqu'à sortir de l'écran**

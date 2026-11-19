@@ -39,4 +39,5 @@
     <string name="bubble_a11y_pinned">Fissato</string>
     <string name="bubble_a11y_ephemeral">Messaggio a autodistruzione</string>
     <string name="skeleton_link_row_loading">Caricamento di un link</string>
+    <string name="talkie_send_voice">Il walkie-talkie ora non passa: invia un messaggio vocale.</string>
 </resources>

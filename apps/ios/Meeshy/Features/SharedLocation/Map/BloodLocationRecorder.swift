@@ -10,8 +10,8 @@ protocol BloodLocationFixReading: AnyObject {
 
 /// Ce que le relevé doit savoir du compte avant de partir : la fonction ouverte par la passerelle, et un Sang au moins.
 struct BloodLocationRecorderContext: Sendable {
-    var isEnabled: @Sendable () async -> Bool
-    var links: @Sendable () async -> [RelationLink]
+    var isEnabled: @concurrent @Sendable () async -> Bool
+    var links: @concurrent @Sendable () async -> [RelationLink]
 
     static let live = BloodLocationRecorderContext(
         isEnabled: { (try? await RelationsService.shared.config())?.bloodLocationEnabled ?? false },

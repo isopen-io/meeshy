@@ -58,7 +58,7 @@ public extension EnvironmentValues {
 struct RelationOpenCommunitiesSection: View {
     let communities: [ProfileOpenCommunity]
     let tint: Color
-    let join: (String) async -> Bool
+    let join: @MainActor (String) async -> Bool
     let onOpen: ((String) -> Void)?
 
     @State private var joins = RelationCommunityJoins()
@@ -117,7 +117,7 @@ struct RelationOpenCommunitiesSection: View {
     @ViewBuilder
     private func chevron(isShown: Bool) -> some View {
         if isShown {
-            Image(systemName: "chevron.right")
+            Image(systemName: "chevron.forward")
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .foregroundStyle(.tertiary)
                 .accessibilityHidden(true)

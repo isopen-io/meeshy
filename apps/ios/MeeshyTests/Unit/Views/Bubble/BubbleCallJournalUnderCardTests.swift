@@ -398,7 +398,8 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
     func test_transcriptSection_togglesAtTheFootOfTheJournal_notInTheHeader() throws {
         let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
         XCTAssertFalse(section.contains("character.bubble.fill"), "Plus d'icône en tête de section.")
-        guard let journal = section.range(of: "ForEach(Array(journal.enumerated())"),
+        XCTAssertTrue(section.contains("ForEach(Array(journal.enumerated())"), "Le journal énumère ses phrases et ses captures.")
+        guard let journal = section.range(of: "journalList"),
               let toggle = section.range(of: "originalToggle") else { return XCTFail("bascule absente") }
         XCTAssertLessThan(journal.lowerBound, toggle.lowerBound, "La bascule est au pied du journal.")
         XCTAssertTrue(section.contains("CallJournalAfterCall.offersOriginalToggle("), "Sans phrase traduite, pas de bascule.")

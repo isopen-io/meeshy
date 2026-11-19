@@ -30,7 +30,7 @@ extension TrackingLinkDetailView {
     private func inlineMap(_ map: TrackingVisitorMapState) -> some View {
         TrackingVisitorMapView(zones: map.zones, isInteractive: false)
             .frame(height: Self.mapHeight)
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous))
+            .clipShape(MeeshyRadius.card(MeeshyRadius.xxl))
             .overlay(alignment: .bottomLeading) { countriesBadge(map).padding(MeeshySpacing.md) }
             .overlay(alignment: .bottomTrailing) {
                 MeeshyButton(TrackingDetailCopy.enlargeMap, systemImage: "arrow.up.left.and.arrow.down.right",
