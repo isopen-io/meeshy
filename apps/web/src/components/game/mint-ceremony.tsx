@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
+import { GLORY_POINTS, gloryAfterGain, type GloryAfterGain } from '@meeshy/shared/utils/game/glory';
 import { meeshDisplayEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { mintCeremonyPlan, mintRefusalReason, MINT_CEREMONY_STRIKE_READY_MS, type MintCeremonyPlan, type MintRefusalReason } from '@meeshy/shared/utils/game/mint-ceremony';
 
@@ -22,7 +22,8 @@ import {
 import { prefersReducedMotion, vibrate, type HapticName } from '@/lib/game/haptics';
 import type { StrikeGate } from '@/lib/game/strike-gate';
 import { formatGameNumber, loadGameCatalogParts, translateGame } from '@/lib/i18n-game-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { rankLabel } from '@/lib/view/game-copy';
 
 import { GameBird } from './game-bird';
 import { MeeshCoin } from './meesh-coin';
@@ -66,12 +67,26 @@ const browserClock: CeremonyClock = {
   cancel: (id) => cancelAnimationFrame(id),
 };
 
+/**
+ * LA GLOIRE DE LA FRAPPE (#19855, tranche de #17394) : la Gloire du joueur AVANT le geste, celle que l'aperçu promet
+ * (`mint.gloryGained`) et le Mythe servi. La scène finit sur la gloire gagnée ET le pas vers le rang suivant ; sans
+ * elle (ancien serveur), « +1 000 de gloire » seul, comme avant.
+ */
+export type MintCeremonyGlory = { readonly before: number; readonly gained: number; readonly mythic: boolean };
+
+const gloryStepText = (step: GloryAfterGain, language: InterfaceLanguage): string =>
+  step.kind === 'risen'
+    ? translateGame(language, 'game.frappe.risen', { rank: rankLabel(step.rank, step.division5, language) })
+    : translateGame(language, 'game.frappe.glory_toward', { glory: formatGameNumber(language, step.gloryMissing), rank: rankLabel(step.rank, step.division5, language) });
+
 export type MintCeremonyProps = {
   /** La LOI de la pièce (`meeshEdition`) : la nuit, les coups, les aïeux, la fête. Le DESSIN (matière, revers, poussières) se lit sur son numéro (#11483). */
   readonly edition: MeeshEdition;
   /** Le numéro de la pièce en train d'être frappée (l'aperçu) ; la confirmation de la passerelle le remplace. */
   readonly number: number;
   readonly gate: StrikeGate;
+  /** La gloire du joueur avant la frappe et celle qu'elle apporte ; absente devant un ancien serveur. */
+  readonly glory?: MintCeremonyGlory | null | undefined;
   /** Le contenant où la pièce file à la fin (la scène de frappe de l'écran). Absent : vers le haut. */
   readonly target?: () => Element | null;
   readonly onDone: () => void;
@@ -182,7 +197,18 @@ const swallowNextClick = (): void => {
   window.addEventListener('click', swallow, true);
 };
 
-export function MintCeremony({ edition, number: shownNumber, gate, target, onDone, reducedMotion, modest: modestProp, clock = browserClock, haptic = (name) => void vibrate(name) }: MintCeremonyProps) {
+export function MintCeremony({
+  edition,
+  number: shownNumber,
+  gate,
+  glory = null,
+  target,
+  onDone,
+  reducedMotion,
+  modest: modestProp,
+  clock = browserClock,
+  haptic = (name) => void vibrate(name),
+}: MintCeremonyProps) {
   const reduced = reducedMotion ?? prefersReducedMotion();
   const modest = modestProp ?? isModestDevice();
   const language = currentInterfaceLanguage();
@@ -204,7 +230,7 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
 
   useEffect(() => {
     let alive = true;
-    loadGameCatalogParts(language, ['frappe']).then(
+    loadGameCatalogParts(language, ['frappe', 'banner']).then(
       () => alive && setReadyLanguage(language),
       () => undefined,
     );
@@ -375,6 +401,8 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
     };
   const text = (render: () => string): string => (ready ? render() : '');
   const [meeParty, meoParty] = PARTY[edition];
+  const gained = glory === null || glory.gained <= 0 ? GLORY_POINTS.mint : glory.gained;
+  const gloryStep = glory === null ? null : gloryAfterGain({ before: glory.before, gained, mythic: glory.mythic });
   const say = text(() => (refusal !== null ? translateGame(language, REFUSAL_KEY[refusal]) : translateGame(language, SAY_KEY[edition], { number: formatGameNumber(language, number) })));
 
   const scene = (
@@ -447,7 +475,8 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
           </div>
         </div>
         <div ref={bind('glory')} data-ceremony-glory="">
-          {text(() => translateGame(language, 'game.frappe.glory', { glory: formatGameNumber(language, GLORY_POINTS.mint) }))}
+          <span data-ceremony-glory-gained="">{text(() => translateGame(language, 'game.frappe.glory', { glory: formatGameNumber(language, gained) }))}</span>
+          {gloryStep === null ? null : <small data-ceremony-glory-step="">{text(() => gloryStepText(gloryStep, language))}</small>}
         </div>
       </div>
       <div data-ceremony-hint="">{text(() => translateGame(language, 'game.frappe.skip'))}</div>
