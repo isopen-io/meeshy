@@ -1526,3 +1526,13 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   retrait reste en attente). Restent assumés : une relecture en échec lève l'attente (critère de l'issue), une liste
   d'avant la marque restaurée ailleurs publie encore (décision au porteur).
 - Prochain lot recommandé : fusion de cette PR, plafond `untilStopped` de `listOnlyState`, #19682 une fois décidée.
+
+## 2026-11-19 — réveil de 11 h 14 : #19864 (relevé avant relecture, #19767) recalée sur dev
+
+- Reprise : #19864 toujours ouverte, tête d8648e64d intacte ; la CI des PR reste gelée (30 vérifications « skipped »).
+  #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
+- `origin/dev` (fd1bb9f46 : pistes vocales de post, profil iOS, pbxproj régénéré) fusionnée à la main, sans conflit et
+  sans fichier commun avec le lot.
+- Gardes iOS sur l'arbre fusionné : règles maison (42) rc=0, cohésion rc=0, couleurs d'accent rc=0, et inscription des
+  tests (2 055) rc=0 — le rouge hérité de `dev` (AnchoredSheetNamingGuardTests) est soldé par a14f751ff.
+- Prochain lot recommandé : fusion de #19864 au dégel, puis le plafond `untilStopped` de `listOnlyState`, #19682 décidée.
