@@ -49,10 +49,8 @@
         },
         { "androidName": "talkie_send_voice_copy", "status": "android-only" },
         {
-          "catalog": "app",
-          "iosKey": "talkie.send.voice",
           "androidName": "talkie_send_voice",
-          "status": "adopted"
+          "status": "android-only"
         },
         { "androidName": "talkie_send_e2ee", "status": "android-only" },
         {

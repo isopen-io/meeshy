@@ -17,6 +17,7 @@ public struct MeeshySkeleton: View {
         MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
     }
     @State private var hasWaitedDelay = false
+    @State private var lineAvailableWidth: Double = 0
 
     public init(shape: MeeshySkeletonShape) {
         self.shape = shape
@@ -36,11 +37,12 @@ public struct MeeshySkeleton: View {
         let fixed = MeeshySkeletonRecipe.size(of: shape, availableWidth: 0)
         switch shape {
         case .line:
-            GeometryReader { proxy in
-                let size = MeeshySkeletonRecipe.size(of: shape, availableWidth: Double(proxy.size.width))
-                silhouette(size: size).frame(width: CGFloat(size.width), height: CGFloat(size.height))
-            }
-            .frame(height: CGFloat(fixed.height))
+            let size = MeeshySkeletonRecipe.size(of: shape, availableWidth: lineAvailableWidth)
+            silhouette(size: size)
+                .frame(width: CGFloat(size.width), height: CGFloat(size.height))
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .frame(height: CGFloat(fixed.height), alignment: .topLeading)
+                .onGeometryChange(for: Double.self) { Double($0.size.width) } action: { lineAvailableWidth = $0 }
         case .pill, .circle:
             silhouette(size: fixed).frame(width: CGFloat(fixed.width), height: CGFloat(fixed.height))
         case .ticket:

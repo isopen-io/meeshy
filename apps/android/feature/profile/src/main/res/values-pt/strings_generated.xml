@@ -11,7 +11,6 @@
     <string name="profile_action_decline_connection">Recusar conexão</string>
     <string name="profile_action_report">Denunciar</string>
     <string name="profile_action_resend_request">Reenviar solicitação</string>
-    <string name="profile_action_send_message">Enviar uma mensagem</string>
     <string name="profile_activity_title">Atividade</string>
     <string name="profile_avatar_edit">Editar foto do perfil</string>
     <string name="profile_bio_label">Bio</string>
@@ -61,7 +60,6 @@
     <string name="profile_report_quick_reason_violence">Violência</string>
     <string name="profile_save">Salvar</string>
     <string name="profile_save_error">Erro ao salvar</string>
-    <string name="profile_section_about">Sobre</string>
     <string name="profile_section_actions">Ações</string>
     <string name="profile_section_contact">CONTATO</string>
     <string name="profile_section_identity">IDENTIDADE</string>
@@ -77,11 +75,9 @@
     <string name="profile_stats_conversations">Conversas</string>
     <string name="profile_stats_daysShort">Dias</string>
     <string name="profile_stats_friends">Amigos</string>
-    <string name="profile_stats_memberSince">Membro desde</string>
     <string name="profile_stats_messages">Mensagens</string>
     <string name="profile_stats_messagesShort">Mensagens</string>
     <string name="profile_stats_title">Estatísticas</string>
-    <string name="profile_status_connected">Conectados</string>
     <string name="profile_tab_conversations">Conversas</string>
     <string name="profile_tab_posts">Posts</string>
     <string name="profile_title">Perfil</string>
@@ -92,7 +88,6 @@
     <string name="profile_username">Nome de usuário</string>
     <string name="profile_verified">Verificado</string>
     <string name="profile_view_posts">Publicações</string>
-    <string name="profile_voice_title">Voz</string>
     <string name="report_close">Fechar</string>
     <string name="report_details_header">Detalhes (opcional)</string>
     <string name="report_error">Erro ao enviar a denúncia</string>
@@ -111,7 +106,6 @@
     <string name="shared_location_precision_exact">Localização exata</string>
     <string name="shared_location_precision_neighborhood">No nível do bairro</string>
     <string name="shared_location_share_action">Compartilhar minha localização</string>
-    <string name="shared_location_share_action_a11y">Compartilhar minha localização com %1$s</string>
     <string name="shared_location_share_active">%1$s vê sua localização (%2$s) até %3$s</string>
     <string name="shared_location_share_confirm">Compartilhar</string>
     <string name="shared_location_share_denied">Permita a localização nos Ajustes para compartilhar sua localização</string>

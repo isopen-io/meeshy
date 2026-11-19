@@ -10,7 +10,7 @@ final class ProfileCoverAndNextCirclesTests: XCTestCase {
     // MARK: - Plein écran et retour
 
     func test_presentationStyle_saysBackInFullScreen_andCloseInASheet() {
-        XCTAssertEqual(ProfilePresentationStyle.cover.leadingSymbol, "chevron.left")
+        XCTAssertEqual(ProfilePresentationStyle.cover.leadingSymbol, "chevron.backward")
         XCTAssertEqual(ProfilePresentationStyle.sheet.leadingSymbol, "chevron.down")
     }
 

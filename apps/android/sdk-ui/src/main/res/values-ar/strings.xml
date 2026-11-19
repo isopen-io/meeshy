@@ -39,4 +39,5 @@
     <string name="bubble_a11y_pinned">مثبّتة</string>
     <string name="bubble_a11y_ephemeral">رسالة ذاتية الحذف</string>
     <string name="skeleton_link_row_loading">جارٍ تحميل رابط</string>
+    <string name="talkie_send_voice">لا يمكن إيصال جهاز اللاسلكي الآن: أرسل رسالة صوتية بدلًا من ذلك.</string>
 </resources>

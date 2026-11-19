@@ -34,7 +34,9 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
         "call": "meeshy://call?contactId=conv1&type=video",
         // Widget « Mes proches » et activité d'une position partagée : la
         // vitrine d'une personne, par son pseudo (#19524).
-        "u": "meeshy://u/leo.m"
+        "u": "meeshy://u/leo.m",
+        // Widget « Mon lien » : un appui ouvre mes liens.
+        "links": "meeshy://links"
     ]
 
     /// Hosts émis SANS destination, et pourquoi ils le restent. Chacun demande
