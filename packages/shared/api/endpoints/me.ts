@@ -148,6 +148,15 @@ export const gameShowcaseOrder = '/api/v1/me/game/showcase/order';
 /** PUT /api/v1/me/game/visibility */
 export const gameVisibility = '/api/v1/me/game/visibility';
 
+/** POST /api/v1/me/health/fall */
+export const healthFall = '/api/v1/me/health/fall';
+
+/** POST /api/v1/me/health/fall/ok */
+export const healthFallOk = '/api/v1/me/health/fall/ok';
+
+/** GET · PUT /api/v1/me/health/fall/settings */
+export const healthFallSettings = '/api/v1/me/health/fall/settings';
+
 /** POST /api/v1/me/live-activity-tokens */
 export const liveActivityTokens = '/api/v1/me/live-activity-tokens';
 

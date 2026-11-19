@@ -43,6 +43,8 @@ struct ConnectionBanner: View {
     @ObservedObject private var inactivityAnnouncements: InactivityAnnouncementFeed
     /// « En appel » d'un Sang et sa fin (#18753) : même nature, même rotation, même extinction.
     @ObservedObject private var phoneCallAnnouncements: PhoneCallAnnouncementFeed
+    /// La chute détectée d'un Sang et son retour (#18748) : même nature, même rotation, même extinction.
+    @ObservedObject private var fallAnnouncements: FallAnnouncementFeed
     @StateObject private var statusVM = ConnectionStatusViewModel()
     @StateObject private var syncPillVM = SyncPillViewModel()
     /// Source des frappes hors conversation. Injectée EXPLICITEMENT par
@@ -152,13 +154,15 @@ struct ConnectionBanner: View {
         batteryAnnouncements: BatteryAnnouncementFeed = .shared,
         phoneAnnouncements: PhoneReachabilityAnnouncementFeed = .shared,
         inactivityAnnouncements: InactivityAnnouncementFeed = .shared,
-        phoneCallAnnouncements: PhoneCallAnnouncementFeed = .shared
+        phoneCallAnnouncements: PhoneCallAnnouncementFeed = .shared,
+        fallAnnouncements: FallAnnouncementFeed = .shared
     ) {
         self.inAppNotices = inAppNotices
         self.batteryAnnouncements = batteryAnnouncements
         self.phoneAnnouncements = phoneAnnouncements
         self.inactivityAnnouncements = inactivityAnnouncements
         self.phoneCallAnnouncements = phoneCallAnnouncements
+        self.fallAnnouncements = fallAnnouncements
         self.isStoryViewerPresenting = isStoryViewerPresenting
         self.onItemTap = onItemTap
         self.activeConversationId = activeConversationId
@@ -249,6 +253,7 @@ struct ConnectionBanner: View {
             ))
         }
 
+        result.append(contentsOf: fallAnnouncements.entries)
         result.append(contentsOf: batteryAnnouncements.entries)
         result.append(contentsOf: phoneAnnouncements.entries)
         result.append(contentsOf: inactivityAnnouncements.entries)
