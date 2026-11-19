@@ -27,14 +27,30 @@ struct MeeshyCollapsingHeroBannerInBarTests {
         #expect(MeeshyCollapsingHeroRecipe.bannerOpacity(collapsed, keepsBannerInBar: false) == 0)
     }
 
-    @Test("coins : droits dépliée, ceux de la barre une fois repliée ; toujours droits pour une bannière effacée")
-    func corners_followTheGlass() {
-        let open = MeeshyCollapsingHeroRecipe.resolve(progress: 0)
-        let closed = MeeshyCollapsingHeroRecipe.resolve(progress: 1)
-        #expect(MeeshyCollapsingHeroRecipe.bannerCornerRadius(open, keepsBannerInBar: true) == 0)
-        #expect(MeeshyCollapsingHeroRecipe.bannerCornerRadius(closed, keepsBannerInBar: true)
+    @Test("#19925 : la fiche se replie en barre DROITE — bannière et verre sans coin arrondi, dépliée comme repliée")
+    func corners_profileBarIsSquare() {
+        for progress in Self.steps {
+            let recipe = MeeshyCollapsingHeroRecipe.resolve(progress: progress)
+            #expect(MeeshyCollapsingHeroRecipe.bannerCornerRadius(recipe, keepsBannerInBar: true) == 0)
+            #expect(MeeshyCollapsingHeroRecipe.bannerCornerRadius(recipe, keepsBannerInBar: false) == 0)
+        }
+        #expect(MeeshyCollapsingHeroRecipe.glassCornerRadius(keepsBannerInBar: true) == 0)
+        #expect(MeeshyCollapsingHeroRecipe.glassCornerRadius(keepsBannerInBar: false)
                 == MeeshyCollapsingHeroRecipe.barCornerRadius)
-        #expect(MeeshyCollapsingHeroRecipe.bannerCornerRadius(closed, keepsBannerInBar: false) == 0)
+    }
+
+    @Test("#19925 : le nom descend sous ce que le cadre de l'avatar peint sous son bord, jamais moins de 10")
+    func titleGap_clearsTheAvatarFrame() {
+        #expect(MeeshyCollapsingHeroRecipe.titleGap(avatarSpill: 0) == 10)
+        #expect(MeeshyCollapsingHeroRecipe.titleGap(avatarSpill: 37) == 41)
+        #expect(MeeshyCollapsingHeroRecipe.titleGap(avatarSpill: .nan) == 10)
+    }
+
+    @Test("#19925 : l'avatar s'écarte du bord autant que son cadre déborde, jamais moins de 20")
+    func avatarInset_keepsTheFrameOnScreen() {
+        #expect(MeeshyCollapsingHeroRecipe.avatarInset(avatarSpill: 0) == 20)
+        #expect(MeeshyCollapsingHeroRecipe.avatarInset(avatarSpill: 37) == 45)
+        #expect(MeeshyCollapsingHeroRecipe.avatarInset(avatarSpill: .infinity) == 20)
     }
 
     @Test("ma fiche et celle d'un autre gardent leur bannière dans la barre")
