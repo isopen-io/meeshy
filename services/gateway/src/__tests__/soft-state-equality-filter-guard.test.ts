@@ -106,7 +106,7 @@ const SRC_DIR = join(__dirname, '..');
  * `Notification`, `Post`, `ShareLink`, `UserDevice`, `Sound`) et le rang
  * d'activité (`Conversation.lastActivityAt`, #19800).
  */
-const COLONNES = new Set(['leftAt', 'bannedAt', 'expiresAt', 'lastActivityAt']);
+const COLONNES = new Set(['leftAt', 'bannedAt', 'expiresAt', 'lastActivityAt', 'messageId']);
 
 /**
  * **Une colonne n'est pas un piège sur tous les modèles qui la portent**, et
@@ -140,6 +140,12 @@ const COLONNES = new Set(['leftAt', 'bannedAt', 'expiresAt', 'lastActivityAt']);
  */
 const MODELES_PAR_COLONNE: Readonly<Record<string, readonly string[]>> = {
   lastActivityAt: ['conversation'],
+  // `messageId` est porté par une douzaine de modèles, et il n'est OPTIONNEL
+  // que sur `MessageAttachment` (#19801) — `AttachmentStatusEntry`,
+  // `AttachmentReaction`, `AttachmentFileAtRest` le déclarent REQUIS, où
+  // l'égalité nue est exacte et `isSet` ne compile même pas (cycle 182,
+  // constat A). La portée se mesure, elle ne s'absout pas par une phrase.
+  messageId: ['messageAttachment'],
 };
 
 /** Ce site est-il sur un modèle où sa colonne est OPTIONNELLE — donc piégeuse ? */
@@ -167,6 +173,26 @@ const DISCIPLINE_D_ECRITURE: Readonly<Record<string, { readonly sites: number; r
     + 'notification créée. Y ajouter une troisième branche d’absence toucherait un '
     + 'chemin chaud pour couvrir les seules lignes ANTÉRIEURES à la colonne, '
     + 'qu’aucun chemin vivant ne crée : la forme ATTESTÉE gagne (cycle 180, constat I).' },
+  // `sites` compte les LECTURES nues de ce fichier pour cette colonne (une), pas
+  // les créateurs (cinq) : la clé est un FICHIER, et le compte existe pour qu'une
+  // SECONDE égalité nue posée ici n'entre pas sous l'absolution écrite pour sa
+  // voisine. J'ai d'abord écrit 5, et le témoin l'a dit — un champ compte ce que
+  // son témoin compte, jamais ce que son nom suggère.
+  'services/MaintenanceService.ts#messageId': { sites: 1, raison:
+    'MessageAttachment.messageId a CINQ créateurs, et les cinq posent la colonne '
+    + 'depuis #19801 — `copyAttachments`, `MessageProcessor` (un identifiant réel), '
+    + '`UploadProcessor` ×2 (`messageId || null`, qui ferme aussi le cas `undefined`) '
+    + 'et `tus-handler` (`messageId: null`, la ligne que #19801 a posée). La '
+    + 'discipline n’est pas AFFIRMÉE ici : elle est tenue par son propre cliquet, '
+    + '`attachment-pending-key-guard`, inventaire d’infractions VIDE, qui rougit sur '
+    + 'un créateur neuf qui l’omettrait ET sur une valeur pouvant rendre `undefined` '
+    + '(que Prisma ignore comme une clé absente). '
+    + 'Et la troisième branche est REFUSÉE ici pour une raison qui n’est pas de '
+    + 'performance : `...unsetOrNull` ramasserait l’ARRIÉRÉ laissé par `tus-handler` '
+    + 'AVANT #19801 — une population que personne n’a mesurée — et ce balayage '
+    + 'SUPPRIME la ligne et ses octets, sans borne ni pagination. C’est une purge de '
+    + 'données de production, qui attend le feu vert du porteur (directive du '
+    + '2026-10-03). Son sort est la seconde moitié de #19801.' },
 };
 
 /**
