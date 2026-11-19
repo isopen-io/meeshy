@@ -90873,43 +90873,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لعبته"
+            "value": "أسطورته"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sein Spiel"
+            "value": "Seine Legende"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Their game"
+            "value": "Their Legend"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Su juego"
+            "value": "Su Leyenda"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Son jeu"
+            "value": "Sa Légende"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il suo gioco"
+            "value": "La sua Leggenda"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O jogo dele"
+            "value": "A Lenda dele"
           }
         }
       }

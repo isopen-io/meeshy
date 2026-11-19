@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Les mots des blocs de la Vitrine d'un autre (#19416, planche `Autre-Vitrine`)
 //
-// « Avec Léo », « En direct · Entre Proches », « Dernières infos », « Son jeu » et le fuseau « UTC+0 · 16:42 chez Léo » :
+// « Avec Léo », « En direct · Entre Proches », « Dernières infos », « Sa Légende » et le fuseau « UTC+0 · 16:42 chez Léo » :
 // une seule source, testée, pour les trois blocs et le fuseau d'« À propos ». Isolé au MainActor comme `Bundle.module`
 // dans MeeshyUI ; ce qui ne lit aucun catalogue reste `nonisolated`.
 
@@ -144,10 +144,11 @@ enum ProfileVitrineCopy {
         (Double(level) / 100).formatted(.percent.precision(.fractionLength(0)).locale(locale))
     }
 
-    // MARK: Son jeu
+    // MARK: Sa Légende
 
+    /// « Sa Légende » : le jeu d'un autre porte le nom que sa fiche porte chez moi (« Ma Légende »).
     static var gameTitle: String {
-        String(localized: "profile.vitrine.game.title", defaultValue: "Son jeu", bundle: .module)
+        String(localized: "profile.vitrine.game.title", defaultValue: "Sa Légende", bundle: .module)
     }
 
     /// « Niveau 31 · rang ».

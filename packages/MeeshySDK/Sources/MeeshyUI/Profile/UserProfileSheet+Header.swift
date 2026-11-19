@@ -109,10 +109,6 @@ extension UserProfileSheet {
                         .allowsHitTesting(false)
                 }
             }
-            .overlay(alignment: .bottom) {
-                bannerGameBadge
-                    .padding(.bottom, CGFloat(ProfileHeroPlan.bannerBottomInset))
-            }
     }
 
     @ViewBuilder
@@ -158,18 +154,6 @@ extension UserProfileSheet {
             return url
         }
         return nil
-    }
-
-    /// #10093, #10231, #10601 — le niveau et le rang du membre, posés sur sa bannière par l'app (`profileGameSection`) :
-    /// ce que SA visibilité autorise, rien sinon. L'app occupe toute la bannière — le niveau à l'angle bas du début, le
-    /// rang à l'angle bas de la fin, leurs cadres posés sur le bord bas, loin du bouton Fermer. Le doigt le traverse —
-    /// toucher la bannière l'ouvre toujours en plein écran.
-    @ViewBuilder
-    var bannerGameBadge: some View {
-        if !isBlocked, !isBlockedByTarget, let userId = resolvedUserId, !userId.isEmpty, let gameSection {
-            gameSection.build(userId, displayUser.displayName ?? displayUser.username)
-                .allowsHitTesting(false)
-        }
     }
 
     /// Ce que la bannière peint (#10933) : la photo gagne toujours, le design équipé ne vient qu'à son défaut.

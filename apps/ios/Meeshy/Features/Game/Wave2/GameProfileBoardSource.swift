@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - « Son jeu » dans la Vitrine d'un autre (#19416, planche `Autre-Vitrine`)
+// MARK: - « Sa Légende » dans la Vitrine d'un autre (#19416, planche `Autre-Vitrine`)
 //
 // Le jeu d'un membre n'était qu'un badge sur sa bannière (#10093) ; la Vitrine le dit désormais en entier : son niveau
 // dans un médaillon (K45), son rang, ses étincelles quand elles me sont servies, la progression du niveau (K42) et sa
@@ -46,7 +46,7 @@ enum GameProfileBoardRules {
     }
 }
 
-/// La carte « Son jeu » qu'injecte l'app dans la Vitrine (`ProfileGameSection.card`).
+/// La carte « Sa Légende » qu'injecte l'app dans la Vitrine (`ProfileGameSection.card`).
 struct GameProfileBoardSource: View {
     let userId: String
     let tint: Color

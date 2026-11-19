@@ -85,4 +85,37 @@ final class ProfileCoverAndNextCirclesTests: XCTestCase {
         XCTAssertGreaterThan(midway, 0)
         XCTAssertLessThan(midway, 1)
     }
+
+    // MARK: - Le jeu d'un autre se dit une fois (#19773)
+
+    /// La bannière d'un autre ne porte plus ni niveau ni gloire : « Sa Légende », dans la Vitrine, les dit seule.
+    func test_otherBanner_carriesNoGame_theVitrineCardSaysItOnce() throws {
+        let header = try profileSource("UserProfileSheet+Header.swift")
+        XCTAssertFalse(header.contains("gameSection"), "la bannière d'un autre ne redit pas son jeu")
+        XCTAssertFalse(try profileSource("ProfileGameSection.swift").contains("build:"), "l'emplacement n'offre plus de bannière")
+        XCTAssertTrue(try profileSource("UserProfileSheet+VitrineBlocks.swift").contains("gameSection?.card"))
+    }
+
+    /// « Sa Légende » en miroir de « Ma Légende », dans les sept langues.
+    func test_gameCard_isNamedTheirLegend_inEveryLanguage() throws {
+        let catalog = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Resources/Localizable.xcstrings")
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: catalog)) as? [String: Any])
+        let strings = try XCTUnwrap(root["strings"] as? [String: Any])
+        let entry = try XCTUnwrap(strings["profile.vitrine.game.title"] as? [String: Any])
+        let localizations = try XCTUnwrap(entry["localizations"] as? [String: [String: [String: String]]])
+        XCTAssertEqual(localizations["fr"]?["stringUnit"]?["value"], "Sa Légende")
+        XCTAssertEqual(localizations.count, 7)
+        XCTAssertFalse(ProfileVitrineCopy.gameTitle.isEmpty)
+    }
+
+    private func profileSource(_ name: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Profile/\(name)")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
 }
