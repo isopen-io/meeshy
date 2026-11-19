@@ -25,6 +25,9 @@ public protocol CommunityDetailModeling: ObservableObject {
     var isAdmin: Bool { get }
     var isLoading: Bool { get }
     var loadFailure: CommunityLoadFailure? { get }
+    var requiresJoinApproval: Bool { get }
+    var joinRequestPending: Bool { get }
+    var joinRefusal: CommunityJoinRefusal? { get }
 
     func load() async
     func joinCommunity() async

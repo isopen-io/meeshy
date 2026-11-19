@@ -13,7 +13,7 @@ public protocol CommunityServiceProviding: Sendable {
     func addMember(communityId: String, userId: String, role: MemberRole) async throws -> APICommunityMember
     func updateMemberRole(communityId: String, memberId: String, role: MemberRole) async throws -> APICommunityMember
     func removeMember(communityId: String, userId: String) async throws
-    func join(communityId: String) async throws -> APICommunityMember
+    func join(communityId: String) async throws -> CommunityJoinOutcome
     func leave(communityId: String) async throws
     func invite(communityId: String, userId: String) async throws -> APICommunityMember
     func invite(communityId: String, userIds: [String]) async throws
@@ -136,10 +136,13 @@ public final class CommunityService: CommunityServiceProviding, Sendable {
 
     // MARK: - Join Community
 
-    public func join(communityId: String) async throws -> APICommunityMember {
-        let response: APIResponse<APICommunityMember> = try await api.request(
+    /// Annonce `acceptsPending` (#19869) : une communauté qui valide chaque
+    /// entrée rend une demande en attente (202) au lieu d'un 409 que seul un
+    /// ancien client reçoit encore.
+    public func join(communityId: String) async throws -> CommunityJoinOutcome {
+        let response: APIResponse<CommunityJoinOutcome> = try await api.post(
             CommunitiesEndpoint.byIdJoin(id: communityId),
-            method: "POST"
+            body: JoinCommunityRequest(acceptsPending: true)
         )
         return response.data
     }

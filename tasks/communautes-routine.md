@@ -606,6 +606,16 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - 15:29 : `ci.yml` (`workflow_dispatch`) VERT sur `2d4149e7c`. `dev` ayant reçu 21 commits (appels web, position partagée, relations ; aucun chemin du lot), `dev` `07609bfa9` refusionnée sans conflit ; rejoués : shared `__tests__/ci/` 216 verts, web `tsc --noEmit` vert, suites communautés + appels (182 fichiers, 2 632 tests) vertes, catalogue 269 = référence.
 - Prochain lot recommandé : iOS #19877 (les intendants tranchent les demandes), puis #19869 / #19879.
 
+## 2026-11-19 — réveil 15:38 UTC
+
+- Début du run : #19880 (#19871, intendants web) ouverte, poussée à 15:31 par une autre session avec une CI dispatchée en file : vivante, cédée.
+- Lot : #19869 — iOS dit « Demander à rejoindre » puis « Demande envoyée » sur une communauté qui valide chaque entrée.
+- SDK : `CommunityService.join` annonce `acceptsPending` et rend `CommunityJoinOutcome` (`.joined(membre)` ou `.pending(requestId)`, la réponse 202 se distinguant d'une rangée de membre par `requestId`) ; `CommunityJoinRefusal.classify` lit 403 `COMMUNITY_JOIN_COOLDOWN` par son code ; `APICommunity` décode `requiresJoinApproval` et `currentUserJoinRequest` (servis depuis #19868).
+- App : `CommunityDetailViewModel` — « Demande envoyée » dès le toucher, défaite sur un échec ; une demande ne fait membre de rien, ne relit pas la fiche et n'entre pas dans « mes communautés » ; `community:member-joined` sur soi fait membre et efface la demande ; un cache qui croyait l'entrée directe lit la demande servie. La porte « Rejoindre » de la fiche de profil ne compte plus une demande comme une adhésion.
+- Écran : la demande envoyée est un statut (pas un bouton), avec « Un administrateur ou un modérateur doit l'accepter » ; le délai d'un refus récent se dit. Quatre clés au catalogue MeeshyUI en sept langues, reprises du web.
+- Témoins : SDK `CommunityServiceTests` (+5), app `CommunityDetailViewModelTests` (+8). Preuve : CI iOS de la PR. Gardes iOS locales : `check_house_rules.sh` (42 règles, après correction d'une police fixe), `check_cohesion_budget.sh`, `check_test_registration.sh` (2 056), `check-accent-color-hardcoding.mjs` (168 / 408 = références) verts.
+- Prochain lot recommandé : #19877 (intendants sur iOS).
+
 ## 2026-11-19 — réveil 17:38 UTC
 
 - Début du run : #19903 (#19869, iOS « Demande envoyée ») ouverte, poussée à 16:55 par une autre session, ses `workflow_dispatch` en file : vivante, cédée.
