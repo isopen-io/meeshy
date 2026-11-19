@@ -139,7 +139,17 @@ export class EncryptionService implements AtRestKeyring {
   private initialized = false;
   private cacheCleanupInterval?: NodeJS.Timeout;
   // Lock map for atomic key generation - prevents TOCTOU race condition
-  private keyGenerationLocks: Map<string, { promise: Promise<string>; resolve: (value: string) => void }> = new Map();
+  /**
+   * #19786 — le verrou porte son `reject` autant que son `resolve`. Sans lui, un
+   * appelant entré par `return existingLock.promise` détenait une promesse que
+   * l'échec de la génération ne réglait JAMAIS : ni résolue, ni rejetée, aucun
+   * minuteur pour la libérer. Sur une requête HTTP, une réponse qui n'arrive pas.
+   */
+  private keyGenerationLocks: Map<string, {
+    promise: Promise<string>;
+    resolve: (value: string) => void;
+    reject: (reason: unknown) => void;
+  }> = new Map();
 
   constructor(prisma: PrismaClient) {
     this.keyVault = new ServerKeyVault(prisma);
@@ -200,11 +210,21 @@ export class EncryptionService implements AtRestKeyring {
 
       // ATOMIC: Create lock entry SYNCHRONOUSLY before any await
       // This ensures only one caller can start key generation
-      let resolveLock: (value: string) => void;
-      const lockPromise = new Promise<string>((resolve) => {
+      let resolveLock!: (value: string) => void;
+      let rejectLock!: (reason: unknown) => void;
+      const lockPromise = new Promise<string>((resolve, reject) => {
         resolveLock = resolve;
+        rejectLock = reject;
       });
-      this.keyGenerationLocks.set(conversationId, { promise: lockPromise, resolve: resolveLock! });
+      // #19786 — la promesse du verrou peut n'avoir AUCUN attendant : c'est même
+      // le cas nominal, un seul appelant. La rejeter sans écouteur termine le
+      // PROCESS sous le `--unhandled-rejections=throw` par défaut de Node 22 —
+      // toute la passerelle tombée parce qu'une clé n'a pas pu être créée. Ce
+      // `catch` ne consomme pas le rejet pour les attendants (il en dérive une
+      // promesse à part) ; il déclare seulement qu'un rejet non observé est
+      // attendu. Règle du dépôt sur `void p`, prise par l'autre bout.
+      void lockPromise.catch(() => undefined);
+      this.keyGenerationLocks.set(conversationId, { promise: lockPromise, resolve: resolveLock, reject: rejectLock });
 
       try {
         // Double-check after acquiring lock - race window is now closed.
@@ -214,7 +234,7 @@ export class EncryptionService implements AtRestKeyring {
         const existingKeyId = this.keyVault.getConversationKeyId(conversationId);
         if (existingKeyId) {
           logger.debug('Key found after lock acquisition', { conversationId, keyId: existingKeyId });
-          resolveLock!(existingKeyId);
+          resolveLock(existingKeyId);
           return existingKeyId;
         }
 
@@ -223,11 +243,14 @@ export class EncryptionService implements AtRestKeyring {
         await this.keyVault.setConversationKey(conversationId, keyId);
 
         logger.debug('Generated new conversation key', { conversationId, keyId });
-        resolveLock!(keyId);
+        resolveLock(keyId);
         return keyId;
       } catch (error) {
-        // On error, reject waiting promises with a new generation attempt
+        // #19786 — les attendants reçoivent la MÊME erreur, pas un silence. Le
+        // verrou part d'abord de la carte pour qu'un appelant suivant refasse le
+        // chemin complet au lieu de s'abonner à un échec déjà consommé.
         this.keyGenerationLocks.delete(conversationId);
+        rejectLock(error);
         throw error;
       } finally {
         // Clean up lock after a small delay to allow late-comers to get the result
