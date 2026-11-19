@@ -1571,7 +1571,7 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   couleurs d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
 - Prochain lot recommandé : fusion de #19864 au dégel, puis plafond `untilStopped` de `listOnlyState`, #19682 décidée.
 
-## 2026-11-19 — réveil de 21 h : #19864 recalée sur dev 56b3abc7c
+## 2026-11-19 — réveil de 19 h : #19864 recalée sur dev 56b3abc7c
 
 - Reprise : #19864 toujours ouverte, tête 9dd6c1e6e intacte ; la CI des PR reste gelée (35 vérifications « skipped »).
   #19682 toujours sans décision du porteur. Aucun nouveau lot ouvert.
