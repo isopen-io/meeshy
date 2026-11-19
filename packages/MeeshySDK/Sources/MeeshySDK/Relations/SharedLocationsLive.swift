@@ -11,9 +11,11 @@ public struct SharedLocationEntry: Equatable, Sendable {
     public let deadline: Date
     /// Le cercle servi avec la position (`nil` : non servi).
     public let circle: RelationLevel?
+    /// Le mouvement servi avec la position (#19887) ; `nil` : non servi.
+    public let motion: SharedLocationMotion?
 
     public init(latitude: Double, longitude: Double, precision: SharedLocationPrecision, radiusMeters: Double,
-                updatedAt: Date, deadline: Date, circle: RelationLevel? = nil) {
+                updatedAt: Date, deadline: Date, circle: RelationLevel? = nil, motion: SharedLocationMotion? = nil) {
         self.latitude = latitude
         self.longitude = longitude
         self.precision = precision
@@ -21,6 +23,7 @@ public struct SharedLocationEntry: Equatable, Sendable {
         self.updatedAt = updatedAt
         self.deadline = deadline
         self.circle = circle
+        self.motion = motion
     }
 }
 
@@ -123,7 +126,8 @@ public final class SharedLocationsLive: ObservableObject {
             radiusMeters: changed.radiusMeters,
             updatedAt: changed.updatedAt,
             deadline: deadline,
-            circle: changed.circle
+            circle: changed.circle,
+            motion: changed.motion
         )
         if ghosts[changed.userId] != nil { ghosts.removeValue(forKey: changed.userId) }
         scheduleExpiry()

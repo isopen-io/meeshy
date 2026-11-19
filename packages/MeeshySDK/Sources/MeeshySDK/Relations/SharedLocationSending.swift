@@ -33,21 +33,37 @@ public struct SharedLocationFix: Sendable, Equatable {
     public let latitude: Double
     public let longitude: Double
     public let accuracy: Double?
+    /// Ce que fait l'appareil quand le relevé part (#19887) ; `nil` : inconnu, aucune clé ne part.
+    public let motion: SharedLocationMotion?
 
     /// `nil` : un relevé hors du globe ou non fini ne part jamais.
-    public init?(latitude: Double, longitude: Double, accuracy: Double? = nil) {
+    public init?(latitude: Double, longitude: Double, accuracy: Double? = nil, motion: SharedLocationMotion? = nil) {
         guard latitude.isFinite, longitude.isFinite, (-90...90).contains(latitude), (-180...180).contains(longitude) else {
             return nil
         }
         self.latitude = latitude
         self.longitude = longitude
         self.accuracy = accuracy.flatMap { $0.isFinite && $0 >= 0 ? min($0, SharedLocationContract.maxRadiusMeters) : nil }
+        self.motion = motion
+    }
+
+    private init(validated fix: SharedLocationFix, motion: SharedLocationMotion?) {
+        latitude = fix.latitude
+        longitude = fix.longitude
+        accuracy = fix.accuracy
+        self.motion = motion
+    }
+
+    /// Le même relevé avec ce mouvement, ou sans aucun (`nil`) : une passerelle d'avant #19887 refuse la clé.
+    public func withMotion(_ motion: SharedLocationMotion?) -> SharedLocationFix {
+        SharedLocationFix(validated: self, motion: motion)
     }
 
     /// `location:share-update`, et la `position` de `location:share-start`.
-    public var wire: [String: Double] {
-        var wire = ["latitude": latitude, "longitude": longitude]
+    public var wire: [String: Any] {
+        var wire: [String: Any] = ["latitude": latitude, "longitude": longitude]
         if let accuracy { wire["accuracy"] = accuracy }
+        if let motion { wire["motion"] = motion.rawValue }
         return wire
     }
 
@@ -174,6 +190,16 @@ public struct SharedLocationStartRequest: Sendable, Equatable {
         self.shareBattery = shareBattery
         self.source = source
         self.untilStopped = untilStopped
+    }
+
+    /// La position part avec un mouvement (#19887).
+    public var carriesMotion: Bool { fix?.motion != nil }
+
+    /// La même charge, sa position portant ce mouvement ou aucun (`nil`). Une liste seule n'a pas de position.
+    public func withMotion(_ motion: SharedLocationMotion?) -> SharedLocationStartRequest {
+        SharedLocationStartRequest(validated: recipients, duration: duration, fix: fix?.withMotion(motion),
+                                   notifyRecipients: notifyRecipients, shareBattery: shareBattery, source: source,
+                                   untilStopped: untilStopped)
     }
 
     /// Au moins une personne part avec sa propre échéance.
