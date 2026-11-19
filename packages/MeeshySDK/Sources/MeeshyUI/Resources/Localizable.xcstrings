@@ -13629,7 +13629,7 @@
         }
       }
     },
-    "community.detail.join.cooldown": {
+    "community.join.cooldown": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -13659,7 +13659,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre dernière demande a été refusée : vous pourrez en refaire une 7 jours après ce refus."
+            "value": "Votre dernière demande a été refusée : réessayez 7 jours après ce refus."
           }
         },
         "it": {
@@ -13676,7 +13676,7 @@
         }
       }
     },
-    "community.detail.join.request": {
+    "community.join.request": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -13723,7 +13723,7 @@
         }
       }
     },
-    "community.detail.join.requested": {
+    "community.join.requested": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -13770,7 +13770,7 @@
         }
       }
     },
-    "community.detail.join.requested.hint": {
+    "community.join.requested.waiting": {
       "extractionState": "manual",
       "localizations": {
         "ar": {

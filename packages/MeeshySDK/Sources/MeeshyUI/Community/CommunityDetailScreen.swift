@@ -423,7 +423,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .foregroundStyle(notice.isRefusal ? MeeshyColors.error : theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
-                    .accessibilityIdentifier("community.detail.join.notice")
+                    .accessibilityIdentifier("community.join.notice")
             }
 
             if viewModel.isMember && !viewModel.isCreator {
@@ -456,7 +456,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 Image(systemName: "clock")
                     .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .regular, design: .rounded))
                     .foregroundStyle(theme.textSecondary)
-                Text(String(localized: "community.detail.join.requested", defaultValue: "Demande envoyée", bundle: .module))
+                Text(String(localized: "community.join.requested", defaultValue: "Demande envoyée", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .rounded))
                     .foregroundStyle(theme.textSecondary)
             }
@@ -465,12 +465,12 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
             .background(theme.backgroundSecondary.opacity(0.5))
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("community.detail.join.requested")
+            .accessibilityIdentifier("community.join.requested")
         } else {
             actionButton(
                 icon: viewModel.requiresJoinApproval ? "person.crop.circle.badge.questionmark" : "arrow.forward.circle.fill",
                 title: viewModel.requiresJoinApproval
-                    ? String(localized: "community.detail.join.request", defaultValue: "Demander à rejoindre", bundle: .module)
+                    ? String(localized: "community.join.request", defaultValue: "Demander à rejoindre", bundle: .module)
                     : String(localized: "community.detail.action.join", defaultValue: "Rejoindre", bundle: .module)
             ) {
                 Task { await viewModel.joinCommunity() }
@@ -480,10 +480,10 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
 
     private var joinNotice: (text: String, isRefusal: Bool)? {
         if viewModel.joinRefusal == .cooldown {
-            return (String(localized: "community.detail.join.cooldown", defaultValue: "Votre dernière demande a été refusée : vous pourrez en refaire une 7 jours après ce refus.", bundle: .module), true)
+            return (String(localized: "community.join.cooldown", defaultValue: "Votre dernière demande a été refusée : réessayez 7 jours après ce refus.", bundle: .module), true)
         }
         if viewModel.joinRequestPending {
-            return (String(localized: "community.detail.join.requested.hint", defaultValue: "Un administrateur ou un modérateur doit l’accepter.", bundle: .module), false)
+            return (String(localized: "community.join.requested.waiting", defaultValue: "Un administrateur ou un modérateur doit l’accepter.", bundle: .module), false)
         }
         return nil
     }
