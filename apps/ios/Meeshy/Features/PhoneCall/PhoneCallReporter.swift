@@ -1,6 +1,6 @@
 import Combine
 import Foundation
-@preconcurrency import CallKit
+import CallKit
 import MeeshySDK
 
 /// La règle pure : un appel est en cours tant qu'UN appel n'est pas terminé — appel du téléphone ou appel Meeshy,
@@ -74,6 +74,7 @@ nonisolated final class CallObserverDelegateProxy: NSObject, CXCallObserverDeleg
 
     func callObserver(_ callObserver: CXCallObserver, callChanged call: CXCall) {
         let active = PhoneCallActivity.isActive(callsEnded: callObserver.calls.map(\.hasEnded))
+        let onChange = self.onChange
         MainActor.assumeIsolated { onChange?(active) }
     }
 }

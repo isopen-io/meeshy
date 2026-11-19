@@ -26,7 +26,12 @@ final class PhoneCallCenterTests: XCTestCase {
         let session: Session
     }
 
-    private func makeSUT(viewer: String? = "me", names: [String: String] = ["peer": "Jacques"]) -> Rig {
+    private final class MemoryCacheOwner: PhoneCallCacheOwnerStoring {
+        var owner: String?
+        init(_ owner: String?) { self.owner = owner }
+    }
+
+    private func makeSUT(viewer: String? = "me", names: [String: String] = ["peer": "Jacques"], cacheOwner: String? = "me") -> Rig {
         let clock = self.clock
         let store = PhoneCallStateStore(persistence: MemoryPhoneCallStatePersistence(), now: { clock })
         let feed = PhoneCallAnnouncementFeed(now: { clock })
@@ -41,7 +46,8 @@ final class PhoneCallCenterTests: XCTestCase {
             endedEvents: Empty().eraseToAnyPublisher(),
             callChanges: Empty().eraseToAnyPublisher(),
             foreground: Empty().eraseToAnyPublisher(),
-            connected: Empty().eraseToAnyPublisher()
+            connected: Empty().eraseToAnyPublisher(),
+            cacheOwner: MemoryCacheOwner(cacheOwner)
         )
         return Rig(sut: sut, store: store, feed: feed, service: service, session: session)
     }
@@ -209,12 +215,20 @@ final class PhoneCallCenterTests: XCTestCase {
         XCTAssertTrue(rig.store.states.isEmpty)
     }
 
-    func test_firstAccountOfTheLaunch_keepsTheCache() async {
-        let rig = makeSUT(viewer: nil)
+    func test_firstAccountOfTheLaunch_keepsTheCache_whenItIsTheCacheOwner() async {
+        let rig = makeSUT(viewer: nil, cacheOwner: "me")
         await rig.sut.receive(started(announced: false))
         rig.session.viewer = "me"
         rig.sut.accountChanged(to: "me")
         XCTAssertNotNil(rig.store.state(for: "peer"))
+    }
+
+    func test_firstAccountOfTheLaunch_dropsACacheLeftByAnotherAccount() async {
+        let rig = makeSUT(viewer: nil, cacheOwner: "previous-account")
+        await rig.sut.receive(started(announced: false))
+        rig.session.viewer = "me"
+        rig.sut.accountChanged(to: "me")
+        XCTAssertTrue(rig.store.states.isEmpty)
     }
 
     // MARK: - Les mots

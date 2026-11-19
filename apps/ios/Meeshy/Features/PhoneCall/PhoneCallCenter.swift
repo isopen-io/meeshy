@@ -26,6 +26,7 @@ final class PhoneCallCenter {
     private let currentCallActivity: () -> Bool
     private let lane = OrderedEventLane()
     private var account: String?
+    private let cacheOwner: PhoneCallCacheOwnerStoring
     private var cancellables = Set<AnyCancellable>()
 
     nonisolated deinit {}
@@ -41,8 +42,10 @@ final class PhoneCallCenter {
         endedEvents: AnyPublisher<PhoneCallEnded, Never> = PhoneCallEvents.ended,
         callChanges: AnyPublisher<Bool, Never>,
         foreground: AnyPublisher<Void, Never>,
-        connected: AnyPublisher<Bool, Never>
+        connected: AnyPublisher<Bool, Never>,
+        cacheOwner: PhoneCallCacheOwnerStoring = UserDefaultsPhoneCallCacheOwner()
     ) {
+        self.cacheOwner = cacheOwner
         self.store = store
         self.feed = feed
         self.service = service
@@ -113,16 +116,18 @@ final class PhoneCallCenter {
     // MARK: - Le compte
 
     /// Le compte change. La déconnexion et le passage à un AUTRE compte oublient l'état des autres et ce qui a été
-    /// rapporté ; le premier compte du lancement garde le cache (cache d'abord). Une session ouverte rapporte l'état
-    /// des appels de maintenant.
+    /// rapporté ; le premier compte du lancement ne garde le cache (cache d'abord) que s'il en est le PROPRIÉTAIRE —
+    /// le cache d'un autre compte, laissé au repos, ne s'affiche jamais. Une session ouverte rapporte l'état des
+    /// appels de maintenant.
     func accountChanged(to userId: String?) {
         let previous = account
         account = userId
         guard previous != userId else { return }
-        if userId == nil || previous != nil {
+        if userId == nil || previous != nil || cacheOwner.owner != userId {
             store.reset()
             feed.reset()
         }
+        cacheOwner.owner = userId
         reporter.reset()
         guard userId != nil else { return }
         lane.submit { [weak self] in await self?.reportCurrentActivity() }
@@ -163,5 +168,20 @@ extension PhoneCallCenter {
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { userId in center.accountChanged(to: userId) }
+    }
+}
+
+/// Le compte à qui appartient le cache « en appel » rangé au repos : un autre compte qui ouvre l'app à froid ne lit
+/// jamais les appels des Sangs du précédent.
+protocol PhoneCallCacheOwnerStoring: AnyObject {
+    var owner: String? { get set }
+}
+
+final class UserDefaultsPhoneCallCacheOwner: PhoneCallCacheOwnerStoring {
+    private let key = "me.meeshy.phoneCall.cacheOwner"
+
+    var owner: String? {
+        get { UserDefaults.standard.string(forKey: key) }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
     }
 }
