@@ -12,6 +12,7 @@ public nonisolated struct ProfileLinkCardFace: Sendable, Equatable {
     public let accentHex: String
     public let avatarURL: String?
     public let avatarThumbHash: String?
+    public let avatarRing: ServedProfileDecorItem?
     public let bio: ProfileLinkBio?
     public let presence: PresenceState?
     public let offersWrite: Bool
@@ -24,6 +25,7 @@ public nonisolated struct ProfileLinkCardFace: Sendable, Equatable {
         accentHex = ProfileAccent.hex(chosen: card.profileAccentColor, userId: card.userId, name: card.name)
         avatarURL = card.avatarURL
         avatarThumbHash = card.avatarThumbHash
+        avatarRing = card.avatarRing
         bio = card.servedBio(prism: prism)
         presence = card.isOnline.map { UserPresence(isOnline: $0).state }
         offersWrite = !card.isSelf

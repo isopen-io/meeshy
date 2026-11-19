@@ -17,7 +17,7 @@ public nonisolated enum ProfilePresentationStyle: Sendable, Equatable {
     public var leadingSymbol: String {
         switch self {
         case .sheet: return "chevron.down"
-        case .cover: return "chevron.left"
+        case .cover: return "chevron.backward"
         }
     }
 }
@@ -155,7 +155,6 @@ struct ProfileCoverChrome: ViewModifier {
     /// descente — l'écran d'origine est déjà découvert. Sans fin d'animation lisible (iOS 16), elle se retire aussitôt.
     private func leave() {
         isLeaving = true
-        HapticFeedback.light()
         guard #available(iOS 17, *) else { return dismissWithoutMotion() }
         withAnimation(MeeshyMotion.animation(.rise, reduce: reduceMotion), completionCriteria: .logicallyComplete) {
             drag = max(width, drag)

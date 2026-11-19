@@ -55,7 +55,6 @@ struct ProfileActionsFace: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
-            header.meeshyCascade(rank: 0)
             showSection.meeshyCascade(rank: 1)
             sharingSection.meeshyCascade(rank: 2)
             whoSeesMeSection.meeshyCascade(rank: 3)
@@ -77,13 +76,6 @@ struct ProfileActionsFace: View {
     }
 
     // MARK: - En-tête
-
-    /// Mon avatar, « Actions » en grand et mon pseudo, sur la bannière vivante (planche `Moi-Actions`) : l'en-tête
-    /// commun des faces de ma fiche.
-    private var header: some View {
-        ProfileFaceHeader(user: user, title: ProfileActionsCopy.title, accentColor: accentColor,
-                          identifier: "profile.actions.header")
-    }
 
     // MARK: - Montrer
 

@@ -5,7 +5,7 @@ import MeeshySDK
 //
 // La Vitrine de la fiche d'un autre (#18870), faite du kit (loi 12) : la bio et
 // les puces vivent sous le nom (`ProfileIdentityChips`, dans l'en-tête), puis
-// « Avec lui », « En direct », « Sa voix », « Son jeu », « En chiffres », la
+// « Avec lui », « En direct », « Sa voix », « Sa Légende », « En chiffres », la
 // complétude, « En commun » et « Publications ».
 
 extension UserProfileSheet {

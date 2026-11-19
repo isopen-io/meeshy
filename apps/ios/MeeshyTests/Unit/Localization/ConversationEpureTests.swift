@@ -685,8 +685,9 @@ final class ConversationEpureTests: XCTestCase {
 
     private static let pass3: [String: [String: String]] = [
         "share.link.create.button.create": [
-            "fr": "Créer le lien", "en": "Create the link", "es": "Crear el enlace", "pt-BR": "Criar o link",
-            "de": "Link erstellen", "it": "Crea il link", "ar": "إنشاء الرابط"
+            "fr": "Créer et copier le lien", "en": "Create and copy the link", "es": "Crear y copiar el enlace",
+            "pt-BR": "Criar e copiar o link", "de": "Link erstellen und kopieren", "it": "Crea e copia il link",
+            "ar": "إنشاء الرابط ونسخه"
         ],
         "share.link.create.section.access.subtitle": [
             "fr": "Ce que les invités doivent fournir", "en": "What guests must provide", "es": "Lo que los invitados deben facilitar",

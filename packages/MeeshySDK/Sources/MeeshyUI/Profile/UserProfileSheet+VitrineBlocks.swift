@@ -4,7 +4,7 @@ import MeeshySDK
 // MARK: - UserProfileSheet — les blocs vivants de la Vitrine d'un autre (#19416, planche `Autre-Vitrine`)
 //
 // « Avec Léo · Tout voir » (K32, mène à la face Actions), « En direct · Entre Proches » (l'app le lit, dès Proche
-// seulement) et « Son jeu » (l'app le lit, selon la visibilité du membre). Aucun ne se pose sur ma propre fiche ni sur
+// seulement) et « Sa Légende » (l'app le lit, selon la visibilité du membre). Aucun ne se pose sur ma propre fiche ni sur
 // une fiche bloquée : rien de lui ne se lit alors, et ces blocs n'ont rien à y dire.
 
 extension UserProfileSheet {
@@ -47,7 +47,7 @@ extension UserProfileSheet {
 
     @ViewBuilder
     var gameSectionCard: some View {
-        if showsRelationBlocks, let card = gameSection?.card, let userId = resolvedUserId {
+        if showsRelationBlocks, let card = gameSection?.card, let userId = resolvedUserId, !userId.isEmpty {
             card(userId, accentTint)
                 .padding(.horizontal, MeeshySpacing.xl)
         }

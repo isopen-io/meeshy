@@ -136,6 +136,14 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Components/ForwardPickerSheet.swift": "remplacés par l'écran de partage unique (#10947/#10948)",
         "Main/Views/SharePickerView.swift": "remplacés par l'écran de partage unique (#10947/#10948)",
         "Share/ShareSheetView.swift": "écran de partage unique en cours (#10947/#10948) — sa présence est l'affaire de son lot",
+        "Contacts/OurCircleSheet.swift": "orbite de « Notre cercle » : un schéma du lien, la présence se lit sur la fiche dessous",
+        "Contacts/OurCircleGrantBars.swift": "crans de « Notre cercle » : un schéma des accords, la présence se lit sur la fiche dessous",
+        "Profile/Links/ProfileCardView.swift": "soi — l'avatar du compte connecté",
+        "Profile/Links/MyAddressesView.swift": "soi — l'avatar du compte connecté",
+        "Profile/Views/ProfileEditImageControls.swift": "soi — l'avatar du compte connecté",
+        "MeeshyUI/JoinFlow/JoinFlowScreen.swift": "la passerelle ne sert aucune présence à cette charge (créateur d'un lien expiré, vu par un visiteur)",
+        "MeeshyUI/Profile/LinksFaceStack.swift": "visage d'un lien — il dit qui est venu, jamais qui est en ligne ; `LinksFaceMember` ne porte aucune présence",
+        "MeeshyUI/Profile/ProfileInCommonParts.swift": "amis en commun — `InCommonFriend` ne porte aucune présence servie",
     ]
 
     func test_everyPeerAvatar_passesTheServedPresence_orIsNamedWithItsReason() throws {

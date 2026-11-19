@@ -257,7 +257,8 @@ struct MyAddressesVitrinePreview: View {
     private var identity: some View {
         HStack(spacing: MeeshySpacing.sm) {
             MeeshyAvatar(name: owner.displayName ?? owner.username, context: .postAuthor,
-                         accentColor: owner.profileAccentHex, avatarURL: owner.avatar)
+                         accentColor: owner.profileAccentHex, avatarURL: owner.avatar,
+                         ring: owner.profileDecor?.avatarRing)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(owner.displayName ?? owner.username)

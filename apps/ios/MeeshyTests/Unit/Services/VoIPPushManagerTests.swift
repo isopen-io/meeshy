@@ -356,7 +356,8 @@ final class VoIPPushManagerTests: XCTestCase {
         }
         let followingBody = String(source[dedupRange.upperBound...].prefix(400))
         XCTAssertTrue(
-            followingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: callId)"),
+            followingBody.contains("Self.reportPhantomCall(callId: callId)") &&
+            source.contains("reportPhantomVoIPCall(uuid: UUID(), update: update, callId: callId)"),
             "The dedup-hit phantom-call path must pass `callId` to reportPhantomVoIPCall so a CallKit " +
             "rejection can evict the dedup entry — otherwise a genuine retry is silently swallowed."
         )
@@ -370,7 +371,7 @@ final class VoIPPushManagerTests: XCTestCase {
         }
         let precedingBody = String(source[..<malformedRange.lowerBound].suffix(400))
         XCTAssertTrue(
-            precedingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: nil)") &&
+            precedingBody.contains("Self.reportPhantomCall(callId: nil)") &&
             !precedingBody.contains("callId: callId"),
             "The malformed-payload path never inserted into the dedup ring, so it must not pass a callId " +
             "(there's nothing to evict)."

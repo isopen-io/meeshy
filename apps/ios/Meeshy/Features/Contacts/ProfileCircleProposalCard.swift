@@ -10,6 +10,7 @@ nonisolated struct ProfileCircleProposal: Equatable, Sendable {
     let requestId: String
     let level: RelationLevel
     let avatar: String?
+    let ring: ServedProfileDecorItem?
     /// Ce que le cercle proposé ajoute au commun, par la loi d'accès : rien n'est réécrit ici.
     let opens: [OurCircleFeature]
 
@@ -24,7 +25,7 @@ nonisolated struct ProfileCircleProposal: Equatable, Sendable {
         }
         guard let match, let level = match.requestedLevel else { return nil }
         return ProfileCircleProposal(requestId: match.id, level: level, avatar: match.sender?.avatar,
-                                     opens: opens(from: common, to: level))
+                                     ring: match.sender?.avatarRing, opens: opens(from: common, to: level))
     }
 
     /// Du cran proposé vers le commun, ce que chaque cran ajoute — le plus haut d'abord, comme « Notre cercle ».
@@ -108,7 +109,8 @@ struct ProfileCircleProposalCard: View {
 
     private func avatar(_ proposal: ProfileCircleProposal, tint: Color) -> some View {
         MeeshyAvatar(name: displayName, context: .conversationList,
-                     accentColor: profileAccent ?? DynamicColorGenerator.colorForName(displayName), avatarURL: proposal.avatar)
+                     accentColor: profileAccent ?? DynamicColorGenerator.colorForName(displayName), avatarURL: proposal.avatar,
+                     presenceState: PresenceManager.shared.knownPresenceState(for: viewModel.userId), ring: proposal.ring)
             .overlay(alignment: .bottomTrailing) {
                 Image(systemName: VitrineSeenAsCopy.glyph(of: proposal.level) + ".fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .bold))

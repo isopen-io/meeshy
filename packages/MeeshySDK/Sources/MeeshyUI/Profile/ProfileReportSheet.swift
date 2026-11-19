@@ -13,14 +13,15 @@ struct ProfileReportSheet: View {
     var avatarURL: String?
     var accentColor = ""
     var ring: ServedProfileDecorItem?
+    var presence: PresenceState?
     let isAlreadyBlocked: Bool
     /// « Joindre des messages » : la source et la personne signalée. Sans source, ou sans limite annoncée par la
     /// passerelle, la section n'existe pas.
     var reportMessages: (any ProfileReportMessagesProviding)?
     var reportedUserId: String?
-    let onSend: (ProfileReportDraft) async -> ProfileReportOutcome
+    let onSend: @MainActor (ProfileReportDraft) async -> ProfileReportOutcome
     /// Rebloque après un blocage demandé qui n'a pas abouti ; `true` une fois la personne bloquée.
-    var onRetryBlock: () async -> Bool = { false }
+    var onRetryBlock: @MainActor () async -> Bool = { false }
 
     @Environment(\.dismiss) private var dismiss
     @State private var draft = ProfileReportDraft()
@@ -99,7 +100,8 @@ struct ProfileReportSheet: View {
     /// En tête, qui l'on signale : son avatar, « Signaler Rui », l'anonymat du signalement, et ✕ pour fermer.
     private var header: some View {
         HStack(alignment: .top, spacing: MeeshySpacing.md) {
-            MeeshyAvatar(name: name, context: .userListItem, accentColor: accentColor, avatarURL: avatarURL, ring: ring)
+            MeeshyAvatar(name: name, context: .userListItem, accentColor: accentColor, avatarURL: avatarURL,
+                         presenceState: presence, ring: ring)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(verbatim: ProfileReportCopy.title(name))

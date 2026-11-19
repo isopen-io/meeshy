@@ -7,6 +7,7 @@ struct ShareMyLocationRecipient: Identifiable, Equatable {
     let userId: String
     let name: String
     let circle: RelationLevel?
+    var avatarURL: String? = nil
 
     var id: String { userId }
 }
@@ -130,7 +131,9 @@ struct ShareMyLocationSheet: View {
     }
 
     private func avatar(_ recipient: ShareMyLocationRecipient) -> some View {
-        MeeshyAvatar(name: recipient.name, context: .custom(26), accentColor: DynamicColorGenerator.colorForName(recipient.name))
+        MeeshyAvatar(name: recipient.name, context: .custom(26), accentColor: DynamicColorGenerator.colorForName(recipient.name),
+                     avatarURL: recipient.avatarURL,
+                     presenceState: PresenceManager.shared.knownPresenceState(for: recipient.userId))
     }
 
     @ViewBuilder

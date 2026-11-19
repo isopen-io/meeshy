@@ -417,21 +417,24 @@ private struct MeeshyButtonHoldWaves: View {
                 TimelineView(.animation) { context in
                     let elapsed = context.date.timeIntervalSinceReferenceDate
                     ZStack {
-                        ForEach(0..<decor.waveCount, id: \.self) { index in
-                            let wave = MeeshyButtonHoldDecor.wave(index: index, count: decor.waveCount,
-                                                                  elapsed: elapsed)
-                            Circle()
-                                .strokeBorder(tone, lineWidth: CGFloat(MeeshyButtonHoldDecor.waveStroke))
-                                .frame(width: diameter, height: diameter)
-                                .scaleEffect(CGFloat(wave.scale))
-                                .opacity(wave.opacity)
-                        }
+                        ForEach((0..<decor.waveCount).map { index in
+                            AsyncRenderRow(id: index, content: waveRing(index: index, elapsed: elapsed))
+                        }, content: asyncRenderRowContent)
                     }
                 }
             }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    private func waveRing(index: Int, elapsed: TimeInterval) -> some View {
+        let wave = MeeshyButtonHoldDecor.wave(index: index, count: decor.waveCount, elapsed: elapsed)
+        return Circle()
+            .strokeBorder(tone, lineWidth: CGFloat(MeeshyButtonHoldDecor.waveStroke))
+            .frame(width: diameter, height: diameter)
+            .scaleEffect(CGFloat(wave.scale))
+            .opacity(wave.opacity)
     }
 }
 

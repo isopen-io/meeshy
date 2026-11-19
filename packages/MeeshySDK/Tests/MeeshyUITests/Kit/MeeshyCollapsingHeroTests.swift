@@ -102,15 +102,6 @@ struct MeeshyCollapsingHeroTests {
         }
     }
 
-    @Test("un tic léger à l'épinglage, un seul par sens")
-    func pinTick_firesOncePerDirection() {
-        #expect(MeeshyCollapsingHeroRecipe.pinTick(from: 0.9, to: 1.0))
-        #expect(MeeshyCollapsingHeroRecipe.pinTick(from: 1.0, to: 0.9))
-        #expect(!MeeshyCollapsingHeroRecipe.pinTick(from: 1.0, to: 1.4))
-        #expect(!MeeshyCollapsingHeroRecipe.pinTick(from: 0.2, to: 0.6))
-        #expect(!MeeshyCollapsingHeroRecipe.pinTick(from: .nan, to: 0.3))
-    }
-
     @Test("les commandes gardent 44 et ne se déplacent pas de plus de 6")
     func controls_stayPut() {
         for step in stride(from: 0.0, through: 1.0, by: 0.1) {

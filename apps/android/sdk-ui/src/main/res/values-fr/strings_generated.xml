@@ -548,7 +548,6 @@
     <string name="talkie_send_rate_limited">Trop de prises de parole : réessaie dans un instant.</string>
     <string name="talkie_send_recording_copy">Enregistrement du message vocal…</string>
     <string name="talkie_send_talking">Tu parles à %1$s…</string>
-    <string name="talkie_send_voice">Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal.</string>
     <string name="talkie_send_waking">Réveil de %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Vu avant-hier à %1$s</string>
     <string name="time_lastSeen_dateAt">Vu le %1$s à %2$s</string>

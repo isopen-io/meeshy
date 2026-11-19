@@ -41,7 +41,7 @@ public struct ProfileLinkCardView: View {
     private var avatar: some View {
         MeeshyAvatar(name: face.name, context: .custom(52), accentColor: face.accentHex,
                      avatarURL: face.avatarURL, thumbHash: face.avatarThumbHash, presenceState: face.presence,
-                     isDark: isDark, onTap: onOpen)
+                     ring: face.avatarRing, isDark: isDark, onTap: onOpen)
             .padding(4)
             .background(Circle().fill(MeeshyColors.backgroundSecondary(isDark: isDark)))
             .accessibilityLabel(ProfileLinkCardCopy.openShowcase)

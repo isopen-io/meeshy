@@ -182,8 +182,9 @@ extension AffiliateView {
 
     private func referralRow(_ referral: ReferralPage.Referral) -> some View {
         MeeshyPersonRow(title: referral.name, subtitle: Self.joinedLine(referral.joinedAt), showsDivider: false) {
-            MeeshyAvatar(name: referral.name, context: .custom(36), avatarURL: referral.avatar, enablePulse: false,
-                         isDark: isDark)
+            MeeshyAvatar(name: referral.name, context: .custom(36), avatarURL: referral.avatar,
+                         presenceState: referral.userId.flatMap { PresenceManager.shared.knownPresenceState(for: $0) },
+                         enablePulse: false, isDark: isDark)
         } trailing: {
             HStack(spacing: MeeshySpacing.sm) {
                 MeeshyBadge(.label(Self.statusTitle(referral.status)), leading: .dot, surface: .tonal,
