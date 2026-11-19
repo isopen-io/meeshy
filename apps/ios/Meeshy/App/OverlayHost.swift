@@ -11,6 +11,7 @@ struct OverlayHost: ViewModifier {
             .modifier(TalkieOverlay(center: .shared))
             .modifier(TogetherOverlay(center: .shared))
             .bringRingOverlay()
+            .modifier(OwnFallBannerOverlay(center: .shared))
             .onAppear {
                 ListeningCenter.start()
                 ListeningBroadcaster.start()
@@ -18,6 +19,7 @@ struct OverlayHost: ViewModifier {
                 PhoneReachabilityCenter.start()
                 InactivityCheckCenter.start()
                 PhoneCallCenter.start()
+                FallDetectionCenter.start()
             }
             .sheet(isPresented: $isCrashSheetPresented) {
                 CrashReportSheet(reports: crashReports)
