@@ -73,6 +73,8 @@ extension UserProfileSheet {
             topInset: heroTopInset,
             isLoading: phase == .skeleton,
             keepsBannerInBar: true,
+            avatarSpill: Double(AvatarRingLayout.paintBeyondAvatar(
+                shownAvatarRing, avatarSize: CGFloat(MeeshyCollapsingHeroRecipe.avatarExpanded))),
             banner: { heroBanner(progress: progress) },
             leading: { heroCloseButton },
             trailing: { heroTrailing(progress: progress) },
@@ -274,10 +276,12 @@ extension UserProfileSheet {
             onViewStory: ringState != .none ? onViewStory : nil,
             onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
         ) }
+        // Toute la place que le film du cadre demande : il se voit en entier, le nom descend d'autant (#19925).
         .avatarRing(
             shownAvatarRing,
             avatarSize: context.size,
-            storyRingSize: ringState == .none ? nil : context.ringSize
+            storyRingSize: ringState == .none ? nil : context.ringSize,
+            decorRoom: AvatarRingLayout.fullSpill(shownAvatarRing, box: context.size * 100 / 84)
         )
         .overlay(alignment: .bottomLeading) {
             ProfileAvatarListening(userId: isIdentityMuted || isCurrentUser ? nil : resolvedUserId, avatarSize: size,

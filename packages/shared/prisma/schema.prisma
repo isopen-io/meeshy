@@ -2539,7 +2539,7 @@ model CommunityJoinRequest {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
   communityId String    @db.ObjectId
   userId      String    @db.ObjectId
-  /// pending, accepted, rejected
+  /// pending, accepted, rejected, expired (#19872 : non tranchée en 30 jours, close quand son auteur redemande)
   status      String    @default("pending")
   /// Comment la demande est arrivée : self ou link
   via         String?
