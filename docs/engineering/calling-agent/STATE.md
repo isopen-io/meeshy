@@ -1865,3 +1865,31 @@ socket jusqu'au client.
 1. **#19911** (web, réaliste : la perte négative perd toute la télémétrie de l'appel). Vérifier aussi iOS et Android.
 2. #19899 et #19896 (Android, petits).
 3. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
+
+## Cycle 55 — 2026-11-19
+
+- **Base** : `origin/dev` @ `76169fde8`. #19912 (cycle 54) est fusionnée.
+- **Branche** : `claude/determined-volta-s7xm21`.
+- **Objectif** : #19911. Une perte négative, un RTT démesuré, une somme qui déborde ou un codec trop long ne font plus rejeter tout le rapport `call:analytics` du web.
+- **Livré** :
+  - **`call-quality.ts`** (`positive` = fini et > 0, sinon 0) :
+    - `readStats` : les sommes, le RTT et la gigue passent par `milliseconds`/`positive`. Un RTT de 1e306 ou négatif compte comme non mesuré, comme `numberOf`.
+    - `peerRate` : le delta est ≥ 0 dès le premier relevé (RFC 3550, doublons). Perte et débits sont finis et ≥ 0.
+  - **`call-analytics.ts`** : `averageRtt`, `averagePacketLoss` et `maxPacketLoss` sont neutralisés s'ils sont non finis ou négatifs. Le codec est coupé à 50 caractères.
+  - Pour des stats valides, les valeurs sont identiques. Le schéma serveur ne change pas.
+- **Tests** :
+  - `call-analytics-hostile-stats.test.ts` : 9 cas ajoutés, dont les témoins pour une perte négative au premier relevé et au suivant, un RTT de 1e306 ou négatif, un codec de 80 caractères, des sommes à `Number.MAX_VALUE` et deux flux à `packetsLost: 1e308`. Le `qualityReport` est validé contre `socketQualityReportSchema`.
+  - **Rouge avant** : la QA a remis le code de `dev` sous le nouveau témoin, avec 6 tests en échec. Le cas de débordement était rouge seul, avant son correctif.
+  - **Vert après** : `bun test src/lib/calls/` donne **2449 pass / 0 fail**. Les composants qualité et l'admin analytics passent aussi, 274 pass. `tsc --noEmit` donne 0.
+  - Relancé par moi : le témoin, 13 pass / 0 fail.
+- **QA** : favorable avec réserves. La seule réserve, NaN quand une somme déborde, est corrigée dans le même lot (`bedad6ffa`).
+- **Miroirs** :
+  - iOS : ouvert **#19933**. Il porte le RTT non borné, les moyennes non gardées, un `Int(Double)` qui peut planter et le codec non coupé.
+  - Android : complément posté sur **#19899**, pour le RTT et la gigue non bornés (`CallStats.kt:168,207`).
+- **Limites** : un lien qui ne rapporterait que des RTT aberrants paraîtrait sain sur cette mesure. C'est un choix assumé : une valeur absurde compte comme non mesurée.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre : fusionner `dev`, puis `workflow_dispatch` de `ci.yml`, puis la fusionner.
+1. **#19933** (iOS, le seul risque de plantage), puis #19899 et #19896 (Android).
+2. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
