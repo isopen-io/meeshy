@@ -844,6 +844,20 @@ export type {
   InactivityLastBattery,
   WellnessOkAck,
 } from './inactivity-check.js';
+export { PHONE_CALL_ANNOUNCEMENT_KINDS, PHONE_CALL_CONFIG } from './phone-call.js';
+export type {
+  PhoneCallAnnouncement,
+  PhoneCallAnnouncementKind,
+  PhoneCallConfig,
+  PhoneCallState,
+  PhoneCallStartedEventData,
+  PhoneCallEndedEventData,
+  PhoneCallSnapshot,
+  PhoneCallAck,
+  PhoneCallReport,
+  PhoneCallEmitterSettings,
+  PhoneCallPersonSettings,
+} from './phone-call.js';
 export * from './phone-reachability-constants.js';
 export type {
   PhoneReachabilityAnnouncement,
