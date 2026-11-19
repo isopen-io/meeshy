@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CommunityMemberJoinVia } from '@meeshy/shared/types/socketio-events';
 import type { CommunityMemberAnnounce, CommunityMemberChange } from '../community-member-broadcast';
+import { USABLE_ACCOUNT_WHERE } from '../relations/usableAccount';
 
 export type CommunityMembershipSyncPrisma = Pick<PrismaClient, 'communityMember' | 'user'>;
 
@@ -60,7 +61,7 @@ async function everyoneAddable(
   if (userIds.length === 0) return true;
   const ids = [...userIds];
   const living = await prisma.user.findMany({
-    where: { id: { in: ids }, isActive: true, deactivatedAt: null, deletedAt: null },
+    where: { id: { in: ids }, ...USABLE_ACCOUNT_WHERE },
     select: { id: true },
     take: ids.length,
   });
