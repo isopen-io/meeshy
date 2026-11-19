@@ -42,6 +42,25 @@
  * PAR COLONNE » veut dire — une égalité nue est exacte quand la colonne est
  * écrite à CHAQUE création, et cela se mesure, jamais ne se suppose.
  *
+ * ─── `lastActivityAt`, et l'axe de classement qui n'existait pas (#19800) ────
+ *
+ * Mesuré le 2026-11-19 : **1 site**, et il était nu — l'ÉCRITURE monotone de
+ * `recordConversationActivity`, unique écrivain de `Conversation.lastActivityAt`.
+ * Son `OR` portait `{ lastActivityAt: null }` et `{ lt: at }`, donc il
+ * n'appariait aucune conversation : les dix-neuf chemins de création n'écrivent
+ * pas la colonne. `updateMany` rendait `count: 0`, la première écriture ne
+ * pouvait jamais avoir lieu, et les QUATRE alimenteurs de l'axe « activité » du
+ * rang de liste — réaction de message, réaction de pièce jointe, appel, épingle
+ * — étaient inertes pour la population entière.
+ *
+ * Ce site enseigne une forme que les fixtures ne couvraient pas : une égalité
+ * nue dont la SŒUR de `OR` est un INTERVALLE (`{ lt }`). La clause est une
+ * alternative, elle a la forme juste, et aucune de ses branches ne dit l'absence
+ * — `FIXTURE_SOEUR_INTERVALLE` l'épingle. Et les LECTEURS de cette colonne
+ * étaient déjà justes (`list-rank.ts` dit l'absence en trois branches depuis
+ * #8309) : **un cliquet de lecture ne dit rien d'une colonne dont c'est
+ * l'ÉCRITURE qui est nue.**
+ *
  * ─── CE QUE CE CLIQUET NE GARDE PAS, et sa TAILLE ────────────────────────────
  *
  * Il ne tient que TROIS colonnes, et il ne lit que
@@ -83,10 +102,16 @@ const SRC_DIR = join(__dirname, '..');
 
 /**
  * Les colonnes de soft-state triées (#19748) : les deux de la participation
- * (`Participant`, `CallParticipant`) et l'échéance (`ServerEncryptionKey`,
- * `Notification`, `Post`, `ShareLink`, `UserDevice`, `Sound`).
+ * (`Participant`, `CallParticipant`), l'échéance (`ServerEncryptionKey`,
+ * `Notification`, `Post`, `ShareLink`, `UserDevice`, `Sound`) et le rang
+ * d'activité (`Conversation.lastActivityAt`, #19800).
+ *
+ * `lastActivityAt` vit aussi sur `UserSession`, où elle est REQUISE
+ * (`DateTime @default(now())`) : aucun filtre ne peut y poser l'égalité nue que
+ * ce cliquet cherche, et `isSet` n'existe pas sur une colonne requise (cycle
+ * 181, constat D). Le nom est partagé, le piège ne l'est pas.
  */
-const COLONNES = new Set(['leftAt', 'bannedAt', 'expiresAt']);
+const COLONNES = new Set(['leftAt', 'bannedAt', 'expiresAt', 'lastActivityAt']);
 
 /**
  * Les égalités nues GELÉES — et une ligne n'y entre QU'AVEC la discipline
@@ -255,6 +280,27 @@ const FIXTURE_ECRITURE_NOMMEE = `
   }
 `;
 
+/**
+ * La forme du défaut #19800 : l'égalité nue dont la SŒUR de `OR` est un
+ * INTERVALLE. La clause EST une alternative — donc elle ressemble au remède —
+ * et aucune de ses branches ne dit l'absence. Une sonde qui se contenterait de
+ * « ce champ a-t-il une sœur dans son `OR` ? » la bénirait.
+ */
+const FIXTURE_SOEUR_INTERVALLE = `
+  await prisma.conversation.updateMany({
+    where: { id, OR: [{ lastActivityAt: null }, { lastActivityAt: { lt: at } }] },
+    data: { lastActivityAt: at },
+  });
+`;
+
+/** Le même site, RÉPARÉ : la troisième branche dit l'absence. */
+const FIXTURE_SOEUR_INTERVALLE_REPAREE = `
+  await prisma.conversation.updateMany({
+    where: { id, OR: [{ lastActivityAt: null }, { lastActivityAt: { isSet: false } }, { lastActivityAt: { lt: at } }] },
+    data: { lastActivityAt: at },
+  });
+`;
+
 const FIXTURE_EN_COMMENTAIRE = `
   // Audit C5 — \`{leftAt: null}\` seul manque les documents Mongo sans la clé.
   /** Et \`where: { bannedAt: null }\` dans un doc-comment non plus. */
@@ -279,6 +325,14 @@ describe('le balayage lui-même — un scanner qui cherche une GRAPHIE doit prou
 
   it('voit la forme JUSTE sans l’accuser : l’absence est dite à côté', () => {
     expect(sites(FIXTURE_ABSENCE_DITE)).toEqual(['leftAt:true']);
+  });
+
+  it('REFUSE une égalité nue dont la SŒUR de `OR` est un INTERVALLE — une alternative n’est pas le remède (#19800)', () => {
+    expect(sites(FIXTURE_SOEUR_INTERVALLE)).toEqual(['lastActivityAt:false']);
+  });
+
+  it('et il absout le MÊME site une fois la troisième branche posée', () => {
+    expect(sites(FIXTURE_SOEUR_INTERVALLE_REPAREE)).toEqual(['lastActivityAt:true']);
   });
 
   it('ne lit pas les COMMENTAIRES — sinon il relèverait les notes des cycles précédents', () => {
@@ -328,7 +382,7 @@ describe('le balayage lui-même — un scanner qui cherche une GRAPHIE doit prou
   });
 });
 
-describe('aucun filtre de participation ne décide sur une égalité nue (#19690)', () => {
+describe('aucun filtre de soft-state ne décide sur une égalité nue (#19690, #19755, #19800)', () => {
   const balayage = () => sweepEqualityNullFilters(SRC_DIR, COLONNES);
 
   /**
