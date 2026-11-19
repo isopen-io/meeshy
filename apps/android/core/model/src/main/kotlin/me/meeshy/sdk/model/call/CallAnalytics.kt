@@ -41,6 +41,8 @@ data class CallAnalytics(
     val packetLossSum: Double = 0.0,
     val maxPacketLoss: Double = 0.0,
     val qualitySampleCounts: Map<ConnectionQuality, Int> = emptyMap(),
+    /** Gels, limitation, tampon de gigue, MOS et relais (#19895) : seulement ce qui a été lu. */
+    val media: CallMediaTally = CallMediaTally(),
 ) {
     /** First media-up anchor; idempotent so a reconnect's re-entry never rewrites it. */
     fun connected(nowMs: Long): CallAnalytics =
@@ -58,6 +60,7 @@ data class CallAnalytics(
             packetLossSum = packetLossSum + sample.packetLoss,
             maxPacketLoss = maxOf(maxPacketLoss, sample.packetLoss),
             qualitySampleCounts = qualitySampleCounts + (tier to ((qualitySampleCounts[tier] ?: 0) + 1)),
+            media = sample.media?.let { media.plus(it, sample.jitterMs) } ?: media,
         )
     }
 
@@ -104,7 +107,7 @@ data class CallAnalytics(
         "deviceModel" to deviceModel,
         "isVideo" to isVideo,
         "endReason" to endReasonWire,
-    )
+    ) + media.fields(averageRttMs = average(rttSumMs), averagePacketLossPercent = average(packetLossSum) * PERCENT)
 
     private fun average(sum: Double): Double = if (sampleCount > 0) sum / sampleCount else 0.0
 
@@ -125,6 +128,9 @@ data class CallAnalytics(
         }
 
     companion object {
+        /** La perte d'un échantillon est une FRACTION ; le MOS la lit en pourcentage, comme iOS et le web. */
+        private const val PERCENT: Double = 100.0
+
         /** Le `endReason` d'un instantané pris pendant l'appel. */
         const val IN_PROGRESS_WIRE: String = "in_progress"
 

@@ -17,8 +17,6 @@ nonisolated enum ProfileOwnHeroPlan {
     static let collapsedHeight: Double = MeeshyCollapsingHeroRecipe.collapsedHeight
     /// Où commence ce qui défile : sous l'identité du héros déplié, qui déborde de la bannière.
     static let contentTop: Double = expandedHeight + MeeshyCollapsingHeroRecipe.identityOverflow
-    /// Le niveau et le rang s'élèvent au-dessus de l'avatar, qui chevauche le bas de la bannière.
-    static let bannerBottomInset: Double = ProfileHeroPlan.bannerBottomInset
     /// « Changer la bannière » (planche `Moi-Edition`) : sous la rangée des commandes, au bord de fin.
     static let changeBannerTop: Double = 122
 
@@ -43,10 +41,6 @@ nonisolated enum ProfileOwnHeroPlan {
 
     static func usesModeHeader(isEditing: Bool) -> Bool {
         isEditing
-    }
-
-    static func showsGameBadges(isEditing: Bool) -> Bool {
-        !isEditing
     }
 
     static func leading(isEditing: Bool) -> [ProfileOwnHeroControl] {

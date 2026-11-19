@@ -65,7 +65,21 @@ export function matches(row: Row, where: Where = {}): boolean {
       ? (expected as Where[]).some((branch) => matches(row, branch))
       : key === 'NOT'
         ? !matches(row, expected as Where)
-        : fieldMatches(row, key, expected),
+        : // #19802 — `AND` est modélisé depuis que `snapshotWhere` compose deux
+          // `unsetOrNull` (deux clés `OR`, qui ne peuvent pas cohabiter dans un
+          // même objet). Sans cette branche, la clause tombait dans
+          // `fieldMatches(row, 'AND', …)` : aucune ligne appariée, `count: 0`,
+          // et cinq témoins de vérification rendaient 409 — un ROUGE qui
+          // accusait la production pour une lacune du DOUBLE.
+          //
+          // La direction était la bonne (il a échoué BRUYAMMENT plutôt que
+          // d'ignorer la clé, ce que `helpers/mongo-where.ts` exige d'un
+          // double), mais un double qui ne connaît pas une famille de clauses
+          // que la production emploie est un double qui mentira dès que la
+          // forme changera de sens.
+          key === 'AND'
+          ? (expected as Where[]).every((branch) => matches(row, branch))
+          : fieldMatches(row, key, expected),
   );
 }
 

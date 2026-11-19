@@ -1759,3 +1759,109 @@ socket jusqu'au client.
 0. Si la PR de ce cycle n'est pas fusionnée, prouver sa CI par `workflow_dispatch` de `ci.yml`, puis la fusionner.
 1. #19804 (version ou compare-and-swap sur `PostMedia.translations`, vérifié contre un vrai Mongo), puis #19825 et #19806.
 2. **Recentrer sur les appels** : latence de `call_caption_translation_seconds` sur le staging, recette fr↔en de #16613.
+
+## Cycle 52 — 2026-11-19
+
+- **Base** : `origin/dev` @ `3bbd958d2`. #19857 (cycle 51, #19841) est fusionnée. Le travail recentre sur les appels eux-mêmes et sort de la dette des pistes de post.
+- **Branche** : `claude/determined-volta-vxgvmw`.
+- **Objectif** : #19876, la moitié web de #11932. Le web rapporte, dans `call:analytics`, les gels, la cause de limitation, le MOS et la route élue de chaque appel.
+- **Livré** :
+  - **MOS, une seule source TS** : `packages/shared/utils/call-mos.ts` (`estimateCallMos`), copie ligne à ligne de `CallMOS.swift`. Le témoin reprend les six cas de `CallMOSTests.swift`.
+  - **Lecture des stats** : `apps/web/src/lib/calls/call-analytics-stats.ts` lit chaque relevé de la boucle de qualité, sur le même `getStats` que `readStats` :
+    - inbound-rtp vidéo : gels, NACK, PLI ;
+    - inbound-rtp audio : tampon de gigue, échantillons masqués ;
+    - outbound-rtp vidéo : limitation ;
+    - paire élue, prise au transport puis à défaut à la paire nominée : seulement `candidateType`, et `relayProtocol` si `relay`. Ni adresse, ni ufrag, ni URL TURN.
+  - **Rapport** : `analyticsPayload` émet chaque champ seulement s'il est mesuré, jamais un 0 inventé.
+    - Rien n'appelle `getStats` au raccrochage : le rapport part du dernier relevé.
+    - Il garde le dernier relevé de chaque pair, combinés à la fin, pour qu'un pair parti ne soit pas perdu (QA R1).
+    - Le tampon de gigue ne compte que les flux qui portent le délai et un compte émis positif (QA R2).
+  - **Schéma** : `socketCallAnalyticsSchema` n'est pas modifié, et tous les champs restent optionnels.
+- **Tests** :
+  - Rouge, puis vert, à chaque étape. Le détail est dans les commits.
+  - `bun test src/lib/calls/` → `2439 pass / 0 fail`, et `tsc --noEmit` donne 0.
+  - `vitest run utils/call-mos` → `6 passed`.
+  - Relancé par moi : `call-analytics*` + `call-quality-loop`, `28 pass` après correction, et MOS `6 passed`.
+  - Suite web complète, chez le spécialiste : `34717 pass, 1 fail`. Le rouge, `act-leak-guard.test.ts`, est déjà rouge sans le lot.
+- **QA** : favorable avec réserves.
+  - R1 et R2 sont corrigées dans le lot.
+  - R3 n'est pas corrigée : `readStats`, pour le rtt, prend la paire nominée, et la lecture média prend la paire du transport. C'est mineur.
+  - Un témoin de stats hostiles (NaN, Infinity, chaînes, `null`) vérifie que le rapport passe toujours le schéma de la passerelle. Un payload invalide aurait perdu toute la télémétrie de l'appel.
+- **Limites** :
+  - **Écart avec iOS** : iOS émet certains compteurs à 0 quand une mesure manque, et n'émet pas `candidateType` ni `relayProtocol` (il n'émet que `relayed`). Écart consigné dans le commentaire de #11932.
+  - **Non vérifié ici** : les gardes navigateur `check-calls-*.mjs`, faute de Chromium joignable par ces scripts dans ce conteneur.
+  - **Non vérifié non plus** : un agrégat non nul sur staging après un appel web réel.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la prouver par `workflow_dispatch` de `ci.yml`, puis la fusionner.
+1. Sur staging, un appel web↔web ou web↔iOS, puis `GET /admin/analytics/calls` : `quality.reportingCalls` > 0. C'est le critère qui ferme #19876.
+2. Android, moitié restante de #11932 (même MOS, dont la source unique reste `CallMOS.swift` / `call-mos.ts`).
+3. #12236 (ancrage de la négociation de l'appelant sur la réponse, iOS et web), puis #16933 (export Prometheus du débordement de la voie rapide des sous-titres).
+
+## Cycle 53 — 2026-11-19
+
+- **Base** : `origin/dev` @ `ebb68519d`, puis `dev` @ `07609bfa9` fusionnée dans la branche (9 commits, aucun sur les chemins du lot).
+- **Branche** : `claude/determined-volta-5pzxw0`. **PR** : #19898.
+- **Objectif** : #19895, moitié Android de #11932. Android rapporte dans `call:analytics` les gels, la limitation, le MOS et le relais de chaque appel.
+- **Livré** (Android seul) :
+  - **MOS** : `core/model/.../call/CallMos.kt`, miroir de `CallMOS.swift` et de `call-mos.ts`, qui sont désormais trois copies d'une même formule. Le témoin reprend les six cas iOS.
+  - **Lecture des stats** : `CallStatsCollector` projette sept compteurs de plus et deux textes, `relayProtocol` et `qualityLimitationReason`. La projection reste en liste blanche : ni adresse, ni port, ni ufrag, ni URL.
+  - **Lecture média** : `CallMediaQuality.read` reprend `readMediaQuality` du web.
+    - Chaque somme ne compte que les flux qui portent la mesure. Une mesure absente vaut `null`, jamais 0.
+    - Le tampon de gigue ne lit que l'audio dont le compte émis est positif.
+    - Du candidat local de la paire élue, seul le type part, et `relayProtocol` seulement s'il est `relay`.
+  - **Repli sur la paire nominée** : libwebrtc rend `nominated` en booléen, maintenant lu comme 1/0. Ce repli n'avait jamais fonctionné ; `relayed` en profite aussi.
+  - **Ce que l'appel retient** : `CallMediaTally` garde le dernier relevé, la somme des gigues et le décompte des causes de limitation.
+    - Chaque champ ne part que s'il est mesuré et fini.
+    - Les compteurs sont bornés à 2^53−1, car zod 4 refuse au-delà, vérifié à l'exécution.
+    - La cause dominante l'emporte ; à égalité, l'ordre alphabétique tranche.
+    - Le MOS est calculé sur les moyennes de l'appel, perte convertie en pourcentage.
+  - **Rétrocompatibilité** : aucun champ existant n'a changé, et le schéma serveur non plus.
+- **Tests** :
+  - Ajoutés : `CallMosTest`, `CallMediaQualityTest` (9), `CallAnalyticsMediaTest` (9), plus un test sur l'échantillonneur et un sur le collecteur. Ils étaient rouges à la compilation avant le code.
+  - **Preuve** : `workflow_dispatch` d'`android.yml`, run 44546671378 sur `1c04ffae7`, **success**. `assembleDebug`, `testDebugUnitTest`, kit, Room et gardes sont tous verts.
+  - Gradle ne tourne pas dans le conteneur : le plugin AGP est introuvable hors ligne, et `build-artifacts.signal.org` répond 403.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - Le schéma, la vie privée et les appelants (aucun `distinctUntilChanged` touché) ont été vérifiés.
+  - Réserves 2 et 3 → #19899 : `averageRtt`, `averagePacketLoss` et `maxPacketLoss` ne sont pas bornés (préexistant, inatteignable aujourd'hui), et le RTT n'est pas lu sur la paire élue.
+- **Suivis ouverts** :
+  - #19896 : la perte est en fraction sur Android, en pourcentage sur iOS et le web.
+  - #19897 : le web ne borne pas les compteurs démesurés.
+  - #19899.
+- **Limites** :
+  - Je n'ai pas vérifié sur un appareil la présence de `freezeCount`, `qualityLimitationReason` et `relayProtocol` dans le libwebrtc embarqué.
+  - Il n'y a pas encore de recette staging web↔Android (`reportingCalls` > 0).
+
+### Cycle suivant : par où reprendre
+
+0. Si #19898 n'est pas fusionnée, la reprendre : fusionner `dev`, puis `workflow_dispatch` d'`android.yml`, puis fusionner.
+1. #19899 et #19896 (Android, petits), puis #19897 (web).
+2. Recette staging de #11932 (`GET /admin/analytics/calls`, `quality.reportingCalls` > 0) : c'est le critère qui ferme #11932.
+3. #12236 (ancrage de la négociation de l'appelant), puis #16933 (alerte sur le débordement de la voie rapide des sous-titres).
+
+## Cycle 54 — 2026-11-19
+
+- **Base** : `origin/dev` @ `1c183a31c`. #19898 (cycle 53) est fusionnée. La branche contient la tête de `dev`.
+- **Branche** : `claude/determined-volta-9cg0j1`.
+- **Objectif** : #19897. Un compteur WebRTC démesuré ne fait plus rejeter tout le rapport `call:analytics` du web.
+- **Livré** (`apps/web/src/lib/calls/call-analytics.ts`) :
+  - `count` omet un compteur non fini, négatif ou supérieur à `Number.MAX_SAFE_INTEGER` après arrondi. Sont concernés `freezeCount`, `concealedSamples`, `nackCount` et `pliCount` : zod 4 refuse un entier non sûr.
+  - `measure` omet `totalFreezesDuration` et `jitterBufferDelay` s'ils sont non finis ou négatifs. Cela couvre le débordement de somme de `combineMediaQuality` (1e308 + 1e308) et celui de `delay*1000/emitted`.
+  - Un payload valide reste identique, et le schéma serveur ne change pas.
+- **Tests** :
+  - Le témoin `call-analytics-hostile-stats.test.ts` reçoit `1e30`, `2^53`, une somme infinie et une division qui déborde. Il était rouge avant le correctif (`safeParse().success` à `false`), vert après.
+  - La borne incluse `MAX_SAFE_INTEGER` est bien émise.
+  - `bun test src/lib/calls/` : `2440 pass / 0 fail`. `tsc --noEmit` : 0.
+  - Relancé par moi : `bun test src/lib/calls/call-analytics`, `29 pass / 0 fail`.
+- **QA** : favorable avec réserves. Les réserves sont préexistantes et le diff ne les aggrave pas. Elles sont versées dans **#19911** :
+  - une perte de paquets négative (RFC 3550, paquets dupliqués, scénario réaliste) fait rejeter tout le rapport ;
+  - un RTT de `1e306` aussi ;
+  - `codec` n'est pas coupé à 50 caractères.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre : `workflow_dispatch` de `ci.yml`, puis la fusionner.
+1. **#19911** (web, réaliste : la perte négative perd toute la télémétrie de l'appel). Vérifier aussi iOS et Android.
+2. #19899 et #19896 (Android, petits).
+3. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.

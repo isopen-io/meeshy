@@ -16,6 +16,8 @@ struct ProfileOwnAvatar: View {
     let isEditing: Bool
     /// Le diamètre que l'en-tête repliable (K28) lui donne : 112 sous la bannière, 36 dans la barre (#19589).
     var size: CGFloat = ProfileOwnAvatar.size
+    /// Le cadre équipé se pose ici, sauf quand l'hôte le pose lui-même hors d'un conteneur qui découpe (#19925).
+    var wearsRing = true
 
     @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
     @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
@@ -37,16 +39,30 @@ struct ProfileOwnAvatar: View {
             moodEmoji: mood,
             onMoodTap: mood == nil ? nil : moodTapResolver?(userId)
         )
-        .avatarRing(ring, avatarSize: size, decorRoom: AvatarRingLayout.fullSpill(ring, box: size * 100 / 84))
+        .modifier(ProfileOwnRing(ring: wearsRing ? ring : nil, size: size))
     }
 
     static let size: CGFloat = AvatarContext.profileBanner.size
 
-    private var ring: AvatarRingDesign? { ProfileDecorResolver.ring(user?.profileDecor?.avatarRing) }
+    private var ring: AvatarRingDesign? { Self.ring(of: user) }
 
-    /// #15157 — ce que le cadre illustré peint sous l'avatar : l'écran le réserve avant le nom.
+    static func ring(of user: MeeshyUser?) -> AvatarRingDesign? {
+        ProfileDecorResolver.ring(user?.profileDecor?.avatarRing)
+    }
+
+    /// #15157 — ce que le cadre illustré peint sous un avatar de `avatarSize` : l'écran le réserve avant le nom.
     /// Vers le haut, le cadre déborde sur la bannière ; sur les côtés, l'écran est libre.
-    static func reserveBelow(_ user: MeeshyUser?) -> CGFloat {
-        AvatarRingLayout.paintBeyondAvatar(ProfileDecorResolver.ring(user?.profileDecor?.avatarRing), avatarSize: size)
+    static func reserveBelow(_ user: MeeshyUser?, avatarSize: CGFloat) -> CGFloat {
+        AvatarRingLayout.paintBeyondAvatar(ring(of: user), avatarSize: avatarSize)
+    }
+}
+
+/// Le cadre équipé, avec toute la place que son film demande autour de sa boîte : il se voit en entier (#15157).
+struct ProfileOwnRing: ViewModifier {
+    let ring: AvatarRingDesign?
+    let size: CGFloat
+
+    func body(content: Content) -> some View {
+        content.avatarRing(ring, avatarSize: size, decorRoom: AvatarRingLayout.fullSpill(ring, box: size * 100 / 84))
     }
 }
