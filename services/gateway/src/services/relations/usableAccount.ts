@@ -1,4 +1,5 @@
 import { GlobalUserRole, isPlatformTeam } from '@meeshy/shared/types/role-types';
+import { unsetOrNull } from '../../utils/prisma-unset';
 
 /**
  * Un compte qui peut agir ou recevoir : actif, ni supprimé, ni désactivé. Le talkie
@@ -15,6 +16,38 @@ export const ACCOUNT_STATE_SELECT = { isActive: true, deletedAt: true, deactivat
 
 export const isUsableAccount = <T extends AccountState>(account: T | null | undefined): account is T =>
   !!account && account.isActive === true && !account.deletedAt && !account.deactivatedAt;
+
+/**
+ * La MÊME loi, côté `where` — et les deux moitiés ne se substituent pas.
+ *
+ * `isUsableAccount` juge une LIGNE DÉJÀ CHARGÉE : le client Prisma rend `null`
+ * pour une colonne absente comme pour une colonne nulle, donc la lecture JS est
+ * exacte sans rien savoir de MongoDB. Une SÉLECTION, elle, doit choisir : sous
+ * MongoDB `{ champ: null }` est une ÉGALITÉ, et elle n'apparie pas un document
+ * dont la clé est ABSENTE.
+ *
+ * Or **aucun des deux chemins de création de compte n'écrit ces colonnes** —
+ * `registration.service.ts` (l'inscription) ni `user-management.service.ts`
+ * (création par un administrateur). L'absence est donc l'état de tout compte qui
+ * n'a jamais été désactivé ni supprimé, c'est-à-dire la population entière ;
+ * seuls `updateStatus` et la réactivation posent `deactivatedAt: null`. Composé
+ * à la main, ce prédicat n'appariait AUCUN compte, et quatre portes refusaient
+ * tout le monde : la présence d'équipe (#16623), la synchronisation
+ * d'appartenance de communauté, l'adoption de salon et la notification
+ * « ajouté à une communauté » (#19799). C'est la cinquième fois que la même
+ * sémantique se paie sur `User` — la diffusion n'atteignait personne (leçon 318,
+ * `jobs/broadcast-recipients.ts`), le compteur de présence de communauté portait
+ * déjà la forme juste en ligne.
+ *
+ * La clé rendue est `AND` : un `where` qui porte DÉJÀ son propre `AND` compose
+ * (`AND: [...USABLE_ACCOUNT_WHERE.AND, ...sien]`) au lieu de spreader, sans quoi
+ * l'un écrase l'autre — le seul piège de cette constante, celui de `unsetOrNull`
+ * un étage plus haut.
+ */
+export const USABLE_ACCOUNT_WHERE = {
+  isActive: true,
+  AND: [unsetOrNull('deletedAt'), unsetOrNull('deactivatedAt')],
+} as const;
 
 const STORED_ROLES: ReadonlySet<string> = new Set<string>(Object.values(GlobalUserRole));
 
