@@ -41,6 +41,8 @@ struct ConnectionBanner: View {
     @ObservedObject private var phoneAnnouncements: PhoneReachabilityAnnouncementFeed
     /// L'alerte d'inactivité d'un Sang et son retour (#18738) : même nature, même rotation, même extinction.
     @ObservedObject private var inactivityAnnouncements: InactivityAnnouncementFeed
+    /// « En appel » d'un Sang et sa fin (#18753) : même nature, même rotation, même extinction.
+    @ObservedObject private var phoneCallAnnouncements: PhoneCallAnnouncementFeed
     @StateObject private var statusVM = ConnectionStatusViewModel()
     @StateObject private var syncPillVM = SyncPillViewModel()
     /// Source des frappes hors conversation. Injectée EXPLICITEMENT par
@@ -149,12 +151,14 @@ struct ConnectionBanner: View {
         inAppNotices: NotificationToastManager = .shared,
         batteryAnnouncements: BatteryAnnouncementFeed = .shared,
         phoneAnnouncements: PhoneReachabilityAnnouncementFeed = .shared,
-        inactivityAnnouncements: InactivityAnnouncementFeed = .shared
+        inactivityAnnouncements: InactivityAnnouncementFeed = .shared,
+        phoneCallAnnouncements: PhoneCallAnnouncementFeed = .shared
     ) {
         self.inAppNotices = inAppNotices
         self.batteryAnnouncements = batteryAnnouncements
         self.phoneAnnouncements = phoneAnnouncements
         self.inactivityAnnouncements = inactivityAnnouncements
+        self.phoneCallAnnouncements = phoneCallAnnouncements
         self.isStoryViewerPresenting = isStoryViewerPresenting
         self.onItemTap = onItemTap
         self.activeConversationId = activeConversationId
@@ -248,6 +252,7 @@ struct ConnectionBanner: View {
         result.append(contentsOf: batteryAnnouncements.entries)
         result.append(contentsOf: phoneAnnouncements.entries)
         result.append(contentsOf: inactivityAnnouncements.entries)
+        result.append(contentsOf: phoneCallAnnouncements.entries)
 
         result.append(contentsOf: Self.typingEntries(
             typingUsers: typingSource.typingUsers,

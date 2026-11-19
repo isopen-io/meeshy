@@ -91,7 +91,8 @@ export const MINIMUM_SWIFT_ROUTES = 120;
 // les cinq anciens y étaient sortis du balayage en silence (165 → 160), `call:conversation-changed` est neuf.
 // 167 le 2026-11-18 : iOS lit `community:deleted` (#19591), sur le modèle de `community:updated`.
 // 169 le 2026-11-19 : `inactivity:alert` et `inactivity:cleared` (#18738), après la fusion de dev.
-export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 169;
+// 171 le 2026-11-19 : `phone-call:started` et `phone-call:ended` (#18753), iOS lit « en appel ».
+export const SWIFT_SWEPT_EVENTS_AT_LAST_MEASURE = 171;
 
 export type SwiftProperty = {
   /** La clé du FIL : le `CodingKeys` s'il existe, sinon le nom Swift. */

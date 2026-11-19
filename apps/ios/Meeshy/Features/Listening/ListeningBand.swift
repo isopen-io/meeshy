@@ -100,6 +100,8 @@ struct HeaderPeerListening: ViewModifier {
             .modifier(AvatarPhoneReachabilityOverlay(userId: userId, avatarSize: avatarSize))
             // L'alerte d'inactivité du pair (#18738) : le glyphe tant qu'il n'a pas répondu à « Tout va bien ? ».
             .modifier(AvatarInactivityOverlay(userId: userId, avatarSize: avatarSize))
+            // « En appel » du pair (#18753) : le glyphe et « En appel depuis… », jamais avec qui.
+            .modifier(AvatarPhoneCallOverlay(userId: userId, avatarSize: avatarSize))
     }
 }
 

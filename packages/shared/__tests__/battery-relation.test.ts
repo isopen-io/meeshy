@@ -49,7 +49,7 @@ describe('la batterie dans la matrice des cercles (#14147)', () => {
   });
 
   it('le consentement est accordé par défaut entre Sangs, pour la batterie, le téléphone injoignable (#18737) et la vérification d\'inactivité (#18738)', () => {
-    expect(RELATION_EMITTER_CONSENT_DEFAULT_LEVEL).toEqual({ 'device.battery': 'BLOOD', 'device.battery.pull': 'BLOOD', 'device.unreachable': 'BLOOD', 'safety.inactivity': 'BLOOD' });
+    expect(RELATION_EMITTER_CONSENT_DEFAULT_LEVEL).toEqual({ 'device.battery': 'BLOOD', 'device.battery.pull': 'BLOOD', 'device.unreachable': 'BLOOD', 'safety.inactivity': 'BLOOD', 'device.call': 'BLOOD' });
   });
 });
 

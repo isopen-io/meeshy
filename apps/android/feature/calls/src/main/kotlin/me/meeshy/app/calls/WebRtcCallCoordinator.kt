@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.call.CallParticipantLeftPayload
 import me.meeshy.sdk.model.call.CallVideoFallback
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.ThermalState
+import me.meeshy.sdk.model.phonecall.MeeshyCallRinging
 import me.meeshy.sdk.model.call.WebRtcError
 import me.meeshy.sdk.playback.CallHandoff
 import me.meeshy.sdk.socket.CallSignalManager
@@ -363,10 +364,14 @@ class WebRtcCallCoordinator @Inject constructor(
      */
     fun routePreviewAudio(audible: Boolean, isVideo: Boolean) {
         if (audible) {
+            if (callScope == null) MeeshyCallRinging.set(true)
             audio.route(speakerOn = true, isVideo = isVideo)
             return
         }
-        if (callScope == null) audio.restore()
+        if (callScope == null) {
+            MeeshyCallRinging.set(false)
+            audio.restore()
+        }
     }
 
     fun end() {
@@ -375,6 +380,8 @@ class WebRtcCallCoordinator @Inject constructor(
     }
 
     private fun teardown() {
+        // Décroché (`begin` passe par ici) ou fin : l'appel ne sonne plus — « en appel » redevient vrai (#18753).
+        MeeshyCallRinging.set(false)
         thermalMonitor?.stop()
         videoHealth?.reset()
         videoEncoding.end()
