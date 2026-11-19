@@ -245,7 +245,6 @@ public struct MeeshySegmented<ID: Hashable & Sendable>: View {
               let next = MeeshySegmentedLaw.tapResult(current: currentIndex, target: index, isEnabled: isEnabled)
         else { return }
         selection.wrappedValue = options[next].id
-        HapticFeedback.light()
     }
 
     private func move(_ key: MeeshySegmentedLaw.Key) -> Bool {

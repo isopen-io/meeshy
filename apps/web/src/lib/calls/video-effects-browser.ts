@@ -2,7 +2,8 @@ import { lazyLensStage } from '@/lib/meeshy-lens/lens-lazy';
 
 import { currentDeviceTier } from '../device/capability-tier';
 
-import { browserReducedMotion, createFaceLayer } from './face-effects-draw';
+import { browserReducedMotion, browserSurface, createFaceLayer } from './face-effects-draw';
+import { lazyFaceRig, type FaceRig } from './face-rig-port';
 import { browserFaceDetector, createFaceTracker, type FaceDetectorPort } from './face-tracker';
 import { createSegmentedBlur, segmentIntervalFor, type SegmenterPort } from './video-effects-blur';
 import { createBlurCompositor } from './video-effects-compositor';
@@ -11,7 +12,8 @@ import type { BlurStage, FrameEnv, Surface } from './video-effects-frames';
 
 /**
  * **CE QUE LE TRAITEMENT REÇOIT DU NAVIGATEUR** (#9099, #8471) — le canevas
- * de travail, la fabrique d'images, le flou et le calque de visage, bâtis
+ * de travail, la fabrique d'images, le flou et le calque de visage (et son
+ * gréement chargé à la demande, #19779), bâtis
  * avec les seules API qu'un WORKER connaît aussi (`OffscreenCanvas`,
  * `VideoFrame`, `createImageBitmap`) : le worker et le repli du fil principal
  * en reçoivent la même chose.
@@ -69,13 +71,22 @@ function trackFace(detector: FaceDetectorPort): (source: CanvasImageSource, fram
   };
 }
 
+/**
+ * Le gréement du visage (#19779) : un chunk à part, demandé au premier visage
+ * cherché — le détecteur à 478 points (palier A), la pose, la loupe du bébé.
+ */
+const loadFaceRig = (fallback: FaceDetectorPort | null): Promise<FaceRig> =>
+  import('./face-rig').then((module) => module.createFaceRig({ fallback, tier: currentDeviceTier, now, surface: browserSurface() }));
+
 export function browserFrameEnv(options: { readonly reducedMotion?: () => boolean } = {}): LocalFrameEnv {
-  const face = createFaceLayer(browserFaceDetector(), options.reducedMotion === undefined ? {} : { reducedMotion: options.reducedMotion });
+  const detector = browserFaceDetector();
+  const faceRig = lazyFaceRig(() => loadFaceRig(detector), detector);
+  const face = createFaceLayer(detector, { rig: faceRig, ...(options.reducedMotion === undefined ? {} : { reducedMotion: options.reducedMotion }) });
   const lensFace = { track: trackFace, browserDetector: browserFaceDetector, tier: currentDeviceTier, now };
   const lens = lazyLensStage(() =>
     import('@/lib/meeshy-lens/lens-browser').then((module) => module.browserLensStage({ face: lensFace, ...(options.reducedMotion === undefined ? {} : { reducedMotion: options.reducedMotion }) })),
   );
-  return { surface: offscreen2d, now, face, blur: browserBlur, lens, frameFrom: (canvas, init) => new VideoFrame(canvas, init) };
+  return { surface: offscreen2d, now, face, faceRig, blur: browserBlur, lens, frameFrom: (canvas, init) => new VideoFrame(canvas, init) };
 }
 
 /** Le repli du fil principal : `matchMedia` y existe, le calque de visage le lit lui-même. */

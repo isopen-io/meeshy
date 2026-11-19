@@ -131,9 +131,9 @@ struct ShareMyLocationSheet: View {
     }
 
     private func avatar(_ recipient: ShareMyLocationRecipient) -> some View {
-        MeeshyAvatar(name: recipient.name, context: .custom(26), accentColor: DynamicColorGenerator.colorForName(recipient.name),
+        LivePresence { MeeshyAvatar(name: recipient.name, context: .custom(26), accentColor: DynamicColorGenerator.colorForName(recipient.name),
                      avatarURL: recipient.avatarURL,
-                     presenceState: PresenceManager.shared.knownPresenceState(for: recipient.userId))
+                     presenceState: PresenceManager.shared.knownPresenceState(for: recipient.userId)) }
     }
 
     @ViewBuilder

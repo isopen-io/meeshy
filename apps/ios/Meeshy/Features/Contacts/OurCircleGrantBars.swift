@@ -17,12 +17,14 @@ enum OurCircleTint {
 struct OurCircleFace: Equatable {
     var avatarURL: String?
     var ring: ServedProfileDecorItem?
-    var presence: PresenceState?
+    var userId: String?
 
+    /// Lue au rendu, sous `LivePresence` chez chaque avatar qui la montre : elle suit `user:status` (#11412).
     @MainActor
+    var presence: PresenceState? { userId.flatMap { PresenceManager.shared.knownPresenceState(for: $0) } }
+
     static func of(_ user: MeeshyUser?, userId: String?) -> OurCircleFace {
-        OurCircleFace(avatarURL: user?.avatar, ring: user?.profileDecor?.avatarRing,
-                      presence: userId.flatMap { PresenceManager.shared.knownPresenceState(for: $0) })
+        OurCircleFace(avatarURL: user?.avatar, ring: user?.profileDecor?.avatarRing, userId: userId)
     }
 }
 
@@ -97,8 +99,8 @@ struct OurCircleGrantBars: View {
                          tint: Color) -> some View {
         let reached = (levels.firstIndex(of: level) ?? 0) + 1
         return HStack(spacing: MeeshySpacing.xsPlus) {
-            MeeshyAvatar(name: name, context: .custom(Self.rowAvatar), accentColor: accentHex, avatarURL: face.avatarURL,
-                         presenceState: face.presence, ring: face.ring)
+            LivePresence { MeeshyAvatar(name: name, context: .custom(Self.rowAvatar), accentColor: accentHex, avatarURL: face.avatarURL,
+                         presenceState: face.presence, ring: face.ring) }
             ForEach(levels.indices, id: \.self) { index in
                 notch(filled: index < reached, unknown: isFloor && index >= reached, tint: tint)
             }

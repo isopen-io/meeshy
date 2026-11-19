@@ -10,6 +10,7 @@
     <string name="call_effects_face_angel">Engel</string>
     <string name="call_effects_face_demon">Dämon</string>
     <string name="call_effects_face_volcano">Ausbruch</string>
+    <string name="call_effects_face_baby">Baby</string>
     <string name="call_effects_settings">Einstellungen</string>
     <string name="call_effects_settings_hint">Zeigt Helligkeit und Hintergrundunschärfe statt der Effekte</string>
     <string name="call_effects_back">Zurück zum Anruf</string>

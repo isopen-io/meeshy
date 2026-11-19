@@ -67,8 +67,8 @@ struct ContactlessExchangeSection: View {
 
     private func person(name: String, username: String, avatar: String?, userId: String?) -> some View {
         HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(name: username, context: .custom(56), accentColor: accentColor, avatarURL: avatar,
-                         presenceState: userId.flatMap { PresenceManager.shared.knownPresenceState(for: $0) })
+            LivePresence { MeeshyAvatar(name: username, context: .custom(56), accentColor: accentColor, avatarURL: avatar,
+                         presenceState: userId.flatMap { PresenceManager.shared.knownPresenceState(for: $0) }) }
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: name)

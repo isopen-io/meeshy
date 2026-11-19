@@ -438,6 +438,14 @@ describe('partage d’écran (#8063)', () => {
     return h;
   };
 
+  test('la boucle de qualité sait que j’envoie mon écran, pour en garder la résolution (#19777)', async () => {
+    const h = await connected();
+    h.advance(2_000);
+    expect(h.qualityDeps()?.sharingScreen?.()).toBe(false);
+    await h.engine.toggleScreen();
+    expect(h.qualityDeps()?.sharingScreen?.()).toBe(true);
+  });
+
   test('dans un appel vocal, partager envoie l’écran sur chaque lien et l’annonce', async () => {
     const h = await connected();
     await h.engine.toggleScreen();

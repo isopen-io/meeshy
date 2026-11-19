@@ -5,7 +5,7 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 import type { SocketClient } from '@/lib/net/socket';
 
 import { bridgeCallEvents } from './call-socket-bridge';
-import { bindCallTransport, resetCallTransportForTests, whenCallTransportReady, type CallTransport } from './call-transport';
+import { bindCallTransport, currentCallTransport, resetCallTransportForTests, whenCallTransportReady, type CallTransport } from './call-transport';
 
 /**
  * UN APPEL NE PART QUE SUR UNE CONNEXION AUTHENTIFIÉE (#8199) — un onglet
@@ -101,6 +101,19 @@ describe('le pont du socket annonce la connexion prête', () => {
     fire(SERVER_EVENTS.AUTHENTICATED);
     await settle();
     expect(waiting.done).toBe(true);
+  });
+
+  test('reconnecter le port d’appel recycle le socket du pont (#19776)', () => {
+    const recycled: string[] = [];
+    const { socket } = fakeSocket(true);
+    bridgeCallEvents({ ...socket, recycle: () => void recycled.push('recycle') });
+    currentCallTransport()?.reconnect?.();
+    expect(recycled).toEqual(['recycle']);
+  });
+
+  test('un socket sans recyclage (bouchon de fixtures) se reconnecte sans erreur', () => {
+    bridgeCallEvents(fakeSocket(true).socket);
+    expect(() => currentCallTransport()?.reconnect?.()).not.toThrow();
   });
 
   test('un socket déjà authentifié avant que le pont se pose (bouchon de fixtures) est tenu pour prêt', async () => {

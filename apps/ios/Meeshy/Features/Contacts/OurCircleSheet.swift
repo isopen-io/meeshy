@@ -152,14 +152,14 @@ struct OurCircleSheet: View {
             form: .rings,
             label: OurCircleCopy.scaleLabel,
             center: {
-                MeeshyAvatar(name: myName, context: .custom(OurCircleGrantBars.centerAvatar),
+                LivePresence { MeeshyAvatar(name: myName, context: .custom(OurCircleGrantBars.centerAvatar),
                              accentColor: myAccentHex, avatarURL: myFace.avatarURL, presenceState: myFace.presence,
-                             ring: myFace.ring)
+                             ring: myFace.ring) }
             },
             marker: {
-                MeeshyAvatar(name: displayName, context: .custom(OurCircleGrantBars.markerAvatar),
+                LivePresence { MeeshyAvatar(name: displayName, context: .custom(OurCircleGrantBars.markerAvatar),
                              accentColor: accentHex ?? DynamicColorGenerator.colorForName(displayName),
-                             avatarURL: theirFace.avatarURL, presenceState: theirFace.presence, ring: theirFace.ring)
+                             avatarURL: theirFace.avatarURL, presenceState: theirFace.presence, ring: theirFace.ring) }
             }
         )
         .frame(maxWidth: .infinity)
