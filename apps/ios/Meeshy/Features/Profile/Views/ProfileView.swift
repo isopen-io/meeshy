@@ -511,16 +511,8 @@ struct ProfileView: View {
                 onDecor: { decorShown = true }
             )
             .transition(.opacity)
-            // La carte formulaire n'existe qu'en édition (planche `Moi-Edition`) ; la Vitrine n'en montre aucune.
-            ProfileIdentitySection(
-                isEditing: isEditing, firstName: $firstName, lastName: $lastName,
-                displayName: $displayName, bio: $bio, city: $city, cityCircle: $cityCircle,
-                username: user?.username, accentColor: accentColor
-            )
-            .meeshyCascade(rank: 0)
-        } else {
-            restingIdentity.meeshyCascade(rank: 0)
         }
+        identityBlock.meeshyCascade(rank: 0)
         // Les blocs montent l'un après l'autre à l'arrivée sur la face (K26, mouvement 08, #19625).
         ProfileCirclesSection(summary: circles.summary, hasServedLinks: circles.hasServedLinks,
                               loadState: circles.loadState, accentHex: accentColor, onOpen: open,
@@ -543,6 +535,21 @@ struct ProfileView: View {
         if !isEditing, let userId = user?.id {
             ProfilePublicationsSection(userId: userId, accentColor: accentColor)
                 .meeshyCascade(rank: 4)
+        }
+    }
+
+    /// Le bloc du rang 0, un seul quelle que soit la face : la carte formulaire n'existe qu'en édition (planche
+    /// `Moi-Edition`) ; la Vitrine n'en montre aucune et lit l'identité en texte.
+    @ViewBuilder
+    private var identityBlock: some View {
+        if isEditing {
+            ProfileIdentitySection(
+                isEditing: isEditing, firstName: $firstName, lastName: $lastName,
+                displayName: $displayName, bio: $bio, city: $city, cityCircle: $cityCircle,
+                username: user?.username, accentColor: accentColor
+            )
+        } else {
+            restingIdentity
         }
     }
 

@@ -32,13 +32,16 @@ nonisolated struct RelationCommunityJoins: Equatable, Sendable {
     }
 }
 
-/// La porte que l'app ouvre vers une communauté (son identifiant serveur). `nil` : le billet d'une communauté dont je
-/// fais partie ne s'ouvre pas.
+/// La porte que l'app ouvre vers une communauté (son identifiant serveur), et l'adhésion qu'elle envoie (`true` : le
+/// serveur l'a acceptée). `nil` : le billet d'une communauté dont je fais partie ne s'ouvre pas, et « Rejoindre » ne se
+/// montre pas — la fiche n'appelle aucun service.
 public struct ProfileCommunityDoor {
     public let open: (String) -> Void
+    public let join: @MainActor (String) async -> Bool
 
-    public init(open: @escaping (String) -> Void) {
+    public init(open: @escaping (String) -> Void, join: @escaping @MainActor (String) async -> Bool) {
         self.open = open
+        self.join = join
     }
 }
 
@@ -58,7 +61,7 @@ public extension EnvironmentValues {
 struct RelationOpenCommunitiesSection: View {
     let communities: [ProfileOpenCommunity]
     let tint: Color
-    let join: @MainActor (String) async -> Bool
+    let join: (@MainActor (String) async -> Bool)?
     let onOpen: ((String) -> Void)?
 
     @State private var joins = RelationCommunityJoins()
@@ -108,9 +111,11 @@ struct RelationOpenCommunitiesSection: View {
                     .accessibilityHidden(true)
             }
             Spacer(minLength: MeeshySpacing.sm)
-            MeeshyButton(RelationLinksReachCopy.join, kind: .accent, size: .s44, tint: tint,
-                         isPending: joins.isPending(community.id), action: { start(community) })
-                .accessibilityHint(Text(community.name))
+            if let join {
+                MeeshyButton(RelationLinksReachCopy.join, kind: .accent, size: .s44, tint: tint,
+                             isPending: joins.isPending(community.id), action: { start(community, join: join) })
+                    .accessibilityHint(Text(community.name))
+            }
         }
     }
 
@@ -124,7 +129,7 @@ struct RelationOpenCommunitiesSection: View {
         }
     }
 
-    private func start(_ community: ProfileOpenCommunity) {
+    private func start(_ community: ProfileOpenCommunity, join: @escaping @MainActor (String) async -> Bool) {
         guard joins.begin(community) else { return }
         let id = community.id
         Task {
