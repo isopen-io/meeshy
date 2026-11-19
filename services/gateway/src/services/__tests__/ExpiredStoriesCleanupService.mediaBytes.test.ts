@@ -154,4 +154,30 @@ describe('ExpiredStoriesCleanupService — octets des médias purgés', () => {
     expect(prisma.post.deleteMany).not.toHaveBeenCalled();
     expect(result.hardDeleted).toBe(0);
   });
+
+  // #19750 — les pistes TTS traduites d'une story vocale vivent dans
+  // `PostMedia.translations` : la passe doit les LIRE pour les effacer. Le
+  // double ne rend que les colonnes que le `select` demande, comme Prisma.
+  it('test_cleanup_reclaimsTheTranslatedTracksOfAnExpiredStory', async () => {
+    const stored = {
+      id: 'media-1',
+      fileUrl: '2026/11/u/voice.m4a',
+      thumbnailUrl: null,
+      translations: {
+        fr: { type: 'audio', url: '/api/v1/attachments/file/translated/media-1_fr.mp3', path: '/app/uploads/translated/media-1_fr.mp3' },
+      },
+    };
+    const prisma = buildPrisma();
+    (prisma.postMedia.findMany as jest.Mock).mockImplementation(async (...args: unknown[]) => {
+      const { select } = args[0] as { select: Record<string, true> };
+      return [Object.fromEntries(Object.entries(stored).filter(([column]) => select[column]))];
+    });
+    const storage = buildStorage();
+
+    await new ExpiredStoriesCleanupService(prisma, { mediaStorage: storage }).cleanup();
+
+    expect(storage.delete).toHaveBeenCalledWith('2026/11/u/voice.m4a');
+    expect(storage.delete).toHaveBeenCalledWith('translated/media-1_fr.mp3');
+    expect(storage.delete).not.toHaveBeenCalledWith('/app/uploads/translated/media-1_fr.mp3');
+  });
 });

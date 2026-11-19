@@ -1876,6 +1876,10 @@ jobs:
             [ "$i" = 3 ] && exit 1
             echo "apt : tentative $i en échec, nouvelle tentative dans 10 s"
             sleep 10
+            # Un `timeout` qui tue apt pendant l'installation laisse dpkg
+            # INTERROMPU, et toute reprise échoue alors sur « dpkg was
+            # interrupted » (2026-11-19, run 44452585237, deux fois de suite).
+            sudo timeout 240 dpkg --configure -a || true
           done
           ffprobe -version | head -1
           jpegtran -version 2>&1 | head -1
@@ -2025,6 +2029,10 @@ jobs:
             [ "$i" = 3 ] && exit 1
             echo "apt : tentative $i en échec, nouvelle tentative dans 10 s"
             sleep 10
+            # Un `timeout` qui tue apt pendant l'installation laisse dpkg
+            # INTERROMPU, et toute reprise échoue alors sur « dpkg was
+            # interrupted » (2026-11-19, run 44452585237, deux fois de suite).
+            sudo timeout 240 dpkg --configure -a || true
           done
 
       - name: Parity lane self-test
