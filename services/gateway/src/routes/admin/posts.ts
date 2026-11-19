@@ -7,6 +7,7 @@ import { validatePagination } from '../../utils/pagination';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { authorSelect, mediaSelect, NOT_DELETED } from '../../services/posts/postIncludes';
+import { withServedPostMedia } from '../../services/posts/servedPostMedia';
 import { applyPostRemovalEffects } from '../../services/posts/postRemovalEffects';
 import { noticeAdminRemoval } from '../../services/moderation/adminRemovalNotices';
 import { removedPostContentType } from '../../services/moderation/contentRemoval';
@@ -702,7 +703,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         return sendNotFound(reply, 'Post non trouve');
       }
 
-      return sendSuccess(reply, post);
+      return sendSuccess(reply, withServedPostMedia(post));
 
     } catch (error) {
       logError(fastify.log, 'Get admin post detail error:', error);

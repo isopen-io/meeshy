@@ -1,5 +1,5 @@
 import { describe, it, expect, jest } from '@jest/globals';
-import { reclaimMediaRowBytes } from '../reclaimPostMediaBytes';
+import { POST_MEDIA_FILE_COLUMNS, reclaimMediaRowBytes } from '../reclaimPostMediaBytes';
 
 type SoundRow = { fileUrl: string; coverUrl: string | null };
 
@@ -194,5 +194,68 @@ describe('reclaimMediaRowBytes', () => {
     ]);
 
     expect(deleted(storage)).toEqual(['2026/10/u/a.jpg', '2026/10/u/b.jpg']);
+  });
+  // #19750 — les pistes TTS d'un média de post ne sont désignées que par
+  // `translations.<langue>.url` : sans les lire, chaque story expirée laissait
+  // ses vocaux traduits sur le disque, servis sans authentification.
+  describe('les pistes traduites (#19750)', () => {
+    const TRACK_FR = '/api/v1/attachments/file/translated/media-1_fr.mp3';
+    const TRACK_EN = '/api/v1/attachments/file/translated/media-1_en.mp3';
+
+    it('test_reclaim_deletesTheTranslatedAudioTracksOfTheRow', async () => {
+      const prisma = buildPrisma();
+      const storage = buildStorage();
+
+      const count = await reclaimMediaRowBytes(prisma, storage, [
+        {
+          fileUrl: '2026/11/u/voice.m4a',
+          translations: {
+            fr: { type: 'audio', transcription: 'Bonjour', path: '/app/uploads/translated/media-1_fr.mp3', url: TRACK_FR },
+            en: { type: 'audio', transcription: 'Hello', url: TRACK_EN },
+          },
+        },
+      ]);
+
+      expect(deleted(storage)).toEqual(['/api/v1/attachments/file/translated/media-1_en.mp3', '/api/v1/attachments/file/translated/media-1_fr.mp3', '2026/11/u/voice.m4a']);
+      expect(count).toBe(3);
+    });
+
+    it('test_reclaim_keepsATranslatedTrackStillReferencedByASound', async () => {
+      const prisma = buildPrisma([{ fileUrl: TRACK_FR, coverUrl: null }]);
+      const storage = buildStorage();
+
+      await reclaimMediaRowBytes(prisma, storage, [
+        { fileUrl: '2026/11/u/voice.m4a', translations: { fr: { type: 'audio', url: TRACK_FR } } },
+      ]);
+
+      expect(deleted(storage)).toEqual(['2026/11/u/voice.m4a']);
+    });
+
+    it('test_reclaim_ignoresMalformedTranslationJson_neverGuessesAPath', async () => {
+      const prisma = buildPrisma();
+      const storage = buildStorage();
+
+      await reclaimMediaRowBytes(prisma, storage, [
+        { fileUrl: '2026/11/u/a.m4a', translations: 'not-a-map' },
+        { fileUrl: '2026/11/u/b.m4a', translations: [{ url: TRACK_FR }] },
+        {
+          fileUrl: '2026/11/u/c.m4a',
+          translations: {
+            fr: null,
+            en: { url: 42 },
+            es: { type: 'text', transcription: 'Hola' },
+            de: { path: '/app/uploads/translated/x_de.mp3' },
+            it: { url: '/outputs/audio/translated/x_it.mp3' },
+            pt: { url: '/api/v1/attachments/file/..%2F..%2Fetc%2Fpasswd' },
+          },
+        },
+      ]);
+
+      expect(deleted(storage)).toEqual(['2026/11/u/a.m4a', '2026/11/u/b.m4a', '2026/11/u/c.m4a']);
+    });
+
+    it('test_fileColumns_selectTheTranslationsEveryReaderSpreads', () => {
+      expect(POST_MEDIA_FILE_COLUMNS).toMatchObject({ translations: true });
+    });
   });
 });
