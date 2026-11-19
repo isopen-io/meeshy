@@ -15,7 +15,8 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
     }()
 
     private static let convertedSites: [(file: String, action: String)] = [
-        ("Profile/UserProfileSheet+ConversationsTab.swift", "openSharedConversation(conv)"),
+        // La rangée est un type à part depuis 81b7c44161 : son Button invoque `onOpen()`, qui ouvre la conversation.
+        ("Profile/UserProfileSheet+ConversationsTab.swift", "onOpen()"),
         ("Story/StoryTextEditTopBar.swift", "onFinish()"),
         ("Community/CommunitySettingsScreen.swift", "viewModel.localColor = hex"),
         ("Community/CommunityListScreen.swift", "onTap()"),

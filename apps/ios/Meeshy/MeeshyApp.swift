@@ -563,9 +563,10 @@ struct ProfileSheetEnvironment: ViewModifier {
                 scanner: { onOpened in ProfileSlot.view(.scanner, userId: "", displayName: "", onOpened: onOpened) }
             ))
             .environment(\.profileSendSheet, ProfileSendHost.sheet)
-            .environment(\.profileCommunityDoor, ProfileCommunityDoor { id in
-                DeepLinkRouter.shared.pendingDeepLink = .community(id: id)
-            })
+            .environment(\.profileCommunityDoor, ProfileCommunityDoor(
+                open: { id in DeepLinkRouter.shared.pendingDeepLink = .community(id: id) },
+                join: { id in (try? await CommunityService.shared.join(communityId: id)) != nil }
+            ))
             .environment(\.profileLoading, LiveProfileLoading())
             .environment(\.avatarListeningSource, ListeningCenter.shared.source)
     }

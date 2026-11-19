@@ -9,8 +9,8 @@ enum ProfilePublicationsGrid {
     /// Sur un cache vide pendant le premier chargement : six squelettes, jamais un spinner.
     static let skeletonCount = 6
 
-    /// Le rapport d'un réel vertical : il se lit debout dans la maçonnerie.
-    static let reelAspect = 9.0 / 16.0
+    /// Le rapport d'un réel vertical, projeté de la scène : il se lit debout dans la maçonnerie.
+    static let reelAspect = Double(SceneShape.aspect)
 
     static func tiles(posts: [FeedPost], isLoading: Bool, genre: ProfilePublicationGenre) -> [MeeshyMediaGridItem] {
         guard !posts.isEmpty else {
