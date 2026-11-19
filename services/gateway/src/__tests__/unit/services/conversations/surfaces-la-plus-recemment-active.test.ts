@@ -47,6 +47,13 @@ const shared = (id: string, fields: Record<string, unknown>, userIds: readonly s
   isActive: true,
   deletedAt: null,
   encryptionMode: null,
+  // #19910 — les deux colonnes REQUISES du schéma (`Boolean @default(false)`,
+  // `String @default("everyone")`). Prisma les écrit à CHAQUE création, donc
+  // toute ligne de production les porte ; les omettre faisait de la fixture une
+  // ligne qui n'existe pas, et le `where` du repli — qui les filtre depuis
+  // #19910 — l'écartait à juste titre.
+  isAnnouncementChannel: false,
+  defaultWriteRole: 'everyone',
   participants: userIds.map((userId) => ({ userId, isActive: true })),
   ...fields,
 });
