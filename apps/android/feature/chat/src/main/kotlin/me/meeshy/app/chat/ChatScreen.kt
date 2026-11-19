@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import me.meeshy.sdk.model.PlainSignalAdmission
 import me.meeshy.sdk.model.reading.focal.FocalMetrics
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import me.meeshy.ui.theme.MeeshySpacing
 import androidx.compose.material3.Scaffold
@@ -114,6 +115,8 @@ fun ChatScreen(
     val engagement = remember(engagementSnapshot, engagementController) {
         ChatEngagementBinding(engagementSnapshot, engagementController?.sent ?: NO_SENT)
     }
+    val actAdvanceController = remember(viewModel) { viewModel.controllers.find<ChatActAdvanceController>() }
+    val actAdvance by (actAdvanceController?.shown ?: NO_ACT_ADVANCE).collectAsStateWithLifecycle()
     val readingModeController = remember(viewModel) { viewModel.controllers.find<ReadingModeController>()?.let(::ThreadReadingModeViewModel) }
     val readingModeState by (readingModeController?.state ?: NO_READING_MODE).collectAsStateWithLifecycle()
     val summaryController = remember(viewModel) { viewModel.controllers.find<LivingSummaryController>() }
@@ -225,6 +228,11 @@ fun ChatScreen(
                 ) {
                     ChatHeaderHost(host, remember(viewModel) { viewModel.controllers.find<ChatServerSearch>() })
                 }
+                // L'acte du Rêve qui avance (#17367) : sous la bande de l'en-tête, jamais sur la saisie.
+                ChatActAdvancePill(
+                    advance = actAdvance.takeUnless { chromeHidden },
+                    modifier = Modifier.align(Alignment.TopCenter).padding(top = headerHeight + MeeshySpacing.sm),
+                )
                 Box(
                     Modifier
                         .align(Alignment.BottomCenter)

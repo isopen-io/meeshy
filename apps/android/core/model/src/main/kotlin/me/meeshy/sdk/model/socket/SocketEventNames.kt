@@ -211,6 +211,7 @@ object SocketEventNames {
     const val PRESENCE_SNAPSHOT = "presence:snapshot"
 
     // game
+    const val GAME_MISSIONS_UPDATED = "game:missions-updated"
     const val GAME_UPDATED = "game:updated"
 
     // pack
@@ -422,6 +423,7 @@ object SocketEventNames {
         E2EE_ENVELOPE,
         ENGAGEMENT_CONVERSATION_UPDATED,
         ENGAGEMENT_POST_UPDATED,
+        GAME_MISSIONS_UPDATED,
         GAME_UPDATED,
         LOCATION_LIVE_START,
         LOCATION_LIVE_STARTED,
