@@ -294,12 +294,23 @@ struct MeeshyAnchoredSheetTests {
             let code = try Self.code(file)
             #expect(!code.contains("Color(hex"), "\(file)")
             #expect(!code.contains("Color.white") && !code.contains("Color.black"), "\(file)")
-            #expect(!code.contains(".meeshyGlass("), "\(file)")
+            #expect(code.components(separatedBy: ".meeshyGlass(").count == (file == "MeeshyAnchoredSheet.swift" ? 2 : 1),
+                    "\(file)")
             #expect(!code.contains("glassEffect"), "\(file)")
             #expect(!code.contains("Composer"), "\(file)")
             #expect(!code.contains(".shared"), "\(file)")
             #expect(!code.contains("UIImpactFeedbackGenerator"), "\(file)")
         }
+    }
+
+    @Test("le seul verre de la feuille est celui de K01, au ton deep, sous la surface glass (#19583)")
+    func source_theOnlyGlassIsTheK01DeepOfTheGlassSurface() throws {
+        let code = try Self.code("MeeshyAnchoredSheet.swift")
+        let glass = try #require(code.range(of: ".meeshyGlass("))
+        let branch = try #require(code.range(of: "if surface == .glass {"))
+        #expect(branch.upperBound <= glass.lowerBound)
+        #expect(code[branch.upperBound..<glass.lowerBound].count < 80)
+        #expect(code[glass.upperBound...].prefix(120).contains("tone: .deep)"))
     }
 
     @Test("le décalage du doigt n'est lu que par l'enveloppe, jamais par le contenu")

@@ -207,7 +207,7 @@ public struct TrackingLinkChanges: Encodable, Sendable, Equatable {
         try Self.encode(campaign, .campaign, in: &container)
         try Self.encode(source, .source, in: &container)
         try Self.encode(medium, .medium, in: &container)
-        try Self.encode(expiresAt.map { $0.map { ISO8601DateFormatter().string(from: $0) } }, .expiresAt, in: &container)
+        try Self.encode(expiresAt.map { $0.map(WireDate.string(from:)) }, .expiresAt, in: &container)
         try container.encodeIfPresent(isActive, forKey: .isActive)
     }
 

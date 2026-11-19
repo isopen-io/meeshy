@@ -180,7 +180,11 @@ export class EncryptionService implements AtRestKeyring {
   async getOrCreateConversationKey(conversationId?: string): Promise<string> {
     // Fast path: check for existing key without locking
     if (conversationId) {
-      const existingKeyId = this.keyVault.getConversationKeyId(conversationId);
+      // #19755 — la carte du coffre est un cache read-through : un manque est
+      // relu en base avant de forger quoi que ce soit. Tant qu'elle partait vide
+      // à chaque démarrage, ce chemin persistait une clé de PLUS pour une
+      // conversation qui en avait déjà une.
+      const existingKeyId = await this.keyVault.conversationKeyId(conversationId);
       if (existingKeyId) {
         logger.debug('Using existing conversation key', { conversationId, keyId: existingKeyId });
         return existingKeyId;
@@ -203,7 +207,10 @@ export class EncryptionService implements AtRestKeyring {
       this.keyGenerationLocks.set(conversationId, { promise: lockPromise, resolve: resolveLock! });
 
       try {
-        // Double-check after acquiring lock - race window is now closed
+        // Double-check after acquiring lock - race window is now closed.
+        // La lecture de la CARTE suffit ici : le chemin rapide vient de la
+        // remplir si la base portait une clé, et seul un appelant concurrent de
+        // CE processus peut l'avoir posée depuis.
         const existingKeyId = this.keyVault.getConversationKeyId(conversationId);
         if (existingKeyId) {
           logger.debug('Key found after lock acquisition', { conversationId, keyId: existingKeyId });
