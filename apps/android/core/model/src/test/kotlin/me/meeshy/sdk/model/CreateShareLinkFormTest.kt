@@ -1,6 +1,8 @@
 package me.meeshy.sdk.model
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import org.junit.Test
 import java.time.Duration
 import java.time.Instant
@@ -250,5 +252,19 @@ class CreateShareLinkFormTest {
         val chosen = empty.withConversation("conv-9")
         assertThat(chosen.canSubmit).isTrue()
         assertThat(chosen.toRequest(nowMillis)!!.conversationId).isEqualTo("conv-9")
+    }
+
+    @Test
+    fun `chaque droit du lien part sur le fil, meme a sa valeur par defaut`() {
+        val wire = Json { explicitNulls = false }
+        val sent = wire.parseToJsonElement(
+            wire.encodeToString(CreateShareLinkRequest.serializer(), CreateShareLinkRequest(conversationId = "c")),
+        ).jsonObject
+        assertThat(sent.keys).containsAtLeast(
+            "allowAnonymousMessages", "allowAnonymousFiles", "allowAnonymousImages", "allowViewHistory",
+            "requireAccount", "requireNickname", "requireEmail", "requireBirthday",
+        )
+        assertThat(sent["allowAnonymousImages"].toString()).isEqualTo("false")
+        assertThat(sent["requireNickname"].toString()).isEqualTo("false")
     }
 }

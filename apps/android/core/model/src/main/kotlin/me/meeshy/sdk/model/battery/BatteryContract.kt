@@ -227,6 +227,13 @@ public data class BatteryPullResultWire(val requestedAt: String? = null, val epi
 @Serializable
 public data class BatteryEmitterSettings(val sharingEnabled: Boolean = true)
 
+/**
+ * Le corps de `PUT /me/device/battery/settings` (strict : `sharingEnabled` exigé). Sans valeur par défaut :
+ * `MeeshyApi.json` n'encode pas les défauts, et réactiver (`true`) partirait en `{}` (#19794).
+ */
+@Serializable
+public data class BatteryEmitterSettingsBody(val sharingEnabled: Boolean)
+
 /** `GET|PUT /relations/:userId/battery/settings` — ce que JE partage à l'autre, ce que je reçois de lui. */
 @Serializable
 public data class BatteryPersonSettingsWire(

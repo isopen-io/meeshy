@@ -6,6 +6,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.battery.BatteryEmitterSettings
+import me.meeshy.sdk.model.battery.BatteryEmitterSettingsBody
 import me.meeshy.sdk.model.battery.BatteryPersonSettingsBody
 import me.meeshy.sdk.model.battery.BatteryPersonSettingsWire
 import me.meeshy.sdk.model.battery.BatteryPullResultWire
@@ -36,7 +37,7 @@ interface BatteryApi {
     suspend fun emitterSettings(): ApiResponse<BatteryEmitterSettings>
 
     @PUT(ApiRoutesMe.DEVICE_BATTERY_SETTINGS)
-    suspend fun setEmitterSettings(@Body body: BatteryEmitterSettings): ApiResponse<BatteryEmitterSettings>
+    suspend fun setEmitterSettings(@Body body: BatteryEmitterSettingsBody): ApiResponse<BatteryEmitterSettings>
 
     /** Le rattrapage : les épisodes en cours qu'on me sert. */
     @GET(ApiRoutesRelations.BATTERY)
