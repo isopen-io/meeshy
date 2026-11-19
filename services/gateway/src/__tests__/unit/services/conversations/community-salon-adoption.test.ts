@@ -38,6 +38,7 @@ import {
   exitSalonOutsiders,
   isBecomingPrivate,
 } from '../../../../services/conversations/communitySalonAdoption';
+import { findManyIn } from '../../../helpers/mongo-where';
 
 const COMMUNITY = '507f1f77bcf86cd799439044';
 const CREATEUR = '507f1f77bcf86cd7994390c0';
@@ -99,17 +100,25 @@ function prismaDouble(monde: Monde = {}) {
       createMany: jest.fn<any>(async (args: any) => ({ count: args.data.length })),
     },
     user: {
+      // La lecture « compte vivant » ÉVALUE son `where` contre des lignes à la
+      // forme NOMINALE de production : ni `deletedAt` ni `deactivatedAt`, qu'aucune
+      // création de compte n'écrit (#19799). Un double qui répond depuis son propre
+      // ensemble accepte une égalité nue qui, en base, n'apparie personne.
       findMany: jest.fn<any>(async (args: any) => {
-        if (args.where.isActive === true) {
-          return args.where.id.in.filter((id: string) => !morts.has(id)).map((id: string) => ({ id }));
+        if (args.where.blockedUserIds !== undefined) {
+          return args.where.id.in.filter((id: string) => bloquentCreateur.has(id)).map((id: string) => ({ id }));
         }
-        return args.where.id.in.filter((id: string) => bloquentCreateur.has(id)).map((id: string) => ({ id }));
+        const comptes = (args.where.id.in as string[]).map((id) => (
+          morts.has(id) ? { id, isActive: true, deactivatedAt: UN_PASSE } : { id, isActive: true }
+        ));
+        return findManyIn(comptes).findMany(args);
       }),
       findUnique: jest.fn<any>(async () => ({ blockedUserIds: bloquesParCreateur })),
     },
   };
 }
 
+const UN_PASSE = new Date('2026-10-01T00:00:00.000Z');
 const NOW = new Date('2026-11-07T22:00:00.000Z');
 const NO_ANNOUNCE = (): void => undefined;
 const creations = (prisma: ReturnType<typeof prismaDouble>) =>

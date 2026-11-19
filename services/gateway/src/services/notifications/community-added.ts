@@ -36,6 +36,7 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { deferAfterResponse, type AfterResponse } from '../../utils/after-response.js';
 import type { NotificationService } from './NotificationService.js';
 import { getSharedNotificationService } from './notification-service-registry.js';
+import { USABLE_ACCOUNT_WHERE } from '../relations/usableAccount';
 
 const logger = enhancedLogger.child({ module: 'CommunityAdded' });
 
@@ -81,7 +82,7 @@ export async function announceAddedToCommunity(
   if (!actor) return 0;
 
   const recipients = await deps.prisma.user.findMany({
-    where: { id: { in: ids }, isActive: true, deactivatedAt: null, deletedAt: null },
+    where: { id: { in: ids }, ...USABLE_ACCOUNT_WHERE },
     select: { id: true, ...RECIPIENT_LANG_SELECT },
     take: ids.length,
   });

@@ -111,8 +111,47 @@ export type EqualityNullSweep = {
   readonly unresolvedFragments: readonly string[];
 };
 
+const blankKeepingLines = (texte: string): string => texte.replace(/[^\n]/g, ' ');
+
+/**
+ * Dépouille commentaires et littéraux de chaîne **sans déplacer une seule
+ * ligne** (#19799, audit du cycle 181).
+ *
+ * Deux défauts, tous deux mesurés :
+ *
+ *  · un bloc `/* … *\/` remplacé par la chaîne VIDE emporte ses retours à la
+ *    ligne, et tout ce qui suit remonte d'autant : le site
+ *    `routes/communities/addable-user.ts:19` était NOMMÉ `:8`, onze lignes de
+ *    doc-comment plus haut. Un cliquet dont la valeur est de NOMMER fichier,
+ *    ligne, colonne et graphie n'a pas le droit de se tromper sur le plus
+ *    actionnable des quatre — à `:8` il n'y a rien, et la conclusion naturelle du
+ *    lecteur est que le cliquet s'est trompé de SITE ;
+ *  · le CONTENU d'un littéral de chaîne n'est pas du code. Un libellé, un message
+ *    de journal ou une fixture qui CITE `champ: { isSet: false }` est dépouillé
+ *    comme un commentaire, pour la même raison.
+ *
+ *    **Ce dépouillement est une CEINTURE, pas la garde** — mesuré : c'est
+ *    l'ancrage `^…$` d'`isAbsencePredicate` sur la BRANCHE qui refuse déjà une
+ *    citation, une branche `{ label: "…" }` n'étant pas un prédicat d'absence
+ *    canonique. Lui attribuer cette fermeture serait une affirmation fausse de
+ *    plus dans un doc-comment. Ce qu'il porte vraiment : il met le filtre hors
+ *    d'atteinte de toute recherche TEXTUELLE future posée sur la même source.
+ *
+ *    Et il est SÛR pour une raison précise, qui tient à son motif et non au
+ *    hasard : les deux premières alternatives exigent la quote fermante **sur la
+ *    même ligne** (`[^'\\\n]`), si bien qu'une quote orpheline — le `/['"]/` d'un
+ *    littéral de regex — n'ouvre pas de chaîne et ne désynchronise rien. Mesuré
+ *    sur les 1722 fichiers de production : 0 site gagné, 0 site perdu.
+ *
+ * Le bloc est donc remplacé par ses PROPRES retours à la ligne, et le contenu
+ * d'une chaîne par des espaces, ses `\n` gardés.
+ */
 const withoutComments = (source: string): string =>
-  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  source
+    .replace(/\/\*[\s\S]*?\*\//g, (bloc) => bloc.replace(/[^\n]/g, ''))
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+    .replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`/g, (chaine) =>
+      `${chaine[0]}${blankKeepingLines(chaine.slice(1, -1))}${chaine[chaine.length - 1]}`);
 
 /** Ce qui suit un `...` sans nommer de fragment cherchable. */
 const SPREAD_KEYWORDS = new Set(['new', 'this', 'await', 'typeof', 'void']);
