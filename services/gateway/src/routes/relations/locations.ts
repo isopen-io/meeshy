@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { parseSharedLocationIncludes, SHARED_LOCATION_CIRCLES } from '@meeshy/shared/types/shared-location';
+import { parseSharedLocationIncludes, SHARED_LOCATION_CIRCLES, SHARED_LOCATION_MOTIONS } from '@meeshy/shared/types/shared-location';
 import { readRestVersionClaim, upgradeRequirementFor } from '../../middleware/app-version-floor';
 import { bloodLocationDepsOf } from '../../services/bloodLocation/bloodLocationDeps';
 import { bloodLocationEnabledFor } from '../../services/bloodLocation/bloodLocationFlag';
@@ -15,7 +15,7 @@ import { errorResponses, relationLimiter } from './shared';
  * Une position servie, déclarée CHAMP PAR CHAMP : le sérialiseur retire tout champ non
  * déclaré, et rien de plus riche que la précision du lecteur ne peut partir à côté.
  * `circle` est le cercle d'où vient l'émetteur pour CE lecteur (#17966) ; `startedAt`, le
- * début du partage en cours (#19458).
+ * début du partage en cours (#19458) ; `motion`, le mouvement à la précision exacte (#19887).
  */
 export const sharedLocationItemSchema = {
   type: 'object',
@@ -29,6 +29,7 @@ export const sharedLocationItemSchema = {
     updatedAt: { type: 'string' },
     expiresAt: { type: 'string' },
     startedAt: { type: 'string' },
+    motion: { type: 'string', enum: [...SHARED_LOCATION_MOTIONS] },
   },
 } as const;
 

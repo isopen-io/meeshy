@@ -51,6 +51,13 @@ export const SHARED_LOCATION_EXACT_MIN_RADIUS_METERS = 10;
 export const SHARED_LOCATION_RECIPIENTS_MAX = 50;
 
 /**
+ * Le mouvement de l'émetteur (#19887), joint par son appareil à la position. Servi à la
+ * précision EXACTE seulement : à un lecteur flouté, il dirait le rythme que l'arrondi cache.
+ */
+export const SHARED_LOCATION_MOTIONS = ['stationary', 'walking', 'running', 'cycling', 'automotive'] as const;
+export type SharedLocationMotion = (typeof SHARED_LOCATION_MOTIONS)[number];
+
+/**
  * Le cercle d'où vient la personne, tel que la loi d'accès vient de le juger pour CE
  * lecteur (#17013, #17966) : le marqueur de la carte en tire son icône et sa couleur,
  * et aucun client ne le recalcule. Un partage temporaire s'ouvre dès Ami, donc rien
