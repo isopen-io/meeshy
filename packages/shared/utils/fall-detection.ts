@@ -3,7 +3,7 @@
  * déduplication, et la projection servie à un Sang, TRONQUÉE À LA MINUTE. Aucun délai n'est écrit
  * ici : tout vient de `FallDetectionConfig`.
  */
-import { FALL_DETECTION_CONFIG, type FallAnnouncement, type FallDetectionConfig, type FallState } from '../types/fall-detection.js';
+import { FALL_CONSENT_VERSION, FALL_DETECTION_CONFIG, type FallAnnouncement, type FallDetectionConfig, type FallState } from '../types/fall-detection.js';
 
 /** L'épisode d'UN émetteur, rangé côté serveur (Redis scellé, aucun historique). */
 export type FallRecord = { readonly detectedAt: string; readonly openedAt: string };
@@ -48,3 +48,33 @@ export const servedFall = (userId: string, record: FallRecord, config: FallDetec
 });
 
 export const fallAnnouncementOf = (record: FallRecord): FallAnnouncement => ({ kind: 'detected', at: floorMinute(record.detectedAt) });
+
+/** L'accord ne vaut que daté ET donné sur la version COURANTE du texte : un texte changé se reconsent. */
+export const isFallConsentCurrent = (consent: { readonly consentedAt: Date | string | null | undefined; readonly version: string | null | undefined }): boolean =>
+  Boolean(consent.consentedAt) && consent.version === FALL_CONSENT_VERSION;
+
+/** La trace d'un épisode CLOS (réponse, retrait) : son instant seul, pour qu'un rapport rejoué ne le rouvre pas. */
+export type FallTombstone = { readonly detectedAt: string };
+
+/** Un rapport couvert par la pierre tombale : même fenêtre que la déduplication de l'épisode en cours. */
+export const fallTombstoneCovers = (tombstone: FallTombstone | null, detectedAt: string, config: FallDetectionConfig = FALL_DETECTION_CONFIG): boolean =>
+  tombstone !== null && ms(detectedAt) - ms(tombstone.detectedAt) < config.dedupeWindowMinutes * MINUTE_MS;
+
+/** La pierre tombale vit tant qu'un rapport du même instant peut encore être accepté. */
+export const fallTombstoneExpiresAt = (tombstone: FallTombstone, config: FallDetectionConfig = FALL_DETECTION_CONFIG): string =>
+  new Date(ms(tombstone.detectedAt) + config.maxReportAgeMinutes * MINUTE_MS).toISOString();
+
+const DAY_MS = 24 * 60 * MINUTE_MS;
+
+/**
+ * Un épisode s'ouvre : perce-t-il ? Au plus `maxUrgentEpisodesPerDay` épisodes sur 24 h glissantes
+ * percent (time-sensitive) ; au-delà, l'alerte est servie et poussée sans percer.
+ */
+export const fallUrgencyStep = (
+  openings: readonly string[],
+  now: string,
+  config: FallDetectionConfig = FALL_DETECTION_CONFIG,
+): { readonly urgent: boolean; readonly openings: readonly string[] } => {
+  const recent = openings.filter((at) => ms(now) - ms(at) < DAY_MS);
+  return { urgent: recent.length < config.maxUrgentEpisodesPerDay, openings: [...recent, now] };
+};

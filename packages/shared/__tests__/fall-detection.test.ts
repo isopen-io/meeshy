@@ -19,9 +19,22 @@ import {
   fallPersonSettingsUpdateSchema,
   fallReportSchema,
   fallSnapshotSchema,
+  SAFETY_ALERT_CLEARED_PUSH_TYPE,
+  SAFETY_ALERT_PUSH_TYPE,
 } from '../types/fall-detection';
 import { SERVER_EVENTS } from '../types/socketio-events';
-import { fallAnnouncementOf, fallReportVerdict, fallStep, isFallLive, servedFall, type FallRecord } from '../utils/fall-detection';
+import {
+  fallAnnouncementOf,
+  fallReportVerdict,
+  fallStep,
+  fallTombstoneCovers,
+  fallTombstoneExpiresAt,
+  fallUrgencyStep,
+  isFallConsentCurrent,
+  isFallLive,
+  servedFall,
+  type FallRecord,
+} from '../utils/fall-detection';
 import { notificationString } from '../utils/notification-strings';
 
 const pair = (over: Partial<Omit<RelationAccessInput, 'consent'>> = {}): Omit<RelationAccessInput, 'consent'> => ({
@@ -66,7 +79,7 @@ describe('la chute dans la matrice des cercles (#18748)', () => {
 
 describe('le contrat de la chute', () => {
   it('les délais de l\'épisode sont ceux de la décision', () => {
-    expect(FALL_DETECTION_CONFIG).toEqual({ episodeTtlMinutes: 360, maxReportAgeMinutes: 30, maxFutureSkewMinutes: 2, dedupeWindowMinutes: 10 });
+    expect(FALL_DETECTION_CONFIG).toEqual({ episodeTtlMinutes: 360, maxReportAgeMinutes: 30, maxFutureSkewMinutes: 2, dedupeWindowMinutes: 10, maxUrgentEpisodesPerDay: 3 });
     expect(FALL_CONSENT_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(FALL_CONSENT_MINIMUM_AGE).toBe(15);
   });
@@ -150,5 +163,51 @@ describe('le texte de l\'écran verrouillé ne dit rien de la santé', () => {
     expect(notificationString('fr', 'fall.alertTitle')).toBe('⚠️ Alerte de sécurité');
     expect(notificationString('fr', 'fall.alertBody', { actor: 'Awa', value: '16:42' })).toBe('Awa · 16:42 — ouvrez Meeshy');
     expect(notificationString('fr', 'fall.respondedBody', { actor: 'Awa' })).toBe('Awa a répondu');
+  });
+});
+
+describe('ce qui traverse Apple et Google ne dit rien de la santé (audit #18748, I3)', () => {
+  it('les types de push sont neutres', () => {
+    expect(SAFETY_ALERT_PUSH_TYPE).toBe('safety_alert');
+    expect(SAFETY_ALERT_CLEARED_PUSH_TYPE).toBe('safety_alert_cleared');
+    for (const type of [SAFETY_ALERT_PUSH_TYPE, SAFETY_ALERT_CLEARED_PUSH_TYPE]) expect(type).not.toMatch(/fall|chute|health/i);
+  });
+});
+
+describe('l\'accord ne vaut que sur la version courante du texte (audit #18748, I1)', () => {
+  it('daté et à la version courante : valide ; version ancienne, absente, ou sans date : non', () => {
+    const consentedAt = new Date('2026-11-19T09:00:00.000Z');
+    expect(isFallConsentCurrent({ consentedAt, version: FALL_CONSENT_VERSION })).toBe(true);
+    expect(isFallConsentCurrent({ consentedAt, version: '2026-01-01' })).toBe(false);
+    expect(isFallConsentCurrent({ consentedAt, version: null })).toBe(false);
+    expect(isFallConsentCurrent({ consentedAt: null, version: FALL_CONSENT_VERSION })).toBe(false);
+  });
+});
+
+describe('la pierre tombale d\'un épisode clos (audit #18748, B2)', () => {
+  it('le même rapport, ou un rapport à moins de 10 min, est couvert ; au-delà, non', () => {
+    const tomb = { detectedAt: at(42, 13) };
+    expect(fallTombstoneCovers(tomb, at(42, 13))).toBe(true);
+    expect(fallTombstoneCovers(tomb, at(51))).toBe(true);
+    expect(fallTombstoneCovers(tomb, at(30))).toBe(true);
+    expect(fallTombstoneCovers(tomb, at(52, 14))).toBe(false);
+    expect(fallTombstoneCovers(null, at(42, 13))).toBe(false);
+  });
+
+  it('elle vit tant qu\'un rapport du même instant peut encore être accepté', () => {
+    expect(fallTombstoneExpiresAt({ detectedAt: at(42, 13) })).toBe(at(72, 13));
+  });
+});
+
+describe('le plafond des alertes qui percent (audit #18748, I6)', () => {
+  it('trois épisodes sur 24 h glissantes percent ; le quatrième est servi sans percer ; passé 24 h, la fenêtre se vide', () => {
+    const first = fallUrgencyStep([], at(0));
+    expect(first).toEqual({ urgent: true, openings: [at(0)] });
+    const third = fallUrgencyStep([at(0), at(10)], at(20));
+    expect(third).toEqual({ urgent: true, openings: [at(0), at(10), at(20)] });
+    const fourth = fallUrgencyStep(third.openings, at(30));
+    expect(fourth.urgent).toBe(false);
+    expect(fourth.openings).toEqual([at(0), at(10), at(20), at(30)]);
+    expect(fallUrgencyStep(fourth.openings, at(24 * 60 + 11))).toEqual({ urgent: true, openings: [at(20), at(30), at(24 * 60 + 11)] });
   });
 });

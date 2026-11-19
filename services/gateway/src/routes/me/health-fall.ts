@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { fallConsentUpdateSchema, fallReportSchema } from '@meeshy/shared/types/fall-detection';
 import { fallRelayDepsOf } from '../../services/fallDetection/fallDeps';
-import { refreshFallAudience, reportFall, respondFall } from '../../services/fallDetection/fallRelay';
+import { reportFall, respondFall, withdrawFallConsent } from '../../services/fallDetection/fallRelay';
+import { isFallLockBusy } from '../../services/fallDetection/fallStore';
 import { readFallConsentSettings, writeFallConsent } from '../../services/fallDetection/fallSettings';
 import { relationIoOf } from '../../socketio/relationEvents';
 import { logError } from '../../utils/logger';
@@ -14,7 +15,7 @@ const consentSchema = {
   type: 'object',
   properties: { consentedAt: { type: 'string', nullable: true }, consentVersion: { type: 'string', nullable: true }, currentVersion: { type: 'string' } },
 } as const;
-const fallErrors = { ...errorResponses, 403: errorResponseSchema } as const;
+const fallErrors = { ...errorResponses, 403: errorResponseSchema, 503: errorResponseSchema } as const;
 
 const REFUSAL = {
   'too-old': { status: 400, error: 'Chute trop ancienne', code: 'FALL_REPORT_TOO_OLD' },
@@ -52,6 +53,7 @@ export default async function healthFallMeRoutes(fastify: FastifyInstance): Prom
       const refusal = REFUSAL[outcome.kind];
       return sendError(reply, refusal.status, refusal.error, { code: refusal.code });
     } catch (error) {
+      if (isFallLockBusy(error)) return sendError(reply, 503, 'Réessayez dans un instant', { code: 'FALL_BUSY' });
       logError(fastify.log, 'Fall report error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
@@ -71,6 +73,7 @@ export default async function healthFallMeRoutes(fastify: FastifyInstance): Prom
     try {
       return sendSuccess(reply, { cleared: await respondFall(relayOf(), request.user!.userId) });
     } catch (error) {
+      if (isFallLockBusy(error)) return sendError(reply, 503, 'Réessayez dans un instant', { code: 'FALL_BUSY' });
       logError(fastify.log, 'Fall answer error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
@@ -110,12 +113,18 @@ export default async function healthFallMeRoutes(fastify: FastifyInstance): Prom
     if (!parsed.success) return sendBadRequest(reply, 'Réglage illisible');
     try {
       const userId = request.user!.userId;
+      if (!parsed.data.consented) {
+        await withdrawFallConsent(relayOf(), userId, async () => {
+          await writeFallConsent(fastify.prisma, { userId, update: parsed.data, now: new Date() });
+        });
+        return sendSuccess(reply, await readFallConsentSettings(fastify.prisma, userId));
+      }
       const written = await writeFallConsent(fastify.prisma, { userId, update: parsed.data, now: new Date() });
       if (written.kind === 'minor') return sendError(reply, 403, 'Accord réservé aux 15 ans et plus', { code: 'FALL_CONSENT_MINOR' });
       if (written.kind === 'stale-version') return sendError(reply, 400, 'Texte d’accord périmé', { code: 'FALL_CONSENT_VERSION_STALE' });
-      if (!parsed.data.consented) await refreshFallAudience(relayOf(), userId).catch((error: unknown) => logError(fastify.log, 'Fall alert not cleared after consent withdrawal:', error));
       return sendSuccess(reply, written.settings);
     } catch (error) {
+      if (isFallLockBusy(error)) return sendError(reply, 503, 'Réessayez dans un instant', { code: 'FALL_BUSY' });
       logError(fastify.log, 'Fall settings write error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }

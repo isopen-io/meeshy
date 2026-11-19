@@ -859,12 +859,12 @@ export type {
   PhoneCallPersonSettings,
 } from './phone-call.js';
 export {
-  FALL_CLEARED_PUSH_TYPE,
   FALL_CLEARED_REASONS,
   FALL_CONSENT_MINIMUM_AGE,
   FALL_CONSENT_VERSION,
-  FALL_DETECTED_PUSH_TYPE,
   FALL_DETECTION_CONFIG,
+  SAFETY_ALERT_CLEARED_PUSH_TYPE,
+  SAFETY_ALERT_PUSH_TYPE,
 } from './fall-detection.js';
 export type {
   FallAnnouncement,
