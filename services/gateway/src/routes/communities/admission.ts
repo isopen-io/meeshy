@@ -145,6 +145,16 @@ export async function requestCommunityEntry(
     await fastify.prisma.communityJoinRequest.deleteMany({ where: { id: created.id, status: 'pending' } });
     return { kind: 'pending', requestId: kept };
   }
+  // #19872 — une invitation a pu la faire entrer entre le contrôle « non-membre » et l'écriture :
+  // la demande naît close, et personne n'est relancé.
+  const enteredMeanwhile = await fastify.prisma.communityMember.findFirst({
+    where: { communityId, userId, isActive: true },
+    select: { id: true }
+  });
+  if (enteredMeanwhile) {
+    await closePendingJoinRequests(fastify.prisma, { communityId, userIds: [userId], decidedBy: null, now });
+    return { kind: 'pending', requestId: created.id };
+  }
   scheduleCommunityJoinRequestedFrom(fastify, { communityId, requestId: created.id, userId });
   return { kind: 'pending', requestId: created.id };
 }

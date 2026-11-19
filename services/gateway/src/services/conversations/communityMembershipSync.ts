@@ -170,8 +170,10 @@ export async function applyCommunityAdmission(
   }
   const written = [...reactivated, ...admission.creations];
   announce(written.map((entrant): CommunityMemberChange => ({ kind: 'joined', communityId, ...entrant })));
-  // #19872 — entrer par un salon clôt une demande d'entrée restée en attente.
-  await closePendingJoinRequests(prisma, { communityId, userIds: written.map((entrant) => entrant.userId), decidedBy: null });
+  // #19872 — entrer par un salon clôt une demande d'entrée restée en attente. Tout le plan :
+  // une réactivation qu'une course a déjà faite laisse la personne membre quand même.
+  const admitted = [...admission.reactivations, ...admission.creations].map((entrant) => entrant.userId);
+  await closePendingJoinRequests(prisma, { communityId, userIds: admitted, decidedBy: null });
   return written;
 }
 

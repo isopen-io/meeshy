@@ -202,7 +202,7 @@ describe('Entrer par une autre porte clôt la demande en attente', () => {
     expect(prisma.communityMember.create).toHaveBeenCalledTimes(1);
   });
 
-  it('applyCommunityAdmission (entrée implicite par un salon) clôt les demandes de ceux qu\'il a ÉCRITS, pas des autres', async () => {
+  it('applyCommunityAdmission (entrée implicite par un salon) clôt les demandes de TOUT le plan — une réactivation déjà faite par une course laisse la personne membre quand même', async () => {
     const prisma = makePrisma();
     prisma.communityMember.updateMany = jest.fn<any>().mockResolvedValue({ count: 0 });
     prisma.communityMember.createMany = jest.fn<any>().mockResolvedValue({ count: 1 });
@@ -215,8 +215,33 @@ describe('Entrer par une autre porte clôt la demande en attente', () => {
     }, () => undefined);
 
     expect(closures(prisma)).toEqual([
-      expect.objectContaining({ where: { communityId: COMM, userId: { in: [ARRIVANT] }, status: 'pending' } }),
+      expect.objectContaining({ where: { communityId: COMM, userId: { in: [OTHER, ARRIVANT] }, status: 'pending' } }),
     ]);
+  });
+
+  it('POST …/members sur une ligne laissée par un départ : la réactivation clôt aussi la demande', async () => {
+    const prisma = makePrisma();
+    prisma.communityMember.findFirst.mockResolvedValue({ id: ROW, isActive: false, userId: ARRIVANT, role: 'member' });
+    const app = await build(prisma);
+    const res = await app.inject({ method: 'POST', url: `/communities/${COMM}/members`, payload: { userId: ARRIVANT } });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.communityMember.update).toHaveBeenCalledTimes(1);
+    expect(closures(prisma)).toHaveLength(1);
+  });
+
+  it('une invitation qui la fait entrer pendant qu\'elle demande : la demande naît close et personne n\'est relancé', async () => {
+    const { scheduleCommunityJoinRequestedFrom } = jest.requireMock('../../../../services/community-join-request-broadcast') as { scheduleCommunityJoinRequestedFrom: jest.Mock };
+    scheduleCommunityJoinRequestedFrom.mockClear();
+    const prisma = makePrisma();
+    prisma.communityJoinRequest.findFirst.mockResolvedValue(null);
+    prisma.communityJoinRequest.findMany.mockResolvedValue([{ id: REQUEST }]);
+    prisma.communityMember.findFirst.mockResolvedValue({ id: ROW });
+
+    await requestCommunityEntry({ prisma } as any, { communityId: COMM, userId: ARRIVANT, via: 'self', country: null }, NOW);
+
+    expect(closures(prisma)).toEqual([expect.objectContaining({ data: expect.objectContaining({ status: 'accepted' }) })]);
+    expect(scheduleCommunityJoinRequestedFrom).not.toHaveBeenCalled();
   });
 });
 

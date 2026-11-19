@@ -615,3 +615,4 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Cliquet `community-member-writer-sweep` : chaque écrivain d'entrée doit appeler `closePendingJoinRequests`.
 - Témoins : `join-request-lifecycle-19872.test.ts` (15, rouge prouvé : 11 échecs sur un module vide) ; `communities-core` et `link-entries-19429` ajustés (le `where` porte `createdAt`).
 - Aucun client touché, aucun contrat d'API changé.
+- Auditeur adversarial : non bloquant. Corrigés dans le lot : une invitation qui fait entrer pendant que la demande s'écrit (la demande naît close, personne n'est relancé) ; une réactivation déjà faite par une course clôt quand même (tout le plan d'`applyCommunityAdmission`) ; témoin de l'ajout sur une ligne réactivée. Rouge prouvé (2 échecs sans les correctifs). Ouverte, préexistante : #19914 (accepter rouvre la demande si une panne survient après l'entrée). Rappel : pas d'index unique sur la paire `CommunityMember` (#16696).
