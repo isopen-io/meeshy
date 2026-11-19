@@ -666,7 +666,7 @@ final class SharedLocationSharingSyncTests: XCTestCase {
         XCTAssertEqual(parts.emitter.updates.count, 1)
     }
 
-    func test_aRelaunch_aGatewayBeforeTheListAlone_neverGetsThisDevicesPositionBeforeTheRead() async {
+    func test_aRelaunch_aGatewayBeforeTheListAlone_stopsWithoutThisDevicesPositionBeforeTheRead() async {
         let store = FakeSharedLocationRosterStore()
         let sut = await publishingSUT(store: store)
         sut.emitter.startVerdict = .started(expiresAt: t0.addingTimeInterval(3600), startedAt: mine)
@@ -676,9 +676,11 @@ final class SharedLocationSharingSyncTests: XCTestCase {
 
         let problem = await relaunched.center.stopSharing(with: bob)
 
-        XCTAssertEqual(problem, .withdrawalPending)
+        XCTAssertNil(problem)
+        XCTAssertEqual(relaunched.emitter.stops, 1)
         XCTAssertTrue(relaunched.emitter.starts.allSatisfy(\.isListOnly))
         XCTAssertTrue(relaunched.emitter.updates.isEmpty)
+        XCTAssertTrue(relaunched.center.roster.isEmpty)
     }
 
     // MARK: - Une sauvegarde restaurée sur un autre appareil (#19767)

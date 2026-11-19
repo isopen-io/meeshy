@@ -419,7 +419,7 @@ final class SharedLocationSharingCenter: ObservableObject {
             return await publish(next, fix: pinnedFix, previous: roster)
         }
         if let last = freshLastFix { return await publish(next, fix: last, previous: roster) }
-        guard !awaitsServedTruth else { return .refused(.unconfirmed) }
+        guard !awaitsServedTruth else { return await stopAll() }
         guard let fix = await fixes.silentFix() else { return await stopAll() }
         guard isLive else { return .refused(.failed) }
         return await publish(next, fix: fix, previous: roster)

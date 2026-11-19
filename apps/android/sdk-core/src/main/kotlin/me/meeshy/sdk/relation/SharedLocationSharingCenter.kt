@@ -400,7 +400,7 @@ class SharedLocationSharingCenter internal constructor(
         }
         if (!isCurrent(ticket)) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.FAILED)
         freshLastFix()?.let { return publish(ticket, next, it, previous = _roster.value) }
-        if (awaitsServedTruth) return SharedLocationShareProblem.Refused(SharedLocationSendOutcome.UNCONFIRMED)
+        if (awaitsServedTruth) return stopAll(ticket)
         val fix = deviceFix() ?: return stopAll(ticket)
         return publish(ticket, next, fix, previous = _roster.value)
     }
