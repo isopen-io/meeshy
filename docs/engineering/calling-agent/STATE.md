@@ -1839,3 +1839,29 @@ socket jusqu'au client.
 1. #19899 et #19896 (Android, petits), puis #19897 (web).
 2. Recette staging de #11932 (`GET /admin/analytics/calls`, `quality.reportingCalls` > 0) : c'est le critère qui ferme #11932.
 3. #12236 (ancrage de la négociation de l'appelant), puis #16933 (alerte sur le débordement de la voie rapide des sous-titres).
+
+## Cycle 54 — 2026-11-19
+
+- **Base** : `origin/dev` @ `1c183a31c`. #19898 (cycle 53) est fusionnée. La branche contient la tête de `dev`.
+- **Branche** : `claude/determined-volta-9cg0j1`.
+- **Objectif** : #19897. Un compteur WebRTC démesuré ne fait plus rejeter tout le rapport `call:analytics` du web.
+- **Livré** (`apps/web/src/lib/calls/call-analytics.ts`) :
+  - `count` omet un compteur non fini, négatif ou supérieur à `Number.MAX_SAFE_INTEGER` après arrondi. Sont concernés `freezeCount`, `concealedSamples`, `nackCount` et `pliCount` : zod 4 refuse un entier non sûr.
+  - `measure` omet `totalFreezesDuration` et `jitterBufferDelay` s'ils sont non finis ou négatifs. Cela couvre le débordement de somme de `combineMediaQuality` (1e308 + 1e308) et celui de `delay*1000/emitted`.
+  - Un payload valide reste identique, et le schéma serveur ne change pas.
+- **Tests** :
+  - Le témoin `call-analytics-hostile-stats.test.ts` reçoit `1e30`, `2^53`, une somme infinie et une division qui déborde. Il était rouge avant le correctif (`safeParse().success` à `false`), vert après.
+  - La borne incluse `MAX_SAFE_INTEGER` est bien émise.
+  - `bun test src/lib/calls/` : `2440 pass / 0 fail`. `tsc --noEmit` : 0.
+  - Relancé par moi : `bun test src/lib/calls/call-analytics`, `29 pass / 0 fail`.
+- **QA** : favorable avec réserves. Les réserves sont préexistantes et le diff ne les aggrave pas. Elles sont versées dans **#19911** :
+  - une perte de paquets négative (RFC 3550, paquets dupliqués, scénario réaliste) fait rejeter tout le rapport ;
+  - un RTT de `1e306` aussi ;
+  - `codec` n'est pas coupé à 50 caractères.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée, la reprendre : `workflow_dispatch` de `ci.yml`, puis la fusionner.
+1. **#19911** (web, réaliste : la perte négative perd toute la télémétrie de l'appel). Vérifier aussi iOS et Android.
+2. #19899 et #19896 (Android, petits).
+3. Recette staging de #11932 (`quality.reportingCalls` > 0), puis #12236, puis #16933.
