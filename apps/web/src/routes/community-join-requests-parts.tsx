@@ -79,7 +79,7 @@ export function JoinRequestsSection({
           type="button"
           data-community-join-requests-more
           onClick={onMore}
-          className="flex min-h-11 w-full items-center justify-center text-caption font-semibold focus-visible:outline-2 focus-visible:-outline-offset-2"
+          className="flex min-h-11 w-full items-center justify-center text-caption font-semibold active:opacity-80 focus-visible:outline-2 focus-visible:-outline-offset-2"
           style={{ color: 'var(--color-ios-brand)', borderTop: ROW_SEPARATOR }}
         >
           {translateMembership(language, 'community.members.requests.more')}
@@ -138,7 +138,7 @@ function JoinRequestRow({
           aria-label={translateMembership(language, 'community.members.requests.rejectLabel', { name: request.name })}
           disabled={pending}
           onClick={onReject}
-          className="grid min-h-11 place-items-center rounded-chip px-3 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="grid min-h-11 place-items-center rounded-chip px-3 text-body font-semibold active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ color: INK, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 14%, transparent)', opacity: pending ? 0.55 : 1 }}
         >
           {translateMembership(language, 'community.members.requests.reject')}
@@ -149,7 +149,7 @@ function JoinRequestRow({
           aria-label={translateMembership(language, 'community.members.requests.acceptLabel', { name: request.name })}
           disabled={pending}
           onClick={onAccept}
-          className="grid min-h-11 place-items-center rounded-chip px-3 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="grid min-h-11 place-items-center rounded-chip px-3 text-body font-semibold active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ color: 'var(--color-ios-on-brand)', backgroundColor: 'var(--color-ios-brand)', opacity: pending ? 0.55 : 1 }}
         >
           {translateMembership(language, 'community.members.requests.accept')}
