@@ -1798,3 +1798,7 @@ socket jusqu'au client.
 1. Sur staging, un appel web↔web ou web↔iOS, puis `GET /admin/analytics/calls` : `quality.reportingCalls` > 0. C'est le critère qui ferme #19876.
 2. Android, moitié restante de #11932 (même MOS, dont la source unique reste `CallMOS.swift` / `call-mos.ts`).
 3. #12236 (ancrage de la négociation de l'appelant sur la réponse, iOS et web), puis #16933 (export Prometheus du débordement de la voie rapide des sous-titres).
+
+## Cycle 53 — 2026-11-19
+
+- **Base** : `origin/dev` @ `ebb68519d`. **Objectif** : #19895, la moitié Android de #11932 (en cours).
