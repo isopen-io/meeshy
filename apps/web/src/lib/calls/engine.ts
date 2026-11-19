@@ -146,6 +146,8 @@ export type CallEngineDeps = {
   readonly cameraEffects?: CameraEffectsPort;
   /** Ce que montrent les contrôles d'un appel (#8433, #8438, #8439) — les magasins de l'application par défaut. */
   readonly controlState?: { readonly reactions: CallReactionStoreApi; readonly notices: CallNoticeStoreApi };
+  /** Le serveur dit FINI l'appel qu'on rejoignait (join refusé CALL_ENDED, #19778) : ce qui l'offrait encore se répare. */
+  readonly onJoinRefusedEnded?: (ended: { readonly conversationId: string; readonly callId: string }) => void;
 };
 
 export type CallEngine = {
@@ -558,6 +560,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
 
   const afterJoinAck = (ack: ReturnType<typeof decodeAck>): boolean => {
     if (!ack.ok) {
+      const refused = read();
+      if (ack.code === 'CALL_ENDED' && refused !== null && refused.callId !== null) deps.onJoinRefusedEnded?.({ conversationId: refused.conversationId, callId: refused.callId });
       if (ack.code === 'CALL_ENDED') finish(mapServerEndReason(ack.endReason ?? 'completed'));
       else finish('failed', ack.code);
       return false;

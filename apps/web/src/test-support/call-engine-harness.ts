@@ -42,7 +42,7 @@ export const stream = (tracks: readonly FakeTrack[]): MediaStream => {
 
 export type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; restarts: number; closed: boolean; received: string[]; sent: unknown[] };
 
-export function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly videoRefused?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort; readonly acquireCamera?: CallEngineDeps['acquireCamera']; readonly acquireCameraDevice?: CallEngineDeps['acquireCameraDevice'] } = {}) {
+export function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly videoRefused?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort; readonly acquireCamera?: CallEngineDeps['acquireCamera']; readonly acquireCameraDevice?: CallEngineDeps['acquireCameraDevice']; readonly onJoinRefusedEnded?: CallEngineDeps['onJoinRefusedEnded'] } = {}) {
   resetCallTransportForTests();
   let qualityDeps: QualityLoopDeps | null = null;
   const store: CallStoreApi = createCallStore();
@@ -162,6 +162,7 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
     random: () => options.random ?? 0.99,
     createCaptions: (ctx) => createCaptions(ctx, { speech: null, language: () => 'fr', prism: () => ['fr'], viewerName: () => 'Moi', newId: () => 'w-1', serverMayHearCaptions: () => true }),
     ...(options.cameraEffects === undefined ? {} : { cameraEffects: options.cameraEffects }),
+    ...(options.onJoinRefusedEnded === undefined ? {} : { onJoinRefusedEnded: options.onJoinRefusedEnded }),
   };
   const engine = createCallEngine(deps);
 

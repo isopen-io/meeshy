@@ -1,4 +1,5 @@
 import { apiDeps } from '@/lib/api/deps';
+import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { translate } from '@/lib/i18n-catalog';
@@ -12,6 +13,7 @@ import { deviceLabel } from './call-analytics';
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
 import { callLensStore } from './call-lens-store';
 import { createCameraEffects } from './camera-effects';
+import { repairEndedCall } from './ended-call-repair';
 import { browserConnection, dataProfileOf, opusShapeFor, type DataProfile } from './call-data-profile';
 import { browserPreferenceStorage, preferredInputs, writeDevicePreference } from './call-devices';
 import { acquireCallMedia, acquireCamera, acquireChosenInput, acquireDisplay } from './call-media';
@@ -141,5 +143,6 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     platform: () => (__SHELL__ ? 'android-shell' : 'web'),
     deviceModel: () => (typeof navigator === 'undefined' ? 'web' : deviceLabel(navigator.userAgent)),
     createCaptions: lazyCaptions,
+    onJoinRefusedEnded: (ended) => repairEndedCall(appQueryClient, ended),
   };
 }
