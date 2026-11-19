@@ -119,13 +119,6 @@ const ASYMETRIES: readonly {
       + 'avec le lot qui porte ces deux gestes, pas isolément.',
     events: ['attachment:ready', 'user:preferences-community-reordered'],
   },
-  {
-    absents: ['android'],
-    raison:
-      "un acte du Rêve qui avance : iOS relit ses actes, le web aussi depuis #17367 (l'acte qui avance se voit "
-      + "à l'envoi). Android relit le bloc `game` par `game:updated` seulement ; sa moitié suit le portage de #17367.",
-    events: ['game:missions-updated'],
-  },
 ];
 
 const contract = readContractPayloads();
