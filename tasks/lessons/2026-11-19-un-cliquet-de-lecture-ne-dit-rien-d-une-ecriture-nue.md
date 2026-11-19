@@ -1,10 +1,10 @@
-# Un cliquet qui garde les LECTURES ne dit rien d'une colonne dont c'est l'ÉCRITURE qui est nue
+## Un cliquet qui garde les LECTURES ne dit rien d'une colonne dont c'est l'ÉCRITURE qui est nue (cycle 182, #19800)
 
 *2026-11-19, cycle 182, #19800. Famille : les égalités nues de soft-state
 (#19690, #19755, #19748) — et la seule des six occurrences du piège qui vivait
 dans un `updateMany`.*
 
-## Ce qui s'est passé
+**Ce qui s'est passé.**
 
 `Conversation.lastActivityAt` avait l'air entièrement sous garde. Son lecteur
 principal — la borne de curseur de `routes/conversations/utils/list-rank.ts` —
@@ -26,7 +26,7 @@ conversation** : la première écriture ne pouvait jamais avoir lieu, la colonne
 restait absente pour toujours, et l'axe « activité » du rang de liste (#9026)
 n'a jamais existé — quatre gestes du produit inertes pour la population entière.
 
-## La règle
+**La règle.**
 
 > **Le mot « filtre » oriente vers la lecture, et c'est le vocabulaire de la
 > règle qui cache le site, pas l'instrument.** Un `where` d'`updateMany` /
@@ -49,7 +49,7 @@ Le balayage `where-equality-null-scan.ts` ne s'y trompe pas : il relève tout
 `create`, `update`, `set` — les CHARGES, pas les clauses). C'est la lecture
 humaine de son inventaire qui s'y trompe.
 
-## Le corollaire : pour prouver qu'une colonne n'est jamais écrite, compter ses ÉCRIVAINS
+**Le corollaire — pour prouver qu'une colonne n'est jamais écrite, compter ses ÉCRIVAINS.**
 
 L'issue affirmait « mesuré sur les dix-neuf sites de création ». Le compte ne se
 retrouve pas (onze `prisma.conversation.create`, aucun `createMany`, aucun
@@ -66,7 +66,7 @@ C'est la leçon 93 (« un compte est une AFFIRMATION ») prise par le côté uti
 ne pas seulement vérifier le compte hérité, mais trouver l'énoncé qui n'a pas
 besoin de compte.
 
-## Le second corollaire : deux fonctions de même nom ne se distinguent pas au `grep`
+**Le second corollaire — deux fonctions de même nom ne se distinguent pas au `grep`.**
 
 L'issue nommait cinq alimenteurs de la colonne. Il y en a quatre :
 `messagePostSaveEffects.ts:160` est
@@ -80,7 +80,7 @@ n'importe pas l'unité en cause.
 > pour dresser la liste. Deux signatures, un nom : le `grep` rend les deux et
 > rien ne les sépare à l'œil.
 
-## Et le piège de MÉTHODE qui attend le correctif
+**Et le piège de MÉTHODE qui attend le correctif.**
 
 Réparer le filtre **allume un chemin que son inertie rendait gratuit**. Le flux
 B de `loadRankedConversationPage` ne rendait jamais rien, donc `GET /conversations`
