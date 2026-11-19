@@ -39,4 +39,10 @@ class GameUpdatedEventTest {
         assertThat(shouldApplyGameState(incoming = null, applied = 100)).isTrue()
         assertThat(shouldApplyGameState(incoming = 1, applied = null)).isTrue()
     }
+
+    @Test fun `game missions-updated carries only the day to reread`() {
+        val event = json.decodeFromString<GameMissionsUpdatedEvent>("""{"dayKey":"2026-11-19","extra":1}""")
+
+        assertThat(event.dayKey).isEqualTo("2026-11-19")
+    }
 }
