@@ -1592,3 +1592,9 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   d'accent rc=0. Swift et `sdk-core` Android se prouvent par la CI de la PR, au dégel.
 - Prochain lot recommandé : inchangé (fusion de #19864 au dégel, plafond `untilStopped` de `listOnlyState`, #19682
   une fois décidée).
+
+## 2026-11-19 — reprise de #19864 après son retrait de la vague de fusion
+
+- Cause : devant une passerelle d'avant la liste seule, l'appareil relancé qui attend la relecture rendait `Refused(UNCONFIRMED)` ; le témoin déjà sur dev `SharedLocationSharingCenterTest:344` attend l'arrêt complet. Correctif sur les deux miroirs : `stopAll` (un arrêt n'a pas besoin de la position, aucune position d'ici ne part avant la relecture). Mes deux témoins du lot suivent (arrêt, rien de la position, liste vide).
+- `dev` b560659a8 fusionnée à la main ; gardes iOS vertes sur l'arbre fusionné (house_rules 42, cohesion, registration 2056 inscrits, accent 168/408). `android.yml` déclenché sur la branche, comme demandé sur la PR.
+- Restent en lots suivants : #19928 (relecture en échec à garder muette), #19929 (liste restaurée effacée et reconstruite, empreinte de l'identifiant d'installation).
