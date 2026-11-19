@@ -116,6 +116,14 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
             // Un lien de courriel MEURT. Sans cette date, le jeton reçu il y a
             // six mois ouvrait encore la suppression du compte (#4183).
             tokenExpiresAt: new Date(Date.now() + TOKEN_TTL_MS),
+            // #19802 — « aucun rappel encore envoyé » se POSE. La passe
+            // journalière cherche les demandes à relancer par
+            // `OR: [{ lastReminderAt: null }, { lastReminderAt: { lt: … } }]`,
+            // et sous MongoDB AUCUNE des deux branches n'apparie une clé
+            // ABSENTE (`utils/prisma-unset.ts`) : sans cette ligne, le PREMIER
+            // rappel ne partait jamais — donc la colonne n'était jamais écrite,
+            // donc aucun rappel ne partait jamais. Le défaut s'auto-entretenait.
+            lastReminderAt: null,
           }
         });
 
@@ -312,6 +320,12 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
             confirmTokenHash: hashToken(confirmToken),
             cancelTokenHash: hashToken(cancelToken),
             tokenExpiresAt,
+            // #19802 — même discipline que la route sœur ci-dessus : la clé se
+            // pose, sans quoi cette demande n'entre dans aucune file de rappel.
+            // Les deux routes créent la MÊME ligne ; n'en réparer qu'une
+            // laisserait la moitié de la population sans premier rappel, et
+            // rien ne le dirait.
+            lastReminderAt: null,
           },
         });
 

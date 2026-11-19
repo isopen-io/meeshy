@@ -106,7 +106,7 @@ const SRC_DIR = join(__dirname, '..');
  * `Notification`, `Post`, `ShareLink`, `UserDevice`, `Sound`) et le rang
  * d'activité (`Conversation.lastActivityAt`, #19800).
  */
-const COLONNES = new Set(['leftAt', 'bannedAt', 'expiresAt', 'lastActivityAt', 'messageId']);
+const COLONNES = new Set(['leftAt', 'bannedAt', 'expiresAt', 'lastActivityAt', 'messageId', 'verifiedAt', 'lastReminderAt']);
 
 /**
  * **Une colonne n'est pas un piège sur tous les modèles qui la portent**, et
@@ -146,6 +146,11 @@ const MODELES_PAR_COLONNE: Readonly<Record<string, readonly string[]>> = {
   // l'égalité nue est exacte et `isSet` ne compile même pas (cycle 182,
   // constat A). La portée se mesure, elle ne s'absout pas par une phrase.
   messageId: ['messageAttachment'],
+  // #19802 — les deux colonnes de « pas encore fait », chacune sur son seul
+  // modèle : la file de vérification des partenaires et les rappels
+  // hebdomadaires de suppression de compte.
+  verifiedAt: ['partnerProfile'],
+  lastReminderAt: ['accountDeletionRequest'],
 };
 
 /** Ce site est-il sur un modèle où sa colonne est OPTIONNELLE — donc piégeuse ? */
@@ -193,6 +198,24 @@ const DISCIPLINE_D_ECRITURE: Readonly<Record<string, { readonly sites: number; r
     + 'SUPPRIME la ligne et ses octets, sans borne ni pagination. C’est une purge de '
     + 'données de production, qui attend le feu vert du porteur (directive du '
     + '2026-10-03). Son sort est la seconde moitié de #19801.' },
+  'services/packs/LensPartners.ts#verifiedAt': { sites: 1, raison:
+    'PartnerProfile.verifiedAt a TROIS créateurs, et les trois posent la colonne '
+    + 'depuis #19802 : `LensPartners` (par le `data` qu’il répand dans son `create`), '
+    + 'l’éditeur officiel de `PackPublishers` (une date RÉELLE — il naît vérifié) et '
+    + 'l’éditeur créé à la publication d’un pack, le seul site qui était nu. Mesure '
+    + 'du lot : l’issue #19802 annonçait les TROIS nus ; deux l’écrivaient déjà, et '
+    + 'l’un par un spread que l’énumération de clés littérales ne pouvait pas voir. '
+    + 'Témoin de la discipline : `__tests__/unit/pending-state-write-discipline.test.ts`.' },
+  'services/MaintenanceService.ts#lastReminderAt': { sites: 1, raison:
+    'AccountDeletionRequest.lastReminderAt a DEUX créateurs — les deux routes de '
+    + 'demande de suppression — et les deux posent la colonne depuis #19802 ; avant, '
+    + 'AUCUNE ne l’écrivait, donc le PREMIER rappel ne partait jamais, donc la colonne '
+    + 'n’était jamais écrite : le défaut s’auto-entretenait. '
+    + 'La troisième branche est REFUSÉE ici, et pas pour une raison de performance : '
+    + '`...unsetOrNull` ferait entrer d’un coup tout l’arriéré dans la passe '
+    + 'journalière, c’est-à-dire un ENVOI DE COURRIELS DE MASSE à chaque demande '
+    + 'expirée depuis la mise en service. Un envoi ne se rattrape pas. Le sort de '
+    + 'l’arriéré est une décision du porteur (#19900).' },
 };
 
 /**
