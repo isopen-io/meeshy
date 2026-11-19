@@ -25,6 +25,7 @@ import { CommunityRole } from './types';
 import { communityGuardsItsSalons, exitCommunitySalons } from '../../services/conversations/communitySalonExit';
 import { isAddableUser } from './addable-user';
 import { scheduleCommunityMemberBroadcastFrom } from '../../services/community-member-broadcast';
+import { closePendingJoinRequests } from '../../services/community-join-request-lifecycle';
 import { scheduleCommunityAddedAnnouncement } from '../../services/notifications/community-added';
 import { gateCoMemberPresence } from './member-presence';
 import { viewerFromRequest } from '../users/presence-gate';
@@ -543,6 +544,7 @@ export async function registerMembershipRoutes(
 
       scheduleCommunityAddedAnnouncement(fastify.prisma, { communityId: id, actorId: userId, recipientIds: [inviteeId] });
       scheduleCommunityMemberBroadcastFrom(fastify, { kind: 'joined', communityId: id, userId: inviteeId, role: 'member', via: 'invited' });
+      await closePendingJoinRequests(fastify.prisma, { communityId: id, userIds: [inviteeId], decidedBy: userId });
 
       // Le succès revient à l'INVITÉ, pas à celui qui invite : c'est lui qui
       // rejoint le cercle (#5759).
