@@ -93,7 +93,7 @@ const EPHEMERAL_ONLY_TYPES = [
 /** JUMEAU de `MOOD_TYPES` (#10813) : la nouvelle humeur d'un contact a sa page. */
 const MOOD_TYPES = ['friend_new_mood'];
 const REQUEST_TYPES = ['friend_request', 'contact_request'];
-const PROFILE_TYPES = ['contact_joined', 'contact_recently_active', 'device_battery', 'device_unreachable'];
+const PROFILE_TYPES = ['contact_joined', 'contact_recently_active', 'device_battery', 'device_unreachable', 'inactivity_alert'];
 /** JUMEAU de `MISSED_CALL_TYPES` (#9177) : repli d'un appel manqué sans `conversationId`. */
 const MISSED_CALL_TYPES = ['missed_call', 'CALL_MISSED', 'call_declined'];
 const PROGRESSION_TYPES = [
@@ -519,6 +519,20 @@ const REPLYABLE_TYPES = ['new_message', 'message_reply', 'reply', 'user_mentione
 const INVITE_FORMS = ['chat', 'join'];
 const SHARE_LINK_KEY = /^[A-Za-z0-9_-]{1,100}$/;
 
+/** « TOUT VA BIEN ? » (#18738) : `wellness_check` reste affichée et porte « Je vais bien » ; l'action (sans ouvrir l'app) et le toucher
+ * répondent `POST /api/v1/me/wellness/ok` au nom du compte ENREGISTRÉ. JUMEAU de `answerWellnessCheck` (`src/lib/inactivity/wellness-answer.ts`). */
+const WELLNESS_PUSH_TYPE = 'wellness_check';
+const WELLNESS_OK_ACTION = 'wellness-ok';
+const WELLNESS_OK_LABELS = { fr: 'Je vais bien', en: 'I’m OK', es: 'Estoy bien', de: 'Mir geht es gut', it: 'Sto bene', pt: 'Estou bem', ar: 'أنا بخير' };
+const questionBienEtre = (data) => (texte(data.type) === WELLNESS_PUSH_TYPE ? { action: WELLNESS_OK_ACTION, title: WELLNESS_OK_LABELS[langueDuNavigateur()] } : null);
+async function repondreBienEtre(data, action) {
+  const stocke = await lireCredential();
+  const entetes = stocke !== null && stocke.credential && stocke.credential.kind === 'registered' ? entetesCredential(stocke.credential) : null;
+  const corps = { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, entetes), body: '{}', keepalive: true };
+  if (entetes !== null) await self.fetch(texte(stocke.apiBase) + '/api/v1/me/wellness/ok', corps).catch(() => undefined);
+  if (action !== WELLNESS_OK_ACTION) await ouvrir(data);
+}
+
 function coordonnee(valeur, borne) {
   const nombre = Number(texte(valeur));
   return texte(valeur) !== '' && Number.isFinite(nombre) && Math.abs(nombre) <= borne ? nombre : null;
@@ -583,12 +597,14 @@ function offreContenu(data) {
 function montrer(banniere, notification, data) {
   const offre = rappel(data);
   const contenu = offreContenu(data);
-  const actions = offre === null ? contenu.actions : [offre.action];
+  const question = questionBienEtre(data);
+  const actions = question !== null ? [question] : offre === null ? contenu.actions : [offre.action];
   const cle = acteurSujet(data);
   const tap = { ...donneesDuTap(data), ...(cle === '' ? {} : { [ACTOR_SUBJECT_KEY]: cle }) };
   return self.registration.showNotification(banniere.titre, {
     body: banniere.corps,
     ...livraison(notification, texte(data.notificationId)),
+    ...(question === null ? {} : { requireInteraction: true }),
     icon: BANNER_ICON,
     badge: BANNER_BADGE,
     ...(contenu.image === '' ? {} : { image: contenu.image }),
@@ -719,104 +735,6 @@ async function afficher(payload) {
   } finally {
     await accuse;
   }
-}
-
-/**
- * LE TALKIE D'URGENCE, ONGLET FERMÉ (#17141, #17144) — un Proche parle pendant
- * que personne ne regarde : la passerelle pousse `talkie_incoming` (titre et
- * corps localisés, `talkieId`, `fromUserId`, nom de l'émetteur, et parfois
- * l'audio `audioUrl`). La notification dit « X vous parle » ; la toucher ouvre
- * (ou focalise) l'app, qui rattrape la voix par `talkie:join`.
- *
- * C'est la SEULE notification de Meeshy qui porte une action de LECTURE
- * (directive porteur 2026-11-08) : « Écouter » ({@link TALKIE_LISTEN_ACTION})
- * fait jouer la voix par un onglet déjà ouvert SANS le mettre au premier plan
- * — un worker ne joue pas de son lui-même ; sans onglet, elle ouvre l'app sur
- * le talkie. Aucune autre notification ne la porte : `sw-push-talkie.test.ts`
- * en est le témoin. D-11 vaut ici aussi : un onglet visible l'entend déjà.
- */
-const TALKIE_PUSH_TYPE = 'talkie_incoming';
-const TALKIE_TAG_PREFIX = 'talkie:';
-const TALKIE_LISTEN_ACTION = 'talkie-listen';
-/** JUMEAUX de `TALKIE_PARAM` et `TALKIE_WAKE_MESSAGE` (`src/lib/talkie/talkie-wake-intent.ts`). */
-const TALKIE_PARAM = 'talkie';
-const TALKIE_WAKE_MESSAGE = 'TALKIE_WAKE';
-/** Le libellé d'« Écouter » quand la passerelle n'en sert pas : le worker ne charge aucun catalogue. */
-const TALKIE_LISTEN_LABELS = { fr: 'Écouter', en: 'Listen', es: 'Escuchar', de: 'Anhören', it: 'Ascolta', pt: 'Ouvir', ar: 'استماع' };
-const TALKIE_TALKS_LABELS = { fr: ' vous parle', en: ' is talking to you', es: ' te está hablando', de: ' spricht mit dir', it: ' ti sta parlando', pt: ' está falando com você', ar: ' يتحدث إليك' };
-
-function langueDuNavigateur() {
-  const langue = texte(self.navigator && self.navigator.language).slice(0, 2).toLowerCase();
-  return Object.prototype.hasOwnProperty.call(TALKIE_LISTEN_LABELS, langue) ? langue : 'en';
-}
-
-/**
- * L'audio porté par le push ne voyage que s'il vient de la PASSERELLE
- * configurée (`apiBase` posé par la page avec le crédential) : une autre
- * origine ferait jouer une fausse voix d'urgence et partir une requête
- * arbitraire. Sans passerelle connue, rien ne voyage (fail-closed).
- */
-function audioDuTalkie(valeur, apiBase) {
-  try {
-    const passerelle = new URL(texte(apiBase));
-    const audio = new URL(texte(valeur));
-    return audio.protocol === 'https:' && audio.origin === passerelle.origin ? audio.href : '';
-  } catch {
-    return '';
-  }
-}
-
-async function annoncerTalkie(data) {
-  const talkieId = texte(data.talkieId);
-  const nom = texte(data.fromName) || texte(data.senderName);
-  const langue = langueDuNavigateur();
-  const titre = texte(data.title) || (nom === '' ? '' : nom + TALKIE_TALKS_LABELS[langue]);
-  if (talkieId === '' || texte(data.fromUserId) === '' || titre === '') return;
-
-  const ouvertes = await fenetres();
-  if (ouvertes.some((client) => client.visibilityState === 'visible')) return;
-  const stocke = await lireCredential();
-
-  await self.registration.showNotification(titre, {
-    body: texte(data.body),
-    tag: TALKIE_TAG_PREFIX + talkieId,
-    renotify: true,
-    requireInteraction: true,
-    icon: BANNER_ICON,
-    badge: BANNER_BADGE,
-    actions: [{ action: TALKIE_LISTEN_ACTION, title: texte(data.listenLabel) || TALKIE_LISTEN_LABELS[langue] }],
-    data: { type: TALKIE_PUSH_TYPE, talkieId: talkieId, audioUrl: audioDuTalkie(voixDuTalkie(data), stocke && stocke.apiBase) },
-  });
-}
-
-/* Le push de SUIVI (`phase: 'ended'`, même étiquette : il remplace la
-   bannière) porte la voix gardée en pièce jointe, `attachmentUrl` ; le réveil
-   en direct, sa capacité `audioUrl`. Les deux passent la même garde d'origine. */
-function voixDuTalkie(data) {
-  if (data.phase === 'ended') return texte(data.attachmentUrl) || data.audioUrl;
-  return data.audioUrl;
-}
-
-async function ouvrirTalkie(data, action) {
-  const talkieId = texte(data.talkieId);
-  if (talkieId === '') return;
-  const ecouter = action === TALKIE_LISTEN_ACTION;
-  const audioUrl = ecouter ? texte(data.audioUrl) : '';
-  const ouvertes = await fenetres();
-  const client = ouvertes[0];
-  if (client === undefined) {
-    /* L'adresse d'un onglet neuf ne porte QUE la prise de parole : jamais
-       d'audio dans l'URL de la page (un lien forgé ferait jouer une fausse
-       voix). L'onglet rattrape par `talkie:join`. */
-    await self.clients.openWindow(PUSH_ROUTE_PATTERNS.notifications + '?' + TALKIE_PARAM + '=' + encodeURIComponent(talkieId));
-    return;
-  }
-  if (!ecouter) {
-    await Promise.resolve()
-      .then(() => client.focus())
-      .catch(() => undefined);
-  }
-  client.postMessage({ type: TALKIE_WAKE_MESSAGE, talkieId: talkieId, ...(audioUrl !== '' ? { audioUrl: audioUrl } : {}) });
 }
 
 /**
@@ -1156,6 +1074,8 @@ self.addEventListener('notificationclick', (evenement) => {
       ouverture,
       texte(data.type) === TALKIE_PUSH_TYPE
         ? ouvrirTalkie(data, action)
+        : texte(data.type) === WELLNESS_PUSH_TYPE
+        ? repondreBienEtre(data, action)
         : texte(data.type) === CALL_PUSH_TYPE
         ? ouvrirAppel(data, action)
         : action === CALL_BACK_ACTION

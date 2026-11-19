@@ -65,6 +65,16 @@ describe('le défilement', () => {
     expect(host.querySelector('[data-phone-glyph="reachable"]')).not.toBeNull();
   });
 
+  test('l’alerte d’inactivité d’un Sang se dit avec un sablier, son retour avec une coche (#18738)', async () => {
+    const store = createPillAnnouncementStore();
+    store.getState().announce(said({ key: 'inactivity:jacques', text: 'Jacques n’a pas répondu à « Tout va bien ? »', icon: { kind: 'inactivity', responded: false } }));
+    const host = await mount(<Probe store={store} suppressed={false} />);
+    expect(host.querySelector('[data-inactivity-glyph="alert"]')).not.toBeNull();
+    expect(host.querySelector('[data-battery-glyph]')).toBeNull();
+    await act(async () => store.getState().announce(said({ id: 'a2', key: 'inactivity:jacques', text: 'Jacques va bien', tone: 'good', icon: { kind: 'inactivity', responded: true } })));
+    expect(host.querySelector('[data-inactivity-glyph="responded"]')).not.toBeNull();
+  });
+
   test('retenue tant que la pastille dit plus urgent', async () => {
     const store = createPillAnnouncementStore();
     store.getState().announce(said());

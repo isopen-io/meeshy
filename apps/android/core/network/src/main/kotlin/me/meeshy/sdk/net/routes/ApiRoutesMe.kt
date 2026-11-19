@@ -84,4 +84,6 @@ public object ApiRoutesMe {
     public const val STICKERS_BY_STICKER_ID: String = "me/stickers/{stickerId}"
     public const val STICKERS_BY_STICKER_ID_USE: String = "me/stickers/{stickerId}/use"
     public const val TERMS: String = "me/terms"
+    public const val WELLNESS_OK: String = "me/wellness/ok"
+    public const val WELLNESS_SETTINGS: String = "me/wellness/settings"
 }

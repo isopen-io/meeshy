@@ -29,6 +29,7 @@ import {
 } from '../nowPlaying/nowPlayingRelay';
 import { reconcileBatteryOfAccount, type BatteryRelayDeps } from '../battery/batteryRelay';
 import { reconcilePhoneReachabilityOfAccount, type PhoneReachabilityRelayDeps } from '../phoneReachability/phoneReachabilityRelay';
+import { reconcileInactivityOfAccount, type InactivityRelayDeps } from '../inactivityCheck/inactivityRelay';
 import { RITUAL_SHARE_FEATURE } from './relationConsent';
 import { ACCOUNT_STATE_SELECT, isUsableTeamAccount } from './usableAccount';
 
@@ -82,7 +83,7 @@ export type TeamShareRevocationDb = SharesBeyondLinkDb & Pick<PrismaClient, 'use
 
 export async function revokeTeamSharesOf(
   prisma: TeamShareRevocationDb,
-  params: { readonly userId: string; readonly now: Date; readonly nowPlaying?: NowPlayingRelayDeps; readonly battery?: BatteryRelayDeps; readonly phoneReachability?: PhoneReachabilityRelayDeps },
+  params: { readonly userId: string; readonly now: Date; readonly nowPlaying?: NowPlayingRelayDeps; readonly battery?: BatteryRelayDeps; readonly phoneReachability?: PhoneReachabilityRelayDeps; readonly inactivity?: InactivityRelayDeps },
 ): Promise<void> {
   const account = await prisma.user.findUnique({ where: { id: params.userId }, select: { role: true, ...ACCOUNT_STATE_SELECT } });
   if (isUsableTeamAccount(account)) return;
@@ -90,6 +91,7 @@ export async function revokeTeamSharesOf(
   const reconciled = await Promise.allSettled([
     params.battery ? reconcileBatteryOfAccount(params.battery, params.userId) : Promise.resolve(),
     params.phoneReachability ? reconcilePhoneReachabilityOfAccount(params.phoneReachability, params.userId) : Promise.resolve(),
+    params.inactivity ? reconcileInactivityOfAccount(params.inactivity, params.userId) : Promise.resolve(),
   ]);
   const failure = reconciled.find((r): r is PromiseRejectedResult => r.status === 'rejected');
   const nowPlaying = params.nowPlaying;

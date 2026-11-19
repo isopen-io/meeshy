@@ -130,3 +130,16 @@ export async function bloodLocationMapFor(deps: BloodLocationDeps, viewerId: str
     return [{ ...point, ...(circle === undefined ? {} : { circle }) }];
   });
 }
+
+/**
+ * Le dernier point d'UN Sang tel que `viewerId` le lit déjà — jugé exactement comme la carte, la
+ * consultation notée au journal de ce seul Sang. Pour l'alerte d'inactivité (#18738).
+ */
+export async function bloodLastPointFor(deps: BloodLocationDeps, ownerId: string, viewerId: string): Promise<Omit<SharedLocationBloodItem, 'circle'> | null> {
+  if (!deps.enabledFor(viewerId) || !deps.enabledFor(ownerId) || ownerId === viewerId) return null;
+  if ((await bloodLocationMutedBy(deps.prisma, viewerId, [ownerId])).has(ownerId)) return null;
+  if (!(await allowedOwners(deps, viewerId, [ownerId])).has(ownerId)) return null;
+  await noteMapConsultations(deps, [ownerId], viewerId);
+  if ((await ghostedFor(deps, viewerId, [ownerId])).has(ownerId)) return null;
+  return latestPointOf(deps, ownerId, viewerId);
+}

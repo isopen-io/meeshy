@@ -240,7 +240,8 @@ describe('la FORME des charges socket — ce qu\'iOS EXIGE, ce que le contrat D�
     ].sort();
 
     expect(silentRaw).toEqual(['auth:session-revoked', 'auth:token-expired', 'heartbeat:ack', 'talkie:chunk']);
-    expect(manual.length, `types à init(from:) manuel : ${manual.join(', ')}`).toBe(32);
+    // 34 le 2026-11-18 : InactivityAlertRaised et InactivityAlertCleared (#18738), décodeurs TOLÉRANTS comme ceux du téléphone injoignable.
+    expect(manual.length, `types à init(from:) manuel : ${manual.join(', ')}`).toBe(34);
   });
   /**
    * Le SECOND niveau (#18116). Trois événements de commentaire y rendent la MÊME divergence —

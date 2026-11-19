@@ -28,6 +28,7 @@ import { NOW_PLAYING_CLIENT_EVENTS, NOW_PLAYING_SERVER_EVENTS } from './now-play
 import { BATTERY_CLIENT_EVENTS, BATTERY_SERVER_EVENTS } from './battery-event-names.js';
 import { LINK_ACTIVITY_SERVER_EVENTS } from './link-activity-event-names.js';
 import { PHONE_REACHABILITY_SERVER_EVENTS } from './phone-reachability-event-names.js';
+import { INACTIVITY_SERVER_EVENTS } from './inactivity-event-names.js';
 import { SHARED_LOCATION_CLIENT_EVENTS, SHARED_LOCATION_SERVER_EVENTS } from './shared-location-event-names.js';
 import { CONTACT_EXCHANGE_SERVER_EVENTS } from './contact-exchange-event-names.js';
 import { TOGETHER_CLIENT_EVENTS, TOGETHER_SERVER_EVENTS } from './together-event-names.js';
@@ -197,6 +198,7 @@ export const SERVER_EVENTS = {
   ...BATTERY_SERVER_EVENTS,
   ...LINK_ACTIVITY_SERVER_EVENTS,
   ...PHONE_REACHABILITY_SERVER_EVENTS,
+  ...INACTIVITY_SERVER_EVENTS,
   ...SHARED_LOCATION_SERVER_EVENTS,
   ...CONTACT_EXCHANGE_SERVER_EVENTS,
   ...TOGETHER_SERVER_EVENTS,

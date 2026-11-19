@@ -50,6 +50,10 @@ class PushMessageDispatcherTest {
                 foreground = { false },
                 responder = { probeAnswers += 1 },
             ),
+            inactivityHandler = me.meeshy.app.inactivity.InactivityPushHandler(
+                notices = me.meeshy.sdk.inactivity.InactivityForegroundNotices(),
+                foreground = { false },
+            ),
             messagePresenter = messagePresenter,
             freshness = freshness,
             observers = observers,
@@ -99,6 +103,24 @@ class PushMessageDispatcherTest {
         assertThat(fixture.probeAnswers).isEqualTo(1)
         assertThat(fixture.batteryPulls).isEqualTo(0)
         verify(exactly = 0) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `une alerte d'inactivite app fermee part en banniere`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "inactivity_alert", "title" to "Jacques", "body" to "Aucune activité depuis 12 h"))
+
+        verify(exactly = 1) { fixture.messagePresenter.present(any()) }
+    }
+
+    @Test
+    fun `la question tout va bien part en banniere`() {
+        val fixture = Fixture()
+
+        fixture.dispatcher.dispatch(push("type" to "wellness_check", "title" to "Tout va bien ?"))
+
+        verify(exactly = 1) { fixture.messagePresenter.present(any()) }
     }
 
     @Test

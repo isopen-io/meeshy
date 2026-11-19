@@ -376,12 +376,10 @@ extension iPadRootView {
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .contactJoined, .contactRecentlyActive, .relationAcquaintance, .deviceBattery, .deviceUnreachable, .legacyStatusUpdate:
+             .contactJoined, .contactRecentlyActive, .relationAcquaintance, .deviceBattery, .deviceUnreachable,
+             .inactivityAlert, .legacyStatusUpdate:
             if let senderId = ctx.senderId {
-                router.deepLinkProfileUser = ProfileSheetUser(
-                    userId: senderId,
-                    username: ctx.senderUsername ?? senderId
-                )
+                router.deepLinkProfileUser = ProfileSheetUser(userId: senderId, username: ctx.senderUsername ?? senderId)
             }
 
         case .communityInvite, .communityJoined, .communityLeft,
@@ -445,6 +443,8 @@ extension iPadRootView {
              .system, .maintenance, .updateAvailable, .voiceCloneReady, .reportResolved:
             // Pas d'entité cible : le panneau des notifications plutôt qu'un tap muet.
             rightPanelRoute = .notifications
+
+        case .wellnessCheck: Task { await InactivityCheckCenter.shared.answerWellness() } // « Je vais bien » (#18738)
         }
     }
 
