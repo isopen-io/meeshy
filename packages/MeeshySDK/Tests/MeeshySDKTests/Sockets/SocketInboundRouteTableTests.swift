@@ -49,7 +49,7 @@ final class SocketInboundRouteTableTests: XCTestCase {
         "notification:counts", "notification:deleted", "notification:deleted-bulk", "notification:new",
         "notification:read", "notification:read-bulk", "now-playing:changed", "now-playing:cleared",
         "participant:rights-updated", "participant:role-updated",
-        "phone:reachable", "phone:unreachable",
+        "phone-call:ended", "phone-call:started", "phone:reachable", "phone:unreachable",
         "presence:snapshot", "profile:decor-updated", "profile:updated", "reaction:added", "reaction:removed", "read-status:updated",
         "relation:level-raised", "relation:ritual-completed", "relation:ritual-progress", "relation:ritual-started",
         "talkie:chunk", "talkie:ended", "talkie:incoming",

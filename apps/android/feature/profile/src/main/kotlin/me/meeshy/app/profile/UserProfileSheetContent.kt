@@ -61,6 +61,8 @@ import me.meeshy.ui.component.battery.BatteryPersonSection
 import me.meeshy.ui.component.battery.BatteryPersonSurface
 import me.meeshy.ui.component.inactivity.InactivityPersonSection
 import me.meeshy.ui.component.inactivity.InactivityPersonSurface
+import me.meeshy.ui.component.phonecall.PhoneCallPersonSection
+import me.meeshy.ui.component.phonecall.PhoneCallPersonSurface
 import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSection
 import me.meeshy.ui.component.phonereachability.PhoneReachabilityPersonSurface
 import me.meeshy.ui.profile.ProfileFullscreenImage
@@ -225,6 +227,12 @@ internal fun ProfileSheetLoadedContent(
                                 userId = profile.id,
                                 name = header.displayName,
                                 surface = InactivityPersonSurface.PROFILE,
+                            )
+                            // En appel (#18753) : son état, et le partage avec un Sang.
+                            PhoneCallPersonSection(
+                                userId = profile.id,
+                                name = header.displayName,
+                                surface = PhoneCallPersonSurface.PROFILE,
                             )
                         }
                         AnimatedContent(

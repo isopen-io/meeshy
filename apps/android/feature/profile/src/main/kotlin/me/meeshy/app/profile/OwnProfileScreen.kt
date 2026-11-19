@@ -73,6 +73,7 @@ import me.meeshy.ui.R as UiR
 import me.meeshy.sdk.model.composer.look.ComposerLookPerson
 import me.meeshy.ui.component.battery.BatterySharingSwitch
 import me.meeshy.ui.component.inactivity.InactivityDelaySetting
+import me.meeshy.ui.component.phonecall.PhoneCallSharingSwitch
 import me.meeshy.ui.component.phonereachability.PhoneReachabilitySharingSwitch
 import me.meeshy.ui.component.retouch.EntityImageRetouchHost
 import me.meeshy.ui.component.retouch.rememberEntityImageRetouch
@@ -331,6 +332,8 @@ internal fun OwnProfileBody(
             PhoneReachabilitySharingSwitch()
             // Vérification d'inactivité (#18738) : 6 h / 12 h / 24 h / Désactivée, pour tous, dans MON profil.
             InactivityDelaySetting()
+            // Montrer à mes Sangs que je suis en appel (#18753) : la coupure globale, collecte comprise, dans MON profil.
+            PhoneCallSharingSwitch()
         }
         Spacer(Modifier.height(MeeshySpacing.xxxl + MeeshySpacing.sm))
     }

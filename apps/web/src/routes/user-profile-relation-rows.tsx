@@ -7,7 +7,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { translate } from '@/lib/i18n-catalog';
 import { announcementToneOf } from '@/lib/view/announcement-tone';
 
-/* Chaque rangée garde son propre chunk, chargé à la demande (#13940, #13936, #16641, #17055, #18345, #14147, #18737, #18738). */
+/* Chaque rangée garde son propre chunk, chargé à la demande (#13940, #13936, #16641, #17055, #18345, #14147, #18737, #18738, #18753). */
 const ProfileCircleRow = lazy(() => import('@/routes/user-profile-circle').then((m) => ({ default: m.ProfileCircleRow })));
 const ProfileBringRow = lazy(() => import('@/routes/user-profile-bring').then((m) => ({ default: m.ProfileBringRow })));
 const ProfileTalkieRow = lazy(() => import('@/routes/user-profile-talkie').then((m) => ({ default: m.ProfileTalkieRow })));
@@ -17,6 +17,8 @@ const ProfileBatteryRow = lazy(() => import('@/components/battery-panel').then((
 const ProfilePhoneReachabilityRow = lazy(() => import('@/components/phone-reachability-panel').then((m) => ({ default: m.ProfilePhoneReachabilityRow })));
 /* L'inactivité (#18738) se garde elle-même : rien sous Sang, sauf une alerte que le serveur m'a servie. */
 const ProfileInactivityRow = lazy(() => import('@/components/inactivity-panel').then((m) => ({ default: m.ProfileInactivityRow })));
+/* « En appel » (#18753) se garde lui-même : rien hors Sang et équipe, sauf un état que le serveur m'a servi. */
+const ProfilePhoneCallRow = lazy(() => import('@/components/phone-call-panel').then((m) => ({ default: m.ProfilePhoneCallRow })));
 
 export type RelationRowPerson = PersonSummary;
 
@@ -68,6 +70,7 @@ export function ProfileRelationRows({
       {offered('talkie') ? <ProfileTalkieRow language={language} person={summary} onNotice={notice} /> : null}
       {offered('together') ? <ProfileTogetherRow language={language} person={summary} onNotice={notice} /> : null}
       <ProfileInactivityRow language={language} person={named} />
+      <ProfilePhoneCallRow language={language} person={named} />
       {offered('unreachable') ? <ProfilePhoneReachabilityRow language={language} viewerId={viewerId} person={named} /> : null}
       {offered('battery') ? <ProfileBatteryRow language={language} viewerId={viewerId} person={named} /> : null}
       <ProfileShareLocationRow language={language} person={summary} offered={offered('location')} onNotice={(message) => announce(message, 'error')} />
