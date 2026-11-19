@@ -71,10 +71,15 @@ export function metricGrade(metric: GradedMetric, value: number): MetricGrade {
 
 const numberOf = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
+const milliseconds = (seconds: unknown): number => {
+  const value = numberOf(seconds) * 1000;
+  return Number.isFinite(value) && value > 0 ? value : 0;
+};
+
 /** La gigue de `CallStats.reduce` (iOS, #8209) : la moyenne des flux entrants non vidéo qui la rapportent, en ms. */
 const audioJitterMs = (inbound: readonly StatsEntry[]): number => {
   const samples = inbound.filter((entry) => entry.kind !== 'video' && typeof entry.jitter === 'number' && Number.isFinite(entry.jitter)).map((entry) => numberOf(entry.jitter));
-  return samples.length === 0 ? 0 : (samples.reduce((sum, value) => sum + value, 0) / samples.length) * 1000;
+  return samples.length === 0 ? 0 : milliseconds(samples.reduce((sum, value) => sum + value, 0) / samples.length);
 };
 
 const subtype = (mimeType: unknown): string | null => (typeof mimeType === 'string' && mimeType.includes('/') ? (mimeType.split('/')[1] ?? null) : null);
@@ -95,7 +100,7 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
   const uplink = entries.find((entry) => entry.type === 'remote-inbound-rtp' && entry.kind === 'video' && typeof entry.fractionLost === 'number');
   return {
     at,
-    rtt: numberOf(pair?.currentRoundTripTime ?? remote?.roundTripTime) * 1000,
+    rtt: milliseconds(pair?.currentRoundTripTime ?? remote?.roundTripTime),
     jitter: audioJitterMs(inbound),
     lost: sum(inbound, 'packetsLost'),
     received: sum(inbound, 'packetsReceived'),
@@ -111,7 +116,7 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
 }
 
 export function peerRate(current: StatsRead, previous: StatsRead | null): PeerQuality {
-  const delta = (field: 'lost' | 'received' | 'audioBytes' | 'videoBytes'): number => (previous === null ? current[field] : Math.max(0, current[field] - previous[field]));
+  const delta = (field: 'lost' | 'received' | 'audioBytes' | 'videoBytes'): number => Math.max(0, previous === null ? current[field] : current[field] - previous[field]);
   const packets = delta('lost') + delta('received');
   const packetLoss = packets > 0 ? Math.min(100, (delta('lost') / packets) * 100) : 0;
   const elapsed = previous === null ? 0 : current.at - previous.at;

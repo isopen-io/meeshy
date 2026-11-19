@@ -165,11 +165,15 @@ export function deviceLabel(userAgent: string): string {
 
 const share = (count: number, total: number): number => (total === 0 ? 0 : count / total);
 
+const nonNegative = (value: number): number => (Number.isFinite(value) && value > 0 ? value : 0);
+
+const CODEC_MAX_LENGTH = 50;
+
 export function analyticsPayload(telemetry: Telemetry, context: AnalyticsContext): CallAnalyticsEvent {
   const { samples, levels, connectedAt } = telemetry;
   const since = (from: number | null): number => (connectedAt === null || from === null ? -1 : Math.max(0, connectedAt - from));
-  const averageRtt = share(telemetry.rttSum, samples);
-  const averagePacketLoss = share(telemetry.lossSum, samples);
+  const averageRtt = nonNegative(share(telemetry.rttSum, samples));
+  const averagePacketLoss = nonNegative(share(telemetry.lossSum, samples));
   return {
     callId: context.callId,
     setupTimeMs: since(telemetry.startedAt),
@@ -179,8 +183,8 @@ export function analyticsPayload(telemetry: Telemetry, context: AnalyticsContext
     networkTransitions: telemetry.networkTransitions,
     averageRtt,
     averagePacketLoss,
-    maxPacketLoss: telemetry.maxLoss,
-    codec: telemetry.codec ?? 'unknown',
+    maxPacketLoss: nonNegative(telemetry.maxLoss),
+    codec: (telemetry.codec ?? 'unknown').slice(0, CODEC_MAX_LENGTH),
     effectsUsed: telemetry.effects,
     filtersUsed: telemetry.effects.some(isColorFilter),
     transcriptionUsed: telemetry.captionsShown,
