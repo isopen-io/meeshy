@@ -58,7 +58,7 @@ const publication = (type: string): any => ({
   comments: [{ id: 'c0', media: [voiceMedia('m-c0')] }],
 });
 
-const commentaire = (): any => ({ id: 'c1', postId: POST_ID, content: 'écoute', media: [voiceMedia('m-c1')] });
+const commentaire = (): any => ({ id: 'c1', postId: POST_ID, content: 'écoute', media: [voiceMedia('m-c1')], quotedMedia: voiceMedia('m-cited') });
 
 describe('#19750 — la diffusion d’une publication ou d’un commentaire retire le chemin disque des pistes', () => {
   const diffusions: ReadonlyArray<readonly [string, (h: SocialEventsHandler) => Promise<void>]> = [

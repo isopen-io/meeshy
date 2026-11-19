@@ -10,7 +10,8 @@ import { servedAttachmentTranslations } from '../attachments/servedAttachmentTra
  *
  * Une publication porte des médias à trois étages — les siens, ceux de
  * l'original d'une republication (`repostOf`), ceux de ses commentaires en
- * aperçu (`comments`) ; un commentaire n'en a qu'un. Une valeur qui n'a pas la
+ * aperçu (`comments`) ; un commentaire n'en a qu'un, plus le média qu'il CITE
+ * (`quotedMedia`, relu par `serveCitedPostMedia`). Une valeur qui n'a pas la
  * forme attendue traverse telle quelle : la projection retire, elle ne devine
  * jamais.
  *
@@ -25,10 +26,12 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const carriesTranslations = (row: unknown): boolean => isRecord(row) && 'translations' in row;
 
-const servedMediaRow = (row: unknown): unknown =>
-  isRecord(row) && carriesTranslations(row)
-    ? { ...row, translations: servedAttachmentTranslations(row.translations) }
+/** Une ligne `PostMedia` telle qu'elle sort : la même, ses pistes sans `path`. */
+export function servedMediaRow<R>(row: R): R {
+  return isRecord(row) && carriesTranslations(row)
+    ? ({ ...row, translations: servedAttachmentTranslations(row.translations) } as R)
     : row;
+}
 
 /**
  * Le `T` rendu est celui reçu : seule une clé d'une valeur JSON (`Prisma.JsonValue`
@@ -36,8 +39,16 @@ const servedMediaRow = (row: unknown): unknown =>
  * ne déclare. Sans carte à servir, le porteur est rendu tel quel (même référence).
  */
 export function withServedCarrierMedia<T>(carrier: T): T {
-  if (!isRecord(carrier) || !Array.isArray(carrier.media) || !carrier.media.some(carriesTranslations)) return carrier;
-  return { ...carrier, media: carrier.media.map(servedMediaRow) } as T;
+  if (!isRecord(carrier)) return carrier;
+  const { media, quotedMedia } = carrier;
+  const servesMedia = Array.isArray(media) && media.some(carriesTranslations);
+  const servesQuoted = carriesTranslations(quotedMedia);
+  if (!servesMedia && !servesQuoted) return carrier;
+  return {
+    ...carrier,
+    ...(servesMedia ? { media: (media as unknown[]).map(servedMediaRow) } : {}),
+    ...(servesQuoted ? { quotedMedia: servedMediaRow(quotedMedia) } : {}),
+  } as T;
 }
 
 export function withServedPostMedia<T>(post: T): T {

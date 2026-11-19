@@ -14,6 +14,7 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 const mockGetPostById = jest.fn<any>();
 const mockGetComments = jest.fn<any>();
 const mockAddComment = jest.fn<any>();
+const mockUpdateComment = jest.fn<any>();
 
 jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
@@ -26,6 +27,7 @@ jest.mock('../../../../services/PostCommentService', () => ({
     getComments: (...args: any[]) => mockGetComments(...args),
     getReplies: jest.fn<any>().mockResolvedValue({ items: [], hasMore: false, nextCursor: null }),
     addComment: (...args: any[]) => mockAddComment(...args),
+    updateComment: (...args: any[]) => mockUpdateComment(...args),
   })),
 }));
 
@@ -125,11 +127,14 @@ function buildPrisma() {
   } as any;
 }
 
-async function buildApp(broadcast = jest.fn<any>().mockResolvedValue(undefined)): Promise<FastifyInstance> {
+async function buildApp(
+  broadcast = jest.fn<any>().mockResolvedValue(undefined),
+  broadcastUpdated = jest.fn<any>().mockResolvedValue(undefined),
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = buildPrisma();
   app.decorate('prisma', prisma);
-  app.decorate('socialEvents', { broadcastCommentAdded: broadcast } as any);
+  app.decorate('socialEvents', { broadcastCommentAdded: broadcast, broadcastCommentUpdated: broadcastUpdated } as any);
   registerCoreRoutes(app, prisma, requiredAuth);
   registerCommentRoutes(app, prisma, requiredAuth);
   await app.ready();
@@ -142,6 +147,7 @@ beforeEach(() => {
   mockGetPostById.mockReset();
   mockGetComments.mockReset();
   mockAddComment.mockReset();
+  mockUpdateComment.mockReset();
 });
 
 describe('#19750 — une piste traduite de média de post sort sans son chemin disque', () => {
@@ -195,6 +201,51 @@ describe('#19750 — une piste traduite de média de post sort sans son chemin d
 
     expect(res.statusCode).toBe(200);
     expect(res.json().data.media).toEqual([{ id: 'm1', translations: null }, { id: 'm2', translations: 'legacy' }, { id: 'm3' }]);
+    await app.close();
+  });
+
+  it('QA — GET /posts/:postId/comments : le média CITÉ (quotedMedia) sort aussi sans son chemin disque', async () => {
+    const citing = {
+      id: 'c-q', content: 'regarde', authorId: 'u-ana', postId: POST_ID, media: [],
+      metadata: { quotedPostMedia: { postMediaId: 'm-cited', kind: 'audio' } },
+    };
+    mockGetComments.mockResolvedValue({ items: [citing], hasMore: false, nextCursor: null });
+    const app = await buildApp();
+    const prisma = (app as any).prisma;
+    prisma.postMedia.findMany.mockResolvedValue([{ ...voiceMedia('m-cited'), postId: POST_ID }]);
+
+    const list = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/comments` });
+
+    expect(list.statusCode).toBe(200);
+    expect(list.json().data[0].quotedMedia.id).toBe('m-cited');
+    expect(list.body).not.toContain(DISK);
+    await app.close();
+  });
+
+  it('POST et PATCH d’un commentaire qui cite : la réponse et l’écho socket servent le média cité sans chemin disque', async () => {
+    const citing = {
+      id: 'c-q', content: 'regarde', authorId: USER_ID, postId: POST_ID, media: [],
+      metadata: { quotedPostMedia: { postMediaId: 'm-cited', kind: 'audio' } },
+    };
+    mockAddComment.mockResolvedValue(citing);
+    mockUpdateComment.mockResolvedValue({ ...citing, content: 'regarde bien' });
+    const added = jest.fn<any>().mockResolvedValue(undefined);
+    const updated = jest.fn<any>().mockResolvedValue(undefined);
+    const app = await buildApp(added, updated);
+    (app as any).prisma.postMedia.findMany.mockResolvedValue([{ ...voiceMedia('m-cited'), postId: POST_ID }]);
+
+    const created = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/comments`, payload: { content: 'regarde' } });
+    const edited = await app.inject({ method: 'PATCH', url: `/posts/${POST_ID}/comments/c-q`, payload: { content: 'regarde bien' } });
+
+    expect(created.statusCode).toBe(201);
+    expect(edited.statusCode).toBe(200);
+    expect(created.json().data.quotedMedia.translations.fr).toEqual(servedTrack('fr'));
+    expect(edited.json().data.quotedMedia.translations.en).toEqual(servedTrack('en'));
+    expect(created.body).not.toContain(DISK);
+    expect(edited.body).not.toContain(DISK);
+    const echoes = [added.mock.calls[0]?.[0], updated.mock.calls[0]?.[0]] as Array<{ comment: { quotedMedia?: unknown } }>;
+    expect(echoes.map((echo) => echo?.comment.quotedMedia)).toEqual([expect.anything(), expect.anything()]);
+    expect(JSON.stringify(echoes)).not.toContain(DISK);
     await app.close();
   });
 });
