@@ -348,7 +348,7 @@ final class TrackingLinkServiceTests: XCTestCase {
         let set = try JSONSerialization.jsonObject(with: JSONEncoder().encode(TrackingLinkChanges(expiresAt: .some(date)))) as? [String: Any]
         let removed = try JSONSerialization.jsonObject(with: JSONEncoder().encode(TrackingLinkChanges(expiresAt: .some(nil)))) as? [String: Any]
 
-        XCTAssertEqual(set?["expiresAt"] as? String, ISO8601DateFormatter().string(from: date))
+        XCTAssertEqual(set?["expiresAt"] as? String, WireDate.string(from: date))
         XCTAssertTrue(removed?["expiresAt"] is NSNull)
     }
 
