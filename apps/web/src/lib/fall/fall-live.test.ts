@@ -166,6 +166,19 @@ describe('le rattrapage à chaque socket accrochée', () => {
     expect(fallStateOf(client, SANG, clock.now)).not.toBeNull();
   });
 
+  test('une chute levée PENDANT la demande ne ressuscite pas avec une réponse partie avant la levée', async () => {
+    const pending: { resolve: (value: ApiResult<readonly FallState[]>) => void } = { resolve: () => undefined };
+    const client = new QueryClient();
+    receiveFallState(client, state(), T0 - 1_000);
+    const { socket, fire } = fakeSocket();
+    bindFallLive({ socket, client, viewerId: () => ME, snapshot: () => new Promise((resolve) => (pending.resolve = resolve)), now: () => T0, announce: () => undefined });
+    fire('fall:cleared', { userId: SANG, reason: 'responded' });
+    pending.resolve({ ok: true, data: [state()] });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fallStateOf(client, SANG, T0)).toBeNull();
+  });
+
   test('un rattrapage en échec garde le cache : jamais vidé faute de réseau', async () => {
     const client = new QueryClient();
     receiveFallState(client, state(), T0 - 1_000);

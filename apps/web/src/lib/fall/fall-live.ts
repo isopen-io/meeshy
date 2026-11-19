@@ -71,13 +71,24 @@ export function clearFallState(client: QueryClient, userId: string): void {
   write(client, Object.fromEntries(Object.entries(kept).filter(([id]) => id !== userId)));
 }
 
-/** Le rattrapage : `mark` est l'horloge du DÉPART de la demande ; ce qui est arrivé depuis n'est pas effacé. */
-export function reconcileFallSnapshot(client: QueryClient, items: readonly FallState[], mark: number, now: number): void {
+/**
+ * Le rattrapage : `mark` est l'horloge du DÉPART de la demande ; ce qui est arrivé depuis n'est pas effacé. `movedSince`
+ * nomme les personnes qu'un événement a TOUCHÉES depuis ce départ (posé ou effacé) : la réponse, partie avant, ne les
+ * connaît pas à jour — elle ne ressuscite donc pas une chute levée en vol, ni ne remplace un état plus neuf (même
+ * garde qu'Android `FallRoster.reconcile`).
+ */
+export function reconcileFallSnapshot(
+  client: QueryClient,
+  items: readonly FallState[],
+  mark: number,
+  now: number,
+  movedSince: ReadonlySet<string> = new Set(),
+): void {
   const served = new Set(items.map((item) => item.userId));
   Object.entries(keptOf(client))
-    .filter(([userId, entry]) => !served.has(userId) && entry.receivedAt < mark)
+    .filter(([userId, entry]) => !served.has(userId) && entry.receivedAt < mark && !movedSince.has(userId))
     .forEach(([userId]) => clearFallState(client, userId));
-  items.forEach((item) => receiveFallState(client, item, now));
+  items.filter((item) => !movedSince.has(item.userId)).forEach((item) => receiveFallState(client, item, now));
 }
 
 export function bindFallLive({
@@ -98,25 +109,33 @@ export function bindFallLive({
   readonly announce: (userId: string, kind: FallPillKind) => void;
 }): () => void {
   let live = true;
+  let tick = 0;
+  const touched = new Map<string, number>();
+  const touch = (userId: string): void => void touched.set(userId, ++tick);
   const notMine = (userId: string): boolean => userId !== viewerId();
   const onDetected = (payload: unknown): void => {
     const data = decodeFallDetected(payload);
     if (data === null || !notMine(data.userId)) return;
+    touch(data.userId);
     receiveFallState(client, data.state, now());
     if (data.announcement !== undefined) announce(data.userId, 'detected');
   };
   const onCleared = (payload: unknown): void => {
     const data = decodeFallCleared(payload);
     if (data === null || !notMine(data.userId)) return;
+    touch(data.userId);
     clearFallState(client, data.userId);
     if (data.reason === 'responded') announce(data.userId, 'responded');
   };
   socket.on(FALL_SERVER_EVENTS.FALL_DETECTED, onDetected);
   socket.on(FALL_SERVER_EVENTS.FALL_CLEARED, onCleared);
   const mark = now();
+  const sentAt = tick;
   snapshot().then(
     (result) => {
-      if (live && result.ok) reconcileFallSnapshot(client, result.data.filter((item) => notMine(item.userId)), mark, now());
+      if (!live || !result.ok) return;
+      const movedSince = new Set([...touched].filter(([, at]) => at > sentAt).map(([userId]) => userId));
+      reconcileFallSnapshot(client, result.data.filter((item) => notMine(item.userId)), mark, now(), movedSince);
     },
     () => undefined,
   );
