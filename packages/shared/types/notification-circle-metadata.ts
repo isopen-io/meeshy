@@ -4,7 +4,7 @@
  * de position. Elles vivent ici pour que `notification.ts` tienne sous son budget (#4532) ;
  * `notification.ts` les réexporte, rien ne change pour qui les importe.
  */
-import type { BaseNotificationMetadata } from './notification.js';
+import type { BaseNotificationMetadata } from './notification-base-metadata.js';
 
 /**
  * Metadata pour contact_recently_active (#8285) — « X était sur Meeshy

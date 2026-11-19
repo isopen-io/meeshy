@@ -7,6 +7,7 @@
  */
 
 import type { PostType } from './post.js';
+import type { BaseNotificationMetadata } from './notification-base-metadata.js';
 import type { NotificationAttachmentWire } from './notification-attachment-wire.js';
 import type { NotificationContentDetail } from './notification-content-detail.js';
 import type {
@@ -426,9 +427,7 @@ export interface NotificationDelivery {
 /**
  * Metadata de base commune à toutes les notifications
  */
-export interface BaseNotificationMetadata {
-  readonly action?: 'view_message' | 'view_conversation' | 'view_post' | 'join_conversation' | 'accept_or_reject_contact' | 'view_profile' | 'open_call' | 'view_details' | 'view_community' | 'update_app' | 'none';
-}
+export type { BaseNotificationMetadata } from './notification-base-metadata.js';
 
 /**
  * Metadata pour new_message
