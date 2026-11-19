@@ -69,6 +69,8 @@ public sealed interface PushTapDestination {
             "contact_joined", "contact_recently_active",
             // #18737 : le téléphone injoignable d'un Proche ouvre le profil de l'émetteur.
             "device_unreachable",
+            // #18738 : l'alerte d'inactivité d'un Sang ouvre le profil de la personne (l'acteur, `senderId`).
+            "inactivity_alert",
         )
 
         private val ACCOUNT_TYPES = setOf(

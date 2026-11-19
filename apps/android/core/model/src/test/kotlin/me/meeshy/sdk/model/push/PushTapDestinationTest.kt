@@ -106,6 +106,18 @@ class PushTapDestinationTest {
     }
 
     @Test
+    fun `l alerte d inactivite d un Sang ouvre le profil de la personne`() {
+        assertThat(resolve(PushPayload(type = "inactivity_alert", senderId = "u5")))
+            .isEqualTo(PushTapDestination.Profile("u5"))
+        assertThat(resolve(PushPayload(type = "inactivity_alert"))).isEqualTo(PushTapDestination.Notifications)
+    }
+
+    @Test
+    fun `la question tout va bien ouvre l app sans autre destination`() {
+        assertThat(resolve(PushPayload(type = "wellness_check", senderId = "me"))).isEqualTo(PushTapDestination.None)
+    }
+
+    @Test
     fun `une demande d ami sans expediteur ouvre les notifications`() {
         assertThat(resolve(PushPayload(type = "friend_request"))).isEqualTo(PushTapDestination.Notifications)
     }

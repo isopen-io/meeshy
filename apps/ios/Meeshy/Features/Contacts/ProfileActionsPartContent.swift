@@ -191,6 +191,7 @@ private struct ProfilePhoneSection: View {
         let shownUnreachable = circle.offersPhoneReachability ? unreachable : nil
         return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             MeeshySectionHeader(title: ProfileActionsWording.phone)
+            InactivityAlertDetailSection(userId: request.userId)
             if let board = ProfileLiveBoard.resolve(
                 level: circle.toolGateLevel, place: nil,
                 battery: circle.offersBattery ? ProfileLiveSourceRules.battery(battery, now: now) : nil,
@@ -211,6 +212,9 @@ private struct ProfilePhoneSection: View {
                 ProfileBatteryRow(userId: request.userId, displayName: request.displayName,
                                   canPull: circle.offersBatteryPull, asksConsent: circle.batteryAsksConsent,
                                   showsDetail: false)
+            }
+            if circle.offersInactivity {
+                ProfileInactivityRow(userId: request.userId, tint: request.tint)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

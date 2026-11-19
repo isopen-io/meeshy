@@ -85,6 +85,8 @@ export function pushCategoryForNotificationType(
     case 'call_declined':
     case 'call_recording_ready':
       return 'MEESHY_CALL_MISSED';
+    case 'wellness_check':
+      return 'MEESHY_WELLNESS_CHECK';
     default:
       return undefined;
   }

@@ -38,6 +38,7 @@ import { PresenceForeground } from '../presence-foreground';
 import { refuseSocketBelowAppVersionFloor } from '../../middleware/app-version-floor';
 import { noteBatteryAlive, sessionIdOfSocket } from './BatteryHandler';
 import { notePhoneSignOfLife } from './PhoneReachabilityHandler';
+import { noteInactivitySignOfActivity } from './InactivityHandler';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -469,6 +470,8 @@ export class AuthHandler {
     noteBatteryAlive({ userId: user.id, sessionId: sessionIdOfSocket(socket) });
     // #18737 — et la socket du téléphone suivi est son signe de vie : il n'est pas injoignable.
     notePhoneSignOfLife({ userId: user.id, sessionId: sessionIdOfSocket(socket) });
+    // #18738 — et l'app ouverte sur le téléphone suivi est une activité : « Tout va bien ? » attend.
+    noteInactivitySignOfActivity({ userId: user.id, sessionId: sessionIdOfSocket(socket) });
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,

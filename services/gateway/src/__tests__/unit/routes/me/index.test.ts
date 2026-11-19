@@ -79,6 +79,10 @@ jest.mock('../../../../routes/me/device-reachability', () => ({
   __esModule: true,
   default: jest.fn(async () => {}),
 }));
+jest.mock('../../../../routes/me/wellness', () => ({
+  __esModule: true,
+  default: jest.fn(async () => {}),
+}));
 
 jest.mock('../../../../routes/me/live-activity-tokens', () => ({
   __esModule: true,

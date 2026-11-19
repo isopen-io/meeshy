@@ -174,6 +174,12 @@ public object NotificationTypeCatalog {
      */
     public val hiddenTypes: Set<NotificationType> = setOf(NotificationType.VOICEMAIL)
 
+    /**
+     * Les types de la passerelle qu'AUCUNE ligne ne règle : les signaux de sécurité de la vérification d'inactivité
+     * (#18738, « Tout va bien ? » et l'alerte aux Sangs). Ils passent toujours ([NotificationTypeToggle]).
+     */
+    public val untoggleableWireTypes: Set<String> = me.meeshy.sdk.model.inactivity.InactivityContract.NOTIFICATION_TYPES
+
     private val byType: Map<NotificationType, NotificationTypeDescriptor> =
         descriptors.associateBy { it.type }
 

@@ -205,7 +205,7 @@
       "firstScreen": 48
     },
     "me": {
-      "total": 105,
+      "total": 107,
       "firstScreen": 37
     },
     "me-bookmarks": {
@@ -628,15 +628,15 @@
     },
     "me": {
       "de": {
-        "total": 103,
-        "firstScreen": 37
-      },
-      "a": {
         "total": 105,
         "firstScreen": 37
       },
-      "motif": "L'entrée « Voir comme… » (ma Vitrine telle que chaque cercle la voit) tient en deux mots ; son explication est la description accessible de l'entrée, jamais une ligne de plus",
-      "issue": 18878
+      "a": {
+        "total": 107,
+        "firstScreen": 37
+      },
+      "motif": "La carte « Mon téléphone » accueille « Vérification d’inactivité » (6 h, 12 h, 24 h ou Désactivée, dans un sélecteur fermé) au lieu d’une section de plus ; ce qu’elle déclenche se lit sur la fiche de chaque Sang",
+      "issue": 18738
     }
   }
 }

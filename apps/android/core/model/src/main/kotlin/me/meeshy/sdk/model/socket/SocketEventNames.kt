@@ -29,6 +29,10 @@ object SocketEventNames {
     const val PHONE_UNREACHABLE = "phone:unreachable"
     const val PHONE_REACHABLE = "phone:reachable"
 
+    // vérification d'inactivité (#18738, TEL-02) : serveur -> client, `user:<Sang>` ; aucun événement montant
+    const val INACTIVITY_ALERT = "inactivity:alert"
+    const val INACTIVITY_CLEARED = "inactivity:cleared"
+
     // connection health
     const val HEARTBEAT_ACK = "heartbeat:ack"
 
@@ -322,6 +326,8 @@ object SocketEventNames {
         BATTERY_REPORT,
         PHONE_UNREACHABLE,
         PHONE_REACHABLE,
+        INACTIVITY_ALERT,
+        INACTIVITY_CLEARED,
         AUDIO_TRANSCRIPTION_READY,
         AUDIO_TRANSLATION_READY,
         AUTH_SESSION_REVOKED,
