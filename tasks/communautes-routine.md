@@ -597,3 +597,9 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gardes web ajustées : `press-ratchet` (réponse d’appui sur les trois boutons), `avatar-presence-guard` (exemption : un demandeur n’a pas de présence servie), `community-live-binding.test.ts` (sept événements écoutés). Suite web complète : 34 719 verts, 1 rouge ÉTRANGER (`act-leak-guard.test.ts`, rouge aussi sans le lot).
 - Témoins : `community-join-requests.test.ts` (13), `community-join-requests.test.tsx` (6), `community-live.test.ts` (+1), `community-member-live.test.ts` (+1) — rouge prouvé sur les deux branchements temps réel (2 échecs sans eux).
 - Suivis ouverts (milestone 284) : iOS #19877, Android #19878, refus notifié au demandeur #19879.
+
+## 2026-11-19 — réveil 13:38 UTC
+
+- Début du run : #19880 (#19871, intendants web) seule PR de la routine ouverte, dernière poussée à 11:55, donc inactive : run consacré à la mener à la fusion.
+- Verdict trouvé sur `4390a6065` : seconde tentative du `workflow_dispatch` de `ci.yml`, tous les travaux verts (les rouges de la première tentative étaient d'infrastructure : miroir apt de Playwright, tranche passerelle annulée).
+- `dev` (`fbfaa617b`, 20 fichiers : position partagée, rang de liste, carte iOS ; aucun chemin du lot) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 216 tests verts ; web `tsc --noEmit` vert, suites du lot (6 fichiers, 41 tests) vertes, `check-ts-catalog-dead-entries` 269 = référence.
