@@ -61,15 +61,34 @@ class CallAnalyticsTest {
     // --- quality aggregation ----------------------------------------------------
 
     @Test
-    fun `samples aggregate into average and max`() {
+    fun `samples aggregate into average and max, the loss emitted as a percentage`() {
         val analytics = CallAnalytics(startedAtMs = 0)
-            .plusSample(sample(rtt = 100.0, loss = 1.0))
-            .plusSample(sample(rtt = 300.0, loss = 7.0))
+            .plusSample(sample(rtt = 100.0, loss = 0.01))
+            .plusSample(sample(rtt = 300.0, loss = 0.07))
 
         val fields = fieldsOf(analytics)
         assertThat(fields["averageRtt"]).isEqualTo(200.0)
-        assertThat(fields["averagePacketLoss"]).isEqualTo(4.0)
-        assertThat(fields["maxPacketLoss"]).isEqualTo(7.0)
+        assertThat(fields["averagePacketLoss"] as Double).isWithin(1e-9).of(4.0)
+        assertThat(fields["maxPacketLoss"] as Double).isWithin(1e-9).of(7.0)
+    }
+
+    @Test
+    fun `a five percent loss fraction is reported as 5 on the wire, like iOS and the web`() {
+        val analytics = CallAnalytics(startedAtMs = 0).plusSample(sample(rtt = 80.0, loss = 0.05))
+
+        val fields = fieldsOf(analytics)
+        assertThat(fields["averagePacketLoss"] as Double).isWithin(1e-9).of(5.0)
+        assertThat(fields["maxPacketLoss"] as Double).isWithin(1e-9).of(5.0)
+    }
+
+    @Test
+    fun `the MOS still reads the loss once as a percentage, never twice`() {
+        val media = CallMediaQuality()
+        val analytics = CallAnalytics(startedAtMs = 0)
+            .plusSample(CallQualitySample(rttMs = 80.0, packetLoss = 0.05, jitterMs = 12.0, media = media))
+
+        val expected = Math.round(CallMos.estimate(roundTripTimeMs = 80.0, jitterMs = 12.0, packetLossPercent = 5.0) * 100) / 100.0
+        assertThat(fieldsOf(analytics)["mos"] as Double).isWithin(1e-9).of(expected)
     }
 
     @Test
@@ -177,5 +196,100 @@ class CallAnalyticsSnapshotTest {
         assertThat(CallAnalytics.snapshotDue(CallState.Connected)).isTrue()
         assertThat(CallAnalytics.snapshotDue(CallState.Reconnecting(1))).isFalse()
         assertThat(CallAnalytics.snapshotDue(CallState.Idle)).isFalse()
+    }
+}
+
+/**
+ * #19899 — une mesure absurde (NaN, ±Infinity, négative, somme qui déborde) ne
+ * fait jamais rejeter `call:analytics` : `socketCallAnalyticsSchema` exige
+ * `averageRtt`, `averagePacketLoss` et `maxPacketLoss` finis et `nonnegative()`,
+ * et un seul champ hors bornes perd toute la télémétrie de l'appel. La valeur
+ * absurde est neutralisée à l'entrée (elle compte pour 0, une perte au-delà de 1
+ * est plafonnée à 1) et le payload est borné à la sortie.
+ */
+class CallAnalyticsHostileSampleTest {
+
+    private fun fieldsOf(analytics: CallAnalytics): Map<String, Any> =
+        analytics.fields(durationSeconds = 30, isVideo = false, endReason = CallEndReason.Local, deviceModel = "Pixel 8")
+
+    private fun foldAll(vararg samples: CallQualitySample): CallAnalytics =
+        samples.fold(CallAnalytics(startedAtMs = 0).connected(1_200)) { acc, sample -> acc.plusSample(sample) }
+
+    private val hostileSamples = listOf(
+        CallQualitySample(rttMs = Double.NaN, packetLoss = Double.NaN),
+        CallQualitySample(rttMs = Double.POSITIVE_INFINITY, packetLoss = Double.POSITIVE_INFINITY),
+        CallQualitySample(rttMs = Double.NEGATIVE_INFINITY, packetLoss = Double.NEGATIVE_INFINITY),
+        CallQualitySample(rttMs = -250.0, packetLoss = -0.4),
+        CallQualitySample(rttMs = Double.MAX_VALUE, packetLoss = 0.5, media = CallMediaQuality()),
+        CallQualitySample(rttMs = Double.MAX_VALUE, packetLoss = 3.0, jitterMs = Double.NaN, media = CallMediaQuality()),
+    )
+
+    @Test
+    fun `each hostile sample alone yields a payload inside the schema bounds`() {
+        hostileSamples.forEach { hostile -> assertSchemaBounds(fieldsOf(foldAll(hostile))) }
+    }
+
+    @Test
+    fun `every hostile sample together, overflowing sums included, yields a payload inside the schema bounds`() {
+        assertSchemaBounds(fieldsOf(foldAll(*hostileSamples.toTypedArray())))
+    }
+
+    @Test
+    fun `a non-finite sample does not poison the valid ones`() {
+        val fields = fieldsOf(
+            foldAll(
+                CallQualitySample(rttMs = 100.0, packetLoss = 0.02),
+                CallQualitySample(rttMs = Double.NaN, packetLoss = Double.NaN),
+            ),
+        )
+
+        assertThat(fields["averageRtt"]).isEqualTo(50.0)
+        assertThat(fields["averagePacketLoss"] as Double).isWithin(1e-9).of(1.0)
+        assertThat(fields["maxPacketLoss"] as Double).isWithin(1e-9).of(2.0)
+    }
+
+    @Test
+    fun `a negative sample counts as no loss and no delay`() {
+        val fields = fieldsOf(foldAll(CallQualitySample(rttMs = -40.0, packetLoss = -0.3)))
+
+        assertThat(fields["averageRtt"]).isEqualTo(0.0)
+        assertThat(fields["averagePacketLoss"]).isEqualTo(0.0)
+        assertThat(fields["maxPacketLoss"]).isEqualTo(0.0)
+    }
+
+    @Test
+    fun `a loss fraction above one is capped at one hundred percent`() {
+        val fields = fieldsOf(foldAll(CallQualitySample(rttMs = 50.0, packetLoss = 3.0)))
+
+        assertThat(fields["averagePacketLoss"] as Double).isWithin(1e-9).of(100.0)
+        assertThat(fields["maxPacketLoss"] as Double).isWithin(1e-9).of(100.0)
+    }
+
+    /** Les bornes de `socketCallAnalyticsSchema` (`services/gateway/src/validation/call-schemas.ts`) sur chaque champ numérique. */
+    private fun assertSchemaBounds(fields: Map<String, Any>) {
+        listOf("averageRtt", "averagePacketLoss", "maxPacketLoss").forEach { key ->
+            val value = fields[key] as Double
+            assertThat(value.isFinite()).isTrue()
+            assertThat(value).isAtLeast(0.0)
+        }
+        assertThat(fields["setupTimeMs"] as Long).isAtLeast(-1L)
+        assertThat(fields["durationSeconds"] as Long).isAtLeast(0L)
+        assertThat(fields["reconnectionCount"] as Int).isAtLeast(0)
+        assertThat(fields["networkTransitions"] as Int).isAtLeast(0)
+
+        @Suppress("UNCHECKED_CAST")
+        val distribution = fields["qualityDistribution"] as Map<String, Double>
+        assertThat(distribution.keys).containsExactly("excellent", "good", "fair", "poor")
+        distribution.values.forEach { share ->
+            assertThat(share.isFinite()).isTrue()
+            assertThat(share).isAtLeast(0.0)
+            assertThat(share).isAtMost(1.0)
+        }
+
+        fields["mos"]?.let { mos ->
+            assertThat((mos as Double).isFinite()).isTrue()
+            assertThat(mos).isAtLeast(1.0)
+            assertThat(mos).isAtMost(5.0)
+        }
     }
 }
