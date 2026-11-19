@@ -481,3 +481,89 @@ aucun rapport.
 (#5243). Je cède et je signale : **#19808**, avec la mesure, le commit fautif, et
 le correctif attendu (extraire, puis BAISSER la ligne de dette — jamais la
 monter, ce serait la marge que le cliquet existe pour refuser).
+
+## L'audit adversarial de #19786 : BLOQUANT sur ce qui partait À CÔTÉ
+
+Le lot #19786 (règlement du verrou de génération de clé) touche le chemin
+d'échec du chiffrement au repos : #9226 lui impose l'agent
+`auditeur-adversarial` avant fusion. Verdict rendu : **BLOQUANT**, sur un lot
+dont le cœur a été confirmé et mesuré par mutation — retirer `rejectLock` rend
+deux témoins ROUGES (« PENDU », puis un timeout jest à 10 s), retirer le
+`void lockPromise.catch` tue le worker (« Tests: 0 total »), retirer le `delete`
+du `catch` fait tomber le témoin de l'appelant tardif.
+
+Ce qui bloquait n'était pas le règlement du verrou. C'était ce qui partait à
+côté, et les deux constats sont réparés dans ce lot.
+
+### Constat 1 — le minuteur supprimait le verrou d'un AUTRE essai
+
+Le `guardedTimeout` du `finally` ne capturait que le `conversationId`. Un essai
+qui échoue retire son verrou aussitôt, puis son minuteur tire 100 ms plus tard
+et supprimait inconditionnellement le verrou de l'essai SUIVANT, encore en vol.
+Mesuré sur un Mongo convalescent (`create` échoue une fois, puis réussit en
+300 ms) : **3 appels à `create`, deux `keyId` distincts, deux lignes
+`ServerEncryptionKey` pour une conversation** — sous un verrou dont le
+commentaire dit « ATOMIC … prevents TOCTOU race condition ».
+
+Le `delete` nu était préexistant ; le lot le rend ATTEIGNABLE, puisqu'avant lui
+un échec laissait les attendants pendus, donc personne n'arrivait après. Et le
+`finally` n'était gardé par AUCUN témoin : retiré en entier, 69 témoins
+restaient verts.
+
+Réparé par `releaseOwnLock()`, lié à l'identité de l'entrée
+(`if (map.get(k) === lockEntry) delete`), partagé par le `catch` et le
+`finally`. Témoin : « un essai échoué ne supprime pas le verrou d'un essai
+suivant encore en vol », ROUGE sous la version inconditionnelle en nommant les
+deux `keyId`.
+
+### Constat 2 — l'erreur propagée était servie en 400, donc PERMANENTE
+
+L'erreur qui voyageait désormais jusqu'aux appelants était l'erreur de base
+BRUTE : aucun prédicat de `MessagingService` ne la reconnaissait, elle tombait
+dans la branche terminale « erreur interne », et la route la servait en **HTTP
+400**. `outcomeOf` (`apps/web/src/lib/api/outcome.ts`) ne tient que 408, 425 et
+429 pour rejouables : tout autre 4xx est `permanent`, et `isPermanentFailure`
+retire le bouton « Réessayer ». La pendaison d'avant finissait, elle, en
+`TIMEOUT` après 15 s — transitoire, donc RETRYABLE.
+
+Le lot échangeait un mauvais transport contre une **pire issue produit**, et sa
+propre justification (#9223, « un envoi sans réponse est pire qu'un envoi
+refusé ») ne tenait plus : elle est vraie d'un refus RETRYABLE.
+
+Réparé en CLASSANT à la source : `ConversationKeyGenerationFailedError`
+(`services/messaging/serverAtRest.ts`), reconnue par
+`isRetryableMessageWrite` — le prédicat de #19080 renommé pour porter la
+PROPRIÉTÉ qu'il décide (« rien n'est écrit, le même envoi rejoué aboutit »)
+plutôt que le seul mécanisme par lequel on l'avait rencontrée (P2034/P2028). La
+route sert donc **503 + `code: MESSAGE_SEND_RETRYABLE` + `Retry-After`**. Un
+refus de clé MAÎTRESSE n'est pas reclassé : il dit autre chose, et un témoin de
+contrôle le garde.
+
+Témoin de chaîne : `keyGenerationFailureServedStatus.test.ts`, avec la VRAIE
+`MessagingService`, le VRAI `EncryptionService` et le VRAI `ServerKeyVault`
+(seule la base est doublée), jusqu'à `app.inject()`. Sans le classement, il rend
+**400** ; avec, **503**. Un témoin posé sur la levée ne pouvait pas le voir.
+
+### Mes affirmations que l'audit a corrigées
+
+- la garde `void lockPromise.catch` **n'évite pas la chute de la passerelle** :
+  `server.ts` enregistre son propre `unhandledRejection`, dont le `process.exit`
+  est commenté. Elle reste nécessaire (le worker jest, lui, meurt), mais sa
+  raison écrite était fausse — commentaires de production et de témoin corrigés ;
+- l'ORDRE `delete` puis `reject` est **indifférent** (deux instructions
+  synchrones du même job) : c'est le `delete` seul qui produit l'effet. Le
+  commentaire affirmait une causalité qui n'était pas celle du mécanisme ;
+- `setConversationKey` **ne rejette jamais**, et carte et base ne peuvent pas
+  diverger : ce tiers de l'affirmation était vide ;
+- la portée n'est pas totale : un `create` qui ne se règle JAMAIS pend encore les
+  attendants. Écrit dans le doc-comment du verrou, avec son suivi.
+
+### Suivis ouverts
+
+| issue | ce qu'elle porte |
+|---|---|
+| **#19826** | le verrou n'a pas d'ÉCHÉANCE ; minuteurs ni annulés ni `unref`és ; `shutdown()` ne les nettoie pas |
+| **#19827** | un scellement refusé DÉTRUIT l'entrée de file hors ligne — fail-open sur la durabilité |
+| **#19828** | l'envoi ANONYME sert 500 nu pour le même échec : pas de code stable, pas de `Retry-After` |
+
+Leçon : `tasks/lessons/2026-11-19-un-meilleur-transport-peut-servir-une-pire-issue.md`.
