@@ -66,19 +66,19 @@ final class CommunityLinkDetailViewModel: ObservableObject {
 
     let link: CommunityLink
     let viewerId: String?
-    let inviteUser: @Sendable (String, String) async throws -> Void
-    private let loadDetails: @Sendable (String) async throws -> CommunityLinkDetails
-    private let loadEntries: @Sendable (String) async throws -> [CommunityLinkEntry]
-    private let setPrivate: @Sendable (String, Bool) async throws -> Void
-    private let loadFriends: @Sendable () async -> [CommunityInviteCandidate]
+    let inviteUser: @concurrent @Sendable (String, String) async throws -> Void
+    private let loadDetails: @concurrent @Sendable (String) async throws -> CommunityLinkDetails
+    private let loadEntries: @concurrent @Sendable (String) async throws -> [CommunityLinkEntry]
+    private let setPrivate: @concurrent @Sendable (String, Bool) async throws -> Void
+    private let loadFriends: @concurrent @Sendable () async -> [CommunityInviteCandidate]
 
     init(link: CommunityLink,
          viewerId: String?,
-         loadDetails: @escaping @Sendable (String) async throws -> CommunityLinkDetails,
-         loadEntries: @escaping @Sendable (String) async throws -> [CommunityLinkEntry],
-         setPrivate: @escaping @Sendable (String, Bool) async throws -> Void,
-         loadFriends: @escaping @Sendable () async -> [CommunityInviteCandidate] = { [] },
-         invite: @escaping @Sendable (String, String) async throws -> Void = { _, _ in }) {
+         loadDetails: @escaping @concurrent @Sendable (String) async throws -> CommunityLinkDetails,
+         loadEntries: @escaping @concurrent @Sendable (String) async throws -> [CommunityLinkEntry],
+         setPrivate: @escaping @concurrent @Sendable (String, Bool) async throws -> Void,
+         loadFriends: @escaping @concurrent @Sendable () async -> [CommunityInviteCandidate] = { [] },
+         invite: @escaping @concurrent @Sendable (String, String) async throws -> Void = { _, _ in }) {
         self.link = link
         self.viewerId = viewerId
         self.loadDetails = loadDetails

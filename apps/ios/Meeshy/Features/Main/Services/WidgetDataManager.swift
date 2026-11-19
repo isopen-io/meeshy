@@ -589,7 +589,9 @@ final class WidgetDataManager: NotificationWidgetSink {
     }
 
     /// Suit le pseudo du compte connecté : le widget « Mon lien » change avec le compte et le pseudo.
-    func followProfileLink(_ usernames: AnyPublisher<String?, Never>) {
+    func followProfileLink(
+        _ usernames: AnyPublisher<String?, Never> = AuthManager.shared.$currentUser.map { $0?.username }.eraseToAnyPublisher()
+    ) {
         profileLinkObservation = usernames
             .removeDuplicates()
             .receive(on: DispatchQueue.main)

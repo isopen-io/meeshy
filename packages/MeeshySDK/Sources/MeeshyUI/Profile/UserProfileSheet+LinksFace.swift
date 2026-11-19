@@ -54,7 +54,7 @@ struct RelationLinksFace: View {
     let onLeave: () -> Void
     let onCopy: (ProfileLink) -> Void
     let onShowVitrine: () -> Void
-    let joinCommunity: (String) async -> Bool
+    let joinCommunity: @MainActor (String) async -> Bool
 
     @Environment(\.openURL) private var openURL
     @Environment(\.profileCommunityDoor) private var communityDoor

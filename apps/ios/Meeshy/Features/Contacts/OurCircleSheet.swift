@@ -70,8 +70,11 @@ struct OurCircleSheet: View {
     var accentHex: String? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var confirmedLowering: ProfileCircleLowering?
+    @State private var them: MeeshyUser?
     private var theme: ThemeManager { ThemeManager.shared }
     private var me: MeeshyUser? { AuthManager.shared.currentUser }
+    private var myFace: OurCircleFace { OurCircleFace.of(me, userId: me?.id) }
+    private var theirFace: OurCircleFace { OurCircleFace.of(them, userId: viewModel.userId) }
     private var myName: String {
         me.map { $0.displayName ?? $0.username } ?? ""
     }
@@ -92,8 +95,8 @@ struct OurCircleSheet: View {
                     orbit(summary)
                     headline(summary)
                     OurCircleGrantBars(summary: summary, theirName: displayName, myName: myName,
-                                       theirAccentHex: accentHex, myAccentHex: myAccentHex, myAvatarURL: me?.avatar,
-                                       theirTint: theirTint(summary), myTint: myTint(summary))
+                                       theirAccentHex: accentHex, myAccentHex: myAccentHex, theirFace: theirFace,
+                                       myFace: myFace, theirTint: theirTint(summary), myTint: myTint(summary))
                         .meeshyCascade(rank: 2)
                     opened(summary)
                     nextOpens(summary)
@@ -110,6 +113,17 @@ struct OurCircleSheet: View {
         .background(theme.backgroundPrimary)
         .adaptiveOnChange(of: viewModel.didUnlink) { _, unlinked in
             if unlinked { dismiss() }
+        }
+        .task(id: viewModel.userId) { await loadThem() }
+    }
+
+    /// La photo et le contour de la personne, relus du profil que sa fiche a mis en cache.
+    private func loadThem() async {
+        switch await CacheCoordinator.shared.profiles.load(for: viewModel.userId) {
+        case .fresh(let users, _), .stale(let users, _):
+            them = users.first
+        case .expired, .empty:
+            break
         }
     }
 
@@ -139,11 +153,13 @@ struct OurCircleSheet: View {
             label: OurCircleCopy.scaleLabel,
             center: {
                 MeeshyAvatar(name: myName, context: .custom(OurCircleGrantBars.centerAvatar),
-                             accentColor: myAccentHex, avatarURL: me?.avatar)
+                             accentColor: myAccentHex, avatarURL: myFace.avatarURL, presenceState: myFace.presence,
+                             ring: myFace.ring)
             },
             marker: {
                 MeeshyAvatar(name: displayName, context: .custom(OurCircleGrantBars.markerAvatar),
-                             accentColor: accentHex ?? DynamicColorGenerator.colorForName(displayName))
+                             accentColor: accentHex ?? DynamicColorGenerator.colorForName(displayName),
+                             avatarURL: theirFace.avatarURL, presenceState: theirFace.presence, ring: theirFace.ring)
             }
         )
         .frame(maxWidth: .infinity)

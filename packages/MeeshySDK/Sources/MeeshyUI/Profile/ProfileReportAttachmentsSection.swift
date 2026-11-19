@@ -67,7 +67,7 @@ struct ProfileReportAttachmentsSection: View {
 /// Le choix parmi nos messages : ceux de la personne signalée dans nos conversations, lus du cache local à
 /// l'ouverture (aucune roue : la lecture est locale). Un message chiffré de bout en bout demande un consentement.
 struct ProfileReportMessagePicker: View {
-    let load: () async -> [ProfileReportAttachment]
+    let load: @MainActor () async -> [ProfileReportAttachment]
     let limit: Int
     @Binding var draft: ProfileReportDraft
 

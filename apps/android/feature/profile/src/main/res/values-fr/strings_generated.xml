@@ -11,7 +11,6 @@
     <string name="profile_action_decline_connection">Refuser la connexion</string>
     <string name="profile_action_report">Signaler</string>
     <string name="profile_action_resend_request">Renvoyer la demande</string>
-    <string name="profile_action_send_message">Envoyer un message</string>
     <string name="profile_activity_title">Activité</string>
     <string name="profile_avatar_edit">Modifier la photo de profil</string>
     <string name="profile_bio_label">Bio</string>
@@ -61,7 +60,6 @@
     <string name="profile_report_quick_reason_violence">Violence</string>
     <string name="profile_save">Enregistrer</string>
     <string name="profile_save_error">Erreur lors de l\'enregistrement</string>
-    <string name="profile_section_about">À propos</string>
     <string name="profile_section_actions">Actions</string>
     <string name="profile_section_contact">CONTACT</string>
     <string name="profile_section_identity">IDENTITÉ</string>
@@ -77,11 +75,9 @@
     <string name="profile_stats_conversations">Conversations</string>
     <string name="profile_stats_daysShort">Jours</string>
     <string name="profile_stats_friends">Amis</string>
-    <string name="profile_stats_memberSince">Membre depuis</string>
     <string name="profile_stats_messages">Messages</string>
     <string name="profile_stats_messagesShort">Messages</string>
     <string name="profile_stats_title">Statistiques</string>
-    <string name="profile_status_connected">Connectés</string>
     <string name="profile_tab_conversations">Conversations</string>
     <string name="profile_tab_posts">Publications</string>
     <string name="profile_title">Profil</string>
@@ -92,7 +88,6 @@
     <string name="profile_username">Pseudo</string>
     <string name="profile_verified">Vérifié</string>
     <string name="profile_view_posts">Publications</string>
-    <string name="profile_voice_title">Voix</string>
     <string name="report_close">Fermer</string>
     <string name="report_details_header">Détails (facultatif)</string>
     <string name="report_error">Impossible d\'envoyer le signalement</string>
@@ -111,7 +106,6 @@
     <string name="shared_location_precision_exact">Position exacte</string>
     <string name="shared_location_precision_neighborhood">Au quartier près</string>
     <string name="shared_location_share_action">Partager ma position</string>
-    <string name="shared_location_share_action_a11y">Partager ma position avec %1$s</string>
     <string name="shared_location_share_active">%1$s voit ta position (%2$s) jusqu\'à %3$s</string>
     <string name="shared_location_share_confirm">Partager</string>
     <string name="shared_location_share_denied">Autorise la localisation dans Réglages pour partager ta position</string>
