@@ -33,7 +33,7 @@ public struct AvatarListeningLive: View {
     public var body: some View {
         ZStack {
             if let band {
-                AvatarListeningBand(listening: band, avatarSize: avatarSize)
+                AvatarListeningOrbit(listening: band, avatarSize: avatarSize)
             }
         }
         .meeshyMotion(.rise, value: band)

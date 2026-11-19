@@ -15,12 +15,19 @@ enum GameProfileBoardRules {
     static func board(_ read: GameVisitorRead?, for userId: String, hidden: Bool) -> ProfileGameBoard? {
         guard let shown = GameVisitorRead.shown(read, for: userId, hidden: hidden),
               let model = GameBannerBadgeModel.of(shown.standing, userId: userId) else { return nil }
+        let standing = shown.standing?.standing
+        let sparksTotal = standing?.sparksLifetime ?? model.pocket
+        let glory = standing?.glory
         return ProfileGameBoard(
             level: model.level,
             rankName: model.rankName,
             levelProgress: model.levelProgress,
-            sparks: model.pocket.map { GameCopy.formatCount($0) },
-            trophies: shown.entries.map { trophy($0) }
+            sparks: sparksTotal.map { GameCopy.formatCount($0) },
+            trophies: shown.entries.map { trophy($0) },
+            tier: model.tier,
+            crest: ProfileGameBoard.Crest(rank: model.rank, division5: model.division, mythic: model.mythic),
+            glory: glory.map { "\(GameBannerBadgeModel.gloryGlyph)\u{00A0}\(GameCopy.formatCount($0))" },
+            gloryLabel: glory.map { GameCopy.gloryAmount(GameCopy.formatCount($0)) }
         )
     }
 

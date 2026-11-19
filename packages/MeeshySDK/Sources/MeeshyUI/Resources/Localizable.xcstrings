@@ -90961,6 +90961,53 @@
         }
       }
     },
+    "profile.vitrine.game.levelSparks": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المستوى %1$@ · %2$@ شرارة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level %1$@ · %2$@ Funken"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level %1$@ · %2$@ sparks"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nivel %1$@ · %2$@ chispas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niveau %1$@ · %2$@ étincelles"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Livello %1$@ · %2$@ scintille"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nível %1$@ · %2$@ faíscas"
+          }
+        }
+      }
+    },
     "profile.vitrine.game.level": {
       "extractionState": "manual",
       "localizations": {

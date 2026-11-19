@@ -33,7 +33,7 @@ extension UserProfileSheet {
             }
             .overlay(alignment: .top) {
                 ScrollOffsetReader(relay: scrollRelay) { offset in
-                    profileHero(progress: ProfileHeroPlan.progress(scrollOffset: Double(offset)))
+                    profileHero(progress: ProfileHeroPlan.progress(scrollOffset: Double(offset), topInset: heroTopInset))
                         .offset(y: -offset)
                 }
             }
@@ -43,6 +43,21 @@ extension UserProfileSheet {
         .trackScrollContentOffset { scrollRelay.offset = -$0 }
         .background(theme.backgroundPrimary)
         .ignoresSafeArea(edges: .top)
+        .background { statusBarReader }
+    }
+
+    /// Le haut des commandes du héros (#19854) : en plein écran, sous la barre système ; en feuille, `topInset`.
+    var heroTopInset: Double {
+        ProfileHeroPlan.topInset(statusBar: presentationStyle == .cover ? heroStatusBar : 0)
+    }
+
+    /// Lit la barre système sous la fiche, hors du défilement qui l'ignore.
+    private var statusBarReader: some View {
+        GeometryReader { proxy in
+            Color.clear.adaptiveOnChange(of: Double(proxy.safeAreaInsets.top), initial: true) { _, top in
+                heroStatusBar = top
+            }
+        }
     }
 
     // MARK: - Le héros (K28)
@@ -54,8 +69,8 @@ extension UserProfileSheet {
             subtitle: "@\(displayUser.username)",
             alignment: .leading,
             expandedHeight: ProfileHeroPlan.expandedHeight,
-            collapsedHeight: ProfileHeroPlan.collapsedHeight,
-            topInset: ProfileHeroPlan.topInset,
+            collapsedHeight: ProfileHeroPlan.collapsedHeight(topInset: heroTopInset),
+            topInset: heroTopInset,
             isLoading: phase == .skeleton,
             keepsBannerInBar: true,
             banner: { heroBanner(progress: progress) },
@@ -87,7 +102,7 @@ extension UserProfileSheet {
             MeeshyBadge(.label(ProfileStatesCopy.blockedChip), leading: .systemImage("nosign"), surface: .glass,
                         kind: .err, size: .s28)
                 .accessibilityIdentifier("profile.header.blocked")
-        } else if ProfileHeroPlan.barShowsRelation(progress: progress) {
+        } else if ProfileHeroPlan.barShowsRelation(progress: progress, topInset: heroTopInset) {
             relationPillSlot
         }
     }

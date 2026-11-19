@@ -82,7 +82,10 @@ struct RelationFaceSelector: View {
                 tone: .theme
             )
             .padding(MeeshySpacing.xs)
-            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl + MeeshySpacing.xs), density: .dense)
+            // Le verre suit le thème, comme l'encre des onglets : forcé en sombre, il laissait « Liens » et « Actions »
+            // en encre claire sur un verre clair (#19854).
+            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl + MeeshySpacing.xs), tone: .theme,
+                         density: .dense)
             if let writeShortcut {
                 MeeshyGlassButton(
                     systemImage: "bubble.left.fill",
