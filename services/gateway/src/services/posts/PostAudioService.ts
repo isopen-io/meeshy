@@ -62,8 +62,8 @@ type HandleAudioTranslationsReadyParams = {
   translations: Record<string, {
     type: string;
     transcription: string;
-    path: string;
-    url: string;
+    path?: string;
+    url?: string;
     durationMs: number;
     format: string;
     cloned: boolean;
