@@ -28,6 +28,7 @@ import { deliveryQueueSealer, type DeliveryQueueSealer } from '../../../services
 import {
   ConversationKeyGenerationFailedError,
   ServerAtRestUnavailableError,
+  ServerAtRestUnreadableError,
 } from '../../../services/messaging/serverAtRest';
 
 const MASTER = Buffer.alloc(32, 7).toString('base64');
@@ -137,6 +138,50 @@ describe('#19827 — un refus de scellement TRANSITOIRE ne détruit plus l’ent
     expect(redis.stored()).not.toContain('4471');
   });
 
+  /**
+   * LA porte que le lot ferme par une PROPRIÉTÉ et non par son propre code, et
+   * qui n'était gardée par rien.
+   *
+   * `restoreForRetry` est le seul site qui pousse une entrée du tas vers Redis.
+   * Elle ne reçoit que ce qu'`openedForReplay` a classé `retry`, qui exige un
+   * `sealedPayload` — une entrée gardée en clair n'y entre donc pas. C'est vrai,
+   * et c'est écrit dans une méthode que #19827 n'ouvre même pas : une ligne
+   * ajoutée un jour à `openedForReplay` pousserait du clair dans Redis, et dans
+   * ses sauvegardes AOF, sans qu'un seul témoin tombe.
+   *
+   * La scène est donc MIXTE, parce qu'elle est la seule à faire TOURNER la
+   * remise : un clair gardé dans le tas, et à côté une entrée scellée que ce
+   * lecteur ne rouvre pas pour une cause transitoire.
+   */
+  it('le clair gardé ne revient pas en Redis par la REMISE d’un drain MIXTE', async () => {
+    const redis = fakeRedis();
+    const sealedButUnopenable: DeliveryQueueSealer = {
+      seal: async (e) => ({ ...e, payload: {}, sealedPayload: { ciphertext: 'x', keyId: 'k', iv: 'i', authTag: 'a', aad: 'delivery-queue:v2' } }),
+      open: async () => { throw new ServerAtRestUnreadableError('data-key-unavailable'); },
+    };
+    const writer = new RedisDeliveryQueue(redis.cacheStore, sealedButUnopenable);
+    await writer.enqueue('u-1', entry({ messageId: 'm-sealed', dedupKey: 'd-sealed' }), { sealAtRest: true });
+
+    // Le MÊME magasin Redis, un sceau qui refuse désormais pour une cause
+    // transitoire : l'entrée en clair rejoint le tas, la scellée reste en Redis.
+    const queue = new RedisDeliveryQueue(
+      redis.cacheStore,
+      {
+        seal: async () => { throw new ConversationKeyGenerationFailedError(CONV, new Error('mongo down')); },
+        open: sealedButUnopenable.open,
+      },
+    );
+    await queue.enqueue('u-1', entry({ messageId: 'm-clear', dedupKey: 'd-clear' }), { sealAtRest: true });
+
+    const replayed = await queue.drain('u-1');
+
+    // Le clair est rejoué ; la scellée illisible est REMISE en Redis — donc
+    // `restoreForRetry` a bien tourné, ce qui est tout l'intérêt de la scène.
+    expect(replayed.map((e) => e.messageId)).toEqual(['m-clear']);
+    expect(redis.stored()).not.toBe('');
+    expect(redis.stored()).not.toContain('4471');
+  });
+
   it('l’entrée gardée reste soumise au plafond du tas et à la fenêtre de rétention', async () => {
     const redis = fakeRedis();
     const queue = new RedisDeliveryQueue(
@@ -149,6 +194,16 @@ describe('#19827 — un refus de scellement TRANSITOIRE ne détruit plus l’ent
     }
 
     expect(await queue.size('u-1')).toBe(50);
+
+    // La SECONDE moitié du titre, qu'aucune assertion ne portait : au-delà de
+    // la fenêtre de rétention, le balayage périodique retire le clair gardé —
+    // c'est le seul filet qui ne dépende d'aucune reconnexion.
+    await queue.enqueue('u-2', entry({ messageId: 'm-old', dedupKey: 'd-old', enqueuedAt: new Date(Date.now() - 49 * 60 * 60 * 1000).toISOString() }), { sealAtRest: true });
+    expect(await queue.size('u-2')).toBe(1);
+
+    await queue.cleanup();
+
+    expect(await queue.size('u-2')).toBe(0);
   });
 });
 
