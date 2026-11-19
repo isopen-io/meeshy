@@ -546,3 +546,22 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - `dev` avait avancé (`c465db99c`, dont `packages/shared/types/voice-api.ts` et `api-schemas/message-attachment.ts`) : fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : shared `__tests__/ci/` 25 fichiers / 216 tests verts ; `check_house_rules.sh` (42 règles), `check_cohesion_budget.sh`, `check_test_registration.sh` (2 045 fichiers inscrits), `check-accent-color-hardcoding.mjs` (168 / 410 = références) verts. Branche redéclarée prête sur la PR.
 - Aucun nouveau lot ouvert : une seule PR de la routine à la fois, et rien ne se prouve tant que la CI est gelée.
 - Prochain lot recommandé : après la fusion de #19694, ouvrir l'issue des entrées INDIRECTES restantes et fermer #16857, puis la moitié « compte supprimé » de #18769.
+
+## 2026-11-18 — réveil 21:38 UTC
+
+- Début du run : #19694 (#19591, iOS lit la disparition) fusionnée à 21:28 par la file coordonnée ; aucune PR de la routine ouverte. CI de PR toujours gelée (`pull_request` « skipped »), la preuve passe par `workflow_dispatch`.
+- Lot : #18769, seconde moitié — un compte supprimé quitte ses communautés, et ça se voit. `deactivateCommunityMembershipsOfDeletedAccount` reçoit `CommunityMemberAnnounce` en paramètre REQUIS (même règle qu'`applyCommunityAdmission`), lit ses communautés actives AVANT l'écriture (après, il n'y en a plus), et annonce `community:member-left` (`reason: 'removed'`) dans chacune — rien si l'écriture lève, rien si une course l'a déjà faite (`count === 0`). `MaintenanceService` branche `communityMemberAnnouncerOverIO(prisma, resolveIO())` sur le serveur que le manager lui injecte déjà (`setShareLinkRevocationLive`) : aucune ligne ajoutée à `MeeshySocketIOManager`, hors budget.
+- Audience : celle de la loi partagée (membres actifs restants, créateur, et la room du compte lui-même, dont les sessions sont déjà révoquées à ce stade de la suppression). Charge : l'identifiant seul, déjà anonymisé en place par #5691.
+- Cliquet `community-member-writer-sweep` : plus aucun écrivain muet (l'entrée `silent #18769` devient `member-broadcast`).
+- Témoins : `deactivateDeletedAccountCommunityMemberships.test.ts` (+4), `MaintenanceService.test.ts` (+2, dont le branchement traversant le vrai annonceur jusqu'aux rooms `user:<id>`). Rouge prouvé : 6 échecs sans le correctif.
+- Gates locaux : passerelle `tsc --noEmit` vert ; 31 suites / 811 tests verts (MaintenanceService, écrivains, diffusion, promesses détachées). Rouge ÉTRANGER : `tsc-never-loaded-tests-ratchet` mesure 80 erreurs non muettes pour un plafond de 76 — identique sur `dev` nu (même liste avant / après le lot).
+- Aucun client touché : les trois lisent déjà `community:member-left`.
+- Prochain lot recommandé : fermer #16857 (ses trois tranches et ses entrées indirectes sont livrées) ; #16739, #16893, #16669 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-19 — réveil 05:38 UTC
+
+- Début du run : #19763 (#18769, un compte supprimé quitte ses communautés) seule PR de la routine ouverte, dernière poussée à 01:38, donc inactive : run consacré à la mener à la fusion.
+- `dev` (`d88c406d7`, 14 commits : iOS, SDK, garde passerelle `participation-soft-state-equality-filter-guard`) fusionnée dans la branche sans conflit. Rejoués sur l'arbre fusionné : passerelle `tsc --noEmit` vert ; `MaintenanceService`, `deactivateDeletedAccountCommunityMemberships`, `community-member-writer-sweep`, `participation-soft-state-equality-filter-guard` et `tsc-never-loaded` verts.
+- Seul rouge : `gateway-test-file-size-budget` règle 3 (`calls-routes.test.ts : 2154 → 2175`), ÉTRANGER et identique sur `dev` nu ; avec la garde web `capability-guard` (`lib/calls/call-network-recovery.ts`), il est corrigé par #19772, vivante (poussée à 05:06 par une autre session) : cédée.
+- Pas de `workflow_dispatch` sur cette tête : son verdict serait rouge pour ces deux causes, et la branche devra reprendre `dev` après #19772.
+- Prochain lot recommandé : dès que #19772 est sur `dev`, reprendre `dev`, lancer `ci.yml` en `workflow_dispatch` et fusionner #19763 sur un verdict vert ; puis fermer #16857.
