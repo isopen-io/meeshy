@@ -722,6 +722,19 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
 
         const attachment = await prisma.messageAttachment.create({
           data: {
+            // #19801 — LA CLÉ D'ATTENTE SE POSE, elle ne se déduit pas. Prisma
+            // n'écrit pas un champ optionnel qu'on ne lui donne pas : sans cette
+            // ligne le document n'a AUCUNE clé `messageId`, et
+            // `{ messageId: null }` — une ÉGALITÉ sous MongoDB — ne l'apparie
+            // jamais (`utils/prisma-unset.ts`). Les DEUX lecteurs de cette
+            // colonne cherchent une pièce « encore libre » :
+            // `MaintenanceService.cleanupOrphanedAttachments` (le balayage des
+            // orphelines, qui ne voyait donc aucun média poussé ici puis jamais
+            // envoyé — fuite de stockage silencieuse) et `FREE_ATTACHMENT`
+            // (`services/calls/callRecordingLink.ts`, qui dit déjà l'absence).
+            // La branche `PostMedia` du MÊME `else`, vingt lignes plus haut,
+            // pose `postId: null` pour exactement cette raison.
+            messageId: null,
             originalName: filename,
             ...persistedRenditionFields(rendered),
             ...processingFields,
