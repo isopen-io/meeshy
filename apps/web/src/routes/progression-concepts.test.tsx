@@ -97,6 +97,10 @@ describe('la première page : une carte par concept, et rien d’autre', () => {
     expect(cards(page())).toEqual([...progressionConcepts(playing)]);
   });
 
+  test('la première carte est celle du rang, le niveau la suit (#17394)', () => {
+    expect(cards(page()).slice(0, 2)).toEqual(['glory', 'level']);
+  });
+
   for (const concept of PROGRESSION_CONCEPTS) {
     test(`${concept} : la carte entière ouvre la fiche, sa tête dit le nom puis la valeur sur une ligne`, () => {
       const card = page().querySelector(`[data-concept-card="${concept}"]`);
