@@ -12,6 +12,8 @@ const ar = {
   'game.frappe.say.gold': 'Meesh رقم {number} ذهبية. رآها أجدادك.',
   'game.frappe.say.prism': 'Meesh رقم {number} موشورية: كل اللغات تسطع فيها.',
   'game.frappe.glory': '\u2066+{glory}\u2069 من المجد',
+  'game.frappe.glory_toward': '{glory} من المجد حتى {rank}',
+  'game.frappe.risen': 'لقبك {rank}',
   'game.frappe.refused.shadow': 'ظلّ يحجب نورك. شراراتك القادمة ستبدّده، ثم نسكّ.',
   'game.frappe.refused.locked': 'إرثك ينتظر رتبة أعلى. مجدك سيفتحه، ثم نسكّ.',
   'game.frappe.refused.light': 'نورك لا يكفي بعد. شراراتك القادمة ستغذّيه.',
