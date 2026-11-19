@@ -177,6 +177,7 @@ nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProvidin
         case .angel: return angel(image, face: face, canvas: canvas, time: time, isDegraded: isDegraded)
         case .demon: return demon(image, face: face, canvas: canvas, time: time)
         case .volcano: return volcano(image, canvas: canvas, time: time, isAnimated: isAnimated, isDegraded: isDegraded)
+        case .baby: return baby(image, face: face, canvas: canvas, intensity: intensity)
         }
     }
 
@@ -225,6 +226,38 @@ nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProvidin
             .wartCenters(for: bounds, count: CallFaceEffectBudget.wartCount(isDegraded: isDegraded), seed: seed)
             .map { Self.spot(at: $0, radius: radius, color: CIColor(red: 0.22, green: 0.38, blue: 0.12, alpha: 0.9)) }
         return warts.reduce(skin) { $1.composited(over: $0) }
+    }
+
+    /// #19779 — Bébé : un étalonnage doux sur toute l'image ; sur un visage VU
+    /// seulement (jamais supposé), la peau lissée, les yeux agrandis (les mêmes
+    /// bosses que le crapaud), le bas du visage resserré et deux joues roses.
+    private func baby(_ image: CIImage, face: CallFaceLandmarks?, canvas: CGRect, intensity: Float) -> CIImage {
+        let soft = image.applyingFilter("CIColorControls", parameters: [
+            kCIInputBrightnessKey: 0.03,
+            kCIInputSaturationKey: 1.1,
+            kCIInputContrastKey: 1.0
+        ])
+        guard let face else { return soft }
+        let bounds = face.bounds
+        let smoothed = smoothing(soft, face: face, canvas: canvas, intensity: max(intensity, 0.4))
+        let chin = CallFaceEffectGeometry.babyChinPinch(for: bounds)
+        let pinched = smoothed.applyingFilter("CIPinchDistortion", parameters: [
+            kCIInputCenterKey: CIVector(cgPoint: chin.center),
+            kCIInputRadiusKey: chin.radius,
+            kCIInputScaleKey: chin.scale
+        ]).cropped(to: canvas)
+        let bigEyes = CallFaceEffectGeometry.babyEyeBumps(for: face).reduce(pinched) { current, bump in
+            current.applyingFilter("CIBumpDistortion", parameters: [
+                kCIInputCenterKey: CIVector(cgPoint: bump.center),
+                kCIInputRadiusKey: bump.radius,
+                kCIInputScaleKey: bump.scale
+            ])
+        }.cropped(to: canvas)
+        let blush = CIColor(red: 1, green: 0.55, blue: 0.62, alpha: 0.32)
+        return CallFaceEffectGeometry.cheekCenters(for: bounds)
+            .map { Self.spot(at: $0, radius: bounds.width * 0.16, color: blush) }
+            .reduce(bigEyes) { $1.composited(over: $0) }
+            .cropped(to: canvas)
     }
 
     private func angel(_ image: CIImage, face: CallFaceLandmarks?, canvas: CGRect, time: TimeInterval, isDegraded: Bool) -> CIImage {

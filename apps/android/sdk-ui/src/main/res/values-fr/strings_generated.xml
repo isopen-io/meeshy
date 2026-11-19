@@ -418,6 +418,7 @@
     <string name="reading_mode_summary_title">Résumé</string>
     <string name="retouch_crop_original">Original</string>
     <string name="retouch_effect_angel">Ange</string>
+    <string name="retouch_effect_baby">Bébé</string>
     <string name="retouch_effect_demon">Démon</string>
     <string name="retouch_effect_none">Aucun</string>
     <string name="retouch_effect_smoothing">Lissage de peau</string>

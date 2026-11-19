@@ -19,6 +19,18 @@ class CallFaceEffectGeometryTest {
     }
 
     @Test
+    fun `le bebe agrandit les deux yeux et resserre le bas du visage (#19779)`() {
+        val landmarks = CallFaceLandmarks(face, leftEye = FacePoint(160f, 300f), rightEye = FacePoint(240f, 300f))
+        val eyes = CallFaceEffectGeometry.babyEyeBumps(landmarks)
+        assertThat(eyes.map { it.center }).containsExactly(FacePoint(160f, 300f), FacePoint(240f, 300f)).inOrder()
+        assertThat(eyes.all { it.scale > 0f && it.radius > face.width * 0.1f }).isTrue()
+        val chin = CallFaceEffectGeometry.babyChinPinch(face)
+        assertThat(chin.center.y).isGreaterThan(face.midY)
+        assertThat(chin.scale).isGreaterThan(0f)
+        assertThat(chin.scale).isLessThan(0.5f)
+    }
+
+    @Test
     fun `deux cornes symetriques sortent du front`() {
         val horns = CallFaceEffectGeometry.hornRects(face)
         assertThat(horns).hasSize(2)

@@ -413,6 +413,7 @@
     <string name="reading_mode_summary_title">Zusammenfassung</string>
     <string name="retouch_crop_original">Original</string>
     <string name="retouch_effect_angel">Engel</string>
+    <string name="retouch_effect_baby">Baby</string>
     <string name="retouch_effect_demon">Dämon</string>
     <string name="retouch_effect_none">Keiner</string>
     <string name="retouch_effect_smoothing">Hautglättung</string>

@@ -108,9 +108,9 @@ struct ProfileCircleProposalCard: View {
     }
 
     private func avatar(_ proposal: ProfileCircleProposal, tint: Color) -> some View {
-        MeeshyAvatar(name: displayName, context: .conversationList,
+        LivePresence { MeeshyAvatar(name: displayName, context: .conversationList,
                      accentColor: profileAccent ?? DynamicColorGenerator.colorForName(displayName), avatarURL: proposal.avatar,
-                     presenceState: PresenceManager.shared.knownPresenceState(for: viewModel.userId), ring: proposal.ring)
+                     presenceState: PresenceManager.shared.knownPresenceState(for: viewModel.userId), ring: proposal.ring) }
             .overlay(alignment: .bottomTrailing) {
                 Image(systemName: VitrineSeenAsCopy.glyph(of: proposal.level) + ".fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .bold))

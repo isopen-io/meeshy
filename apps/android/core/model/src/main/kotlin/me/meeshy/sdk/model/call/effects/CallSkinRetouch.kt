@@ -28,14 +28,19 @@ data class CallSkinRetouchPlan(
         const val TEXTURE_KEPT: Float = 0.35f
         const val UNDER_EYE_SHARE: Float = 0.6f
 
+        /** #19779 — la peau lissée du Bébé, au moins (iOS `max(intensity, 0.4)`). */
+        const val BABY_SMOOTHING: Float = 0.4f
+
         fun make(config: VideoFilterConfig, ladder: CallVideoDegradation, isConstrained: Boolean): CallSkinRetouchPlan? {
             val effect = config.activeFaceEffect
-            if (effect.isStylized) return null
+            if (effect.isStylized && effect != CallFaceEffect.Baby) return null
             val tone = if (config.naturalComplexionEnabled && !isConstrained && !ladder.isExhausted) 1f else 0f
-            val smoothing = if (effect == CallFaceEffect.Smoothing && !ladder.isSmoothingDegraded && !ladder.isExhausted) {
-                config.skinSmoothingIntensity.coerceIn(0f, 1f)
-            } else {
-                0f
+            val smoothes = !ladder.isSmoothingDegraded && !ladder.isExhausted
+            val smoothing = when {
+                !smoothes -> 0f
+                effect == CallFaceEffect.Smoothing -> config.skinSmoothingIntensity.coerceIn(0f, 1f)
+                effect == CallFaceEffect.Baby -> config.skinSmoothingIntensity.coerceIn(BABY_SMOOTHING, 1f)
+                else -> 0f
             }
             if (tone <= 0f && smoothing <= 0f) return null
             val isDegraded = ladder.tier != CallBlurTier.Balanced || ladder.isSmoothingDegraded || isConstrained

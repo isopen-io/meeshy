@@ -55,7 +55,7 @@ struct ProfileVitrineBlocksTests {
     func live_stale_neverClaimsReachable() throws {
         let board = try #require(Self.board(staleAge: 3 * 3600))
         #expect(board.isStale)
-        #expect(board.staleAge == 3 * 3600)
+        #expect(board.staleAge == TimeInterval(3 * 3600))
         #expect(board.phone == nil)
         #expect(board.place == Self.place)
     }
