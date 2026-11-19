@@ -27,6 +27,8 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
     private let isLoading: Bool
     private let collapsedTapLabel: String?
     private let onCollapsedTap: (() -> Void)?
+    /// La bannière reste DANS la barre repliée, floutée par son verre, au lieu de s'effacer (fiche de profil, #19780).
+    private let keepsBannerInBar: Bool
     private let banner: Banner
     private let leading: Leading
     private let trailing: Trailing
@@ -47,6 +49,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
                 isLoading: Bool = false,
                 collapsedTapLabel: String? = nil,
                 onCollapsedTap: (() -> Void)? = nil,
+                keepsBannerInBar: Bool = false,
                 @ViewBuilder banner: () -> Banner,
                 @ViewBuilder leading: () -> Leading,
                 @ViewBuilder trailing: () -> Trailing,
@@ -62,6 +65,7 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
         self.isLoading = isLoading
         self.collapsedTapLabel = collapsedTapLabel
         self.onCollapsedTap = onCollapsedTap
+        self.keepsBannerInBar = keepsBannerInBar
         self.banner = banner()
         self.leading = leading()
         self.trailing = trailing()
@@ -106,8 +110,9 @@ public struct MeeshyCollapsingHero<Banner: View, Leading: View, Trailing: View, 
             }
         }
         .frame(width: width, height: CGFloat(recipe.height + recipe.bannerStretch), alignment: .top)
-        .clipped()
-        .opacity(recipe.bannerOpacity)
+        .clipShape(MeeshyCollapsingHeroBarShape(cornerRadius: CGFloat(
+            MeeshyCollapsingHeroRecipe.bannerCornerRadius(recipe, keepsBannerInBar: keepsBannerInBar))))
+        .opacity(MeeshyCollapsingHeroRecipe.bannerOpacity(recipe, keepsBannerInBar: keepsBannerInBar))
         .accessibilityHidden(true)
     }
 

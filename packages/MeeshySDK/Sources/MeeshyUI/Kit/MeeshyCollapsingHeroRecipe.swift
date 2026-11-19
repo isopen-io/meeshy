@@ -102,6 +102,18 @@ public nonisolated struct MeeshyCollapsingHeroRecipe: Sendable, Equatable {
         )
     }
 
+    /// La bannière d'un héros qui la GARDE dans sa barre (fiche de profil, #19780) : pleine tout du long ; c'est le
+    /// verre qui arrive par-dessus et la floute. Sinon, l'effacement de la loi (de 0 à 50 %).
+    public static func bannerOpacity(_ recipe: MeeshyCollapsingHeroRecipe, keepsBannerInBar: Bool) -> Double {
+        keepsBannerInBar ? 1 : recipe.bannerOpacity
+    }
+
+    /// Les coins bas de la bannière gardée : droits dépliée, ceux de la barre une fois le verre posé ; toujours
+    /// droits pour une bannière qui s'efface.
+    public static func bannerCornerRadius(_ recipe: MeeshyCollapsingHeroRecipe, keepsBannerInBar: Bool) -> Double {
+        keepsBannerInBar ? barCornerRadius * recipe.glassOpacity : 0
+    }
+
     /// Le tic d'épinglage : il sonne quand l'avancée franchit l'épinglage, dans un sens ou dans l'autre, une fois.
     public static func pinTick(from previous: Double, to current: Double) -> Bool {
         guard previous.isFinite, current.isFinite else { return false }

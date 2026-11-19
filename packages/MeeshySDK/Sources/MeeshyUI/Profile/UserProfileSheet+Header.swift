@@ -57,6 +57,7 @@ extension UserProfileSheet {
             collapsedHeight: ProfileHeroPlan.collapsedHeight,
             topInset: ProfileHeroPlan.topInset,
             isLoading: phase == .skeleton,
+            keepsBannerInBar: true,
             banner: { heroBanner(progress: progress) },
             leading: { heroCloseButton },
             trailing: { heroTrailing(progress: progress) },
