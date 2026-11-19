@@ -74,7 +74,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. Da
 - **Les vingt états** : **Étincelle** (clé `etincelle`, jamais « Braise »), Lueur, **Clarté** (clé `lumiere`, jamais « Lumière »), Éclat, Rayon, Aurore, Comète, Étoile, Constellation, Galaxie, puis Nébuleuse, Pulsar, Quasar, Supernova, Magnétar, Amas, Superamas, Cosmos, Infini, Singularité.
 - **L'épreuve** : tous les dix niveaux, de 10 à 100, les aïeux demandent une épreuve (une Meesh, un rêve, une Flamme, un rang). Tant qu'elle n'est pas réussie, la lumière attend.
 - **Le rang ouvre la lumière** : la Supernova est la limite sous Ambassadeur, Ambassadeur ouvre jusqu'à la Singularité, Oracle lève toute limite.
-- **A** : anneau « 34 » · Éclat ; « Niveau 34 ».
+- **A** : anneau « 34 » · Éclat ; « Niveau 34 ». Le bandeau et l'anneau, lus à voix haute, disent « Ta lumière au niveau 34 » (#19892).
 - **B** : « Ta lumière brille en Éclat », puis en petit « niveau 34 · 3 200 étincelles jusqu'au niveau 35 ».
 - **Bannis** : « encore N avant le niveau X » → « N étincelles jusqu'au niveau X » ; « étape » → « épreuve » ; « record de niveau » → « ta plus haute lumière ».
 
