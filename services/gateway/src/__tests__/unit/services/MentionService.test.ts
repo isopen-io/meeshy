@@ -93,6 +93,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
 import { MentionService, MentionSuggestion, MentionValidationResult, resolveMentionedUsers, resolveUsernamesToIds } from '../../../services/MentionService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../../services/CacheStore';
+import { findUniqueIn } from '../../helpers/mongo-where';
 
 describe('MentionService', () => {
   let service: MentionService;
@@ -1422,12 +1423,24 @@ describe('MentionService', () => {
     });
 
     describe('Public/Global conversations', () => {
+      /**
+       * Le compte est LU sous la loi « compte vivant », et le double l'ÉVALUE :
+       * la ligne est à la forme NOMINALE de production — ni `deletedAt` ni
+       * `deactivatedAt`, qu'aucune création de compte n'écrit. Un
+       * `mockResolvedValue({ id })` rend la ligne quelle que soit la clause, donc
+       * il accepte une égalité nue qui, en base, n'apparie personne (#19799).
+       */
+      const annuaireAvec = (...comptes: Record<string, unknown>[]) => {
+        prisma.user.findUnique.mockImplementation(findUniqueIn(comptes) as never);
+      };
+      const vivant = { id: userId, isActive: true };
+
       it('should return true for active user in public conversation', async () => {
         prisma.conversation.findUnique.mockResolvedValue({
           id: conversationId,
           type: 'public',
         });
-        prisma.user.findUnique.mockResolvedValue({ id: userId });
+        annuaireAvec(vivant);
 
         const result = await service.canMentionUser(conversationId, userId);
 
@@ -1439,7 +1452,7 @@ describe('MentionService', () => {
           id: conversationId,
           type: 'global',
         });
-        prisma.user.findUnique.mockResolvedValue({ id: userId });
+        annuaireAvec(vivant);
 
         const result = await service.canMentionUser(conversationId, userId);
 
@@ -1451,7 +1464,23 @@ describe('MentionService', () => {
           id: conversationId,
           type: 'public',
         });
-        prisma.user.findUnique.mockResolvedValue(null);
+        annuaireAvec();
+
+        const result = await service.canMentionUser(conversationId, userId);
+
+        expect(result).toBe(false);
+      });
+
+      it.each([
+        ['supprimé', { deletedAt: new Date('2026-10-01T00:00:00Z') }],
+        ['désactivé', { deactivatedAt: new Date('2026-10-01T00:00:00Z') }],
+        ['inactif', { isActive: false }],
+      ])('should return false for a %s account', async (_etat, mort) => {
+        prisma.conversation.findUnique.mockResolvedValue({
+          id: conversationId,
+          type: 'public',
+        });
+        annuaireAvec({ ...vivant, ...mort });
 
         const result = await service.canMentionUser(conversationId, userId);
 

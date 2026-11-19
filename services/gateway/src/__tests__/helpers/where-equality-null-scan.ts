@@ -56,8 +56,24 @@ export type EqualityNullSweep = {
   readonly sites: readonly EqualityNullSite[];
 };
 
+/**
+ * Dépouille les commentaires **sans déplacer une seule ligne**.
+ *
+ * Un bloc `/* … *\/` remplacé par la chaîne vide emporte ses retours à la ligne,
+ * et tout ce qui suit remonte d'autant : le site `addable-user.ts:19` était
+ * NOMMÉ `:8` par ce balayage (#19799), parce que le doc-comment au-dessus de lui
+ * compte onze lignes. Un cliquet dont la valeur est de NOMMER fichier, ligne,
+ * colonne et graphie n'a pas le droit de se tromper sur le champ le plus
+ * actionnable des quatre — il envoie lire le mauvais endroit, et quelqu'un y
+ * conclura que le cliquet s'est trompé de site.
+ *
+ * Le bloc est donc remplacé par ses PROPRES retours à la ligne ; un `//` garde
+ * déjà le sien, le motif ne consommant pas la fin de ligne.
+ */
 const withoutComments = (source: string): string =>
-  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  source
+    .replace(/\/\*[\s\S]*?\*\//g, (bloc) => bloc.replace(/[^\n]/g, ''))
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
 
 /** Les clés d'objet sous lesquelles un `{ champ: null }` est une ÉCRITURE, jamais un filtre. */
 const PAYLOAD_KEYS = new Set(['data', 'create', 'update', 'set']);

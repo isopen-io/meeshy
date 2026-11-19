@@ -32,6 +32,7 @@ jest.mock('../../../services/notifications/community-added', () => ({
 
 import { registerMembershipRoutes } from '../../../routes/communities/membership';
 import { registerMemberRoutes } from '../../../routes/communities/members';
+import { findFirstIn } from '../../helpers/mongo-where';
 
 const ADMIN = '507f1f77bcf86cd799439101';
 const MEMBER = '507f1f77bcf86cd799439102';
@@ -44,27 +45,24 @@ const COMMUNITY = '507f1f77bcf86cd7994391a1';
 
 type Row = Record<string, unknown>;
 
+/**
+ * La forme NOMINALE de production : un compte jamais désactivé ni supprimé n'a
+ * AUCUNE de ces deux colonnes — ni l'inscription (`registration.service.ts`) ni
+ * la création par un administrateur (`user-management.service.ts`) ne les écrit.
+ * Les poser `null` à la main décrit l'état MINORITAIRE (celui d'un compte
+ * réactivé), et un filtre d'égalité nue y passe au vert alors qu'en base il
+ * n'apparie presque personne (#19799).
+ */
 const USERS: Row[] = [
-  { id: ADMIN, isActive: true, deactivatedAt: null, deletedAt: null, blockedUserIds: [BLOCKED_BY_ADMIN] },
-  { id: MEMBER, isActive: true, deactivatedAt: null, deletedAt: null, blockedUserIds: [] },
-  { id: NEWCOMER, isActive: true, deactivatedAt: null, deletedAt: null, blockedUserIds: [] },
-  { id: DEACTIVATED_USER, isActive: false, deactivatedAt: new Date('2026-10-01'), deletedAt: null, blockedUserIds: [] },
-  { id: BLOCKS_ADMIN, isActive: true, deactivatedAt: null, deletedAt: null, blockedUserIds: [ADMIN] },
-  { id: BLOCKED_BY_ADMIN, isActive: true, deactivatedAt: null, deletedAt: null, blockedUserIds: [] },
+  { id: ADMIN, isActive: true, blockedUserIds: [BLOCKED_BY_ADMIN] },
+  { id: MEMBER, isActive: true, blockedUserIds: [] },
+  { id: NEWCOMER, isActive: true, blockedUserIds: [] },
+  { id: DEACTIVATED_USER, isActive: false, deactivatedAt: new Date('2026-10-01'), blockedUserIds: [] },
+  { id: BLOCKS_ADMIN, isActive: true, blockedUserIds: [ADMIN] },
+  { id: BLOCKED_BY_ADMIN, isActive: true, blockedUserIds: [] },
   // Suppression demandée par l'utilisateur (`routes/account-deletion.ts`) : `isActive: false` + `deletedAt`, SANS `deactivatedAt`.
-  { id: SELF_DELETED, isActive: false, deactivatedAt: null, deletedAt: new Date('2026-10-02'), blockedUserIds: [] },
+  { id: SELF_DELETED, isActive: false, deletedAt: new Date('2026-10-02'), blockedUserIds: [] },
 ];
-
-function userMatches(row: Row, where: Row): boolean {
-  if (Array.isArray(where.OR)) return (where.OR as Row[]).some((branch) => userMatches(row, branch));
-  return Object.entries(where).every(([key, value]) => {
-    if (value === undefined) return true;
-    if (typeof value === 'object' && value !== null && 'has' in value) {
-      return ((row[key] as unknown[]) ?? []).includes((value as Row).has);
-    }
-    return row[key] === value;
-  });
-}
 
 function makePrisma() {
   const writes: Row[] = [];
@@ -86,7 +84,10 @@ function makePrisma() {
       }),
     },
     user: {
-      findFirst: jest.fn<any>(async ({ where }: { where: Row }) => USERS.find((row) => userMatches(row, where)) ?? null),
+      // Le double ÉVALUE le `where` avec la sémantique MongoDB (une clé ABSENTE
+      // n'est pas une clé à `null`) : un évaluateur écrit à la main sur
+      // `row[key] === value` accepte l'égalité nue que la base refuse.
+      findFirst: jest.fn<any>(findFirstIn(USERS)),
     },
     communityMember: {
       findFirst: jest.fn<any>(async ({ where }: { where: Row }) =>

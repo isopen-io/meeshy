@@ -1,3 +1,4 @@
+import type { Prisma } from '@meeshy/shared/prisma/client';
 import { GlobalUserRole, isPlatformTeam } from '@meeshy/shared/types/role-types';
 import { unsetOrNull } from '../../utils/prisma-unset';
 
@@ -47,7 +48,7 @@ export const isUsableAccount = <T extends AccountState>(account: T | null | unde
 export const USABLE_ACCOUNT_WHERE = {
   isActive: true,
   AND: [unsetOrNull('deletedAt'), unsetOrNull('deactivatedAt')],
-} as const;
+} satisfies Prisma.UserWhereInput;
 
 const STORED_ROLES: ReadonlySet<string> = new Set<string>(Object.values(GlobalUserRole));
 
