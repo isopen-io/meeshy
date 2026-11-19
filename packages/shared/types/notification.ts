@@ -9,6 +9,26 @@
 import type { PostType } from './post.js';
 import type { NotificationAttachmentWire } from './notification-attachment-wire.js';
 import type { NotificationContentDetail } from './notification-content-detail.js';
+import type {
+  ContactRecentlyActiveNotificationMetadata,
+  RelationAcquaintanceNotificationMetadata,
+  DeviceBatteryNotificationMetadata,
+  DeviceUnreachableNotificationMetadata,
+  WellnessCheckNotificationMetadata,
+  InactivityAlertNotificationMetadata,
+  LocationShareStartedNotificationMetadata,
+  LocationShareRequestedNotificationMetadata,
+} from './notification-circle-metadata.js';
+export type {
+  ContactRecentlyActiveNotificationMetadata,
+  RelationAcquaintanceNotificationMetadata,
+  DeviceBatteryNotificationMetadata,
+  DeviceUnreachableNotificationMetadata,
+  WellnessCheckNotificationMetadata,
+  InactivityAlertNotificationMetadata,
+  LocationShareStartedNotificationMetadata,
+  LocationShareRequestedNotificationMetadata,
+} from './notification-circle-metadata.js';
 
 // =====================================================
 // NOTIFICATION TYPES & ENUMS
@@ -406,7 +426,7 @@ export interface NotificationDelivery {
 /**
  * Metadata de base commune à toutes les notifications
  */
-interface BaseNotificationMetadata {
+export interface BaseNotificationMetadata {
   readonly action?: 'view_message' | 'view_conversation' | 'view_post' | 'join_conversation' | 'accept_or_reject_contact' | 'view_profile' | 'open_call' | 'view_details' | 'view_community' | 'update_app' | 'none';
 }
 
@@ -634,94 +654,6 @@ export interface ContactJoinedNotificationMetadata extends BaseNotificationMetad
   readonly action: 'view_profile';
   readonly joinerIds: readonly string[];
   readonly joinerCount: number;
-}
-
-/**
- * Metadata pour contact_recently_active (#8285) — « X était sur Meeshy
- * récemment ». `userId` est la personne revenue : le toucher ouvre son profil.
- * Aucune heure de connexion ne voyage — la notification dit « récemment »,
- * jamais « à 14 h 02 ».
- */
-export interface ContactRecentlyActiveNotificationMetadata extends BaseNotificationMetadata {
-  readonly action: 'view_profile';
-  readonly userId: string;
-}
-
-/**
- * Metadata pour relation_acquaintance (#13932) — la Connaissance née toute seule.
- * `userId` est l'AUTRE personne : le toucher ouvre son profil. Aucun compte
- * d'interactions ne voyage : la notification dit le résultat, pas la mesure.
- */
-export interface RelationAcquaintanceNotificationMetadata extends BaseNotificationMetadata {
-  readonly action: 'view_profile';
-  readonly userId: string;
-  readonly relationLevel: 'ACQUAINTANCE';
-  readonly origin: 'auto-acquaintance';
-}
-
-/**
- * Metadata pour device_battery (#14147) — la batterie d'un Proche ou d'un Sang.
- * `userId` est l'ÉMETTEUR : le toucher ouvre son profil. Seul le palier se range :
- * ni le niveau (il n'est que dans le corps), ni l'appareil, ni l'estimation, ni
- * l'heure du relevé. La ligne expire avec l'état (24 h) : aucun historique.
- */
-export interface DeviceBatteryNotificationMetadata extends BaseNotificationMetadata {
-  readonly action: 'view_profile';
-  readonly userId: string;
-  readonly batteryKind: 'critical' | 'probably-off' | 'back-on' | 'charging' | 'recharged';
-}
-
-/**
- * Metadata pour device_unreachable (#18737) — le téléphone d'un Proche ou d'un Sang.
- * `userId` est l'ÉMETTEUR : le toucher ouvre son profil. Seuls le genre et la cause probable se
- * rangent ; l'heure du dernier signe de vie n'est que dans le corps. La ligne expire avec l'état.
- */
-export interface DeviceUnreachableNotificationMetadata extends BaseNotificationMetadata {
-  readonly action: 'view_profile';
-  readonly userId: string;
-  readonly reachabilityKind: 'unreachable' | 'reachable';
-  readonly cause?: 'battery' | 'network';
-}
-
-/**
- * Metadata pour wellness_check (#18738) — adressée à SOI : le toucher, ou l'action « Je vais bien »,
- * répond par `POST /me/wellness/ok`. Rien d'autre ne se range.
- */
-export interface WellnessCheckNotificationMetadata extends BaseNotificationMetadata {
-  readonly action: 'none';
-  readonly wellnessCheck: true;
-}
-
-/**
- * Metadata pour inactivity_alert (#18738) — `userId` est la personne restée inactive : le toucher
- * ouvre son profil, où la dernière position et la dernière batterie se lisent si elles sont déjà
- * partagées. Ni position ni batterie ne se rangent dans la notification.
- */
-export interface InactivityAlertNotificationMetadata extends BaseNotificationMetadata {
-  readonly action: 'view_profile';
-  readonly userId: string;
-  readonly inactivityKind: 'alert' | 'responded';
-}
-
-/**
- * Metadata pour location_share_started (#19204). `userId` est l'ÉMETTEUR : le toucher ouvre sa
- * carte. Seule la durée choisie se range : ni position, ni précision, ni autre destinataire.
- * La ligne expire au terme du partage.
- */
-export interface LocationShareStartedNotificationMetadata extends BaseNotificationMetadata {
-  readonly action: 'view_profile';
-  readonly userId: string;
-  readonly durationMinutes: number;
-}
-
-/**
- * Metadata pour location_share_requested (#19204). `userId` est le DEMANDEUR : le toucher ouvre
- * le partage vers lui. Aucune position ne voyage : il n'en a pas, il en demande une.
- */
-export interface LocationShareRequestedNotificationMetadata extends BaseNotificationMetadata {
-  readonly action: 'view_profile';
-  readonly userId: string;
-  readonly requestKind: 'extend' | 'reask';
 }
 
 /** Le contenu qu'un retrait par la modération a visé (#11149). */
