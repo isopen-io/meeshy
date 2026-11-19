@@ -31,7 +31,7 @@ export type QualityTick = {
   readonly audioBitrate: number;
   readonly path: MediaPath | null;
   /** #19876 — gels, limitation et route élue de chaque pair, lus sur le même relevé ; le rapport de fin les accumule. */
-  readonly media?: readonly MediaQuality[];
+  readonly media?: Readonly<Record<string, MediaQuality>>;
 };
 
 export type QualityLoopDeps = {
@@ -132,7 +132,7 @@ export function createQualityLoop(deps: QualityLoopDeps): QualityLoop {
       profile,
       audioBitrate: audioBitrateFor(profile, total.level),
       path: paths.includes('relay') ? 'relay' : paths.includes('direct') ? 'direct' : null,
-      media: reads.map(([, , , media]) => media),
+      media: Object.fromEntries(reads.map(([userId, , , media]) => [userId, media])),
     };
   };
 

@@ -86,7 +86,7 @@ const media = (overrides: Partial<MediaQuality> = {}): MediaQuality => ({ ...NOT
 const chrome = media({ freezeCount: 2, totalFreezesDuration: 0.9, jitterBufferDelay: 4.8, jitterBufferEmittedCount: 96, concealedSamples: 480, nackCount: 12, pliCount: 3, qualityLimitationReason: 'bandwidth', candidateType: 'relay', relayProtocol: 'udp' });
 
 const sampled = (steps: ReadonlyArray<readonly [MediaQuality, number]>) =>
-  steps.reduce((t, [peer, jitter]) => withMedia(withSample(t, { level: 'good', rtt: 200, packetLoss: 2 }), [peer], jitter), createTelemetry(0));
+  steps.reduce((t, [peer, jitter]) => withMedia(withSample(t, { level: 'good', rtt: 200, packetLoss: 2 }), { a: peer }, jitter), createTelemetry(0));
 
 describe('le rapport de fin d’appel porte les gels, la limitation, le MOS et le relais (#19876)', () => {
   test('les compteurs cumulés du DERNIER relevé, le tampon de gigue en millisecondes moyennes, la route élue', () => {
@@ -131,14 +131,34 @@ describe('le rapport de fin d’appel porte les gels, la limitation, le MOS et l
   test('sans aucun relevé média, aucun champ de qualité ne part — pas même le MOS', () => {
     const silent = analyticsPayload(withSample(createTelemetry(0), { level: 'good', rtt: 200, packetLoss: 2 }), { ...context, now: 1 });
     QUALITY_FIELDS.forEach((field) => expect(Object.keys(silent)).not.toContain(field));
-    expect(withMedia(createTelemetry(0), [], 10)).toEqual(createTelemetry(0));
+    expect(withMedia(createTelemetry(0), {}, 10)).toEqual(createTelemetry(0));
   });
 
   test('plusieurs pairs : les compteurs s’additionnent et chaque pair compte sa cause de limitation', () => {
-    const telemetry = withMedia(createTelemetry(0), [media({ ...chrome, qualityLimitationReason: 'cpu' }), media({ freezeCount: 1, qualityLimitationReason: 'cpu' }), chrome], 10);
+    const telemetry = withMedia(createTelemetry(0), { a: media({ ...chrome, qualityLimitationReason: 'cpu' }), b: media({ freezeCount: 1, qualityLimitationReason: 'cpu' }), c: chrome }, 10);
     const payload = analyticsPayload(telemetry, { ...context, now: 1 });
     expect(payload.freezeCount).toBe(5);
     expect(payload.qualityLimitationReason).toBe('cpu');
+  });
+
+  test('un pair parti, ou dont le dernier getStats a échoué, garde ses gels, NACK et PLI dans le rapport (QA R1)', () => {
+    const first = withMedia(createTelemetry(0), { a: media({ freezeCount: 2, nackCount: 10, pliCount: 1 }), b: media({ freezeCount: 3, nackCount: 20, pliCount: 4 }) }, 10);
+    const payload = analyticsPayload(withMedia(first, { a: media({ freezeCount: 5, nackCount: 11, pliCount: 1 }) }, 10), { ...context, now: 1 });
+    expect(payload.freezeCount).toBe(8);
+    expect(payload.nackCount).toBe(31);
+    expect(payload.pliCount).toBe(5);
+  });
+
+  test('un lien reconstruit pour le MÊME pair remplace son entrée : ses compteurs repartent de zéro, le rapport suit le nouveau lien (accepté)', () => {
+    const before = withMedia(createTelemetry(0), { a: media({ freezeCount: 7, nackCount: 40 }) }, 10);
+    const payload = analyticsPayload(withMedia(before, { a: media({ freezeCount: 1, nackCount: 2 }) }, 10), { ...context, now: 1 });
+    expect(payload.freezeCount).toBe(1);
+    expect(payload.nackCount).toBe(2);
+  });
+
+  test('la mémoire reste bornée par le nombre de pairs, quel que soit le nombre de relevés', () => {
+    const many = Array.from({ length: 5_000 }, (_, index) => index).reduce((t, index) => withMedia(t, { [`p${index % 3}`]: media({ freezeCount: index }) }, 10), createTelemetry(0));
+    expect(Object.keys(many.peers)).toEqual(['p0', 'p1', 'p2']);
   });
 
   test('le rapport produit passe le schéma de la passerelle, avec ou sans qualité', () => {
@@ -148,7 +168,7 @@ describe('le rapport de fin d’appel porte les gels, la limitation, le MOS et l
   });
 
   test('la mémoire reste bornée avec les relevés média : aucun historique', () => {
-    const long = Array.from({ length: 10_000 }, (_, index) => media({ ...chrome, qualityLimitationReason: ['none', 'cpu', 'bandwidth', 'other'][index % 4] ?? null })).reduce((t, peer) => withMedia(t, [peer], 12), createTelemetry(0));
+    const long = Array.from({ length: 10_000 }, (_, index) => media({ ...chrome, qualityLimitationReason: ['none', 'cpu', 'bandwidth', 'other'][index % 4] ?? null })).reduce((t, peer) => withMedia(t, { a: peer }, 12), createTelemetry(0));
     expect(JSON.stringify(long).length).toBeLessThan(900);
   });
 });

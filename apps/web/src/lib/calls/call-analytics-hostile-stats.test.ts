@@ -34,7 +34,7 @@ describe('une stat malformée ne casse ni la boucle ni le rapport (#19876, QA)',
   });
 
   test('le rapport issu de stats hostiles passe le schéma de la passerelle : la télémétrie de l’appel n’est pas rejetée', () => {
-    const telemetry = withMedia(withSample(createTelemetry(0), { level: 'good', rtt: 120, packetLoss: 1 }), [readMediaQuality(report(hostile))], Number.NaN);
+    const telemetry = withMedia(withSample(createTelemetry(0), { level: 'good', rtt: 120, packetLoss: 1 }), { peer: readMediaQuality(report(hostile)) }, Number.NaN);
     const payload = analyticsPayload(telemetry, context);
     expect(socketCallAnalyticsSchema.safeParse(payload).success).toBe(true);
     expect(payload.freezeCount).toBe(2);
@@ -46,7 +46,7 @@ describe('une stat malformée ne casse ni la boucle ni le rapport (#19876, QA)',
 
   test('un candidat local ne fait partir ni adresse, ni port, ni ufrag, ni URL : seulement son type', () => {
     const relay = readMediaQuality(report(hostile.map((entry) => (entry.id === 'l' ? { ...entry, candidateType: 'relay', relayProtocol: 'tcp' } : entry))));
-    const payload = analyticsPayload(withMedia(withSample(createTelemetry(0), { level: 'good', rtt: 120, packetLoss: 1 }), [relay], 10), context);
+    const payload = analyticsPayload(withMedia(withSample(createTelemetry(0), { level: 'good', rtt: 120, packetLoss: 1 }), { peer: relay }, 10), context);
     const wire = JSON.stringify(payload);
     ['203.0.113.7', '198.51.100.9', '3478', 'ufrag', 'turn:'].forEach((secret) => expect(wire).not.toContain(secret));
     expect(payload.candidateType).toBe('relay');

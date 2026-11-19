@@ -481,7 +481,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (loop === null || callId === null) return;
     const tick = await loop.tick();
     if (tick === null || session.loop !== loop || read()?.callId !== callId) return;
-    const { total, stage, codec, media = [] } = tick;
+    const { total, stage, codec, media = {} } = tick;
     session.telemetry = withMedia(withCodec(withSample(session.telemetry, total), codec), media, total.jitter);
     update((current) => ({ ...current, quality: { level: total.level, packetLoss: total.packetLoss, rtt: total.rtt, jitter: total.jitter, audioKbps: total.audioKbps, videoKbps: total.videoKbps, survival: stage } }));
     if (total.level === 'poor') session.troubled = true;

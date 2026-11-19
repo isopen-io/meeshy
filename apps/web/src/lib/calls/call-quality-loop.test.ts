@@ -224,8 +224,9 @@ describe('la boucle de qualité d’un appel (#8047)', () => {
     h.add('b');
     (h.networks.get('b') as { relay?: boolean }).relay = true;
     const [tick] = await h.advance(2_000);
-    expect(tick?.media?.map((peer) => peer.candidateType)).toEqual(['srflx', 'relay']);
-    expect(tick?.media?.[0]?.freezeCount).toBeNull();
+    expect(tick?.media?.a?.candidateType).toBe('srflx');
+    expect(tick?.media?.b?.candidateType).toBe('relay');
+    expect(tick?.media?.a?.freezeCount).toBeNull();
   });
 
   test('un navigateur qui refuse la préférence de dégradation reçoit quand même le plafond du profil, une seule fois (#8697)', async () => {

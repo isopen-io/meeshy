@@ -34,8 +34,12 @@ export type Telemetry = {
   readonly codec: string | null;
   readonly captionsShown: boolean;
   readonly effects: readonly string[];
-  /** #19876 — le dernier relevé des compteurs cumulés de tous les pairs ; `null` tant qu'aucun relevé média n'a abouti. */
-  readonly media: MediaQuality | null;
+  /**
+   * #19876 — le dernier relevé des compteurs cumulés de CHAQUE pair, par pair :
+   * un pair parti ou dont le dernier `getStats` a échoué garde le sien ; un lien
+   * reconstruit pour le même pair remplace son entrée. Borné par le nombre de pairs.
+   */
+  readonly peers: Readonly<Record<string, MediaQuality>>;
   readonly mediaSamples: number;
   readonly jitterSum: number;
   readonly limitations: Readonly<Record<LimitationReason, number>>;
@@ -53,7 +57,7 @@ export type AnalyticsContext = { readonly callId: string; readonly now: number; 
 const NO_LEVELS: CallQualityDistribution = { excellent: 0, good: 0, fair: 0, poor: 0 };
 
 export function createTelemetry(startedAt: number): Telemetry {
-  return { startedAt, negotiatingAt: null, connectedAt: null, reconnections: 0, networkTransitions: 0, samples: 0, rttSum: 0, lossSum: 0, maxLoss: 0, levels: NO_LEVELS, codec: null, captionsShown: false, effects: [], media: null, mediaSamples: 0, jitterSum: 0, limitations: NO_LIMITATIONS };
+  return { startedAt, negotiatingAt: null, connectedAt: null, reconnections: 0, networkTransitions: 0, samples: 0, rttSum: 0, lossSum: 0, maxLoss: 0, levels: NO_LEVELS, codec: null, captionsShown: false, effects: [], peers: {}, mediaSamples: 0, jitterSum: 0, limitations: NO_LIMITATIONS };
 }
 
 /** Le décroché, ou l'arrivée du pair : ce qui sépare la sonnerie humaine de la négociation WebRTC. */
@@ -91,14 +95,14 @@ export function withSample(telemetry: Telemetry, sample: TelemetrySample): Telem
 
 /**
  * #19876 — un relevé média (`CallAnalyticsRecorder.recordMedia`, iOS) : les
- * compteurs cumulés remplacent les précédents, la gigue s'ajoute pour le MOS,
+ * compteurs cumulés de chaque pair relevé remplacent les siens, la gigue s'ajoute pour le MOS,
  * et chaque pair compte sa cause de limitation.
  */
-export function withMedia(telemetry: Telemetry, peers: readonly MediaQuality[], jitterMs: number): Telemetry {
-  const media = combineMediaQuality(peers);
-  if (media === null) return telemetry;
-  const limitations = peers.map((peer) => peer.qualityLimitationReason).filter(isLimitationReason).reduce((counts, reason) => ({ ...counts, [reason]: counts[reason] + 1 }), telemetry.limitations);
-  return { ...telemetry, media, mediaSamples: telemetry.mediaSamples + 1, jitterSum: telemetry.jitterSum + (Number.isFinite(jitterMs) ? Math.max(jitterMs, 0) : 0), limitations };
+export function withMedia(telemetry: Telemetry, peers: Readonly<Record<string, MediaQuality>>, jitterMs: number): Telemetry {
+  const read = Object.values(peers);
+  if (read.length === 0) return telemetry;
+  const limitations = read.map((peer) => peer.qualityLimitationReason).filter(isLimitationReason).reduce((counts, reason) => ({ ...counts, [reason]: counts[reason] + 1 }), telemetry.limitations);
+  return { ...telemetry, peers: { ...telemetry.peers, ...peers }, mediaSamples: telemetry.mediaSamples + 1, jitterSum: telemetry.jitterSum + (Number.isFinite(jitterMs) ? Math.max(jitterMs, 0) : 0), limitations };
 }
 
 /** La cause la plus fréquente ; à égalité, la première dans l'ordre alphabétique, comme iOS. */
@@ -111,7 +115,8 @@ const count = (value: number | null): number | null => (value === null ? null : 
 
 /** Les champs de qualité (#11277), chacun SEULEMENT s'il a été mesuré : un client n'invente aucune valeur. */
 function mediaFields(telemetry: Telemetry, averageRtt: number, averagePacketLoss: number): Partial<CallAnalyticsEvent> {
-  const { media, mediaSamples } = telemetry;
+  const { mediaSamples } = telemetry;
+  const media = combineMediaQuality(Object.values(telemetry.peers));
   if (media === null || mediaSamples === 0) return {};
   const emitted = media.jitterBufferEmittedCount ?? 0;
   const mos = estimateCallMos({ roundTripTimeMs: averageRtt, jitterMs: telemetry.jitterSum / mediaSamples, packetLossPercent: averagePacketLoss });
